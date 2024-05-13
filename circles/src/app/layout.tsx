@@ -9,7 +9,6 @@ import type { Circle } from "../types/models";
 const inter = Inter({ subsets: ["latin"] });
 const wix = Wix_Madefor_Display({ subsets: ["latin"], variable: "--font-wix-display" });
 const libre = Libre_Franklin({ subsets: ["latin"], variable: "--font-libre-franklin" });
-
 export const metadata: Metadata = {
     title: "Circles",
     description: "A world connected",

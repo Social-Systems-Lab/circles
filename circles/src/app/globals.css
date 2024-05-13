@@ -35,6 +35,7 @@ html {
 }
 
 p {
+    font-family: var(--font-libre-franklin);
     margin-top: 1rem;
     margin-bottom: 1rem;
 }

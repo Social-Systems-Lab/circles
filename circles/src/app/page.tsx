@@ -1,5 +1,4 @@
 import Image from "next/image";
-import HomeContent from "./HomeContent";
 import picture from "@images/picture.png";
 import cover from "@images/cover.png";
 import type { Circle } from "../types/models";

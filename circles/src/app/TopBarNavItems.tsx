@@ -77,7 +77,7 @@ export default function TopBarNavItems() {
                         } ${!itemVisibility[index] ? "hidden" : ""}`}
                     >
                         <div>
-                            <span className="mt-[1px]">{item.title}</span>
+                            <p className="m-0 mt-[1px]">{item.title}</p>
                         </div>
                     </div>
                 </Link>
