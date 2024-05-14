@@ -21,7 +21,7 @@ const navItems = [
 ];
 
 export default function TopBarNavItems() {
-    const itemContainerRef = useRef(null);
+    const itemContainerRef = useRef<HTMLDivElement | null>(null);
     const itemRefs = useRef(navItems.map(() => React.createRef()));
     const pathname = usePathname();
     const [itemVisibility, setItemVisibility] = useState<boolean[]>([]);
@@ -34,7 +34,7 @@ export default function TopBarNavItems() {
         let newItemVisibility: boolean[] = [];
 
         // calculate visible and hidden items
-        const containerWidth = itemContainerRef.current.offsetWidth;
+        const containerWidth = itemContainerRef.current?.offsetWidth || 0;
         let currentWidth = 0;
         navItems.forEach((item, index) => {
             const itemWidth = item.width;
