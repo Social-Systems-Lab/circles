@@ -22,7 +22,7 @@ const navItems = [
 
 export default function TopBarNavItems() {
     const itemContainerRef = useRef<HTMLDivElement | null>(null);
-    const itemRefs = useRef(navItems.map(() => React.createRef()));
+    const itemRefs = useRef<React.RefObject<HTMLDivElement>[]>(navItems.map(() => React.createRef()));
     const pathname = usePathname();
     const [itemVisibility, setItemVisibility] = useState<boolean[]>([]);
     const [navMenuOpen, setNavMenuOpen] = useState(false);
