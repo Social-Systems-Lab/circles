@@ -1,7 +1,7 @@
 export default function Settings() {
     return (
         <div>
-            <h4>Settings</h4>
+            <h4>Circle Settings</h4>
         </div>
     );
 }

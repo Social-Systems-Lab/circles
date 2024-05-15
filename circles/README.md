@@ -32,7 +32,9 @@ To update docker:
 docker-compose up --build -d
 ```
 
-## Build Docker image (multi-platform)
+Open [http://localhost:3001](http://localhost:3001) with your browser to see the result.
+
+## Build Docker image
 
 Enable buildx driver.
 
@@ -43,17 +45,12 @@ docker buildx create --name mybuilder --use
 Build the multi-platform Docker image.
 
 ```bash
-# docker build -t sslorg/circles:latest .
-# docker push sslorg/circles:latest
-
-docker buildx build --platform linux/arm64,linux/amd64 -t sslorg/circles:latest --push .
+docker build -t sslorg/circles:latest .
+docker push sslorg/circles:latest
 ```
 
-## Deploy on Server
-
-(in server terminal)
+Multi-platform build:
 
 ```bash
-docker pull sslorg/circles:latest
-docker-compose up -d
+docker buildx build --platform linux/arm64,linux/amd64 -t sslorg/circles:latest --push .
 ```
