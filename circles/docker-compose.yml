@@ -25,6 +25,14 @@ services:
         volumes:
             - db:/data/db
 
+    watchtower:
+        image: containrrr/watchtower
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock
+        restart: always
+        environment:
+            WATCHTOWER_POLL_INTERVAL: 60 # Check for updates every minute
+
 volumes:
     db:
     circles:
