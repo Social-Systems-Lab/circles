@@ -16,6 +16,7 @@ const navItems = [
     { id: "members", title: "Members", path: "/members", width: 110 },
     { id: "messenger", title: "Messenger", path: "/messenger", width: 100 },
     { id: "settings", title: "Settings", path: "/settings", width: 79 },
+    { id: "admin", title: "Admin", path: "/admin", width: 79 },
     // { id: "notes", title: "Notes", path: "/dashboard", width: 61 },
     // { id: "collections", title: "Collections", path: "/dashboard", width: 99 },
 ];
