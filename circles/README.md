@@ -27,3 +27,17 @@ docker-compose up
 ```
 
 ## Build Docker image
+
+```bash
+docker build -t sslorg/circles:latest .
+docker push sslorg/circles:latest
+```
+
+## Deploy on Server
+
+(in server terminal)
+
+```bash
+docker pull sslorg/circles:latest
+docker-compose up -d
+```

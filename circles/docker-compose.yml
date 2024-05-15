@@ -10,7 +10,7 @@ services:
             - "3001:3001"
         environment:
             - PORT=3001
-            - MONGO_URI=mongodb://db:27017/mydatabase
+            - MONGO_URI=mongodb://db:27017/circles
             - NODE_ENV=production
         volumes:
             - circles:/circles
