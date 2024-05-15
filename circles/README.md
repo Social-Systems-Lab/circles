@@ -23,14 +23,30 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 ## Run on Docker
 
 ```bash
-docker-compose up
+docker-compose up -d
 ```
 
-## Build Docker image
+To update docker:
 
 ```bash
-docker build -t sslorg/circles:latest .
-docker push sslorg/circles:latest
+docker-compose up --build -d
+```
+
+## Build Docker image (multi-platform)
+
+Enable buildx driver.
+
+```
+docker buildx create --name mybuilder --use
+```
+
+Build the multi-platform Docker image.
+
+```bash
+# docker build -t sslorg/circles:latest .
+# docker push sslorg/circles:latest
+
+docker buildx build --platform linux/arm64,linux/amd64 -t sslorg/circles:latest --push .
 ```
 
 ## Deploy on Server

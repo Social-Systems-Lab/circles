@@ -1,8 +1,9 @@
-FROM imbios/bun-node:18-slim AS deps
+FROM oven/bun:latest as deps
+
 ARG DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get -y update && \
-  apt-get install -yq openssl git ca-certificates
+# RUN apt-get -y update && \
+#   apt-get install -yq openssl git ca-certificates
 WORKDIR /app
 
 # Install dependencies with Bun
