@@ -31,7 +31,7 @@ export default function RootLayout({
                 <main className="flex flex-col h-screen relative overflow-hidden">
                     <TopBar circle={circle} />
                     <div className="flex-1 flex flex-row">
-                        <div className={`flex-1 min-w-[${sidePanelWidthPx}]`}>{children}</div>
+                        <div className={`flex-1 min-w-[400px]`}>{children}</div>
                         <Map />
                     </div>
                 </main>

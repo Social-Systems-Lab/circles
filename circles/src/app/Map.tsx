@@ -11,7 +11,7 @@ mapboxgl.accessToken = "pk.eyJ1IjoiZXhtYWtpbmEtYWRtaW4iLCJhIjoiY2t1cjJkOWJuMDB0M
 
 const MapBox = () => {
     const mapContainer = useRef(null);
-    const map = useRef(null);
+    const map = useRef<mapboxgl.Map | null>(null);
     const [lng, setLng] = useState(20);
     const [lat, setLat] = useState(20);
     const [zoom, setZoom] = useState(2.2);

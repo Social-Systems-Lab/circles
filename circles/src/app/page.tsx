@@ -7,11 +7,7 @@ type CircleCoverProps = {
 };
 
 const CircleCover = ({ circle }: CircleCoverProps) => {
-    return (
-        <div className={`relative h-[${coverHeightPx}] w-full`}>
-            {circle.cover && <Image src={circle.cover} alt="Cover" objectFit="cover" sizes="100vw" fill />}
-        </div>
-    );
+    return <div className={`relative h-[400px] w-full`}>{circle.cover && <Image src={circle.cover} alt="Cover" objectFit="cover" sizes="100vw" fill />}</div>;
 };
 
 export default function Home() {

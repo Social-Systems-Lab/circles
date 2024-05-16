@@ -69,7 +69,7 @@ export default function TopBarNavItems() {
     }, []);
 
     return (
-        <nav ref={itemContainerRef} className={`flex-1 flex flex-row h-[${topBarHeightPx}] overflow-hidden mr-8`}>
+        <nav ref={itemContainerRef} className={`flex-1 flex flex-row h-[60px] overflow-hidden mr-8`}>
             {navItems.map((item, index) => (
                 <Link key={item.id} href={item.path}>
                     <div
