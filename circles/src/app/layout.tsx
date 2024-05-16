@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import TopBar from "./TopBar";
 import { Wix_Madefor_Display, Libre_Franklin, Inter } from "next/font/google";
+import { sidePanelWidthPx } from "./constants";
 import "./globals.css";
-import picture from "@images/picture.png";
-import cover from "@images/cover.png";
 import type { Circle } from "../types/models";
+import Map from "./Map";
 
 const inter = Inter({ subsets: ["latin"] });
 const wix = Wix_Madefor_Display({ subsets: ["latin"], variable: "--font-wix-display" });
@@ -20,8 +20,8 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     const circle: Circle = {
-        picture: picture,
-        cover: cover,
+        picture: "/images/picture.png",
+        cover: "/images/cover.png",
         name: "Social Systems Lab",
     };
 
@@ -30,7 +30,10 @@ export default function RootLayout({
             <body className={inter.className}>
                 <main className="flex flex-col h-screen relative overflow-hidden">
                     <TopBar circle={circle} />
-                    {children}
+                    <div className="flex-1 flex flex-row">
+                        <div className={`flex-1 min-w-[${sidePanelWidthPx}]`}>{children}</div>
+                        <Map />
+                    </div>
                 </main>
             </body>
         </html>

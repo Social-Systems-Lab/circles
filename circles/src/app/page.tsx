@@ -1,7 +1,6 @@
 import Image from "next/image";
-import picture from "@images/picture.png";
-import cover from "@images/cover.png";
 import type { Circle } from "../types/models";
+import { sidePanelWidthPx, coverHeightPx } from "./constants";
 
 type CircleCoverProps = {
     circle: Circle;
@@ -9,22 +8,18 @@ type CircleCoverProps = {
 
 const CircleCover = ({ circle }: CircleCoverProps) => {
     return (
-        <div className="relative h-[400px] w-full">
-            <Image src={circle.cover} alt="Cover" layout="fill" objectFit="cover" />
+        <div className={`relative h-[${coverHeightPx}] w-full`}>
+            {circle.cover && <Image src={circle.cover} alt="Cover" objectFit="cover" sizes="100vw" fill />}
         </div>
     );
 };
 
 export default function Home() {
     const circle: Circle = {
-        picture: picture,
-        cover: cover,
+        picture: "/images/picture.png",
+        cover: "/images/cover.png",
         name: "Social Systems Lab",
     };
 
-    return (
-        <div className="flex-1">
-            <CircleCover circle={circle} />
-        </div>
-    );
+    return <CircleCover circle={circle} />;
 }
