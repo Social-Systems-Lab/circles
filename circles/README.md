@@ -45,12 +45,5 @@ docker buildx create --name mybuilder --use
 Build the multi-platform Docker image.
 
 ```bash
-docker build -t sslorg/circles:latest .
-docker push sslorg/circles:latest
-```
-
-Multi-platform build:
-
-```bash
 docker buildx build --platform linux/arm64,linux/amd64 -t sslorg/circles:latest --push .
 ```
