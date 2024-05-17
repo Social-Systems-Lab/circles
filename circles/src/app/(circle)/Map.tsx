@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AiOutlineRead } from "react-icons/ai";
 import { LiaGlobeAfricaSolid } from "react-icons/lia";
-import { sidePanelWidth, topBarHeight } from "./constants";
+import { sidePanelWidth, topBarHeight } from "../constants";
 import useWindowDimensions from "@/components/useWindowDimensions";
 import mapboxgl from "mapbox-gl"; // eslint-disable-line import/no-webpack-loader-syntax
 

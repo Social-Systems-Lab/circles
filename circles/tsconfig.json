@@ -19,6 +19,7 @@
         ],
         "paths": {
             "@/*": ["./src/*"],
+            "@app/*": ["./src/app/*"],
             "@images/*": ["./public/images/*"]
         }
     },

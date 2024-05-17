@@ -1,8 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import TopBarNavItems from "./TopBarNavItems";
-import { topBarHeightPx } from "./constants";
-import type { Circle } from "../types/models";
+import { topBarHeightPx } from "../constants";
+import type { Circle } from "../../types/models";
 
 type TopBarProps = {
     circle: Circle;

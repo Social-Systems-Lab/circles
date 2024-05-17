@@ -1,6 +1,6 @@
 import Image from "next/image";
-import type { Circle } from "../types/models";
-import { sidePanelWidthPx, coverHeightPx } from "./constants";
+import type { Circle } from "../../types/models";
+import { sidePanelWidthPx, coverHeightPx } from "../constants";
 
 type CircleCoverProps = {
     circle: Circle;

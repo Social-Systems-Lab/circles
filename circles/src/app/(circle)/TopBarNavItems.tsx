@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from
 import { usePathname } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { HiChevronDown } from "react-icons/hi";
-import { topBarHeightPx } from "./constants";
+import { topBarHeightPx } from "../constants";
 
 const navItems = [
     { id: "home", title: "Home", path: "/", width: 61 },

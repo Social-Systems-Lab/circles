@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import TopBar from "./TopBar";
 import { Wix_Madefor_Display, Libre_Franklin, Inter } from "next/font/google";
-import { sidePanelWidthPx } from "./constants";
-import "./globals.css";
-import type { Circle } from "../types/models";
+import "@app/globals.css";
+import type { Circle } from "@/types/models";
 import Map from "./Map";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -22,7 +21,7 @@ export default function RootLayout({
     const circle: Circle = {
         picture: "/images/picture.png",
         cover: "/images/cover.png",
-        name: "Social Systems Lab",
+        name: "CircleName",
     };
 
     return (

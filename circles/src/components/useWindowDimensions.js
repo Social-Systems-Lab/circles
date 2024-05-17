@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 
 function getWindowDimensions() {
     if (typeof window === "undefined") {
-        return { windowWidth: 0, windowHeight: 0 };
+        return { windowWidth: 1920, windowHeight: 1080 };
     }
 
     const { innerWidth: windowWidth, innerHeight: windowHeight } = window;
