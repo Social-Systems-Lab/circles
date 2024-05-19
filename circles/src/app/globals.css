@@ -6,6 +6,8 @@
     --foreground-rgb: 0, 0, 0;
     --background-start-rgb: 214, 219, 220;
     --background-end-rgb: 255, 255, 255;
+    --link-rgb: 33, 100, 205;
+    --link-hover-rgb: 21, 67, 139;
 
     --text-size-80: 0.694rem;
     --text-size-90: 0.833rem;
@@ -198,4 +200,12 @@ h1,
     body {
         @apply bg-background text-foreground;
     }
+}
+
+a {
+    color: rgb(var(--link-rgb));
+}
+
+a:hover {
+    color: rgb(var(--link-hover-rgb));
 }

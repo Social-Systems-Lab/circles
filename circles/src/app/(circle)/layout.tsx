@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import TopBar from "./TopBar";
 import { Wix_Madefor_Display, Libre_Franklin, Inter } from "next/font/google";
 import "@app/globals.css";
-import type { Circle } from "@/types/models";
+import type { Circle } from "@/models/models";
 import Map from "./Map";
+import { ServerConfigs } from "@/lib/db";
+import { redirect } from "next/navigation";
 
 const inter = Inter({ subsets: ["latin"] });
 const wix = Wix_Madefor_Display({ subsets: ["latin"], variable: "--font-wix-display" });
@@ -13,15 +15,25 @@ export const metadata: Metadata = {
     description: "Tools for Transformation",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
     children,
 }: Readonly<{
     children: React.ReactNode;
 }>) {
+    // get server config and circle from database
+    let serverConfig = await ServerConfigs.findOne({});
+    if (!serverConfig || serverConfig.status === "setup") {
+        if (!serverConfig) {
+            await ServerConfigs.insertOne({ status: "setup" });
+        }
+        redirect("/setup");
+    }
+
     const circle: Circle = {
         picture: "/images/picture.png",
         cover: "/images/cover.png",
         name: "CircleName",
+        handle: "circleHandle",
     };
 
     return (

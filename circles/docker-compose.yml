@@ -10,7 +10,6 @@ services:
             - "3001:3001"
         environment:
             - PORT=3001
-            - MONGO_URI=mongodb://db:27017/circles
             - NODE_ENV=production
         volumes:
             - circles:/circles
@@ -19,11 +18,15 @@ services:
 
     db:
         image: mongo:latest
-        restart: always
+        environment:
+            - MONGO_INITDB_DATABASE=circles
+            - MONGO_INITDB_ROOT_USERNAME=admin
+            - MONGO_INITDB_ROOT_PASSWORD=password
         ports:
             - "27017:27017"
         volumes:
             - db:/data/db
+        restart: always
 
     watchtower:
         image: containrrr/watchtower
