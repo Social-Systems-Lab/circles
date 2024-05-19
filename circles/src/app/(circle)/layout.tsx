@@ -6,6 +6,7 @@ import type { Circle } from "@/models/models";
 import Map from "./Map";
 import { ServerConfigs } from "@/lib/db";
 import { redirect } from "next/navigation";
+import { Toaster } from "@/components/ui/toaster";
 
 const inter = Inter({ subsets: ["latin"] });
 const wix = Wix_Madefor_Display({ subsets: ["latin"], variable: "--font-wix-display" });
@@ -45,6 +46,7 @@ export default async function RootLayout({
                         <div className={`flex-1 min-w-[400px]`}>{children}</div>
                         <Map />
                     </div>
+                    <Toaster />
                 </main>
             </body>
         </html>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Wix_Madefor_Display, Libre_Franklin, Inter } from "next/font/google";
 import "@app/globals.css";
+import { Toaster } from "@/components/ui/toaster";
 
 const inter = Inter({ subsets: ["latin"] });
 const wix = Wix_Madefor_Display({ subsets: ["latin"], variable: "--font-wix-display" });
@@ -19,6 +20,7 @@ export default function RootLayout({
         <html lang="en" className={`${wix.variable} ${libre.variable}`}>
             <body className={inter.className}>
                 <main className="flex flex-col h-screen relative overflow-hidden">{children}</main>
+                <Toaster />
             </body>
         </html>
     );
