@@ -202,10 +202,10 @@ h1,
     }
 }
 
-a {
+a.textLink {
     color: rgb(var(--link-rgb));
 }
 
-a:hover {
+a.textLink:hover {
     color: rgb(var(--link-hover-rgb));
 }

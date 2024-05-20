@@ -22,13 +22,14 @@ export default async function RootLayout({
     children: React.ReactNode;
 }>) {
     // get server config and circle from database
-    let serverConfig = await ServerConfigs.findOne({});
-    if (!serverConfig || serverConfig.status === "setup") {
-        if (!serverConfig) {
-            await ServerConfigs.insertOne({ status: "setup" });
-        }
-        redirect("/setup");
-    }
+    // TODO uncomment when setup wizard is implemented
+    // let serverConfig = await ServerConfigs.findOne({});
+    // if (!serverConfig || serverConfig.status === "setup") {
+    //     if (!serverConfig) {
+    //         await ServerConfigs.insertOne({ status: "setup" });
+    //     }
+    //     redirect("/setup");
+    // }
 
     const circle: Circle = {
         picture: "/images/picture.png",
