@@ -7,14 +7,13 @@ import { sidePanelWidth, topBarHeight } from "../constants";
 import useWindowDimensions from "@/components/useWindowDimensions";
 import mapboxgl from "mapbox-gl"; // eslint-disable-line import/no-webpack-loader-syntax
 
-mapboxgl.accessToken = "pk.eyJ1IjoiZXhtYWtpbmEtYWRtaW4iLCJhIjoiY2t1cjJkOWJuMDB0MDJvbWYweWx5emR0dSJ9.elxjxO7DHA2UyXs0j7GTHA";
-
-const MapBox = () => {
+const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
     const mapContainer = useRef(null);
     const map = useRef<mapboxgl.Map | null>(null);
     const [lng, setLng] = useState(20);
     const [lat, setLat] = useState(20);
     const [zoom, setZoom] = useState(2.2);
+    mapboxgl.accessToken = mapboxKey;
 
     useEffect(() => {
         if (!mapContainer.current) {
@@ -33,15 +32,17 @@ const MapBox = () => {
     return <div ref={mapContainer} className="map-container z-10" style={{ width: "100%", height: "100%" }} />;
 };
 
-export default function Map() {
+export default function Map({ mapboxKey }: { mapboxKey: string }) {
     const [mapOpen, setMapOpen] = useState(false);
     const { windowWidth, windowHeight } = useWindowDimensions();
+
+    if (!mapboxKey) return null;
 
     return (
         <>
             {mapOpen && (
                 <div className={`relative`} style={{ width: windowWidth - sidePanelWidth + "px", height: windowHeight - topBarHeight + "px" }}>
-                    <MapBox />
+                    <MapBox mapboxKey={mapboxKey} />
                 </div>
             )}
             <div

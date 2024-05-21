@@ -12,11 +12,11 @@ import { handleSchema, passwordSchema } from "@/models/models";
 
 const registerFormZodSchema = z
     .object({
-        email: z.string().email({
+        _email: z.string().email({
             message: "Enter valid email",
         }),
         handle: handleSchema,
-        password: passwordSchema,
+        _password: passwordSchema,
         confirmPassword: z.string(),
         type: z.enum(["user", "organization"]),
     })
@@ -31,9 +31,9 @@ export default function Login() {
     const form = useForm<RegisterFormType>({
         resolver: zodResolver(registerFormZodSchema),
         defaultValues: {
-            email: "",
+            _email: "", // underscore to prevent autofill
             handle: "",
-            password: "",
+            _password: "", // underscore to prevent autofill
             confirmPassword: "",
             type: "user",
         },
@@ -51,15 +51,19 @@ export default function Login() {
                 <h1 className="text-3xl font-bold pb-2">Register</h1>
                 <p className="text-gray-500 pb-4">Create an account to get started.</p>
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8" autoComplete="off">
+                        {/* fake fields are a workaround for chrome/opera autofill getting the wrong fields */}
+                        <input id="username" style={{ display: "none" }} type="text" name="fakeusernameremembered"></input>
+                        <input id="password" style={{ display: "none" }} type="password" name="fakepasswordremembered"></input>
+
                         <FormField
                             control={form.control}
-                            name="email"
+                            name="_email"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Email</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="email" {...field} autoFocus />
+                                        <Input placeholder="email" {...field} autoFocus autoComplete="nope" />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
@@ -75,7 +79,7 @@ export default function Login() {
                                         <Input placeholder="handle" {...field} />
                                     </FormControl>
                                     <FormDescription>
-                                        Choose a unique handle that will identify you on the platform, e.g. <i>my_username_123</i>.
+                                        Choose a unique handle that will identify the account on the platform, e.g. a nickname or organisation name.
                                     </FormDescription>
                                     <FormMessage />
                                 </FormItem>
@@ -105,12 +109,12 @@ export default function Login() {
                         />
                         <FormField
                             control={form.control}
-                            name="password"
+                            name="_password"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Password</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="" type="password" {...field} />
+                                        <Input placeholder="" type="password" {...field} autoComplete="new-password" />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

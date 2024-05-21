@@ -31,6 +31,30 @@ export type Circle = z.infer<typeof circleSchema>;
 export const serverConfigSchema = z.object({
     defaultCircleDid: z.string().optional(),
     status: z.enum(["setup", "online"]),
+    setup_status: z.enum(["config", "account", "circle", "complete"]),
+    mapboxKey: z.string().optional(),
+    openaiKey: z.string().optional(),
 });
 
 export type ServerConfig = z.infer<typeof serverConfigSchema>;
+
+// server setup form wizard
+
+export const serverSetupDataSchema = z.object({
+    openaiKey: z.string().trim(),
+    mapboxKey: z.string().trim(),
+});
+
+export type ServerSetupData = z.infer<typeof serverSetupDataSchema>;
+
+export const openAIFormSchema = z.object({
+    openaiKey: z.string().trim().min(8, { message: "Enter valid OpenAI API key" }),
+});
+
+export type OpenAIFormType = z.infer<typeof openAIFormSchema>;
+
+export const mapboxFormSchema = z.object({
+    mapboxKey: z.string().trim().min(8, { message: "Enter valid Mapbox API key" }),
+});
+
+export type MapboxFormType = z.infer<typeof mapboxFormSchema>;

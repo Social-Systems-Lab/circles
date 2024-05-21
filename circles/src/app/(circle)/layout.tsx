@@ -22,14 +22,20 @@ export default async function RootLayout({
     children: React.ReactNode;
 }>) {
     // get server config and circle from database
-    // TODO uncomment when setup wizard is implemented
-    // let serverConfig = await ServerConfigs.findOne({});
-    // if (!serverConfig || serverConfig.status === "setup") {
-    //     if (!serverConfig) {
-    //         await ServerConfigs.insertOne({ status: "setup" });
-    //     }
-    //     redirect("/setup");
-    // }
+    let serverConfig = await ServerConfigs.findOne({});
+    if (!serverConfig) {
+        await ServerConfigs.insertOne({ status: "setup", setup_status: "config" });
+        redirect("/setup");
+    }
+    if (serverConfig.status === "setup") {
+        if (serverConfig.setup_status === "config") {
+            redirect("/setup");
+        } else if (serverConfig.setup_status === "account") {
+            redirect("/login");
+        } else {
+            redirect("/setup");
+        }
+    }
 
     const circle: Circle = {
         picture: "/images/picture.png",
@@ -45,7 +51,7 @@ export default async function RootLayout({
                     <TopBar circle={circle} />
                     <div className="flex-1 flex flex-row">
                         <div className={`flex-1 min-w-[400px]`}>{children}</div>
-                        <Map />
+                        <Map mapboxKey={serverConfig?.mapboxKey ?? ""} />
                     </div>
                     <Toaster />
                 </main>

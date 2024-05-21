@@ -7,8 +7,8 @@ const inter = Inter({ subsets: ["latin"] });
 const wix = Wix_Madefor_Display({ subsets: ["latin"], variable: "--font-wix-display" });
 const libre = Libre_Franklin({ subsets: ["latin"], variable: "--font-libre-franklin" });
 export const metadata: Metadata = {
-    title: "Social Systems Lab",
-    description: "Tools for Transformation",
+    title: "Circles",
+    description: "Your Social Platform",
 };
 
 export default function RootLayout({
