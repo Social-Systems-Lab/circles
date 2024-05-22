@@ -3,7 +3,7 @@
 import { ServerSetupData, OpenAIFormType, MapboxFormType, mapboxFormSchema, openAIFormSchema } from "@/models/models";
 import { ServerConfigs } from "@/lib/db";
 
-type SaveResponse = {
+type ActionResponse = {
     message?: string;
     success: boolean;
 };
@@ -17,7 +17,7 @@ export async function isAuthorized(): Promise<boolean> {
     return true;
 }
 
-export async function completeServerConfig(): Promise<SaveResponse> {
+export async function completeServerConfig(): Promise<ActionResponse> {
     // verify user is authorized
     let authorized = await isAuthorized();
     if (!authorized) {
@@ -39,7 +39,7 @@ export async function completeServerConfig(): Promise<SaveResponse> {
     };
 }
 
-export async function saveOpenAIKeyAction(clientData: OpenAIFormType): Promise<SaveResponse> {
+export async function saveOpenAIKeyAction(clientData: OpenAIFormType): Promise<ActionResponse> {
     const data = openAIFormSchema.safeParse(clientData);
 
     if (!data.success) {
@@ -67,7 +67,7 @@ export async function saveOpenAIKeyAction(clientData: OpenAIFormType): Promise<S
     };
 }
 
-export async function saveMapboxKeyAction(clientData: MapboxFormType): Promise<SaveResponse> {
+export async function saveMapboxKeyAction(clientData: MapboxFormType): Promise<ActionResponse> {
     const data = mapboxFormSchema.safeParse(clientData);
 
     if (!data.success) {

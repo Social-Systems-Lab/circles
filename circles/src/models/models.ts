@@ -58,3 +58,29 @@ export const mapboxFormSchema = z.object({
 });
 
 export type MapboxFormType = z.infer<typeof mapboxFormSchema>;
+
+// login form wizard
+
+export const loginDataSchema = z.object({
+    email: z.string().email({
+        message: "Enter valid email",
+    }),
+    aiEnabled: z.boolean().default(false),
+    password: passwordSchema.optional(),
+});
+
+export type LoginData = z.infer<typeof loginDataSchema>;
+
+export const emailFormSchema = z.object({
+    email: z.string().email({
+        message: "Enter valid email",
+    }),
+});
+
+export type EmailFormType = z.infer<typeof emailFormSchema>;
+
+export const passwordFormSchema = z.object({
+    password: passwordSchema,
+});
+
+export type PasswordFormType = z.infer<typeof passwordFormSchema>;
