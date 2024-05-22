@@ -36,10 +36,49 @@ html {
     font-family: var(--font-libre-franklin);
 }
 
+.formatted p {
+    margin-top: 0rem;
+    margin-bottom: 0rem;
+}
+.formatted h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    margin-top: 2.25rem;
+    margin-bottom: 1rem;
+}
+
+.formatted h6,
+.h6 {
+    font-size: var(--text-size-200);
+}
+.formatted h5,
+.h5 {
+    font-size: var(--text-size-200);
+}
+.formatted h4,
+.h4 {
+    font-size: var(--text-size-200);
+}
+.formatted h3,
+.h3 {
+    font-size: var(--text-size-200);
+}
+.formatted h2,
+.h2 {
+    font-size: var(--text-size-300);
+}
+.formatted h1,
+.h1 {
+    font-size: var(--text-size-400);
+}
+
 p {
     font-family: var(--font-libre-franklin);
-    margin-top: 1rem;
-    margin-bottom: 1rem;
+    /* margin-top: 1rem;
+    margin-bottom: 1rem; */
 }
 
 .h1,

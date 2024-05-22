@@ -17,7 +17,7 @@ type FormModeTabsProps = {
 
 export function FormModeTabs({ activeTab, onTabChange }: FormModeTabsProps) {
     return (
-        <div className="flex justify-center space-x-1 p-1 mt-4 mb-4 bg-[#f1f1f1] rounded-[8px]">
+        <div className="flex flex-shrink-0 h-[48px] justify-center space-x-1 p-1 mt-4 mb-4 bg-[#f1f1f1] rounded-[8px]">
             <Button className={`w-[120px] py-2 px-4`} onClick={() => onTabChange("Assistant")} variant={activeTab === "Assistant" ? "outline" : "ghost"}>
                 Assistant
             </Button>
@@ -29,7 +29,7 @@ export function FormModeTabs({ activeTab, onTabChange }: FormModeTabsProps) {
 }
 
 function ConfigureForm() {
-    return <div>Configure Tab</div>;
+    return <div className="flex-1 flex flex-column">Configure Tab</div>;
 }
 
 type FormDataDisplayProps = {
@@ -39,7 +39,7 @@ type FormDataDisplayProps = {
 function FormDataDisplay({ data }: FormDataDisplayProps) {
     return (
         <div className="p-4">
-            <h2 className="text-xl font-bold mb-4">Preview</h2>
+            <h2 className="text-xl font-bold m-0 p-0 mb-4">Preview</h2>
             <pre>{JSON.stringify(data, null, 2)}</pre>
         </div>
     );
@@ -54,13 +54,11 @@ export function SmartForm() {
     };
 
     return (
-        <div className="flex flex-1 flex-row gap-0 h-full overflow-hidden">
-            <div className="flex-1 flex flex-col justify-center items-center max-w-[650px]">
+        <div className="flex flex-1 flex-row gap-0 h-full">
+            <div className="flex-1 flex flex-col justify-center items-center max-w-[650px] h-full">
                 <FormModeTabs activeTab={activeTab} onTabChange={handleTabChange} />
-                <div className="flex flex-1 w-full">
-                    {activeTab === "Assistant" && <AssistantChat />}
-                    {activeTab === "Configure" && <ConfigureForm />}
-                </div>
+                {activeTab === "Assistant" && <AssistantChat />}
+                {activeTab === "Configure" && <ConfigureForm />}
             </div>
             <div className="flex-1 bg-[#fdfdfd] overflow-hidden relative">
                 <FormDataDisplay data={formData} />
