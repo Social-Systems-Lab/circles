@@ -54,7 +54,7 @@ export default function LoginForm({ loginData }: { loginData: LoginData }) {
             <div className="flex-1 flex flex-col justify-center items-center max-w-[650px]">
                 <ScrollArea className="flex-1 w-full pl-8 pr-8">
                     <div className="flex flex-col items-center justify-center pt-[200px]">
-                        <h1 className="text-3xl font-bold pb-8">Welcome</h1>
+                        <h1 className="m-0 p-0 text-3xl font-bold pb-8">Welcome</h1>
                     </div>
                     <div className="flex flex-row justify-center items-center w-full">
                         <div className="flex flex-col flex-1 max-w-[500px] justify-center items-center">

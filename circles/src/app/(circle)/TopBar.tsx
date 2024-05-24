@@ -19,7 +19,7 @@ export default function TopBar({ circle }: TopBarProps) {
                             <Image src={circle.picture ?? ""} alt="Logo" width={40} height={40} className="rounded-full overflow-hidden w-[40px] h-[40px]" />
                         </Link>
                         <Link href="/">
-                            <h4 className="ml-4">{circle.name}</h4>
+                            <h4 className="m-0 p-0 ml-4">{circle.name}</h4>
                         </Link>
                     </div>
                     <TopBarNavItems />

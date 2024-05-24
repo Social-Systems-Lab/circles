@@ -23,19 +23,20 @@ export default async function RootLayout({
 }>) {
     // get server config and circle from database
     let serverConfig = await ServerConfigs.findOne({});
-    if (!serverConfig) {
-        await ServerConfigs.insertOne({ status: "setup", setup_status: "config" });
-        redirect("/setup");
-    }
-    if (serverConfig.status === "setup") {
-        if (serverConfig.setup_status === "config") {
-            redirect("/setup");
-        } else if (serverConfig.setup_status === "account") {
-            redirect("/login");
-        } else {
-            redirect("/setup");
-        }
-    }
+    // TODO uncomment when registration flow is implemented
+    // if (!serverConfig) {
+    //     await ServerConfigs.insertOne({ status: "setup", setup_status: "config" });
+    //     redirect("/setup");
+    // }
+    // if (serverConfig.status === "setup") {
+    //     if (serverConfig.setup_status === "config") {
+    //         redirect("/setup");
+    //     } else if (serverConfig.setup_status === "account") {
+    //         redirect("/login");
+    //     } else {
+    //         redirect("/setup");
+    //     }
+    // }
 
     const circle: Circle = {
         picture: "/images/picture.png",

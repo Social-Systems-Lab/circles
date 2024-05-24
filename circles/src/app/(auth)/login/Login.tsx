@@ -48,7 +48,7 @@ export default function Login() {
     return (
         <div className="flex flex-1 flex-row justify-center items-center">
             <div className="flex-1 max-w-[400px]">
-                <h1 className="text-3xl font-bold pb-2">Register</h1>
+                <h1 className="text-3xl font-bold m-0 p-0 pb-2">Register</h1>
                 <p className="text-gray-500 pb-4">Create an account to get started.</p>
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8" autoComplete="off">

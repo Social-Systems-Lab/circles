@@ -36,7 +36,7 @@ export default function ServerSetupForm({ setupData }: { setupData: ServerSetupD
             <div className="flex-1 flex flex-col justify-center items-center max-w-[650px]">
                 <ScrollArea className="flex-1 w-full pl-8 pr-8">
                     <div className="flex flex-col items-center justify-center pt-[200px]">
-                        <h1 className="text-3xl font-bold pb-2">Home Server Setup</h1>
+                        <h1 className="m-0 p-0 text-3xl font-bold pb-2">Home Server Setup</h1>
                         <p className="text-gray-500 pb-4">Configure home server to get started.</p>
                     </div>
                     <div className="flex flex-row justify-center items-center w-full">

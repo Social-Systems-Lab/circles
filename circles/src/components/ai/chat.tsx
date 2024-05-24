@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { KeyboardEvent, KeyboardEventHandler, useEffect, useMemo, useState, useTransition } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { getAnswer, getStreamedAnswer } from "./actions";
@@ -11,15 +11,9 @@ import { Bot, Loader2 } from "lucide-react";
 import { Scrollbars } from "react-custom-scrollbars-2";
 import { MemoizedReactMarkdown } from "../memoized-markdown";
 import { ScrollArea } from "../ui/scroll-area";
-
-type Message = {
-    type: "Assistant" | "User";
-    text: string;
-    options?: string[];
-    stream?: boolean;
-    streamMessage?: string;
-    streamDone?: boolean;
-};
+import { FormData, InputProvider, Message } from "@/models/models";
+import { CoreUserMessage } from "ai";
+import { useIsMobile } from "../use-is-mobile";
 
 type ChatMessageProps = {
     message: Message;
@@ -29,8 +23,18 @@ type ChatMessageProps = {
 
 export function ChatMessage({ message, isPending, onOptionClick }: ChatMessageProps) {
     // stream the message
-    const isAssistant = message.type === "Assistant";
+    const isAssistant = message.coreMessage.role === "assistant";
     const options = message.options ?? [];
+    const getMessageContent = () => {
+        switch (message.coreMessage.role) {
+            case "assistant":
+            case "user":
+            case "system":
+                return message.coreMessage.content.toString();
+            case "tool":
+                return JSON.stringify(message.coreMessage.content);
+        }
+    };
 
     return (
         <div className={`flex flex-row gap-2 pb-4`}>
@@ -38,8 +42,8 @@ export function ChatMessage({ message, isPending, onOptionClick }: ChatMessagePr
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : isAssistant ? <Bot size={18} /> : <FaRegUser size={14} />}
             </div>
             <div className="flex flex-col">
-                <div className={`flex-1 flex flex-col p-2 rounded-md ${isAssistant ? "bg-gray-100" : "bg-blue-100"}`}>
-                    <MemoizedReactMarkdown className="formatted">{message.text}</MemoizedReactMarkdown>
+                <div className={`flex-1 flex flex-col p-2 rounded-md ${isAssistant ? "bg-gray-100" : "bg-[#e8fff4]"}`}>
+                    <MemoizedReactMarkdown className="formatted">{getMessageContent()}</MemoizedReactMarkdown>
                 </div>
                 <OptionsPane options={options} onOptionClick={onOptionClick} />
             </div>
@@ -64,7 +68,7 @@ export function ChatMessages({ messages, onOptionClick }: ChatMessagesProps) {
 
 type OptionsPaneProps = {
     options: string[];
-    onOptionClick: (option: string) => void;
+    onOptionClick?: (option: string) => void;
 };
 
 export function OptionsPane({ options, onOptionClick }: OptionsPaneProps) {
@@ -105,11 +109,21 @@ type InputBoxProps = {
 
 function InputBox({ onSend }: InputBoxProps) {
     const [input, setInput] = useState<string>("");
+    const isMobile = useIsMobile();
 
     const handleSend = () => {
         if (input.trim()) {
             onSend(input);
             setInput("");
+        }
+    };
+
+    const handleMessageKeyDown = async (e: KeyboardEvent<HTMLInputElement>) => {
+        if (!isMobile && e.keyCode === 13 && !e.shiftKey) {
+            e.preventDefault();
+            await handleSend();
+        } else {
+            return;
         }
     };
 
@@ -120,6 +134,7 @@ function InputBox({ onSend }: InputBoxProps) {
                 className="flex-grow p-2 border border-gray-300 rounded-md"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleMessageKeyDown}
                 placeholder="Type your message..."
             />
             <Button onClick={handleSend}>Send</Button>
@@ -127,12 +142,27 @@ function InputBox({ onSend }: InputBoxProps) {
     );
 }
 
-export function AssistantChat() {
-    const [responseMessage, setResponseMessage] = useState<Message>({
-        type: "Assistant",
-        text: "Hi there! I'm your automated assistant. I'm here to help you join the Circles platform and make the most out of your experience. Do you have an account?",
-        options: ["Yes, I have an account", "I want to create an account", "Why should I join?"],
-    });
+type AssistantChatProps = {
+    formData: any;
+    setFormData: (data: any) => void;
+};
+
+export function AiChat({ formData, setFormData, context, setContext }: AssistantChatProps) {
+    useEffect(() => {
+        // initialize the chat with a welcome message from the context
+        setMessages([]);
+        const welcomeMessage = context.steps[0].prompt;
+        let newResponseMessage: Message = {
+            coreMessage: {
+                role: "assistant",
+                content: welcomeMessage,
+            },
+            options: context.steps[0].inputProvider?.data,
+        };
+        setResponseMessage(newResponseMessage);
+    }, [context]);
+
+    const [responseMessage, setResponseMessage] = useState<Message>();
     const [messages, setMessages] = useState<Message[]>([]);
     const [isPending, startTransition] = useTransition();
 
@@ -142,44 +172,51 @@ export function AssistantChat() {
 
     const handleSend = async (message: string) => {
         // add response message to list of chat messages
-        setMessages((messages) => [...messages, responseMessage, { type: "User", text: message }]);
+        let userMessage: Message = { coreMessage: { role: "user", content: message } };
+        let newMessages = responseMessage ? [...messages, responseMessage, userMessage] : [...messages, userMessage];
+        setMessages(newMessages);
 
         // add new response message for new AI response
         let pendingResponseMessage: Message = {
-            type: "Assistant",
-            text: "",
+            coreMessage: {
+                role: "assistant",
+                content: "",
+            },
         };
         setResponseMessage(pendingResponseMessage);
 
-        // console.log(JSON.stringify(messages, null, 2));
-        // console.log(JSON.stringify(pendingResponseMessage, null, 2));
-
         startTransition(async () => {
-            const { output } = await getStreamedAnswer(message);
+            const { output } = await getStreamedAnswer(newMessages, formData);
 
+            let streamedResponseText = "";
             for await (const delta of readStreamableValue(output)) {
-                setResponseMessage((currentResponse) => ({ ...currentResponse, text: `${currentResponse.text}${delta}` }));
+                if (typeof delta === "string") {
+                    streamedResponseText = `${streamedResponseText}${delta}`;
+                    setResponseMessage((currentResponse) => {
+                        if (!currentResponse) return undefined;
+                        let newMessage: Message = { ...currentResponse };
+                        newMessage.coreMessage.content = streamedResponseText;
+                        return newMessage;
+                    });
+                } else if (delta && "type" in delta) {
+                    if (delta.type === "form-data") {
+                        setFormData((delta as FormData).data);
+                    } else if (delta?.type === "input-provider") {
+                        let inputType = (delta as InputProvider).inputType;
+                        let data = (delta as InputProvider).data;
+                        console.log("input-provider", inputType, data);
+                        if (inputType === "options") {
+                            setResponseMessage((currentResponse) => {
+                                let newMessage: Message = { ...currentResponse };
+                                newMessage.options = (delta as InputProvider).data;
+                                return newMessage;
+                            });
+                        } // TODO handle rest of input types
+                    } else if (delta.type === "context") {
+                    }
+                }
             }
         });
-
-        // add AI answer
-        // setMessages([...newMessages, { type: "Assistant", stream: true, streamMessage: message }]);
-
-        // get AI answer
-        // const { text } = await getAnswer(message);
-        // setMessages([...newMessages, { type: "Assistant", text }]);
-
-        // // Simulate bot response and options
-        // setTimeout(() => {
-        //     setMessages((prevMessages) => [
-        //         ...prevMessages,
-        //         {
-        //             type: "Assistant",
-        //             text: "Great can you start by telling me if this account will be personal account, i.e. tied to you as an individual, or an organization account which will represent an organization?",
-        //             options: ["Personal", "Organization", "Can you help me decide?"],
-        //         },
-        //     ]);
-        // }, 1000);
     };
 
     return (
@@ -190,7 +227,7 @@ export function AssistantChat() {
                     {/* <Scrollbars autoHide> */}
                     <div className="flex flex-col space-y-4 p-4">
                         <ChatMessages messages={messages} onOptionClick={onOptionClick} />
-                        <ChatMessage message={responseMessage} isPending={isPending} onOptionClick={onOptionClick} />
+                        {responseMessage && <ChatMessage message={responseMessage} isPending={isPending} onOptionClick={onOptionClick} />}
                     </div>
                     {/* </Scrollbars> */}
                 </ScrollArea>

@@ -36,9 +36,53 @@ html {
     font-family: var(--font-libre-franklin);
 }
 
+.formatted h1:first-child {
+    margin-top: 0px;
+}
+.formatted h2:first-child {
+    margin-top: 0px;
+}
+.formatted h3:first-child {
+    margin-top: 0px;
+}
+.formatted h4:first-child {
+    margin-top: 0px;
+}
+.formatted h5:first-child {
+    margin-top: 0px;
+}
+.formatted h6:first-child {
+    margin-top: 0px;
+}
+.formatted p:first-child {
+    margin-top: 0px;
+}
+
+.formatted h1:last-child {
+    margin-bottom: 0px;
+}
+.formatted h2:last-child {
+    margin-bottom: 0px;
+}
+.formatted h3:last-child {
+    margin-bottom: 0px;
+}
+.formatted h4:last-child {
+    margin-bottom: 0px;
+}
+.formatted h5:last-child {
+    margin-bottom: 0px;
+}
+.formatted h6:last-child {
+    margin-bottom: 0px;
+}
+.formatted p:last-child {
+    margin-bottom: 0px;
+}
+
 .formatted p {
-    margin-top: 0rem;
-    margin-bottom: 0rem;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
 }
 .formatted h1,
 h2,
