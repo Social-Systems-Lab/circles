@@ -1,11 +1,22 @@
 "use server";
 
-import { generateText, streamText, generateObject, CoreMessage, CoreSystemMessage, ToolContent, CoreToolMessage, CoreAssistantMessage } from "ai";
+import {
+    generateText,
+    streamText,
+    generateObject,
+    CoreMessage,
+    CoreSystemMessage,
+    ToolContent,
+    CoreToolMessage,
+    CoreAssistantMessage,
+    ToolResultPart,
+} from "ai";
 import { StreamableValue, createStreamableValue } from "ai/rsc";
 import { OpenAIProvider, createOpenAI } from "@ai-sdk/openai";
 import { ServerConfigs } from "@/lib/db";
-import { Message } from "@/models/models";
+import { AddedMessages, InputProvider, Message } from "@/models/models";
 import { z } from "zod";
+import { AiWizardStep, aiWizardContexts, getContextSystemMessage } from "@/models/ai-wizard-contexts";
 
 export async function getAnswer(question: string) {
     // get openaikey from db
@@ -25,69 +36,71 @@ export async function getAnswer(question: string) {
     return { text, finishReason, usage };
 }
 
-type SmartFormType = {
-    systemMessage: (formData: any) => CoreSystemMessage;
-    initialPrompt: any;
+const debug = false;
+
+const printMessage = (message: Message) => {
+    if (!debug) {
+        return;
+    }
+    let output = "";
+    output += message.coreMessage.role + ": ";
+    if (typeof message.coreMessage.content === "string") {
+        output += message.coreMessage.content;
+    } else {
+        let content = message.coreMessage.content?.[0];
+        if (content.type === "tool-call") {
+            output += "calling " + content.toolName + "(" + JSON.stringify(content.args) + ")";
+        } else if (content.type === "tool-result") {
+            output += content.toolName + " response: " + JSON.stringify(content.result);
+        }
+    }
+    output += "\n";
+    console.log(output);
+    return output;
 };
 
-const loginRegisterSmartForm: SmartFormType = {
-    systemMessage: (formData) => ({
-        role: "system",
-        content: `You are an AI assistant that helps the user to fill out a form step by step. 
-        You are on the Circles platform, a social media platform for change-makers.
-        Guide the user through each step of the form, validate their input, and provide feedback.
-        
-        Here are the steps for the registration form:
-        1. Choose account type (user or organization)*
-        2. Enter name or organization name*
-        3. Enter email address*
-        4. Create a password*
-        5. Choose a unique handle*
-        6. Provide a short description
-        7. Upload a profile picture
-        8. Upload a cover picture
-        9. Ask the user some questions and use the answers to generate profile description.
-
-        Here are the steps for the login form:
-        1. Provide email address
-        2. Provide password
-        
-        This is the form data schema:
-        export const registrationFormSchema = z.object({
-            type: z.enum(["user", "organization"]).describe("Account type"),
-            name: z.string().describe("User's name, nickname or if organization the organization's name"),
-            email: z.string().email().describe("Email address"),
-            password: passwordSchema.describe("Password"),
-            handle: handleSchema.describe(
-                "Unique handle that will identify the account on the platform, e.g. a nickname or organisation name. May consist of lowercase letters, numbers and underscore."
-            ),
-            description: z.string().optional().describe("Short description of the user or organization"),
-            picture: z.string().optional().describe("URL to profile picture"),
-            cover: z.string().optional().describe("URL to cover picture"),
-            content: z.string().optional().describe("Profile content that describes the user or organization in more detail"),
-        });
-
-        We currently have the following formData, do not overwrite any value without user confirming it:
-        ${JSON.stringify(formData)}
-
-        Important:
-        - Make sure to call the updateFormData function every time user gives input, to update the formData with new information.
-        - Make sure to call the provideInputOptions function every time you ask for user input to enhance and make it easier for the user, the most common is to provide a list of choices for text input.
-        - Make sure to call the initiateStep function every time you start a new step in the form to receive detailed information on how to guide the user through the step.
-        `,
-    }),
-
-    initialPrompt: {
-        type: "Assistant",
-        text: "Hi there! I'm your automated assistant. I'm here to help you join the Circles platform and ease the process. Do you have an account?",
-        options: ["Yes, I have an account", "I want to create an account", "Why should I join?"],
-    },
+const printMessages = (messages: Message[]) => {
+    messages.forEach((message) => {
+        printMessage(message);
+    });
 };
 
-async function streamResponse(provider: OpenAIProvider, stream: any, messages: Message[], smartForm: SmartFormType, formData: any, closeStream: boolean) {
-    let coreMessages = [smartForm.systemMessage(formData), ...messages.map((x) => x.coreMessage)];
-    console.log("formData", formData);
-    console.log("coreMessages", coreMessages);
+function setStep(stepNumber: number, contextId: string, stream: any): string {
+    let context = aiWizardContexts[contextId];
+    let stepDetails = context.steps.find((x) => x.stepNumber === stepNumber);
+    if (!stepDetails) {
+        return `Step ${stepNumber} not found in context ${contextId}`;
+    }
+    if (stepDetails.inputProvider) {
+        stream.update(stepDetails.inputProvider);
+    }
+
+    // initiate step
+    return `Step initiated: ${stepNumber}
+   Instructions: ${stepDetails.instructions}`;
+}
+
+async function streamResponse(provider: OpenAIProvider, stream: any, messages: Message[], formData: any, contextId: string, closeStream: boolean) {
+    let currentContextId = contextId;
+    let context = aiWizardContexts[currentContextId];
+    if (!context) {
+        if (closeStream) {
+            stream.done();
+        }
+        return;
+    }
+    let systemMessage = getContextSystemMessage(context, formData);
+    let coreMessages = [systemMessage, ...messages.map((x) => x.coreMessage)];
+
+    //console.log("formData", formData);
+    if (closeStream) {
+        if (debug) console.log(systemMessage);
+        printMessages(messages);
+    }
+
+    if (debug) console.log(`------ START ${currentContextId} ------`);
+
+    //console.log("coreMessages", coreMessages);
 
     const { fullStream } = await streamText({
         model: provider("gpt-4o"),
@@ -107,29 +120,19 @@ async function streamResponse(provider: OpenAIProvider, stream: any, messages: M
                     formData[key] = value;
                     stream.update({ type: "form-data", data: formData });
 
-                    return "Form value updated, please prompt the user for the next step in the process";
+                    return "Form value updated.";
                 },
             },
-            provideInputOptions: {
-                description: "Provides the user with additional convenient input options to help the user respond to questions besides the regular text input",
+            presentSuggestions: {
+                description:
+                    "Provides the user with some suggested answers to pick from to make things convenient. These suggestions will be presented along the regular text input",
                 parameters: z.object({
-                    type: z
-                        .enum(["options", "date-picker", "email", "file-upload", "password", "submit-form"])
-                        .describe(
-                            "Input type. 'options' - provides the user with a list of choices to select from. 'date-picker' - for choosing dates. 'email' - email input that checks if email exists. 'file-upload' - for uploading files such as profile picture. 'password' - for secure password entry. 'submit-form' - will submit the form to the server, this can be done once all required fields are provided."
-                        ),
-                    choices: z
-                        .array(z.string())
-                        .optional()
-                        .describe(
-                            "The text for each choice to provide to the user if it's options input. Please use human readable text for each that expresses the option from the user's perspective, e.g. 'I have an account' if it's to answer yes to if the user has an account."
-                        ),
+                    suggestions: z.array(z.string()).describe("An array of suggestions that is to presented to the user."),
                 }),
-                execute: async ({ type, choices }) => {
-                    console.log("provideInputOptions");
-                    console.log(type, choices);
-                    stream.update({ type: "input-provider", inputType: type, data: choices });
-                    return `${type} presented to user.`;
+                execute: async ({ suggestions }) => {
+                    let inputProvider: InputProvider = { type: "input-provider", inputType: "suggestions", data: suggestions };
+                    stream.update(inputProvider);
+                    return `The suggestions [${suggestions.join()}] will be presented to the user after your response.`;
                 },
             },
             initiateStep: {
@@ -138,11 +141,36 @@ async function streamResponse(provider: OpenAIProvider, stream: any, messages: M
                     step: z.number().describe("The step to initiate"),
                 }),
                 execute: async ({ step }) => {
-                    console.log("initiateStep");
-                    console.log(step);
+                    // get step details from context
+                    return setStep(step, contextId, stream);
+                },
+            },
+            switchContext: {
+                description: `Switches the conversation to a different context. Here are the available contexts:\n ${context.availableContexts.map(
+                    (x) => x.id + " - " + x.switchReason + "\n"
+                )}`,
+                parameters: z.object({
+                    newContextId: z.enum([currentContextId, ...context.availableContexts.map((x) => x.id)]).describe("The context to switch to."),
+                }),
+                execute: async ({ newContextId }) => {
+                    // clear form data
+                    formData = {};
+                    contextId = newContextId;
+                    stream.update({ type: "form-data", data: {} });
+                    stream.update({ type: "switch-context", contextId: newContextId });
+                    let stepText = setStep(1, newContextId, stream);
 
-                    // initiate step
-                    return `Step initiated: ${step}`;
+                    return `Switched to context: ${newContextId}
+                    ${stepText}                    
+                    `;
+                },
+            },
+            submitForm: {
+                description: "Submits the user formData to the server",
+                parameters: z.object({}),
+                execute: async () => {
+                    // submit form
+                    return "Form submitted OK.";
                 },
             },
         },
@@ -152,30 +180,42 @@ async function streamResponse(provider: OpenAIProvider, stream: any, messages: M
 
     let newMessages: Message[] = [];
 
+    // response message here is just for easy debug and printing
+    let printResponseMessage: Message = { coreMessage: { role: "assistant", content: "" }, toolCall: false };
+
     for await (const delta of fullStream) {
         if (delta.type === "text-delta") {
+            printResponseMessage.coreMessage.content += delta.textDelta;
             stream.update(delta.textDelta);
         } else if (delta.type === "tool-call") {
             if (shouldContinueGenerating(delta)) {
                 let coreToolCallMessage: CoreAssistantMessage = { role: "assistant", content: [delta] };
-                newMessages.push({ coreMessage: coreToolCallMessage });
+                let newMessage: Message = { coreMessage: coreToolCallMessage, toolCall: true };
+                printMessage(newMessage);
+                newMessages.push(newMessage);
             }
-            console.log("tool-call", delta.toolName);
         } else if (delta.type === "tool-result") {
             if (shouldContinueGenerating(delta)) {
                 let coreToolMessage: CoreToolMessage = { role: "tool", content: [delta] };
-                newMessages.push({ coreMessage: coreToolMessage });
+                let newMessage: Message = { coreMessage: coreToolMessage, toolCall: false };
+                printMessage(newMessage);
+                newMessages.push(newMessage);
             }
-            console.log("tool-result", delta.result);
         }
     }
 
     // if we have tool results we make another call to get more responses
     if (newMessages.length > 0) {
+        let addedMessages: AddedMessages = { type: "added-messages", messages: newMessages };
+        stream.update(addedMessages);
         try {
-            await streamResponse(provider, stream, [...messages, ...newMessages], smartForm, formData, false);
+            await streamResponse(provider, stream, [...messages, ...newMessages], formData, contextId, false);
         } catch (e) {}
     }
+
+    printMessage(printResponseMessage);
+
+    if (debug) console.log(`------ END ${currentContextId} ------`);
 
     // feed the result of tool calls to the
     if (closeStream) {
@@ -187,18 +227,19 @@ function shouldContinueGenerating(delta: any) {
     if (delta.type === "tool-call" || delta.type === "tool-result") {
         if (delta.toolName === "updateFormData") {
             return true;
-        }
-        if (delta.toolName === "provideInputOptions") {
-            return delta.args.inputType === "submit-form";
+        } else if (delta.toolName === "presentSuggestions") {
+            return false;
+            //return delta.args.inputType !== "submit-form";
+        } else if (delta.toolName === "initiateStep") {
+            return true;
+        } else if (delta.toolName === "switchContext") {
+            return true;
         }
     }
     return true;
 }
 
-export async function getStreamedAnswer(messages: Message[], formData: any) {
-    let smartForm = loginRegisterSmartForm;
-    console.log("getStreamedAnswer");
-
+export async function getStreamedAnswer(messages: Message[], formData: any, contextId: string) {
     // get openaikey from db
     const serverConfig = await ServerConfigs.findOne({});
     const openaiKey = serverConfig?.openaiKey;
@@ -208,7 +249,7 @@ export async function getStreamedAnswer(messages: Message[], formData: any) {
 
     let openAiProvider = createOpenAI({ apiKey: openaiKey });
     const stream = createStreamableValue<StreamableValue>("");
-    streamResponse(openAiProvider, stream, messages, smartForm, formData, true);
+    streamResponse(openAiProvider, stream, messages, formData, contextId, true);
 
     return { output: stream.value };
 }

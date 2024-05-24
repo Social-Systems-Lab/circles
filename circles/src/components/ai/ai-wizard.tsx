@@ -11,17 +11,18 @@ import Image from "next/image";
 import { AiWizardContext, aiWizardContexts } from "@/models/ai-wizard-contexts";
 
 type ContextProps = {
+    context: AiWizardContext;
     activeTab: WizardModeOptions;
     onTabChange: (tab: WizardModeOptions) => void;
 };
 
-export function WizardContextHeader({ activeTab, onTabChange }: ContextProps) {
+export function WizardContextHeader({ context, activeTab, onTabChange }: ContextProps) {
     return (
         <div className="flex flex-col w-full items-center">
             <div className="flex-1">
                 <div className="flex flex-row mt-4 mb-2 text-white rounded-[20px] bg-[#8595c9]">
                     {/* #57428d gray-200 */}
-                    <h4 className="m-0 p-2 pl-6 pr-6 text-[16px]">Welcome to Circles!</h4>
+                    <h4 className="m-0 p-2 pl-6 pr-6 text-[16px]">{context.title}</h4>
                 </div>
             </div>
             <div className="flex-1">
@@ -87,7 +88,7 @@ export function AiWizard({ initialContext = aiWizardContexts["logged-out-welcome
     return (
         <div className="flex flex-1 flex-row gap-0 h-full">
             <div className="flex-1 flex flex-col justify-center items-center max-w-[650px] h-full">
-                <WizardContextHeader activeTab={activeTab} onTabChange={handleTabChange} />
+                <WizardContextHeader context={context} activeTab={activeTab} onTabChange={handleTabChange} />
                 {activeTab === "Assisted" && <AiChat formData={formData} setFormData={setFormData} context={context} setContext={setContext} />}
                 {activeTab === "Manual" && <ManualForm />}
             </div>

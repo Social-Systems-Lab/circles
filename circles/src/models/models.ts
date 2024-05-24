@@ -88,7 +88,8 @@ export type PasswordFormType = z.infer<typeof passwordFormSchema>;
 
 export type Message = {
     coreMessage: CoreMessage;
-    options?: string[];
+    inputProvider?: InputProvider;
+    toolCall?: boolean;
 };
 
 export const registrationFormSchema = z.object({
@@ -107,9 +108,9 @@ export const registrationFormSchema = z.object({
 
 export type InputProvider = {
     type: "input-provider";
-    inputType: "options" | "password" | "date-picker" | "file-upload";
+    inputType: "suggestions";
     //data: MultipleChoiceData | PasswordData | TextData | DatePickerData | FileUploadData;
-    data: any;
+    data?: any;
 };
 
 export type FormData = {
@@ -117,4 +118,14 @@ export type FormData = {
     data: any;
 };
 
-export type StreamableValue = string | InputProvider | FormData;
+export type SwitchContext = {
+    type: "switch-context";
+    contextId: string;
+};
+
+export type AddedMessages = {
+    type: "added-messages";
+    messages: Message[];
+};
+
+export type StreamableValue = string | InputProvider | FormData | SwitchContext | AddedMessages;
