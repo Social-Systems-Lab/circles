@@ -90,6 +90,7 @@ export type Message = {
     coreMessage: CoreMessage;
     inputProvider?: InputProvider;
     toolCall?: boolean;
+    suggestion?: string;
 };
 
 export const registrationFormSchema = z.object({

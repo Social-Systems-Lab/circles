@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyboardEvent, KeyboardEventHandler, useEffect, useMemo, useState, useTransition } from "react";
+import { KeyboardEvent, KeyboardEventHandler, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { getAnswer, getStreamedAnswer } from "./actions";
@@ -23,18 +23,7 @@ type ChatMessageProps = {
     isPending?: boolean;
 };
 
-const showToolCalls = false;
-
-export function EmailAndPasswordInput() {
-    return (
-        <div className="flex flex-col gap-2">
-            <input id="username" style={{ display: "none" }} type="text" name="fakeusernameremembered"></input>
-            <input id="password" style={{ display: "none" }} type="password" name="fakepasswordremembered"></input>
-            <Input type="email" placeholder="Email" autoFocus autoComplete="nope" />
-            <Input type="password" placeholder="Password" autoComplete="new-password" />
-        </div>
-    );
-}
+const showToolCalls = true;
 
 export function ChatMessage({ message, isPending, onSuggestionClick: onOptionClick }: ChatMessageProps) {
     // stream the message
@@ -73,7 +62,7 @@ export function ChatMessage({ message, isPending, onSuggestionClick: onOptionCli
         if (inputProvider) {
             switch (inputProvider.inputType) {
                 case "suggestions":
-                    return <SuggestionsInput suggestions={inputProvider.data} onSuggestionClick={onOptionClick} />;
+                    return <SuggestionsInput suggestions={inputProvider.data} onSuggestionClick={onOptionClick} message={message} />;
                 default:
                     return null;
             }
@@ -87,9 +76,11 @@ export function ChatMessage({ message, isPending, onSuggestionClick: onOptionCli
             <div className="flex flex-shrink-0 w-[22px] h-[22px] mt-[4px] rounded-full border-gray-300 border justify-center items-center">
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : isAssistant ? <Bot size={18} /> : <FaRegUser size={14} />}
             </div>
-            <div className="flex flex-col">
-                <div className={`flex-1 flex flex-col p-2 rounded-md ${isAssistant ? "bg-gray-100" : "bg-[#e8fff4]"}`}>
-                    <MemoizedReactMarkdown className="formatted">{getMessageContent()}</MemoizedReactMarkdown>
+            <div className="flex flex-col w-full">
+                <div className="flex flex-row items-start">
+                    <div className={`flex flex-col p-2 rounded-md ${isAssistant ? "bg-gray-100" : "bg-[#e8fff4]"}`}>
+                        <MemoizedReactMarkdown className="formatted">{getMessageContent()}</MemoizedReactMarkdown>
+                    </div>
                 </div>
                 {!isPending && getInputProviderComponent()}
             </div>
@@ -127,10 +118,11 @@ export function ChatMessages({ messages, onSuggestionClick }: ChatMessagesProps)
 type SuggestionsInputProps = {
     suggestions: string[];
     onSuggestionClick?: (suggestion: string) => void;
+    message: Message;
 };
 
-export function SuggestionsInput({ suggestions, onSuggestionClick }: SuggestionsInputProps) {
-    const [selectedSuggestion, setSelectedSuggestion] = useState<string>("");
+export function SuggestionsInput({ suggestions, onSuggestionClick, message }: SuggestionsInputProps) {
+    const [selectedSuggestion, setSelectedSuggestion] = useState<string>(message.suggestion ?? "");
 
     // get color based on index
     const getColor = (index: number) => {
@@ -140,9 +132,18 @@ export function SuggestionsInput({ suggestions, onSuggestionClick }: Suggestions
     };
 
     const onSuggestionItemClick = (suggestion: string) => {
+        message.suggestion = suggestion;
+        setSelectedSuggestion(suggestion);
         if (onSuggestionClick) {
             onSuggestionClick(suggestion);
         }
+    };
+
+    const isChosen = (selectedSuggestion: string, suggestion: string) => {
+        return selectedSuggestion === suggestion;
+    };
+    const isNotChosen = (selectedSuggestion: string, suggestion: string) => {
+        return selectedSuggestion !== "" && selectedSuggestion !== suggestion;
     };
 
     return (
@@ -150,19 +151,23 @@ export function SuggestionsInput({ suggestions, onSuggestionClick }: Suggestions
             {suggestions.map((suggestion, index) => (
                 <div
                     key={index}
-                    className="flex-1 flex flex-row min-h-[40px] cursor-pointer items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground relative overflow-hidden"
+                    className={`flex-1 flex flex-row min-h-[40px] cursor-pointer items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground relative overflow-hidden`}
                     onClick={() => onSuggestionItemClick(suggestion)}
                 >
                     <div
-                        className={`flex flex-row justify-center items-center text-[10px] font-bold text-white m-0 p-0 w-[16px] h-full bg-[#58dda1]`}
-                        // style={{
-                        //     backgroundColor: getColor(index),
-                        // }}
+                        className={`flex flex-row justify-center items-center text-[10px] font-bold text-white m-0 p-0 w-[16px] h-full`}
+                        style={{
+                            backgroundColor: isNotChosen(selectedSuggestion, suggestion) ? "#d5d5d5" : "#58dda1",
+                        }}
                     >
                         {index + 1}
                     </div>
-                    <div className="flex-1 pl-2 pr-1 py-1">{suggestion}</div>
-                    {/* e59b67 fff7ed #58dda1 #dd587e #b0bbb6 #ffb5b5 #b5ffc4 */}
+                    <div className={`flex-1 pl-2 pr-1 py-1`}>{suggestion}</div>
+                    {/* e59b67 fff7ed #58dda1 #dd587e #b0bbb6 #ffb5b5 #b5ffc4 
+                    selectedBg: #bfffd5
+                    unselectedBg: #d5d5d5
+                    unselectedText: #a7a7a7
+                    */}
                 </div>
             ))}
         </div>
@@ -217,6 +222,7 @@ type AssistantChatProps = {
 
 export function AiChat({ formData, setFormData, context, setContext }: AssistantChatProps) {
     const [initialized, setInitialized] = useState(false);
+    const viewportRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (initialized) return;
@@ -297,6 +303,11 @@ export function AiChat({ formData, setFormData, context, setContext }: Assistant
                         setMessages((currentMessages) => [...currentMessages, ...newMessages]);
                     }
                 }
+
+                // scroll to bottom
+                if (viewportRef.current) {
+                    viewportRef.current.scrollTop = viewportRef.current.scrollHeight;
+                }
             }
         });
     };
@@ -305,7 +316,7 @@ export function AiChat({ formData, setFormData, context, setContext }: Assistant
         <div className="flex-1 flex flex-col w-full" style={{ height: "0px" }}>
             {/* height set to 0px because ScrollArea doesn't work without it */}
             <div className="flex-1 flex flex-col justify-center items-center relative overflow-hidden">
-                <ScrollArea className="flex-1 relative overflow-hidden w-full">
+                <ScrollArea viewportRef={viewportRef} className="flex-1 relative overflow-hidden w-full">
                     {/* <Scrollbars autoHide> */}
                     <div className="flex flex-col space-y-4 p-4 w-full">
                         <ChatMessages messages={messages} onSuggestionClick={onSuggestionClick} />

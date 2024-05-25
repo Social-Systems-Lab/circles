@@ -1,5 +1,9 @@
 import { AiWizard } from "@/components/ai/ai-wizard";
 
 export default function Settings() {
-    return <AiWizard />;
+    return (
+        <div className="w-full h-full absolute">
+            <AiWizard />
+        </div>
+    );
 }

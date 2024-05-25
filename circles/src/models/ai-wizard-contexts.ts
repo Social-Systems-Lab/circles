@@ -26,6 +26,7 @@ export type AiWizardStep = {
     prompt?: string;
     nextStep?: number;
     inputProvider?: InputProvider;
+    generateInputProviderInstructions?: string;
 };
 
 export const getContextSystemMessage = (context: AiWizardContext, formData: FormData) => {
@@ -102,7 +103,7 @@ export const aiWizardContexts: { [key: string]: AiWizardContext } = {
                 stepNumber: 1,
                 description: "Ask for email address",
                 instructions: "Please provide your email address.",
-                prompt: "Let's create a new account! TODO",
+                prompt: "Let's create a new account!",
             },
             {
                 stepNumber: 2,
@@ -129,7 +130,8 @@ export const aiWizardContexts: { [key: string]: AiWizardContext } = {
         formSchema: `z.object({
             type: z.enum(["user", "organization"]).describe("Account type"),
             email: z.string().email().describe("Email address"),
-            password: passwordSchema.describe("Password"),
+            password: z.string().min(8).describe("Password containing at least 8 characters"),
+            name: z.string().describe("User's full name or if organization the organization's name"),
         });`,
 
         defaultStep: 1,
@@ -153,6 +155,11 @@ export const aiWizardContexts: { [key: string]: AiWizardContext } = {
             },
             {
                 stepNumber: 3,
+                description: "Enter name or organization name",
+                instructions: "Instruct the user to enter their name or organization name depending on what account type they have chosen.",
+            },
+            {
+                stepNumber: 4,
                 description: "Enter password",
                 instructions:
                     "Instruct the user to choose a password. After the password is submitted, call 'submitForm' to submit the form and if registration is successful switch to the 'personlization-form' context.",
@@ -180,48 +187,60 @@ export const aiWizardContexts: { [key: string]: AiWizardContext } = {
         description: "Personalization form for new users",
         intent: "personalize their account on the Circles platform",
         formSchema: `z.object({
-            name: z.string().describe("User's name, nickname or if organization the organization's name"),
             handle: handleSchema.describe(
                 "Unique handle that will identify the account on the platform, e.g. a nickname or organisation name. May consist of lowercase letters, numbers and underscore."
             ),
-            description: z.string().optional().describe("Short description of the user or organization"),
             picture: z.string().optional().describe("URL to profile picture"),
             cover: z.string().optional().describe("URL to cover picture"),
-            content: z.string().optional().describe("Profile content that describes the user or organization in more detail"),
+            answer_1: z.string().optional().describe("User's answer to the first personlization question"),
+            answer_2: z.string().optional().describe("User's answer to the second personlization question"),
+            answer_3: z.string().optional().describe("User's answer to the third personlization question"),
+            content: z.string().optional().describe("Profile content that will be generated based on the users answers that describes the user or organization in more detail. This will be presented on the user's profile to entice people to join or connect with the user or organization."),
+            description: z.string().optional().describe("Short description that summarizes the essence and 'vibe' of the user or organization."),
         });`,
 
         defaultStep: 1,
         steps: [
             {
                 stepNumber: 1,
-                description: "Enter name or organization name",
-                instructions: "Instruct the user to enter their name or organization name depending on what account type they have chosen.",
+                description: "Ask the user the first personlization question",
+                instructions:
+                    "Inform the user briefly about the process and ask the user the first personlization question that the relate to the ethos of the platform. The first one being 'What are you fighting for?', personalize the question if possible.",
             },
             {
                 stepNumber: 2,
-                description: "Choose a unique handle",
+                description: "Ask the user the second personlization question",
                 instructions:
-                    "Instruct the user to choose a unique handle. Important: call 'presentSuggestions' with some suggested handles based on the user's input so far that will be presented below your response.",
+                    "Offer a quick feedback on the user's answer, try to mention that there are many others that share the same vision. Then ask the second personalization question and here you can be creative in what the question is.",
             },
             {
                 stepNumber: 3,
-                description: "Upload a profile picture",
-                instructions: "Please upload a profile picture.",
+                description: "Ask the user the third and final personlization question",
+                instructions:
+                    "Offer a quick feedback on the user's previous answers, connect the two. Then ask the final personalization question and here you can be creative in what the question is.",
             },
             {
                 stepNumber: 4,
-                description: "Upload a cover picture",
-                instructions: "Please upload a cover picture.",
+                description: "Generate profile description",
+                instructions:
+                    "Generate long profile content and short description based on all the information given so far. The long profile content will be presented on the user's profile to entice people to join or connect with the user or organization. The short desciption is at a glance description that summarizes the essence and 'vibe' of the user or organization. And then ask if anything should be changed and if not proceed to the next step.",
             },
             {
                 stepNumber: 5,
-                description: "Generate profile description",
-                instructions: "Please answer the following questions to help us generate your profile description.",
+                description: "Choose cover picture",
+                instructions: "Instruct the user that a cover image has been generated for them.",
             },
             {
                 stepNumber: 6,
-                description: "Provide a short description",
-                instructions: "Please provide a short description.",
+                description: "Upload a profile picture",
+                instructions: "Prompt the user to upload a profile picture as a cherry on the cake.",
+            },
+            {
+                stepNumber: 7,
+                description: "Choose a unique handle",
+                instructions:
+                    "Prompt the user to choose a unique handle (suggestions will be presented in a panel below so no need to mention suggestions in your response).",
+                generateInputProviderInstructions: "Generate 4 suggested handles for the user to choose from.",
             },
         ],
         availableContexts: [

@@ -64,7 +64,7 @@ function WizardDisplay({ data }: WizardDisplayProps) {
     return (
         <div className="p-4 w-full h-full overflow-hidden relative">
             <Image src="/images/cover2.png" alt="" objectFit="cover" fill />
-            <div className="bg-white rounded-[20px] p-4 absolute top-2 left-2">
+            <div className="bg-white rounded-[20px] p-4 m-4 absolute top-0 left-0">
                 <h2 className="text-xl font-bold m-0 p-0 mb-4">FormData</h2>
                 <pre className="w-full whitespace-pre-wrap">{JSON.stringify(data, null, 2)}</pre>
             </div>

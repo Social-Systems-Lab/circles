@@ -65,7 +65,7 @@ const printMessages = (messages: Message[]) => {
     });
 };
 
-function setStep(stepNumber: number, contextId: string, stream: any): string {
+async function setStep(stepNumber: number, contextId: string, stream: any): string {
     let context = aiWizardContexts[contextId];
     let stepDetails = context.steps.find((x) => x.stepNumber === stepNumber);
     if (!stepDetails) {
@@ -73,6 +73,9 @@ function setStep(stepNumber: number, contextId: string, stream: any): string {
     }
     if (stepDetails.inputProvider) {
         stream.update(stepDetails.inputProvider);
+    }
+    if (stepDetails.generateInputProviderInstructions) {
+        // call openAI to get input provider
     }
 
     // initiate step
@@ -123,18 +126,18 @@ async function streamResponse(provider: OpenAIProvider, stream: any, messages: M
                     return "Form value updated.";
                 },
             },
-            presentSuggestions: {
-                description:
-                    "Provides the user with some suggested answers to pick from to make things convenient. These suggestions will be presented along the regular text input",
-                parameters: z.object({
-                    suggestions: z.array(z.string()).describe("An array of suggestions that is to presented to the user."),
-                }),
-                execute: async ({ suggestions }) => {
-                    let inputProvider: InputProvider = { type: "input-provider", inputType: "suggestions", data: suggestions };
-                    stream.update(inputProvider);
-                    return `The suggestions [${suggestions.join()}] will be presented to the user after your response.`;
-                },
-            },
+            // presentSuggestions: {
+            //     description:
+            //         "Provides the user with some suggested answers to pick from to make things convenient. These suggestions will be presented along the regular text input",
+            //     parameters: z.object({
+            //         suggestions: z.array(z.string()).describe("An array of suggestions that is to presented to the user."),
+            //     }),
+            //     execute: async ({ suggestions }) => {
+            //         let inputProvider: InputProvider = { type: "input-provider", inputType: "suggestions", data: suggestions };
+            //         stream.update(inputProvider);
+            //         return `The suggestions [${suggestions.join()}] will be presented to the user after your response.`;
+            //     },
+            // },
             initiateStep: {
                 description: "Initiates a new step in the form to receive detailed information on how to guide the user through the step",
                 parameters: z.object({
@@ -142,7 +145,7 @@ async function streamResponse(provider: OpenAIProvider, stream: any, messages: M
                 }),
                 execute: async ({ step }) => {
                     // get step details from context
-                    return setStep(step, contextId, stream);
+                    return await setStep(step, contextId, stream);
                 },
             },
             switchContext: {
@@ -158,7 +161,7 @@ async function streamResponse(provider: OpenAIProvider, stream: any, messages: M
                     contextId = newContextId;
                     stream.update({ type: "form-data", data: {} });
                     stream.update({ type: "switch-context", contextId: newContextId });
-                    let stepText = setStep(1, newContextId, stream);
+                    let stepText = await setStep(1, newContextId, stream);
 
                     return `Switched to context: ${newContextId}
                     ${stepText}                    
@@ -197,7 +200,7 @@ async function streamResponse(provider: OpenAIProvider, stream: any, messages: M
         } else if (delta.type === "tool-result") {
             if (shouldContinueGenerating(delta)) {
                 let coreToolMessage: CoreToolMessage = { role: "tool", content: [delta] };
-                let newMessage: Message = { coreMessage: coreToolMessage, toolCall: false };
+                let newMessage: Message = { coreMessage: coreToolMessage, toolCall: true };
                 printMessage(newMessage);
                 newMessages.push(newMessage);
             }
