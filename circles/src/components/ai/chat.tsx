@@ -3,19 +3,15 @@
 import { KeyboardEvent, KeyboardEventHandler, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
-import { getAnswer, getStreamedAnswer } from "./actions";
+import { getStreamedAnswer } from "./actions";
 import { readStreamableValue } from "ai/rsc";
 import { FaRegUser } from "react-icons/fa";
-import { RiRobot3Line } from "react-icons/ri";
 import { Bot, Loader2 } from "lucide-react";
-import { Scrollbars } from "react-custom-scrollbars-2";
 import { MemoizedReactMarkdown } from "../memoized-markdown";
 import { ScrollArea } from "../ui/scroll-area";
-import { AddedMessages, FormData, InputProvider, Message, SwitchContext } from "@/models/models";
-import { CoreUserMessage } from "ai";
+import { AiContext, AddedMessages, FormData, InputProvider, Message, SwitchContext } from "@/models/models";
 import { useIsMobile } from "../use-is-mobile";
-import { AiWizardContext, aiWizardContexts } from "@/models/ai-wizard-contexts";
-import { set } from "zod";
+import { aiContexts } from "@/lib/ai-contexts";
 
 type ChatMessageProps = {
     message: Message;
@@ -29,8 +25,7 @@ export function ChatMessage({ message, isPending, onSuggestionClick: onOptionCli
     // stream the message
     const isAssistant = message.coreMessage.role !== "user";
     const inputProvider = message.inputProvider;
-
-    const getMessageContent = () => {
+    const messageContent = useMemo(() => {
         switch (message.coreMessage.role) {
             case "assistant":
                 // could be a tool call message or regular message
@@ -56,7 +51,7 @@ export function ChatMessage({ message, isPending, onSuggestionClick: onOptionCli
                     return "Unknown message";
                 }
         }
-    };
+    }, [message]);
 
     const getInputProviderComponent = () => {
         if (inputProvider) {
@@ -77,11 +72,13 @@ export function ChatMessage({ message, isPending, onSuggestionClick: onOptionCli
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : isAssistant ? <Bot size={18} /> : <FaRegUser size={14} />}
             </div>
             <div className="flex flex-col w-full">
-                <div className="flex flex-row items-start">
-                    <div className={`flex flex-col p-2 rounded-md ${isAssistant ? "bg-gray-100" : "bg-[#e8fff4]"}`}>
-                        <MemoizedReactMarkdown className="formatted">{getMessageContent()}</MemoizedReactMarkdown>
+                {messageContent && (
+                    <div className="flex flex-row items-start">
+                        <div className={`flex flex-col p-2 rounded-md ${isAssistant ? "bg-gray-100" : "bg-[#e8fff4]"}`}>
+                            <MemoizedReactMarkdown className="formatted">{messageContent}</MemoizedReactMarkdown>
+                        </div>
                     </div>
-                </div>
+                )}
                 {!isPending && getInputProviderComponent()}
             </div>
         </div>
@@ -216,8 +213,8 @@ function InputBox({ onSend }: InputBoxProps) {
 type AssistantChatProps = {
     formData: any;
     setFormData: (data: any) => void;
-    context: AiWizardContext;
-    setContext: (context: AiWizardContext) => void;
+    context: AiContext;
+    setContext: (context: AiContext) => void;
 };
 
 export function AiChat({ formData, setFormData, context, setContext }: AssistantChatProps) {
@@ -292,7 +289,7 @@ export function AiChat({ formData, setFormData, context, setContext }: Assistant
                     } else if (delta.type === "switch-context") {
                         let contextId = (delta as SwitchContext).contextId;
                         console.log("CLIENT: switch-context", contextId);
-                        let newContext = aiWizardContexts[contextId];
+                        let newContext = aiContexts[contextId];
                         if (newContext) {
                             setMessages([]);
                             setContext(newContext);

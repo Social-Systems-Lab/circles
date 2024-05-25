@@ -130,3 +130,43 @@ export type AddedMessages = {
 };
 
 export type StreamableValue = string | InputProvider | FormData | SwitchContext | AddedMessages;
+
+export type AvailableContext = {
+    id: string;
+    switchReason: string;
+};
+
+export type ContextInfo = {
+    currentContextId: string;
+    contextId: string;
+    formData: any;
+    context: AiContext;
+    stream: any;
+    messages: Message[];
+};
+
+export type AiContext = {
+    id: string;
+    title: string;
+    intent: string;
+    description: string;
+    formSchema?: string;
+    defaultStep?: number;
+    instructions?: string;
+    prompt?: string;
+    steps: AiStep[];
+    availableContexts: AvailableContext[];
+    icon: string;
+};
+
+export type AiContextTool = (c: ContextInfo) => any;
+
+export type AiStep = {
+    stepNumber: number;
+    description: string;
+    instructions?: string;
+    prompt?: string;
+    nextStep?: number;
+    inputProvider?: InputProvider;
+    generateInputProviderInstructions?: string;
+};

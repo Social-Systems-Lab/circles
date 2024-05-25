@@ -1,69 +1,6 @@
-import { CoreSystemMessage } from "ai";
-import { InputProvider, Message } from "./models";
+import { AiContext } from "../models/models";
 
-export type AvailableContext = {
-    id: string;
-    switchReason: string;
-};
-
-export type AiWizardContext = {
-    id: string;
-    title: string;
-    intent: string;
-    description: string;
-    formSchema?: string;
-    defaultStep?: number;
-    instructions?: string;
-    prompt?: string;
-    steps: AiWizardStep[];
-    availableContexts: AvailableContext[];
-};
-
-export type AiWizardStep = {
-    stepNumber: number;
-    description: string;
-    instructions?: string;
-    prompt?: string;
-    nextStep?: number;
-    inputProvider?: InputProvider;
-    generateInputProviderInstructions?: string;
-};
-
-export const getContextSystemMessage = (context: AiWizardContext, formData: FormData) => {
-    const intent = context.intent;
-    let content = "";
-    let preface = `You are an AI assistant that helps the user ${intent}. You are on the Circles platform, a social media platform for change-makers. Guide the user through the process, personalize the experience and be encouraging.`;
-    let steps = "";
-    if (context.steps.length > 0) {
-        steps = "\n\nHere are the steps:\n";
-        context.steps.forEach((step) => {
-            steps += `${step.stepNumber}: ${step.description}\n`;
-        });
-    }
-    let formDataString = "";
-    if (formData) {
-        formDataString = `\n\nWe currently have the following formData, do not overwrite any value without user confirming it:\n${JSON.stringify(formData)}`;
-    }
-    let important = `\n\nImportant: 
-    - Make sure to call the updateFormData function every time user gives input, to update the formData with new information.
-    - Make sure to call the initiateStep function every time you start a new step in the form to receive detailed information on how to guide the user through the step.`;
-
-    let formSchema = "";
-    if (context.formSchema) {
-        formSchema = `\n\nThis is the formData schema:\n${context.formSchema}`;
-    }
-
-    content = preface + steps + formDataString + formSchema + important;
-
-    let systemMessage: CoreSystemMessage = {
-        role: "system",
-        content: content,
-    };
-    return systemMessage;
-};
-
-// TODO these can be fetched from the database
-export const aiWizardContexts: { [key: string]: AiWizardContext } = {
+export const aiContexts: { [key: string]: AiContext } = {
     "logged-out-welcome": {
         id: "logged-out-welcome",
         title: "Welcome to Circles!",
@@ -74,7 +11,7 @@ export const aiWizardContexts: { [key: string]: AiWizardContext } = {
             {
                 stepNumber: 1,
                 description: "Welcome the user",
-                prompt: "Hi there! I'm your automated assistant. I'm here to help you join the Circles platform and ease the process. Do you have an account?",
+                prompt: "Hi and welcome to Circles, your platform for creating change. If you're new here, start your journey by creating your account. If you're returning, welcome back! Ready to dive back and continue making an impact?",
                 inputProvider: {
                     type: "input-provider",
                     inputType: "suggestions",
@@ -92,6 +29,7 @@ export const aiWizardContexts: { [key: string]: AiWizardContext } = {
                 switchReason: "Switch to this context to initiate register a new account process.",
             },
         ],
+        icon: "FaDoorOpen",
     },
     "login-form": {
         id: "login-form",
@@ -121,6 +59,7 @@ export const aiWizardContexts: { [key: string]: AiWizardContext } = {
                 switchReason: "Switch to this context if log in process is to be cancelled and to initiate the register new account process.",
             },
         ],
+        icon: "PiSignInBold",
     },
     "register-form": {
         id: "register-form",
@@ -179,8 +118,8 @@ export const aiWizardContexts: { [key: string]: AiWizardContext } = {
                 switchReason: "Switch to this context to initiate personalization process after the user has registered their account.",
             },
         ],
+        icon: "IoCreate",
     },
-
     "personalization-form": {
         id: "personalization-form",
         title: "Personalize your account",
@@ -249,5 +188,6 @@ export const aiWizardContexts: { [key: string]: AiWizardContext } = {
                 switchReason: "Switch to this context when the personalization process is done.",
             },
         ],
+        icon: "MdAccountCircle",
     },
 };

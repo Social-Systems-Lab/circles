@@ -8,21 +8,45 @@ import { readStreamableValue } from "ai/rsc";
 import { FaRegUser } from "react-icons/fa";
 import { AiChat } from "./chat";
 import Image from "next/image";
-import { AiWizardContext, aiWizardContexts } from "@/models/ai-wizard-contexts";
+import { aiContexts } from "@/lib/ai-contexts";
+import { AiContext } from "@/models/models";
+import Map from "@/app/(circle)/Map";
+import { FaDoorOpen } from "react-icons/fa6";
+import { PiSignInBold } from "react-icons/pi";
+import { IoCreate } from "react-icons/io5";
+import { MdAccountCircle } from "react-icons/md";
 
 type ContextProps = {
-    context: AiWizardContext;
+    context: AiContext;
     activeTab: WizardModeOptions;
     onTabChange: (tab: WizardModeOptions) => void;
 };
 
 export function WizardContextHeader({ context, activeTab, onTabChange }: ContextProps) {
+    const getIcon = () => {
+        switch (context.icon) {
+            case "FaDoorOpen":
+                return <FaDoorOpen />;
+            case "PiSignInBold":
+                return <PiSignInBold />;
+            case "IoCreate":
+                return <IoCreate />;
+            case "MdAccountCircle":
+                return <MdAccountCircle />;
+            default:
+                return null;
+        }
+    };
+
     return (
         <div className="flex flex-col w-full items-center">
             <div className="flex-1">
-                <div className="flex flex-row mt-4 mb-2 text-white rounded-[20px] bg-[#8595c9]">
+                {/* <div className="flex flex-row mt-4 mb-2 text-white rounded-[20px] bg-[#8595c9]"> */}
+                {/* <div className="flex flex-row mt-4 mb-2 text-black justify-center items-center"> */}
+                <div className="flex flex-row p-1 mt-4 mb-2 text-white rounded-[20px] bg-[#8595c9] justify-center items-center">
                     {/* #57428d gray-200 */}
-                    <h4 className="m-0 p-2 pl-6 pr-6 text-[16px]">{context.title}</h4>
+                    <div className="flex flex-row justify-center items-center ml-1 p-[2px]">{getIcon()}</div>
+                    <h4 className="m-0 ml-2 mr-4 text-[16px]">{context.title}</h4>
                 </div>
             </div>
             <div className="flex-1">
@@ -62,8 +86,9 @@ type WizardDisplayProps = {
 
 function WizardDisplay({ data }: WizardDisplayProps) {
     return (
-        <div className="p-4 w-full h-full overflow-hidden relative">
+        <div className="w-full h-full overflow-hidden relative">
             <Image src="/images/cover2.png" alt="" objectFit="cover" fill />
+            {/* <Map mapboxKey="pk.eyJ1IjoidGltYW9sc3NvbiIsImEiOiJjbGQyMW05M2YwMXVhM3lvYzMweWllbDZtIn0.ar7LH2YZverGDBWGjxQ65w" /> */}
             <div className="bg-white rounded-[20px] p-4 m-4 absolute top-0 left-0">
                 <h2 className="text-xl font-bold m-0 p-0 mb-4">FormData</h2>
                 <pre className="w-full whitespace-pre-wrap">{JSON.stringify(data, null, 2)}</pre>
@@ -73,12 +98,12 @@ function WizardDisplay({ data }: WizardDisplayProps) {
 }
 
 type AiWizardProps = {
-    initialContext?: AiWizardContext;
+    initialContext?: AiContext;
 };
 
-export function AiWizard({ initialContext = aiWizardContexts["logged-out-welcome"] }: AiWizardProps) {
+export function AiWizard({ initialContext = aiContexts["logged-out-welcome"] }: AiWizardProps) {
     const [activeTab, setActiveTab] = useState<WizardModeOptions>("Assisted");
-    const [context, setContext] = useState<AiWizardContext>(initialContext);
+    const [context, setContext] = useState<AiContext>(initialContext);
     const [formData, setFormData] = useState<any>({});
 
     const handleTabChange = (tab: WizardModeOptions) => {
