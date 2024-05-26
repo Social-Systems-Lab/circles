@@ -17,7 +17,7 @@ export const aiContexts: { [key: string]: AiContext } = {
                 inputProvider: {
                     type: "input-provider",
                     inputType: "suggestions",
-                    data: ["Yes, I have an account", "I want to create an account", "Why should I join?"],
+                    data: ["I have an account", "I want to create an account", "Why should I join?"],
                 },
             },
         ],

@@ -1,7 +1,17 @@
 import { CoreSystemMessage, CoreTool } from "ai";
-import { AiContextTool, AiContext, ContextInfo, InputProvider, Message } from "../models/models";
+import {
+    AiContextTool,
+    AiContext,
+    ContextInfo,
+    InputProvider,
+    Message,
+    registrationFormSchema,
+    RegistrationFormType,
+    AuthData,
+} from "../models/models";
 import { z } from "zod";
 import { aiContexts } from "./ai-contexts";
+import { createUser, generateUserToken } from "./auth";
 
 export const getContextTools = (c: ContextInfo): Record<string, CoreTool<any, any>> => {
     return aiContextsTools[c.contextId](c);
@@ -45,7 +55,7 @@ export const getContextSystemMessage = (c: ContextInfo) => {
     return systemMessage;
 };
 
-async function setStep(stepNumber: number, contextId: string, stream: any): Promise<string> {
+export async function setStep(stepNumber: number, contextId: string, stream: any): Promise<string> {
     let context = aiContexts[contextId];
     let stepDetails = context.steps.find((x) => x.stepNumber === stepNumber);
     if (!stepDetails) {
@@ -144,12 +154,27 @@ export const aiContextsTools: { [key: string]: (c: ContextInfo) => Record<string
         getSmartFormTools(c, {
             submitForm: {
                 description: "Submits the registration form to the server",
-                parameters: z.object({}),
-                execute: async () => {
-                    // Custom registration logic
-                    // Example: Save the form data to the database
-                    // await saveToDatabase(c.formData);
-                    return "Registration form submission not implemented";
+                parameters: registrationFormSchema,
+                execute: async (registrationFormData: RegistrationFormType) => {
+                    // register the user
+                    try {
+                        // validate the form data
+                        let user = await createUser(
+                            registrationFormData.name,
+                            registrationFormData.type,
+                            registrationFormData.email,
+                            registrationFormData.password,
+                        );
+
+                        // generate and sign token for the user
+                        let token = generateUserToken(user.did, user.email);
+                        let streamMessage: AuthData = { type: "auth-data", user: user, token: token };
+                        c.stream.update(streamMessage);
+
+                        return "User registered successfully";
+                    } catch (error) {
+                        return JSON.stringify(error);
+                    }
                 },
             },
         }),

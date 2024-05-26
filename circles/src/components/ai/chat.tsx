@@ -21,6 +21,8 @@ import { ScrollArea } from "../ui/scroll-area";
 import { AiContext, AddedMessages, FormData, InputProvider, Message, SwitchContext } from "@/models/models";
 import { useIsMobile } from "../use-is-mobile";
 import { aiContexts } from "@/lib/ai-contexts";
+import _ from "lodash"; // to throttle calls
+import { useThrottle } from "../use-throttle";
 
 type ChatMessageProps = {
     message: Message;
@@ -247,8 +249,9 @@ export function AiChat({ formData, setFormData, context, setContext }: Assistant
 
     const handleSend = useCallback(
         async (message: string | null) => {
+            console.log("inside handleSend()");
+
             // add response message to list of chat messages
-            if (!message && initialized) return;
             if (isPending) return;
 
             let newMessages: Message[] = [];
@@ -310,6 +313,9 @@ export function AiChat({ formData, setFormData, context, setContext }: Assistant
                         } else if (delta.type === "added-messages") {
                             let newMessages = (delta as AddedMessages).messages;
                             setMessages((currentMessages) => [...currentMessages, ...newMessages]);
+                        } else if (delta.type === "auth-data") {
+                            // TODO set auth data
+                            console.log("auth-data", delta);
                         }
                     }
 
@@ -320,17 +326,18 @@ export function AiChat({ formData, setFormData, context, setContext }: Assistant
                 }
             });
         },
-        [context.id, formData, initialized, messages, responseMessage, setContext, setFormData, isPending],
+        [context.id, formData, messages, responseMessage, setContext, setFormData, isPending],
     );
 
+    const throttledHandleSend = useThrottle(handleSend, 1000);
+
     useEffect(() => {
-        if (initialized) return;
-
-        console.log("calling handleSend()");
-
-        // initialize the chat by triggering the first step
-        handleSend(null);
-        setInitialized(true);
+        if (!initialized) {
+            setInitialized(true);
+            console.log("calling handleSend()");
+            // initialize the chat by triggering the first step
+            throttledHandleSend(null);
+        }
 
         // initialize the chat with a welcome message from the context
         // const welcomeMessage = context.steps[0].prompt ?? "";

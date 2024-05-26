@@ -9,10 +9,15 @@ export const handleSchema = z
     .max(20, { message: "Handle can't be more than 20 characters long" })
     .regex(/^[a-zA-Z0-9_]+$/, { message: "Handle can only contain letters, numbers and underscores." });
 
+export const accountTypeSchema = z.enum(["user", "organization"]);
+export type AccountType = z.infer<typeof accountTypeSchema>;
+
 export const userSchema = z.object({
-    did: didSchema.optional(),
+    did: didSchema,
+    type: accountTypeSchema.default("user"),
     name: z.string().default("Anonymous User"),
-    handle: handleSchema,
+    email: z.string().email(),
+    handle: handleSchema.optional(),
     picture: z.string().optional(),
     cover: z.string().optional(),
 });
@@ -94,18 +99,20 @@ export type Message = {
 };
 
 export const registrationFormSchema = z.object({
-    type: z.enum(["user", "organization"]).describe("Account type"),
+    type: accountTypeSchema.describe("Account type"),
     name: z.string().describe("User's name, nickname or if organization the organization's name"),
     email: z.string().email().describe("Email address"),
     password: passwordSchema.describe("Password"),
-    handle: handleSchema.describe(
-        "Unique handle that will identify the account on the platform, e.g. a nickname or organisation name. May consist of lowercase letters, numbers and underscore.",
-    ),
-    description: z.string().optional().describe("Short description of the user or organization"),
-    picture: z.string().optional().describe("URL to profile picture"),
-    cover: z.string().optional().describe("URL to cover picture"),
-    content: z.string().optional().describe("Profile content that describes the user or organization in more detail"),
+    // handle: handleSchema.optional().describe(
+    //     "Unique handle that will identify the account on the platform, e.g. a nickname or organisation name. May consist of lowercase letters, numbers and underscore.",
+    // ),
+    // description: z.string().optional().describe("Short description of the user or organization"),
+    // picture: z.string().optional().describe("URL to profile picture"),
+    // cover: z.string().optional().describe("URL to cover picture"),
+    // content: z.string().optional().describe("Profile content that describes the user or organization in more detail"),
 });
+
+export type RegistrationFormType = z.infer<typeof registrationFormSchema>;
 
 export type InputProvider = {
     type: "input-provider";
@@ -129,7 +136,13 @@ export type AddedMessages = {
     messages: Message[];
 };
 
-export type StreamableValue = string | InputProvider | FormData | SwitchContext | AddedMessages;
+export type AuthData = {
+    type: "auth-data";
+    user: User;
+    token: string;
+};
+
+export type StreamableValue = string | InputProvider | FormData | SwitchContext | AddedMessages | AuthData;
 
 export type AvailableContext = {
     id: string;

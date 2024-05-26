@@ -15,7 +15,7 @@ import { StreamableValue, createStreamableValue } from "ai/rsc";
 import { OpenAIProvider, createOpenAI } from "@ai-sdk/openai";
 import { ServerConfigs } from "@/lib/db";
 import { AddedMessages, ContextInfo, Message } from "@/models/models";
-import { getContextSystemMessage, getContextTools } from "@/lib/ai-contexts-tools";
+import { getContextSystemMessage, getContextTools, setStep } from "@/lib/ai-contexts-tools";
 import { aiContexts } from "@/lib/ai-contexts";
 
 export async function getAnswer(question: string) {
@@ -77,6 +77,12 @@ async function streamResponse(provider: OpenAIProvider, c: ContextInfo, closeStr
     }
     let systemMessage = getContextSystemMessage(c);
     let coreMessages = [systemMessage, ...c.messages.map((x) => x.coreMessage)];
+
+    // if no message we are initiating context, so call setStep to the first step
+    if (c.messages.length <= 0 && c.context.steps.length > 0) {
+        let stepNumber = c.context.defaultStep || 1;
+        await setStep(stepNumber, c.currentContextId, c.stream);
+    }
 
     //console.log("formData", formData);
     if (closeStream) {
