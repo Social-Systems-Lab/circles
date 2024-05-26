@@ -26,6 +26,8 @@ export const getContextSystemMessage = (c: ContextInfo) => {
         formDataString = `\n\nWe currently have the following formData, do not overwrite any value without user confirming it:\n${JSON.stringify(formData)}`;
     }
     let important = `\n\nImportant: 
+    - Make sure to call the switchContext function if the user intentions are aligned with a different context than the current one.
+    ${context.availableContexts.length > 0 ? c.context.availableContexts.map((x) => "    - " + x.id + " - " + x.switchReason + "\n").join("") : ""}    
     - Make sure to call the updateFormData function every time user gives input, to update the formData with new information.
     - Make sure to call the initiateStep function every time you start a new step in the form to receive detailed information on how to guide the user through the step.`;
 
@@ -51,6 +53,9 @@ async function setStep(stepNumber: number, contextId: string, stream: any): Prom
     }
     if (stepDetails.inputProvider) {
         stream.update(stepDetails.inputProvider);
+    } else {
+        // clear any input provider
+        stream.update({ type: "input-provider", inputType: "none" });
     }
     if (stepDetails.generateInputProviderInstructions) {
         // call openAI to get input provider
@@ -77,7 +82,8 @@ export const getSmartFormTools = (c: ContextInfo, customTools?: any): Record<str
             },
         },
         initiateStep: {
-            description: "Initiates a new step in the form to receive detailed information on how to guide the user through the step",
+            description:
+                "Initiates a new step in the form to receive detailed information on how to guide the user through the step",
             parameters: z.object({
                 step: z.number().describe("The step to initiate"),
             }),
@@ -88,10 +94,12 @@ export const getSmartFormTools = (c: ContextInfo, customTools?: any): Record<str
         },
         switchContext: {
             description: `Switches the conversation to a different context. Here are the available contexts:\n ${c.context.availableContexts.map(
-                (x) => x.id + " - " + x.switchReason + "\n"
+                (x) => x.id + " - " + x.switchReason + "\n",
             )}`,
             parameters: z.object({
-                newContextId: z.enum([c.currentContextId, ...c.context.availableContexts.map((x) => x.id)]).describe("The context to switch to."),
+                newContextId: z
+                    .enum([c.currentContextId, ...c.context.availableContexts.map((x) => x.id)])
+                    .describe("The context to switch to."),
             }),
             execute: async ({ newContextId }: any): Promise<string> => {
                 // clear form data

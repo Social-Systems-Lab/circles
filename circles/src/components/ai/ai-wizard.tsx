@@ -22,7 +22,11 @@ type ContextProps = {
     onTabChange: (tab: WizardModeOptions) => void;
 };
 
-export function WizardContextHeader({ context, activeTab, onTabChange }: ContextProps) {
+export function WizardContextHeader({
+    context,
+    activeTab,
+    onTabChange,
+}: ContextProps) {
     const getIcon = () => {
         switch (context.icon) {
             case "FaDoorOpen":
@@ -39,18 +43,24 @@ export function WizardContextHeader({ context, activeTab, onTabChange }: Context
     };
 
     return (
-        <div className="flex flex-col w-full items-center">
+        <div className="flex w-full flex-col items-center">
             <div className="flex-1">
                 {/* <div className="flex flex-row mt-4 mb-2 text-white rounded-[20px] bg-[#8595c9]"> */}
                 {/* <div className="flex flex-row mt-4 mb-2 text-black justify-center items-center"> */}
-                <div className="flex flex-row p-1 mt-4 mb-2 text-white rounded-[20px] bg-[#8595c9] justify-center items-center">
+                <div className="mb-2 mt-4 flex flex-row items-center justify-center rounded-[20px] bg-[#8595c9] p-1 text-white">
                     {/* #57428d gray-200 */}
-                    <div className="flex flex-row justify-center items-center ml-1 p-[2px]">{getIcon()}</div>
-                    <h4 className="m-0 ml-2 mr-4 text-[16px]">{context.title}</h4>
+                    <div className="ml-1 flex flex-row items-center justify-center p-[2px]">
+                        {getIcon()}
+                    </div>
+                    <h4 className="m-0 ml-2 mr-4 text-[16px]">
+                        {context.title}
+                    </h4>
                 </div>
             </div>
             <div className="flex-1">
-                <div className="pr-4">{/* <FormModeTabs activeTab={activeTab} onTabChange={onTabChange} /> */}</div>
+                <div className="pr-4">
+                    {/* <FormModeTabs activeTab={activeTab} onTabChange={onTabChange} /> */}
+                </div>
             </div>
         </div>
     );
@@ -63,13 +73,24 @@ type WizardModeTabsProps = {
     onTabChange: (tab: WizardModeOptions) => void;
 };
 
-export function WizardModeTabs({ activeTab, onTabChange }: WizardModeTabsProps) {
+export function WizardModeTabs({
+    activeTab,
+    onTabChange,
+}: WizardModeTabsProps) {
     return (
-        <div className="flex flex-shrink-0 h-[48px] justify-center space-x-1 p-1 mt-4 mb-4 bg-[#f1f1f1] rounded-[8px]">
-            <Button className={`w-[120px] py-2 px-4`} onClick={() => onTabChange("Assisted")} variant={activeTab === "Assisted" ? "outline" : "ghost"}>
+        <div className="mb-4 mt-4 flex h-[48px] flex-shrink-0 justify-center space-x-1 rounded-[8px] bg-[#f1f1f1] p-1">
+            <Button
+                className={`w-[120px] px-4 py-2`}
+                onClick={() => onTabChange("Assisted")}
+                variant={activeTab === "Assisted" ? "outline" : "ghost"}
+            >
                 Assisted
             </Button>
-            <Button className={`w-[120px] py-2 px-4`} onClick={() => onTabChange("Manual")} variant={activeTab === "Manual" ? "outline" : "ghost"}>
+            <Button
+                className={`w-[120px] px-4 py-2`}
+                onClick={() => onTabChange("Manual")}
+                variant={activeTab === "Manual" ? "outline" : "ghost"}
+            >
                 Manual
             </Button>
         </div>
@@ -77,22 +98,38 @@ export function WizardModeTabs({ activeTab, onTabChange }: WizardModeTabsProps) 
 }
 
 function ManualForm() {
-    return <div className="flex-1 flex flex-column">Configure Tab</div>;
+    return <div className="flex-column flex flex-1">Configure Tab</div>;
 }
 
 type WizardDisplayProps = {
-    data: any;
+    formData: any;
 };
 
-function WizardDisplay({ data }: WizardDisplayProps) {
+function WizardDisplay({ formData }: WizardDisplayProps) {
+    const emptyFormData = !formData || Object.keys(formData).length === 0;
+
     return (
-        <div className="w-full h-full overflow-hidden relative">
-            <Image src="/images/cover2.png" alt="" objectFit="cover" fill />
+        <div className="relative h-full w-full overflow-hidden">
+            <Image
+                className="opacity-100"
+                src="/images/cover2.png"
+                alt=""
+                objectFit="cover"
+                fill
+            />
             {/* <Map mapboxKey="pk.eyJ1IjoidGltYW9sc3NvbiIsImEiOiJjbGQyMW05M2YwMXVhM3lvYzMweWllbDZtIn0.ar7LH2YZverGDBWGjxQ65w" /> */}
-            <div className="bg-white rounded-[20px] p-4 m-4 absolute top-0 left-0">
-                <h2 className="text-xl font-bold m-0 p-0 mb-4">FormData</h2>
-                <pre className="w-full whitespace-pre-wrap">{JSON.stringify(data, null, 2)}</pre>
-            </div>
+            {!emptyFormData && (
+                <div className="absolute left-0 top-0 flex h-full w-full flex-row items-center justify-center">
+                    <div className="m-4 max-w-[600px] rounded-[20px] bg-white p-4 shadow-lg">
+                        <h2 className="m-0 mb-4 p-0 text-xl font-bold">
+                            FormData
+                        </h2>
+                        <pre className="w-full whitespace-pre-wrap">
+                            {JSON.stringify(formData, null, 2)}
+                        </pre>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -101,7 +138,9 @@ type AiWizardProps = {
     initialContext?: AiContext;
 };
 
-export function AiWizard({ initialContext = aiContexts["logged-out-welcome"] }: AiWizardProps) {
+export function AiWizard({
+    initialContext = aiContexts["logged-out-welcome"],
+}: AiWizardProps) {
     const [activeTab, setActiveTab] = useState<WizardModeOptions>("Assisted");
     const [context, setContext] = useState<AiContext>(initialContext);
     const [formData, setFormData] = useState<any>({});
@@ -111,14 +150,25 @@ export function AiWizard({ initialContext = aiContexts["logged-out-welcome"] }: 
     };
 
     return (
-        <div className="flex flex-1 flex-row gap-0 h-full">
-            <div className="flex-1 flex flex-col justify-center items-center max-w-[650px] h-full">
-                <WizardContextHeader context={context} activeTab={activeTab} onTabChange={handleTabChange} />
-                {activeTab === "Assisted" && <AiChat formData={formData} setFormData={setFormData} context={context} setContext={setContext} />}
+        <div className="flex h-full flex-1 flex-row gap-0">
+            <div className="flex h-full max-w-[650px] flex-1 flex-col items-center justify-center">
+                <WizardContextHeader
+                    context={context}
+                    activeTab={activeTab}
+                    onTabChange={handleTabChange}
+                />
+                {activeTab === "Assisted" && (
+                    <AiChat
+                        formData={formData}
+                        setFormData={setFormData}
+                        context={context}
+                        setContext={setContext}
+                    />
+                )}
                 {activeTab === "Manual" && <ManualForm />}
             </div>
-            <div className="flex-1 bg-[#fdfdfd] overflow-hidden relative">
-                <WizardDisplay data={formData} />
+            <div className="relative flex-1 overflow-hidden bg-[#fdfdfd]">
+                <WizardDisplay formData={formData} />
             </div>
         </div>
     );

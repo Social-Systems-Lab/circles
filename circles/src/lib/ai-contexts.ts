@@ -12,6 +12,8 @@ export const aiContexts: { [key: string]: AiContext } = {
                 stepNumber: 1,
                 description: "Welcome the user",
                 prompt: "Hi and welcome to Circles, your platform for creating change. If you're new here, start your journey by creating your account. If you're returning, welcome back! Ready to dive back and continue making an impact?",
+                instructions:
+                    "Welcome the user and ask them if they have an account or if they want to create one. Switch to the appropriate context based on the user's answer.",
                 inputProvider: {
                     type: "input-provider",
                     inputType: "suggestions",
@@ -22,11 +24,11 @@ export const aiContexts: { [key: string]: AiContext } = {
         availableContexts: [
             {
                 id: "login-form",
-                switchReason: "Switch to this context to initiate log in process.",
+                switchReason: "Switch to this context if user intends to log in.",
             },
             {
                 id: "register-form",
-                switchReason: "Switch to this context to initiate register a new account process.",
+                switchReason: "Switch to this context if user intends to register a new account.",
             },
         ],
         icon: "FaDoorOpen",
@@ -52,11 +54,13 @@ export const aiContexts: { [key: string]: AiContext } = {
         availableContexts: [
             {
                 id: "logged-out-welcome",
-                switchReason: "Switch to this context if log in process is to be cancelled and register new account process is not to be initiated.",
+                switchReason:
+                    "Switch to this context if log in process is to be cancelled and register new account process is not to be initiated.",
             },
             {
                 id: "register-form",
-                switchReason: "Switch to this context if log in process is to be cancelled and to initiate the register new account process.",
+                switchReason:
+                    "Switch to this context if log in process is to be cancelled and to initiate the register new account process.",
             },
         ],
         icon: "PiSignInBold",
@@ -95,7 +99,8 @@ export const aiContexts: { [key: string]: AiContext } = {
             {
                 stepNumber: 3,
                 description: "Enter name or organization name",
-                instructions: "Instruct the user to enter their name or organization name depending on what account type they have chosen.",
+                instructions:
+                    "Instruct the user to enter their name or organization name depending on what account type they have chosen.",
             },
             {
                 stepNumber: 4,
@@ -107,15 +112,18 @@ export const aiContexts: { [key: string]: AiContext } = {
         availableContexts: [
             {
                 id: "logged-out-welcome",
-                switchReason: "Switch to this context if registration process is to be cancelled and a log in to existing process is not to be initiated.",
+                switchReason:
+                    "Switch to this context if registration process is to be cancelled and a log in to existing process is not to be initiated.",
             },
             {
                 id: "login-form",
-                switchReason: "Switch to this context if registration process is to be cancelled and to initiate log in to existing account process.",
+                switchReason:
+                    "Switch to this context if registration process is to be cancelled and to initiate log in to existing account process.",
             },
             {
                 id: "personalization-form",
-                switchReason: "Switch to this context to initiate personalization process after the user has registered their account.",
+                switchReason:
+                    "Switch to this context to initiate personalization process after the user has registered their account.",
             },
         ],
         icon: "IoCreate",

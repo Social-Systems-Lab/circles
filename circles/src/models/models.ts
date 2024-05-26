@@ -99,7 +99,7 @@ export const registrationFormSchema = z.object({
     email: z.string().email().describe("Email address"),
     password: passwordSchema.describe("Password"),
     handle: handleSchema.describe(
-        "Unique handle that will identify the account on the platform, e.g. a nickname or organisation name. May consist of lowercase letters, numbers and underscore."
+        "Unique handle that will identify the account on the platform, e.g. a nickname or organisation name. May consist of lowercase letters, numbers and underscore.",
     ),
     description: z.string().optional().describe("Short description of the user or organization"),
     picture: z.string().optional().describe("URL to profile picture"),
@@ -109,7 +109,7 @@ export const registrationFormSchema = z.object({
 
 export type InputProvider = {
     type: "input-provider";
-    inputType: "suggestions";
+    inputType: "suggestions" | "none";
     //data: MultipleChoiceData | PasswordData | TextData | DatePickerData | FileUploadData;
     data?: any;
 };

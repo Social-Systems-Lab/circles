@@ -36,7 +36,7 @@ export async function getAnswer(question: string) {
     return { text, finishReason, usage };
 }
 
-const debug = false;
+const debug = true;
 
 const printMessage = (message: Message) => {
     if (!debug) {
@@ -90,7 +90,7 @@ async function streamResponse(provider: OpenAIProvider, c: ContextInfo, closeStr
 
     // get tools for context
     let tools = getContextTools(c);
-    console.log("tools: ", tools);
+    //console.log("tools: ", tools);
 
     const { fullStream } = await streamText({
         model: provider("gpt-4o"),
