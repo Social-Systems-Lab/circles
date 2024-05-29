@@ -1,6 +1,8 @@
 import { FormAction } from "../../models/models";
-import { registerFormAction } from "./register/register-form-action";
+import { loginFormAction } from "./login/login-form-action";
+import { signupFormAction } from "./signup/signup-form-action";
 
 export const formActions: Record<string, FormAction> = {
-    "register-form": registerFormAction,
+    "signup-form": signupFormAction,
+    "login-form": loginFormAction,
 };

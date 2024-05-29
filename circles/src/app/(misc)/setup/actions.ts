@@ -31,7 +31,7 @@ export async function completeServerConfig(): Promise<ActionResponse> {
     // TODO check if there are circles in the database
     //let userCount = await Users.countDocuments({});
     //let circlesCount = await Circles.countDocuments({});
-    await ServerConfigs.updateOne({}, { $set: { setup_status: "account" } });
+    await ServerConfigs.updateOne({}, { $set: { setupStatus: "account" } });
 
     return {
         message: "Server setup complete",

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import ServerSetupForm from "./ServerSetupForm";
+import ServerSetupForm from "./server-setup-form";
 import { ServerConfigs } from "@/lib/db";
 import { ServerSetupData } from "@/models/models";
 

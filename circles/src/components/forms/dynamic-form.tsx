@@ -68,7 +68,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ initialFormData = {}, 
     };
 
     return (
-        <div className="flex flex-1 flex-row items-center justify-center">
+        <div className="flex flex-1 flex-row items-center justify-center pl-6 pr-6">
             <div className="max-w-[400px] flex-1">
                 <h1 className="m-0 p-0 pb-2 text-3xl font-bold">{title}</h1>
                 <p className="pb-4 text-gray-500">{description}</p>

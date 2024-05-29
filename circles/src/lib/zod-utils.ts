@@ -15,6 +15,7 @@ export const generateZodSchema = (fields: FormField[]): ZodSchema<any> => {
                         });
                     }
                     break;
+
                 case "email":
                     schema = emailSchema;
                     break;
@@ -33,10 +34,14 @@ export const generateZodSchema = (fields: FormField[]): ZodSchema<any> => {
                         throw new Error(`Enum validation for field ${field.name} requires at least one option.`);
                     }
                     break;
+
                 case "handle":
                     schema = handleSchema;
+                    break;
+
                 default:
                     schema = z.string();
+                    break;
             }
 
             if (!field.required) {

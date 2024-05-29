@@ -28,10 +28,11 @@ export type User = z.infer<typeof userSchema>;
 
 export const circleSchema = z.object({
     did: didSchema.optional(),
-    name: z.string().default("Untitled Circle"),
+    name: z.string().default("Circle"),
     handle: handleSchema,
     picture: z.string().optional(),
     cover: z.string().optional(),
+    description: z.string().optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;
@@ -39,7 +40,7 @@ export type Circle = z.infer<typeof circleSchema>;
 export const serverConfigSchema = z.object({
     defaultCircleDid: z.string().optional(),
     status: z.enum(["setup", "online"]),
-    setup_status: z.enum(["config", "account", "circle", "complete"]),
+    setupStatus: z.enum(["config", "account", "circle", "complete"]),
     mapboxKey: z.string().optional(),
     openaiKey: z.string().optional(),
 });
