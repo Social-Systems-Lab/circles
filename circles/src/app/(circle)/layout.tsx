@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import TopBar from "./TopBar";
+import TopBar from "../../components/navigation/top-bar";
 import { Wix_Madefor_Display, Libre_Franklin, Inter } from "next/font/google";
 import "@app/globals.css";
 import type { Circle } from "@/models/models";
-import Map from "./Map";
+import Map from "../../components/map/map";
 import { ServerConfigs } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { Toaster } from "@/components/ui/toaster";
@@ -11,6 +11,7 @@ import { Toaster } from "@/components/ui/toaster";
 const inter = Inter({ subsets: ["latin"] });
 const wix = Wix_Madefor_Display({ subsets: ["latin"], variable: "--font-wix-display" });
 const libre = Libre_Franklin({ subsets: ["latin"], variable: "--font-libre-franklin" });
+
 export const metadata: Metadata = {
     title: "Social Systems Lab",
     description: "Tools for Transformation",
@@ -48,10 +49,10 @@ export default async function RootLayout({
     return (
         <html lang="en" className={`${wix.variable} ${libre.variable}`}>
             <body className={inter.className}>
-                <main className="flex flex-col h-screen relative overflow-hidden">
+                <main className="relative flex h-screen flex-col overflow-hidden">
                     <TopBar circle={circle} />
-                    <div className="flex-1 flex flex-row">
-                        <div className={`flex-1 min-w-[400px] relative`}>{children}</div>
+                    <div className="flex flex-1 flex-row">
+                        <div className={`relative min-w-[400px] flex-1`}>{children}</div>
                         <Map mapboxKey={serverConfig?.mapboxKey ?? ""} />
                     </div>
                     <Toaster />

@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from
 import { usePathname } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { HiChevronDown } from "react-icons/hi";
-import { topBarHeightPx } from "../constants";
+import { topBarHeightPx } from "../../app/constants";
 
 const navItems = [
     { id: "home", title: "Home", path: "/", width: 61 },
@@ -69,12 +69,12 @@ export default function TopBarNavItems() {
     }, []);
 
     return (
-        <nav ref={itemContainerRef} className={`flex-1 flex flex-row h-[60px] overflow-hidden mr-8`}>
+        <nav ref={itemContainerRef} className={`mr-8 flex h-[60px] flex-1 flex-row overflow-hidden`}>
             {navItems.map((item, index) => (
                 <Link key={item.id} href={item.path}>
                     <div
                         ref={itemRefs.current[index]}
-                        className={`flex-shrink-0 h-full items-center pr-2 pl-2 cursor-pointer flex flex-row justify-center ${
+                        className={`flex h-full flex-shrink-0 cursor-pointer flex-row items-center justify-center pl-2 pr-2 ${
                             pathname === item.path ? "border-b-2 border-red-500" : "border-b-2 border-transparent"
                         } ${!itemVisibility[index] ? "hidden" : ""}`}
                     >
@@ -88,22 +88,31 @@ export default function TopBarNavItems() {
             <Popover open={navMenuOpen} onOpenChange={setNavMenuOpen}>
                 <PopoverTrigger>
                     <div
-                        className={`flex flex-row justify-center flex-shrink-0 h-full items-center pr-2 pl-2 cursor-pointer ${
-                            !itemVisibility[navItems.findIndex((x) => x.path === pathname)] ? "border-b-2 border-red-500" : "border-b-2 border-transparent"
+                        className={`flex h-full flex-shrink-0 cursor-pointer flex-row items-center justify-center pl-2 pr-2 ${
+                            !itemVisibility[navItems.findIndex((x) => x.path === pathname)]
+                                ? "border-b-2 border-red-500"
+                                : "border-b-2 border-transparent"
                         } ${itemVisibility.includes(false) ? "" : "hidden"}`}
                     >
-                        <span className="mr-[2px]">{!itemVisibility[navItems.findIndex((x) => x.path === pathname)] ? currentNavItem?.title : "More"}</span>
+                        <span className="mr-[2px]">
+                            {!itemVisibility[navItems.findIndex((x) => x.path === pathname)]
+                                ? currentNavItem?.title
+                                : "More"}
+                        </span>
                         <HiChevronDown size="16px" />
                     </div>
 
-                    <div className={`p-2 cursor-pointer ${itemVisibility.includes(false) ? "" : "hidden"}`}>More</div>
+                    <div className={`cursor-pointer p-2 ${itemVisibility.includes(false) ? "" : "hidden"}`}>More</div>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 ml-4 overflow-hidden">
+                <PopoverContent className="ml-4 w-auto overflow-hidden p-0">
                     {navItems
                         .filter((_, index) => !itemVisibility[index])
                         .map((item) => (
                             <Link key={item.id} href={item.path}>
-                                <div className="p-2 cursor-pointer hover:bg-[#f0f0f0]" onClick={() => setNavMenuOpen(false)}>
+                                <div
+                                    className="cursor-pointer p-2 hover:bg-[#f0f0f0]"
+                                    onClick={() => setNavMenuOpen(false)}
+                                >
                                     {item.title}
                                 </div>
                             </Link>

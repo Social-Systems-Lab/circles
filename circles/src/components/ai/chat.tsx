@@ -16,13 +16,13 @@ import { getStreamedAnswer } from "./actions";
 import { readStreamableValue } from "ai/rsc";
 import { FaRegUser } from "react-icons/fa";
 import { Bot, Loader2 } from "lucide-react";
-import { MemoizedReactMarkdown } from "../memoized-markdown";
+import { MemoizedReactMarkdown } from "../../lib/memoized-markdown";
 import { ScrollArea } from "../ui/scroll-area";
 import { AiContext, AddedMessages, FormData, InputProvider, Message, SwitchContext } from "@/models/models";
-import { useIsMobile } from "../use-is-mobile";
+import { useIsMobile } from "../../lib/use-is-mobile";
 import { aiContexts } from "@/lib/ai-contexts";
 import _ from "lodash"; // to throttle calls
-import { useThrottle } from "../use-throttle";
+import { useThrottle } from "../../lib/use-throttle";
 
 type ChatMessageProps = {
     message: Message;
@@ -30,7 +30,7 @@ type ChatMessageProps = {
     isPending?: boolean;
 };
 
-const showToolCalls = true; // set to true to show AI tool calls in chat messages, useful for debugging
+const showToolCalls = false; // set to true to show AI tool calls in chat messages, useful for debugging
 
 export function ChatMessage({ message, isPending, onSuggestionClick: onOptionClick }: ChatMessageProps) {
     // stream the message
@@ -306,7 +306,7 @@ export function AiChat({ formData, setFormData, context, setContext }: Assistant
                             console.log("CLIENT: switch-context", contextId);
                             let newContext = aiContexts[contextId];
                             if (newContext) {
-                                setMessages([]);
+                                setMessages([]); // TODO we might want to keep a context history so the user can return to previous contexts easily
                                 setContext(newContext);
                             }
                             // console.log("switch-context", contextId);
@@ -349,7 +349,7 @@ export function AiChat({ formData, setFormData, context, setContext }: Assistant
         //     inputProvider: context.steps[0].inputProvider,
         // };
         // setResponseMessage(newResponseMessage);
-    }, [context, initialized, handleSend]);
+    }, [context, initialized, throttledHandleSend]);
 
     const onSuggestionClick = (suggestion: string) => {
         handleSend(suggestion);

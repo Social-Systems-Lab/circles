@@ -1,4 +1,5 @@
 import { CoreMessage } from "ai";
+import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { z } from "zod";
 
 export const didSchema = z.string().regex(/^[0-9a-fA-F]{64}$/, "DID must be a 64-character hexadecimal string");
@@ -10,6 +11,7 @@ export const handleSchema = z
     .regex(/^[a-zA-Z0-9_]+$/, { message: "Handle can only contain letters, numbers and underscores." });
 
 export const accountTypeSchema = z.enum(["user", "organization"]);
+export const emailSchema = z.string().email({ message: "Enter valid email" });
 export type AccountType = z.infer<typeof accountTypeSchema>;
 
 export const userSchema = z.object({
@@ -182,4 +184,56 @@ export type AiStep = {
     nextStep?: number;
     inputProvider?: InputProvider;
     generateInputProviderInstructions?: string;
+};
+
+// dynamic-forms
+
+export type FormFieldOption = {
+    value: string;
+    label: string;
+};
+
+export type FormFieldType = "text" | "email" | "password" | "select" | "handle";
+
+export type FormField = {
+    name: string;
+    label: string;
+    type: FormFieldType;
+    placeholder?: string;
+    autoComplete?: string;
+    description?: string;
+    options?: FormFieldOption[];
+    minLength?: number;
+    required: boolean;
+    validationMessage?: string;
+};
+
+export type FormSchema = {
+    id: string;
+    title: string;
+    description: string;
+    footer: {
+        text: string;
+        link: { href: string; text: string };
+    };
+    button: {
+        text: string;
+    };
+    fields: FormField[];
+};
+
+export type FormSubmitResponse = {
+    message?: string;
+    success: boolean;
+    data?: any;
+};
+
+export type FormAction = {
+    id: string;
+    onSubmit: (values: Record<string, any>) => Promise<FormSubmitResponse>;
+};
+
+export type FormActionHandler = {
+    id: string;
+    onHandleSubmit: (response: FormSubmitResponse, router: AppRouterInstance) => Promise<FormSubmitResponse>;
 };

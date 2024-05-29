@@ -173,7 +173,11 @@ export const aiContextsTools: { [key: string]: (c: ContextInfo) => Record<string
 
                         return "User registered successfully";
                     } catch (error) {
-                        return JSON.stringify(error);
+                        if (error instanceof Error) {
+                            return error.message;
+                        } else {
+                            return "Failed to register the user. " + JSON.stringify(error);
+                        }
                     }
                 },
             },

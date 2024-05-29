@@ -6,6 +6,7 @@ import path from "path";
 import { Users } from "./db";
 import { AccountType, User } from "@/models/models";
 import jwt from "jsonwebtoken";
+import { cookies } from "next/headers";
 
 const SALT_FILENAME = "salt.bin";
 const IV_FILENAME = "iv.bin";
@@ -16,11 +17,27 @@ const APP_DIR = "/circles";
 const USERS_DIR = path.join(APP_DIR, "users");
 export const JWT_SECRET = "temp_7S7mVe6S1K6Q"; // TODO get from environment variable
 
-export const createUser = async (name: string, type: AccountType, email: string, password: string): Promise<User> => {
+export const createUser = async (
+    name: string,
+    handle: string,
+    type: AccountType,
+    email: string,
+    password: string,
+): Promise<User> => {
+    if (!name || !email || !password || !handle) {
+        throw new Error("Missing required fields");
+    }
+
     // check if email is already in use
     let existingUser = await Users.findOne({ email: email });
     if (existingUser) {
         throw new Error("Email already in use");
+    }
+
+    // check if handle is already in use
+    existingUser = await Users.findOne({ handle: handle });
+    if (existingUser) {
+        throw new Error("Handle already in use");
     }
 
     // make sure account directory exists
@@ -63,7 +80,7 @@ export const createUser = async (name: string, type: AccountType, email: string,
     fs.writeFileSync(path.join(accountPath, PRIVATE_KEY_FILENAME), encryptedPrivateKey);
 
     // add user to the database
-    let user: User = { did: did, name: name, type: type, email: email };
+    let user: User = { did: did, name: name, handle: handle, type: type, email: email };
     await Users.insertOne(user);
     return user;
 };
@@ -101,8 +118,18 @@ export const authenticateUser = async (did: string, password: string): Promise<b
 };
 
 export const generateUserToken = (did: string, email: string): string => {
-    const token = jwt.sign({ userDid: did, email: email }, JWT_SECRET, { expiresIn: "1h" });
+    const token = jwt.sign({ userDid: did, email: email }, JWT_SECRET, { expiresIn: "24h" });
     return token;
+};
+
+export const createSession = async (token: string) => {
+    // create a cookie-based session
+    cookies().set("token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 60 * 60 * 24 * 7, // One week
+        path: "/",
+    });
 };
 
 // export const auth = async (c: any, next: Next) => {

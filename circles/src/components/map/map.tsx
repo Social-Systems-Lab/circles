@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { AiOutlineRead } from "react-icons/ai";
 import { LiaGlobeAfricaSolid } from "react-icons/lia";
-import { sidePanelWidth, topBarHeight } from "../constants";
-import useWindowDimensions from "@/components/use-window-dimensions";
+import { sidePanelWidth, topBarHeight } from "../../app/constants";
+import useWindowDimensions from "@/lib/use-window-dimensions";
 import mapboxgl from "mapbox-gl"; // eslint-disable-line import/no-webpack-loader-syntax
 
 const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
@@ -41,16 +41,19 @@ export default function Map({ mapboxKey }: { mapboxKey: string }) {
     return (
         <>
             {mapOpen && (
-                <div className={`relative`} style={{ width: windowWidth - sidePanelWidth + "px", height: windowHeight - topBarHeight + "px" }}>
+                <div
+                    className={`relative`}
+                    style={{ width: windowWidth - sidePanelWidth + "px", height: windowHeight - topBarHeight + "px" }}
+                >
                     <MapBox mapboxKey={mapboxKey} />
                 </div>
             )}
             <div
-                className="z-30 group fixed bottom-[10px] right-5 p-[2px] bg-[#242424] hover:bg-[#304678e6] rounded-full cursor-pointer"
+                className="group fixed bottom-[10px] right-5 z-30 cursor-pointer rounded-full bg-[#242424] p-[2px] hover:bg-[#304678e6]"
                 onClick={() => setMapOpen(!mapOpen)}
             >
                 {mapOpen ? (
-                    <AiOutlineRead className="text-white group-hover:text-white m-[4px]" size="30px" />
+                    <AiOutlineRead className="m-[4px] text-white group-hover:text-white" size="30px" />
                 ) : (
                     <LiaGlobeAfricaSolid className="text-white group-hover:text-white" size="38px" />
                 )}
