@@ -9,7 +9,7 @@ export const signupFormSchema: FormSchema = {
         link: { href: "/login", text: "Log in" },
     },
     button: {
-        text: "Register",
+        text: "Sign up",
     },
     fields: [
         {

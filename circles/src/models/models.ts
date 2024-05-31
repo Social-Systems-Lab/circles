@@ -19,12 +19,21 @@ export const userSchema = z.object({
     type: accountTypeSchema.default("user"),
     name: z.string().default("Anonymous User"),
     email: z.string().email(),
-    handle: handleSchema.optional(),
+    handle: handleSchema,
     picture: z.string().optional(),
     cover: z.string().optional(),
+    roles: z.record(z.string(), z.string()).optional(),
 });
 
 export type User = z.infer<typeof userSchema>;
+
+export const roleSchema = z.object({
+    name: z.string(),
+    description: z.string(),
+    permissions: z.string().array(),
+});
+
+export type Role = z.infer<typeof roleSchema>;
 
 export const circleSchema = z.object({
     did: didSchema.optional(),

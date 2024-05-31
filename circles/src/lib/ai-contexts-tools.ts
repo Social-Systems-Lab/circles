@@ -167,7 +167,7 @@ export const aiContextsTools: { [key: string]: (c: ContextInfo) => Record<string
                         );
 
                         // generate and sign token for the user
-                        let token = generateUserToken(user.did, user.email);
+                        let token = await generateUserToken(user.did, user.email);
                         let streamMessage: AuthData = { type: "auth-data", user: user, token: token };
                         c.stream.update(streamMessage);
 

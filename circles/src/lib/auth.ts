@@ -5,8 +5,6 @@ import fs from "fs";
 import path from "path";
 import { Users } from "./db";
 import { AccountType, User } from "@/models/models";
-import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
 
 const SALT_FILENAME = "salt.bin";
 const IV_FILENAME = "iv.bin";
@@ -15,7 +13,6 @@ const PRIVATE_KEY_FILENAME = "privateKey.pem.enc";
 const ENCRYPTION_ALGORITHM = "aes-256-cbc";
 const APP_DIR = "/circles";
 const USERS_DIR = path.join(APP_DIR, "users");
-export const JWT_SECRET = "temp_7S7mVe6S1K6Q"; // TODO get from environment variable
 
 export const createUser = async (
     name: string,
@@ -92,7 +89,7 @@ export class AuthenticationError extends Error {
     }
 }
 
-export const authenticateUser = async (did: string, password: string): Promise<boolean> => {
+export const authenticateUser = (did: string, password: string): boolean => {
     const accountPath = path.join(USERS_DIR, did);
     if (!fs.existsSync(accountPath)) {
         throw new AuthenticationError("Account does not exist");
@@ -116,35 +113,3 @@ export const authenticateUser = async (did: string, password: string): Promise<b
 
     return true;
 };
-
-export const generateUserToken = (did: string, email: string): string => {
-    const token = jwt.sign({ userDid: did, email: email }, JWT_SECRET, { expiresIn: "24h" });
-    return token;
-};
-
-export const createSession = async (token: string) => {
-    // create a cookie-based session
-    cookies().set("token", token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        maxAge: 60 * 60 * 24 * 7, // One week
-        path: "/",
-    });
-};
-
-// export const auth = async (c: any, next: Next) => {
-//     const token = c.req.header("authorization")?.split(" ")[1];
-
-//     if (!token) {
-//         return c.json({ error: "No token provided" }, 401);
-//     }
-
-//     try {
-//         const decoded = await verify(token, JWT_SECRET);
-//         c.req.userDid = decoded.userDid;
-//     } catch (error) {
-//         return c.json({ error: "Invalid token" }, 403);
-//     }
-
-//     await next();
-// };
