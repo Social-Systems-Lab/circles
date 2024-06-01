@@ -11,7 +11,8 @@ import {
 } from "../models/models";
 import { z } from "zod";
 import { aiContexts } from "./ai-contexts";
-import { createUser, generateUserToken } from "./auth";
+import { createUser } from "./auth/auth";
+import { generateUserToken } from "./auth/jwt";
 
 export const getContextTools = (c: ContextInfo): Record<string, CoreTool<any, any>> => {
     return aiContextsTools[c.contextId](c);

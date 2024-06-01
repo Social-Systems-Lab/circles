@@ -1,7 +1,7 @@
 "use server";
 
 import { ServerSetupData, OpenAIFormType, MapboxFormType, mapboxFormSchema, openAIFormSchema } from "@/models/models";
-import { ServerConfigs } from "@/lib/db";
+import { ServerConfigs } from "@/lib/data/db";
 
 type ActionResponse = {
     message?: string;

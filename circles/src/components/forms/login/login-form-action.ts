@@ -1,7 +1,7 @@
 import { FormAction, AuthData, FormSubmitResponse } from "../../../models/models";
-import { AuthenticationError, authenticateUser } from "@/lib/auth";
-import { createSession, generateUserToken } from "@/lib/jwt";
-import { Users } from "@/lib/db";
+import { AuthenticationError, authenticateUser } from "@/lib/auth/auth";
+import { createSession, generateUserToken } from "@/lib/auth/jwt";
+import { Users } from "@/lib/data/db";
 
 export const loginFormAction: FormAction = {
     id: "login-form",
@@ -21,9 +21,7 @@ export const loginFormAction: FormAction = {
             let token = await generateUserToken(user.did, user.email);
 
             createSession(token);
-            let authData: AuthData = { type: "auth-data", user: user, token };
-
-            return { success: true, message: "User authenticated successfully", data: authData };
+            return { success: true, message: "User authenticated successfully" };
         } catch (error) {
             if (error instanceof AuthenticationError) {
                 return { success: false, message: error.message };

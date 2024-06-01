@@ -1,8 +1,6 @@
-import { on } from "events";
-import { FormSchema, FormAction, AuthData, FormSubmitResponse } from "../../../models/models";
-import { AuthenticationError, createUser } from "@/lib/auth";
-import { createSession, generateUserToken } from "@/lib/jwt";
-import { redirect } from "next/navigation";
+import { FormAction, AuthData, FormSubmitResponse } from "../../../models/models";
+import { AuthenticationError, createUser } from "@/lib/auth/auth";
+import { createSession, generateUserToken } from "@/lib/auth/jwt";
 
 export const signupFormAction: FormAction = {
     id: "signup-form",

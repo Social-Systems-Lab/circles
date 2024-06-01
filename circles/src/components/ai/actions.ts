@@ -13,7 +13,7 @@ import {
 } from "ai";
 import { StreamableValue, createStreamableValue } from "ai/rsc";
 import { OpenAIProvider, createOpenAI } from "@ai-sdk/openai";
-import { ServerConfigs } from "@/lib/db";
+import { ServerConfigs } from "@/lib/data/db";
 import { AddedMessages, ContextInfo, Message } from "@/models/models";
 import { getContextSystemMessage, getContextTools, setStep } from "@/lib/ai-contexts-tools";
 import { aiContexts } from "@/lib/ai-contexts";

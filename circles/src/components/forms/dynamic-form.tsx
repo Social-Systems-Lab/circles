@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import Link from "next/link";
 import { DynamicField } from "@/components/forms/dynamic-field";
-import { generateZodSchema } from "@/lib/zod-utils";
+import { generateZodSchema } from "@/lib/utils/form";
 import { FormSchema } from "@/models/models";
 import { useEffect, useState, useTransition } from "react";
 import { formSchemas } from "@/components/forms/form-schemas";

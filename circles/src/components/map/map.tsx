@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { AiOutlineRead } from "react-icons/ai";
 import { LiaGlobeAfricaSolid } from "react-icons/lia";
 import { sidePanelWidth, topBarHeight } from "../../app/constants";
-import useWindowDimensions from "@/lib/use-window-dimensions";
+import useWindowDimensions from "@/components/utils/use-window-dimensions";
 import mapboxgl from "mapbox-gl"; // eslint-disable-line import/no-webpack-loader-syntax
 
 const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {

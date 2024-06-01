@@ -3,9 +3,9 @@ import { cookies } from "next/headers";
 
 export const JWT_SECRET = "temp_7S7mVe6S1K6Q"; // TODO get from environment variable
 
-export const verifyUserToken = async (token: string): Promise<boolean> => {
+export const verifyUserToken = async (token: string): Promise<JWTPayload> => {
     const { payload } = await jwtVerify(token, new TextEncoder().encode(JWT_SECRET));
-    return true;
+    return payload;
 };
 
 export const createSession = async (token: string) => {

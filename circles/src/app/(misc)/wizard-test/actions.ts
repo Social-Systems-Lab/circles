@@ -1,7 +1,14 @@
 "use server";
 
-import { LoginData, EmailFormType, loginDataSchema, PasswordFormType, passwordFormSchema, emailFormSchema } from "@/models/models";
-import { ServerConfigs } from "@/lib/db";
+import {
+    LoginData,
+    EmailFormType,
+    loginDataSchema,
+    PasswordFormType,
+    passwordFormSchema,
+    emailFormSchema,
+} from "@/models/models";
+import { ServerConfigs } from "@/lib/data/db";
 
 type ActionResponse = {
     message?: string;

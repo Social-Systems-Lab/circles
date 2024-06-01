@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import ServerSetupForm from "./server-setup-form";
-import { ServerConfigs } from "@/lib/db";
+import { ServerConfigs } from "@/lib/data/db";
 import { ServerSetupData } from "@/models/models";
 
 export default async function Setup() {

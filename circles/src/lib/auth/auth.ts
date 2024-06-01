@@ -3,7 +3,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import { Users } from "./db";
+import { Users } from "../data/db";
 import { AccountType, User } from "@/models/models";
 
 const SALT_FILENAME = "salt.bin";

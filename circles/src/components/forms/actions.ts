@@ -1,7 +1,6 @@
 "use server";
 
-import { generateZodSchema } from "@/lib/zod-utils";
-import { formActionHandlers } from "@/components/forms/form-action-handlers";
+import { generateZodSchema } from "@/lib/utils/form";
 import { formActions } from "@/components/forms/form-actions";
 import { formSchemas } from "@/components/forms/form-schemas";
 import { FormSubmitResponse } from "@/models/models";

@@ -22,18 +22,22 @@ export const userSchema = z.object({
     handle: handleSchema,
     picture: z.string().optional(),
     cover: z.string().optional(),
-    roles: z.record(z.string(), z.string()).optional(),
 });
 
 export type User = z.infer<typeof userSchema>;
 
-export const roleSchema = z.object({
+export const userGroupSchema = z.object({
     name: z.string(),
+    handle: handleSchema,
     description: z.string(),
-    permissions: z.string().array(),
 });
 
-export type Role = z.infer<typeof roleSchema>;
+// access rules are a map of features to array of user groups that are granted access to the feature
+export const circleAccessRulesSchema = z.object({
+    edit: z.array(z.string()).optional(),
+    delete: z.array(z.string()).optional(),
+    view: z.array(z.string()).optional(),
+});
 
 export const circleSchema = z.object({
     did: didSchema.optional(),
@@ -42,9 +46,39 @@ export const circleSchema = z.object({
     picture: z.string().optional(),
     cover: z.string().optional(),
     description: z.string().optional(),
+    userGroups: z.array(userGroupSchema).optional(),
+    // accessRules: circleAccessRulesSchema.optional(),
+    // pages: z.array(z.string()).optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;
+
+export const homeModuleAccessRulesSchema = z.object({
+    edit: z.array(z.string()).optional(),
+    delete: z.array(z.string()).optional(),
+    view: z.array(z.string()).optional(),
+});
+
+export const homeModuleSchema = z.object({
+    name: z.string(),
+    handle: handleSchema,
+    description: z.string(),
+    accessRules: homeModuleAccessRulesSchema.optional(),
+});
+
+export const feedsModuleSchema = z.object({
+    name: z.string(),
+    handle: handleSchema,
+    description: z.string(),
+    accessRules: homeModuleAccessRulesSchema.optional(),
+});
+
+export const membersModuleSchema = z.object({
+    name: z.string(),
+    handle: handleSchema,
+    description: z.string(),
+    accessRules: homeModuleAccessRulesSchema.optional(),
+});
 
 export const serverConfigSchema = z.object({
     defaultCircleDid: z.string().optional(),
@@ -222,7 +256,7 @@ export type FormSchema = {
     id: string;
     title: string;
     description: string;
-    footer: {
+    footer?: {
         text: string;
         link: { href: string; text: string };
     };

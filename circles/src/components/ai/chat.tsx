@@ -16,13 +16,13 @@ import { getStreamedAnswer } from "./actions";
 import { readStreamableValue } from "ai/rsc";
 import { FaRegUser } from "react-icons/fa";
 import { Bot, Loader2 } from "lucide-react";
-import { MemoizedReactMarkdown } from "../../lib/memoized-markdown";
+import { MemoizedReactMarkdown } from "../utils/memoized-markdown";
 import { ScrollArea } from "../ui/scroll-area";
 import { AiContext, AddedMessages, FormData, InputProvider, Message, SwitchContext } from "@/models/models";
-import { useIsMobile } from "../../lib/use-is-mobile";
+import { useIsMobile } from "../utils/use-is-mobile";
 import { aiContexts } from "@/lib/ai-contexts";
 import _ from "lodash"; // to throttle calls
-import { useThrottle } from "../../lib/use-throttle";
+import { useThrottle } from "../utils/use-throttle";
 
 type ChatMessageProps = {
     message: Message;

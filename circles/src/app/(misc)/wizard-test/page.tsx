@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import LoginForm from "./LoginForm";
-import { ServerConfigs } from "@/lib/db";
+import { ServerConfigs } from "@/lib/data/db";
 import { LoginData } from "@/models/models";
 import { AiWizard } from "@/components/ai/ai-wizard";
 import { aiContexts } from "@/lib/ai-contexts";
