@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Button } from "../ui/button";
 import { useTransition } from "react";
 import { logOut } from "../auth/actions";
@@ -10,6 +10,7 @@ import { useAtom } from "jotai";
 
 export const ProfileMenu = () => {
     const router = useRouter();
+    const pathname = usePathname();
     const [authenticated, setAuthenticated] = useAtom(authenticatedAtom);
     const [user, setUser] = useAtom(userAtom);
     const [isPending, startTransition] = useTransition();
@@ -30,7 +31,9 @@ export const ProfileMenu = () => {
             await logOut();
             setAuthenticated(false);
             setUser(undefined);
-            router.push("/logged-out");
+
+            let redirectTo = pathname ?? "/";
+            router.push("/logged-out?redirectTo=" + redirectTo);
         });
     };
 
