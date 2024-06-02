@@ -21,7 +21,7 @@ export const loginFormAction: FormAction = {
             let token = await generateUserToken(user.did, user.email);
 
             createSession(token);
-            return { success: true, message: "User authenticated successfully" };
+            return { success: true, message: "User authenticated successfully", data: { user } };
         } catch (error) {
             if (error instanceof AuthenticationError) {
                 return { success: false, message: error.message };

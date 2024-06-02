@@ -2,32 +2,17 @@
 
 import { useRouter } from "next/navigation";
 import { Button } from "../ui/button";
-import { useCallback, useEffect, useState, useTransition } from "react";
-import { checkAuth, logOut } from "./actions";
-import { useThrottle } from "../utils/use-throttle";
-import { User } from "@/models/models";
+import { useTransition } from "react";
+import { logOut } from "../auth/actions";
 import { Loader2 } from "lucide-react";
+import { userAtom, authenticatedAtom } from "@/lib/data/atoms";
+import { useAtom } from "jotai";
 
 export const ProfileMenu = () => {
     const router = useRouter();
-    const [authenticated, setAuthenticated] = useState(false);
-    const [user, setUser] = useState<User | undefined>(undefined);
+    const [authenticated, setAuthenticated] = useAtom(authenticatedAtom);
+    const [user, setUser] = useAtom(userAtom);
     const [isPending, startTransition] = useTransition();
-
-    const checkAuthStatus = useCallback(async () => {
-        startTransition(async () => {
-            console.log("calling getStreamedAnswer()");
-            const { user, authenticated: authStatus } = await checkAuth();
-            setAuthenticated(authStatus);
-            setUser(user);
-        });
-    }, []);
-
-    const throttledCheckAuth = useThrottle(checkAuthStatus, 500);
-
-    useEffect(() => {
-        throttledCheckAuth();
-    }, [throttledCheckAuth]);
 
     const onLogInClick = () => {
         router.push("/login");
@@ -46,30 +31,35 @@ export const ProfileMenu = () => {
         });
     };
 
+    if (authenticated === undefined) {
+        return null;
+    }
+
     return (
         <div className="flex flex-row items-center justify-center gap-1 pr-4">
-            {!isPending && (
-                <>
-                    {authenticated && (
-                        <Button className="h-full w-full" onClick={onLogOutClick} variant="outline">
-                            Log out
-                        </Button>
-                    )}
-
-                    {!authenticated && (
+            {authenticated && (
+                <Button className="h-full w-full" onClick={onLogOutClick} variant="outline">
+                    {isPending ? (
                         <>
-                            <Button className="h-full w-full" onClick={onLogInClick} variant="link">
-                                Log in
-                            </Button>
-                            <Button className="h-full w-full" onClick={onSignUpClick} variant="outline">
-                                Sign up
-                            </Button>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Logging out...
                         </>
+                    ) : (
+                        "Log out"
                     )}
-                </>
+                </Button>
             )}
 
-            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {!authenticated && (
+                <>
+                    <Button className="h-full w-full" onClick={onLogInClick} variant="link">
+                        Log in
+                    </Button>
+                    <Button className="h-full w-full" onClick={onSignUpClick} variant="outline">
+                        Sign up
+                    </Button>
+                </>
+            )}
         </div>
     );
 };

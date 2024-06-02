@@ -1,12 +1,20 @@
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
-import { FormSubmitResponse, FormActionHandler } from "../../../models/models";
+import { FormSubmitResponse, FormActionHandler, FormTools } from "../../../models/models";
 
 export const signupFormActionHandler: FormActionHandler = {
     id: "signup-form",
-    onHandleSubmit: async (response: FormSubmitResponse, router: AppRouterInstance): Promise<FormSubmitResponse> => {
+    onHandleSubmit: async (
+        response: FormSubmitResponse,
+        router: AppRouterInstance,
+        tools: FormTools,
+    ): Promise<FormSubmitResponse> => {
         if (!response.success) {
             return response;
         }
+
+        // set logged in user and authenticate status
+        tools.setUser(response.data.user);
+        tools.setAuthenticated(true);
 
         // redirect to home page
         router.push("/");

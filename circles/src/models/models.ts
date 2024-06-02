@@ -279,5 +279,16 @@ export type FormAction = {
 
 export type FormActionHandler = {
     id: string;
-    onHandleSubmit: (response: FormSubmitResponse, router: AppRouterInstance) => Promise<FormSubmitResponse>;
+    onHandleSubmit: (
+        response: FormSubmitResponse,
+        router: AppRouterInstance,
+        tools: FormTools,
+    ) => Promise<FormSubmitResponse>;
+};
+
+export type FormTools = {
+    user?: User;
+    setUser: (user: User) => void;
+    authenticated?: boolean;
+    setAuthenticated: (authenticated: boolean) => void;
 };

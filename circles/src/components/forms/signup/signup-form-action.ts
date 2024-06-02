@@ -10,9 +10,7 @@ export const signupFormAction: FormAction = {
             let user = await createUser(values.name, values.handle, values.type, values._email, values._password);
             let token = await generateUserToken(user.did, user.email);
             createSession(token);
-            let authData: AuthData = { type: "auth-data", user, token };
-
-            return { success: true, message: "User signed up successfully", data: authData };
+            return { success: true, message: "User signed up successfully", data: { user } };
         } catch (error) {
             if (error instanceof AuthenticationError) {
                 return { success: false, message: error.message };

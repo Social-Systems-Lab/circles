@@ -5,6 +5,8 @@ import "@app/globals.css";
 import Map from "../../components/map/map";
 import { Toaster } from "@/components/ui/toaster";
 import { getDefaultCircle, getServerConfig } from "@/lib/server-utils";
+import { Provider } from "jotai";
+import { Authenticator } from "@/components/auth/authenticator";
 
 const inter = Inter({ subsets: ["latin"] });
 const wix = Wix_Madefor_Display({ subsets: ["latin"], variable: "--font-wix-display" });
@@ -19,18 +21,21 @@ export default async function RootLayout({
     let circle = await getDefaultCircle(true, serverConfig);
 
     return (
-        <html lang="en" className={`${wix.variable} ${libre.variable}`}>
-            <body className={inter.className}>
-                <main className="relative flex h-screen flex-col overflow-hidden">
-                    <TopBar circle={circle} />
-                    <div className="flex flex-1 flex-row">
-                        <div className={`relative flex min-w-[400px] flex-1`}>{children}</div>
-                        <Map mapboxKey={serverConfig?.mapboxKey ?? ""} />
-                    </div>
-                    <Toaster />
-                </main>
-            </body>
-        </html>
+        <Provider>
+            <html lang="en" className={`${wix.variable} ${libre.variable}`}>
+                <body className={inter.className}>
+                    <main className="relative flex h-screen flex-col overflow-hidden">
+                        <TopBar circle={circle} />
+                        <div className="flex flex-1 flex-row">
+                            <div className={`relative flex min-w-[400px] flex-1`}>{children}</div>
+                            <Map mapboxKey={serverConfig?.mapboxKey ?? ""} />
+                        </div>
+                        <Toaster />
+                        <Authenticator />
+                    </main>
+                </body>
+            </html>
+        </Provider>
     );
 }
 

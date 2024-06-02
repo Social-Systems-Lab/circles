@@ -7,13 +7,15 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import Link from "next/link";
 import { DynamicField } from "@/components/forms/dynamic-field";
 import { generateZodSchema } from "@/lib/utils/form";
-import { FormSchema } from "@/models/models";
-import { useEffect, useState, useTransition } from "react";
+import { FormSchema, FormTools } from "@/models/models";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { formSchemas } from "@/components/forms/form-schemas";
 import { onFormSubmit } from "./actions";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { formActionHandlers } from "@/components/forms/form-action-handlers";
+import { authenticatedAtom, userAtom } from "@/lib/data/atoms";
+import { useAtom } from "jotai";
 
 interface DynamicFormProps {
     initialFormData?: Record<string, any>;
@@ -22,6 +24,11 @@ interface DynamicFormProps {
 }
 
 export const DynamicForm: React.FC<DynamicFormProps> = ({ initialFormData = {}, formData = {}, formSchemaId }) => {
+    const [user, setUser] = useAtom(userAtom);
+    const [authenticated, setAuthenticated] = useAtom(authenticatedAtom);
+    const formTools = useMemo<FormTools>(() => {
+        return { user, setUser, authenticated, setAuthenticated };
+    }, [user, setUser, authenticated, setAuthenticated]);
     const formSchema = formSchemas[formSchemaId];
     const zodSchema = generateZodSchema(formSchema.fields);
     const form = useForm({
@@ -44,7 +51,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ initialFormData = {}, 
             const formActionHandler = formActionHandlers[formSchemaId];
             if (formActionHandler) {
                 const { onHandleSubmit } = formActionHandler;
-                result = await onHandleSubmit(result, router);
+                result = await onHandleSubmit(result, router, formTools);
             }
 
             if (!result.success) {
