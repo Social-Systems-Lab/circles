@@ -1,5 +1,6 @@
 import { CoreMessage } from "ai";
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import { ReadonlyURLSearchParams } from "next/navigation";
 import { z } from "zod";
 
 export const didSchema = z.string().regex(/^[0-9a-fA-F]{64}$/, "DID must be a 64-character hexadecimal string");
@@ -291,4 +292,5 @@ export type FormTools = {
     setUser: (user: User) => void;
     authenticated?: boolean;
     setAuthenticated: (authenticated: boolean) => void;
+    searchParams: ReadonlyURLSearchParams;
 };

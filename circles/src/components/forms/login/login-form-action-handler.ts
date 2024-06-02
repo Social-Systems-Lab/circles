@@ -16,8 +16,9 @@ export const loginFormActionHandler: FormActionHandler = {
         tools.setUser(response.data.user);
         tools.setAuthenticated(true);
 
-        // redirect to home page
-        router.push("/");
+        // redirect to requested page
+        let redirectUrl = tools.searchParams?.get("redirectTo") ?? "/";
+        router.push(redirectUrl);
         return response;
     },
 };

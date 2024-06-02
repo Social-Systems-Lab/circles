@@ -6,7 +6,7 @@ export const loginFormSchema: FormSchema = {
     description: "Enter your email and password to log in.",
     footer: {
         text: "Don't have an account?",
-        link: { href: "/register", text: "Sign up here" },
+        link: { href: "/signup", text: "Sign up here" },
     },
     button: {
         text: "Log in",

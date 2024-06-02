@@ -28,7 +28,9 @@ export async function middleware(request: NextRequest) {
 
     if (!authorized) {
         console.log("Unauthorized request to", request.nextUrl.pathname);
-        return Response.redirect(new URL("/unauthenticated", request.url));
+        const redirectUrl = new URL("/unauthenticated", request.url);
+        redirectUrl.searchParams.set("redirectTo", request.nextUrl.pathname);
+        return Response.redirect(redirectUrl);
     } else {
         console.log("Authorized request to", request.nextUrl.pathname);
     }

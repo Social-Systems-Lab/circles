@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "../ui/button";
 import { useTransition } from "react";
 import { logOut } from "../auth/actions";
@@ -13,13 +13,16 @@ export const ProfileMenu = () => {
     const [authenticated, setAuthenticated] = useAtom(authenticatedAtom);
     const [user, setUser] = useAtom(userAtom);
     const [isPending, startTransition] = useTransition();
+    const searchParams = useSearchParams();
 
     const onLogInClick = () => {
-        router.push("/login");
+        let redirectTo = searchParams.get("redirectTo") ?? "/";
+        router.push("/login?redirectTo=" + redirectTo);
     };
 
     const onSignUpClick = () => {
-        router.push("/signup");
+        let redirectTo = searchParams.get("redirectTo");
+        router.push("/signup?redirectTo=" + redirectTo);
     };
 
     const onLogOutClick = async () => {

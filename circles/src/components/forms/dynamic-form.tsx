@@ -12,7 +12,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { formSchemas } from "@/components/forms/form-schemas";
 import { onFormSubmit } from "./actions";
 import { Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { formActionHandlers } from "@/components/forms/form-action-handlers";
 import { authenticatedAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
@@ -26,9 +26,10 @@ interface DynamicFormProps {
 export const DynamicForm: React.FC<DynamicFormProps> = ({ initialFormData = {}, formData = {}, formSchemaId }) => {
     const [user, setUser] = useAtom(userAtom);
     const [authenticated, setAuthenticated] = useAtom(authenticatedAtom);
+    const searchParams = useSearchParams();
     const formTools = useMemo<FormTools>(() => {
-        return { user, setUser, authenticated, setAuthenticated };
-    }, [user, setUser, authenticated, setAuthenticated]);
+        return { user, setUser, authenticated, setAuthenticated, searchParams };
+    }, [user, setUser, authenticated, setAuthenticated, searchParams]);
     const formSchema = formSchemas[formSchemaId];
     const zodSchema = generateZodSchema(formSchema.fields);
     const form = useForm({
