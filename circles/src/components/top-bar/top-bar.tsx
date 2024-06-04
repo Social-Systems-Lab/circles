@@ -6,9 +6,10 @@ import { ProfileMenu } from "./profile-menu";
 
 type TopBarProps = {
     circle: Circle;
+    isDefaultCircle: boolean;
 };
 
-export default function TopBar({ circle }: TopBarProps) {
+export default function TopBar({ circle, isDefaultCircle }: TopBarProps) {
     return (
         <>
             <div className={`h-[60px] w-full flex-shrink-0`}></div>
@@ -25,10 +26,10 @@ export default function TopBar({ circle }: TopBarProps) {
                             />
                         </Link>
                         <Link href="/">
-                            <h4 className="m-0 ml-4 p-0">{circle?.name ?? "Circle"}</h4>
+                            <h4 className="m-0 ml-4 p-0">{circle?.name ?? "Circles"}</h4>
                         </Link>
                     </div>
-                    <TopBarNavItems />
+                    <TopBarNavItems circle={circle} isDefaultCircle={isDefaultCircle} />
                     <ProfileMenu />
                 </div>
             </div>

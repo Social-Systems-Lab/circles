@@ -1,6 +1,6 @@
 import Image from "next/image";
 import type { Circle } from "../../models/models";
-import { getDefaultCircle } from "@/lib/server-utils";
+import { getDefaultCircle } from "@/lib/data/circle";
 import { cn } from "@/lib/utils";
 
 type CircleCoverProps = {

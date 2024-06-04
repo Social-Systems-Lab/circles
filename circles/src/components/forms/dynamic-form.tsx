@@ -21,9 +21,15 @@ interface DynamicFormProps {
     initialFormData?: Record<string, any>;
     formData?: Record<string, any>;
     formSchemaId: string;
+    maxWidth?: string;
 }
 
-export const DynamicForm: React.FC<DynamicFormProps> = ({ initialFormData = {}, formData = {}, formSchemaId }) => {
+export const DynamicForm: React.FC<DynamicFormProps> = ({
+    initialFormData = {},
+    formData = {},
+    formSchemaId,
+    maxWidth = "400px",
+}) => {
     const [user, setUser] = useAtom(userAtom);
     const [authenticated, setAuthenticated] = useAtom(authenticatedAtom);
     const searchParams = useSearchParams();
@@ -77,11 +83,11 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ initialFormData = {}, 
 
     return (
         <div className="flex flex-1 flex-row items-center justify-center pl-6 pr-6">
-            <div className="max-w-[400px] flex-1">
+            <div className="flex-1" style={{ maxWidth: maxWidth }}>
                 <h1 className="m-0 p-0 pb-2 text-3xl font-bold">{title}</h1>
-                <p className="pb-4 text-gray-500">{description}</p>
+                <p className=" pb-8 text-gray-500">{description}</p>
                 <Form {...form}>
-                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-8" autoComplete="off">
+                    <form onSubmit={handleSubmit(onSubmit)} autoComplete="off">
                         {/* fake fields are a workaround for chrome/opera autofill getting the wrong fields */}
                         <input id="username" style={{ display: "none" }} type="text" name="fakeusernameremembered" />
                         <input
@@ -90,41 +96,44 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ initialFormData = {}, 
                             type="password"
                             name="fakepasswordremembered"
                         />
+                        <div className="space-y-8">
+                            {formSchema.fields.map((field) => (
+                                <FormField
+                                    key={field.name}
+                                    control={control}
+                                    name={field.name}
+                                    render={({ field: formField }) => (
+                                        <DynamicField field={field} formField={formField} />
+                                    )}
+                                />
+                            ))}
 
-                        {formSchema.fields.map((field) => (
-                            <FormField
-                                key={field.name}
-                                control={control}
-                                name={field.name}
-                                render={({ field: formField }) => <DynamicField field={field} formField={formField} />}
-                            />
-                        ))}
+                            <FormMessage>{formError}</FormMessage>
 
-                        <FormMessage>{formError}</FormMessage>
-
-                        <Button className="w-full" type="submit" disabled={isPending}>
-                            {isPending ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Saving...
-                                </>
-                            ) : (
-                                <>{button.text}</>
-                            )}
-                        </Button>
-                        {/* 
+                            <Button className="w-full lg:max-w-[200px]" type="submit" disabled={isPending}>
+                                {isPending ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Saving...
+                                    </>
+                                ) : (
+                                    <>{button.text}</>
+                                )}
+                            </Button>
+                            {/* 
                         Show this if form is editing existing form data
                         <Button className="w-full" type="button" onClick={handleReset}>
                             Reset
                         </Button> */}
-                        {footer && (
-                            <p>
-                                {footer.text}{" "}
-                                <Link className="textLink" href={footer.link.href}>
-                                    {footer.link.text}
-                                </Link>
-                            </p>
-                        )}
+                            {footer && (
+                                <p>
+                                    {footer.text}{" "}
+                                    <Link className="textLink" href={footer.link.href}>
+                                        {footer.link.text}
+                                    </Link>
+                                </p>
+                            )}
+                        </div>
                     </form>
                 </Form>
             </div>

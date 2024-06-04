@@ -40,16 +40,41 @@ export const circleAccessRulesSchema = z.object({
     view: z.array(z.string()).optional(),
 });
 
+export const pageSchema = z.object({
+    name: z.string(),
+    handle: handleSchema,
+    description: z.string(),
+    //accessRules: pageAccessRulesSchema.optional(),
+    module: z.string(),
+});
+
+export type Page = z.infer<typeof pageSchema>;
+
+export const defaultPages: Page[] = [
+    {
+        name: "Home",
+        handle: "",
+        description: "Home page",
+        module: "home",
+    },
+    {
+        name: "Settings",
+        handle: "settings",
+        description: "Settings page",
+        module: "settings",
+    },
+];
+
 export const circleSchema = z.object({
     did: didSchema.optional(),
-    name: z.string().default("Circle"),
+    name: z.string().default("Circles"),
     handle: handleSchema,
     picture: z.string().optional(),
     cover: z.string().optional(),
     description: z.string().optional(),
-    userGroups: z.array(userGroupSchema).optional(),
+    userGroups: z.array(userGroupSchema).default([]),
+    pages: z.array(pageSchema).default([]),
     // accessRules: circleAccessRulesSchema.optional(),
-    // pages: z.array(z.string()).optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;
@@ -82,9 +107,9 @@ export const membersModuleSchema = z.object({
 });
 
 export const serverConfigSchema = z.object({
-    defaultCircleDid: z.string().optional(),
+    defaultCircleId: z.string().optional(),
     status: z.enum(["setup", "online"]),
-    setupStatus: z.enum(["config", "account", "circle", "complete"]),
+    setupStatus: z.enum(["config", "account", "complete"]),
     mapboxKey: z.string().optional(),
     openaiKey: z.string().optional(),
 });
@@ -144,22 +169,6 @@ export type Message = {
     toolCall?: boolean;
     suggestion?: string;
 };
-
-export const registrationFormSchema = z.object({
-    type: accountTypeSchema.describe("Account type"),
-    name: z.string().describe("User's name, nickname or if organization the organization's name"),
-    email: z.string().email().describe("Email address"),
-    password: passwordSchema.describe("Password"),
-    // handle: handleSchema.optional().describe(
-    //     "Unique handle that will identify the account on the platform, e.g. a nickname or organisation name. May consist of lowercase letters, numbers and underscore.",
-    // ),
-    // description: z.string().optional().describe("Short description of the user or organization"),
-    // picture: z.string().optional().describe("URL to profile picture"),
-    // cover: z.string().optional().describe("URL to cover picture"),
-    // content: z.string().optional().describe("Profile content that describes the user or organization in more detail"),
-});
-
-export type RegistrationFormType = z.infer<typeof registrationFormSchema>;
 
 export type InputProvider = {
     type: "input-provider";

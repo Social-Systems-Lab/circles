@@ -5,14 +5,30 @@ import {
     ContextInfo,
     InputProvider,
     Message,
-    registrationFormSchema,
-    RegistrationFormType,
     AuthData,
+    accountTypeSchema,
+    passwordSchema,
 } from "../models/models";
 import { z } from "zod";
 import { aiContexts } from "./ai-contexts";
 import { createUser } from "./auth/auth";
 import { generateUserToken } from "./auth/jwt";
+
+export const registrationFormSchema = z.object({
+    type: accountTypeSchema.describe("Account type"),
+    name: z.string().describe("User's name, nickname or if organization the organization's name"),
+    email: z.string().email().describe("Email address"),
+    password: passwordSchema.describe("Password"),
+    // handle: handleSchema.optional().describe(
+    //     "Unique handle that will identify the account on the platform, e.g. a nickname or organisation name. May consist of lowercase letters, numbers and underscore.",
+    // ),
+    // description: z.string().optional().describe("Short description of the user or organization"),
+    // picture: z.string().optional().describe("URL to profile picture"),
+    // cover: z.string().optional().describe("URL to cover picture"),
+    // content: z.string().optional().describe("Profile content that describes the user or organization in more detail"),
+});
+
+export type RegistrationFormType = z.infer<typeof registrationFormSchema>;
 
 export const getContextTools = (c: ContextInfo): Record<string, CoreTool<any, any>> => {
     return aiContextsTools[c.contextId](c);

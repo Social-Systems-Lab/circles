@@ -1,7 +1,7 @@
-import { FormAction, FormSubmitResponse } from "../../../models/models";
+import { FormAction, FormSubmitResponse } from "../../../../models/models";
 
 export const circleSettingsFormAction: FormAction = {
-    id: "circel-settings-form",
+    id: "circle-about-form",
     onSubmit: async (values: Record<string, any>): Promise<FormSubmitResponse> => {
         try {
             return { success: true, message: "Circle settings saved successfully" };

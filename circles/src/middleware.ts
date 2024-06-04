@@ -4,12 +4,8 @@ import type { NextRequest } from "next/server";
 export async function middleware(request: NextRequest) {
     let authorized = false;
 
-    console.log("Middleware invoked");
-    console.log("Path:", request.nextUrl.pathname);
-
     try {
         const token = request.cookies.get("token")?.value;
-        console.log("token", token);
         if (token) {
             await verifyUserToken(token);
             authorized = true;
