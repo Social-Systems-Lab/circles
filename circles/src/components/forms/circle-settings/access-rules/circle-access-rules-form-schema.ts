@@ -1,9 +1,10 @@
 import { FormSchema } from "../../../../models/models";
 
-export const circleAboutFormSchema: FormSchema = {
-    id: "circle-about-form",
-    title: "About",
-    description: "Circle name and handle.",
+export const circleAccessRulesFormSchema: FormSchema = {
+    id: "circle-access-rules-form",
+    title: "Access Rules",
+    description:
+        "Manage and control which user groups have access to specific features within the circle. Define and enforce permissions to ensure appropriate access for each group.",
     button: {
         text: "Save",
     },

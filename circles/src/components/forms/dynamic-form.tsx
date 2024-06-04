@@ -37,6 +37,8 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
         return { user, setUser, authenticated, setAuthenticated, searchParams };
     }, [user, setUser, authenticated, setAuthenticated, searchParams]);
     const formSchema = formSchemas[formSchemaId];
+    if (!formSchema) throw new Error(`Form schema with id ${formSchemaId} not found`);
+
     const zodSchema = generateZodSchema(formSchema.fields);
     const form = useForm({
         resolver: zodResolver(zodSchema),
