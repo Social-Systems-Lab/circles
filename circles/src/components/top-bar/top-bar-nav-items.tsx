@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { HiChevronDown } from "react-icons/hi";
@@ -13,7 +13,30 @@ export default function TopBarNavItems({ circle, isDefaultCircle }: { circle: Ci
     const pathname = usePathname();
     const [itemVisibility, setItemVisibility] = useState<boolean[]>([]);
     const [navMenuOpen, setNavMenuOpen] = useState(false);
-    const currentNavItem = circle.pages.find((x) => `/${x.handle}` === pathname); // TODO handle non-default circles
+
+    const getPath = useCallback(
+        (page: Page) => {
+            if (isDefaultCircle) {
+                return `/${page.handle}`;
+            } else {
+                return `/circles/${circle.handle}${page.handle ? `/${page.handle}` : ""}`;
+            }
+        },
+        [isDefaultCircle, circle.handle],
+    );
+
+    const currentNavItem = useMemo(() => {
+        return circle.pages.find((x) => {
+            if (x.handle === "") {
+                return pathname === getPath(x);
+            }
+            return pathname.startsWith(getPath(x));
+        });
+    }, [circle.pages, getPath, pathname]);
+    const currentNavVisible = useMemo(() => {
+        if (!currentNavItem) return false;
+        return itemVisibility[circle.pages.indexOf(currentNavItem)];
+    }, [currentNavItem, circle.pages, itemVisibility]);
 
     const recalculateItemVisibility = () => {
         if (!itemContainerRef.current) return;
@@ -53,14 +76,6 @@ export default function TopBarNavItems({ circle, isDefaultCircle }: { circle: Ci
         return () => resizeObserver.disconnect();
     }, []);
 
-    const getPath = (page: Page) => {
-        if (isDefaultCircle) {
-            return `/${page.handle}`;
-        } else {
-            return `/circles/${circle.handle}/${page.handle}`;
-        }
-    };
-
     return (
         <nav ref={itemContainerRef} className={`mr-8 flex h-[60px] flex-1 flex-row overflow-hidden`}>
             {circle.pages.map((item, index) => (
@@ -68,7 +83,7 @@ export default function TopBarNavItems({ circle, isDefaultCircle }: { circle: Ci
                     <div
                         ref={itemRefs.current[index]}
                         className={`flex h-full flex-shrink-0 cursor-pointer flex-row items-center justify-center pl-2 pr-2 ${
-                            pathname === getPath(item) ? "border-b-2 border-red-500" : "border-b-2 border-transparent"
+                            item === currentNavItem ? "border-b-2 border-red-500" : "border-b-2 border-transparent"
                         } ${!itemVisibility[index] ? "hidden" : ""}`}
                     >
                         <div>
@@ -82,16 +97,10 @@ export default function TopBarNavItems({ circle, isDefaultCircle }: { circle: Ci
                 <PopoverTrigger>
                     <div
                         className={`flex h-full flex-shrink-0 cursor-pointer flex-row items-center justify-center pl-2 pr-2 ${
-                            !itemVisibility[circle.pages.findIndex((x) => getPath(x) === pathname)]
-                                ? "border-b-2 border-red-500"
-                                : "border-b-2 border-transparent"
+                            !currentNavVisible ? "border-b-2 border-red-500" : "border-b-2 border-transparent"
                         } ${itemVisibility.includes(false) ? "" : "hidden"}`}
                     >
-                        <span className="mr-[2px]">
-                            {!itemVisibility[circle.pages.findIndex((x) => getPath(x) === pathname)]
-                                ? currentNavItem?.name
-                                : "More"}
-                        </span>
+                        <span className="mr-[2px]">{!currentNavVisible ? currentNavItem?.name : "More"}</span>
                         <HiChevronDown size="16px" />
                     </div>
 

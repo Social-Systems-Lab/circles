@@ -1,3 +1,4 @@
+import { Toast } from "@/components/ui/use-toast";
 import { CoreMessage } from "ai";
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { ReadonlyURLSearchParams } from "next/navigation";
@@ -66,14 +67,15 @@ export const defaultPages: Page[] = [
 ];
 
 export const circleSchema = z.object({
+    _id: z.string().optional(),
     did: didSchema.optional(),
-    name: z.string().default("Circles"),
-    handle: handleSchema,
+    name: z.string().default("Circles").optional(),
+    handle: handleSchema.optional(),
     picture: z.string().optional(),
     cover: z.string().optional(),
     description: z.string().optional(),
-    userGroups: z.array(userGroupSchema).default([]),
-    pages: z.array(pageSchema).default([]),
+    userGroups: z.array(userGroupSchema).default([]).optional(),
+    pages: z.array(pageSchema).default([]).optional(),
     // accessRules: circleAccessRulesSchema.optional(),
 });
 
@@ -247,7 +249,7 @@ export type FormFieldOption = {
     label: string;
 };
 
-export type FormFieldType = "text" | "email" | "password" | "select" | "handle";
+export type FormFieldType = "text" | "hidden" | "email" | "password" | "select" | "handle";
 
 export type FormField = {
     name: string;
@@ -258,7 +260,7 @@ export type FormField = {
     description?: string;
     options?: FormFieldOption[];
     minLength?: number;
-    required: boolean;
+    required?: boolean;
     validationMessage?: string;
 };
 
@@ -302,4 +304,5 @@ export type FormTools = {
     authenticated?: boolean;
     setAuthenticated: (authenticated: boolean) => void;
     searchParams: ReadonlyURLSearchParams;
+    toast: ({ ...props }: Toast) => void;
 };

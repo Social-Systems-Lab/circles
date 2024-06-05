@@ -10,13 +10,16 @@ export const getDefaultCircle = async (
     inServerConfig: ServerConfig | null = null,
 ): Promise<Circle> => {
     let serverConfig = inServerConfig ?? (await getServerConfig(redirectIfSetup));
-    let circle = (await Circles.findOne(
-        { _id: new ObjectId(serverConfig?.defaultCircleId) },
-        { projection: { _id: 0 } },
-    )) as Circle;
+    let circle = await Circles.findOne({ _id: new ObjectId(serverConfig?.defaultCircleId) });
+
     if (!circle) {
-        circle = createDefaultCircle();
+        return createDefaultCircle();
     }
+
+    if (circle._id) {
+        circle._id = circle._id.toString();
+    }
+
     return circle;
 };
 
@@ -50,6 +53,19 @@ export const createDefaultCircle = (): Circle => {
 };
 
 export const getCircleByHandle = async (handle: string): Promise<Circle> => {
-    let circle = (await Circles.findOne({ handle: handle }, { projection: { _id: 0 } })) as Circle;
+    let circle = (await Circles.findOne({ handle: handle })) as Circle;
+    if (circle?._id) {
+        circle._id = circle._id.toString();
+    }
+    return circle;
+};
+
+export const updateCircle = async (circle: Circle): Promise<Circle> => {
+    console.log("updateCircle", circle);
+    let { _id, ...circleWithoutId } = circle;
+    let result = await Circles.updateOne({ _id: new ObjectId(_id) }, { $set: circleWithoutId });
+    if (result.modifiedCount === 0) {
+        throw new Error("Circle not found");
+    }
     return circle;
 };

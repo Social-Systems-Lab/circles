@@ -3,11 +3,16 @@ import { FormSchema } from "../../../../models/models";
 export const circleAboutFormSchema: FormSchema = {
     id: "circle-about-form",
     title: "About",
-    description: "Circle name and handle.",
+    description: "Manage and personalize your circle's identity.",
     button: {
         text: "Save",
     },
     fields: [
+        {
+            name: "_id",
+            type: "hidden",
+            label: "ID",
+        },
         {
             name: "name",
             label: "Name",

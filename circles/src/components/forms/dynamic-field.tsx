@@ -8,10 +8,11 @@ import { FormField } from "@/models/models";
 type RenderFieldProps = {
     field: FormField;
     formField: ControllerRenderProps<any, any>;
+    collapse?: boolean;
 };
 
-export const DynamicTextField: React.FC<RenderFieldProps> = ({ field, formField }) => (
-    <FormItem>
+export const DynamicTextField: React.FC<RenderFieldProps> = ({ field, formField, collapse }) => (
+    <FormItem style={{ visibility: collapse ? "collapse" : "visible" }}>
         <FormLabel>{field.label}</FormLabel>
         <FormControl>
             <Input type="text" placeholder={field.placeholder} autoComplete={field.autoComplete} {...formField} />
@@ -54,6 +55,8 @@ export const DynamicPasswordField: React.FC<RenderFieldProps> = ({ field, formFi
 
 export const DynamicField: React.FC<RenderFieldProps> = ({ field, formField }) => {
     switch (field.type) {
+        case "hidden":
+            return DynamicTextField({ field, formField, collapse: true });
         case "handle":
         case "text":
         case "email":

@@ -16,6 +16,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { formActionHandlers } from "@/components/forms/form-action-handlers";
 import { authenticatedAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
+import { useToast } from "@/components/ui/use-toast";
 
 interface DynamicFormProps {
     initialFormData?: Record<string, any>;
@@ -32,10 +33,11 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
 }) => {
     const [user, setUser] = useAtom(userAtom);
     const [authenticated, setAuthenticated] = useAtom(authenticatedAtom);
+    const { toast } = useToast();
     const searchParams = useSearchParams();
     const formTools = useMemo<FormTools>(() => {
-        return { user, setUser, authenticated, setAuthenticated, searchParams };
-    }, [user, setUser, authenticated, setAuthenticated, searchParams]);
+        return { user, setUser, authenticated, setAuthenticated, searchParams, toast };
+    }, [user, setUser, authenticated, setAuthenticated, searchParams, toast]);
     const formSchema = formSchemas[formSchemaId];
     if (!formSchema) throw new Error(`Form schema with id ${formSchemaId} not found`);
 
@@ -86,29 +88,23 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
     return (
         <div className="flex flex-1 flex-row items-center justify-center pl-6 pr-6">
             <div className="flex-1" style={{ maxWidth: maxWidth }}>
-                <h1 className="m-0 p-0 pb-2 text-3xl font-bold">{title}</h1>
+                <h1 className="m-0 p-0 pb-3 text-3xl font-bold">{title}</h1>
                 <p className=" pb-8 text-gray-500">{description}</p>
                 <Form {...form}>
                     <form onSubmit={handleSubmit(onSubmit)} autoComplete="off">
-                        {/* fake fields are a workaround for chrome/opera autofill getting the wrong fields */}
-                        <input id="username" style={{ display: "none" }} type="text" name="fakeusernameremembered" />
-                        <input
-                            id="password"
-                            style={{ display: "none" }}
-                            type="password"
-                            name="fakepasswordremembered"
-                        />
                         <div className="space-y-8">
-                            {formSchema.fields.map((field) => (
-                                <FormField
-                                    key={field.name}
-                                    control={control}
-                                    name={field.name}
-                                    render={({ field: formField }) => (
-                                        <DynamicField field={field} formField={formField} />
-                                    )}
-                                />
-                            ))}
+                            {formSchema.fields
+                                .filter((x) => x.type !== "hidden")
+                                .map((field) => (
+                                    <FormField
+                                        key={field.name}
+                                        control={control}
+                                        name={field.name}
+                                        render={({ field: formField }) => (
+                                            <DynamicField field={field} formField={formField} />
+                                        )}
+                                    />
+                                ))}
 
                             <FormMessage>{formError}</FormMessage>
 
@@ -136,6 +132,29 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
                                 </p>
                             )}
                         </div>
+
+                        {/* hidden fields added last to not impact layout */}
+                        {formSchema.fields
+                            .filter((x) => x.type === "hidden")
+                            .map((field) => (
+                                <FormField
+                                    key={field.name}
+                                    control={control}
+                                    name={field.name}
+                                    render={({ field: formField }) => (
+                                        <DynamicField field={field} formField={formField} />
+                                    )}
+                                />
+                            ))}
+
+                        {/* fake fields are a workaround for chrome/opera autofill getting the wrong fields */}
+                        <input id="username" style={{ display: "none" }} type="text" name="fakeusernameremembered" />
+                        <input
+                            id="password"
+                            style={{ display: "none" }}
+                            type="password"
+                            name="fakepasswordremembered"
+                        />
                     </form>
                 </Form>
             </div>

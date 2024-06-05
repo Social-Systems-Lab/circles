@@ -8,7 +8,7 @@ type PageProps = {
 
 export default async function Page({ params }: PageProps) {
     let circle = await getCircleByHandle(params.handle);
-    let page = circle.pages.find((p) => p.handle === params.page);
+    let page = circle.pages?.find((p) => p.handle === params.page);
     console.log("page", page);
     if (!page) {
         // redirect to not-found
