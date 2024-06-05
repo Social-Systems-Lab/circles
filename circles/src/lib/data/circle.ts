@@ -28,8 +28,8 @@ export const createDefaultCircle = (): Circle => {
         name: "Circles",
         description: "Your Social Platform",
         handle: "default",
-        picture: "/images/default-picture.png",
-        cover: "/images/default-cover.png",
+        picture: { url: "/images/default-picture.png" },
+        cover: { url: "/images/default-cover.png" },
         userGroups: [
             {
                 name: "Admins",

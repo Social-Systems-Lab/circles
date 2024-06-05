@@ -23,7 +23,7 @@ export async function generateMetadata(): Promise<Metadata> {
     let circle = await getDefaultCircle(false);
     let title = circle.name;
     let description = circle.description;
-    let icon = circle.picture ?? "/images/default-picture.png";
+    let icon = circle.picture?.url ?? "/images/default-picture.png";
 
     return {
         title: title,

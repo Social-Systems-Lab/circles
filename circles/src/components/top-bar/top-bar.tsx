@@ -18,7 +18,7 @@ export default function TopBar({ circle, isDefaultCircle }: TopBarProps) {
                     <div className="ml-11 mr-10 flex flex-shrink-0 flex-row items-center justify-center">
                         <Link href="/">
                             <Image
-                                src={circle?.picture ?? "/images/default-picture.png"}
+                                src={circle?.picture?.url ?? "/images/default-picture.png"}
                                 alt="Logo"
                                 width={40}
                                 height={40}

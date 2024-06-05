@@ -11,8 +11,8 @@ const IV_FILENAME = "iv.bin";
 const PUBLIC_KEY_FILENAME = "publicKey.pem";
 const PRIVATE_KEY_FILENAME = "privateKey.pem.enc";
 const ENCRYPTION_ALGORITHM = "aes-256-cbc";
-const APP_DIR = "/circles";
-const USERS_DIR = path.join(APP_DIR, "users");
+export const APP_DIR = "/circles";
+export const USERS_DIR = path.join(APP_DIR, "users");
 
 export const createUser = async (
     name: string,

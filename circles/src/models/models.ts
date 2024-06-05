@@ -22,9 +22,12 @@ export const getImageSchema = (maxSize?: number) => {
     let maxImageSize = maxSize ?? DEFAULT_MAX_IMAGE_FILE_SIZE;
     return z
         .any()
-        .refine((file) => file?.size <= maxImageSize, `Max image size is ${maxSize / 1024 / 1024}MB.`)
         .refine(
-            (file) => ACCEPTED_IMAGE_TYPES.includes(file?.type),
+            (file) => !file?.size || file?.size <= maxImageSize,
+            `Max image size is ${maxImageSize / 1000 / 1000}MB.`,
+        )
+        .refine(
+            (file) => !file?.type || ACCEPTED_IMAGE_TYPES.includes(file?.type),
             "Only .jpg, .jpeg, .png and .webp image formats are supported.",
         );
 };
@@ -81,13 +84,19 @@ export const defaultPages: Page[] = [
     },
 ];
 
+export const fileInfoSchema = z.object({
+    originalName: z.string().optional(),
+    fileName: z.string().optional(),
+    url: z.string(),
+});
+
 export const circleSchema = z.object({
     _id: z.string().optional(),
     did: didSchema.optional(),
     name: z.string().default("Circles").optional(),
     handle: handleSchema.optional(),
-    picture: z.string().optional(),
-    cover: z.string().optional(),
+    picture: fileInfoSchema.optional(),
+    cover: fileInfoSchema.optional(),
     description: z.string().optional(),
     userGroups: z.array(userGroupSchema).default([]).optional(),
     pages: z.array(pageSchema).default([]).optional(),

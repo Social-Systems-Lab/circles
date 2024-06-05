@@ -40,13 +40,13 @@ export const circleAboutFormSchema: FormSchema = {
             name: "picture",
             label: "Picture",
             type: "image",
-            description: "Add a picture to represent your circle.",
+            description: "Add a picture to represent the circle.",
         },
         {
             name: "cover",
             label: "Cover",
-            type: "image-list",
-            description: "Add cover images to represent your circle.",
+            type: "image",
+            description: "Add cover image to decorate the circle.",
         },
     ],
 };

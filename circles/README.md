@@ -12,13 +12,25 @@ Run development server:
 bun dev
 ```
 
-Run database in docker:
+Run MongoDB database in docker:
 
 ```bash
 docker-compose up -d db
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Run minio storage in docker:
+
+```
+docker-compose up -d minio
+```
+
+Run nginx reverse proxy in docker:
+
+```
+docker-compose up -d nginx
+```
+
+Open [http://localhost](http://localhost) with your browser to see the result.
 
 ## Run on Docker
 

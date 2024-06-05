@@ -78,7 +78,7 @@ export const DynamicPasswordField: React.FC<RenderFieldProps> = ({ field, formFi
 );
 
 export const DynamicImageField: React.FC<RenderFieldProps> = ({ field, formField }) => {
-    const [previewUrl, setPreviewUrl] = useState<string | null>(formField.value || null);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(formField.value?.url || null);
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         formField.onChange(e.target.files && e.target.files?.[0]);

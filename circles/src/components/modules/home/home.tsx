@@ -10,7 +10,7 @@ const CircleCover = ({ circle }: CircleCoverProps) => {
     return (
         <div className={`relative h-[400px] w-full`}>
             <Image
-                src={circle?.cover ?? "/images/default-cover.png"}
+                src={circle?.cover?.url ?? "/images/default-cover.png"}
                 alt="Cover"
                 objectFit="cover"
                 sizes="100vw"
@@ -30,7 +30,7 @@ const CirclePicture = ({ circle, className, size = 40 }: CirclePictureProps) => 
     return (
         <Image
             className={cn("rounded-full border-2 border-white", className)}
-            src={circle?.picture ?? "/images/default-picture.png"}
+            src={circle?.picture?.url ?? "/images/default-picture.png"}
             alt="Picture"
             objectFit="cover"
             width={size}

@@ -1,6 +1,16 @@
 import { FormField, emailSchema, getImageSchema, handleSchema, passwordSchema } from "@/models/models";
 import { z, ZodSchema, ZodString } from "zod";
 
+export const getFormValues = (formData: FormData): Record<string, any> => {
+    const values: Record<string, any> = {};
+
+    for (const [key, value] of formData.entries() as any) {
+        values[key] = value;
+    }
+
+    return values;
+};
+
 export const generateZodSchema = (fields: FormField[]): ZodSchema<any> => {
     const fieldSchemas = fields.reduce(
         (acc, field) => {

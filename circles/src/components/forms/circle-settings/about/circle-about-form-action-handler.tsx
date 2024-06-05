@@ -9,6 +9,11 @@ export const circleAboutFormActionHandler: FormActionHandler = {
         router: AppRouterInstance,
         tools: FormTools,
     ): Promise<FormSubmitResponse> => {
+        console.log("response", response);
+        if (!response) {
+            return { success: false, message: "No response" };
+        }
+
         if (!response.success) {
             tools.toast({
                 title: "Save Error",
