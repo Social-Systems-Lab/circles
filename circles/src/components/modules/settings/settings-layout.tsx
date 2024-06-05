@@ -24,7 +24,7 @@ const settingsForms = [
 export default async function SettingsModuleLayout({ children, circle, page, isDefaultCircle }: ModuleLayoutPageProps) {
     return (
         <div className="flex w-full flex-col lg:flex-row lg:pt-[20px]">
-            <div className="flex flex-col items-center pb-2 lg:flex-1 lg:items-end">
+            <div className="relative flex flex-col items-center pb-2 lg:flex-1 lg:items-end">
                 <FormNav items={settingsForms} circle={circle} isDefaultCircle={isDefaultCircle} />
             </div>
             {children}

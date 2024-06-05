@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { FormControl, FormDescription, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -6,6 +6,8 @@ import { Control, ControllerRenderProps } from "react-hook-form";
 import { FormField } from "@/models/models";
 import { Textarea } from "../ui/textarea";
 import Image from "next/image";
+import { Label } from "../ui/label";
+import { Button } from "../ui/button";
 
 type RenderFieldProps = {
     field: FormField;
@@ -79,6 +81,7 @@ export const DynamicPasswordField: React.FC<RenderFieldProps> = ({ field, formFi
 
 export const DynamicImageField: React.FC<RenderFieldProps> = ({ field, formField }) => {
     const [previewUrl, setPreviewUrl] = useState<string | null>(formField.value?.url || null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         formField.onChange(e.target.files && e.target.files?.[0]);
@@ -93,11 +96,24 @@ export const DynamicImageField: React.FC<RenderFieldProps> = ({ field, formField
         }
     };
 
+    const triggerFileInput = () => {
+        if (fileInputRef.current) {
+            fileInputRef.current.click();
+        }
+    };
+
     return (
         <FormItem>
             <FormLabel>{field.label}</FormLabel>
             <FormControl>
-                <Input type="file" accept="image/*" onChange={(event) => handleFileChange(event)} />
+                <Input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => handleFileChange(event)}
+                    style={{ display: "none" }}
+                    id="imageUpload"
+                />
             </FormControl>
             {previewUrl && (
                 <Image
@@ -105,8 +121,16 @@ export const DynamicImageField: React.FC<RenderFieldProps> = ({ field, formField
                     alt="Preview"
                     width={field.imagePreviewWidth ?? 120}
                     height={field.imagePreviewHeight ?? 120}
+                    objectFit="cover"
+                    onClick={triggerFileInput}
+                    className="cursor-pointer"
                 />
             )}
+
+            <Button type="button" variant="outline" onClick={triggerFileInput}>
+                Upload new image
+            </Button>
+
             {field.description && <FormDescription>{field.description}</FormDescription>}
             <FormMessage />
         </FormItem>

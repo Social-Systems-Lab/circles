@@ -22,7 +22,7 @@ const BaseLayout = ({ children, circle, serverConfig, isDefaultCircle }: BaseLay
     <Provider>
         <html lang="en" className={`${wix.variable} ${libre.variable}`}>
             <body className={inter.className}>
-                <main className="relative flex h-screen flex-col overflow-hidden">
+                <main className="relative flex h-screen flex-col">
                     <TopBar circle={circle} isDefaultCircle={isDefaultCircle} />
                     <div className="flex flex-1 flex-row">
                         <div className={`relative flex min-w-[400px] flex-1`}>{children}</div>

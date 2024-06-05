@@ -30,7 +30,7 @@ export const FormNav: React.FC<FormNavProps> = ({ items, circle, isDefaultCircle
     };
 
     return (
-        <nav className={cn("flex space-x-2 lg:flex-col lg:space-x-0 lg:space-y-1", className)} {...props}>
+        <nav className={cn("fixed flex space-x-2 lg:flex-col lg:space-x-0 lg:space-y-1", className)} {...props}>
             {items.map((item) => (
                 <Link
                     key={item.handle}

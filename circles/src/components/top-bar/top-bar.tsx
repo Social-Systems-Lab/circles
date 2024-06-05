@@ -13,7 +13,7 @@ export default function TopBar({ circle, isDefaultCircle }: TopBarProps) {
     return (
         <>
             <div className={`h-[60px] w-full flex-shrink-0`}></div>
-            <div className={`fixed top-0 z-40 h-[60px] w-full`}>
+            <div className={`fixed top-0 z-40 h-[60px] w-full bg-white`}>
                 <div className={`flex h-[60px] flex-row items-center`}>
                     <div className="ml-11 mr-10 flex flex-shrink-0 flex-row items-center justify-center">
                         <Link href="/">
