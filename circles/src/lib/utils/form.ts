@@ -1,4 +1,4 @@
-import { FormField, emailSchema, handleSchema, passwordSchema } from "@/models/models";
+import { FormField, emailSchema, getImageSchema, handleSchema, passwordSchema } from "@/models/models";
 import { z, ZodSchema, ZodString } from "zod";
 
 export const generateZodSchema = (fields: FormField[]): ZodSchema<any> => {
@@ -7,6 +7,10 @@ export const generateZodSchema = (fields: FormField[]): ZodSchema<any> => {
             let schema: z.ZodTypeAny;
 
             switch (field.type) {
+                case "image":
+                    schema = getImageSchema(field.imageMaxSize);
+                    break;
+
                 case "textarea":
                 case "text":
                     schema = z.string();

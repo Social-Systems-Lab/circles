@@ -17,6 +17,12 @@ export const circleAboutFormAction: FormAction = {
                 handle: values.handle,
             };
 
+            if (values.picture) {
+                console.log("Circle picture", values.picture);
+            }
+
+            return { success: true, message: "Circle settings saved successfully" };
+
             await updateCircle(circle);
 
             // clear page cache so pages update

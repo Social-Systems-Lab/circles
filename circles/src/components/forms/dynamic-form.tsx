@@ -58,7 +58,15 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
     const onSubmit = async (values: Record<string, any>) => {
         setFormError(null);
         startTransition(async () => {
+            console.log("Before onFormSubmit");
+
+            // const formData = new FormData();
+            // Object.keys(values).forEach((key) => {
+            //     formData.append(key, values[key]);
+            // });
+
             let result = await onFormSubmit(formSchemaId, values, page);
+            console.log("After onFormSubmit");
 
             // call client action handler
             const formActionHandler = formActionHandlers[formSchemaId];

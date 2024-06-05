@@ -9,7 +9,7 @@ import { ZodError } from "zod";
 export async function onFormSubmit(
     formSchemaId: string,
     values: Record<string, any>,
-    page: Page,
+    page?: Page,
 ): Promise<FormSubmitResponse> {
     try {
         const formSchema = formSchemas[formSchemaId];

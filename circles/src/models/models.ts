@@ -14,6 +14,21 @@ export const handleSchema = z
 
 export const accountTypeSchema = z.enum(["user", "organization"]);
 export const emailSchema = z.string().email({ message: "Enter valid email" });
+
+const DEFAULT_MAX_IMAGE_FILE_SIZE = 5000000; // 5MB
+const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+
+export const getImageSchema = (maxSize?: number) => {
+    let maxImageSize = maxSize ?? DEFAULT_MAX_IMAGE_FILE_SIZE;
+    return z
+        .any()
+        .refine((file) => file?.size <= maxImageSize, `Max image size is ${maxSize / 1024 / 1024}MB.`)
+        .refine(
+            (file) => ACCEPTED_IMAGE_TYPES.includes(file?.type),
+            "Only .jpg, .jpeg, .png and .webp image formats are supported.",
+        );
+};
+
 export type AccountType = z.infer<typeof accountTypeSchema>;
 
 export const userSchema = z.object({
@@ -249,7 +264,7 @@ export type FormFieldOption = {
     label: string;
 };
 
-export type FormFieldType = "text" | "textarea" | "hidden" | "email" | "password" | "select" | "handle";
+export type FormFieldType = "text" | "textarea" | "image" | "hidden" | "email" | "password" | "select" | "handle";
 
 export type FormField = {
     name: string;
@@ -263,6 +278,9 @@ export type FormField = {
     maxLength?: number;
     required?: boolean;
     validationMessage?: string;
+    imageMaxSize?: number;
+    imagePreviewWidth?: number;
+    imagePreviewHeight?: number;
 };
 
 export type FormSchema = {
