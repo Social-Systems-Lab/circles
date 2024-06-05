@@ -1,11 +1,13 @@
 import { updateCircle } from "@/lib/data/circle";
-import { Circle, FormAction, FormSubmitResponse } from "../../../../models/models";
+import { Circle, FormAction, FormSubmitResponse, Page } from "../../../../models/models";
+import { revalidatePath } from "next/cache";
+import { getServerConfig } from "@/lib/data/server-config";
 
 export const circleAboutFormAction: FormAction = {
     id: "circle-about-form",
-    onSubmit: async (values: Record<string, any>): Promise<FormSubmitResponse> => {
+    onSubmit: async (values: Record<string, any>, page?: Page): Promise<FormSubmitResponse> => {
         try {
-            console.log("Saving circle settings with values", values);
+            // console.log("Saving circle settings with values", values);
             // TODO check if user is authorized to save circle settings
 
             // convert record to circle object
@@ -14,7 +16,17 @@ export const circleAboutFormAction: FormAction = {
                 name: values.name,
                 handle: values.handle,
             };
+
             await updateCircle(circle);
+
+            // clear page cache so pages update
+            let serverConfig = await getServerConfig(false);
+            if (circle._id === serverConfig.defaultCircleId) {
+                revalidatePath(`/`); // root home page
+                revalidatePath(`/${page?.handle ? `/${page.handle}` : ""}`); // root settings page
+            }
+            revalidatePath(`/circles/${circle.handle}${page?.handle ? `/${page.handle}` : ""}`); // settings page
+            revalidatePath(`/circles/${circle.handle}`); // home page
 
             return { success: true, message: "Circle settings saved successfully" };
         } catch (error) {

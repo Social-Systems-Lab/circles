@@ -3,10 +3,14 @@
 import { generateZodSchema } from "@/lib/utils/form";
 import { formActions } from "@/components/forms/form-actions";
 import { formSchemas } from "@/components/forms/form-schemas";
-import { FormSubmitResponse } from "@/models/models";
+import { FormSubmitResponse, Page } from "@/models/models";
 import { ZodError } from "zod";
 
-export async function onFormSubmit(formSchemaId: string, values: Record<string, any>): Promise<FormSubmitResponse> {
+export async function onFormSubmit(
+    formSchemaId: string,
+    values: Record<string, any>,
+    page: Page,
+): Promise<FormSubmitResponse> {
     try {
         const formSchema = formSchemas[formSchemaId];
         const zodSchema = generateZodSchema(formSchema.fields);
@@ -17,7 +21,7 @@ export async function onFormSubmit(formSchemaId: string, values: Record<string, 
         // call form server action
         const formAction = formActions[formSchemaId];
         const { onSubmit } = formAction;
-        let response = await onSubmit(values);
+        let response = await onSubmit(values, page);
 
         return response;
     } catch (error) {

@@ -7,13 +7,9 @@ export const generateZodSchema = (fields: FormField[]): ZodSchema<any> => {
             let schema: z.ZodTypeAny;
 
             switch (field.type) {
+                case "textarea":
                 case "text":
                     schema = z.string();
-                    if (field.minLength) {
-                        schema = (schema as ZodString).min(field.minLength, {
-                            message: field.validationMessage,
-                        });
-                    }
                     break;
 
                 case "email":
@@ -42,6 +38,21 @@ export const generateZodSchema = (fields: FormField[]): ZodSchema<any> => {
                 default:
                     schema = z.string();
                     break;
+            }
+
+            // check if schema is ZodString
+            if (schema instanceof ZodString) {
+                if (field.minLength) {
+                    schema = (schema as ZodString).min(field.minLength, {
+                        message: field.validationMessage,
+                    });
+                }
+
+                if (field.maxLength) {
+                    schema = (schema as ZodString).max(field.maxLength, {
+                        message: field.validationMessage,
+                    });
+                }
             }
 
             if (!field.required) {

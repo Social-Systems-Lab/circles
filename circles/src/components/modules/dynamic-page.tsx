@@ -1,15 +1,36 @@
 import { Circle, Page } from "@/models/models";
 import { redirect } from "next/navigation";
 import SettingsModule from "./settings/settings";
+import { getCircleByHandle, getDefaultCircle } from "@/lib/data/circle";
 
 export type DynamicPageProps = {
-    circle: Circle;
-    page: Page;
+    circleHandle?: string;
+    pageHandle?: string;
     subpage?: string;
     isDefaultCircle: boolean;
 };
 
-export default async function DynamicPage({ circle, page, subpage, isDefaultCircle }: DynamicPageProps) {
+export type ModulePageProps = {
+    circle: Circle;
+    page: Page;
+    isDefaultCircle: boolean;
+    subpage?: string;
+};
+
+export default async function DynamicPage({ circleHandle, pageHandle, subpage, isDefaultCircle }: DynamicPageProps) {
+    let circle: Circle = {};
+    if (isDefaultCircle) {
+        circle = await getDefaultCircle(true);
+    } else if (circleHandle) {
+        circle = await getCircleByHandle(circleHandle);
+    }
+
+    let page = circle?.pages?.find((p) => p.handle === pageHandle);
+    if (!page) {
+        // redirect to not-found
+        redirect(`/not-found`);
+    }
+
     switch (page.module) {
         case "settings":
             return <SettingsModule circle={circle} page={page} subpage={subpage} isDefaultCircle={isDefaultCircle} />;

@@ -14,25 +14,25 @@ export async function checkAuth(): Promise<CheckAuthResponse> {
     try {
         const token = cookies().get("token")?.value;
         if (!token) {
-            return { authenticated: false };
+            return { user: undefined, authenticated: false };
         }
 
         let payload = await verifyUserToken(token);
         let userDid = payload.userDid;
         if (!userDid) {
-            return { authenticated: false };
+            return { user: undefined, authenticated: false };
         }
 
         // get user data from database
         let user = await getUser(userDid as string);
         if (!user) {
-            return { authenticated: false };
+            return { user: undefined, authenticated: false };
         }
 
         return { user, authenticated: true };
     } catch (error) {
         console.error("Error verifying token", error);
-        return { authenticated: false };
+        return { user: undefined, authenticated: false };
     }
 }
 

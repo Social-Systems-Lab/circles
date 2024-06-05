@@ -1,5 +1,5 @@
 import { FormNav } from "@/components/forms/form-nav";
-import { DynamicLayoutPageProps } from "../dynamic-page-layout";
+import { DynamicLayoutPageProps, ModuleLayoutPageProps } from "../dynamic-page-layout";
 
 // TODO get from database
 const settingsForms = [
@@ -21,12 +21,7 @@ const settingsForms = [
     },
 ];
 
-export default async function SettingsModuleLayout({
-    children,
-    circle,
-    page,
-    isDefaultCircle,
-}: DynamicLayoutPageProps) {
+export default async function SettingsModuleLayout({ children, circle, page, isDefaultCircle }: ModuleLayoutPageProps) {
     return (
         <div className="flex w-full flex-col lg:flex-row lg:pt-[20px]">
             <div className="flex flex-col items-center pb-2 lg:flex-1 lg:items-end">

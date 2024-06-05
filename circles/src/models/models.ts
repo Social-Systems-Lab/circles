@@ -249,7 +249,7 @@ export type FormFieldOption = {
     label: string;
 };
 
-export type FormFieldType = "text" | "hidden" | "email" | "password" | "select" | "handle";
+export type FormFieldType = "text" | "textarea" | "hidden" | "email" | "password" | "select" | "handle";
 
 export type FormField = {
     name: string;
@@ -260,6 +260,7 @@ export type FormField = {
     description?: string;
     options?: FormFieldOption[];
     minLength?: number;
+    maxLength?: number;
     required?: boolean;
     validationMessage?: string;
 };
@@ -286,7 +287,7 @@ export type FormSubmitResponse = {
 
 export type FormAction = {
     id: string;
-    onSubmit: (values: Record<string, any>) => Promise<FormSubmitResponse>;
+    onSubmit: (values: Record<string, any>, page?: Page) => Promise<FormSubmitResponse>;
 };
 
 export type FormActionHandler = {

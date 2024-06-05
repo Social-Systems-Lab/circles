@@ -6,7 +6,7 @@ export const signupFormAction: FormAction = {
     id: "signup-form",
     onSubmit: async (values: Record<string, any>): Promise<FormSubmitResponse> => {
         try {
-            console.log("Signing up user with values", values);
+            //console.log("Signing up user with values", values);
             let user = await createUser(values.name, values.handle, values.type, values._email, values._password);
             let token = await generateUserToken(user.did, user.email);
             createSession(token);

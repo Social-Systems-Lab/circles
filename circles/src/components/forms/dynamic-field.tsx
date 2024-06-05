@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Control, ControllerRenderProps } from "react-hook-form";
 import { FormField } from "@/models/models";
+import { Textarea } from "../ui/textarea";
 
 type RenderFieldProps = {
     field: FormField;
@@ -16,6 +17,17 @@ export const DynamicTextField: React.FC<RenderFieldProps> = ({ field, formField,
         <FormLabel>{field.label}</FormLabel>
         <FormControl>
             <Input type="text" placeholder={field.placeholder} autoComplete={field.autoComplete} {...formField} />
+        </FormControl>
+        {field.description && <FormDescription>{field.description}</FormDescription>}
+        <FormMessage />
+    </FormItem>
+);
+
+export const DynamicTextareaField: React.FC<RenderFieldProps> = ({ field, formField }) => (
+    <FormItem>
+        <FormLabel>{field.label}</FormLabel>
+        <FormControl>
+            <Textarea placeholder={field.placeholder} autoComplete={field.autoComplete} {...formField} />
         </FormControl>
         {field.description && <FormDescription>{field.description}</FormDescription>}
         <FormMessage />
@@ -61,6 +73,8 @@ export const DynamicField: React.FC<RenderFieldProps> = ({ field, formField }) =
         case "text":
         case "email":
             return DynamicTextField({ field, formField });
+        case "textarea":
+            return DynamicTextareaField({ field, formField });
         case "select":
             return DynamicSelectField({ field, formField });
         case "password":

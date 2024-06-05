@@ -61,10 +61,9 @@ export const getCircleByHandle = async (handle: string): Promise<Circle> => {
 };
 
 export const updateCircle = async (circle: Circle): Promise<Circle> => {
-    console.log("updateCircle", circle);
     let { _id, ...circleWithoutId } = circle;
     let result = await Circles.updateOne({ _id: new ObjectId(_id) }, { $set: circleWithoutId });
-    if (result.modifiedCount === 0) {
+    if (result.matchedCount === 0) {
         throw new Error("Circle not found");
     }
     return circle;

@@ -7,7 +7,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import Link from "next/link";
 import { DynamicField } from "@/components/forms/dynamic-field";
 import { generateZodSchema } from "@/lib/utils/form";
-import { FormSchema, FormTools } from "@/models/models";
+import { FormSchema, FormTools, Page } from "@/models/models";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { formSchemas } from "@/components/forms/form-schemas";
 import { onFormSubmit } from "./actions";
@@ -23,6 +23,7 @@ interface DynamicFormProps {
     formData?: Record<string, any>;
     formSchemaId: string;
     maxWidth?: string;
+    page?: Page;
 }
 
 export const DynamicForm: React.FC<DynamicFormProps> = ({
@@ -30,6 +31,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
     formData = {},
     formSchemaId,
     maxWidth = "400px",
+    page,
 }) => {
     const [user, setUser] = useAtom(userAtom);
     const [authenticated, setAuthenticated] = useAtom(authenticatedAtom);
@@ -56,7 +58,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
     const onSubmit = async (values: Record<string, any>) => {
         setFormError(null);
         startTransition(async () => {
-            let result = await onFormSubmit(formSchemaId, values);
+            let result = await onFormSubmit(formSchemaId, values, page);
 
             // call client action handler
             const formActionHandler = formActionHandlers[formSchemaId];

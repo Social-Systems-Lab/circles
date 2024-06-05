@@ -7,7 +7,7 @@ export const loginFormAction: FormAction = {
     id: "login-form",
     onSubmit: async (values: Record<string, any>): Promise<FormSubmitResponse> => {
         try {
-            console.log("Logging in user with values", values);
+            //console.log("Logging in user with values", values);
             let email = values.email;
             let password = values.password;
 

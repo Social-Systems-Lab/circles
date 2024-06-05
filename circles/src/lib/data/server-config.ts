@@ -21,8 +21,6 @@ export const getServerConfig = async (redirectIfSetup: boolean = false): Promise
     }
 
     if (!serverConfig?.defaultCircleId) {
-        console.log("Creating default circle");
-
         // create a default circle
         let circle = createDefaultCircle();
         let result = await Circles.insertOne(circle);

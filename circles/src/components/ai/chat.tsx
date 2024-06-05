@@ -249,8 +249,6 @@ export function AiChat({ formData, setFormData, context, setContext }: Assistant
 
     const handleSend = useCallback(
         async (message: string | null) => {
-            console.log("inside handleSend()");
-
             // add response message to list of chat messages
             if (isPending) return;
 
