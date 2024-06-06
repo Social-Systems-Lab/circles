@@ -273,7 +273,16 @@ export type FormFieldOption = {
     label: string;
 };
 
-export type FormFieldType = "text" | "textarea" | "image" | "hidden" | "email" | "password" | "select" | "handle";
+export type FormFieldType =
+    | "text"
+    | "textarea"
+    | "image"
+    | "array"
+    | "hidden"
+    | "email"
+    | "password"
+    | "select"
+    | "handle";
 
 export type FormField = {
     name: string;
@@ -290,6 +299,7 @@ export type FormField = {
     imageMaxSize?: number;
     imagePreviewWidth?: number;
     imagePreviewHeight?: number;
+    itemSchema?: FormSchema;
 };
 
 export type FormSchema = {
@@ -314,7 +324,7 @@ export type FormSubmitResponse = {
 
 export type FormAction = {
     id: string;
-    onSubmit: (values: Record<string, any>, page?: Page) => Promise<FormSubmitResponse>;
+    onSubmit: (values: Record<string, any>, page?: Page, subpage?: string) => Promise<FormSubmitResponse>;
 };
 
 export type FormActionHandler = {

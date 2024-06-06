@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { FormControl, FormDescription, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Control, ControllerRenderProps } from "react-hook-form";
+import { Control, Controller, ControllerRenderProps, useFieldArray } from "react-hook-form";
 import { FormField } from "@/models/models";
 import { Textarea } from "../ui/textarea";
 import Image from "next/image";
@@ -12,6 +12,7 @@ import { Button } from "../ui/button";
 type RenderFieldProps = {
     field: FormField;
     formField: ControllerRenderProps<any, any>;
+    control: Control;
     collapse?: boolean;
 };
 
@@ -137,22 +138,71 @@ export const DynamicImageField: React.FC<RenderFieldProps> = ({ field, formField
     );
 };
 
-export const DynamicField: React.FC<RenderFieldProps> = ({ field, formField }) => {
+type DynamicArrayFieldProps = {
+    field: FormField;
+    formField: ControllerRenderProps<any, any>;
+    control: Control;
+};
+
+export const DynamicArrayField: React.FC<DynamicArrayFieldProps> = ({ field, formField, control }) => {
+    const { fields, append, remove } = useFieldArray({
+        control,
+        name: formField.name,
+    });
+
+    if (field.itemSchema === undefined) {
+        return null;
+    }
+
+    return (
+        <div>
+            <div className="flex items-center justify-between">
+                <h1 className="m-0 p-0 pb-3 text-xl font-bold">{field.label}</h1>
+                <Button type="button" onClick={() => append({})}>
+                    Add {field.itemSchema.title}
+                </Button>
+            </div>
+            <div className="space-y-8 pt-4">
+                {fields.map((item, index) => (
+                    <div key={item.id} className="space-y-8 rounded-md border p-4">
+                        {field.itemSchema?.fields.map((subField) => (
+                            <Controller
+                                key={subField.name}
+                                name={`${formField.name}[${index}].${subField.name}`}
+                                control={control}
+                                render={({ field: subFormField }) => (
+                                    <DynamicField field={subField} formField={subFormField} control={control} />
+                                )}
+                            />
+                        ))}
+                        <Button type="button" variant="destructive" onClick={() => remove(index)}>
+                            Remove
+                        </Button>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+export const DynamicField: React.FC<RenderFieldProps> = ({ field, formField, control }) => {
     switch (field.type) {
+        case "array":
+            return DynamicArrayField({ field, formField, control });
         case "hidden":
-            return DynamicTextField({ field, formField, collapse: true });
+            return DynamicTextField({ field, formField, control, collapse: true });
         case "handle":
         case "text":
         case "email":
-            return DynamicTextField({ field, formField });
+            return DynamicTextField({ field, formField, control });
         case "textarea":
-            return DynamicTextareaField({ field, formField });
+            return DynamicTextareaField({ field, formField, control });
         case "select":
-            return DynamicSelectField({ field, formField });
+            return DynamicSelectField({ field, formField, control });
         case "password":
-            return DynamicPasswordField({ field, formField });
+            return DynamicPasswordField({ field, formField, control });
         case "image":
-            return DynamicImageField({ field, formField });
+            return DynamicImageField({ field, formField, control });
         default:
             return null;
     }

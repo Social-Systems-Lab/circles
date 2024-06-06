@@ -24,6 +24,7 @@ interface DynamicFormProps {
     formSchemaId: string;
     maxWidth?: string;
     page?: Page;
+    subpage?: string;
 }
 
 export const DynamicForm: React.FC<DynamicFormProps> = ({
@@ -32,6 +33,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
     formSchemaId,
     maxWidth = "400px",
     page,
+    subpage,
 }) => {
     const [user, setUser] = useAtom(userAtom);
     const [authenticated, setAuthenticated] = useAtom(authenticatedAtom);
@@ -62,9 +64,16 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
 
             const formData = new FormData();
             Object.keys(values).forEach((key) => {
+                // if key is an array object we stringify it before adding to form data
+                let fieldInfo = formSchema.fields.find((x) => x.name === key);
+                if (fieldInfo?.type === "array") {
+                    formData.append(key, JSON.stringify(values[key]));
+                    return;
+                }
+
                 formData.append(key, values[key]);
             });
-            let result = await onFormSubmit(formSchemaId, formData, page);
+            let result = await onFormSubmit(formSchemaId, formData, page, subpage);
 
             // call client action handler
             const formActionHandler = formActionHandlers[formSchemaId];
@@ -94,7 +103,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
     };
 
     return (
-        <div className="flex flex-1 flex-row items-center justify-center pl-6 pr-6">
+        <div className="flex flex-1 flex-row items-center justify-center pb-8 pl-6 pr-6">
             <div className="flex-1" style={{ maxWidth: maxWidth }}>
                 <h1 className="m-0 p-0 pb-3 text-3xl font-bold">{title}</h1>
                 <p className=" pb-8 text-gray-500">{description}</p>
@@ -109,7 +118,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
                                         control={control}
                                         name={field.name}
                                         render={({ field: formField }) => (
-                                            <DynamicField field={field} formField={formField} />
+                                            <DynamicField field={field} formField={formField} control={control} />
                                         )}
                                     />
                                 ))}

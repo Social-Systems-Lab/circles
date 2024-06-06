@@ -1,10 +1,16 @@
-import { FormField, emailSchema, getImageSchema, handleSchema, passwordSchema } from "@/models/models";
+import { FormField, FormSchema, emailSchema, getImageSchema, handleSchema, passwordSchema } from "@/models/models";
 import { z, ZodSchema, ZodString } from "zod";
 
-export const getFormValues = (formData: FormData): Record<string, any> => {
+export const getFormValues = (formData: FormData, formSchema: FormSchema): Record<string, any> => {
     const values: Record<string, any> = {};
 
     for (const [key, value] of formData.entries() as any) {
+        // if key is an array object we parse the json to get the value
+        let fieldInfo = formSchema.fields.find((x) => x.name === key);
+        if (fieldInfo?.type === "array") {
+            values[key] = JSON.parse(value);
+            continue;
+        }
         values[key] = value;
     }
 
@@ -17,6 +23,10 @@ export const generateZodSchema = (fields: FormField[]): ZodSchema<any> => {
             let schema: z.ZodTypeAny;
 
             switch (field.type) {
+                case "array":
+                    schema = z.array(generateZodSchema(field.itemSchema?.fields || []));
+                    break;
+
                 case "image":
                     schema = getImageSchema(field.imageMaxSize);
                     break;

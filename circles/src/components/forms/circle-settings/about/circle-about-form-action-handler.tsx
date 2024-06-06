@@ -9,7 +9,6 @@ export const circleAboutFormActionHandler: FormActionHandler = {
         router: AppRouterInstance,
         tools: FormTools,
     ): Promise<FormSubmitResponse> => {
-        console.log("response", response);
         if (!response) {
             return { success: false, message: "No response" };
         }
@@ -31,8 +30,6 @@ export const circleAboutFormActionHandler: FormActionHandler = {
             description: "Circle About settings saved successfully",
         });
 
-        // redirect to home page
-        //router.push("/");
         return response;
     },
 };

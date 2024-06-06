@@ -68,3 +68,11 @@ export const updateCircle = async (circle: Circle): Promise<Circle> => {
     }
     return circle;
 };
+
+export const getCirclePath = async (circle: Circle): Promise<string> => {
+    let serverConfig = await getServerConfig(false);
+    if (circle._id === serverConfig.defaultCircleId) {
+        return "/";
+    }
+    return `/circles/${circle.handle}/`;
+};

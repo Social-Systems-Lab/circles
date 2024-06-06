@@ -18,7 +18,13 @@ export default async function SettingsModule({ circle, page, subpage, isDefaultC
     return (
         <>
             <div className="flex h-full flex-1 items-start md:pl-8 lg:grow-[2] lg:justify-center">
-                <DynamicForm formSchemaId={getFormSchemaId()} initialFormData={circle} maxWidth="none" page={page} />
+                <DynamicForm
+                    formSchemaId={getFormSchemaId()}
+                    initialFormData={circle}
+                    maxWidth="none"
+                    page={page}
+                    subpage={subpage}
+                />
             </div>
             <div className="flex flex-1"></div>
         </>
