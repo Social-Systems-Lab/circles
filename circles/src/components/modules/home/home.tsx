@@ -52,6 +52,20 @@ export default async function HomeModule({ circle }: HomeProps) {
                     <CirclePicture circle={circle} size={124} />
                 </div>
             </div>
+            <div className="mb-8 mt-[44px] flex flex-col items-center justify-center">
+                <h4>{circle.name}</h4>
+                <p className="pl-4 pr-4">{circle.description}</p>
+                {/* {selectedCircle?.id !== "private" && (
+                    <div className="flex flex-row items-center justify-center">
+                        <FaUsers />
+                        <p className="m-0 ml-2 mr-4">
+                            {selectedCircle?.members} {selectedCircle?.id === "private" ? "Followers" : "Members"}
+                        </p>
+                        <PiMapPinFill />
+                        <p className="m-0 ml-2">{selectedCircle?.location}</p>
+                    </div>
+                )} */}
+            </div>
         </div>
     );
 }
