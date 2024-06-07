@@ -34,17 +34,23 @@ export const createDefaultCircle = (): Circle => {
             {
                 name: "Admins",
                 handle: "admins",
+                title: "Admin",
                 description: "Administrators of the circle",
+                readOnly: true,
             },
             {
                 name: "Moderators",
                 handle: "moderators",
+                title: "Moderator",
                 description: "Moderators of the circle",
+                readOnly: true,
             },
             {
                 name: "Members",
                 handle: "members",
+                title: "Member",
                 description: "Members of the circle",
+                readOnly: true,
             },
         ],
         pages: defaultPages,
@@ -54,6 +60,14 @@ export const createDefaultCircle = (): Circle => {
 
 export const getCircleByHandle = async (handle: string): Promise<Circle> => {
     let circle = (await Circles.findOne({ handle: handle })) as Circle;
+    if (circle?._id) {
+        circle._id = circle._id.toString();
+    }
+    return circle;
+};
+
+export const getCircleById = async (id: string): Promise<Circle> => {
+    let circle = (await Circles.findOne({ _id: new ObjectId(id) })) as Circle;
     if (circle?._id) {
         circle._id = circle._id.toString();
     }

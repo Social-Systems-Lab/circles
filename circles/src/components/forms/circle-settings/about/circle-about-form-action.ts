@@ -6,7 +6,7 @@ import { saveFile, isFile } from "@/lib/data/storage";
 
 export const circleAboutFormAction: FormAction = {
     id: "circle-about-form",
-    onSubmit: async (values: Record<string, any>, page?: Page, subpage: string): Promise<FormSubmitResponse> => {
+    onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
         try {
             // console.log("Saving circle settings with values", values);
             // TODO check if user is authorized to save circle settings

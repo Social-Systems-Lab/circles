@@ -1,33 +1,42 @@
 import React, { useEffect, useRef, useState } from "react";
-import { FormControl, FormDescription, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Control, Controller, ControllerRenderProps, useFieldArray } from "react-hook-form";
-import { FormField } from "@/models/models";
+import { Control, Controller, ControllerRenderProps, useFieldArray, useWatch } from "react-hook-form";
+import { FormField as FormFieldType } from "@/models/models";
 import { Textarea } from "../ui/textarea";
 import Image from "next/image";
 import { Label } from "../ui/label";
 import { Button } from "../ui/button";
+import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 
 type RenderFieldProps = {
-    field: FormField;
+    field: FormFieldType;
     formField: ControllerRenderProps<any, any>;
     control: Control;
     collapse?: boolean;
+    readOnly?: boolean;
 };
 
-export const DynamicTextField: React.FC<RenderFieldProps> = ({ field, formField, collapse }) => (
+export const DynamicTextField: React.FC<RenderFieldProps> = ({ field, formField, collapse, readOnly }) => (
     <FormItem style={{ visibility: collapse ? "collapse" : "visible" }}>
         <FormLabel>{field.label}</FormLabel>
         <FormControl>
-            <Input type="text" placeholder={field.placeholder} autoComplete={field.autoComplete} {...formField} />
+            <Input
+                type="text"
+                placeholder={field.placeholder}
+                autoComplete={field.autoComplete}
+                readOnly={readOnly}
+                {...formField}
+            />
         </FormControl>
         {field.description && <FormDescription>{field.description}</FormDescription>}
         <FormMessage />
     </FormItem>
 );
 
-export const DynamicTextareaField: React.FC<RenderFieldProps> = ({ field, formField }) => {
+export const DynamicTextareaField: React.FC<RenderFieldProps> = ({ field, formField, readOnly }) => {
     const [charCount, setCharCount] = useState(formField.value?.length || 0);
 
     useEffect(() => {
@@ -41,7 +50,12 @@ export const DynamicTextareaField: React.FC<RenderFieldProps> = ({ field, formFi
                 {field.maxLength && <div className="text-[12px]">{`${charCount}/${field.maxLength}`}</div>}
             </div>
             <FormControl>
-                <Textarea placeholder={field.placeholder} autoComplete={field.autoComplete} {...formField} />
+                <Textarea
+                    placeholder={field.placeholder}
+                    autoComplete={field.autoComplete}
+                    readOnly={readOnly}
+                    {...formField}
+                />
             </FormControl>
             {field.description && <FormDescription>{field.description}</FormDescription>}
             <FormMessage />
@@ -49,7 +63,7 @@ export const DynamicTextareaField: React.FC<RenderFieldProps> = ({ field, formFi
     );
 };
 
-export const DynamicSelectField: React.FC<RenderFieldProps> = ({ field, formField }) => (
+export const DynamicSelectField: React.FC<RenderFieldProps> = ({ field, formField, readOnly }) => (
     <FormItem>
         <FormLabel>{field.label}</FormLabel>
         <Select onValueChange={formField.onChange} defaultValue={formField.value}>
@@ -70,17 +84,23 @@ export const DynamicSelectField: React.FC<RenderFieldProps> = ({ field, formFiel
     </FormItem>
 );
 
-export const DynamicPasswordField: React.FC<RenderFieldProps> = ({ field, formField }) => (
+export const DynamicPasswordField: React.FC<RenderFieldProps> = ({ field, formField, readOnly }) => (
     <FormItem>
         <FormLabel>{field.label}</FormLabel>
         <FormControl>
-            <Input type="password" placeholder={field.placeholder} autoComplete={field.autoComplete} {...formField} />
+            <Input
+                type="password"
+                placeholder={field.placeholder}
+                autoComplete={field.autoComplete}
+                readOnly={readOnly}
+                {...formField}
+            />
         </FormControl>
         <FormMessage />
     </FormItem>
 );
 
-export const DynamicImageField: React.FC<RenderFieldProps> = ({ field, formField }) => {
+export const DynamicImageField: React.FC<RenderFieldProps> = ({ field, formField, readOnly }) => {
     const [previewUrl, setPreviewUrl] = useState<string | null>(formField.value?.url || null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -98,6 +118,7 @@ export const DynamicImageField: React.FC<RenderFieldProps> = ({ field, formField
     };
 
     const triggerFileInput = () => {
+        if (readOnly) return;
         if (fileInputRef.current) {
             fileInputRef.current.click();
         }
@@ -125,12 +146,17 @@ export const DynamicImageField: React.FC<RenderFieldProps> = ({ field, formField
                     objectFit="cover"
                     onClick={triggerFileInput}
                     className="cursor-pointer"
+                    style={{
+                        cursor: readOnly ? "default" : "pointer",
+                    }}
                 />
             )}
 
-            <Button type="button" variant="outline" onClick={triggerFileInput}>
-                Upload new image
-            </Button>
+            {!readOnly && (
+                <Button type="button" variant="outline" onClick={triggerFileInput}>
+                    Upload new image
+                </Button>
+            )}
 
             {field.description && <FormDescription>{field.description}</FormDescription>}
             <FormMessage />
@@ -138,13 +164,7 @@ export const DynamicImageField: React.FC<RenderFieldProps> = ({ field, formField
     );
 };
 
-type DynamicArrayFieldProps = {
-    field: FormField;
-    formField: ControllerRenderProps<any, any>;
-    control: Control;
-};
-
-export const DynamicArrayField: React.FC<DynamicArrayFieldProps> = ({ field, formField, control }) => {
+export const DynamicArrayField: React.FC<RenderFieldProps> = ({ field, formField, control, readOnly }) => {
     const { fields, append, remove } = useFieldArray({
         control,
         name: formField.name,
@@ -171,7 +191,12 @@ export const DynamicArrayField: React.FC<DynamicArrayFieldProps> = ({ field, for
                                 name={`${formField.name}[${index}].${subField.name}`}
                                 control={control}
                                 render={({ field: subFormField }) => (
-                                    <DynamicField field={subField} formField={subFormField} control={control} />
+                                    <DynamicField
+                                        field={subField}
+                                        formField={subFormField}
+                                        control={control}
+                                        readOnly={readOnly}
+                                    />
                                 )}
                             />
                         ))}
@@ -185,24 +210,180 @@ export const DynamicArrayField: React.FC<DynamicArrayFieldProps> = ({ field, for
     );
 };
 
-export const DynamicField: React.FC<RenderFieldProps> = ({ field, formField, control }) => {
+export const DynamicTableField: React.FC<RenderFieldProps> = ({ field, formField, control, readOnly }) => {
+    const { fields, append, remove } = useFieldArray({
+        control,
+        name: formField.name,
+    });
+    const watchedFields = useWatch({ control, name: formField.name });
+    const columns: ColumnDef<any>[] =
+        field.itemSchema?.fields
+            .filter((x) => x.showInHeader)
+            .map((subField) => ({
+                accessorKey: subField.name,
+                header: subField.label,
+            })) ?? [];
+    const table = useReactTable({ columns: columns, data: watchedFields, getCoreRowModel: getCoreRowModel() });
+    const [editingId, setEditingId] = useState<string | null>(null);
+
+    if (field.itemSchema === undefined) {
+        return null;
+    }
+
+    const onRowClick = (id: string) => {
+        console.log("setting editing id", id);
+        setEditingId(editingId === id ? null : id);
+    };
+
+    const onAddClick = () => {
+        append({});
+
+        // set editing id to the last item
+        setEditingId(fields?.length.toString());
+    };
+
+    return (
+        <div>
+            <div className="flex items-center justify-between pb-2">
+                <h1 className="m-0 p-0 pb-3 text-xl font-bold">{field.label}</h1>
+                {!readOnly && (
+                    <Button type="button" size="sm" onClick={() => onAddClick()}>
+                        Add {field.itemSchema.title}
+                    </Button>
+                )}
+            </div>
+
+            <div className="rounded-md border">
+                <Table>
+                    <TableHeader>
+                        {table.getHeaderGroups().map((headerGroup) => (
+                            <TableRow key={headerGroup.id}>
+                                {headerGroup.headers.map((header) => {
+                                    return (
+                                        <TableHead key={header.id}>
+                                            {header.isPlaceholder
+                                                ? null
+                                                : flexRender(header.column.columnDef.header, header.getContext())}
+                                        </TableHead>
+                                    );
+                                })}
+                            </TableRow>
+                        ))}
+                    </TableHeader>
+                    <TableBody>
+                        {table.getRowModel().rows?.length ? (
+                            table.getRowModel().rows.map((row) => {
+                                const isRowReadOnly = watchedFields[row.index]?.readOnly;
+                                return (
+                                    <React.Fragment key={row.id}>
+                                        <TableRow
+                                            key={row.id}
+                                            data-state={row.getIsSelected() && "selected"}
+                                            onClick={() => onRowClick(row.id)}
+                                            style={{
+                                                borderBottomWidth: row.id === editingId ? "0px" : "1px",
+                                            }}
+                                            className="h-[53px]"
+                                        >
+                                            {row.getVisibleCells().map((cell) => (
+                                                <TableCell key={cell.id}>
+                                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                                </TableCell>
+                                            ))}
+                                        </TableRow>
+                                        {editingId === row.id && (
+                                            <tr className="border-b bg-muted/50 transition-colors">
+                                                <td colSpan={columns.length}>
+                                                    <div className="space-y-8 p-4">
+                                                        {field.itemSchema?.fields
+                                                            .filter((x) => x.type !== "hidden")
+                                                            .map((subField) => (
+                                                                <FormField
+                                                                    key={subField.name}
+                                                                    control={control}
+                                                                    name={`${formField.name}[${row.index}].${subField.name}`}
+                                                                    render={({ field: formField }) => (
+                                                                        <DynamicField
+                                                                            field={subField}
+                                                                            formField={formField}
+                                                                            control={control}
+                                                                            readOnly={isRowReadOnly}
+                                                                        />
+                                                                    )}
+                                                                />
+                                                                // <DynamicField
+                                                                //         key={subField.name}
+                                                                //         field={subField}
+                                                                //         formField={field}
+                                                                //         control={control}
+                                                                //         />
+
+                                                                // <FormItem key={subField.name}>
+                                                                //     <FormLabel>{subField.label}</FormLabel>
+                                                                //     <FormControl>
+                                                                //         <Controller
+                                                                //             name={`${formField.name}[${row.index}].${subField.name}`}
+                                                                //             control={control}
+                                                                //             render={({ field: subFormField }) => (
+                                                                //                 <Input
+                                                                //                     {...subFormField}
+                                                                //                     readOnly={isReadOnly}
+                                                                //                 />
+                                                                //             )}
+                                                                //         />
+                                                                //     </FormControl>
+                                                                //     <FormMessage />
+                                                                // </FormItem>
+                                                            ))}
+                                                        <Button
+                                                            type="button"
+                                                            variant="destructive"
+                                                            onClick={() => remove(row.index)}
+                                                            disabled={isRowReadOnly}
+                                                        >
+                                                            Remove
+                                                        </Button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </React.Fragment>
+                                );
+                            })
+                        ) : (
+                            <TableRow>
+                                <TableCell colSpan={columns.length} className="h-24 text-center">
+                                    No results.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
+        </div>
+    );
+};
+
+export const DynamicField: React.FC<RenderFieldProps> = ({ field, formField, control, readOnly }) => {
     switch (field.type) {
+        case "table":
+            return DynamicTableField({ field, formField, control, readOnly });
         case "array":
-            return DynamicArrayField({ field, formField, control });
+            return DynamicArrayField({ field, formField, control, readOnly });
         case "hidden":
-            return DynamicTextField({ field, formField, control, collapse: true });
+            return DynamicTextField({ field, formField, control, readOnly, collapse: true });
         case "handle":
         case "text":
         case "email":
-            return DynamicTextField({ field, formField, control });
+            return DynamicTextField({ field, formField, control, readOnly });
         case "textarea":
-            return DynamicTextareaField({ field, formField, control });
+            return DynamicTextareaField({ field, formField, control, readOnly });
         case "select":
-            return DynamicSelectField({ field, formField, control });
+            return DynamicSelectField({ field, formField, control, readOnly });
         case "password":
-            return DynamicPasswordField({ field, formField, control });
+            return DynamicPasswordField({ field, formField, control, readOnly });
         case "image":
-            return DynamicImageField({ field, formField, control });
+            return DynamicImageField({ field, formField, control, readOnly });
         default:
             return null;
     }

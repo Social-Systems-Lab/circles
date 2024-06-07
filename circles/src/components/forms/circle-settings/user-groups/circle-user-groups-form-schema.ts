@@ -13,6 +13,7 @@ export const userGroupFormSchema: FormSchema = {
             label: "Name",
             type: "text",
             required: true,
+            showInHeader: true,
         },
         {
             name: "handle",
@@ -21,11 +22,19 @@ export const userGroupFormSchema: FormSchema = {
             placeholder: "handle",
             description: "Choose a unique handle that will identify the user group on the platform.",
             required: true,
+            showInHeader: false,
+        },
+        {
+            name: "title",
+            label: "Title",
+            type: "text",
+            showInHeader: true,
         },
         {
             name: "description",
             label: "Description",
             type: "textarea",
+            showInHeader: true,
         },
     ],
 };
@@ -47,7 +56,7 @@ export const circleUserGroupsFormSchema: FormSchema = {
         {
             name: "userGroups",
             label: "User Groups",
-            type: "array",
+            type: "table",
             required: true,
             itemSchema: userGroupFormSchema,
         },

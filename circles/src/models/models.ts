@@ -49,7 +49,9 @@ export type User = z.infer<typeof userSchema>;
 export const userGroupSchema = z.object({
     name: z.string(),
     handle: handleSchema,
+    title: z.string(),
     description: z.string(),
+    readOnly: z.boolean().optional(),
 });
 
 // access rules are a map of features to array of user groups that are granted access to the feature
@@ -278,6 +280,7 @@ export type FormFieldType =
     | "textarea"
     | "image"
     | "array"
+    | "table"
     | "hidden"
     | "email"
     | "password"
@@ -300,6 +303,7 @@ export type FormField = {
     imagePreviewWidth?: number;
     imagePreviewHeight?: number;
     itemSchema?: FormSchema;
+    showInHeader?: boolean;
 };
 
 export type FormSchema = {
