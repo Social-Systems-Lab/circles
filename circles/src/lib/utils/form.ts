@@ -26,6 +26,28 @@ export const generateZodSchema = (fields: FormField[]): ZodSchema<any> => {
                 case "table":
                 case "array":
                     schema = z.array(generateZodSchema(field.itemSchema?.fields || []));
+
+                    let ensureUniqueField = field.ensureUniqueField ?? false;
+                    if (ensureUniqueField) {
+                        schema = schema.superRefine((items, ctx) => {
+                            //console.log("Refining array", items, ensureUniqueField);
+                            let uniqueValues = new Set();
+                            let index = 0;
+                            for (let item of items) {
+                                let value = item[ensureUniqueField];
+                                if (uniqueValues.has(value)) {
+                                    ctx.addIssue({
+                                        code: z.ZodIssueCode.custom,
+                                        message: `Found duplicate value '${value}'. Please ensure each ${ensureUniqueField} is unique.`,
+                                        path: [index, ensureUniqueField],
+                                    });
+                                    return;
+                                }
+                                uniqueValues.add(value);
+                                ++index;
+                            }
+                        });
+                    }
                     break;
 
                 case "image":

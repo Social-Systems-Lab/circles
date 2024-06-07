@@ -304,6 +304,7 @@ export type FormField = {
     imagePreviewHeight?: number;
     itemSchema?: FormSchema;
     showInHeader?: boolean;
+    ensureUniqueField?: string;
 };
 
 export type FormSchema = {

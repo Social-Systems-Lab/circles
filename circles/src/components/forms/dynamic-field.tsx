@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Control, Controller, ControllerRenderProps, useFieldArray, useWatch } from "react-hook-form";
+import { Control, Controller, ControllerRenderProps, useFieldArray, useFormContext, useWatch } from "react-hook-form";
 import { FormField as FormFieldType } from "@/models/models";
 import { Textarea } from "../ui/textarea";
 import Image from "next/image";
@@ -10,6 +10,8 @@ import { Label } from "../ui/label";
 import { Button } from "../ui/button";
 import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
+import { cn } from "@/lib/utils";
+import { FaLock } from "react-icons/fa6";
 
 type RenderFieldProps = {
     field: FormFieldType;
@@ -225,6 +227,9 @@ export const DynamicTableField: React.FC<RenderFieldProps> = ({ field, formField
             })) ?? [];
     const table = useReactTable({ columns: columns, data: watchedFields, getCoreRowModel: getCoreRowModel() });
     const [editingId, setEditingId] = useState<string | null>(null);
+    const {
+        formState: { errors },
+    } = useFormContext();
 
     if (field.itemSchema === undefined) {
         return null;
@@ -240,6 +245,15 @@ export const DynamicTableField: React.FC<RenderFieldProps> = ({ field, formField
 
         // set editing id to the last item
         setEditingId(fields?.length.toString());
+    };
+
+    const onRemoveClick = (index: string) => {
+        remove(Number(index));
+        setEditingId(null);
+    };
+
+    const hasError = (index: number) => {
+        return !!errors[formField.name]?.[index];
     };
 
     return (
@@ -258,6 +272,7 @@ export const DynamicTableField: React.FC<RenderFieldProps> = ({ field, formField
                     <TableHeader>
                         {table.getHeaderGroups().map((headerGroup) => (
                             <TableRow key={headerGroup.id}>
+                                <TableHead key="_locked" />
                                 {headerGroup.headers.map((header) => {
                                     return (
                                         <TableHead key={header.id}>
@@ -285,15 +300,23 @@ export const DynamicTableField: React.FC<RenderFieldProps> = ({ field, formField
                                             }}
                                             className="h-[53px]"
                                         >
+                                            <TableCell className="pr-2 text-right">
+                                                {isRowReadOnly && <FaLock className="text-gray-500" />}
+                                            </TableCell>
                                             {row.getVisibleCells().map((cell) => (
-                                                <TableCell key={cell.id}>
+                                                <TableCell
+                                                    key={cell.id}
+                                                    style={{
+                                                        color: hasError(row.index) ? "#ef4444" : "inherit",
+                                                    }}
+                                                >
                                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                                 </TableCell>
                                             ))}
                                         </TableRow>
                                         {editingId === row.id && (
                                             <tr className="border-b bg-muted/50 transition-colors">
-                                                <td colSpan={columns.length}>
+                                                <td colSpan={columns.length + 1}>
                                                     <div className="space-y-8 p-4">
                                                         {field.itemSchema?.fields
                                                             .filter((x) => x.type !== "hidden")
@@ -311,34 +334,11 @@ export const DynamicTableField: React.FC<RenderFieldProps> = ({ field, formField
                                                                         />
                                                                     )}
                                                                 />
-                                                                // <DynamicField
-                                                                //         key={subField.name}
-                                                                //         field={subField}
-                                                                //         formField={field}
-                                                                //         control={control}
-                                                                //         />
-
-                                                                // <FormItem key={subField.name}>
-                                                                //     <FormLabel>{subField.label}</FormLabel>
-                                                                //     <FormControl>
-                                                                //         <Controller
-                                                                //             name={`${formField.name}[${row.index}].${subField.name}`}
-                                                                //             control={control}
-                                                                //             render={({ field: subFormField }) => (
-                                                                //                 <Input
-                                                                //                     {...subFormField}
-                                                                //                     readOnly={isReadOnly}
-                                                                //                 />
-                                                                //             )}
-                                                                //         />
-                                                                //     </FormControl>
-                                                                //     <FormMessage />
-                                                                // </FormItem>
                                                             ))}
                                                         <Button
                                                             type="button"
                                                             variant="destructive"
-                                                            onClick={() => remove(row.index)}
+                                                            onClick={() => onRemoveClick(row.id)}
                                                             disabled={isRowReadOnly}
                                                         >
                                                             Remove
@@ -360,6 +360,11 @@ export const DynamicTableField: React.FC<RenderFieldProps> = ({ field, formField
                     </TableBody>
                 </Table>
             </div>
+            {errors[formField.name] && (
+                <p className="pt-2 text-sm font-medium text-destructive">
+                    There are errors in the table rows. Please review them.
+                </p>
+            )}
         </div>
     );
 };

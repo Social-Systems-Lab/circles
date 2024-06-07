@@ -20,29 +20,24 @@ export function safeModifyArray<T extends Identifiable>(existingArray: T[], subm
         return existingArray;
     }
 
-    // ensure read-only fields are not modified or removed
-    const updatedArray = existingArray.map((existingItem) => {
+    const updatedArray: T[] = [];
+    const handleSet = new Set<string>();
+
+    // add existing read-only items and track handles
+    for (const existingItem of existingArray) {
         if (existingItem.readOnly) {
-            // find the corresponding submitted item
-            const submittedItem = submittedArray.find((item) => item.handle === existingItem.handle);
-            if (submittedItem) {
-                // return the existing read-only item to prevent modification
-                return existingItem;
-            } else {
-                // if the read-only item is not in the submitted data, keep it
-                return existingItem;
-            }
-        } else {
-            // if the item is not read-only, allow it to be updated
-            return submittedArray.find((item) => item.handle === existingItem.handle) || existingItem;
+            updatedArray.push(existingItem);
+            handleSet.add(existingItem.handle);
         }
-    });
+    }
 
-    // add new items that are not in the existing array
-    const newItems = submittedArray.filter(
-        (item) => !existingArray.find((existingItem) => existingItem.handle === item.handle),
-    );
+    // process submitted items
+    for (const submittedItem of submittedArray) {
+        if (handleSet.has(submittedItem.handle)) {
+            continue; // ignore readonly items
+        }
 
-    // combine updated existing items and new items
-    return [...updatedArray, ...newItems];
+        updatedArray.push(submittedItem);
+    }
+    return updatedArray;
 }

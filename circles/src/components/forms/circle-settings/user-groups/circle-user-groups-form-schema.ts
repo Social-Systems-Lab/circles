@@ -59,6 +59,7 @@ export const circleUserGroupsFormSchema: FormSchema = {
             type: "table",
             required: true,
             itemSchema: userGroupFormSchema,
+            ensureUniqueField: "handle",
         },
     ],
 };
