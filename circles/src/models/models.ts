@@ -55,11 +55,7 @@ export const userGroupSchema = z.object({
 });
 
 // access rules are a map of features to array of user groups that are granted access to the feature
-export const circleAccessRulesSchema = z.object({
-    edit: z.array(z.string()).optional(),
-    delete: z.array(z.string()).optional(),
-    view: z.array(z.string()).optional(),
-});
+export const accessRulesSchema = z.record(z.string(), z.array(z.string()));
 
 export const pageSchema = z.object({
     name: z.string(),
@@ -102,7 +98,7 @@ export const circleSchema = z.object({
     description: z.string().optional(),
     userGroups: z.array(userGroupSchema).default([]).optional(),
     pages: z.array(pageSchema).default([]).optional(),
-    // accessRules: circleAccessRulesSchema.optional(),
+    accessRules: accessRulesSchema.optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;

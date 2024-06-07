@@ -24,6 +24,7 @@ export default async function SettingsModule({ circle, page, subpage, isDefaultC
                     maxWidth="none"
                     page={page}
                     subpage={subpage}
+                    showReset={true}
                 />
             </div>
             <div className="flex flex-1"></div>

@@ -25,6 +25,7 @@ interface DynamicFormProps {
     maxWidth?: string;
     page?: Page;
     subpage?: string;
+    showReset?: boolean;
 }
 
 export const DynamicForm: React.FC<DynamicFormProps> = ({
@@ -34,6 +35,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
     maxWidth = "400px",
     page,
     subpage,
+    showReset,
 }) => {
     const [user, setUser] = useAtom(userAtom);
     const [authenticated, setAuthenticated] = useAtom(authenticatedAtom);
@@ -125,21 +127,28 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
 
                             <FormMessage>{formError}</FormMessage>
 
-                            <Button className="w-full lg:max-w-[200px]" type="submit" disabled={isPending}>
-                                {isPending ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Saving...
-                                    </>
-                                ) : (
-                                    <>{button.text}</>
+                            <div className="flex flex-row gap-3">
+                                <Button className="w-full lg:max-w-[200px]" type="submit" disabled={isPending}>
+                                    {isPending ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        <>{button.text}</>
+                                    )}
+                                </Button>
+                                {showReset && (
+                                    <Button
+                                        className="w-full lg:max-w-[200px]"
+                                        type="button"
+                                        onClick={handleReset}
+                                        variant="outline"
+                                    >
+                                        Reset
+                                    </Button>
                                 )}
-                            </Button>
-                            {/* 
-                        Show this if form is editing existing form data
-                        <Button className="w-full" type="button" onClick={handleReset}>
-                            Reset
-                        </Button> */}
+                            </div>
                             {footer && (
                                 <p>
                                     {footer.text}{" "}
