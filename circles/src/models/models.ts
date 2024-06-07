@@ -281,7 +281,8 @@ export type FormFieldType =
     | "email"
     | "password"
     | "select"
-    | "handle";
+    | "handle"
+    | "access-rules";
 
 export type FormField = {
     name: string;

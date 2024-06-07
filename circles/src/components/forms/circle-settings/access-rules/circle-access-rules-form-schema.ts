@@ -10,17 +10,14 @@ export const circleAccessRulesFormSchema: FormSchema = {
     },
     fields: [
         {
-            name: "name",
-            label: "Name",
-            type: "text",
-            required: true,
+            name: "_id",
+            type: "hidden",
+            label: "ID",
         },
         {
-            name: "handle",
-            label: "Handle",
-            type: "handle",
-            placeholder: "handle",
-            description: "Choose a unique handle that will identify the circle on the platform.",
+            name: "accessRules",
+            label: "Access Rules",
+            type: "access-rules",
             required: true,
         },
     ],

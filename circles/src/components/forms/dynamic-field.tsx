@@ -2,7 +2,15 @@ import React, { useEffect, useRef, useState } from "react";
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Control, Controller, ControllerRenderProps, useFieldArray, useFormContext, useWatch } from "react-hook-form";
+import {
+    Control,
+    Controller,
+    ControllerRenderProps,
+    FieldErrorsImpl,
+    useFieldArray,
+    useFormContext,
+    useWatch,
+} from "react-hook-form";
 import { FormField as FormFieldType } from "@/models/models";
 import { Textarea } from "../ui/textarea";
 import Image from "next/image";
@@ -253,7 +261,7 @@ export const DynamicTableField: React.FC<RenderFieldProps> = ({ field, formField
     };
 
     const hasError = (index: number) => {
-        return !!errors[formField.name]?.[index];
+        return !!(errors[formField.name] as FieldErrorsImpl<any>)?.[index];
     };
 
     return (
@@ -369,8 +377,88 @@ export const DynamicTableField: React.FC<RenderFieldProps> = ({ field, formField
     );
 };
 
+type DynamicAccessRulesGridProps = {
+    features: string[];
+    userGroups: string[];
+    control: any;
+};
+
+export const DynamicAccessRulesGrid: React.FC<DynamicAccessRulesGridProps> = ({ features, userGroups, control }) => {
+    const { setValue, getValues } = useFormContext();
+    const accessRules = useWatch({ control, name: "accessRules" });
+
+    const handleCellClick = (feature: string, userGroup: string) => {
+        const currentAccessRules = getValues("accessRules");
+        const userGroupsForFeature = currentAccessRules[feature] || [];
+        const updatedUserGroupsForFeature = userGroupsForFeature.includes(userGroup)
+            ? userGroupsForFeature.filter((ug: string) => ug !== userGroup)
+            : [...userGroupsForFeature, userGroup];
+        setValue(`accessRules.${feature}`, updatedUserGroupsForFeature);
+    };
+
+    return (
+        <div>
+            <table className="w-full table-fixed border-collapse">
+                <thead>
+                    <tr>
+                        <th className="w-1/4"></th>
+                        {userGroups.map((userGroup, index) => (
+                            <th key={index} className={cn("relative h-32 overflow-visible")}>
+                                <div className="absolute bottom-[5px] left-1/2 origin-bottom-left -rotate-45 transform">
+                                    {userGroup}
+                                </div>
+                            </th>
+                        ))}
+                        <th className="relative">
+                            <div className="absolute bottom-[5px] left-1/2 origin-bottom-left -rotate-45 transform">
+                                everyone
+                            </div>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {features.map((feature, rowIndex) => (
+                        <tr key={rowIndex} className="border-t">
+                            <td className="border-r p-2">{feature}</td>
+                            {userGroups.map((userGroup, colIndex) => (
+                                <td
+                                    key={colIndex}
+                                    className={cn("cursor-pointer p-2 text-center", {
+                                        "bg-green-200": accessRules?.[feature]?.includes(userGroup),
+                                    })}
+                                    onClick={() => handleCellClick(feature, userGroup)}
+                                >
+                                    {accessRules?.[feature]?.includes(userGroup) ? "✔️" : ""}
+                                </td>
+                            ))}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+};
+
+export const DynamicAccessRulesField: React.FC<RenderFieldProps> = ({ field, formField, control, readOnly }) => {
+    const userGroups = useWatch({ control, name: "userGroups" })?.map((group: any) => group.handle) || [];
+    const features = Object.keys(formField.value || {});
+
+    return (
+        <FormItem>
+            <div className="flex items-center justify-between pb-2">
+                <h1 className="m-0 p-0 pb-3 text-xl font-bold">{field.label}</h1>
+            </div>
+
+            <DynamicAccessRulesGrid features={features} userGroups={userGroups} control={control} />
+            <FormMessage />
+        </FormItem>
+    );
+};
+
 export const DynamicField: React.FC<RenderFieldProps> = ({ field, formField, control, readOnly }) => {
     switch (field.type) {
+        case "access-rules":
+            return DynamicAccessRulesField({ field, formField, control, readOnly });
         case "table":
             return DynamicTableField({ field, formField, control, readOnly });
         case "array":

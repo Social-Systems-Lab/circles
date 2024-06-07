@@ -53,6 +53,11 @@ export const createDefaultCircle = (): Circle => {
                 readOnly: true,
             },
         ],
+        accessRules: {
+            edit: ["admins"],
+            delete: ["admins"],
+            view: ["admins", "moderators", "members", "everyone"],
+        },
         pages: defaultPages,
     };
     return circle;
