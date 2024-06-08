@@ -12,7 +12,6 @@ export const circleUserGroupsFormAction: FormAction = {
 
             let circle: Circle = {
                 _id: values._id,
-                userGroups: values.userGroups,
             };
 
             // make sure readOnly rows in userGroups are not updated
@@ -23,6 +22,9 @@ export const circleUserGroupsFormAction: FormAction = {
 
             const finalUserGroups = safeModifyArray(existingCircle.userGroups || [], values.userGroups || []);
             circle.userGroups = finalUserGroups;
+
+            // TODO remove, resets to default access rules to circle for testing
+            // circle.accessRules = defaultAccessRules;
 
             // update the circle
             await updateCircle(circle);

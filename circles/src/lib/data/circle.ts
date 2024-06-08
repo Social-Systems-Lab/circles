@@ -1,9 +1,10 @@
 // circle creation and management
 
-import { Circle, ServerConfig, defaultPages } from "@/models/models";
+import { Circle, ServerConfig } from "@/models/models";
 import { getServerConfig } from "./server-config";
 import { Circles } from "./db";
 import { ObjectId } from "mongodb";
+import { defaultAccessRules, defaultUserGroups, defaultPages } from "./constants";
 
 export const getDefaultCircle = async (
     redirectIfSetup: boolean = false,
@@ -30,34 +31,8 @@ export const createDefaultCircle = (): Circle => {
         handle: "default",
         picture: { url: "/images/default-picture.png" },
         cover: { url: "/images/default-cover.png" },
-        userGroups: [
-            {
-                name: "Admins",
-                handle: "admins",
-                title: "Admin",
-                description: "Administrators of the circle",
-                readOnly: true,
-            },
-            {
-                name: "Moderators",
-                handle: "moderators",
-                title: "Moderator",
-                description: "Moderators of the circle",
-                readOnly: true,
-            },
-            {
-                name: "Members",
-                handle: "members",
-                title: "Member",
-                description: "Members of the circle",
-                readOnly: true,
-            },
-        ],
-        accessRules: {
-            edit: ["admins"],
-            delete: ["admins"],
-            view: ["admins", "moderators", "members", "everyone"],
-        },
+        userGroups: defaultUserGroups,
+        accessRules: defaultAccessRules,
         pages: defaultPages,
     };
     return circle;

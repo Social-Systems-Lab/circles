@@ -1,5 +1,13 @@
-import { FormField, FormSchema, emailSchema, getImageSchema, handleSchema, passwordSchema } from "@/models/models";
-import { z, ZodSchema, ZodString } from "zod";
+import {
+    FormField,
+    FormSchema,
+    accessRulesSchema,
+    emailSchema,
+    getImageSchema,
+    handleSchema,
+    passwordSchema,
+} from "@/models/models";
+import { z, ZodIssue, ZodSchema, ZodString } from "zod";
 
 export const getFormValues = (formData: FormData, formSchema: FormSchema): Record<string, any> => {
     const values: Record<string, any> = {};
@@ -7,7 +15,7 @@ export const getFormValues = (formData: FormData, formSchema: FormSchema): Recor
     for (const [key, value] of formData.entries() as any) {
         // if key is an array object we parse the json to get the value
         let fieldInfo = formSchema.fields.find((x) => x.name === key);
-        if (fieldInfo?.type === "array" || fieldInfo?.type === "table") {
+        if (fieldInfo?.type === "array" || fieldInfo?.type === "table" || fieldInfo?.type === "access-rules") {
             values[key] = JSON.parse(value);
             continue;
         }
@@ -17,12 +25,31 @@ export const getFormValues = (formData: FormData, formSchema: FormSchema): Recor
     return values;
 };
 
+const formatZodIssue = (issue: ZodIssue): string => {
+    const { path, message } = issue;
+    const pathString = path.join(".");
+    return `${pathString}: ${message}`;
+};
+
+export const formatZodError = (error: z.ZodError): string => {
+    const { issues } = error;
+    if (issues.length) {
+        const currentIssue = issues[0];
+        return formatZodIssue(currentIssue);
+    }
+    return "";
+};
+
 export const generateZodSchema = (fields: FormField[]): ZodSchema<any> => {
     const fieldSchemas = fields.reduce(
         (acc, field) => {
             let schema: z.ZodTypeAny;
 
             switch (field.type) {
+                case "access-rules":
+                    schema = accessRulesSchema;
+                    break;
+
                 case "table":
                 case "array":
                     schema = z.array(generateZodSchema(field.itemSchema?.fields || []));

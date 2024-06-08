@@ -41,3 +41,40 @@ export function safeModifyArray<T extends Identifiable>(existingArray: T[], subm
     }
     return updatedArray;
 }
+
+export function safeModifyAccessRules(
+    existingRules?: Record<string, string[]>,
+    submittedRules?: Record<string, string[]>,
+): Record<string, string[]> {
+    // circle access rules can only be modified by users not added or removed
+    if (!existingRules) {
+        throw new Error("Existing rules must be provided");
+    }
+    if (!submittedRules) {
+        return existingRules;
+    }
+
+    const updatedRules: Record<string, string[]> = {};
+    const featureSet = new Set<string>();
+
+    // add existing rules
+    for (const feature in existingRules) {
+        featureSet.add(feature);
+        updatedRules[feature] = existingRules[feature];
+    }
+
+    // process submitted items
+    for (const feature in existingRules) {
+        if (!featureSet.has(feature)) {
+            continue; // ignore features not in existing rules
+        }
+        updatedRules[feature] = submittedRules[feature];
+    }
+
+    // make sure admins have access to essential features
+    if (!updatedRules["settings_edit"]?.includes("admins")) {
+        throw new Error("Admins must have access to edit settings");
+    }
+
+    return updatedRules;
+}

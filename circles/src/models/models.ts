@@ -1,5 +1,6 @@
 import { Toast } from "@/components/ui/use-toast";
 import { CoreMessage } from "ai";
+import { read } from "fs";
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { ReadonlyURLSearchParams } from "next/navigation";
 import { z } from "zod";
@@ -54,6 +55,8 @@ export const userGroupSchema = z.object({
     readOnly: z.boolean().optional(),
 });
 
+export type UserGroup = z.infer<typeof userGroupSchema>;
+
 // access rules are a map of features to array of user groups that are granted access to the feature
 export const accessRulesSchema = z.record(z.string(), z.array(z.string()));
 
@@ -63,24 +66,10 @@ export const pageSchema = z.object({
     description: z.string(),
     //accessRules: pageAccessRulesSchema.optional(),
     module: z.string(),
+    readOnly: z.boolean().optional(),
 });
 
 export type Page = z.infer<typeof pageSchema>;
-
-export const defaultPages: Page[] = [
-    {
-        name: "Home",
-        handle: "",
-        description: "Home page",
-        module: "home",
-    },
-    {
-        name: "Settings",
-        handle: "settings",
-        description: "Settings page",
-        module: "settings",
-    },
-];
 
 export const fileInfoSchema = z.object({
     originalName: z.string().optional(),
@@ -102,33 +91,6 @@ export const circleSchema = z.object({
 });
 
 export type Circle = z.infer<typeof circleSchema>;
-
-export const homeModuleAccessRulesSchema = z.object({
-    edit: z.array(z.string()).optional(),
-    delete: z.array(z.string()).optional(),
-    view: z.array(z.string()).optional(),
-});
-
-export const homeModuleSchema = z.object({
-    name: z.string(),
-    handle: handleSchema,
-    description: z.string(),
-    accessRules: homeModuleAccessRulesSchema.optional(),
-});
-
-export const feedsModuleSchema = z.object({
-    name: z.string(),
-    handle: handleSchema,
-    description: z.string(),
-    accessRules: homeModuleAccessRulesSchema.optional(),
-});
-
-export const membersModuleSchema = z.object({
-    name: z.string(),
-    handle: handleSchema,
-    description: z.string(),
-    accessRules: homeModuleAccessRulesSchema.optional(),
-});
 
 export const serverConfigSchema = z.object({
     defaultCircleId: z.string().optional(),

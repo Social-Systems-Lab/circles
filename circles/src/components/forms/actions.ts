@@ -1,6 +1,6 @@
 "use server";
 
-import { generateZodSchema, getFormValues } from "@/lib/utils/form";
+import { formatZodError, generateZodSchema, getFormValues } from "@/lib/utils/form";
 import { formActions } from "@/components/forms/form-actions";
 import { formSchemas } from "@/components/forms/form-schemas";
 import { FormSubmitResponse, Page } from "@/models/models";
@@ -33,7 +33,7 @@ export async function onFormSubmit(
         if (error instanceof ZodError) {
             return {
                 success: false,
-                message: "Form validation failed. " + error.format()._errors?.join(),
+                message: "Form validation failed. " + formatZodError(error),
             };
         } else if (error instanceof Error) {
             return { success: false, message: error.message };

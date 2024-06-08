@@ -11,7 +11,7 @@ import {
     useFormContext,
     useWatch,
 } from "react-hook-form";
-import { FormField as FormFieldType } from "@/models/models";
+import { FormField as FormFieldType, UserGroup } from "@/models/models";
 import { Textarea } from "../ui/textarea";
 import Image from "next/image";
 import { Label } from "../ui/label";
@@ -20,6 +20,8 @@ import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import { cn } from "@/lib/utils";
 import { FaLock } from "react-icons/fa6";
+import { FaCheck } from "react-icons/fa";
+import { accessRulesDescriptions } from "@/lib/data/constants";
 
 type RenderFieldProps = {
     field: FormFieldType;
@@ -379,7 +381,7 @@ export const DynamicTableField: React.FC<RenderFieldProps> = ({ field, formField
 
 type DynamicAccessRulesGridProps = {
     features: string[];
-    userGroups: string[];
+    userGroups: UserGroup[];
     control: any;
 };
 
@@ -389,11 +391,11 @@ export const DynamicAccessRulesGrid: React.FC<DynamicAccessRulesGridProps> = ({ 
 
     const handleCellClick = (feature: string, userGroup: string) => {
         const currentAccessRules = getValues("accessRules");
-        const userGroupsForFeature = currentAccessRules[feature] || [];
+        const userGroupsForFeature = currentAccessRules?.[feature] || [];
         const updatedUserGroupsForFeature = userGroupsForFeature.includes(userGroup)
             ? userGroupsForFeature.filter((ug: string) => ug !== userGroup)
             : [...userGroupsForFeature, userGroup];
-        setValue(`accessRules.${feature}`, updatedUserGroupsForFeature);
+        setValue(`accessRules["${feature}"]`, updatedUserGroupsForFeature);
     };
 
     return (
@@ -403,15 +405,15 @@ export const DynamicAccessRulesGrid: React.FC<DynamicAccessRulesGridProps> = ({ 
                     <tr>
                         <th className="w-1/4"></th>
                         {userGroups.map((userGroup, index) => (
-                            <th key={index} className={cn("relative h-32 overflow-visible")}>
-                                <div className="absolute bottom-[5px] left-1/2 origin-bottom-left -rotate-45 transform">
-                                    {userGroup}
+                            <th key={index} className={cn("relative h-32 overflow-visible font-normal")}>
+                                <div className="absolute bottom-[5px] left-1/2 origin-bottom-left -rotate-45 transform whitespace-nowrap">
+                                    {userGroup.name}
                                 </div>
                             </th>
                         ))}
-                        <th className="relative">
-                            <div className="absolute bottom-[5px] left-1/2 origin-bottom-left -rotate-45 transform">
-                                everyone
+                        <th className="relative h-32 overflow-visible font-normal">
+                            <div className="absolute bottom-[5px] left-1/2 origin-bottom-left -rotate-45 transform whitespace-nowrap">
+                                Everyone
                             </div>
                         </th>
                     </tr>
@@ -419,18 +421,33 @@ export const DynamicAccessRulesGrid: React.FC<DynamicAccessRulesGridProps> = ({ 
                 <tbody>
                     {features.map((feature, rowIndex) => (
                         <tr key={rowIndex} className="border-t">
-                            <td className="border-r p-2">{feature}</td>
+                            <td className="border-r p-2">
+                                {(accessRulesDescriptions as any)[feature]?.name ?? feature}
+                            </td>
                             {userGroups.map((userGroup, colIndex) => (
                                 <td
                                     key={colIndex}
-                                    className={cn("cursor-pointer p-2 text-center", {
-                                        "bg-green-200": accessRules?.[feature]?.includes(userGroup),
+                                    className={cn("cursor-pointer p-2 text-center text-[#254d19]", {
+                                        "bg-[#baf9c0]": accessRules?.[feature]?.includes(userGroup.handle),
                                     })}
-                                    onClick={() => handleCellClick(feature, userGroup)}
+                                    onClick={() => handleCellClick(feature, userGroup.handle)}
                                 >
-                                    {accessRules?.[feature]?.includes(userGroup) ? "✔️" : ""}
+                                    <div className="flex items-center justify-center">
+                                        {accessRules?.[feature]?.includes(userGroup.handle) ? <FaCheck /> : ""}
+                                    </div>
                                 </td>
                             ))}
+                            <td
+                                key="everyone"
+                                className={cn("cursor-pointer p-2 text-center text-[#254d19]", {
+                                    "bg-[#baf9c0]": accessRules?.[feature]?.includes("everyone"),
+                                })}
+                                onClick={() => handleCellClick(feature, "everyone")}
+                            >
+                                <div className="flex items-center justify-center">
+                                    {accessRules?.[feature]?.includes("everyone") ? <FaCheck /> : ""}
+                                </div>
+                            </td>
                         </tr>
                     ))}
                 </tbody>
@@ -440,7 +457,7 @@ export const DynamicAccessRulesGrid: React.FC<DynamicAccessRulesGridProps> = ({ 
 };
 
 export const DynamicAccessRulesField: React.FC<RenderFieldProps> = ({ field, formField, control, readOnly }) => {
-    const userGroups = useWatch({ control, name: "userGroups" })?.map((group: any) => group.handle) || [];
+    const userGroups = useWatch({ control, name: "userGroups" }) || [];
     const features = Object.keys(formField.value || {});
 
     return (
