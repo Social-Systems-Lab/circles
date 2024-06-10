@@ -20,9 +20,9 @@ import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import { cn } from "@/lib/utils";
 import { FaLock } from "react-icons/fa6";
-import { FaCheck } from "react-icons/fa";
+import { FaArrowCircleUp, FaArrowCircleDown, FaCheck } from "react-icons/fa";
 import { accessRulesDescriptions } from "@/lib/data/constants";
-import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 type RenderFieldProps = {
     field: FormFieldType;
@@ -224,7 +224,7 @@ export const DynamicArrayField: React.FC<RenderFieldProps> = ({ field, formField
 };
 
 export const DynamicTableField: React.FC<RenderFieldProps> = ({ field, formField, control, readOnly }) => {
-    const { fields, append, remove } = useFieldArray({
+    const { fields, append, remove, swap } = useFieldArray({
         control,
         name: formField.name,
     });
@@ -267,6 +267,14 @@ export const DynamicTableField: React.FC<RenderFieldProps> = ({ field, formField
         return !!(errors[formField.name] as FieldErrorsImpl<any>)?.[index];
     };
 
+    const moveRow = (index: number, direction: "up" | "down") => {
+        if (direction === "up" && index > 0) {
+            swap(index, index - 1);
+        } else if (direction === "down" && index < fields.length - 1) {
+            swap(index, index + 1);
+        }
+    };
+
     return (
         <div>
             <div className="flex items-center justify-between pb-2">
@@ -293,12 +301,13 @@ export const DynamicTableField: React.FC<RenderFieldProps> = ({ field, formField
                                         </TableHead>
                                     );
                                 })}
+                                <TableHead key="_moveRow" />
                             </TableRow>
                         ))}
                     </TableHeader>
                     <TableBody>
                         {table.getRowModel().rows?.length ? (
-                            table.getRowModel().rows.map((row) => {
+                            table.getRowModel().rows.map((row, index) => {
                                 const isRowReadOnly = watchedFields[row.index]?.readOnly;
                                 return (
                                     <React.Fragment key={row.id}>
@@ -309,7 +318,7 @@ export const DynamicTableField: React.FC<RenderFieldProps> = ({ field, formField
                                             style={{
                                                 borderBottomWidth: row.id === editingId ? "0px" : "1px",
                                             }}
-                                            className="h-[53px]"
+                                            className="group h-[53px]"
                                         >
                                             <TableCell className="pr-2 text-right">
                                                 {isRowReadOnly && <FaLock className="text-gray-500" />}
@@ -324,10 +333,40 @@ export const DynamicTableField: React.FC<RenderFieldProps> = ({ field, formField
                                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                                 </TableCell>
                                             ))}
+                                            <TableCell className="relative m-0 p-0">
+                                                {!readOnly && (
+                                                    <div className="absolute right-0 top-0 flex transform flex-col items-center opacity-0 group-hover:opacity-100">
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="icon"
+                                                            className="h-[26px] w-[26px]"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                moveRow(index, "up");
+                                                            }}
+                                                        >
+                                                            <ChevronUp className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="icon"
+                                                            className="h-[26px] w-[26px]"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                moveRow(index, "down");
+                                                            }}
+                                                        >
+                                                            <ChevronDown className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                            </TableCell>
                                         </TableRow>
                                         {editingId === row.id && (
                                             <tr className="border-b bg-muted/50 transition-colors">
-                                                <td colSpan={columns.length + 1}>
+                                                <td colSpan={columns.length + 2}>
                                                     <div className="space-y-8 p-4">
                                                         {field.itemSchema?.fields
                                                             .filter((x) => x.type !== "hidden")
@@ -383,10 +422,16 @@ export const DynamicTableField: React.FC<RenderFieldProps> = ({ field, formField
 type DynamicAccessRulesGridProps = {
     features: string[];
     userGroups: UserGroup[];
+    pages: Page[];
     control: any;
 };
 
-export const DynamicAccessRulesGrid: React.FC<DynamicAccessRulesGridProps> = ({ features, userGroups, control }) => {
+export const DynamicAccessRulesGrid: React.FC<DynamicAccessRulesGridProps> = ({
+    features,
+    pages,
+    userGroups,
+    control,
+}) => {
     const { setValue, getValues } = useFormContext();
     const accessRules = useWatch({ control, name: "accessRules" });
 
@@ -397,6 +442,19 @@ export const DynamicAccessRulesGrid: React.FC<DynamicAccessRulesGridProps> = ({ 
             ? userGroupsForFeature.filter((ug: string) => ug !== userGroup)
             : [...userGroupsForFeature, userGroup];
         setValue(`accessRules["${feature}"]`, updatedUserGroupsForFeature);
+    };
+
+    const getFeatureDescription = (feature: string) => {
+        if (feature.startsWith("__page_")) {
+            // get page handle
+            const pageHandle = feature.replace("__page_", "");
+
+            // get name from page
+            const page = pages.find((p) => p.handle === pageHandle);
+            return "View Page: " + page?.name;
+        } else {
+            return (accessRulesDescriptions as any)[feature]?.name ?? feature;
+        }
     };
 
     return (
@@ -422,9 +480,7 @@ export const DynamicAccessRulesGrid: React.FC<DynamicAccessRulesGridProps> = ({ 
                 <tbody>
                     {features.map((feature, rowIndex) => (
                         <tr key={rowIndex} className="border-t">
-                            <td className="border-r p-2">
-                                {(accessRulesDescriptions as any)[feature]?.name ?? feature}
-                            </td>
+                            <td className="border-r p-2">{getFeatureDescription(feature)}</td>
                             {userGroups.map((userGroup, colIndex) => (
                                 <td
                                     key={colIndex}
@@ -459,6 +515,7 @@ export const DynamicAccessRulesGrid: React.FC<DynamicAccessRulesGridProps> = ({ 
 
 export const DynamicAccessRulesField: React.FC<RenderFieldProps> = ({ field, formField, control, readOnly }) => {
     const userGroups = useWatch({ control, name: "userGroups" }) || [];
+    const pages = useWatch({ control, name: "pages" }) || [];
     const features = Object.keys(formField.value || {});
 
     return (
@@ -467,7 +524,7 @@ export const DynamicAccessRulesField: React.FC<RenderFieldProps> = ({ field, for
                 <h1 className="m-0 p-0 pb-3 text-xl font-bold">{field.label}</h1>
             </div>
 
-            <DynamicAccessRulesGrid features={features} userGroups={userGroups} control={control} />
+            <DynamicAccessRulesGrid features={features} pages={pages} userGroups={userGroups} control={control} />
             <FormMessage />
         </FormItem>
     );

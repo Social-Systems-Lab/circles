@@ -1,5 +1,6 @@
 // used by tailwindcss to merge classnames, shadcn/ui CLI assumes the file is here
 
+import { Page } from "@/models/models";
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -23,23 +24,53 @@ export function safeModifyArray<T extends Identifiable>(existingArray: T[], subm
     const updatedArray: T[] = [];
     const handleSet = new Set<string>();
 
-    // add existing read-only items and track handles
-    for (const existingItem of existingArray) {
-        if (existingItem.readOnly) {
-            updatedArray.push(existingItem);
-            handleSet.add(existingItem.handle);
-        }
-    }
-
     // process submitted items
     for (const submittedItem of submittedArray) {
-        if (handleSet.has(submittedItem.handle)) {
-            continue; // ignore readonly items
-        }
-
+        handleSet.add(submittedItem.handle);
         updatedArray.push(submittedItem);
     }
+
+    // ensure existing read-only items are in updatedArray
+    for (const existingItem of existingArray) {
+        if (existingItem.readOnly) {
+            if (handleSet.has(existingItem.handle)) {
+                var index = updatedArray.findIndex((x) => x.handle === existingItem.handle);
+                if (index !== -1) {
+                    updatedArray[index] = existingItem;
+                } else {
+                    updatedArray.unshift(existingItem);
+                }
+            } else {
+                updatedArray.unshift(existingItem);
+            }
+        }
+    }
+
     return updatedArray;
+}
+
+export function addPagesAccessRules(
+    pages: Page[],
+    existingAccessRules: Record<string, string[]>,
+): Record<string, string[]> {
+    // add rule for page if it doesn't exist
+    for (const page of pages) {
+        if (!existingAccessRules["__page_" + page.handle]) {
+            existingAccessRules["__page_" + page.handle] = ["admins", "moderators", "members"]; // TODO add default access rules based on page type
+        }
+    }
+
+    // remove rules for pages that don't exist
+    for (const rule in existingAccessRules) {
+        if (rule.startsWith("__page_")) {
+            const handle = rule.replace("__page_", "");
+            if (!pages.find((page) => page.handle === handle)) {
+                delete existingAccessRules[rule];
+            }
+        }
+    }
+
+    return existingAccessRules;
 }
 
 export function safeModifyAccessRules(

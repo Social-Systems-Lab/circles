@@ -1,7 +1,7 @@
 import { getCircleById, getCirclePath, updateCircle } from "@/lib/data/circle";
 import { Circle, FormAction, FormSubmitResponse, Page } from "../../../../models/models";
 import { revalidatePath } from "next/cache";
-import { safeModifyArray } from "@/lib/utils";
+import { addPagesAccessRules, safeModifyArray } from "@/lib/utils";
 
 export const circlePagesFormAction: FormAction = {
     id: "circle-pages-form",
@@ -22,6 +22,10 @@ export const circlePagesFormAction: FormAction = {
 
             const finalPages = safeModifyArray(existingCircle.pages || [], values.pages || []);
             circle.pages = finalPages;
+
+            // make sure access rules exists for all pages
+            const finalAccessRules = addPagesAccessRules(finalPages, existingCircle.accessRules);
+            circle.accessRules = finalAccessRules;
 
             // TODO remove, resets to default access rules to circle for testing
             // circle.pages = defaultPages;

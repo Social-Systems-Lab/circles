@@ -21,7 +21,7 @@ export const pagesFormSchema: FormSchema = {
             label: "Handle",
             type: "handle",
             placeholder: "handle",
-            description: "Choose a unique handle that will identify the user group on the platform.",
+            description: "Choose a unique handle that will identify the page on the platform and appear in the URL.",
             required: true,
             showInHeader: false,
         },
