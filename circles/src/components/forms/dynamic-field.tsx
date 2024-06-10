@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { FaLock } from "react-icons/fa6";
 import { FaCheck } from "react-icons/fa";
 import { accessRulesDescriptions } from "@/lib/data/constants";
+import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 
 type RenderFieldProps = {
     field: FormFieldType;

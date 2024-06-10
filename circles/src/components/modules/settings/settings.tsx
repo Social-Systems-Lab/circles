@@ -12,6 +12,8 @@ export default async function SettingsModule({ circle, page, subpage, isDefaultC
                 return "circle-user-groups-form";
             case "access-rules":
                 return "circle-access-rules-form";
+            case "pages":
+                return "circle-pages-form";
         }
     };
 

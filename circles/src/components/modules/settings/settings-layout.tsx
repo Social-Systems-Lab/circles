@@ -8,16 +8,16 @@ const settingsForms = [
         handle: "",
     },
     {
+        name: "Pages",
+        handle: "pages",
+    },
+    {
         name: "User Groups",
         handle: "user-groups",
     },
     {
         name: "Access Rules",
         handle: "access-rules",
-    },
-    {
-        name: "Pages",
-        handle: "pages",
     },
 ];
 

@@ -9,9 +9,8 @@ export const didSchema = z.string().regex(/^[0-9a-fA-F]{64}$/, "DID must be a 64
 export const passwordSchema = z.string().min(8, { message: "Password must be at least 8 characters long" });
 export const handleSchema = z
     .string()
-    .min(1, { message: "Handle must be at least 1 character long" })
     .max(20, { message: "Handle can't be more than 20 characters long" })
-    .regex(/^[a-zA-Z0-9_]+$/, { message: "Handle can only contain letters, numbers and underscores." });
+    .regex(/^[a-zA-Z0-9_]*$/, { message: "Handle can only contain letters, numbers and underscores." });
 
 export const accountTypeSchema = z.enum(["user", "organization"]);
 export const emailSchema = z.string().email({ message: "Enter valid email" });
