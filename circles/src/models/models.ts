@@ -56,6 +56,26 @@ export const userGroupSchema = z.object({
 
 export type UserGroup = z.infer<typeof userGroupSchema>;
 
+export const featureSchema = z.object({
+    name: z.string(),
+    handle: handleSchema,
+    description: z.string(),
+    defaultUserGroups: z.array(z.string()).optional(),
+});
+
+export type Feature = z.infer<typeof featureSchema>;
+
+export const moduleSchema = z.object({
+    name: z.string(),
+    handle: handleSchema,
+    description: z.string(),
+    component: z.any(),
+    layoutComponent: z.any().optional(),
+    features: z.array(z.string()).optional(),
+});
+
+export type Module = z.infer<typeof moduleSchema>;
+
 // access rules are a map of features to array of user groups that are granted access to the feature
 export const accessRulesSchema = z.record(z.string(), z.array(z.string()));
 

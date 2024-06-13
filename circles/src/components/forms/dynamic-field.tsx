@@ -11,7 +11,7 @@ import {
     useFormContext,
     useWatch,
 } from "react-hook-form";
-import { FormField as FormFieldType, UserGroup } from "@/models/models";
+import { FormField as FormFieldType, Page, UserGroup } from "@/models/models";
 import { Textarea } from "../ui/textarea";
 import Image from "next/image";
 import { Label } from "../ui/label";
@@ -21,7 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { cn } from "@/lib/utils";
 import { FaLock } from "react-icons/fa6";
 import { FaArrowCircleUp, FaArrowCircleDown, FaCheck } from "react-icons/fa";
-import { accessRulesDescriptions } from "@/lib/data/constants";
+import { features as featuresList } from "@/lib/data/constants";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
 type RenderFieldProps = {
@@ -453,7 +453,7 @@ export const DynamicAccessRulesGrid: React.FC<DynamicAccessRulesGridProps> = ({
             const page = pages.find((p) => p.handle === pageHandle);
             return "View Page: " + page?.name;
         } else {
-            return (accessRulesDescriptions as any)[feature]?.name ?? feature;
+            return featuresList[feature]?.name ?? feature;
         }
     };
 

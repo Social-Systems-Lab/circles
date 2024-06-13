@@ -1,7 +1,6 @@
 import { FormNav } from "@/components/forms/form-nav";
-import { DynamicLayoutPageProps, ModuleLayoutPageProps } from "../dynamic-page-layout";
+import { ModuleLayoutPageProps } from "../dynamic-page-layout";
 
-// TODO get from database
 const settingsForms = [
     {
         name: "About",

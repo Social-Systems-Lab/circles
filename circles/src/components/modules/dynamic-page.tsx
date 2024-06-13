@@ -1,7 +1,7 @@
 import { Circle, Page } from "@/models/models";
 import { redirect } from "next/navigation";
-import SettingsModule from "./settings/settings";
 import { getCircleByHandle, getDefaultCircle } from "@/lib/data/circle";
+import { modules } from "./modules";
 
 export type DynamicPageProps = {
     circleHandle?: string;
@@ -31,11 +31,11 @@ export default async function DynamicPage({ circleHandle, pageHandle, subpage, i
         redirect(`/not-found`);
     }
 
-    switch (page.module) {
-        case "settings":
-            return <SettingsModule circle={circle} page={page} subpage={subpage} isDefaultCircle={isDefaultCircle} />;
-        default:
-            // redirect home
-            redirect(isDefaultCircle ? "/" : `/${circle.handle}`);
+    let _module = modules[page.module];
+    if (!_module) {
+        // redirect to not-found
+        redirect(`/not-found`);
     }
+
+    return <_module.component circle={circle} page={page} subpage={subpage} isDefaultCircle={isDefaultCircle} />;
 }

@@ -2,6 +2,7 @@ import { Circle, Page } from "@/models/models";
 import { redirect } from "next/navigation";
 import SettingsModuleLayout from "./settings/settings-layout";
 import { getCircleByHandle, getDefaultCircle } from "@/lib/data/circle";
+import { modules } from "./modules";
 
 export type DynamicLayoutPageProps = {
     circleHandle?: string;
@@ -36,15 +37,19 @@ export default async function DynamicPageLayout({
         redirect(`/not-found`);
     }
 
-    switch (page.module) {
-        case "settings":
-            return (
-                <SettingsModuleLayout circle={circle} page={page} isDefaultCircle={isDefaultCircle}>
-                    {children}
-                </SettingsModuleLayout>
-            );
-        default:
-            // redirect home
-            redirect(isDefaultCircle ? "/" : `/${circle.handle}`);
+    let _module = modules[page.module];
+    if (!_module) {
+        // redirect to not-found
+        redirect(`/not-found`);
     }
+
+    if (!_module.layoutComponent) {
+        return children;
+    }
+
+    return (
+        <_module.layoutComponent circle={circle} page={page} isDefaultCircle={isDefaultCircle}>
+            {children}
+        </_module.layoutComponent>
+    );
 }

@@ -1,7 +1,16 @@
-import { Page } from "@/models/models";
+import { Page, UserGroup, Module, Feature } from "@/models/models";
+
+export const features: Record<string, Feature> = {
+    settings_edit: {
+        name: "Edit Settings",
+        handle: "settings_edit",
+        description: "Edit circle settings",
+        defaultUserGroups: ["admins"],
+    },
+};
 
 // default user groups that all circles will be created with
-export const defaultUserGroups = [
+export const defaultUserGroups: UserGroup[] = [
     {
         name: "Admins",
         handle: "admins",
@@ -28,14 +37,6 @@ export const defaultUserGroups = [
 // default access rules every circle will be created with
 export const defaultAccessRules = {
     settings_edit: ["admins"],
-};
-
-// access rules descriptions
-export const accessRulesDescriptions = {
-    settings_edit: {
-        name: "Edit Settings",
-        description: "Edit circle settings",
-    },
 };
 
 // default pages every circle will be created with

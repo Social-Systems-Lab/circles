@@ -24,7 +24,7 @@ export const circlePagesFormAction: FormAction = {
             circle.pages = finalPages;
 
             // make sure access rules exists for all pages
-            const finalAccessRules = addPagesAccessRules(finalPages, existingCircle.accessRules);
+            const finalAccessRules = addPagesAccessRules(finalPages, existingCircle.accessRules ?? {});
             circle.accessRules = finalAccessRules;
 
             // TODO remove, resets to default access rules to circle for testing

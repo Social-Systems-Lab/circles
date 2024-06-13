@@ -4,7 +4,7 @@ export const pagesFormSchema: FormSchema = {
     id: "pages-form",
     title: "Page",
     description:
-        "Manage the pages that appear in the circle's top navigation menu. These pages can be configured to use different modules, determining how they are rendered and what content they display.",
+        "Manage the pages that appear in the circle's top navigation menu. These pages can be configured to use different modules, determining what kind of content and functionality they provide.",
     button: {
         text: "Save",
     },
@@ -46,7 +46,7 @@ export const circlePagesFormSchema: FormSchema = {
     id: "circle-pages-form",
     title: "Pages",
     description:
-        "Manage the pages that appear in the circle's top navigation menu. These pages can be configured to use different modules, determining how they are rendered and what content they display.",
+        "Manage the pages that appear in the circle's top navigation menu. These pages can be configured to use different modules, determining what kind of content and functionality they provide.",
     button: {
         text: "Save",
     },
