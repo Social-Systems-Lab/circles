@@ -10,6 +10,7 @@ export const modules: Record<string, Module> = {
         handle: "home",
         description: "Landing page",
         features: [],
+        excludeFromMenu: true,
     },
     settings: {
         name: "Settings",
@@ -18,6 +19,7 @@ export const modules: Record<string, Module> = {
         layoutComponent: SettingsModuleLayout,
         description: "Settings page",
         features: [features.settings_edit.handle],
+        excludeFromMenu: true,
     },
     members: {
         name: "Members",

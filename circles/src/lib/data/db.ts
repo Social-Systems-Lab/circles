@@ -1,5 +1,5 @@
 import { MongoClient, MongoClientOptions } from "mongodb";
-import { User, Circle, ServerConfig } from "@/models/models";
+import { ServerConfig, User, Circle, Member } from "@/models/models";
 
 const MONGO_HOST = "127.0.0.1"; // TODO get from environment variable
 const MONGO_PORT = 27017; // TODO get from environment variable
@@ -15,3 +15,4 @@ export const db = client.db("circles");
 export const Users = db.collection<User>("users");
 export const Circles = db.collection<Circle>("circles");
 export const ServerConfigs = db.collection<ServerConfig>("serverConfigs");
+export const Members = db.collection<Member>("members");

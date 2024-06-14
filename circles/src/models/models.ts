@@ -46,6 +46,15 @@ export const userSchema = z.object({
 
 export type User = z.infer<typeof userSchema>;
 
+export const memberSchema = z.object({
+    userDid: z.string(),
+    circleId: z.string(),
+    userGroups: z.array(z.string()).optional(),
+    joinedAt: z.date().optional(),
+});
+
+export type Member = z.infer<typeof memberSchema>;
+
 export const userGroupSchema = z.object({
     name: z.string(),
     handle: handleSchema,
@@ -72,6 +81,7 @@ export const moduleSchema = z.object({
     component: z.any(),
     layoutComponent: z.any().optional(),
     features: z.array(z.string()).optional(),
+    excludeFromMenu: z.boolean().optional(),
 });
 
 export type Module = z.infer<typeof moduleSchema>;

@@ -1,3 +1,4 @@
+import { modules } from "@/components/modules/modules";
 import { FormSchema } from "../../../../models/models";
 
 export const pagesFormSchema: FormSchema = {
@@ -28,10 +29,9 @@ export const pagesFormSchema: FormSchema = {
         {
             name: "module",
             label: "Module",
-            type: "text",
-            placeholder: "module",
+            type: "select",
+            options: Object.entries(modules).map((x) => ({ value: x[0], label: x[1].name })),
             required: true,
-            showInHeader: true,
         },
         {
             name: "description",
