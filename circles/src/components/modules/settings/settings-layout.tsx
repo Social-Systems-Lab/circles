@@ -1,3 +1,5 @@
+"use server";
+
 import { FormNav } from "@/components/forms/form-nav";
 import { ModuleLayoutPageProps } from "../dynamic-page-layout";
 

@@ -35,6 +35,7 @@ export const getImageSchema = (maxSize?: number) => {
 export type AccountType = z.infer<typeof accountTypeSchema>;
 
 export const userSchema = z.object({
+    _id: z.string().optional(),
     did: didSchema,
     type: accountTypeSchema.default("user"),
     name: z.string().default("Anonymous User"),
@@ -47,6 +48,7 @@ export const userSchema = z.object({
 export type User = z.infer<typeof userSchema>;
 
 export const memberSchema = z.object({
+    _id: z.string().optional(),
     userDid: z.string(),
     circleId: z.string(),
     userGroups: z.array(z.string()).optional(),
@@ -54,6 +56,15 @@ export const memberSchema = z.object({
 });
 
 export type Member = z.infer<typeof memberSchema>;
+
+export type MemberDisplay = {
+    userDid: string;
+    circleId: string;
+    userGroups: string[];
+    joinedAt: Date;
+    name: string;
+    profilePicture: string;
+};
 
 export const userGroupSchema = z.object({
     name: z.string(),

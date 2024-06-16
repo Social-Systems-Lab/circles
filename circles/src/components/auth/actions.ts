@@ -1,7 +1,7 @@
 "use server";
 
 import { verifyUserToken } from "@/lib/auth/jwt";
-import { getUser } from "@/lib/data/user";
+import { getUser, getUserPrivate } from "@/lib/data/user";
 import { User } from "@/models/models";
 import { cookies } from "next/headers";
 
@@ -24,7 +24,7 @@ export async function checkAuth(): Promise<CheckAuthResponse> {
         }
 
         // get user data from database
-        let user = await getUser(userDid as string);
+        let user = await getUserPrivate(userDid as string);
         if (!user) {
             return { user: undefined, authenticated: false };
         }

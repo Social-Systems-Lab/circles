@@ -1,6 +1,9 @@
+"use server";
+
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Circle } from "@/models/models";
+import JoinButton from "./join-button";
 
 type CircleCoverProps = {
     circle: Circle;
@@ -51,7 +54,11 @@ export default async function HomeModule({ circle }: HomeProps) {
                 <div className="absolute top-[-60px]">
                     <CirclePicture circle={circle} size={124} />
                 </div>
+                <div className="absolute right-2 top-2">
+                    <JoinButton circle={circle} />
+                </div>
             </div>
+
             <div className="mb-8 mt-[44px] flex flex-col items-center justify-center">
                 <h4>{circle.name}</h4>
                 <p className="pl-4 pr-4">{circle.description}</p>

@@ -1,3 +1,5 @@
+"use server";
+
 import DynamicForm from "@/components/forms/dynamic-form";
 import { ModulePageProps } from "../dynamic-page";
 import { ScrollArea } from "@/components/ui/scroll-area";
