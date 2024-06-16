@@ -8,11 +8,13 @@ A module is a component providing specific capabilities to the Circles platform.
 
 ### Creating the module component
 
-Add a new react component for the module at e.g.
+Add a new react server component for the module at e.g.
 
 `src/components/modules/new-module/new-module.tsx`. 
 
 ```tsx
+"use server";
+
 import { ModulePageProps } from "../dynamic-page";
 
 export default async function NewModule({ circle, page, subpage, isDefaultCircle }: ModulePageProps) {
@@ -102,7 +104,7 @@ Now when we have the basic scaffolding set up for our new module, we can dive in
 Modules will generally consist of the following elements:
 
 - **Models** - the data types that will be stored and retrieved from the database and worked with in the various layers of the application. Defined using zod schemas that allows us to validate data.
-- **Database collections and functions** - The database collections for the data types that allows us to do CRUD operations on the data, and functions that can be reused.
+- **Database interface** - The database collections for the data types that allows us to do CRUD operations on the data, and functions that can be reused.
 
 - **Server Components** - React components that are rendered server-side and does things like fetching data from the database and provides the non-intractable part of the UI.
 - **Client Components** - The bulk of most module UI will be in client components that allows for interactivity and state management. 
@@ -133,7 +135,7 @@ Now when the model is created we can start creating the logic to interface with 
 
 
 
-### Database collections and functions
+### Database interface
 
 First we create a database collection for our new model in `src/lib/data/db.ts`
 
@@ -147,7 +149,7 @@ export const Members = db.collection<Member>("members");
 
 Now we can use the `Members` constant to interface with the members collection in the database and do CRUD operations.
 
-In our example we want to create a method to add a new member. We add this method in a new file at `src/lib/data/member.ts` 
+In our example we want to create a method to add a new member and one to get all members. We add this method in a new file at `src/lib/data/member.ts` 
 
 ```ts
 import { Member } from "@/models/models";
@@ -173,24 +175,34 @@ export const addMember = async (userDid: string, circleId: string, userGroups: s
 
 ### Server Component
 
-The server component is the component we created in the scaffolding setup. Since this is a server component we can make calls to the database within it. 
+The server component is the component we created in the first step. Since this is a server component we can make calls to the database within it. 
 
 ```tsx
+"use server";
+
 import { ModulePageProps } from "../dynamic-page";
 
 export default async function NewModule({ circle, page, subpage, isDefaultCircle }: ModulePageProps) {
     
     // get members from the database
-    
+    let members = getMembers(circle);
     
     return (
         <div className="flex flex-1 flex-col">
-           New Module Content
+           <h1>New Module Content</h1>
+           {members.map(member => (
+               <div>{member.name}</div>
+            ))}
         </div>
     );
 }
 ```
 
+The component gets the members from the database and displays their names on the page. In order to add interactivity to our component we need to create a client component. 
+
+
+
+### Client Component
 
 
 
@@ -199,7 +211,6 @@ export default async function NewModule({ circle, page, subpage, isDefaultCircle
 
 
 
-## Notes on client-side and server-side components
 
 
 
