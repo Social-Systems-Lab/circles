@@ -63,6 +63,12 @@ export const circlePagesFormSchema: FormSchema = {
             required: true,
             itemSchema: pagesFormSchema,
             ensureUniqueField: "handle",
+            defaultValue: {
+                name: "New Page",
+                handle: "new_page",
+                module: "members",
+                description: "New page",
+            },
         },
     ],
 };

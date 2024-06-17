@@ -3,6 +3,7 @@
 import { Page } from "@/models/models";
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { pageFeaturePrefix } from "./data/constants";
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -55,15 +56,15 @@ export function addPagesAccessRules(
 ): Record<string, string[]> {
     // add rule for page if it doesn't exist
     for (const page of pages) {
-        if (!existingAccessRules["__page_" + page.handle]) {
-            existingAccessRules["__page_" + page.handle] = ["admins", "moderators", "members"]; // TODO add default access rules based on page type
+        if (!existingAccessRules[pageFeaturePrefix + page.handle]) {
+            existingAccessRules[pageFeaturePrefix + page.handle] = ["admins", "moderators", "members"]; // TODO add default access rules based on page type
         }
     }
 
     // remove rules for pages that don't exist
     for (const rule in existingAccessRules) {
-        if (rule.startsWith("__page_")) {
-            const handle = rule.replace("__page_", "");
+        if (rule.startsWith(pageFeaturePrefix)) {
+            const handle = rule.replace(pageFeaturePrefix, "");
             if (!pages.find((page) => page.handle === handle)) {
                 delete existingAccessRules[rule];
             }

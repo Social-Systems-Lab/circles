@@ -28,6 +28,13 @@ export const userGroupFormSchema: FormSchema = {
             name: "title",
             label: "Title",
             type: "text",
+            showInHeader: false,
+        },
+        {
+            name: "accessLevel",
+            label: "Access Level",
+            type: "number",
+            required: true,
             showInHeader: true,
         },
         {
@@ -60,6 +67,13 @@ export const circleUserGroupsFormSchema: FormSchema = {
             required: true,
             itemSchema: userGroupFormSchema,
             ensureUniqueField: "handle",
+            defaultValue: {
+                name: "New User Group",
+                handle: "new_user_group",
+                title: "Member",
+                description: "New user group",
+                accessLevel: 300,
+            },
         },
     ],
 };

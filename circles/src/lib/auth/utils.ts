@@ -1,0 +1,38 @@
+import { Circle, Feature, MemberDisplay, UserPrivate } from "@/models/models";
+import { maxAccessLevel } from "../data/constants";
+
+export const getMemberAccessLevel = (user: UserPrivate | MemberDisplay | undefined, circle: Circle): number => {
+    if (!user) return maxAccessLevel;
+
+    let userGroups: string[] | undefined;
+    if ("memberships" in user) {
+        userGroups = user.memberships.find((c) => c.circleId === circle._id)?.userGroups;
+    } else {
+        userGroups = user.userGroups;
+    }
+    if (!userGroups || userGroups.length <= 0) return maxAccessLevel;
+
+    return Math.min(
+        ...userGroups?.map((x) => circle?.userGroups?.find((grp) => grp.handle === x)?.accessLevel ?? maxAccessLevel),
+    );
+};
+
+// returns true if user has higher access than the member (lower access level = higher access)
+export const hasHigherAccess = (user: UserPrivate | undefined, member: MemberDisplay, circle: Circle): boolean => {
+    const userAccessLevel = getMemberAccessLevel(user, circle);
+    const memberAccessLevel = getMemberAccessLevel(member, circle);
+    return userAccessLevel < memberAccessLevel;
+};
+
+export const isAuthorized = (user: UserPrivate | undefined, circle: Circle, feature: Feature): boolean => {
+    // lookup access rules in circle for the features
+    let allowedUserGroups = circle.accessRules?.[feature.handle];
+
+    if (!allowedUserGroups) return false;
+    if (allowedUserGroups.includes("everyone")) return true;
+
+    let membership = user?.memberships?.find((c) => c.circleId === circle._id);
+
+    if (!membership) return false;
+    return allowedUserGroups.some((group) => membership.userGroups.includes(group));
+};

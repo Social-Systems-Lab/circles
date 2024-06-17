@@ -2,11 +2,11 @@
 
 import { verifyUserToken } from "@/lib/auth/jwt";
 import { getUser, getUserPrivate } from "@/lib/data/user";
-import { User } from "@/models/models";
+import { UserPrivate } from "@/models/models";
 import { cookies } from "next/headers";
 
 type CheckAuthResponse = {
-    user?: User;
+    user?: UserPrivate;
     authenticated: boolean;
 };
 

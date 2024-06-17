@@ -1,13 +1,27 @@
 import { Page, UserGroup, Module, Feature } from "@/models/models";
 
-export const features: Record<string, Feature> = {
+export const features: { [key: string]: Feature } = {
     settings_edit: {
         name: "Edit Settings",
         handle: "settings_edit",
         description: "Edit circle settings",
         defaultUserGroups: ["admins"],
     },
+    edit_lower_user_groups: {
+        name: "Edit Lower Member User Groups",
+        handle: "edit_lower_user_groups",
+        description: "Edit circle user groups of lower members",
+        defaultUserGroups: ["admins", "moderators"],
+    },
+    remove_lower_members: {
+        name: "Remove Lower Members",
+        handle: "remove_lower_members",
+        description: "Remove lower members from the circle",
+        defaultUserGroups: ["admins", "moderators"],
+    },
 };
+
+export const maxAccessLevel = 9999999;
 
 // default user groups that all circles will be created with
 export const defaultUserGroups: UserGroup[] = [
@@ -16,6 +30,7 @@ export const defaultUserGroups: UserGroup[] = [
         handle: "admins",
         title: "Admin",
         description: "Administrators of the circle",
+        accessLevel: 100,
         readOnly: true,
     },
     {
@@ -23,6 +38,7 @@ export const defaultUserGroups: UserGroup[] = [
         handle: "moderators",
         title: "Moderator",
         description: "Moderators of the circle",
+        accessLevel: 200,
         readOnly: true,
     },
     {
@@ -30,14 +46,10 @@ export const defaultUserGroups: UserGroup[] = [
         handle: "members",
         title: "Member",
         description: "Members of the circle",
+        accessLevel: 300,
         readOnly: true,
     },
 ];
-
-// default access rules every circle will be created with
-export const defaultAccessRules = {
-    settings_edit: ["admins"],
-};
 
 // default pages every circle will be created with
 export const defaultPages: Page[] = [
@@ -47,6 +59,14 @@ export const defaultPages: Page[] = [
         description: "Home page",
         module: "home",
         readOnly: true,
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Members",
+        handle: "members",
+        description: "Members page",
+        module: "members",
+        defaultUserGroups: ["admins", "moderators", "members"],
     },
     {
         name: "Settings",
@@ -54,5 +74,21 @@ export const defaultPages: Page[] = [
         description: "Settings page",
         module: "settings",
         readOnly: true,
+        defaultUserGroups: ["admins"],
     },
 ];
+
+export const pageFeaturePrefix = "__page_";
+
+export const getDefaultAccessRules = () => {
+    let accessRules: Record<string, string[]> = {};
+    for (let feature in features) {
+        accessRules[feature] = features[feature].defaultUserGroups ?? [];
+    }
+    // add default access rules for default pages
+    for (let page of defaultPages) {
+        accessRules[pageFeaturePrefix + page.handle] = page.defaultUserGroups ?? [];
+    }
+
+    return accessRules;
+};

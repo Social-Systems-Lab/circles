@@ -1,5 +1,4 @@
-import { features } from "../../lib/data/constants";
-import { Circle, Module, Page } from "@/models/models";
+import { Module } from "@/models/models";
 import SettingsModule from "@/components/modules/settings/settings";
 import SettingsModuleLayout from "./settings/settings-layout";
 import MembersModule from "./members/members";
@@ -18,7 +17,6 @@ export const modules: Record<string, Module> = {
         component: SettingsModule,
         layoutComponent: SettingsModuleLayout,
         description: "Settings page",
-        features: [features.settings_edit.handle],
         excludeFromMenu: true,
     },
     members: {
@@ -26,5 +24,6 @@ export const modules: Record<string, Module> = {
         handle: "members",
         description: "Members page",
         component: MembersModule,
+        features: [],
     },
 };

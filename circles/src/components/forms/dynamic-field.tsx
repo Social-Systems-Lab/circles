@@ -11,7 +11,7 @@ import {
     useFormContext,
     useWatch,
 } from "react-hook-form";
-import { FormField as FormFieldType, Page, UserGroup } from "@/models/models";
+import { Feature, FormField as FormFieldType, Page, UserGroup } from "@/models/models";
 import { Textarea } from "../ui/textarea";
 import Image from "next/image";
 import { Label } from "../ui/label";
@@ -21,7 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { cn } from "@/lib/utils";
 import { FaLock } from "react-icons/fa6";
 import { FaArrowCircleUp, FaArrowCircleDown, FaCheck } from "react-icons/fa";
-import { features as featuresList } from "@/lib/data/constants";
+import { features as featuresList, pageFeaturePrefix } from "@/lib/data/constants";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
 type RenderFieldProps = {
@@ -252,7 +252,8 @@ export const DynamicTableField: React.FC<RenderFieldProps> = ({ field, formField
     };
 
     const onAddClick = () => {
-        append({});
+        let newValue = field?.defaultValue ? { ...field.defaultValue } : {};
+        append(newValue);
 
         // set editing id to the last item
         setEditingId(fields?.length.toString());
@@ -445,9 +446,9 @@ export const DynamicAccessRulesGrid: React.FC<DynamicAccessRulesGridProps> = ({
     };
 
     const getFeatureDescription = (feature: string) => {
-        if (feature.startsWith("__page_")) {
+        if (feature.startsWith(pageFeaturePrefix)) {
             // get page handle
-            const pageHandle = feature.replace("__page_", "");
+            const pageHandle = feature.replace(pageFeaturePrefix, "");
 
             // get name from page
             const page = pages.find((p) => p.handle === pageHandle);
@@ -543,6 +544,7 @@ export const DynamicField: React.FC<RenderFieldProps> = ({ field, formField, con
         case "handle":
         case "text":
         case "email":
+        case "number":
             return DynamicTextField({ field, formField, control, readOnly });
         case "textarea":
             return DynamicTextareaField({ field, formField, control, readOnly });

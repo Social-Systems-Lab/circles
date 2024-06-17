@@ -36,6 +36,11 @@ html {
     font-family: var(--font-libre-franklin);
 }
 
+html,
+body {
+    overflow-x: hidden;
+}
+
 .formatted h1:first-child {
     margin-top: 0px;
 }

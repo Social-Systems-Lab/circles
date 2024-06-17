@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { forwardRef, useState } from "react";
 import {
     ColumnDef,
     ColumnFiltersState,
@@ -16,7 +16,7 @@ import {
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Circle, MemberDisplay } from "@/models/models";
+import { Circle, Feature, MemberDisplay, User, UserPrivate } from "@/models/models";
 import { Button } from "@/components/ui/button";
 import { ArrowDown, ArrowUp, ArrowUpDown, MoreHorizontal } from "lucide-react";
 import {
@@ -29,6 +29,19 @@ import {
 } from "@/components/ui/dropdown-menu";
 import Image from "next/image";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useAtom } from "jotai";
+import { userAtom } from "@/lib/data/atoms";
+import { features, maxAccessLevel } from "@/lib/data/constants";
+import { hasHigherAccess, isAuthorized } from "@/lib/auth/utils";
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 
 interface MemberTableProps {
     members: MemberDisplay[];
@@ -41,11 +54,7 @@ export const multiSelectFilter: FilterFn<MemberDisplay> = (
     filterValue: any,
     addMeta: (meta: any) => void,
 ): boolean => {
-    console.log("Filtering: ", row, columnId, filterValue);
-
     let userGroups = row.getValue<string[]>(columnId);
-    console.log("User groups: ", userGroups);
-    console.log("User groups includes", filterValue, userGroups?.includes(filterValue));
     return userGroups?.includes(filterValue);
 };
 
@@ -82,9 +91,14 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
     const data = React.useMemo(() => members, [members]);
     const [sorting, setSorting] = React.useState<SortingState>([]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+    const [user, setUser] = useAtom(userAtom);
+    const [dialogOpen, setDialogOpen] = useState<boolean>(false);
+    const [selectedMember, setSelectedMember] = useState<MemberDisplay | null>(null);
 
     // if user is allowed to edit settings show edit button
-    const canEdit = true;
+    const canEditUserGroups = isAuthorized(user, circle, features.edit_lower_user_groups);
+    const canRemoveUser = isAuthorized(user, circle, features.remove_lower_members);
+    const canEdit = canEditUserGroups || canRemoveUser;
 
     const columns = React.useMemo<ColumnDef<MemberDisplay>[]>(
         () => [
@@ -99,7 +113,6 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
                     );
                 },
                 cell: (info) => {
-                    console.log(info);
                     let picture = info.row.original.picture;
                     let memberName = info.getValue() as string;
                     return (
@@ -117,7 +130,6 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
                         <Button variant="ghost" onClick={() => column.toggleSorting()}>
                             Joined At
                             <SortIcon sortDir={column.getIsSorted()} />
-                            {/* <ArrowUpDown className="ml-2 h-4 w-4" /> */}
                         </Button>
                     );
                 },
@@ -152,7 +164,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
             columnVisibility: {
                 name: true,
                 joinedAt: true,
-                userGroups: false,
+                userGroups: true,
             },
         },
     });
@@ -168,11 +180,9 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
                 <Select
                     value={(table.getColumn("userGroups")?.getFilterValue() as string) ?? ""}
                     onValueChange={(value) => {
-                        table.getColumn("userGroups")?.setFilterValue(value);
                         if (value === "everyone") {
                             table.getColumn("userGroups")?.setFilterValue("");
                         } else {
-                            console.log("Setting filter value: ", value);
                             table.getColumn("userGroups")?.setFilterValue(value);
                         }
                     }}
@@ -203,39 +213,58 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
                                     </TableHead>
                                 );
                             })}
-                            {canEdit && <TableHead className="w-[40px]"></TableHead>}
+                            <TableHead className="w-[40px]"></TableHead>
                         </TableRow>
                     ))}
                 </TableHeader>
                 <TableBody>
                     {table.getRowModel().rows?.length ? (
-                        table.getRowModel().rows.map((row) => (
-                            <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
-                                {row.getVisibleCells().map((cell) => (
-                                    <TableCell key={cell.id}>
-                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                    </TableCell>
-                                ))}
-                                {canEdit && (
+                        table.getRowModel().rows.map((row) => {
+                            const member = row.original;
+                            const canEditRow = canEdit && hasHigherAccess(user, member, circle);
+
+                            return (
+                                <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
+                                    {row.getVisibleCells().map((cell) => (
+                                        <TableCell key={cell.id}>
+                                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                        </TableCell>
+                                    ))}
                                     <TableCell className="w-[40px]">
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" className="h-8 w-8 p-0">
-                                                    <span className="sr-only">Open menu</span>
-                                                    <MoreHorizontal className="h-4 w-4" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuItem>Edit User Groups</DropdownMenuItem>
-                                                <DropdownMenuItem>Remove User</DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
+                                        {canEditRow && (
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                                        <span className="sr-only">Open menu</span>
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem
+                                                        onClick={() => {
+                                                            setSelectedMember(member);
+                                                            setDialogOpen(true);
+                                                        }}
+                                                    >
+                                                        Edit User Groups
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        onClick={() => {
+                                                            setSelectedMember(member);
+                                                            setDialogOpen(true);
+                                                        }}
+                                                    >
+                                                        Remove User
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        )}
                                     </TableCell>
-                                )}
-                            </TableRow>
-                        ))
+                                </TableRow>
+                            );
+                        })
                     ) : (
                         <TableRow>
                             <TableCell colSpan={columns.length + (canEdit ? 1 : 0)} className="h-24 text-center">
@@ -245,6 +274,22 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
                     )}
                 </TableBody>
             </Table>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Are you sure?</DialogTitle>
+                        <DialogDescription>
+                            Do you want to remove the user <b>{selectedMember?.name}</b> from the circle?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button variant="destructive">Remove</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

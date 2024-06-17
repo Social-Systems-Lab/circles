@@ -57,20 +57,28 @@ export const memberSchema = z.object({
 
 export type Member = z.infer<typeof memberSchema>;
 
-export type MemberDisplay = {
-    userDid: string;
+export type Membership = {
     circleId: string;
     userGroups: string[];
     joinedAt: Date;
+    circle: Circle;
+};
+
+export interface UserPrivate extends User {
+    memberships: Membership[];
+}
+
+export interface MemberDisplay extends Member {
     name: string;
     picture: string;
-};
+}
 
 export const userGroupSchema = z.object({
     name: z.string(),
     handle: handleSchema,
     title: z.string(),
     description: z.string(),
+    accessLevel: z.number(),
     readOnly: z.boolean().optional(),
 });
 
@@ -107,6 +115,7 @@ export const pageSchema = z.object({
     //accessRules: pageAccessRulesSchema.optional(),
     module: z.string(),
     readOnly: z.boolean().optional(),
+    defaultUserGroups: z.array(z.string()).optional(),
 });
 
 export type Page = z.infer<typeof pageSchema>;
@@ -276,6 +285,7 @@ export type FormFieldOption = {
 
 export type FormFieldType =
     | "text"
+    | "number"
     | "textarea"
     | "image"
     | "array"
@@ -305,6 +315,7 @@ export type FormField = {
     itemSchema?: FormSchema;
     showInHeader?: boolean;
     ensureUniqueField?: string;
+    defaultValue?: any;
 };
 
 export type FormSchema = {

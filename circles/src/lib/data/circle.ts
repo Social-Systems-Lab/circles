@@ -4,7 +4,7 @@ import { Circle, ServerConfig } from "@/models/models";
 import { getServerConfig } from "./server-config";
 import { Circles } from "./db";
 import { ObjectId } from "mongodb";
-import { defaultAccessRules, defaultUserGroups, defaultPages } from "./constants";
+import { getDefaultAccessRules, defaultUserGroups, defaultPages, features } from "./constants";
 
 export const getDefaultCircle = async (
     redirectIfSetup: boolean = false,
@@ -32,7 +32,7 @@ export const createDefaultCircle = (): Circle => {
         picture: { url: "/images/default-picture.png" },
         cover: { url: "/images/default-cover.png" },
         userGroups: defaultUserGroups,
-        accessRules: defaultAccessRules,
+        accessRules: getDefaultAccessRules(),
         pages: defaultPages,
     };
     return circle;
