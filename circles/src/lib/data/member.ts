@@ -1,5 +1,6 @@
 import { Member, MemberDisplay } from "@/models/models";
-import { Members } from "./db";
+import { Circles, Members } from "./db";
+import { ObjectId } from "mongodb";
 
 export const getMembers = async (circleId?: string): Promise<MemberDisplay[]> => {
     if (!circleId) return [];
@@ -17,12 +18,14 @@ export const getMembers = async (circleId?: string): Promise<MemberDisplay[]> =>
         { $unwind: "$userDetails" },
         {
             $project: {
+                _id: { $toString: "$_id" },
                 userDid: 1,
                 circleId: 1,
                 userGroups: 1,
                 joinedAt: 1,
                 name: "$userDetails.name",
-                profilePicture: "$userDetails.profilePicture",
+                picture: "$userDetails.picture",
+                cover: "$userDetails.cover",
             },
         },
     ]).toArray();
@@ -43,5 +46,9 @@ export const addMember = async (userDid: string, circleId: string, userGroups: s
         joinedAt: new Date(),
     };
     await Members.insertOne(member);
+
+    // increase member count in circle
+    await Circles.updateOne({ _id: new ObjectId(circleId) }, { $inc: { members: 1 } });
+
     return member;
 };

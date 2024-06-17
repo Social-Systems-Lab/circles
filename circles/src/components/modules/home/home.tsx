@@ -4,6 +4,7 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Circle } from "@/models/models";
 import JoinButton from "./join-button";
+import { FaUsers } from "react-icons/fa6";
 
 type CircleCoverProps = {
     circle: Circle;
@@ -62,14 +63,13 @@ export default async function HomeModule({ circle }: HomeProps) {
             <div className="mb-8 mt-[44px] flex flex-col items-center justify-center">
                 <h4>{circle.name}</h4>
                 <p className="pl-4 pr-4">{circle.description}</p>
-                {/* {selectedCircle?.id !== "private" && (
                     <div className="flex flex-row items-center justify-center">
                         <FaUsers />
                         <p className="m-0 ml-2 mr-4">
-                            {selectedCircle?.members} {selectedCircle?.id === "private" ? "Followers" : "Members"}
+                            {circle?.members}
                         </p>
-                        <PiMapPinFill />
-                        <p className="m-0 ml-2">{selectedCircle?.location}</p>
+                        {/* <PiMapPinFill />
+                        <p className="m-0 ml-2">{selectedCircle?.location}</p> */}
                     </div>
                 )} */}
             </div>

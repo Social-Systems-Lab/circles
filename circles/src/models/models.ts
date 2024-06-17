@@ -63,7 +63,7 @@ export type MemberDisplay = {
     userGroups: string[];
     joinedAt: Date;
     name: string;
-    profilePicture: string;
+    picture: string;
 };
 
 export const userGroupSchema = z.object({
@@ -128,6 +128,7 @@ export const circleSchema = z.object({
     userGroups: z.array(userGroupSchema).default([]).optional(),
     pages: z.array(pageSchema).default([]).optional(),
     accessRules: accessRulesSchema.optional(),
+    members: z.number().default(0).optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;

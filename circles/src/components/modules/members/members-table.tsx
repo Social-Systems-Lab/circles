@@ -27,6 +27,8 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import Image from "next/image";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface MemberTableProps {
     members: MemberDisplay[];
@@ -45,6 +47,25 @@ export const multiSelectFilter: FilterFn<MemberDisplay> = (
     console.log("User groups: ", userGroups);
     console.log("User groups includes", filterValue, userGroups?.includes(filterValue));
     return userGroups?.includes(filterValue);
+};
+
+export const UserPicture = ({ name, picture }: { name: string; picture: string }) => {
+    var getInitials = () => {
+        var names = name.split(" "),
+            initials = names[0].substring(0, 1).toUpperCase();
+
+        if (names.length > 1) {
+            initials += names[names.length - 1].substring(0, 1).toUpperCase();
+        }
+        return initials;
+    };
+
+    return (
+        <Avatar>
+            <AvatarImage src={picture} />
+            <AvatarFallback>{getInitials()}</AvatarFallback>
+        </Avatar>
+    );
 };
 
 const SortIcon = ({ sortDir }: { sortDir: string | boolean }) => {
@@ -77,7 +98,17 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
                         </Button>
                     );
                 },
-                cell: (info) => info.getValue(),
+                cell: (info) => {
+                    console.log(info);
+                    let picture = info.row.original.picture;
+                    let memberName = info.getValue() as string;
+                    return (
+                        <div className="flex items-center gap-2">
+                            <UserPicture name={memberName} picture={picture} />
+                            <span className="ml-2 font-bold">{memberName}</span>
+                        </div>
+                    );
+                },
             },
             {
                 accessorKey: "joinedAt",
@@ -118,6 +149,11 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
         state: {
             sorting,
             columnFilters,
+            columnVisibility: {
+                name: true,
+                joinedAt: true,
+                userGroups: false,
+            },
         },
     });
 
@@ -167,7 +203,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
                                     </TableHead>
                                 );
                             })}
-                            {canEdit && <TableHead></TableHead>}
+                            {canEdit && <TableHead className="w-[40px]"></TableHead>}
                         </TableRow>
                     ))}
                 </TableHeader>
@@ -181,7 +217,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
                                     </TableCell>
                                 ))}
                                 {canEdit && (
-                                    <TableCell>
+                                    <TableCell className="w-[40px]">
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
                                                 <Button variant="ghost" className="h-8 w-8 p-0">
