@@ -18,7 +18,15 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Circle, MemberDisplay } from "@/models/models";
 import { Button } from "@/components/ui/button";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, MoreHorizontal } from "lucide-react";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface MemberTableProps {
     members: MemberDisplay[];
@@ -53,6 +61,9 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
     const data = React.useMemo(() => members, [members]);
     const [sorting, setSorting] = React.useState<SortingState>([]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+
+    // if user is allowed to edit settings show edit button
+    const canEdit = true;
 
     const columns = React.useMemo<ColumnDef<MemberDisplay>[]>(
         () => [
@@ -156,6 +167,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
                                     </TableHead>
                                 );
                             })}
+                            {canEdit && <TableHead></TableHead>}
                         </TableRow>
                     ))}
                 </TableHeader>
@@ -168,11 +180,29 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
                                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                     </TableCell>
                                 ))}
+                                {canEdit && (
+                                    <TableCell>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" className="h-8 w-8 p-0">
+                                                    <span className="sr-only">Open menu</span>
+                                                    <MoreHorizontal className="h-4 w-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem>Edit User Groups</DropdownMenuItem>
+                                                <DropdownMenuItem>Remove User</DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </TableCell>
+                                )}
                             </TableRow>
                         ))
                     ) : (
                         <TableRow>
-                            <TableCell colSpan={columns.length} className="h-24 text-center">
+                            <TableCell colSpan={columns.length + (canEdit ? 1 : 0)} className="h-24 text-center">
                                 No members.
                             </TableCell>
                         </TableRow>
