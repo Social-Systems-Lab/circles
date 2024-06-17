@@ -1,6 +1,6 @@
 import { Page, UserGroup, Module, Feature } from "@/models/models";
 
-export const features: { [key: string]: Feature } = {
+export const features = {
     settings_edit: {
         name: "Edit Settings",
         handle: "settings_edit",
@@ -83,7 +83,7 @@ export const pageFeaturePrefix = "__page_";
 export const getDefaultAccessRules = () => {
     let accessRules: Record<string, string[]> = {};
     for (let feature in features) {
-        accessRules[feature] = features[feature].defaultUserGroups ?? [];
+        accessRules[feature] = (features as { [key: string]: Feature })[feature].defaultUserGroups ?? [];
     }
     // add default access rules for default pages
     for (let page of defaultPages) {

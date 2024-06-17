@@ -1,6 +1,6 @@
 "use client";
 
-import React, { forwardRef, useState } from "react";
+import React, { forwardRef, useState, useTransition } from "react";
 import {
     ColumnDef,
     ColumnFiltersState,
@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Circle, Feature, MemberDisplay, User, UserPrivate } from "@/models/models";
 import { Button } from "@/components/ui/button";
-import { ArrowDown, ArrowUp, ArrowUpDown, MoreHorizontal } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Loader2, MoreHorizontal } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -32,7 +32,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { features, maxAccessLevel } from "@/lib/data/constants";
-import { hasHigherAccess, isAuthorized } from "@/lib/auth/utils";
+import { hasHigherAccess, isAuthorized } from "@/lib/auth/client-auth";
 import {
     Dialog,
     DialogClose,
@@ -42,6 +42,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { removeMemberAction } from "./actions";
+import { useToast } from "@/components/ui/use-toast";
 
 interface MemberTableProps {
     members: MemberDisplay[];
@@ -92,13 +94,17 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
     const [sorting, setSorting] = React.useState<SortingState>([]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
     const [user, setUser] = useAtom(userAtom);
-    const [dialogOpen, setDialogOpen] = useState<boolean>(false);
+    const [removeMemberDialogOpen, setRemoveMemberDialogOpen] = useState<boolean>(false);
+    const [editUserGroupsDialogOpen, setEditUserGroupsDialogOpen] = useState<boolean>(false);
     const [selectedMember, setSelectedMember] = useState<MemberDisplay | null>(null);
+    const [isPending, startTransition] = useTransition();
 
     // if user is allowed to edit settings show edit button
     const canEditUserGroups = isAuthorized(user, circle, features.edit_lower_user_groups);
     const canRemoveUser = isAuthorized(user, circle, features.remove_lower_members);
     const canEdit = canEditUserGroups || canRemoveUser;
+
+    const { toast } = useToast();
 
     const columns = React.useMemo<ColumnDef<MemberDisplay>[]>(
         () => [
@@ -168,6 +174,32 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
             },
         },
     });
+
+    const onConfirmRemoveMember = async () => {
+        if (!selectedMember) {
+            return;
+        }
+
+        // call server action to remove user from circle
+        let result = await removeMemberAction(selectedMember, circle);
+        if (result.success) {
+            toast({
+                icon: "success",
+                title: "Member Removed",
+                description: `${selectedMember.name} has been removed from the circle`,
+            });
+        } else {
+            toast({
+                icon: "error",
+                title: "Error",
+                description: result.message,
+                variant: "destructive",
+            });
+        }
+
+        setRemoveMemberDialogOpen(false);
+        console.log(result);
+    };
 
     return (
         <div className="flex flex-1 flex-col">
@@ -245,7 +277,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
                                                     <DropdownMenuItem
                                                         onClick={() => {
                                                             setSelectedMember(member);
-                                                            setDialogOpen(true);
+                                                            setEditUserGroupsDialogOpen(true);
                                                         }}
                                                     >
                                                         Edit User Groups
@@ -253,7 +285,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
                                                     <DropdownMenuItem
                                                         onClick={() => {
                                                             setSelectedMember(member);
-                                                            setDialogOpen(true);
+                                                            setRemoveMemberDialogOpen(true);
                                                         }}
                                                     >
                                                         Remove User
@@ -274,7 +306,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
                     )}
                 </TableBody>
             </Table>
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <Dialog open={removeMemberDialogOpen} onOpenChange={setRemoveMemberDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Are you sure?</DialogTitle>
@@ -286,7 +318,39 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
                         <DialogClose asChild>
                             <Button variant="outline">Cancel</Button>
                         </DialogClose>
-                        <Button variant="destructive">Remove</Button>
+                        <Button variant="destructive" onClick={onConfirmRemoveMember} disabled={isPending}>
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Removing...
+                                </>
+                            ) : (
+                                <>Remove</>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            <Dialog open={editUserGroupsDialogOpen} onOpenChange={setEditUserGroupsDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Edit User Groups</DialogTitle>
+                        <DialogDescription>Edit user groups.</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button disabled={isPending}>
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Saving...
+                                </>
+                            ) : (
+                                <>Save</>
+                            )}
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

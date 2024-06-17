@@ -52,3 +52,15 @@ export const addMember = async (userDid: string, circleId: string, userGroups: s
 
     return member;
 };
+
+export const removeMember = async (userDid: string, circleId: string): Promise<boolean> => {
+    let result = await Members.deleteOne({ userDid: userDid, circleId: circleId });
+    if (result.deletedCount === 0) {
+        throw new Error("User is not a member of this circle");
+    }
+
+    // decrease member count in circle
+    await Circles.updateOne({ _id: new ObjectId(circleId) }, { $inc: { members: -1 } });
+
+    return true;
+};

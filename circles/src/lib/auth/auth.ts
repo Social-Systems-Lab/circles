@@ -3,8 +3,10 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import { Users } from "../data/db";
-import { AccountType, User } from "@/models/models";
+import { Circles, Members, Users } from "../data/db";
+import { AccountType, Feature, User } from "@/models/models";
+import { ObjectId } from "mongodb";
+import { maxAccessLevel } from "../data/constants";
 
 const SALT_FILENAME = "salt.bin";
 const IV_FILENAME = "iv.bin";
@@ -112,4 +114,44 @@ export const authenticateUser = (did: string, password: string): boolean => {
     }
 
     return true;
+};
+
+export const getMemberAccessLevel = async (userDid: string, circleId: string): Promise<number> => {
+    let user = await Users.findOne({ did: userDid });
+    if (!user) return maxAccessLevel;
+
+    let membership = await Members.findOne({ userDid: userDid, circleId: circleId });
+    if (!membership) return maxAccessLevel;
+
+    let userGroups = membership.userGroups;
+    if (!userGroups || userGroups.length <= 0) return maxAccessLevel;
+
+    let circle = await Circles.findOne({ _id: new ObjectId(circleId) });
+    if (!circle) return maxAccessLevel;
+
+    return Math.min(
+        ...userGroups?.map((x) => circle?.userGroups?.find((grp) => grp.handle === x)?.accessLevel ?? maxAccessLevel),
+    );
+};
+
+// returns true if user has higher access than the member (lower access level = higher access)
+export const hasHigherAccess = async (userDid: string, memberDid: string, circleId: string): Promise<boolean> => {
+    const userAccessLevel = await getMemberAccessLevel(userDid, circleId);
+    const memberAccessLevel = await getMemberAccessLevel(memberDid, circleId);
+    return userAccessLevel < memberAccessLevel;
+};
+
+export const isAuthorized = async (userDid: string, circleId: string, feature: Feature): Promise<boolean> => {
+    // lookup access rules in circle for the features
+    let circle = await Circles.findOne({ _id: new ObjectId(circleId) });
+    if (!circle) return false;
+
+    let allowedUserGroups = circle?.accessRules?.[feature.handle];
+    if (!allowedUserGroups) return false;
+    if (allowedUserGroups.includes("everyone")) return true;
+
+    // lookup user membership in circle
+    let membership = await Members.findOne({ userDid: userDid, circleId: circleId });
+    if (!membership) return false;
+    return allowedUserGroups.some((group) => membership?.userGroups?.includes(group));
 };

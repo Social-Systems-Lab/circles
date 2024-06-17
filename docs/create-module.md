@@ -209,6 +209,10 @@ The component gets the members from the database and displays their names on the
 
 
 
+### Access Rules and Features
+
+Describe adding new features and checking if user is authorized to use the feature both client-side and server-side.
+
 
 
 
