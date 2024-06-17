@@ -180,25 +180,26 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
             return;
         }
 
-        // call server action to remove user from circle
-        let result = await removeMemberAction(selectedMember, circle);
-        if (result.success) {
-            toast({
-                icon: "success",
-                title: "Member Removed",
-                description: `${selectedMember.name} has been removed from the circle`,
-            });
-        } else {
-            toast({
-                icon: "error",
-                title: "Error",
-                description: result.message,
-                variant: "destructive",
-            });
-        }
+        startTransition(async () => {
+            // call server action to remove user from circle
+            let result = await removeMemberAction(selectedMember, circle);
+            if (result.success) {
+                toast({
+                    icon: "success",
+                    title: "Member Removed",
+                    description: `${selectedMember.name} has been removed from the circle`,
+                });
+            } else {
+                toast({
+                    icon: "error",
+                    title: "Error",
+                    description: result.message,
+                    variant: "destructive",
+                });
+            }
 
-        setRemoveMemberDialogOpen(false);
-        console.log(result);
+            setRemoveMemberDialogOpen(false);
+        });
     };
 
     return (
