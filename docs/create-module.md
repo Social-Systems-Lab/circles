@@ -181,10 +181,11 @@ The server component is the component we created in the first step. Since this i
 "use server";
 
 import { ModulePageProps } from "../dynamic-page";
+import { getMembers } from "@/lib/data/member";
 
 export default async function NewModule({ circle, page, subpage, isDefaultCircle }: ModulePageProps) {
     
-    // get members from the database
+    // get circle members from the database
     let members = getMembers(circle);
     
     return (

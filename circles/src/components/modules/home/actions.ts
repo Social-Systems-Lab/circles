@@ -24,7 +24,7 @@ export const joinCircle = async (circle: Circle): Promise<JoinCircleResponse> =>
         }
 
         // add member to circle
-        await addMember(userDid, circle._id ?? "", ["member"]);
+        await addMember(userDid, circle._id ?? "", ["members"]);
 
         return { success: true };
     } catch (error) {
