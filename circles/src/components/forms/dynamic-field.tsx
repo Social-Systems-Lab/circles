@@ -11,7 +11,15 @@ import {
     useFormContext,
     useWatch,
 } from "react-hook-form";
-import { Feature, FormField as FormFieldType, Page, UserGroup } from "@/models/models";
+import {
+    Circle,
+    Feature,
+    FormField as FormFieldType,
+    MemberDisplay,
+    Page,
+    UserGroup,
+    UserPrivate,
+} from "@/models/models";
 import { Textarea } from "../ui/textarea";
 import Image from "next/image";
 import { Label } from "../ui/label";
@@ -21,8 +29,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { cn } from "@/lib/utils";
 import { FaLock } from "react-icons/fa6";
 import { FaArrowCircleUp, FaArrowCircleDown, FaCheck } from "react-icons/fa";
-import { features as featuresList, pageFeaturePrefix } from "@/lib/data/constants";
+import { features, features as featuresList, pageFeaturePrefix } from "@/lib/data/constants";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { getMemberAccessLevel, hasHigherAccess, isAuthorized } from "@/lib/auth/client-auth";
 
 type RenderFieldProps = {
     field: FormFieldType;
@@ -528,6 +537,103 @@ export const DynamicAccessRulesField: React.FC<RenderFieldProps> = ({ field, for
             <DynamicAccessRulesGrid features={features} pages={pages} userGroups={userGroups} control={control} />
             <FormMessage />
         </FormItem>
+    );
+};
+
+type MemberUserGroupsGridProps = {
+    currentUser: UserPrivate | undefined;
+    members: MemberDisplay[];
+    control: any;
+    circle: Circle;
+};
+
+export const MemberUserGroupsGrid: React.FC<MemberUserGroupsGridProps> = ({
+    currentUser,
+    members,
+    control,
+    circle,
+}) => {
+    const { setValue, getValues } = useFormContext();
+    const memberUserGroups = useWatch({ control, name: "memberUserGroups" });
+
+    const currentUserAccessLevel = getMemberAccessLevel(currentUser, circle);
+    const canEditUserGroups =
+        isAuthorized(currentUser, circle, features.edit_lower_user_groups) ||
+        isAuthorized(currentUser, circle, features.edit_same_level_user_groups);
+    const canEditSameLevelUserGroups = isAuthorized(currentUser, circle, features.edit_same_level_user_groups);
+
+    useEffect(() => {
+        const initialMemberUserGroups = members.reduce((acc: { [key: string]: string[] }, member) => {
+            acc[member.userDid] = member.userGroups ?? [];
+            return acc;
+        }, {});
+        setValue("memberUserGroups", initialMemberUserGroups);
+    }, [members, setValue]);
+
+    const handleCellClick = (memberDid: string, userGroup: string) => {
+        const currentMemberUserGroups = getValues("memberUserGroups");
+        const userGroupsForMember = currentMemberUserGroups?.[memberDid] || [];
+        const updatedUserGroupsForMember = userGroupsForMember.includes(userGroup)
+            ? userGroupsForMember.filter((ug: string) => ug !== userGroup)
+            : [...userGroupsForMember, userGroup];
+        setValue(`memberUserGroups["${memberDid}"]`, updatedUserGroupsForMember);
+    };
+
+    if (!currentUser) {
+        return null;
+    }
+
+    return (
+        <div>
+            <table className="w-full table-fixed border-collapse">
+                <thead>
+                    <tr>
+                        <th className="w-1/4"></th>
+                        {circle.userGroups?.map((userGroup, index) => (
+                            <th key={index} className={cn("relative h-32 overflow-visible font-normal")}>
+                                <div className="absolute bottom-[5px] left-1/2 origin-bottom-left -rotate-45 transform whitespace-nowrap">
+                                    {userGroup.name}
+                                </div>
+                            </th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody>
+                    {members.map((member, rowIndex) => (
+                        <tr key={rowIndex} className="border-t">
+                            <td className="border-r p-2">{member.name}</td>
+                            {circle.userGroups?.map((userGroup, colIndex) => {
+                                const canEdit =
+                                    canEditUserGroups &&
+                                    (canEditSameLevelUserGroups
+                                        ? currentUserAccessLevel <= userGroup.accessLevel
+                                        : currentUserAccessLevel < userGroup.accessLevel);
+                                return (
+                                    <td
+                                        key={colIndex}
+                                        className={cn("cursor-pointer p-2 text-center", {
+                                            "bg-[#baf9c0] text-[#254d19]":
+                                                canEdit &&
+                                                memberUserGroups?.[member.userDid]?.includes(userGroup.handle),
+                                            "bg-gray-200 text-gray-500": !canEdit,
+                                        })}
+                                        onClick={() => canEdit && handleCellClick(member.userDid, userGroup.handle)}
+                                    >
+                                        <div className="flex items-center justify-center">
+                                            {memberUserGroups?.[member.userDid]?.includes(userGroup.handle) ? (
+                                                <FaCheck />
+                                            ) : (
+                                                ""
+                                            )}
+                                        </div>
+                                    </td>
+                                );
+                            })}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
     );
 };
 

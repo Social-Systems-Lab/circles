@@ -1,6 +1,6 @@
 // used by tailwindcss to merge classnames, shadcn/ui CLI assumes the file is here
 
-import { Page } from "@/models/models";
+import { Circle, Page } from "@/models/models";
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { pageFeaturePrefix } from "./data/constants";
@@ -109,4 +109,53 @@ export function safeModifyAccessRules(
     }
 
     return updatedRules;
+}
+
+export function safeModifyMemberUserGroups(
+    existingUserGroups: string[],
+    submittedUserGroups: string[],
+    circle: Circle,
+    accessLevel: number,
+    canEditSameLevel: boolean,
+): string[] {
+    let circleUserGroups = circle.userGroups ?? [];
+
+    const userGroupsMap = new Map(circleUserGroups.map((group) => [group.handle, group.accessLevel]));
+
+    // create a set of user groups that the user has permission to modify
+    const permissibleGroups = new Set(
+        circleUserGroups
+            .filter((group) => {
+                if (canEditSameLevel) {
+                    return userGroupsMap.get(group.handle) ?? 0 >= accessLevel;
+                } else {
+                    return userGroupsMap.get(group.handle) ?? 0 > accessLevel;
+                }
+            })
+            .map((group) => group.handle),
+    );
+
+    // initialize the resulting user groups with the existing ones
+    const resultingUserGroups = new Set(existingUserGroups);
+
+    // add or remove user groups based on the submitted groups and permissible groups
+    for (const group of submittedUserGroups) {
+        if (permissibleGroups.has(group)) {
+            resultingUserGroups.add(group);
+        }
+    }
+
+    for (const group of existingUserGroups) {
+        if (permissibleGroups.has(group) && !submittedUserGroups.includes(group)) {
+            resultingUserGroups.delete(group);
+        }
+    }
+
+    // convert the resulting user groups to an array
+    const resultingUserGroupsArray = Array.from(resultingUserGroups);
+
+    // sort the resulting user groups by access level
+    resultingUserGroupsArray.sort((a, b) => (userGroupsMap.get(a) ?? 0) - (userGroupsMap.get(b) ?? 0));
+
+    return resultingUserGroupsArray;
 }

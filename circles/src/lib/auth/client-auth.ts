@@ -18,10 +18,22 @@ export const getMemberAccessLevel = (user: UserPrivate | MemberDisplay | undefin
 };
 
 // returns true if user has higher access than the member (lower access level = higher access)
-export const hasHigherAccess = (user: UserPrivate | undefined, member: MemberDisplay, circle: Circle): boolean => {
+export const hasHigherAccess = (
+    user: UserPrivate | undefined,
+    member: MemberDisplay | null,
+    circle: Circle,
+    acceptSameLevel: boolean,
+): boolean => {
+    if (!member) return false;
+
     const userAccessLevel = getMemberAccessLevel(user, circle);
     const memberAccessLevel = getMemberAccessLevel(member, circle);
-    return userAccessLevel < memberAccessLevel;
+
+    if (acceptSameLevel) {
+        return userAccessLevel <= memberAccessLevel;
+    } else {
+        return userAccessLevel < memberAccessLevel;
+    }
 };
 
 export const isAuthorized = (user: UserPrivate | undefined, circle: Circle, feature: Feature): boolean => {

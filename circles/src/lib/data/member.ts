@@ -2,6 +2,10 @@ import { Member, MemberDisplay } from "@/models/models";
 import { Circles, Members } from "./db";
 import { ObjectId } from "mongodb";
 
+export const getMember = async (userDid: string, circleId: string): Promise<Member | null> => {
+    return await Members.findOne({ userDid: userDid, circleId: circleId });
+};
+
 export const getMembers = async (circleId?: string): Promise<MemberDisplay[]> => {
     if (!circleId) return [];
 
@@ -63,4 +67,22 @@ export const removeMember = async (userDid: string, circleId: string): Promise<b
     await Circles.updateOne({ _id: new ObjectId(circleId) }, { $inc: { members: -1 } });
 
     return true;
+};
+
+export const updateMemberUserGroups = async (
+    userDid: string,
+    circleId: string,
+    newGroups: string[],
+): Promise<Member> => {
+    let existingMember = await Members.findOne({ userDid: userDid, circleId: circleId });
+    if (!existingMember) {
+        throw new Error("Member not found");
+    }
+
+    let updatedMember: Member = {
+        ...existingMember,
+        userGroups: newGroups,
+    };
+    await Members.updateOne({ userDid: userDid, circleId: circleId }, { $set: updatedMember });
+    return updatedMember;
 };

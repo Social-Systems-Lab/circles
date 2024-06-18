@@ -134,11 +134,21 @@ export const getMemberAccessLevel = async (userDid: string, circleId: string): P
     );
 };
 
-// returns true if user has higher access than the member (lower access level = higher access)
-export const hasHigherAccess = async (userDid: string, memberDid: string, circleId: string): Promise<boolean> => {
+// returns true if user has higher access than the member (lower access level number = higher access)
+export const hasHigherAccess = async (
+    userDid: string,
+    memberDid: string,
+    circleId: string,
+    acceptSameLevel: boolean,
+): Promise<boolean> => {
     const userAccessLevel = await getMemberAccessLevel(userDid, circleId);
     const memberAccessLevel = await getMemberAccessLevel(memberDid, circleId);
-    return userAccessLevel < memberAccessLevel;
+
+    if (acceptSameLevel) {
+        return userAccessLevel <= memberAccessLevel;
+    } else {
+        return userAccessLevel < memberAccessLevel;
+    }
 };
 
 export const isAuthorized = async (userDid: string, circleId: string, feature: Feature): Promise<boolean> => {

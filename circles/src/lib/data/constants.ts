@@ -7,11 +7,23 @@ export const features = {
         description: "Edit circle settings",
         defaultUserGroups: ["admins"],
     },
+    edit_same_level_user_groups: {
+        name: "Edit Same Level User Groups",
+        handle: "edit_same_level_user_groups",
+        description: "Edit circle user groups of same level members",
+        defaultUserGroups: ["admins"],
+    },
     edit_lower_user_groups: {
         name: "Edit Lower Member User Groups",
         handle: "edit_lower_user_groups",
         description: "Edit circle user groups of lower members",
         defaultUserGroups: ["admins", "moderators"],
+    },
+    remove_same_level_members: {
+        name: "Remove Same Level Members",
+        handle: "remove_same_level_members",
+        description: "Remove same level members from the circle",
+        defaultUserGroups: ["admins"],
     },
     remove_lower_members: {
         name: "Remove Lower Members",
