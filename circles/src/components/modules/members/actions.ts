@@ -4,7 +4,7 @@ import { getMemberAccessLevel, hasHigherAccess, isAuthorized } from "@/lib/auth/
 import { verifyUserToken } from "@/lib/auth/jwt";
 import { getCircleById, getCirclePath } from "@/lib/data/circle";
 import { features } from "@/lib/data/constants";
-import { getMember, removeMember, updateMemberUserGroups } from "@/lib/data/member";
+import { countAdmins, getMember, removeMember, updateMemberUserGroups } from "@/lib/data/member";
 import { safeModifyAccessRules, safeModifyMemberUserGroups } from "@/lib/utils";
 import { Circle, MemberDisplay, Page } from "@/models/models";
 import { revalidatePath } from "next/cache";
@@ -44,7 +44,16 @@ export const removeMemberAction = async (
             return { success: false, message: "You don't have high enough access to remove this member" };
         }
 
-        // add member to circle
+        // make sure last admin isn't removed
+        const isAdmin = member.userGroups?.includes("admins");
+        if (isAdmin) {
+            const adminCount = await countAdmins(circle._id ?? "");
+            if (adminCount <= 1) {
+                return { success: false, message: "Cannot remove the last admin." };
+            }
+        }
+
+        // remove member from circle
         await removeMember(member.userDid, circle._id ?? "");
 
         // clear page cache so page update
@@ -100,6 +109,15 @@ export const updateUserGroupsAction = async (
         const existingMember = await getMember(member.userDid, circle._id ?? "");
         if (!existingMember) {
             throw new Error("Member not found");
+        }
+
+        // make sure last admin isn't removed
+        const isAdmin = existingMember.userGroups?.includes("admins");
+        if (isAdmin && !newGroups.includes("admins")) {
+            const adminCount = await countAdmins(circle._id ?? "");
+            if (adminCount <= 1) {
+                return { success: false, message: "Cannot remove the last admin." };
+            }
         }
 
         const existingCircle = await getCircleById(circle?._id ?? "");

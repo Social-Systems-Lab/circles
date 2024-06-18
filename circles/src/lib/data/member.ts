@@ -86,3 +86,7 @@ export const updateMemberUserGroups = async (
     await Members.updateOne({ userDid: userDid, circleId: circleId }, { $set: updatedMember });
     return updatedMember;
 };
+
+export const countAdmins = async (circleId: string): Promise<number> => {
+    return await Members.countDocuments({ circleId: circleId, userGroups: "admins" });
+};
