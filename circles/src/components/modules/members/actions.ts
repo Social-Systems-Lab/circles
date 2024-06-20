@@ -1,6 +1,6 @@
 "use server";
 
-import { getMemberAccessLevel, hasHigherAccess, isAuthorized } from "@/lib/auth/auth";
+import { getAuthenticatedUserDid, getMemberAccessLevel, hasHigherAccess, isAuthorized } from "@/lib/auth/auth";
 import { verifyUserToken } from "@/lib/auth/jwt";
 import { getCircleById, getCirclePath } from "@/lib/data/circle";
 import { features } from "@/lib/data/constants";
@@ -21,16 +21,7 @@ export const removeMemberAction = async (
     page: Page,
 ): Promise<RemoveMemberResponse> => {
     try {
-        const token = cookies().get("token")?.value;
-        if (!token) {
-            return { success: false, message: "Authentication failed" };
-        }
-
-        let payload = await verifyUserToken(token);
-        let userDid = payload.userDid as string;
-        if (!userDid) {
-            return { success: false, message: "Authentication failed" };
-        }
+        const userDid = await getAuthenticatedUserDid();
 
         // confirm the user is authorized to remove member
         let authorized = await isAuthorized(userDid, circle._id ?? "", features.remove_lower_members);
@@ -78,16 +69,7 @@ export const updateUserGroupsAction = async (
     page: Page,
 ): Promise<UpdateUserGroupsResponse> => {
     try {
-        const token = cookies().get("token")?.value;
-        if (!token) {
-            return { success: false, message: "Authentication failed" };
-        }
-
-        let payload = await verifyUserToken(token);
-        let userDid = payload.userDid as string;
-        if (!userDid) {
-            return { success: false, message: "Authentication failed" };
-        }
+        const userDid = await getAuthenticatedUserDid();
 
         // confirm the user is authorized to edit user groups
         let authorized = await isAuthorized(userDid, circle._id ?? "", features.edit_lower_user_groups);
