@@ -7,6 +7,8 @@ import { Circles, Members, Users } from "../data/db";
 import { AccountType, Feature, User } from "@/models/models";
 import { ObjectId } from "mongodb";
 import { maxAccessLevel } from "../data/constants";
+import { cookies } from "next/headers";
+import { verifyUserToken } from "./jwt";
 
 const SALT_FILENAME = "salt.bin";
 const IV_FILENAME = "iv.bin";
@@ -151,6 +153,23 @@ export const hasHigherAccess = async (
     }
 };
 
+// gets authenticated user DID or throws an error if user is not authenticated
+export const getAuthenticatedUserDid = async (): Promise<string> => {
+    const token = cookies().get("token")?.value;
+    if (!token) {
+        throw new AuthenticationError("Authentication failed");
+    }
+
+    let payload = await verifyUserToken(token);
+    let userDid = payload.userDid as string;
+    if (!userDid) {
+        throw new AuthenticationError("Authentication failed");
+    }
+
+    return userDid;
+};
+
+// checks if user is authorized to use a given feature
 export const isAuthorized = async (userDid: string, circleId: string, feature: Feature): Promise<boolean> => {
     // lookup access rules in circle for the features
     let circle = await Circles.findOne({ _id: new ObjectId(circleId) });
