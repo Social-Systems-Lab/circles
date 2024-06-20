@@ -10,13 +10,13 @@ Before you begin, ensure that you have the following prerequisites installed (us
 
 - **Bun**: A fast JavaScript runtime. Download and install Bun from 
 
-  [here](https://www.docker.com/products/docker-desktop/).
+  [here](https://bun.sh/).
 
   - To check if Bun was installed successfully, run **`bun -v`** in your terminal.
 
 - **Docker**: This is required for containerization. Download and install Docker from 
 
-  [here](https://docs.docker.com/compose/install/).
+  [here](https://www.docker.com/products/docker-desktop/).
 
   - To check if Docker was installed successfully, run **`docker --version`** in your terminal.
 
