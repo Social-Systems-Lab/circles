@@ -1,6 +1,10 @@
-# Server setup (Raspberry Pi 5)
+# Server setup
 
-## Update your system
+## Environment Recommendation
+
+For the production environment, it is recommended to use a stable and secure Linux distribution such as Ubuntu LTS or Debian. Ensure the server is regularly updated and secured.
+
+## Update your system (optional)
 
 ```bash
 sudo apt-get update
