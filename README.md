@@ -3,14 +3,19 @@
 Circles is a social media platform designed for participatory organizations and individuals to set up on their own servers. Often described as "Wordpress for communities," Circles empowers users to create and govern their own spaces, enabling active participation, content creation, and interaction without reliance on big tech.
 
 ## Key Features
-Personal Cloud: Complete ownership and control over data stored on personal hardware, ensuring privacy and eliminating subscription fees.
-Decentralized Social Media: Full control over content, audience, and interactions without intermediaries.
-Enhanced Messaging: End-to-end encryption for private communication, with sophisticated spam filters and organized inboxes.
-Crowd-Sourced Mapping: Access a reliable, user-generated world map with community insights.
-Integrated Knowledge and Data Management: Comprehensive suite for organizing and managing data and knowledge.
-Semantic Network: Connect with the broader network of communities for matchmaking, search and recommendations.
-Unified User Profile: A cohesive identity across all communities and interactions.
-Personalized Recommendation Engine: Tailored content feeds powered by semantic network.
+**Personal Cloud:** Complete ownership and control over data stored on personal hardware, ensuring privacy and eliminating subscription fees.
+
+**Decentralized Social Media:** Full control over content, audience, and interactions without intermediaries.
+
+**Enhanced Messaging:** End-to-end encryption for private communication, with sophisticated spam filters and organized inboxes.
+
+**Crowd-Sourced Mapping:** Access a reliable, user-generated world map with community insights.
+
+**Semantic Network:** Connect with the broader network of communities for matchmaking, search and recommendations.
+
+**Unified User Profile:** A cohesive identity across all communities and interactions.
+
+**Personalized Recommendation Engine:** Tailored content feeds powered by semantic network.
 
 ## Principles
 User Autonomy: Complete control over data, privacy, and content curation.
