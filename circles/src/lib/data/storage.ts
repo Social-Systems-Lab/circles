@@ -6,11 +6,11 @@ import { APP_DIR } from "../auth/auth";
 import { Client as MinioClient } from "minio";
 
 const minioClient = new MinioClient({
-    endPoint: "127.0.0.1", // TODO get from env
-    port: 9000,
+    endPoint: process.env.MINIO_HOST || "127.0.0.1",
+    port: parseInt(process.env.MINIO_PORT || "9000"),
     useSSL: false,
-    accessKey: "minioadmin", // TODO get from env
-    secretKey: "minioadmin", // TODO get from env
+    accessKey: process.env.MINIO_ROOT_USERNAME || "minioadmin",
+    secretKey: process.env.MINIO_ROOT_PASSWORD || "minioadmin",
 });
 
 const bucketName = "circles";
@@ -82,7 +82,7 @@ export const saveFile = async (
     let fileInfo: FileInfo = {
         originalName: file.name,
         fileName: fileName,
-        url: "http://127.0.0.1/storage/" + objectName,
+        url: `http://${process.env.MINIO_HOST || "127.0.0.1"}/storage/` + objectName,
     };
     return fileInfo;
 };

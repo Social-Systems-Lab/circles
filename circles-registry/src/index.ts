@@ -19,4 +19,7 @@ app.get("/", (c) => c.text("Circles Central Registry Service"));
 
 connectToDatabase().catch(console.error);
 
-export default app;
+export default {
+    port: 3001,
+    fetch: app.fetch,
+};

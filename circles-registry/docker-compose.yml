@@ -3,7 +3,7 @@ services:
     app:
         build: .
         ports:
-            - "3000:3000"
+            - "3001:3001"
         environment:
             - MONGODB_URI=mongodb://mongo:27017/circles_registry
             - JWT_SECRET=your_jwt_secret_here
