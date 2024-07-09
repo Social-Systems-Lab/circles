@@ -8,7 +8,7 @@ export const auth = async (c: Context, next: Next) => {
     }
 
     try {
-        const payload = await verify(token, process.env.JWT_SECRET!);
+        const payload = await verify(token, process.env.REGISTRY_JWT_SECRET!);
         c.set("user", payload);
         await next();
     } catch (error) {

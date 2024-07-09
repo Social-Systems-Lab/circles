@@ -18,6 +18,12 @@ Run the rest of the containers in docker:
 docker-compose up -d --scale circles=0 --scale watchtower=0
 ```
 
+Run the circles registry service by navigating to the <project-root>/circles/circles-registry directory and running:
+
+```bash
+docker-compose up -d
+```
+
 Open [http://localhost](http://localhost) with your browser to see the result.
 
 ## Run on Docker
