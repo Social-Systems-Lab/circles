@@ -3,7 +3,6 @@ import { cors } from "hono/cors";
 import { prettyJSON } from "hono/pretty-json";
 import servers from "./routes/servers";
 import users from "./routes/users";
-import { connectToDatabase } from "./data/db";
 
 const app = new Hono();
 
@@ -14,8 +13,6 @@ app.route("/servers", servers);
 app.route("/users", users);
 
 app.get("/", (c) => c.text("Circles Central Registry Service"));
-
-connectToDatabase().catch(console.error);
 
 export default {
     port: 3001,

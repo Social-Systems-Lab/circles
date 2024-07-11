@@ -9,14 +9,10 @@ export const serverSettingsFormSchema: FormSchema = {
     },
     fields: [
         {
-            name: "_id",
-            type: "hidden",
-            label: "ID",
-        },
-        {
             name: "defaultCircleId",
             type: "hidden",
             label: "Default Circle ID",
+            required: false,
         },
         {
             name: "name",
@@ -29,13 +25,8 @@ export const serverSettingsFormSchema: FormSchema = {
             name: "description",
             label: "Description",
             type: "textarea",
+            required: false,
             description: "Description of this Circles instance",
-        },
-        {
-            name: "did",
-            label: "DID",
-            type: "hidden",
-            description: "DID of this Circles instance",
         },
         {
             name: "url",
@@ -48,13 +39,8 @@ export const serverSettingsFormSchema: FormSchema = {
             name: "registryUrl",
             label: "Circles Registry URL",
             type: "registry-info",
+            required: false,
             description: "The URL of the Circles Registry service",
-        },
-        {
-            name: "activeRegistryInfo",
-            label: "Active Registry Info",
-            type: "hidden",
-            description: "Holds information about active server registry",
         },
         {
             name: "jwtSecret",

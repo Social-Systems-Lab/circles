@@ -132,6 +132,14 @@ export const getServerPublicKey = (): string => {
     return fs.readFileSync(publicKeyPath, "utf8");
 };
 
+export const signRegisterServerChallenge = (challenge: string): string => {
+    const privateKeyPath = path.join(SERVER_DIR, PRIVATE_KEY_FILENAME);
+    const privateKey = fs.readFileSync(privateKeyPath, "utf8");
+    const sign = crypto.createSign("SHA256");
+    sign.update(challenge);
+    return sign.sign(privateKey, "base64");
+};
+
 export class AuthenticationError extends Error {
     constructor(message: string) {
         super(message);

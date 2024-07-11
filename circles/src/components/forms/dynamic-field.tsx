@@ -694,15 +694,6 @@ export const DynamicRegistryInfoField: React.FC<RenderFieldProps> = ({ field, fo
                             </div>
                         )}
                     </div>
-                    {/* 
-                    <Button onClick={handleRegister} disabled={readOnly} className="w-[200px]">
-                        Register Server
-                    </Button>
-                    {activeRegistryInfo && activeRegistryInfo.registryUrl !== registryUrl && (
-                        <div className="text-yellow-500">
-                            Warning: Server is registered with a different registry URL.
-                        </div>
-                    )} */}
                 </div>
             </FormControl>
             <FormMessage />

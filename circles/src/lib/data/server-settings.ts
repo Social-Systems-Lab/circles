@@ -3,7 +3,7 @@ import { Circles, ServerSettingsCollection } from "./db";
 import { Circle, RegistryInfo, ServerSettings } from "@/models/models";
 import { createDefaultCircle } from "./circle";
 import { ObjectId } from "mongodb";
-import { createServerDid } from "../auth/auth";
+import { createServerDid, getServerPublicKey, signRegisterServerChallenge } from "../auth/auth";
 
 const ENV_TO_SETTINGS_MAP: Record<string, keyof ServerSettings> = {
     CIRCLES_INSTANCE_NAME: "name",
@@ -43,16 +43,20 @@ export const getServerSettings = async (): Promise<ServerSettings> => {
         let serverDid = await createServerDid();
         await ServerSettingsCollection.updateOne({}, { $set: { did: serverDid.did } });
         serverSettings.did = serverDid.did;
+    }
 
+    if (serverSettings && serverSettings?.did && !serverSettings?.activeRegistryInfo) {
         // register server with registry if registry URL is set
         if (serverSettings.registryUrl) {
             try {
+                console.log("**** attempting to register server ****");
+                let publicKey = getServerPublicKey();
                 let registryInfo = await registerServer(
                     serverSettings.did,
                     serverSettings.name!,
                     serverSettings.url!,
                     serverSettings.registryUrl,
-                    serverDid.publicKey,
+                    publicKey,
                 );
                 serverSettings.activeRegistryInfo = registryInfo;
 
@@ -80,10 +84,7 @@ export const getServerSettings = async (): Promise<ServerSettings> => {
 
 export const updateServerSettings = async (serverSettings: ServerSettings): Promise<void> => {
     let { _id, ...serverSettingsWithoutId } = serverSettings;
-    let result = await ServerSettingsCollection.updateOne(
-        { _id: new ObjectId(_id) },
-        { $set: serverSettingsWithoutId },
-    );
+    let result = await ServerSettingsCollection.updateOne({}, { $set: serverSettingsWithoutId });
     if (result.matchedCount === 0) {
         throw new Error("Server settings not found");
     }
@@ -107,17 +108,18 @@ export const registerServer = async (
             "Content-Type": "application/json",
         },
         body: JSON.stringify({ did, name, url, publicKey }),
+        next: { revalidate: 10 },
     });
 
+    let registerData = await registerResponse.json();
     if (registerResponse.status !== 200) {
-        console.log("Failed to register server", registerResponse);
+        console.log("Failed to register server", registerData);
         throw new Error("Failed to register server");
     }
 
     // sign the challenge
-    let registerData = await registerResponse.json();
     console.log("Received register response", registerData);
-    const signature = "dummy signature"; //signChallenge(privateKey, registerData.challenge);
+    const signature = signRegisterServerChallenge(registerData.challenge);
 
     // confirm registration
     let confirmResponse = await fetch(`${registryUrl}/servers/register-confirm`, {
@@ -125,15 +127,19 @@ export const registerServer = async (
         headers: {
             "Content-Type": "application/json",
         },
-        body: JSON.stringify({ did, signature }),
+        body: JSON.stringify({ did, challenge: registerData.challenge, signature }),
+        cache: "no-store",
     });
 
+    let confirmResponseObject = await confirmResponse.json();
+
     if (confirmResponse.status !== 200) {
+        console.log("Failed to confirm registration", confirmResponseObject);
         throw new Error("Failed to confirm registration");
     }
 
-    let confirmResponseObject = await confirmResponse.json();
     if (!confirmResponseObject.success) {
+        console.log("Failed to confirm registration", confirmResponseObject);
         throw new Error("Failed to confirm registration");
     }
 

@@ -1,11 +1,12 @@
 import { getAuthenticatedUserDid, getServerPublicKey, isAuthorized } from "@/lib/auth/auth";
-import { FormAction, FormSubmitResponse, ServerSettings } from "../../../../models/models";
+import { FormAction, FormSubmitResponse, Page, ServerSettings } from "../../../../models/models";
 import { features } from "@/lib/data/constants";
 import { getServerSettings, registerServer, updateServerSettings } from "@/lib/data/server-settings";
+import { revalidatePath } from "next/cache";
 
 export const serverSettingsFormAction: FormAction = {
     id: "server-settings-form",
-    onSubmit: async (values: Record<string, any>): Promise<FormSubmitResponse> => {
+    onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
         try {
             //console.log("Saving server settings with values", values);
             let registrySuccess = true;
@@ -20,7 +21,6 @@ export const serverSettingsFormAction: FormAction = {
 
             // update server settings
             let serverSettings: ServerSettings = {
-                _id: values._id,
                 name: values.name,
                 description: values.description,
                 url: values.url,
@@ -60,6 +60,8 @@ export const serverSettingsFormAction: FormAction = {
 
             // save server settings
             await updateServerSettings(serverSettings);
+
+            revalidatePath(`/${page?.handle}/${subpage}`);
 
             return {
                 success: registrySuccess,
