@@ -4,8 +4,8 @@ services:
     app:
         build: .
         environment:
-            - MONGODB_URI=mongodb://mongo:27017/circles_registry
-            - JWT_SECRET=${REGISTRY_JWT_SECRET}
+            - MONGO_INITDB_ROOT_USERNAME=${REGISTRY_MONGO_ROOT_USERNAME}
+            - MONGO_INITDB_ROOT_PASSWORD=${REGISTRY_MONGO_ROOT_PASSWORD}
         depends_on:
             - db
         networks:

@@ -4,7 +4,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { Circles, Members, Users } from "../data/db";
-import { AccountType, Feature, User } from "@/models/models";
+import { AccountType, Feature, RegistryInfo, User } from "@/models/models";
 import { ObjectId } from "mongodb";
 import { maxAccessLevel } from "../data/constants";
 import { cookies } from "next/headers";
@@ -13,10 +13,12 @@ import { verifyUserToken } from "./jwt";
 const SALT_FILENAME = "salt.bin";
 const IV_FILENAME = "iv.bin";
 const PUBLIC_KEY_FILENAME = "publicKey.pem";
-const PRIVATE_KEY_FILENAME = "privateKey.pem.enc";
+const PRIVATE_KEY_FILENAME = "privateKey.pem";
+const ENCRYPTED_PRIVATE_KEY_FILENAME = "privateKey.pem.enc";
 const ENCRYPTION_ALGORITHM = "aes-256-cbc";
 export const APP_DIR = "/circles";
 export const USERS_DIR = path.join(APP_DIR, "users");
+const SERVER_DIR = path.join(APP_DIR, "server");
 
 export const createUser = async (
     name: string,
@@ -78,12 +80,56 @@ export const createUser = async (
     fs.writeFileSync(path.join(accountPath, SALT_FILENAME), salt);
     fs.writeFileSync(path.join(accountPath, IV_FILENAME), iv);
     fs.writeFileSync(path.join(accountPath, PUBLIC_KEY_FILENAME), publicKey.export({ type: "pkcs1", format: "pem" }));
-    fs.writeFileSync(path.join(accountPath, PRIVATE_KEY_FILENAME), encryptedPrivateKey);
+    fs.writeFileSync(path.join(accountPath, ENCRYPTED_PRIVATE_KEY_FILENAME), encryptedPrivateKey);
 
     // add user to the database
     let user: User = { did: did, name: name, handle: handle, type: type, email: email };
     await Users.insertOne(user);
     return user;
+};
+
+export type ServerDid = { did: string; publicKey: string };
+export const createServerDid = async (): Promise<ServerDid> => {
+    // make sure account directory exists
+    if (!fs.existsSync(SERVER_DIR)) {
+        fs.mkdirSync(SERVER_DIR, { recursive: true });
+    }
+
+    const publicKeyPath = path.join(SERVER_DIR, PUBLIC_KEY_FILENAME);
+    const privateKeyPath = path.join(SERVER_DIR, PRIVATE_KEY_FILENAME);
+
+    if (fs.existsSync(publicKeyPath)) {
+        // return existing public key
+        let publicKey = fs.readFileSync(publicKeyPath, "utf8");
+        return { did: crypto.createHash("sha256").update(publicKey).digest("hex"), publicKey };
+    }
+
+    if (fs.existsSync(privateKeyPath)) {
+        throw new Error("Server private key exists but public key is missing");
+    }
+
+    // generate cryptographic keypair
+    const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
+
+    // did is public key in shorter string format suitable for URLS and directory naming
+    const did = crypto
+        .createHash("sha256")
+        .update(publicKey.export({ type: "pkcs1", format: "pem" }))
+        .digest("hex");
+
+    // save keypair in the server directory
+    fs.writeFileSync(publicKeyPath, publicKey.export({ type: "pkcs1", format: "pem" }));
+    fs.writeFileSync(privateKeyPath, privateKey.export({ type: "pkcs1", format: "pem" }));
+    let publicKeyString = fs.readFileSync(publicKeyPath, "utf8");
+    return { did, publicKey: publicKeyString };
+};
+
+export const getServerPublicKey = (): string => {
+    const publicKeyPath = path.join(SERVER_DIR, PUBLIC_KEY_FILENAME);
+    if (!fs.existsSync(publicKeyPath)) {
+        throw new Error("Server public key not found");
+    }
+    return fs.readFileSync(publicKeyPath, "utf8");
 };
 
 export class AuthenticationError extends Error {

@@ -17,6 +17,7 @@ import {
     FormField as FormFieldType,
     MemberDisplay,
     Page,
+    RegistryInfo,
     UserGroup,
     UserPrivate,
 } from "@/models/models";
@@ -30,8 +31,9 @@ import { cn } from "@/lib/utils";
 import { FaLock } from "react-icons/fa6";
 import { FaArrowCircleUp, FaArrowCircleDown, FaCheck } from "react-icons/fa";
 import { features, features as featuresList, pageFeaturePrefix } from "@/lib/data/constants";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronUp, XCircle } from "lucide-react";
 import { getMemberAccessLevel, hasHigherAccess, isAuthorized } from "@/lib/auth/client-auth";
+import { FaEye, FaEyeSlash } from "react-icons/fa";
 
 type RenderFieldProps = {
     field: FormFieldType;
@@ -105,22 +107,43 @@ export const DynamicSelectField: React.FC<RenderFieldProps> = ({ field, formFiel
         <FormMessage />
     </FormItem>
 );
+export const DynamicPasswordField: React.FC<RenderFieldProps> = ({ field, formField, readOnly }) => {
+    const [showPassword, setShowPassword] = useState(false);
 
-export const DynamicPasswordField: React.FC<RenderFieldProps> = ({ field, formField, readOnly }) => (
-    <FormItem>
-        <FormLabel>{field.label}</FormLabel>
-        <FormControl>
-            <Input
-                type="password"
-                placeholder={field.placeholder}
-                autoComplete={field.autoComplete}
-                readOnly={readOnly}
-                {...formField}
-            />
-        </FormControl>
-        <FormMessage />
-    </FormItem>
-);
+    const togglePasswordVisibility = () => {
+        setShowPassword(!showPassword);
+    };
+
+    return (
+        <FormItem>
+            <FormLabel>{field.label}</FormLabel>
+            <FormControl>
+                <div className="relative">
+                    <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder={field.placeholder}
+                        autoComplete={field.autoComplete}
+                        readOnly={readOnly}
+                        {...formField}
+                    />
+                    <div className="absolute right-[2px] top-0 flex h-[40px] flex-row items-center justify-center">
+                        <Button
+                            className="h-[38px] w-[38px] bg-[#ffffffdd]"
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            onClick={togglePasswordVisibility}
+                        >
+                            {showPassword ? <FaEyeSlash size="14px" /> : <FaEye size="14px" />}
+                        </Button>
+                    </div>
+                </div>
+            </FormControl>
+            {field.description && <FormDescription>{field.description}</FormDescription>}
+            <FormMessage />
+        </FormItem>
+    );
+};
 
 export const DynamicImageField: React.FC<RenderFieldProps> = ({ field, formField, readOnly }) => {
     const [previewUrl, setPreviewUrl] = useState<string | null>(formField.value?.url || null);
@@ -637,8 +660,60 @@ export const MemberUserGroupsGrid: React.FC<MemberUserGroupsGridProps> = ({
     );
 };
 
+export const DynamicRegistryInfoField: React.FC<RenderFieldProps> = ({ field, formField, collapse, readOnly }) => {
+    const { watch, setValue } = useFormContext();
+    const activeRegistryInfo: RegistryInfo = watch("activeRegistryInfo");
+    const registryUrl: string = formField.value;
+
+    const isRegistered = activeRegistryInfo?.registeredAt && activeRegistryInfo.registryUrl === registryUrl;
+
+    return (
+        <FormItem>
+            <FormLabel>{field.label}</FormLabel>
+            <FormControl>
+                <div className="flex flex-col space-y-2">
+                    <div className="flex items-center space-x-2">
+                        <Input type="text" placeholder="Registry URL" readOnly={readOnly} {...formField} />
+                    </div>
+                    {field.description && <FormDescription>{field.description}</FormDescription>}
+
+                    <div className="flex flex-row items-center gap-1">
+                        {isRegistered ? (
+                            <CheckCircle2 className="h-[18px] w-[18px] text-green-500" />
+                        ) : (
+                            <XCircle className="h-[18px]  w-[18px] text-red-500" />
+                        )}
+                        {isRegistered && activeRegistryInfo?.registeredAt && (
+                            <div className="text-sm">
+                                Registered at: {new Date(activeRegistryInfo.registeredAt).toLocaleString()}
+                            </div>
+                        )}
+                        {!isRegistered && (
+                            <div className="text-sm text-red-500">
+                                Server is not registered with the Circles Registry.
+                            </div>
+                        )}
+                    </div>
+                    {/* 
+                    <Button onClick={handleRegister} disabled={readOnly} className="w-[200px]">
+                        Register Server
+                    </Button>
+                    {activeRegistryInfo && activeRegistryInfo.registryUrl !== registryUrl && (
+                        <div className="text-yellow-500">
+                            Warning: Server is registered with a different registry URL.
+                        </div>
+                    )} */}
+                </div>
+            </FormControl>
+            <FormMessage />
+        </FormItem>
+    );
+};
+
 export const DynamicField: React.FC<RenderFieldProps> = ({ field, formField, control, readOnly }) => {
     switch (field.type) {
+        case "registry-info":
+            return DynamicRegistryInfoField({ field, formField, control, readOnly });
         case "access-rules":
             return DynamicAccessRulesField({ field, formField, control, readOnly });
         case "table":

@@ -1,7 +1,7 @@
 "use server";
 
 import { ServerSetupData, OpenAIFormType, MapboxFormType, mapboxFormSchema, openAIFormSchema } from "@/models/models";
-import { ServerConfigs } from "@/lib/data/db";
+import { ServerSettingsCollection } from "@/lib/data/db";
 
 type ActionResponse = {
     message?: string;
@@ -9,7 +9,7 @@ type ActionResponse = {
 };
 
 export async function isAuthorized(): Promise<boolean> {
-    let serverConfig = await ServerConfigs.findOne({});
+    let serverConfig = await ServerSettingsCollection.findOne({});
     if (!serverConfig || serverConfig.status !== "setup") {
         // TODO check if user is admin
         return false;
@@ -31,7 +31,7 @@ export async function completeServerConfig(): Promise<ActionResponse> {
     // TODO check if there are circles in the database
     //let userCount = await Users.countDocuments({});
     //let circlesCount = await Circles.countDocuments({});
-    await ServerConfigs.updateOne({}, { $set: { setupStatus: "account" } });
+    await ServerSettingsCollection.updateOne({}, { $set: { setupStatus: "account" } });
 
     return {
         message: "Server setup complete",
@@ -59,7 +59,7 @@ export async function saveOpenAIKeyAction(clientData: OpenAIFormType): Promise<A
     }
 
     // store OpenAI key
-    await ServerConfigs.updateOne({}, { $set: { openaiKey: data.data.openaiKey } });
+    await ServerSettingsCollection.updateOne({}, { $set: { openaiKey: data.data.openaiKey } });
 
     return {
         message: "OpenAI API key saved",
@@ -87,7 +87,7 @@ export async function saveMapboxKeyAction(clientData: MapboxFormType): Promise<A
     }
 
     // store Mapbox API key
-    await ServerConfigs.updateOne({}, { $set: { mapboxKey: data.data.mapboxKey } });
+    await ServerSettingsCollection.updateOne({}, { $set: { mapboxKey: data.data.mapboxKey } });
 
     return {
         message: "Mapbox API key saved",

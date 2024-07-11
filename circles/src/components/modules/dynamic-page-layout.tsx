@@ -26,7 +26,7 @@ export default async function DynamicPageLayout({
 }: DynamicLayoutPageProps) {
     let circle: Circle = {};
     if (isDefaultCircle) {
-        circle = await getDefaultCircle(true);
+        circle = await getDefaultCircle();
     } else if (circleHandle) {
         circle = await getCircleByHandle(circleHandle);
     }

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getServerConfig } from "@/lib/data/server-config";
+import { getServerSettings } from "@/lib/data/server-settings";
 import { getDefaultCircle } from "@/lib/data/circle";
 import BaseLayout from "@/components/layout/base-layout";
 
@@ -8,8 +8,8 @@ export default async function RootLayout({
 }: Readonly<{
     children: React.ReactNode;
 }>) {
-    let serverConfig = await getServerConfig(true);
-    let circle = await getDefaultCircle(true, serverConfig);
+    let serverConfig = await getServerSettings();
+    let circle = await getDefaultCircle(serverConfig);
 
     return (
         <BaseLayout circle={circle} serverConfig={serverConfig} isDefaultCircle={true}>
@@ -20,7 +20,7 @@ export default async function RootLayout({
 
 export async function generateMetadata(): Promise<Metadata> {
     // get circle from database
-    let circle = await getDefaultCircle(false);
+    let circle = await getDefaultCircle();
     let title = circle.name;
     let description = circle.description;
     let icon = circle.picture?.url ?? "/images/default-picture.png";

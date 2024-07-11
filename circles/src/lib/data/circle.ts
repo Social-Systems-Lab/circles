@@ -1,16 +1,13 @@
 // circle creation and management
 
-import { Circle, ServerConfig } from "@/models/models";
-import { getServerConfig } from "./server-config";
+import { Circle, ServerSettings } from "@/models/models";
+import { getServerSettings } from "./server-settings";
 import { Circles } from "./db";
 import { ObjectId } from "mongodb";
 import { getDefaultAccessRules, defaultUserGroups, defaultPages, features } from "./constants";
 
-export const getDefaultCircle = async (
-    redirectIfSetup: boolean = false,
-    inServerConfig: ServerConfig | null = null,
-): Promise<Circle> => {
-    let serverConfig = inServerConfig ?? (await getServerConfig(redirectIfSetup));
+export const getDefaultCircle = async (inServerConfig: ServerSettings | null = null): Promise<Circle> => {
+    let serverConfig = inServerConfig ?? (await getServerSettings());
     let circle = await Circles.findOne({ _id: new ObjectId(serverConfig?.defaultCircleId) });
 
     if (!circle) {
@@ -54,17 +51,16 @@ export const getCircleById = async (id: string): Promise<Circle> => {
     return circle;
 };
 
-export const updateCircle = async (circle: Circle): Promise<Circle> => {
+export const updateCircle = async (circle: Circle): Promise<void> => {
     let { _id, ...circleWithoutId } = circle;
     let result = await Circles.updateOne({ _id: new ObjectId(_id) }, { $set: circleWithoutId });
     if (result.matchedCount === 0) {
         throw new Error("Circle not found");
     }
-    return circle;
 };
 
 export const getCirclePath = async (circle: Circle): Promise<string> => {
-    let serverConfig = await getServerConfig(false);
+    let serverConfig = await getServerSettings();
     if (circle._id === serverConfig.defaultCircleId) {
         return "/";
     }

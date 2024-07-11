@@ -13,14 +13,14 @@ import {
 } from "ai";
 import { StreamableValue, createStreamableValue } from "ai/rsc";
 import { OpenAIProvider, createOpenAI } from "@ai-sdk/openai";
-import { ServerConfigs } from "@/lib/data/db";
+import { ServerSettingsCollection } from "@/lib/data/db";
 import { AddedMessages, ContextInfo, Message } from "@/models/models";
 import { getContextSystemMessage, getContextTools, setStep } from "@/lib/ai-contexts-tools";
 import { aiContexts } from "@/lib/ai-contexts";
 
 export async function getAnswer(question: string) {
     // get openaikey from db
-    const serverConfig = await ServerConfigs.findOne({});
+    const serverConfig = await ServerSettingsCollection.findOne({});
     const openaiKey = serverConfig?.openaiKey;
     if (!openaiKey) {
         throw new Error("OpenAI key not found");
@@ -166,7 +166,7 @@ function shouldContinueGenerating(delta: any) {
 
 export async function getStreamedAnswer(messages: Message[], formData: any, contextId: string) {
     // get openaikey from db
-    const serverConfig = await ServerConfigs.findOne({});
+    const serverConfig = await ServerSettingsCollection.findOne({});
     const openaiKey = serverConfig?.openaiKey;
     if (!openaiKey) {
         throw new Error("OpenAI key not found");

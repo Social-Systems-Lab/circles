@@ -2,6 +2,8 @@ import { getCircleById, getCirclePath, updateCircle } from "@/lib/data/circle";
 import { Circle, FormAction, FormSubmitResponse, Page } from "../../../../models/models";
 import { revalidatePath } from "next/cache";
 import { addPagesAccessRules, safeModifyArray } from "@/lib/utils";
+import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
+import { features } from "@/lib/data/constants";
 
 export const circlePagesFormAction: FormAction = {
     id: "circle-pages-form",
@@ -13,6 +15,13 @@ export const circlePagesFormAction: FormAction = {
             let circle: Circle = {
                 _id: values._id,
             };
+
+            // check if user is authorized to edit circle settings
+            const userDid = await getAuthenticatedUserDid();
+            let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
+            if (!authorized) {
+                return { success: false, message: "You are not authorized to edit circle settings" };
+            }
 
             // make sure readOnly rows in userGroups are not updated
             const existingCircle = await getCircleById(values._id);

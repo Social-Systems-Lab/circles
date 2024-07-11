@@ -4,7 +4,7 @@ import Map from "../map/map";
 import { Toaster } from "@/components/ui/toaster";
 import { Provider } from "jotai";
 import { Authenticator } from "@/components/auth/authenticator";
-import { Circle, ServerConfig } from "@/models/models";
+import { Circle, ServerSettings } from "@/models/models";
 import TopBar from "../top-bar/top-bar";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -14,7 +14,7 @@ const libre = Libre_Franklin({ subsets: ["latin"], variable: "--font-libre-frank
 type BaseLayoutProps = {
     children: React.ReactNode;
     circle: Circle;
-    serverConfig: ServerConfig;
+    serverConfig: ServerSettings;
     isDefaultCircle: boolean;
 };
 

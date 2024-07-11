@@ -1,13 +1,13 @@
 import { redirect } from "next/navigation";
 import LoginForm from "./LoginForm";
-import { ServerConfigs } from "@/lib/data/db";
+import { ServerSettingsCollection } from "@/lib/data/db";
 import { LoginData } from "@/models/models";
 import { AiWizard } from "@/components/ai/ai-wizard";
 import { aiContexts } from "@/lib/ai-contexts";
 
 export default async function Login() {
     // check if authorized
-    let serverConfig = await ServerConfigs.findOne({});
+    let serverConfig = await ServerSettingsCollection.findOne({});
     let loginData: LoginData = {
         email: "",
         aiEnabled: false,

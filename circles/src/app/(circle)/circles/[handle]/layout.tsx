@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getServerConfig } from "@/lib/data/server-config";
+import { getServerSettings } from "@/lib/data/server-settings";
 import { getCircleByHandle, getDefaultCircle } from "@/lib/data/circle";
 import BaseLayout from "@/components/layout/base-layout";
 import { redirect } from "next/navigation";
@@ -10,7 +10,7 @@ type Props = {
 };
 
 export default async function RootLayout({ params, children }: Props) {
-    let serverConfig = await getServerConfig(true);
+    let serverConfig = await getServerSettings();
     let circle = await getCircleByHandle(params.handle);
 
     if (!circle) {
@@ -31,7 +31,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     // get circle from database
     let circle = await getCircleByHandle(handle);
     if (!circle) {
-        circle = await getDefaultCircle(false);
+        circle = await getDefaultCircle();
     }
 
     let title = circle.name;

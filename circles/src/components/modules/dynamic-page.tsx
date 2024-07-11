@@ -20,7 +20,7 @@ export type ModulePageProps = {
 export default async function DynamicPage({ circleHandle, pageHandle, subpage, isDefaultCircle }: DynamicPageProps) {
     let circle: Circle = {};
     if (isDefaultCircle) {
-        circle = await getDefaultCircle(true);
+        circle = await getDefaultCircle();
     } else if (circleHandle) {
         circle = await getCircleByHandle(circleHandle);
     }

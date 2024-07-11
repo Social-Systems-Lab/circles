@@ -142,15 +142,29 @@ export const circleSchema = z.object({
 
 export type Circle = z.infer<typeof circleSchema>;
 
-export const serverConfigSchema = z.object({
-    defaultCircleId: z.string().optional(),
-    status: z.enum(["setup", "online"]),
-    setupStatus: z.enum(["config", "account", "complete"]),
-    mapboxKey: z.string().optional(),
-    openaiKey: z.string().optional(),
+export const registryInfoSchema = z.object({
+    registeredAt: z.date().optional(),
+    registryUrl: z.string().optional(),
 });
 
-export type ServerConfig = z.infer<typeof serverConfigSchema>;
+export type RegistryInfo = z.infer<typeof registryInfoSchema>;
+
+export const serverSettingsSchema = z.object({
+    _id: z.string().optional(),
+    name: z.string().optional(),
+    description: z.string().optional(),
+    did: didSchema.optional(),
+    defaultCircleId: z.string().optional(),
+    mapboxKey: z.string().optional(),
+    openaiKey: z.string().optional(),
+    url: z.string().optional(),
+    registryUrl: z.string().optional(),
+    activeRegistryInfo: registryInfoSchema.optional(),
+    jwtSecret: z.string().optional(),
+    serverInfo: registryInfoSchema.optional(),
+});
+
+export type ServerSettings = z.infer<typeof serverSettingsSchema>;
 
 // server setup form wizard
 
@@ -295,7 +309,8 @@ export type FormFieldType =
     | "password"
     | "select"
     | "handle"
-    | "access-rules";
+    | "access-rules"
+    | "registry-info";
 
 export type FormField = {
     name: string;

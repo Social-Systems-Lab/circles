@@ -1,21 +1,30 @@
 import { getCirclePath, updateCircle } from "@/lib/data/circle";
 import { Circle, FormAction, FormSubmitResponse, Page } from "../../../../models/models";
 import { revalidatePath } from "next/cache";
-import { getServerConfig } from "@/lib/data/server-config";
+import { getServerSettings } from "@/lib/data/server-settings";
 import { saveFile, isFile } from "@/lib/data/storage";
+import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
+import { features } from "@/lib/data/constants";
 
 export const circleAboutFormAction: FormAction = {
     id: "circle-about-form",
     onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
         try {
             // console.log("Saving circle settings with values", values);
-            // TODO check if user is authorized to save circle settings
 
             let circle: Circle = {
                 _id: values._id,
                 name: values.name,
                 handle: values.handle,
             };
+
+            // check if user is authorized to edit circle settings
+            const userDid = await getAuthenticatedUserDid();
+            let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
+            if (!authorized) {
+                console.log("userDid", userDid);
+                return { success: false, message: "You are not authorized to edit circle settings" };
+            }
 
             if (isFile(values.picture)) {
                 // save the picture and get the file info

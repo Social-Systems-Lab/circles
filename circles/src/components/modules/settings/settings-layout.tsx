@@ -20,6 +20,10 @@ const settingsForms = [
         name: "Access Rules",
         handle: "access-rules",
     },
+    {
+        name: "Server",
+        handle: "server-settings",
+    },
 ];
 
 export default async function SettingsModuleLayout({ children, circle, page, isDefaultCircle }: ModuleLayoutPageProps) {

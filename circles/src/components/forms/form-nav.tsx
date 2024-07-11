@@ -20,6 +20,7 @@ type FormNavProps = {
 
 export const FormNav: React.FC<FormNavProps> = ({ items, circle, isDefaultCircle, className, ...props }) => {
     const pathname = usePathname();
+    const filteredItems = isDefaultCircle ? items : items.filter((item) => item.handle !== "server-settings");
 
     const getPath = (item: NavItem) => {
         if (isDefaultCircle) {
@@ -31,7 +32,7 @@ export const FormNav: React.FC<FormNavProps> = ({ items, circle, isDefaultCircle
 
     return (
         <nav className={cn("fixed flex space-x-2 lg:flex-col lg:space-x-0 lg:space-y-1", className)} {...props}>
-            {items.map((item) => (
+            {filteredItems.map((item) => (
                 <Link
                     key={item.handle}
                     href={getPath(item)}

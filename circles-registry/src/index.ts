@@ -3,14 +3,12 @@ import { cors } from "hono/cors";
 import { prettyJSON } from "hono/pretty-json";
 import servers from "./routes/servers";
 import users from "./routes/users";
-import { errorHandler } from "./middleware/errorHandler";
 import { connectToDatabase } from "./data/db";
 
 const app = new Hono();
 
 app.use("*", cors());
 app.use("*", prettyJSON());
-app.use("*", errorHandler);
 
 app.route("/servers", servers);
 app.route("/users", users);

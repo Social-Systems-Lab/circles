@@ -8,7 +8,7 @@ import {
     passwordFormSchema,
     emailFormSchema,
 } from "@/models/models";
-import { ServerConfigs } from "@/lib/data/db";
+import { ServerSettingsCollection } from "@/lib/data/db";
 
 type ActionResponse = {
     message?: string;

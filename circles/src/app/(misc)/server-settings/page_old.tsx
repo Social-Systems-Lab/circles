@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
 import ServerSetupForm from "./server-setup-form";
-import { ServerConfigs } from "@/lib/data/db";
+import { ServerSettingsCollection } from "@/lib/data/db";
 import { ServerSetupData } from "@/models/models";
 
 export default async function Setup() {
     // check if authorized
-    let serverConfig = await ServerConfigs.findOne({});
+    let serverConfig = await ServerSettingsCollection.findOne({});
     if (!serverConfig || serverConfig.status !== "setup") {
         redirect("/");
     }

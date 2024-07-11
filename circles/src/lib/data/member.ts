@@ -43,6 +43,12 @@ export const addMember = async (userDid: string, circleId: string, userGroups: s
         throw new Error("User is already a member of this circle");
     }
 
+    // if circle has no members, add user as admin
+    let memberCount = await Members.countDocuments({ circleId: circleId });
+    if (memberCount === 0) {
+        userGroups = ["admins", "moderators", "members"];
+    }
+
     let member: Member = {
         userDid: userDid,
         circleId: circleId,
