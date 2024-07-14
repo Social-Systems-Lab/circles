@@ -35,13 +35,16 @@ cd ~/circles-registry
 2.4. Copy docker-compose.yml and .env file:
 
 ```bash
-mkdir circles-registry
-cd circles-registry
 curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/main/circles-registry/docker-compose.yml
 curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/main/circles-registry/.env
+curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/main/circles-registry/nginx.conf
 ```
 
-2.5. Edit the .env file and specify config values
+2.5. Edit the .env file and specify the database password.
+
+```
+nano .env
+```
 
 ## 3. Deploy the Circles Registry
 

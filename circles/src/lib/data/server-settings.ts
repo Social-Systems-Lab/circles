@@ -119,7 +119,7 @@ export const registerServer = async (
     // if registry isn't local make sure server URL isn't local
     if (!urlIsLocal(registryUrl)) {
         if (urlIsLocal(url)) {
-            throw new Error("Cannot register server with local URL");
+            //throw new Error("Cannot register server with local URL"); // TODO uncomment when done testing
         }
     }
 

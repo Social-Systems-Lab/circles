@@ -6,8 +6,8 @@ services:
         environment:
             - MONGO_HOST=${MONGO_HOST}
             - MONGO_PORT=${MONGO_PORT}
-            - MONGO_INITDB_ROOT_USERNAME=${REGISTRY_MONGO_ROOT_USERNAME}
-            - MONGO_INITDB_ROOT_PASSWORD=${REGISTRY_MONGO_ROOT_PASSWORD}
+            - REGISTRY_MONGO_ROOT_USERNAME=${REGISTRY_MONGO_ROOT_USERNAME}
+            - REGISTRY_MONGO_ROOT_PASSWORD=${REGISTRY_MONGO_ROOT_PASSWORD}
         depends_on:
             - db
         networks:
