@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
     app:
-        build: .
+        image: sslorg/circles-registry:latest
         environment:
             - MONGO_HOST=${MONGO_HOST}
             - MONGO_PORT=${MONGO_PORT}
