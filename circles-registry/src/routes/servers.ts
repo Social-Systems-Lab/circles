@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { Context, Next } from "hono";
 import { z } from "zod";
-import { registrationConfirmSchema, registrationRequestSchema } from "../data/models";
-import { Challenges, Servers } from "../data/db";
+import { serverRegistrationConfirmSchema, serverRegistrationRequestSchema } from "../data/models";
+import { ServerChallenges, Servers } from "../data/db";
 const crypto = require("crypto");
 
 const servers = new Hono();
@@ -10,17 +10,24 @@ const servers = new Hono();
 servers.post("/register", async (c: Context) => {
     try {
         const body = await c.req.json();
-        const validatedData = registrationRequestSchema.parse(body);
+        const validatedData = serverRegistrationRequestSchema.parse(body);
 
-        // Generate a challenge
+        // generate a challenge
         const challenge = crypto.randomBytes(32).toString("hex");
         const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // Challenge expires in 5 minutes
 
-        await Challenges.insertOne({
+        // make sure the DID matches the public key
+        let publicKey = validatedData.publicKey;
+        let did = validatedData.did;
+        const hashedPublicKey = crypto.createHash("sha256").update(publicKey).digest("hex");
+        if (did !== hashedPublicKey) {
+            return c.json({ success: false, message: "DID does not match public key" }, 400);
+        }
+
+        await ServerChallenges.insertOne({
             name: validatedData.name,
             did: validatedData.did,
             url: validatedData.url,
-            serverId: validatedData.did,
             publicKey: validatedData.publicKey,
             challenge,
             expiresAt,
@@ -39,10 +46,10 @@ servers.post("/register", async (c: Context) => {
 servers.post("/register-confirm", async (c: Context) => {
     try {
         const body = await c.req.json();
-        const validatedData = registrationConfirmSchema.parse(body);
+        const validatedData = serverRegistrationConfirmSchema.parse(body);
 
-        // Retrieve the challenge
-        const challengeDoc = await Challenges.findOne({ serverId: validatedData.did, challenge: validatedData.challenge });
+        // retrieve the challenge
+        const challengeDoc = await ServerChallenges.findOne({ did: validatedData.did, challenge: validatedData.challenge });
         if (!challengeDoc) {
             return c.json({ success: false, message: "Invalid challenge" }, 400);
         }
@@ -51,7 +58,7 @@ servers.post("/register-confirm", async (c: Context) => {
             return c.json({ success: false, message: "Expired challenge" }, 400);
         }
 
-        // Verify the signature
+        // verify the signature
         const verify = crypto.createVerify("SHA256");
         verify.update(challengeDoc.challenge);
         const isValidSignature = verify.verify(challengeDoc.publicKey, validatedData.signature, "base64");
@@ -60,22 +67,34 @@ servers.post("/register-confirm", async (c: Context) => {
             return c.json({ success: false, message: "Invalid signature" }, 400);
         }
 
-        // Update server as registered
-        await Servers.updateOne(
-            { did: validatedData.did },
-            {
-                $set: {
-                    did: validatedData.did,
-                    name: challengeDoc.name,
-                    url: challengeDoc.url,
-                    publicKey: challengeDoc.publicKey,
-                    registeredAt: new Date(),
-                },
-            }
-        );
+        const existingServer = await Servers.findOne({ did: validatedData.did });
+        if (existingServer) {
+            // update server as registered
+            await Servers.updateOne(
+                { did: validatedData.did },
+                {
+                    $set: {
+                        did: validatedData.did,
+                        name: challengeDoc.name,
+                        url: challengeDoc.url,
+                        publicKey: challengeDoc.publicKey,
+                        updatedAt: new Date(),
+                    },
+                }
+            );
+        } else {
+            // create new server
+            await Servers.insertOne({
+                did: validatedData.did,
+                name: challengeDoc.name,
+                url: challengeDoc.url,
+                publicKey: challengeDoc.publicKey,
+                registeredAt: new Date(),
+            });
+        }
 
-        // Remove the used challenge
-        await Challenges.deleteOne({ serverId: validatedData.did });
+        // remove the used challenge
+        await ServerChallenges.deleteOne({ did: validatedData.did });
 
         return c.json({ success: true, message: "Server registered successfully" });
     } catch (error) {
@@ -85,10 +104,6 @@ servers.post("/register-confirm", async (c: Context) => {
         console.error("Error in server registration confirmation:", error);
         return c.json({ success: false, message: "Internal server error" }, 500);
     }
-});
-
-servers.get("/:serverId", async (c) => {
-    // Implement get server details logic
 });
 
 export default servers;

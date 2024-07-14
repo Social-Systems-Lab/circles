@@ -45,28 +45,32 @@ export const getServerSettings = async (): Promise<ServerSettings> => {
         serverSettings.did = serverDid.did;
     }
 
-    if (serverSettings && serverSettings?.did && !serverSettings?.activeRegistryInfo) {
-        // register server with registry if registry URL is set
-        if (serverSettings.registryUrl) {
-            try {
-                console.log("**** attempting to register server ****");
-                let publicKey = getServerPublicKey();
-                let registryInfo = await registerServer(
-                    serverSettings.did,
-                    serverSettings.name!,
-                    serverSettings.url!,
-                    serverSettings.registryUrl,
-                    publicKey,
-                );
-                serverSettings.activeRegistryInfo = registryInfo;
+    // TODO uncommented below because is called multiple times, registry is now done when server settings is saved
+    // if (serverSettings && serverSettings?.did && !serverSettings?.activeRegistryInfo) {
+    //     // register server with registry if registry URL is set
+    //     if (serverSettings.registryUrl) {
+    //         let localServerAndRemoteRegistry =
+    //             urlIsLocal(serverSettings.url) && !urlIsLocal(serverSettings.registryUrl);
+    //         if (!localServerAndRemoteRegistry) {
+    //             try {
+    //                 let publicKey = getServerPublicKey();
+    //                 let registryInfo = await registerServer(
+    //                     serverSettings.did,
+    //                     serverSettings.name!,
+    //                     serverSettings.url!,
+    //                     serverSettings.registryUrl,
+    //                     publicKey,
+    //                 );
+    //                 serverSettings.activeRegistryInfo = registryInfo;
 
-                // save updated server settings
-                await ServerSettingsCollection.updateOne({}, { $set: { activeRegistryInfo: registryInfo } });
-            } catch (error) {
-                console.error("Failed to register server", error);
-            }
-        }
-    }
+    //                 // save updated server settings
+    //                 await ServerSettingsCollection.updateOne({}, { $set: { activeRegistryInfo: registryInfo } });
+    //             } catch (error) {
+    //                 console.error("Failed to register server with registry", error);
+    //             }
+    //         }
+    //     }
+    // }
 
     // get environment variables
     let settings = serverSettings as ServerSettings;
@@ -90,6 +94,17 @@ export const updateServerSettings = async (serverSettings: ServerSettings): Prom
     }
 };
 
+export const urlIsLocal = (url: string | undefined): boolean => {
+    if (!url) return true;
+
+    return (
+        url.startsWith("http://localhost") ||
+        url.startsWith("localhost") ||
+        url.startsWith("http://127.0.0.1") ||
+        url.startsWith("127.0.0.1")
+    );
+};
+
 export const registerServer = async (
     did: string,
     name: string,
@@ -101,6 +116,13 @@ export const registerServer = async (
         throw new Error("Invalid server registration data");
     }
 
+    // if registry isn't local make sure server URL isn't local
+    if (!urlIsLocal(registryUrl)) {
+        if (urlIsLocal(url)) {
+            throw new Error("Cannot register server with local URL");
+        }
+    }
+
     // make a register request to the registry
     let registerResponse = await fetch(`${registryUrl}/servers/register`, {
         method: "POST",
@@ -108,7 +130,7 @@ export const registerServer = async (
             "Content-Type": "application/json",
         },
         body: JSON.stringify({ did, name, url, publicKey }),
-        next: { revalidate: 10 },
+        cache: "no-store",
     });
 
     let registerData = await registerResponse.json();

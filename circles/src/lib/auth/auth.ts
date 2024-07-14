@@ -84,7 +84,8 @@ export const createUser = async (
 
     // add user to the database
     let user: User = { did: did, name: name, handle: handle, type: type, email: email };
-    await Users.insertOne(user);
+    let res = await Users.insertOne(user);
+    user._id = res.insertedId.toString();
     return user;
 };
 
@@ -140,6 +141,21 @@ export const signRegisterServerChallenge = (challenge: string): string => {
     return sign.sign(privateKey, "base64");
 };
 
+export const getUserPublicKey = (did: string): string => {
+    const publicKeyPath = path.join(USERS_DIR, did, PUBLIC_KEY_FILENAME);
+    if (!fs.existsSync(publicKeyPath)) {
+        throw new Error("User public key not found");
+    }
+    return fs.readFileSync(publicKeyPath, "utf8");
+};
+
+export const signRegisterUserChallenge = (did: string, password: string, challenge: string): string => {
+    const privateKey = getUserPrivateKey(did, password);
+    const sign = crypto.createSign("SHA256");
+    sign.update(challenge);
+    return sign.sign(privateKey, "base64");
+};
+
 export class AuthenticationError extends Error {
     constructor(message: string) {
         super(message);
@@ -147,7 +163,7 @@ export class AuthenticationError extends Error {
     }
 }
 
-export const authenticateUser = (did: string, password: string): boolean => {
+export const getUserPrivateKey = (did: string, password: string): string => {
     const accountPath = path.join(USERS_DIR, did);
     if (!fs.existsSync(accountPath)) {
         throw new AuthenticationError("Account does not exist");
@@ -155,7 +171,7 @@ export const authenticateUser = (did: string, password: string): boolean => {
 
     const salt = fs.readFileSync(path.join(accountPath, SALT_FILENAME));
     const iv = fs.readFileSync(path.join(accountPath, IV_FILENAME));
-    const privateKey = fs.readFileSync(path.join(accountPath, PRIVATE_KEY_FILENAME), "utf8");
+    const privateKey = fs.readFileSync(path.join(accountPath, ENCRYPTED_PRIVATE_KEY_FILENAME), "utf8");
     const encryptionKey = crypto.pbkdf2Sync(password, salt, 100000, 32, "sha512");
 
     // decrypt private key to authenticate user
@@ -169,6 +185,12 @@ export const authenticateUser = (did: string, password: string): boolean => {
         throw new AuthenticationError("Incorrect password");
     }
 
+    return decryptedPrivateKey;
+};
+
+export const authenticateUser = (did: string, password: string): boolean => {
+    // get private key to authenticate user, throws error if password is incorrect
+    getUserPrivateKey(did, password);
     return true;
 };
 

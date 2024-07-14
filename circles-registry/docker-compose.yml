@@ -16,7 +16,7 @@ services:
     db:
         image: mongo:latest
         environment:
-            - MONGO_INITDB_DATABASE=circles_registry
+            - MONGO_INITDB_DATABASE=circlesRegistry
             - MONGO_INITDB_ROOT_USERNAME=${REGISTRY_MONGO_ROOT_USERNAME}
             - MONGO_INITDB_ROOT_PASSWORD=${REGISTRY_MONGO_ROOT_PASSWORD}
         volumes:

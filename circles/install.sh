@@ -7,16 +7,13 @@ cd circles
 # Download docker-compose.yml and .env.example
 echo "Downloading configuration files..."
 curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/main/circles/docker-compose.yml
-curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/main/circles/.env.example
+curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/main/circles/.env
 
 # Check if files were downloaded successfully
 if [ ! -f docker-compose.yml ] || [ ! -f .env.example ]; then
     echo "Error: Failed to download required files. Please check your internet connection and try again."
     exit 1
 fi
-
-# Copy .env.example to .env
-cp .env.example .env
 
 # Function to prompt for a value with a default
 prompt_for_value() {

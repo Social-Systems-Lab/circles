@@ -32,6 +32,13 @@ export const getImageSchema = (maxSize?: number) => {
         );
 };
 
+export const registryInfoSchema = z.object({
+    registeredAt: z.date().optional(),
+    registryUrl: z.string().optional(),
+});
+
+export type RegistryInfo = z.infer<typeof registryInfoSchema>;
+
 export type AccountType = z.infer<typeof accountTypeSchema>;
 
 export const userSchema = z.object({
@@ -43,6 +50,7 @@ export const userSchema = z.object({
     handle: handleSchema,
     picture: z.string().optional(),
     cover: z.string().optional(),
+    activeRegistryInfo: registryInfoSchema.optional(),
 });
 
 export type User = z.infer<typeof userSchema>;
@@ -67,6 +75,10 @@ export type Membership = {
 export interface UserPrivate extends User {
     memberships: Membership[];
 }
+
+export type Partial<T> = {
+    [P in keyof T]?: T[P];
+};
 
 export interface MemberDisplay extends Member {
     name: string;
@@ -141,13 +153,6 @@ export const circleSchema = z.object({
 });
 
 export type Circle = z.infer<typeof circleSchema>;
-
-export const registryInfoSchema = z.object({
-    registeredAt: z.date().optional(),
-    registryUrl: z.string().optional(),
-});
-
-export type RegistryInfo = z.infer<typeof registryInfoSchema>;
 
 export const serverSettingsSchema = z.object({
     _id: z.string().optional(),
