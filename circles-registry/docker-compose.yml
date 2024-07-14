@@ -37,6 +37,14 @@ services:
         networks:
             - registry_network
 
+    watchtower:
+        image: containrrr/watchtower
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock
+        restart: always
+        environment:
+            WATCHTOWER_POLL_INTERVAL: 300 # Check for updates every 5 minutes
+
 networks:
     registry_network:
         name: circles_registry_network
