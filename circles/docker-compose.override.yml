@@ -1,0 +1,7 @@
+version: "3.8"
+
+services:
+    circles:
+        env_file:
+            - .env
+            - .env.local

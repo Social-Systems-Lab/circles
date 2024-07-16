@@ -7,7 +7,6 @@ services:
             - "${CIRCLES_PORT}:${CIRCLES_PORT}"
         env_file:
             - .env
-            - .env.local
         environment:
             - PORT=${CIRCLES_PORT}
             - NODE_ENV=${CIRCLES_NODE_ENV}
@@ -20,8 +19,7 @@ services:
             - MINIO_PORT=${MINIO_PORT}
             - MINIO_ROOT_USERNAME=${MINIO_ROOT_USERNAME}
             - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
-            - CIRCLES_REGISTRY_HOST=${CIRCLES_REGISTRY_HOST}
-            - CIRCLES_REGISTRY_PORT=${CIRCLES_REGISTRY_PORT}
+            - CIRCLES_REGISTRY_URL=${CIRCLES_REGISTRY_URL}
         volumes:
             - circles:/circles
         depends_on:
