@@ -5,3 +5,18 @@ services:
         env_file:
             - .env
             - .env.local
+
+    db:
+        env_file:
+            - .env
+            - .env.local
+
+    minio:
+        env_file:
+            - .env
+            - .env.local
+
+    nginx:
+        env_file:
+            - .env
+            - .env.local

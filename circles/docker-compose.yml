@@ -32,7 +32,6 @@ services:
         image: mongo:latest
         env_file:
             - .env
-            - .env.local
         environment:
             - MONGO_INITDB_DATABASE=circles
             - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
@@ -49,7 +48,6 @@ services:
         image: minio/minio
         env_file:
             - .env
-            - .env.local
         environment:
             MINIO_ROOT_USER: ${MINIO_ROOT_USERNAME}
             MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -66,7 +64,6 @@ services:
         image: nginx:latest
         env_file:
             - .env
-            - .env.local
         volumes:
             - ./nginx.conf.template:/etc/nginx/nginx.conf.template:ro
             - ./docker-entrypoint.sh:/docker-entrypoint.sh:ro
