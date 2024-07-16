@@ -1,4 +1,4 @@
-FROM oven/bun:latest as deps
+FROM imbios/bun-node:18-slim AS deps
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -15,14 +15,14 @@ FROM deps AS builder
 WORKDIR /app
 COPY . .
 
+ENV IS_BUILD=true
+
 RUN bun run build
 
 # Production image, copy all the files and run next
 FROM node:18-slim AS runner
 WORKDIR /app
 
-ARG CONFIG_FILE
-COPY $CONFIG_FILE /app/.env
 ENV NODE_ENV production
 # Uncomment the following line in case you want to disable telemetry during runtime.
 # ENV NEXT_TELEMETRY_DISABLED 1

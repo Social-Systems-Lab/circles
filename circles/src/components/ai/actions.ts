@@ -120,14 +120,16 @@ async function streamResponse(provider: OpenAIProvider, c: ContextInfo, closeStr
                 printMessage(newMessage);
                 newMessages.push(newMessage);
             }
-        } else if (delta.type === "tool-result") {
-            if (shouldContinueGenerating(delta)) {
-                let coreToolMessage: CoreToolMessage = { role: "tool", content: [delta] };
-                let newMessage: Message = { coreMessage: coreToolMessage, toolCall: true };
-                printMessage(newMessage);
-                newMessages.push(newMessage);
-            }
         }
+        // TODO commented because error in build
+        // } else if (delta.type === "tool-result") {
+        //     if (shouldContinueGenerating(delta)) {
+        //         let coreToolMessage: CoreToolMessage = { role: "tool", content: [delta] };
+        //         let newMessage: Message = { coreMessage: coreToolMessage, toolCall: true };
+        //         printMessage(newMessage);
+        //         newMessages.push(newMessage);
+        //     }
+        // }
     }
 
     // if we have tool results we make another call to get more responses

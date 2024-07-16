@@ -6,7 +6,7 @@ import { ServerSetupData } from "@/models/models";
 export default async function Setup() {
     // check if authorized
     let serverConfig = await ServerSettingsCollection.findOne({});
-    if (!serverConfig || serverConfig.status !== "setup") {
+    if (!serverConfig) {
         redirect("/");
     }
     const setupData: ServerSetupData = {

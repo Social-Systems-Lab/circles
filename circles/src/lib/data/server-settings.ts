@@ -15,6 +15,16 @@ const ENV_TO_SETTINGS_MAP: Record<string, keyof ServerSettings> = {
 };
 
 export const getServerSettings = async (): Promise<ServerSettings> => {
+    if (process.env.IS_BUILD === "true") {
+        // return dummy settings
+        return {
+            name: "Circles",
+            url: "http://localhost:3000",
+            registryUrl: "http://localhost:3001",
+            defaultCircleId: "default",
+        };
+    }
+
     let serverSettings = await ServerSettingsCollection.findOne({});
     if (!serverSettings) {
         // initialize server data

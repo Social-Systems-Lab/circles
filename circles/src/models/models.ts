@@ -42,7 +42,7 @@ export type RegistryInfo = z.infer<typeof registryInfoSchema>;
 export type AccountType = z.infer<typeof accountTypeSchema>;
 
 export const userSchema = z.object({
-    _id: z.string().optional(),
+    _id: z.any().optional(),
     did: didSchema,
     type: accountTypeSchema.default("user"),
     name: z.string().default("Anonymous User"),
@@ -56,7 +56,7 @@ export const userSchema = z.object({
 export type User = z.infer<typeof userSchema>;
 
 export const memberSchema = z.object({
-    _id: z.string().optional(),
+    _id: z.any().optional(),
     userDid: z.string(),
     circleId: z.string(),
     userGroups: z.array(z.string()).optional(),
@@ -139,7 +139,7 @@ export const fileInfoSchema = z.object({
 });
 
 export const circleSchema = z.object({
-    _id: z.string().optional(),
+    _id: z.any().optional(),
     did: didSchema.optional(),
     name: z.string().default("Circles").optional(),
     handle: handleSchema.optional(),
@@ -155,7 +155,7 @@ export const circleSchema = z.object({
 export type Circle = z.infer<typeof circleSchema>;
 
 export const serverSettingsSchema = z.object({
-    _id: z.string().optional(),
+    _id: z.any().optional(),
     name: z.string().optional(),
     description: z.string().optional(),
     did: didSchema.optional(),
@@ -374,7 +374,7 @@ export type FormActionHandler = {
 
 export type FormTools = {
     user?: User;
-    setUser: (user: User) => void;
+    setUser: (user: UserPrivate) => void;
     authenticated?: boolean;
     setAuthenticated: (authenticated: boolean) => void;
     searchParams: ReadonlyURLSearchParams;

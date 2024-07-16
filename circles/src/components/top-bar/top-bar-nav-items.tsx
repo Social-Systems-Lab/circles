@@ -9,7 +9,7 @@ import { Circle, Page } from "@/models/models";
 
 export default function TopBarNavItems({ circle, isDefaultCircle }: { circle: Circle; isDefaultCircle: boolean }) {
     const itemContainerRef = useRef<HTMLDivElement | null>(null);
-    const itemRefs = useRef<React.RefObject<HTMLDivElement>[]>(circle.pages.map(() => React.createRef()));
+    const itemRefs = useRef<React.RefObject<HTMLDivElement>[]>(circle?.pages?.map(() => React.createRef()) ?? []);
     const pathname = usePathname();
     const [itemVisibility, setItemVisibility] = useState<boolean[]>([]);
     const [navMenuOpen, setNavMenuOpen] = useState(false);
@@ -26,7 +26,7 @@ export default function TopBarNavItems({ circle, isDefaultCircle }: { circle: Ci
     );
 
     const currentNavItem = useMemo(() => {
-        return circle.pages.find((x) => {
+        return circle?.pages?.find((x) => {
             if (x.handle === "") {
                 return pathname === getPath(x);
             }
@@ -35,7 +35,7 @@ export default function TopBarNavItems({ circle, isDefaultCircle }: { circle: Ci
     }, [circle.pages, getPath, pathname]);
     const currentNavVisible = useMemo(() => {
         if (!currentNavItem) return false;
-        return itemVisibility[circle.pages.indexOf(currentNavItem)];
+        return itemVisibility[circle?.pages?.indexOf(currentNavItem) ?? 0];
     }, [currentNavItem, circle.pages, itemVisibility]);
 
     const recalculateItemVisibility = () => {
@@ -46,7 +46,7 @@ export default function TopBarNavItems({ circle, isDefaultCircle }: { circle: Ci
         // calculate visible and hidden items
         const containerWidth = itemContainerRef.current?.offsetWidth || 0;
         let currentWidth = 0;
-        circle.pages.forEach((item, index) => {
+        circle?.pages?.forEach((item, index) => {
             const itemWidth = item.name.length * 13; // estimate width, TODO find better way
             if (currentWidth + itemWidth <= containerWidth) {
                 newItemVisibility.push(true);
@@ -78,7 +78,7 @@ export default function TopBarNavItems({ circle, isDefaultCircle }: { circle: Ci
 
     return (
         <nav ref={itemContainerRef} className={`mr-8 flex h-[60px] flex-1 flex-row overflow-hidden`}>
-            {circle.pages.map((item, index) => (
+            {circle?.pages?.map((item, index) => (
                 <Link key={item.handle} href={getPath(item)}>
                     <div
                         ref={itemRefs.current[index]}
@@ -107,8 +107,8 @@ export default function TopBarNavItems({ circle, isDefaultCircle }: { circle: Ci
                     <div className={`cursor-pointer p-2 ${itemVisibility.includes(false) ? "" : "hidden"}`}>More</div>
                 </PopoverTrigger>
                 <PopoverContent className="ml-4 w-auto overflow-hidden p-0">
-                    {circle.pages
-                        .filter((_, index) => !itemVisibility[index])
+                    {circle?.pages
+                        ?.filter((_, index) => !itemVisibility[index])
                         .map((item) => (
                             <Link key={item.handle} href={getPath(item)}>
                                 <div

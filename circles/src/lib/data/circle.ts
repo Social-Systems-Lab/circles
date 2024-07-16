@@ -7,8 +7,12 @@ import { ObjectId } from "mongodb";
 import { getDefaultAccessRules, defaultUserGroups, defaultPages, features } from "./constants";
 
 export const getDefaultCircle = async (inServerConfig: ServerSettings | null = null): Promise<Circle> => {
+    if (process.env.IS_BUILD === "true") {
+        return createDefaultCircle();
+    }
+
     let serverConfig = inServerConfig ?? (await getServerSettings());
-    let circle = await Circles.findOne({ _id: new ObjectId(serverConfig?.defaultCircleId) });
+    let circle = (await Circles.findOne({ _id: new ObjectId(serverConfig?.defaultCircleId) })) as Circle;
 
     if (!circle) {
         return createDefaultCircle();

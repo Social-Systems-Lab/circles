@@ -1,9 +1,12 @@
 import DynamicForm from "@/components/forms/dynamic-form";
+import { Suspense } from "react";
 
-export default async function Login() {
+export default function Login() {
     return (
         <div className="flex flex-1 items-start justify-center pt-[40px]">
-            <DynamicForm formSchemaId="login-form" />
+            <Suspense fallback={<div></div>}>
+                <DynamicForm formSchemaId="login-form" />
+            </Suspense>
         </div>
     );
 }

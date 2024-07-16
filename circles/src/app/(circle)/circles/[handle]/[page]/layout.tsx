@@ -1,4 +1,4 @@
-import DynamicPageLayout from "@/components/modules/dynamic-page-layout";
+import { DynamicPageLayout } from "@/components/modules/dynamic-page-layout";
 
 type PageProps = {
     params: { page: string; handle: string };

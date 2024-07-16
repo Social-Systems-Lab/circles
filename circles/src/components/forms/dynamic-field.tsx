@@ -486,7 +486,9 @@ export const DynamicAccessRulesGrid: React.FC<DynamicAccessRulesGridProps> = ({
             const page = pages.find((p) => p.handle === pageHandle);
             return "View Page: " + page?.name;
         } else {
-            return featuresList[feature]?.name ?? feature;
+            if (feature in featuresList) {
+                return featuresList[feature as keyof typeof featuresList]?.name ?? feature;
+            }
         }
     };
 

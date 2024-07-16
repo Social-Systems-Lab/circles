@@ -2,15 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { getAnswer, getStreamedAnswer } from "./actions";
-import { readStreamableValue } from "ai/rsc";
-import { FaRegUser } from "react-icons/fa";
 import { AiChat } from "./chat";
 import Image from "next/image";
 import { aiContexts } from "@/lib/ai-contexts";
 import { AiContext } from "@/models/models";
-import Map from "@/app/(circle)/Map";
 import { FaDoorOpen } from "react-icons/fa6";
 import { PiSignInBold } from "react-icons/pi";
 import { IoCreate } from "react-icons/io5";
@@ -143,8 +138,8 @@ export function WizardModeTabs({ activeTab, onTabChange }: WizardModeTabsProps) 
 }
 
 type ManualFormProps = {
-    context: AiContext;
-    formData: any;
+    context?: AiContext;
+    formData?: any;
 };
 
 function ManualForm({ context, formData }: ManualFormProps) {

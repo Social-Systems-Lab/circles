@@ -10,7 +10,7 @@ type ActionResponse = {
 
 export async function isAuthorized(): Promise<boolean> {
     let serverConfig = await ServerSettingsCollection.findOne({});
-    if (!serverConfig || serverConfig.status !== "setup") {
+    if (!serverConfig) {
         // TODO check if user is admin
         return false;
     }

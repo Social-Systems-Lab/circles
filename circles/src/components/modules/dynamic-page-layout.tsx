@@ -1,6 +1,5 @@
 import { Circle, Page } from "@/models/models";
 import { redirect } from "next/navigation";
-import SettingsModuleLayout from "./settings/settings-layout";
 import { getCircleByHandle, getDefaultCircle } from "@/lib/data/circle";
 import { modules } from "./modules";
 
@@ -18,12 +17,12 @@ export type ModuleLayoutPageProps = {
     children: React.ReactNode;
 };
 
-export default async function DynamicPageLayout({
+export const DynamicPageLayout = async ({
     children,
     circleHandle,
     pageHandle,
     isDefaultCircle,
-}: DynamicLayoutPageProps) {
+}: DynamicLayoutPageProps) => {
     let circle: Circle = {};
     if (isDefaultCircle) {
         circle = await getDefaultCircle();
@@ -44,7 +43,7 @@ export default async function DynamicPageLayout({
     }
 
     if (!_module.layoutComponent) {
-        return children;
+        return <>{children}</>;
     }
 
     return (
@@ -52,4 +51,6 @@ export default async function DynamicPageLayout({
             {children}
         </_module.layoutComponent>
     );
-}
+};
+
+export default DynamicPageLayout;

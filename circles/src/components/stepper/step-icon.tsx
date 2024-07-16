@@ -93,11 +93,13 @@ const StepIcon = React.forwardRef<HTMLDivElement, StepIconProps>((props, ref) =>
             );
         }
         return (
-            <span ref={ref} key="label" className={cn("font-medium text-center text-md")}>
+            <span ref={ref} key="label" className={cn("text-md text-center font-medium")}>
                 {(index || 0) + 1}
             </span>
         );
     }, [isCompletedStep, isCurrentStep, isError, isLoading, Icon, index, Check, ErrorIcon, isKeepError, ref, size]);
 });
+
+StepIcon.displayName = "StepIcon";
 
 export { StepIcon };
