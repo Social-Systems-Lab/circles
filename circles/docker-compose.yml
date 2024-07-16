@@ -71,7 +71,7 @@ services:
             - "80:80"
         depends_on:
             - minio
-            # - circles
+            - circles
         networks:
             - webnet
         command: ["/bin/sh", "-c", "/docker-entrypoint.sh && nginx -g 'daemon off;'"]
