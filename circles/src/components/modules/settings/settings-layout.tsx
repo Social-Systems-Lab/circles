@@ -21,6 +21,10 @@ const settingsForms = [
         handle: "access-rules",
     },
     {
+        name: "Membership Requests",
+        handle: "membership-requests",
+    },
+    {
         name: "Server",
         handle: "server-settings",
     },

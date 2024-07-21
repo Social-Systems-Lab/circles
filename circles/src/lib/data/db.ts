@@ -1,5 +1,5 @@
 import { MongoClient, MongoClientOptions, Db, Collection } from "mongodb";
-import { ServerSettings, User, Circle, Member } from "@/models/models";
+import { ServerSettings, User, Circle, Member, MembershipRequest } from "@/models/models";
 
 const MONGO_HOST = process.env.MONGO_HOST || "127.0.0.1";
 const MONGO_PORT = parseInt(process.env.MONGO_PORT || "27017");
@@ -16,6 +16,7 @@ let Users: Collection<User>;
 let Circles: Collection<Circle>;
 let ServerSettingsCollection: Collection<ServerSettings>;
 let Members: Collection<Member>;
+let MembershipRequests: Collection<MembershipRequest>;
 
 // Only initialize the database connection if not in build mode
 if (process.env.IS_BUILD !== "true") {
@@ -26,9 +27,10 @@ if (process.env.IS_BUILD !== "true") {
     Circles = db.collection<Circle>("circles");
     ServerSettingsCollection = db.collection<ServerSettings>("serverSettings");
     Members = db.collection<Member>("members");
+    MembershipRequests = db.collection<MembershipRequest>("membershipRequests");
 }
 
-export { client, db, Users, Circles, ServerSettingsCollection, Members };
+export { client, db, Users, Circles, ServerSettingsCollection, Members, MembershipRequests };
 
 // export const client = new MongoClient(MONGO_CONNECTION_STRING, options);
 // export const db = client.db("circles");

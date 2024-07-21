@@ -85,6 +85,20 @@ export interface MemberDisplay extends Member {
     picture: string;
 }
 
+export const membershipRequestSchema = z.object({
+    _id: z.any().optional(),
+    userDid: didSchema,
+    circleId: z.string(),
+    status: z.enum(["pending", "approved", "rejected"]),
+    requestedAt: z.date(),
+    rejectedAt: z.date().optional(),
+    name: z.string().optional(),
+    email: z.string().optional(),
+    picture: z.string().optional(),
+});
+
+export type MembershipRequest = z.infer<typeof membershipRequestSchema>;
+
 export const userGroupSchema = z.object({
     name: z.string(),
     handle: handleSchema,
@@ -124,7 +138,6 @@ export const pageSchema = z.object({
     name: z.string(),
     handle: handleSchema,
     description: z.string(),
-    //accessRules: pageAccessRulesSchema.optional(),
     module: z.string(),
     readOnly: z.boolean().optional(),
     defaultUserGroups: z.array(z.string()).optional(),

@@ -31,6 +31,12 @@ export const features = {
         description: "Remove lower members from the circle",
         defaultUserGroups: ["admins", "moderators"],
     },
+    manage_membership_requests: {
+        name: "Manage Membership Requests",
+        handle: "manage_membership_requests",
+        description: "Manage membership requests to join the circle",
+        defaultUserGroups: ["admins", "moderators"],
+    },
 };
 
 export const maxAccessLevel = 9999999;

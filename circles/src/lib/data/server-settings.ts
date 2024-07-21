@@ -45,7 +45,7 @@ export const getServerSettings = async (): Promise<ServerSettings> => {
     //     // replace default circle with new default circle
     //     let circle = createDefaultCircle();
     //     console.log("Creating new default circle", circle);
-    //     await Circles.updateOne({ _id: new ObjectId(serverConfig.defaultCircleId) }, { $set: circle });
+    //     await Circles.updateOne({ _id: new ObjectId(serverSettings.defaultCircleId) }, { $set: circle });
     // }
 
     if (serverSettings && !serverSettings?.did) {
@@ -129,7 +129,7 @@ export const registerServer = async (
     // if registry isn't local make sure server URL isn't local
     if (!urlIsLocal(registryUrl)) {
         if (urlIsLocal(url)) {
-            //throw new Error("Cannot register server with local URL"); // TODO uncomment when done testing
+            throw new Error("Cannot register server with local URL"); // TODO uncomment when done testing
         }
     }
 
