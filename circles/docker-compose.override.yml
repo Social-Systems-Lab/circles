@@ -1,10 +1,9 @@
 version: "3.8"
-
 services:
     circles:
-        env_file:
-            - .env
-            - .env.local
+        profiles: ["do-not-start"]
+    watchtower:
+        profiles: ["do-not-start"]
 
     db:
         env_file:
@@ -17,6 +16,13 @@ services:
             - .env.local
 
     nginx:
+        depends_on:
+            - minio
         env_file:
             - .env
             - .env.local
+        environment:
+            - CIRCLES_HOST=host.docker.internal
+            - CIRCLES_PORT=${CIRCLES_PORT}
+        extra_hosts:
+            - "host.docker.internal:host-gateway"

@@ -2,27 +2,14 @@ echo "Welcome to Circles platform installation!"
 
 # Check if Docker is installed
 if ! [ -x "$(command -v docker)" ]; then
-    read -p "Docker is not installed. Would you like to install Docker now? (y/n) " install_docker
-    if [ "$install_docker" = "y" ]; then
-        sudo apt update
-        sudo apt install -y docker.io
-    else
-        echo "Docker is required for this installation. Exiting..."
-        exit 1
-    fi
+    echo "Docker is required for this installation. Exiting..."
+    exit 1
 fi
-
 
 # Check if Docker Compose is installed
 if ! [ -x "$(command -v docker-compose)" ]; then
-    read -p "Docker Compose is not installed. Would you like to install Docker Compose now? (y/n) " install_docker_compose
-    if [ "$install_docker_compose" = "y" ]; then
-        sudo apt update
-        sudo apt install -y docker-compose
-    else
-        echo "Docker Compose is required for this installation. Exiting..."
-        exit 1
-    fi
+    echo "Docker Compose is required for this installation. Exiting..."
+    exit 1
 fi
 
 # Create and navigate to the circles directory
@@ -41,6 +28,9 @@ if [ ! -f docker-compose.yml ] || [ ! -f .env ] || [ ! -f nginx.conf.template ] 
     echo "Error: Failed to download required files. Please check your internet connection and try again."
     exit 1
 fi
+
+# Set execute permissions for docker-entrypoint.sh
+chmod +x docker-entrypoint.sh
 
 # Function to prompt for a value with a default, generating a secure value if none is provided
 generate_random_string() {

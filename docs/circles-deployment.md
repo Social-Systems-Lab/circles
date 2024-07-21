@@ -41,10 +41,19 @@ sudo apt-get update
 sudo apt-get upgrade
 ```
 
+## Install Docker
+
+Install Docker and Docker Compose. 
+
+https://docs.docker.com/engine/install/
+
+For Raspberry Pi 5 devices you want to follow the installation guide for the Debian platform.
+
+
 ## Run Circles Install Script
 
 ```bash
-curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/main/circles/install.sh
+curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/dev/circles/install.sh
 chmod +x install.sh
 ./install.sh
 ```
