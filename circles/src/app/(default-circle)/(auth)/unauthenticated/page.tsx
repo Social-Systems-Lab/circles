@@ -10,14 +10,12 @@ export default function Unauthenticated() {
                 <Image src={unauthenticated} alt="" width={400} />
                 <h4>Oops! You&apos;re not logged in</h4>
                 Please log in to access this page.
-                <Suspense fallback={<div></div>}>
-                    <RedirectButtons
-                        buttons={[
-                            { text: "Log in", href: "/login?redirectTo={redirectTo}" },
-                            { text: "Sign up", href: "/signup?redirectTo={redirectTo}" },
-                        ]}
-                    />
-                </Suspense>
+                <RedirectButtons
+                    buttons={[
+                        { text: "Log in", href: "/login?redirectTo={redirectTo}" },
+                        { text: "Sign up", href: "/signup?redirectTo={redirectTo}" },
+                    ]}
+                />
             </div>
         </div>
     );

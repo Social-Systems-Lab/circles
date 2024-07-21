@@ -48,5 +48,11 @@ export const circleAboutFormSchema: FormSchema = {
             type: "image",
             description: "Add cover image to decorate the circle.",
         },
+        {
+            name: "isPublic",
+            label: "Public",
+            type: "switch",
+            description: "Indicates if the Circle is Public. A public circle doesn't require approval to join.",
+        },
     ],
 };

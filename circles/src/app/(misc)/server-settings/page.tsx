@@ -8,9 +8,7 @@ export default async function ServerSettings() {
 
     return (
         <div className="flex flex-1 items-start justify-center pt-[40px]">
-            <Suspense fallback={<div></div>}>
-                <DynamicForm formSchemaId="server-settings-form" initialFormData={serverSettings} showReset={true} />
-            </Suspense>
+            <DynamicForm formSchemaId="server-settings-form" initialFormData={serverSettings} showReset={true} />
         </div>
     );
 }

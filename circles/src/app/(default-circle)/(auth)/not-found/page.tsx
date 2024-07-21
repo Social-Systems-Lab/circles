@@ -12,9 +12,7 @@ export default function NotFound() {
                 <Image src={notFound} alt="" width={400} />
                 <h4>Page not found</h4>
                 We couldn&apos;t find the page you were looking for.
-                <Suspense fallback={<div></div>}>
-                    <RedirectButtons buttons={[{ text: "Go to Home", href: "{redirectTo}" }]} />
-                </Suspense>
+                <RedirectButtons buttons={[{ text: "Go to Home", href: "{redirectTo}" }]} />
             </div>
         </div>
     );

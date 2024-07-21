@@ -16,6 +16,8 @@ export const circleAboutFormAction: FormAction = {
                 _id: values._id,
                 name: values.name,
                 handle: values.handle,
+                description: values.description,
+                isPublic: values.isPublic,
             };
 
             // check if user is authorized to edit circle settings

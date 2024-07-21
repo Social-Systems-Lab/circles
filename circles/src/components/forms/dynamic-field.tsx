@@ -34,6 +34,7 @@ import { features, features as featuresList, pageFeaturePrefix } from "@/lib/dat
 import { CheckCircle2, ChevronDown, ChevronUp, XCircle } from "lucide-react";
 import { getMemberAccessLevel, hasHigherAccess, isAuthorized } from "@/lib/auth/client-auth";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
+import { Switch } from "../ui/switch";
 
 type RenderFieldProps = {
     field: FormFieldType;
@@ -703,6 +704,27 @@ export const DynamicRegistryInfoField: React.FC<RenderFieldProps> = ({ field, fo
     );
 };
 
+export const DynamicSwitchField: React.FC<RenderFieldProps> = ({ field, formField, readOnly }) => (
+    <FormItem>
+        <FormControl>
+            <div className="flex items-center justify-between space-x-2">
+                <Label htmlFor={field.name} className="flex flex-col space-y-2">
+                    <span>{field.label}</span>
+                    <span className="font-normal leading-snug text-muted-foreground">{field.description}</span>
+                </Label>
+                <Switch
+                    id={field.name}
+                    checked={formField.value}
+                    onCheckedChange={formField.onChange}
+                    disabled={readOnly}
+                    aria-readonly={readOnly}
+                />
+            </div>
+        </FormControl>
+        <FormMessage />
+    </FormItem>
+);
+
 export const DynamicField: React.FC<RenderFieldProps> = ({ field, formField, control, readOnly }) => {
     switch (field.type) {
         case "registry-info":
@@ -728,6 +750,8 @@ export const DynamicField: React.FC<RenderFieldProps> = ({ field, formField, con
             return DynamicPasswordField({ field, formField, control, readOnly });
         case "image":
             return DynamicImageField({ field, formField, control, readOnly });
+        case "switch":
+            return DynamicSwitchField({ field, formField, control, readOnly });
         default:
             return null;
     }

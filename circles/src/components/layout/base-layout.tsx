@@ -27,9 +27,7 @@ const BaseLayout = ({ children, circle, serverConfig, isDefaultCircle }: BaseLay
                     <TopBar circle={circle} isDefaultCircle={isDefaultCircle} />
                     <div className="flex flex-1 flex-row">
                         <div className={`relative flex min-w-[400px] flex-1`}>{children}</div>
-                        <Suspense fallback={<div></div>}>
-                            <Map mapboxKey={serverConfig?.mapboxKey ?? ""} />
-                        </Suspense>
+                        <Map mapboxKey={serverConfig?.mapboxKey ?? ""} />
                     </div>
                     <Toaster />
                     <Authenticator />

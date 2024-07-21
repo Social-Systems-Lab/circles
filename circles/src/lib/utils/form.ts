@@ -18,6 +18,9 @@ export const getFormValues = (formData: FormData, formSchema: FormSchema): Recor
         if (fieldInfo?.type === "array" || fieldInfo?.type === "table" || fieldInfo?.type === "access-rules") {
             values[key] = JSON.parse(value);
             continue;
+        } else if (fieldInfo?.type === "switch") {
+            values[key] = value === "true";
+            continue;
         }
         values[key] = value;
     }
@@ -46,6 +49,10 @@ export const generateZodSchema = (fields: FormField[]): ZodSchema<any> => {
             let schema: z.ZodTypeAny;
 
             switch (field.type) {
+                case "switch":
+                    schema = z.boolean();
+                    break;
+
                 case "access-rules":
                     schema = accessRulesSchema;
                     break;

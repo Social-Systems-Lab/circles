@@ -30,12 +30,8 @@ export default function TopBar({ circle, isDefaultCircle }: TopBarProps) {
                             <h4 className="m-0 ml-4 p-0">{circle?.name ?? "Circles"}</h4>
                         </Link>
                     </div>
-                    <Suspense fallback={<div></div>}>
-                        <TopBarNavItems circle={circle} isDefaultCircle={isDefaultCircle} />
-                    </Suspense>
-                    <Suspense fallback={<div></div>}>
-                        <ProfileMenu />
-                    </Suspense>
+                    <TopBarNavItems circle={circle} isDefaultCircle={isDefaultCircle} />
+                    <ProfileMenu />
                 </div>
             </div>
         </>

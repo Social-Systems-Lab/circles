@@ -10,14 +10,12 @@ export default function Unauthenticated() {
                 <Image src={unauthorized} alt="" width={400} />
                 <h4>Access Denied</h4>
                 You do not have permission to view this page.
-                <Suspense fallback={<div></div>}>
-                    <RedirectButtons
-                        buttons={[
-                            { text: "Log in", href: "/login?redirectTo={redirectTo}" },
-                            { text: "Sign up", href: "/signup?redirectTo={redirectTo}" },
-                        ]}
-                    />
-                </Suspense>
+                <RedirectButtons
+                    buttons={[
+                        { text: "Log in", href: "/login?redirectTo={redirectTo}" },
+                        { text: "Sign up", href: "/signup?redirectTo={redirectTo}" },
+                    ]}
+                />
             </div>
         </div>
     );

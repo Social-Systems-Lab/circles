@@ -10,14 +10,12 @@ export default function LoggedOut() {
                 <Image src={loggedOut} alt="" width={400} />
                 <h4>You&apos;ve been logged out</h4>
                 We hope to see you again soon!
-                <Suspense fallback={<div></div>}>
-                    <RedirectButtons
-                        buttons={[
-                            { text: "Log in", href: "/login?redirectTo={redirectTo}" },
-                            { text: "Return to page", href: "{redirectTo}" },
-                        ]}
-                    />
-                </Suspense>
+                <RedirectButtons
+                    buttons={[
+                        { text: "Log in", href: "/login?redirectTo={redirectTo}" },
+                        { text: "Return to page", href: "{redirectTo}" },
+                    ]}
+                />
             </div>
         </div>
     );
