@@ -35,6 +35,7 @@ export const createDefaultCircle = (): Circle => {
         userGroups: defaultUserGroups,
         accessRules: getDefaultAccessRules(),
         pages: defaultPages,
+        isPublic: true,
     };
     return circle;
 };

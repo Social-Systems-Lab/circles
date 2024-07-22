@@ -7,5 +7,5 @@ type HomeProps = {
 
 export default async function Home({ params }: HomeProps) {
     let circle = await getCircleByHandle(params.handle);
-    return <HomeModule circle={circle} />;
+    return <HomeModule circle={circle} isDefaultCircle={false} />;
 }

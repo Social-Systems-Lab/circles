@@ -19,7 +19,6 @@ const RejectedRequestsTable: React.FC<RejectedRequestsTableProps> = ({ circle, p
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Rejected At</TableHead>
-                    <TableHead>Actions</TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>
@@ -32,13 +31,10 @@ const RejectedRequestsTable: React.FC<RejectedRequestsTableProps> = ({ circle, p
                 )}
 
                 {requests.map((request) => (
-                    <TableRow key={request.id}>
+                    <TableRow key={request._id}>
                         <TableCell>{request.name}</TableCell>
                         <TableCell>{request.email}</TableCell>
-                        <TableCell>{new Date(request.rejectedAt).toLocaleDateString()}</TableCell>
-                        <TableCell>
-                            <Button variant="outline">Reconsider</Button>
-                        </TableCell>
+                        <TableCell>{new Date(request.rejectedAt!).toLocaleDateString()}</TableCell>
                     </TableRow>
                 ))}
             </TableBody>

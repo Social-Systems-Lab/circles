@@ -47,11 +47,13 @@ import { useToast } from "@/components/ui/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FormProvider, useForm } from "react-hook-form";
 import { MemberUserGroupsGrid } from "@/components/forms/dynamic-field";
+import InviteButton from "../home/invite-button";
 
 interface MemberTableProps {
     members: MemberDisplay[];
     circle: Circle;
     page: Page;
+    isDefaultCircle: boolean;
 }
 
 export const multiSelectFilter: FilterFn<MemberDisplay> = (
@@ -93,7 +95,7 @@ const SortIcon = ({ sortDir }: { sortDir: string | boolean }) => {
     }
 };
 
-const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page }) => {
+const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefaultCircle }) => {
     const data = React.useMemo(() => members, [members]);
     const [sorting, setSorting] = React.useState<SortingState>([]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -264,6 +266,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page }) => {
                     value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
                     onChange={(event) => table.getColumn("name")?.setFilterValue(event.target.value)}
                 />
+                <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />
                 <Select
                     value={(table.getColumn("userGroups")?.getFilterValue() as string) ?? ""}
                     onValueChange={(value) => {

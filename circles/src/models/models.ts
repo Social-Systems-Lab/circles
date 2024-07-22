@@ -74,6 +74,7 @@ export type Membership = {
 
 export interface UserPrivate extends User {
     memberships: Membership[];
+    pendingRequests: MembershipRequest[];
 }
 
 export type Partial<T> = {
@@ -92,6 +93,7 @@ export const membershipRequestSchema = z.object({
     status: z.enum(["pending", "approved", "rejected"]),
     requestedAt: z.date(),
     rejectedAt: z.date().optional(),
+    approvedAt: z.date().optional(),
     name: z.string().optional(),
     email: z.string().optional(),
     picture: z.string().optional(),

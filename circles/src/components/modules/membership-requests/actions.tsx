@@ -3,10 +3,10 @@
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getCirclePath } from "@/lib/data/circle";
 import { features } from "@/lib/data/constants";
+import { addMember } from "@/lib/data/member";
 import {
     getAllMembershipRequests,
-    getMembershipRequests,
-    getRejectedRequests,
+    getMembershipRequest,
     updateMembershipRequestStatus,
 } from "@/lib/data/membership-requests";
 import { Circle, MembershipRequest, Page } from "@/models/models";
@@ -59,14 +59,18 @@ export const approveMembershipRequestAction = async (
             return { success: false, message: "You are not authorized to manage membership requests" };
         }
 
-        await updateMembershipRequestStatus(requestId, "approved");
+        // get member request
+        const request = await getMembershipRequest(requestId);
 
-        // Here you would also add the user to the circle as a member
-        // This part depends on your specific implementation
+        // add member
+        await addMember(request.userDid, circle._id ?? "", ["members"]);
 
-        // Clear page cache
+        // clear page cache
         let circlePath = await getCirclePath(circle);
         revalidatePath(`${circlePath}${page?.handle}`);
+
+        // update status of request
+        await updateMembershipRequestStatus(request.userDid, circle._id!, "approved");
 
         return { success: true };
     } catch (error) {
@@ -88,43 +92,18 @@ export const rejectMembershipRequestAction = async (
             return { success: false, message: "You are not authorized to manage membership requests" };
         }
 
-        await updateMembershipRequestStatus(requestId, "rejected");
+        // get member request
+        const request = await getMembershipRequest(requestId);
 
         // Clear page cache
         let circlePath = await getCirclePath(circle);
         revalidatePath(`${circlePath}${page?.handle}`);
+
+        // update status of request
+        await updateMembershipRequestStatus(request.userDid, circle._id!, "rejected");
 
         return { success: true };
     } catch (error) {
         return { success: false, message: "Failed to reject membership request. " + error?.toString() };
-    }
-};
-
-export const reconsiderRejectedRequestAction = async (
-    requestId: string,
-    circle: Circle,
-    page: Page,
-): Promise<UpdateMembershipRequestResponse> => {
-    try {
-        const userDid = await getAuthenticatedUserDid();
-
-        // Check if the user is authorized to reconsider rejected requests
-        const authorized = await isAuthorized(userDid, circle._id ?? "", features.manage_membership_requests);
-        if (!authorized) {
-            return { success: false, message: "You are not authorized to reconsider rejected requests" };
-        }
-
-        // Here you would change the status back to "pending"
-        // This might involve creating a new function in your data layer
-        // For now, we'll reuse the updateMembershipRequestStatus function
-        await updateMembershipRequestStatus(requestId, "pending");
-
-        // Clear page cache
-        let circlePath = await getCirclePath(circle);
-        revalidatePath(`${circlePath}${page?.handle}`);
-
-        return { success: true };
-    } catch (error) {
-        return { success: false, message: "Failed to reconsider rejected request. " + error?.toString() };
     }
 };

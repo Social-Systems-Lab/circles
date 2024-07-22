@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { Circle } from "@/models/models";
 import JoinButton from "./join-button";
 import { FaUsers } from "react-icons/fa6";
+import InviteButton from "./invite-button";
 
 type CircleCoverProps = {
     circle: Circle;
@@ -45,9 +46,10 @@ const CirclePicture = ({ circle, className, size = 40 }: CirclePictureProps) => 
 
 type HomeProps = {
     circle: Circle;
+    isDefaultCircle: boolean;
 };
 
-export default async function HomeModule({ circle }: HomeProps) {
+export default async function HomeModule({ circle, isDefaultCircle }: HomeProps) {
     return (
         <div className="flex flex-1 flex-col">
             <CircleCover circle={circle} />
@@ -55,7 +57,8 @@ export default async function HomeModule({ circle }: HomeProps) {
                 <div className="absolute top-[-60px]">
                     <CirclePicture circle={circle} size={124} />
                 </div>
-                <div className="absolute right-2 top-2">
+                <div className="absolute right-2 top-2 flex flex-row gap-1">
+                    <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />
                     <JoinButton circle={circle} />
                 </div>
             </div>

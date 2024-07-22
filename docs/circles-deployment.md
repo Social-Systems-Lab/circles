@@ -22,7 +22,7 @@ docker buildx create --name mybuilder --use
 docker buildx build --platform linux/arm64,linux/amd64 -t sslorg/circles:latest --push .
 ```
 
-3. **Build a regular Docker Image:**
+3. **(Option B) Build a regular Docker Image:**
 
 ```bash
 docker build -t sslorg/circles:latest .

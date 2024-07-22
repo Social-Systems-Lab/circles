@@ -50,71 +50,13 @@ export const getAllMembershipRequests = async (
     return { pendingRequests, rejectedRequests };
 };
 
-export const getMembershipRequests = async (circleId: string): Promise<MembershipRequest[]> => {
-    if (!circleId) return [];
+export const getMembershipRequest = async (requestId: string): Promise<MembershipRequest> => {
+    const request = await MembershipRequests.findOne({ _id: new ObjectId(requestId) });
+    if (!request) {
+        throw new Error("Membership request not found");
+    }
 
-    return [];
-
-    const requests = await MembershipRequests.aggregate([
-        { $match: { circleId: circleId, status: "pending" } },
-        {
-            $lookup: {
-                from: "users",
-                localField: "userDid",
-                foreignField: "did",
-                as: "userDetails",
-            },
-        },
-        { $unwind: "$userDetails" },
-        {
-            $project: {
-                _id: { $toString: "$_id" },
-                userDid: 1,
-                circleId: 1,
-                status: 1,
-                requestedAt: 1,
-                name: "$userDetails.name",
-                email: "$userDetails.email",
-                picture: "$userDetails.picture",
-            },
-        },
-    ]).toArray();
-
-    return requests as MembershipRequest[];
-};
-
-export const getRejectedRequests = async (circleId: string): Promise<MembershipRequest[]> => {
-    if (!circleId) return [];
-
-    return [];
-
-    const requests = await MembershipRequests.aggregate([
-        { $match: { circleId: circleId, status: "rejected" } },
-        {
-            $lookup: {
-                from: "users",
-                localField: "userDid",
-                foreignField: "did",
-                as: "userDetails",
-            },
-        },
-        { $unwind: "$userDetails" },
-        {
-            $project: {
-                _id: { $toString: "$_id" },
-                userDid: 1,
-                circleId: 1,
-                status: 1,
-                requestedAt: 1,
-                rejectedAt: 1,
-                name: "$userDetails.name",
-                email: "$userDetails.email",
-                picture: "$userDetails.picture",
-            },
-        },
-    ]).toArray();
-
-    return requests as MembershipRequest[];
+    return request as MembershipRequest;
 };
 
 export const createMembershipRequest = async (userDid: string, circleId: string): Promise<MembershipRequest> => {
@@ -134,11 +76,20 @@ export const createMembershipRequest = async (userDid: string, circleId: string)
     return request;
 };
 
+export const deleteMembershipRequest = async (userDid: string, circleId: string): Promise<boolean> => {
+    const result = await MembershipRequests.deleteOne({ userDid, circleId, status: "pending" });
+    if (result.deletedCount === 0) {
+        throw new Error("No pending request found for this user and circle");
+    }
+    return true;
+};
+
 export const updateMembershipRequestStatus = async (
-    requestId: string,
+    userDid: string,
+    circleId: string,
     newStatus: "approved" | "rejected",
 ): Promise<MembershipRequest> => {
-    const request = await MembershipRequests.findOne({ _id: new ObjectId(requestId) });
+    const request = await MembershipRequests.findOne({ userDid, circleId });
     if (!request) {
         throw new Error("Membership request not found");
     }
@@ -149,9 +100,11 @@ export const updateMembershipRequestStatus = async (
 
     if (newStatus === "rejected") {
         update.rejectedAt = new Date();
+    } else {
+        update.approvedAt = new Date();
     }
 
-    await MembershipRequests.updateOne({ _id: new ObjectId(requestId) }, { $set: update });
+    await MembershipRequests.updateOne({ userDid, circleId }, { $set: update });
 
     return { ...request, ...update } as MembershipRequest;
 };

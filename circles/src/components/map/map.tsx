@@ -6,6 +6,8 @@ import { LiaGlobeAfricaSolid } from "react-icons/lia";
 import { sidePanelWidth, topBarHeight } from "../../app/constants";
 import useWindowDimensions from "@/components/utils/use-window-dimensions";
 import mapboxgl from "mapbox-gl"; // eslint-disable-line import/no-webpack-loader-syntax
+import { useAtom } from "jotai";
+import { mapOpenAtom } from "@/lib/data/atoms";
 
 const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
     const mapContainer = useRef(null);
@@ -33,7 +35,7 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
 };
 
 export default function Map({ mapboxKey }: { mapboxKey: string }) {
-    const [mapOpen, setMapOpen] = useState(false);
+    const [mapOpen, setMapOpen] = useAtom(mapOpenAtom);
     const { windowWidth, windowHeight } = useWindowDimensions();
 
     if (!mapboxKey) return null;
