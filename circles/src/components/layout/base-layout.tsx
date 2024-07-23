@@ -6,6 +6,7 @@ import { Provider } from "jotai";
 import { Authenticator } from "@/components/auth/authenticator";
 import { Circle, ServerSettings } from "@/models/models";
 import LeftBar from "./left-bar";
+import { ProfileMenu } from "./profile-menu";
 
 const inter = Inter({ subsets: ["latin"] });
 const wix = Wix_Madefor_Display({ subsets: ["latin"], variable: "--font-wix-display" });
@@ -25,9 +26,13 @@ const BaseLayout = ({ children, circle, serverConfig, isDefaultCircle }: BaseLay
                 <main className="relative flex flex-row">
                     <LeftBar circle={circle} isDefaultCircle={isDefaultCircle} />
                     <div className="flex flex-1 flex-row">
-                        <div className={`relative flex min-w-[400px] flex-1`}>{children}</div>
+                        <div className={`relative flex min-w-[420px] flex-1`}>{children}</div>
                         <Map mapboxKey={serverConfig?.mapboxKey ?? ""} />
                     </div>
+                    <div className="fixed right-[20px] top-[10px] z-40">
+                        <ProfileMenu />
+                    </div>
+
                     <Toaster />
                     <Authenticator />
                 </main>

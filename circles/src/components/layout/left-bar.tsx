@@ -12,9 +12,9 @@ type LeftBarProps = {
 export default function LeftBar({ circle, isDefaultCircle }: LeftBarProps) {
     return (
         <>
-            <div className={`h-screen w-[72px] flex-shrink-0`}></div>
+            <div className={`h-full w-[72px] flex-shrink-0`}></div>
             <div
-                className={`fixed top-0 z-[100] h-screen w-[72px] bg-white`}
+                className={`fixed top-0 z-[100] h-full w-[72px] bg-white`}
                 style={{
                     boxShadow: "0 2px 6px 2px rgba(60, 64, 67, 0.15)",
                 }}
@@ -33,9 +33,6 @@ export default function LeftBar({ circle, isDefaultCircle }: LeftBarProps) {
                     </div>
                     <LeftBarNavItems circle={circle} isDefaultCircle={isDefaultCircle} />
                 </div>
-            </div>
-            <div className="absolute right-0 top-0 z-40">
-                <ProfileMenu />
             </div>
         </>
     );

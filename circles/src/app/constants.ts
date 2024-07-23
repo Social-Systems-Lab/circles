@@ -1,4 +1,4 @@
-export const sidePanelWidth = 400;
+export const sidePanelWidth = 420;
 export const sidePanelWidthPx = `${sidePanelWidth}px`;
 
 export const topBarHeight = 60;

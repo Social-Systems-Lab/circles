@@ -31,21 +31,31 @@ export const FormNav: React.FC<FormNavProps> = ({ items, circle, isDefaultCircle
     };
 
     return (
-        <nav className={cn("fixed flex space-x-2 lg:flex-col lg:space-x-0 lg:space-y-1", className)} {...props}>
-            {filteredItems.map((item) => (
-                <Link
-                    key={item.handle}
-                    href={getPath(item)}
-                    className={cn(
-                        buttonVariants({ variant: "ghost" }),
-                        pathname === getPath(item) ? "bg-muted hover:bg-muted" : "hover:bg-transparent hover:underline",
-                        "justify-start",
-                        "lg:min-w-[200px]",
-                    )}
-                >
-                    {item.name}
-                </Link>
-            ))}
-        </nav>
+        <>
+            <nav
+                className={cn(
+                    "relative ml-2 mr-2 flex flex-wrap space-x-2 lg:fixed lg:ml-0 lg:mr-0 lg:flex-col lg:space-x-0 lg:space-y-1",
+                    className,
+                )}
+                {...props}
+            >
+                {filteredItems.map((item) => (
+                    <Link
+                        key={item.handle}
+                        href={getPath(item)}
+                        className={cn(
+                            buttonVariants({ variant: "ghost" }),
+                            pathname === getPath(item)
+                                ? "bg-muted hover:bg-muted"
+                                : "hover:bg-transparent hover:underline",
+                            "justify-start",
+                            "lg:min-w-[200px]",
+                        )}
+                    >
+                        {item.name}
+                    </Link>
+                ))}
+            </nav>
+        </>
     );
 };

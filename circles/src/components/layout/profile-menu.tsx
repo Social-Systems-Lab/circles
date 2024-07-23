@@ -7,6 +7,16 @@ import { logOut } from "../auth/actions";
 import { Loader2 } from "lucide-react";
 import { userAtom, authenticatedAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { UserPicture } from "../modules/members/user-picture";
+import { HiOutlineLogout } from "react-icons/hi";
 
 export const ProfileMenu = () => {
     const router = useRouter();
@@ -38,21 +48,32 @@ export const ProfileMenu = () => {
     };
 
     return (
-        <div className="flex flex-row items-center justify-center gap-1 pr-4">
-            {authenticated && (
-                <Button className="h-full w-full" onClick={onLogOutClick} variant="outline">
-                    {isPending ? (
-                        <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Logging out...
-                        </>
-                    ) : (
-                        "Log out"
-                    )}
-                </Button>
+        <div className="flex flex-row items-center justify-center gap-1">
+            {authenticated && user && (
+                <>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button className="h-auto w-auto rounded-full p-0" variant="ghost">
+                                <UserPicture name={user.name} picture={user.picture} size="32px" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <div className="flex w-[160px] flex-col items-center justify-center pt-4">
+                                <UserPicture name={user.name} picture={user.picture} size="108px" />
+                                <span className="text-md pb-4 pt-4 font-bold">{user.name}</span>
+                            </div>
+                            <DropdownMenuSeparator />
+                            {/* <DropdownMenuItem>Edit Profile</DropdownMenuItem> */}
+                            <DropdownMenuItem onClick={onLogOutClick}>
+                                <HiOutlineLogout className="mr-2 h-4 w-4" />
+                                <span>Log out</span>
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </>
             )}
 
-            {!authenticated && (
+            {authenticated === false && (
                 <>
                     <Button className="h-full w-full" onClick={onLogInClick} variant="link">
                         Log in

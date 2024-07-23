@@ -48,6 +48,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { FormProvider, useForm } from "react-hook-form";
 import { MemberUserGroupsGrid } from "@/components/forms/dynamic-field";
 import InviteButton from "../home/invite-button";
+import { useIsCompact } from "@/components/utils/use-is-compact";
+import { UserPicture } from "./user-picture";
 
 interface MemberTableProps {
     members: MemberDisplay[];
@@ -66,25 +68,6 @@ export const multiSelectFilter: FilterFn<MemberDisplay> = (
     return userGroups?.includes(filterValue);
 };
 
-export const UserPicture = ({ name, picture }: { name: string; picture: string }) => {
-    var getInitials = () => {
-        var names = name.split(" "),
-            initials = names[0].substring(0, 1).toUpperCase();
-
-        if (names.length > 1) {
-            initials += names[names.length - 1].substring(0, 1).toUpperCase();
-        }
-        return initials;
-    };
-
-    return (
-        <Avatar>
-            <AvatarImage src={picture} />
-            <AvatarFallback>{getInitials()}</AvatarFallback>
-        </Avatar>
-    );
-};
-
 const SortIcon = ({ sortDir }: { sortDir: string | boolean }) => {
     if (!sortDir) return null;
 
@@ -93,6 +76,10 @@ const SortIcon = ({ sortDir }: { sortDir: string | boolean }) => {
     } else {
         return <ArrowDown className="ml-2 h-4 w-4" />;
     }
+};
+
+const ThreeColumnLayout = ({ children }: { children: React.ReactNode }) => {
+    return <div className="grid grid-cols-3 gap-2">{children}</div>;
 };
 
 const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefaultCircle }) => {
@@ -105,6 +92,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
     const [selectedMember, setSelectedMember] = useState<MemberDisplay | null>(null);
     const [isPending, startTransition] = useTransition();
     const [selectedUserGroups, setSelectedUserGroups] = useState<string[]>([]);
+    const isCompact = useIsCompact();
 
     // if user is allowed to edit settings show edit button
     const canEditUserGroups =
@@ -189,7 +177,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
             columnVisibility: {
                 name: true,
                 joinedAt: true,
-                userGroups: true,
+                userGroups: !isCompact,
             },
         },
     });
@@ -259,173 +247,178 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
     };
 
     return (
-        <div className="flex flex-1 flex-col">
-            <div className="flex flex-row gap-2">
-                <Input
-                    placeholder="Search member..."
-                    value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
-                    onChange={(event) => table.getColumn("name")?.setFilterValue(event.target.value)}
-                />
-                <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />
-                <Select
-                    value={(table.getColumn("userGroups")?.getFilterValue() as string) ?? ""}
-                    onValueChange={(value) => {
-                        if (value === "everyone") {
-                            table.getColumn("userGroups")?.setFilterValue("");
-                        } else {
-                            table.getColumn("userGroups")?.setFilterValue(value);
-                        }
-                    }}
-                >
-                    <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Everyone" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="everyone">Everyone</SelectItem>
-                        {circle.userGroups?.map((group) => (
-                            <SelectItem key={group.handle} value={group.handle}>
-                                {group.name}
-                            </SelectItem>
+        <div className="flex flex-1 flex-row justify-center">
+            <div className="ml-2 mr-2 mt-4 flex max-w-[1000px] flex-1 flex-col">
+                <div className="flex w-full flex-row items-center gap-2">
+                    <div className="flex flex-1 flex-col">
+                        <Input
+                            placeholder="Search member..."
+                            value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
+                            onChange={(event) => table.getColumn("name")?.setFilterValue(event.target.value)}
+                        />
+                    </div>
+                    <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />
+                    <Select
+                        value={(table.getColumn("userGroups")?.getFilterValue() as string) ?? ""}
+                        onValueChange={(value) => {
+                            if (value === "everyone") {
+                                table.getColumn("userGroups")?.setFilterValue("");
+                            } else {
+                                table.getColumn("userGroups")?.setFilterValue(value);
+                            }
+                        }}
+                    >
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Everyone" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="everyone">Everyone</SelectItem>
+                            {circle.userGroups?.map((group) => (
+                                <SelectItem key={group.handle} value={group.handle}>
+                                    {group.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <Table className="mt-1">
+                    <TableHeader>
+                        {table.getHeaderGroups().map((headerGroup) => (
+                            <TableRow key={headerGroup.id}>
+                                {headerGroup.headers.map((header) => {
+                                    return (
+                                        <TableHead key={header.id}>
+                                            {header.isPlaceholder
+                                                ? null
+                                                : flexRender(header.column.columnDef.header, header.getContext())}
+                                        </TableHead>
+                                    );
+                                })}
+                                <TableHead className="w-[40px]"></TableHead>
+                            </TableRow>
                         ))}
-                    </SelectContent>
-                </Select>
-            </div>
-            <Table className="mt-1">
-                <TableHeader>
-                    {table.getHeaderGroups().map((headerGroup) => (
-                        <TableRow key={headerGroup.id}>
-                            {headerGroup.headers.map((header) => {
-                                return (
-                                    <TableHead key={header.id}>
-                                        {header.isPlaceholder
-                                            ? null
-                                            : flexRender(header.column.columnDef.header, header.getContext())}
-                                    </TableHead>
-                                );
-                            })}
-                            <TableHead className="w-[40px]"></TableHead>
-                        </TableRow>
-                    ))}
-                </TableHeader>
-                <TableBody>
-                    {table.getRowModel().rows?.length ? (
-                        table.getRowModel().rows.map((row) => {
-                            const member = row.original;
-                            const canEditUserGroupRow =
-                                canEditUserGroups && hasHigherAccess(user, member, circle, canEditSameLevelUserGroups);
-                            const canRemoveUserRow =
-                                canRemoveUser && hasHigherAccess(user, member, circle, canRemoveSameLevelUser);
+                    </TableHeader>
+                    <TableBody>
+                        {table.getRowModel().rows?.length ? (
+                            table.getRowModel().rows.map((row) => {
+                                const member = row.original;
+                                const canEditUserGroupRow =
+                                    canEditUserGroups &&
+                                    hasHigherAccess(user, member, circle, canEditSameLevelUserGroups);
+                                const canRemoveUserRow =
+                                    canRemoveUser && hasHigherAccess(user, member, circle, canRemoveSameLevelUser);
 
-                            return (
-                                <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
-                                    {row.getVisibleCells().map((cell) => (
-                                        <TableCell key={cell.id}>
-                                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                return (
+                                    <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
+                                        {row.getVisibleCells().map((cell) => (
+                                            <TableCell key={cell.id}>
+                                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                            </TableCell>
+                                        ))}
+                                        <TableCell className="w-[40px]">
+                                            {(canEditUserGroupRow || canRemoveUserRow) && (
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" className="h-8 w-8 p-0">
+                                                            <span className="sr-only">Open menu</span>
+                                                            <MoreHorizontal className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                        <DropdownMenuSeparator />
+                                                        {canEditUserGroupRow && (
+                                                            <DropdownMenuItem
+                                                                onClick={() => onOpenEditUserGroupsDialog(member)}
+                                                            >
+                                                                Edit User Groups
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                        {canRemoveUserRow && (
+                                                            <DropdownMenuItem
+                                                                onClick={() => {
+                                                                    setSelectedMember(member);
+                                                                    setRemoveMemberDialogOpen(true);
+                                                                }}
+                                                            >
+                                                                Remove User
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            )}
                                         </TableCell>
-                                    ))}
-                                    <TableCell className="w-[40px]">
-                                        {(canEditUserGroupRow || canRemoveUserRow) && (
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" className="h-8 w-8 p-0">
-                                                        <span className="sr-only">Open menu</span>
-                                                        <MoreHorizontal className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                    <DropdownMenuSeparator />
-                                                    {canEditUserGroupRow && (
-                                                        <DropdownMenuItem
-                                                            onClick={() => onOpenEditUserGroupsDialog(member)}
-                                                        >
-                                                            Edit User Groups
-                                                        </DropdownMenuItem>
-                                                    )}
-                                                    {canRemoveUserRow && (
-                                                        <DropdownMenuItem
-                                                            onClick={() => {
-                                                                setSelectedMember(member);
-                                                                setRemoveMemberDialogOpen(true);
-                                                            }}
-                                                        >
-                                                            Remove User
-                                                        </DropdownMenuItem>
-                                                    )}
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
+                                    </TableRow>
+                                );
+                            })
+                        ) : (
+                            <TableRow>
+                                <TableCell colSpan={columns.length + (canEdit ? 1 : 0)} className="h-24 text-center">
+                                    No members.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+                <Dialog open={removeMemberDialogOpen} onOpenChange={setRemoveMemberDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Are you sure?</DialogTitle>
+                            <DialogDescription>
+                                Do you want to remove the user <b>{selectedMember?.name}</b> from the circle?
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                            <DialogClose asChild>
+                                <Button variant="outline">Cancel</Button>
+                            </DialogClose>
+                            <Button variant="destructive" onClick={onConfirmRemoveMember} disabled={isPending}>
+                                {isPending ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Removing...
+                                    </>
+                                ) : (
+                                    <>Remove</>
+                                )}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+                <Dialog open={editUserGroupsDialogOpen} onOpenChange={setEditUserGroupsDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Edit User Groups</DialogTitle>
+                            <DialogDescription>Edit user groups for {selectedMember?.name}.</DialogDescription>
+                        </DialogHeader>
+                        <FormProvider {...methods}>
+                            <form onSubmit={methods.handleSubmit(onConfirmEditUserGroups)}>
+                                <MemberUserGroupsGrid
+                                    currentUser={user}
+                                    members={selectedMember ? [selectedMember] : []}
+                                    control={methods.control}
+                                    circle={circle}
+                                />
+                                <DialogFooter className="pt-4">
+                                    <DialogClose asChild>
+                                        <Button variant="outline">Cancel</Button>
+                                    </DialogClose>
+                                    <Button type="submit" disabled={isPending}>
+                                        {isPending ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Saving...
+                                            </>
+                                        ) : (
+                                            <>Save</>
                                         )}
-                                    </TableCell>
-                                </TableRow>
-                            );
-                        })
-                    ) : (
-                        <TableRow>
-                            <TableCell colSpan={columns.length + (canEdit ? 1 : 0)} className="h-24 text-center">
-                                No members.
-                            </TableCell>
-                        </TableRow>
-                    )}
-                </TableBody>
-            </Table>
-            <Dialog open={removeMemberDialogOpen} onOpenChange={setRemoveMemberDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Are you sure?</DialogTitle>
-                        <DialogDescription>
-                            Do you want to remove the user <b>{selectedMember?.name}</b> from the circle?
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <DialogClose asChild>
-                            <Button variant="outline">Cancel</Button>
-                        </DialogClose>
-                        <Button variant="destructive" onClick={onConfirmRemoveMember} disabled={isPending}>
-                            {isPending ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Removing...
-                                </>
-                            ) : (
-                                <>Remove</>
-                            )}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-            <Dialog open={editUserGroupsDialogOpen} onOpenChange={setEditUserGroupsDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Edit User Groups</DialogTitle>
-                        <DialogDescription>Edit user groups for {selectedMember?.name}.</DialogDescription>
-                    </DialogHeader>
-                    <FormProvider {...methods}>
-                        <form onSubmit={methods.handleSubmit(onConfirmEditUserGroups)}>
-                            <MemberUserGroupsGrid
-                                currentUser={user}
-                                members={selectedMember ? [selectedMember] : []}
-                                control={methods.control}
-                                circle={circle}
-                            />
-                            <DialogFooter className="pt-4">
-                                <DialogClose asChild>
-                                    <Button variant="outline">Cancel</Button>
-                                </DialogClose>
-                                <Button type="submit" disabled={isPending}>
-                                    {isPending ? (
-                                        <>
-                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                            Saving...
-                                        </>
-                                    ) : (
-                                        <>Save</>
-                                    )}
-                                </Button>
-                            </DialogFooter>
-                        </form>
-                    </FormProvider>
-                </DialogContent>
-            </Dialog>
+                                    </Button>
+                                </DialogFooter>
+                            </form>
+                        </FormProvider>
+                    </DialogContent>
+                </Dialog>
+            </div>
         </div>
     );
 };

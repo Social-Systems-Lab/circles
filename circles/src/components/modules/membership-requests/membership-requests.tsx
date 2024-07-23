@@ -16,7 +16,7 @@ interface MembershipGatewayProps {
 
 const MembershipGateway: React.FC<MembershipGatewayProps> = ({ circle, page, pendingRequests, rejectedRequests }) => {
     return (
-        <Tabs defaultValue="pending" className="w-full">
+        <Tabs defaultValue="pending" className="w-full pl-6 pr-6">
             <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="pending">Pending Requests</TabsTrigger>
                 <TabsTrigger value="rejected">Rejected Requests</TabsTrigger>

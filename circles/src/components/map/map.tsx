@@ -43,12 +43,18 @@ export default function Map({ mapboxKey }: { mapboxKey: string }) {
     return (
         <>
             {mapOpen && (
-                <div
-                    className={`relative`}
-                    style={{ width: windowWidth - sidePanelWidth + "px", height: windowHeight - topBarHeight + "px" }}
-                >
-                    <MapBox mapboxKey={mapboxKey} />
-                </div>
+                <>
+                    <div
+                        className="relative flex-grow-[1000]"
+                        style={{ width: windowWidth - sidePanelWidth - 72 + "px", height: windowHeight + "px" }}
+                    ></div>
+                    <div
+                        className={`fixed right-0`}
+                        style={{ width: windowWidth - sidePanelWidth - 72 + "px", height: windowHeight + "px" }}
+                    >
+                        <MapBox mapboxKey={mapboxKey} />
+                    </div>
+                </>
             )}
             <div
                 className="group fixed bottom-[10px] right-5 z-30 cursor-pointer rounded-full bg-[#242424] p-[2px] hover:bg-[#304678e6]"

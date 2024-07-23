@@ -306,3 +306,12 @@ a.textLink {
 a.textLink:hover {
     color: rgb(var(--link-hover-rgb));
 }
+
+/* Mapbox */
+.mapboxgl-ctrl-bottom-right {
+    position: absolute;
+    left: 10px;
+    bottom: 2px;
+    font-size: 14px;
+    color: #93949d;
+}

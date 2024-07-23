@@ -131,7 +131,10 @@ export const CircleMembershipButton = ({ circle }: CircleMembershipButtonProps) 
                 <>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant={isCompact ? "ghost" : "outline"}>
+                            <Button
+                                variant={isCompact ? "ghost" : "outline"}
+                                className={isCompact ? "h-[32px] w-[32px] p-0" : ""}
+                            >
                                 {isCompact ? (
                                     <MoreVertical className="h-4 w-4" />
                                 ) : (
