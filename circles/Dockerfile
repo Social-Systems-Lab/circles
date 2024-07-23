@@ -29,6 +29,7 @@ ENV NODE_ENV production
 
 COPY --from=builder  /app/.next/standalone ./
 COPY --from=builder  /app/.next/static ./.next/static
+COPY --from=builder  /app/next.config.mjs ./
 
 
 EXPOSE 3001

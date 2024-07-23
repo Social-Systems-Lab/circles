@@ -4,6 +4,7 @@ import { AccountType, Membership, RegistryInfo, User, UserPrivate } from "@/mode
 import { Members, Users } from "./db";
 import { ObjectId } from "mongodb";
 import { signRegisterUserChallenge } from "../auth/auth";
+import { getUserPendingMembershipRequests } from "./membership-requests";
 
 export const getUser = async (userDid: string): Promise<User> => {
     let user = await Users.findOne(
@@ -58,6 +59,9 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
     ]).toArray();
     user.memberships = memberships as Membership[];
 
+    // add pending membership requests
+    let pendingRequests = await getUserPendingMembershipRequests(userDid);
+    user.pendingRequests = pendingRequests;
     return user as UserPrivate;
 };
 

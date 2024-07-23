@@ -5,8 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Provider } from "jotai";
 import { Authenticator } from "@/components/auth/authenticator";
 import { Circle, ServerSettings } from "@/models/models";
-import TopBar from "../top-bar/top-bar";
-import { Suspense } from "react";
+import LeftBar from "./left-bar";
 
 const inter = Inter({ subsets: ["latin"] });
 const wix = Wix_Madefor_Display({ subsets: ["latin"], variable: "--font-wix-display" });
@@ -23,8 +22,8 @@ const BaseLayout = ({ children, circle, serverConfig, isDefaultCircle }: BaseLay
     <Provider>
         <html lang="en" className={`${wix.variable} ${libre.variable}`}>
             <body className={inter.className}>
-                <main className="relative flex h-screen flex-col">
-                    <TopBar circle={circle} isDefaultCircle={isDefaultCircle} />
+                <main className="relative flex flex-row">
+                    <LeftBar circle={circle} isDefaultCircle={isDefaultCircle} />
                     <div className="flex flex-1 flex-row">
                         <div className={`relative flex min-w-[400px] flex-1`}>{children}</div>
                         <Map mapboxKey={serverConfig?.mapboxKey ?? ""} />

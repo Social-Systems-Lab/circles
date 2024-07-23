@@ -129,6 +129,7 @@ export const moduleSchema = z.object({
     layoutComponent: z.any().optional(),
     features: z.array(z.string()).optional(),
     excludeFromMenu: z.boolean().optional(),
+    defaultIcon: z.string().optional(),
 });
 
 export type Module = z.infer<typeof moduleSchema>;

@@ -10,6 +10,7 @@ export const modules: Record<string, Module> = {
         description: "Landing page",
         features: [],
         excludeFromMenu: true,
+        defaultIcon: "AiOutlineHome",
     },
     settings: {
         name: "Settings",
@@ -18,6 +19,7 @@ export const modules: Record<string, Module> = {
         layoutComponent: SettingsModuleLayout,
         description: "Settings page",
         excludeFromMenu: true,
+        defaultIcon: "AiOutlineSetting",
     },
     members: {
         name: "Members",
@@ -25,5 +27,6 @@ export const modules: Record<string, Module> = {
         description: "Members page",
         component: MembersModule,
         features: [],
+        defaultIcon: "AiOutlineContacts",
     },
 };

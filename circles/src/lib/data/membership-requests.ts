@@ -50,6 +50,39 @@ export const getAllMembershipRequests = async (
     return { pendingRequests, rejectedRequests };
 };
 
+export const getUserPendingMembershipRequests = async (userDid: string): Promise<MembershipRequest[]> => {
+    if (!userDid) return [];
+
+    const requests = await MembershipRequests.aggregate([
+        { $match: { userDid: userDid } },
+        {
+            $lookup: {
+                from: "users",
+                localField: "userDid",
+                foreignField: "did",
+                as: "userDetails",
+            },
+        },
+        { $unwind: "$userDetails" },
+        {
+            $project: {
+                _id: { $toString: "$_id" },
+                userDid: 1,
+                circleId: 1,
+                status: 1,
+                requestedAt: 1,
+                rejectedAt: 1,
+                name: "$userDetails.name",
+                email: "$userDetails.email",
+                picture: "$userDetails.picture",
+            },
+        },
+    ]).toArray();
+
+    const pendingRequests = requests.filter((r) => r.status === "pending") as MembershipRequest[];
+    return pendingRequests;
+};
+
 export const getMembershipRequest = async (requestId: string): Promise<MembershipRequest> => {
     const request = await MembershipRequests.findOne({ _id: new ObjectId(requestId) });
     if (!request) {

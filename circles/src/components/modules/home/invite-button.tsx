@@ -1,5 +1,3 @@
-// components/InviteButton.tsx
-
 "use client";
 
 import React, { useState } from "react";
@@ -25,25 +23,29 @@ interface InviteButtonProps {
     isDefaultCircle: boolean;
 }
 
-export const getCirclePagePath = (
-    circle: Circle,
-    isDefaultCircle: boolean,
-    pageHandle: string,
-    absolutePath: boolean,
-): string => {
-    let rootPath = absolutePath ? window.location.origin : "";
-    if (isDefaultCircle) {
-        return `${rootPath}/${pageHandle}`;
-    }
-    return `${rootPath}/circles/${circle.handle}/${pageHandle}`;
-};
-
 const InviteButton: React.FC<InviteButtonProps> = ({ circle, isDefaultCircle }) => {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const isCompact = useIsCompact();
     const { toast } = useToast();
 
-    const inviteLink = getCirclePagePath(circle, isDefaultCircle, "join", true);
+    const getCirclePagePath = (
+        circle: Circle,
+        isDefaultCircle: boolean,
+        pageHandle: string,
+        absolutePath: boolean,
+    ): string => {
+        if (typeof window === "undefined") {
+            return "";
+        }
+
+        let rootPath = absolutePath ? window.location.origin : "";
+        if (isDefaultCircle) {
+            return `${rootPath}${pageHandle ? `/${pageHandle}` : ""}`;
+        }
+        return `${rootPath}/circles/${circle.handle}${pageHandle ? `/${pageHandle}` : ""}`;
+    };
+
+    const inviteLink = getCirclePagePath(circle, isDefaultCircle, "", true);
 
     const copyToClipboard = async () => {
         try {
@@ -76,7 +78,7 @@ const InviteButton: React.FC<InviteButtonProps> = ({ circle, isDefaultCircle }) 
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>Invite people to the circle</DialogTitle>
-                    <DialogDescription>Anyone with this link can join your circle.</DialogDescription>
+                    <DialogDescription>Anyone with this link can request to join the circle.</DialogDescription>
                 </DialogHeader>
                 <div className="flex items-center space-x-2">
                     <Input className="flex-1" value={inviteLink} readOnly />
