@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { buttonVariants } from "../ui/button";
 import { Circle } from "@/models/models";
+import { useIsCompact } from "../utils/use-is-compact";
 
 type NavItem = {
     name: string;
@@ -21,6 +22,7 @@ type FormNavProps = {
 export const FormNav: React.FC<FormNavProps> = ({ items, circle, isDefaultCircle, className, ...props }) => {
     const pathname = usePathname();
     const filteredItems = isDefaultCircle ? items : items.filter((item) => item.handle !== "server-settings");
+    const isCompact = useIsCompact();
 
     const getPath = (item: NavItem) => {
         if (isDefaultCircle) {
@@ -33,10 +35,16 @@ export const FormNav: React.FC<FormNavProps> = ({ items, circle, isDefaultCircle
     return (
         <>
             <nav
-                className={cn(
-                    "relative ml-2 mr-2 flex flex-wrap space-x-2 lg:fixed lg:ml-0 lg:mr-0 lg:flex-col lg:space-x-0 lg:space-y-1",
-                    className,
-                )}
+                className={cn("flex", className)}
+                style={{
+                    position: isCompact ? "relative" : "fixed",
+                    marginLeft: isCompact ? "5px" : "20px",
+                    marginRight: isCompact ? "5px" : "20px",
+                    flexDirection: isCompact ? "row" : "column",
+                    gap: isCompact ? "4px" : "4px",
+                    flexWrap: isCompact ? "wrap" : "nowrap",
+                    marginTop: isCompact ? "10px" : "0px",
+                }}
                 {...props}
             >
                 {filteredItems.map((item) => (
@@ -49,13 +57,16 @@ export const FormNav: React.FC<FormNavProps> = ({ items, circle, isDefaultCircle
                                 ? "bg-muted hover:bg-muted"
                                 : "hover:bg-transparent hover:underline",
                             "justify-start",
-                            "lg:min-w-[200px]",
                         )}
+                        style={{
+                            minWidth: isCompact ? "0px" : "200px",
+                        }}
                     >
                         {item.name}
                     </Link>
                 ))}
             </nav>
+            {isCompact && <hr className="mb-2 mt-2" />}
         </>
     );
 };

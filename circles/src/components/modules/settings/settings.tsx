@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { getServerSettings } from "@/lib/data/server-settings";
 import MembershipGateway from "../membership-requests/membership-requests";
 import { getAllMembershipRequestsAction } from "../membership-requests/actions";
+import { SettingsForm } from "./settings-form";
 
 export default async function SettingsModule({ circle, page, subpage, isDefaultCircle }: ModulePageProps) {
     const getFormSchemaId = () => {
@@ -30,13 +31,11 @@ export default async function SettingsModule({ circle, page, subpage, isDefaultC
         switch (subpage) {
             default:
                 return (
-                    <DynamicForm
+                    <SettingsForm
                         formSchemaId={getFormSchemaId()}
                         initialFormData={initialFormData}
-                        maxWidth="none"
                         page={page}
                         subpage={subpage}
-                        showReset={true}
                     />
                 );
             case "membership-requests":
@@ -59,7 +58,7 @@ export default async function SettingsModule({ circle, page, subpage, isDefaultC
         }
     };
 
-    let initialFormData = circle;
+    let initialFormData: any = circle;
     if (subpage === "server-settings") {
         let serverSettings = await getServerSettings();
         initialFormData = serverSettings;
@@ -67,9 +66,7 @@ export default async function SettingsModule({ circle, page, subpage, isDefaultC
 
     return (
         <>
-            <div className="flex h-full flex-1 items-start md:pl-8 lg:grow-[2] lg:justify-center">
-                {getSettingsComponent()}
-            </div>
+            {getSettingsComponent()}
             <div className="flex flex-1"></div>
         </>
     );

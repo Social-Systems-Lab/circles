@@ -17,6 +17,7 @@ import { formActionHandlers } from "@/components/forms/form-action-handlers";
 import { authenticatedAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { useToast } from "@/components/ui/use-toast";
+import { useIsCompact } from "../utils/use-is-compact";
 
 interface DynamicFormProps {
     initialFormData?: Record<string, any>;
@@ -58,6 +59,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
     const { handleSubmit, control, reset, setValue } = form;
     const { title, description, footer, button } = formSchema;
     const router = useRouter();
+    const isCompact = useIsCompact();
 
     const onSubmit = async (values: Record<string, any>) => {
         setFormError(null);
@@ -105,10 +107,17 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
     };
 
     return (
-        <div className="flex flex-1 flex-row items-center justify-center pb-8 pl-6 pr-6">
-            <div className="flex-1" style={{ maxWidth: maxWidth }}>
+        <div
+            className="flex flex-1 flex-row items-center justify-center"
+            style={{
+                paddingLeft: isCompact ? "24px" : "24px",
+                paddingRight: isCompact ? "34px" : "24px",
+                paddingBottom: isCompact ? "0" : "32px",
+            }}
+        >
+            <div className="flex-1" style={{ maxWidth: isCompact ? "none" : maxWidth }}>
                 <h1 className="m-0 p-0 pb-3 text-3xl font-bold">{title}</h1>
-                <p className=" pb-8 text-gray-500">{description}</p>
+                <p className="pb-8 text-gray-500">{description}</p>
                 <Form {...form}>
                     <form onSubmit={handleSubmit(onSubmit)} autoComplete="off">
                         <div className="space-y-8">
@@ -128,7 +137,14 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
                             <FormMessage>{formError}</FormMessage>
 
                             <div className="flex flex-row gap-3">
-                                <Button className="w-full lg:max-w-[200px]" type="submit" disabled={isPending}>
+                                <Button
+                                    className="w-full"
+                                    type="submit"
+                                    disabled={isPending}
+                                    style={{
+                                        maxWidth: isCompact ? "none" : "200px",
+                                    }}
+                                >
                                     {isPending ? (
                                         <>
                                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -140,10 +156,13 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
                                 </Button>
                                 {showReset && (
                                     <Button
-                                        className="w-full lg:max-w-[200px]"
+                                        className="w-full"
                                         type="button"
                                         onClick={handleReset}
                                         variant="outline"
+                                        style={{
+                                            maxWidth: isCompact ? "none" : "200px",
+                                        }}
                                     >
                                         Reset
                                     </Button>
