@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { HiChevronDown } from "react-icons/hi";
 import { Circle, Page } from "@/models/models";
-import { AiOutlineContacts, AiOutlineFile, AiOutlineHome, AiOutlineSetting } from "react-icons/ai";
+import { AiOutlineAppstore, AiOutlineContacts, AiOutlineFile, AiOutlineHome, AiOutlineSetting } from "react-icons/ai";
 import PageIcon from "../modules/page-icon";
 
 export default function LeftBarNavItems({ circle, isDefaultCircle }: { circle: Circle; isDefaultCircle: boolean }) {
@@ -16,9 +16,9 @@ export default function LeftBarNavItems({ circle, isDefaultCircle }: { circle: C
     const [itemVisibility, setItemVisibility] = useState<boolean[]>([]);
     const [navMenuOpen, setNavMenuOpen] = useState(false);
 
-    useEffect(() => {
-        console.log(JSON.stringify(circle?.pages, null, 2));
-    }, [circle]);
+    // useEffect(() => {
+    //     console.log(JSON.stringify(circle?.pages, null, 2));
+    // }, [circle]);
 
     const getPath = useCallback(
         (page: Page) => {
@@ -45,24 +45,30 @@ export default function LeftBarNavItems({ circle, isDefaultCircle }: { circle: C
     }, [currentNavItem, circle.pages, itemVisibility]);
 
     const recalculateItemVisibility = () => {
+        console.log("recalculateItemVisibility");
         if (!itemContainerRef.current) return;
 
         let newItemVisibility: boolean[] = [];
+
+        console.log(itemContainerRef.current?.offsetHeight);
 
         // calculate visible and hidden items
         const containerHeight = itemContainerRef.current?.offsetHeight || 0;
         let currentHeight = 0;
         circle?.pages?.forEach((item, index) => {
-            const itemHeight = 40; // TODO get actual height
-            if (currentHeight + itemHeight <= containerHeight) {
-                newItemVisibility.push(true);
-                currentHeight += itemHeight;
-            } else {
-                newItemVisibility.push(false);
-                if (index > 0) {
-                    newItemVisibility[index - 1] = false;
-                }
-            }
+            // TODO for some reason this is not called when the component is resized so for now we disable the "More" functionality
+            newItemVisibility.push(true);
+
+            // const itemHeight = 60.5; // actual height of each item
+            // if (currentHeight + itemHeight <= containerHeight) {
+            //     newItemVisibility.push(true);
+            //     currentHeight += itemHeight;
+            // } else {
+            //     newItemVisibility.push(false);
+            //     if (index > 0) {
+            //         newItemVisibility[index - 1] = false;
+            //     }
+            // }
         });
 
         setItemVisibility(newItemVisibility);
@@ -92,7 +98,7 @@ export default function LeftBarNavItems({ circle, isDefaultCircle }: { circle: C
                             item === currentNavItem ? "text-[#495cff]" : "text-[#696969]"
                         } ${!itemVisibility[index] ? "hidden" : ""}`}
                     >
-                        <PageIcon page={item} size="24px" />
+                        <PageIcon module={item.module} size="24px" />
                         <span className="mt-[4px] text-[11px]">{item.name}</span>
                     </div>
                 </Link>
@@ -101,17 +107,18 @@ export default function LeftBarNavItems({ circle, isDefaultCircle }: { circle: C
             <Popover open={navMenuOpen} onOpenChange={setNavMenuOpen}>
                 <PopoverTrigger>
                     <div
-                        className={`flex h-full flex-shrink-0 cursor-pointer flex-row items-center justify-center pb-2 pt-2 ${
-                            !currentNavVisible ? "border-r-2 border-red-500" : "border-r-2 border-transparent"
+                        className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center pb-2 pt-2 ${
+                            !currentNavVisible ? "text-[#495cff]" : "text-[#696969]"
                         } ${itemVisibility.includes(false) ? "" : "hidden"}`}
                     >
-                        <span className="mt-[2px]">{!currentNavVisible ? currentNavItem?.name : "More"}</span>
-                        <HiChevronDown size="16px" />
+                        <PageIcon module={currentNavVisible ? currentNavItem?.module ?? "" : "pages"} size="24px" />
+                        <div className="mt-[4px] flex flex-row">
+                            <span className=" text-[11px]">{!currentNavVisible ? currentNavItem?.name : "More"}</span>
+                            <HiChevronDown size="16px" />
+                        </div>
                     </div>
-
-                    <div className={`cursor-pointer p-2 ${itemVisibility.includes(false) ? "" : "hidden"}`}>More</div>
                 </PopoverTrigger>
-                <PopoverContent className="ml-4 w-auto overflow-hidden p-0">
+                <PopoverContent className="z-[400] ml-4 w-auto overflow-hidden p-0">
                     {circle?.pages
                         ?.filter((_, index) => !itemVisibility[index])
                         .map((item) => (

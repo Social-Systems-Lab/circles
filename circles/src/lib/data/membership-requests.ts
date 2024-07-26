@@ -37,11 +37,14 @@ export const getAllMembershipRequests = async (
                 status: 1,
                 requestedAt: 1,
                 rejectedAt: 1,
+                questionnaireAnswers: 1,
+                approvedAt: 1,
                 name: "$userDetails.name",
                 email: "$userDetails.email",
                 picture: "$userDetails.picture",
             },
         },
+        { $sort: { requestedAt: -1 } }, // sort by most recent first
     ]).toArray();
 
     const pendingRequests = requests.filter((r) => r.status === "pending") as MembershipRequest[];
@@ -92,7 +95,11 @@ export const getMembershipRequest = async (requestId: string): Promise<Membershi
     return request as MembershipRequest;
 };
 
-export const createMembershipRequest = async (userDid: string, circleId: string): Promise<MembershipRequest> => {
+export const createPendingMembershipRequest = async (
+    userDid: string,
+    circleId: string,
+    answers?: Record<string, string>,
+): Promise<MembershipRequest> => {
     const existingRequest = await MembershipRequests.findOne({ userDid, circleId, status: "pending" });
     if (existingRequest) {
         throw new Error("A pending request already exists for this user and circle");
@@ -103,13 +110,14 @@ export const createMembershipRequest = async (userDid: string, circleId: string)
         circleId,
         status: "pending",
         requestedAt: new Date(),
+        questionnaireAnswers: answers,
     };
 
     await MembershipRequests.insertOne(request);
     return request;
 };
 
-export const deleteMembershipRequest = async (userDid: string, circleId: string): Promise<boolean> => {
+export const deletePendingMembershipRequest = async (userDid: string, circleId: string): Promise<boolean> => {
     const result = await MembershipRequests.deleteOne({ userDid, circleId, status: "pending" });
     if (result.deletedCount === 0) {
         throw new Error("No pending request found for this user and circle");
@@ -117,14 +125,13 @@ export const deleteMembershipRequest = async (userDid: string, circleId: string)
     return true;
 };
 
-export const updateMembershipRequestStatus = async (
-    userDid: string,
-    circleId: string,
+export const updatePendingMembershipRequestStatus = async (
+    requestId: string,
     newStatus: "approved" | "rejected",
 ): Promise<MembershipRequest> => {
-    const request = await MembershipRequests.findOne({ userDid, circleId });
+    const request = await MembershipRequests.findOne({ _id: new ObjectId(requestId), status: "pending" });
     if (!request) {
-        throw new Error("Membership request not found");
+        throw new Error("Pending membership request not found");
     }
 
     const update: Partial<MembershipRequest> = {
@@ -137,7 +144,7 @@ export const updateMembershipRequestStatus = async (
         update.approvedAt = new Date();
     }
 
-    await MembershipRequests.updateOne({ userDid, circleId }, { $set: update });
+    await MembershipRequests.updateOne({ _id: new ObjectId(requestId) }, { $set: update });
 
     return { ...request, ...update } as MembershipRequest;
 };

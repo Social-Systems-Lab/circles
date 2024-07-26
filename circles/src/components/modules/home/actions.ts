@@ -6,7 +6,7 @@ import { verifyUserToken } from "@/lib/auth/jwt";
 import { addMember, countAdmins, getMember, removeMember } from "@/lib/data/member";
 import { Circle } from "@/models/models";
 import { cookies } from "next/headers";
-import { createMembershipRequest, deleteMembershipRequest } from "@/lib/data/membership-requests";
+import { createPendingMembershipRequest, deletePendingMembershipRequest } from "@/lib/data/membership-requests";
 import { getCircleById } from "@/lib/data/circle";
 
 type CircleActionResponse = {
@@ -14,7 +14,7 @@ type CircleActionResponse = {
     message?: string;
 };
 
-export const joinCircle = async (circle: Circle): Promise<CircleActionResponse> => {
+export const joinCircle = async (circle: Circle, answers?: Record<string, string>): Promise<CircleActionResponse> => {
     try {
         const token = cookies().get("token")?.value;
         if (!token) {
@@ -35,11 +35,11 @@ export const joinCircle = async (circle: Circle): Promise<CircleActionResponse> 
 
         if (updatedCircle.isPublic) {
             // For public circles, add member directly
-            await addMember(userDid, updatedCircle._id ?? "", ["members"]);
+            await addMember(userDid, updatedCircle._id ?? "", ["members"], answers);
             return { success: true, message: "You have joined the circle" };
         } else {
             // For private circles, create a membership request
-            await createMembershipRequest(userDid, updatedCircle._id ?? "");
+            await createPendingMembershipRequest(userDid, updatedCircle._id ?? "", answers);
             return { success: true, message: "Your request to join has been sent" };
         }
     } catch (error) {
@@ -92,7 +92,7 @@ export const cancelJoinRequest = async (circle: Circle): Promise<CircleActionRes
             return { success: false, message: "Authentication failed" };
         }
 
-        await deleteMembershipRequest(userDid, circle._id ?? "");
+        await deletePendingMembershipRequest(userDid, circle._id ?? "");
         return { success: true, message: "Your join request has been canceled" };
     } catch (error) {
         return { success: false, message: "Failed to cancel join request. " + error?.toString() };

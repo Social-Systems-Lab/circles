@@ -35,6 +35,7 @@ export const createDefaultCircle = (): Circle => {
         userGroups: defaultUserGroups,
         accessRules: getDefaultAccessRules(),
         pages: defaultPages,
+        questionnaire: [],
         isPublic: true,
     };
     return circle;

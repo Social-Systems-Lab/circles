@@ -7,7 +7,7 @@ import { addMember } from "@/lib/data/member";
 import {
     getAllMembershipRequests,
     getMembershipRequest,
-    updateMembershipRequestStatus,
+    updatePendingMembershipRequestStatus,
 } from "@/lib/data/membership-requests";
 import { Circle, MembershipRequest, Page } from "@/models/models";
 import { revalidatePath } from "next/cache";
@@ -63,14 +63,14 @@ export const approveMembershipRequestAction = async (
         const request = await getMembershipRequest(requestId);
 
         // add member
-        await addMember(request.userDid, circle._id ?? "", ["members"]);
+        await addMember(request.userDid, circle._id ?? "", ["members"], request.questionnaireAnswers);
 
         // clear page cache
         let circlePath = await getCirclePath(circle);
         revalidatePath(`${circlePath}${page?.handle}`);
 
         // update status of request
-        await updateMembershipRequestStatus(request.userDid, circle._id!, "approved");
+        await updatePendingMembershipRequestStatus(request._id!, "approved");
 
         return { success: true };
     } catch (error) {
@@ -100,7 +100,7 @@ export const rejectMembershipRequestAction = async (
         revalidatePath(`${circlePath}${page?.handle}`);
 
         // update status of request
-        await updateMembershipRequestStatus(request.userDid, circle._id!, "rejected");
+        await updatePendingMembershipRequestStatus(request._id!, "rejected");
 
         return { success: true };
     } catch (error) {

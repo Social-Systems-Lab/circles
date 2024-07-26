@@ -1,15 +1,22 @@
 "use client";
 
-import { Page } from "@/models/models";
-import { AiOutlineContacts, AiOutlineHome, AiOutlineQuestion, AiOutlineSetting } from "react-icons/ai";
+import {
+    AiOutlineAppstore,
+    AiOutlineContacts,
+    AiOutlineHome,
+    AiOutlineQuestion,
+    AiOutlineSetting,
+} from "react-icons/ai";
 
 type PageIconProps = {
-    page: Page;
+    module: string;
     size: string;
 };
 
-export const PageIcon = ({ page, size }: PageIconProps) => {
-    switch (page?.module) {
+export const PageIcon = ({ module, size }: PageIconProps) => {
+    switch (module) {
+        case "pages":
+            return <AiOutlineAppstore size={size} />;
         case "home":
             return <AiOutlineHome size={size} />;
         case "settings":

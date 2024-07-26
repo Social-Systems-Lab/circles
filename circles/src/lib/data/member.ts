@@ -37,7 +37,12 @@ export const getMembers = async (circleId?: string): Promise<MemberDisplay[]> =>
     return members as MemberDisplay[];
 };
 
-export const addMember = async (userDid: string, circleId: string, userGroups: string[]): Promise<Member> => {
+export const addMember = async (
+    userDid: string,
+    circleId: string,
+    userGroups: string[],
+    answers?: Record<string, string>,
+): Promise<Member> => {
     const existingMember = await Members.findOne({ userDid: userDid, circleId: circleId });
     if (existingMember) {
         throw new Error("User is already a member of this circle");
@@ -54,6 +59,7 @@ export const addMember = async (userDid: string, circleId: string, userGroups: s
         circleId: circleId,
         userGroups: userGroups,
         joinedAt: new Date(),
+        questionnaireAnswers: answers,
     };
     await Members.insertOne(member);
 

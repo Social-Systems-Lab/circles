@@ -108,6 +108,7 @@ export const DynamicSelectField: React.FC<RenderFieldProps> = ({ field, formFiel
         <FormMessage />
     </FormItem>
 );
+
 export const DynamicPasswordField: React.FC<RenderFieldProps> = ({ field, formField, readOnly }) => {
     const [showPassword, setShowPassword] = useState(false);
 
@@ -269,7 +270,7 @@ export const DynamicTableField: React.FC<RenderFieldProps> = ({ field, formField
                 accessorKey: subField.name,
                 header: subField.label,
             })) ?? [];
-    const table = useReactTable({ columns: columns, data: watchedFields, getCoreRowModel: getCoreRowModel() });
+    const table = useReactTable({ columns: columns, data: watchedFields ?? [], getCoreRowModel: getCoreRowModel() });
     const [editingId, setEditingId] = useState<string | null>(null);
     const {
         formState: { errors },
@@ -436,7 +437,7 @@ export const DynamicTableField: React.FC<RenderFieldProps> = ({ field, formField
                             })
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={columns.length} className="h-24 text-center">
+                                <TableCell colSpan={columns.length + 2} className="h-24 text-center">
                                     No results.
                                 </TableCell>
                             </TableRow>
@@ -725,6 +726,62 @@ export const DynamicSwitchField: React.FC<RenderFieldProps> = ({ field, formFiel
     </FormItem>
 );
 
+export const DynamicQuestionnaireField: React.FC<RenderFieldProps> = ({ field, formField, control, readOnly }) => {
+    const { fields, append, remove, swap } = useFieldArray({
+        control,
+        name: formField.name,
+    });
+
+    const onAddQuestion = () => {
+        append({ question: "", answerType: "text" });
+    };
+
+    return (
+        <FormItem>
+            <div className="flex items-center justify-between pb-2">
+                <h1 className="m-0 p-0 pb-3 text-xl font-bold">{field.label}</h1>
+                {!readOnly && (
+                    <Button type="button" size="sm" onClick={onAddQuestion}>
+                        Add Question
+                    </Button>
+                )}
+            </div>
+            <div className="space-y-4">
+                {fields.map((item, index) => (
+                    <div key={item.id} className="flex items-center space-x-2">
+                        <FormField
+                            control={control}
+                            name={`${formField.name}.${index}.question`}
+                            render={({ field }) => <Input {...field} placeholder="Question" readOnly={readOnly} />}
+                        />
+                        <FormField
+                            control={control}
+                            name={`${formField.name}.${index}.answerType`}
+                            render={({ field }) => (
+                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Answer Type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="text">Text</SelectItem>
+                                        <SelectItem value="yesno">Yes/No</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            )}
+                        />
+                        {!readOnly && (
+                            <Button type="button" variant="destructive" size="sm" onClick={() => remove(index)}>
+                                Remove
+                            </Button>
+                        )}
+                    </div>
+                ))}
+            </div>
+            <FormMessage />
+        </FormItem>
+    );
+};
+
 export const DynamicField: React.FC<RenderFieldProps> = ({ field, formField, control, readOnly }) => {
     switch (field.type) {
         case "registry-info":
@@ -752,6 +809,8 @@ export const DynamicField: React.FC<RenderFieldProps> = ({ field, formField, con
             return DynamicImageField({ field, formField, control, readOnly });
         case "switch":
             return DynamicSwitchField({ field, formField, control, readOnly });
+        case "questionnaire":
+            return DynamicQuestionnaireField({ field, formField, control, readOnly });
         default:
             return null;
     }

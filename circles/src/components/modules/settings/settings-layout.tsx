@@ -25,6 +25,10 @@ const settingsForms = [
         handle: "membership-requests",
     },
     {
+        name: "Questionnaire",
+        handle: "questionnaire",
+    },
+    {
         name: "Server",
         handle: "server-settings",
     },

@@ -24,6 +24,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { useIsCompact } from "@/components/utils/use-is-compact";
+import { CircleQuestionnaireDialog } from "./questionnaire-dialog";
 
 type CircleMembershipButtonProps = {
     circle: Circle;
@@ -35,6 +36,7 @@ export const CircleMembershipButton = ({ circle }: CircleMembershipButtonProps) 
     const pathname = usePathname();
     const { toast } = useToast();
     const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
+    const [isQuestionnaireOpen, setIsQuestionnaireOpen] = useState(false);
     const isCompact = useIsCompact();
 
     const membershipStatus = useMemo(() => {
@@ -52,7 +54,15 @@ export const CircleMembershipButton = ({ circle }: CircleMembershipButtonProps) 
             return;
         }
 
-        let result = await joinCircle(circle);
+        if (circle.questionnaire && circle.questionnaire.length > 0) {
+            setIsQuestionnaireOpen(true);
+        } else {
+            await processJoinRequest();
+        }
+    };
+
+    const processJoinRequest = async (answers?: Record<string, string>) => {
+        let result = await joinCircle(circle, answers);
         if (result.success) {
             toast({
                 icon: "success",
@@ -62,7 +72,10 @@ export const CircleMembershipButton = ({ circle }: CircleMembershipButtonProps) 
             // Update user state to include the new pending request
             setUser((prevUser) => ({
                 ...prevUser!,
-                pendingRequests: [...(prevUser!.pendingRequests || []), { circleId: circle._id }],
+                pendingRequests: [
+                    ...(prevUser!.pendingRequests || []),
+                    { circleId: circle._id, status: "pending", userDid: user!.did, requestedAt: new Date() },
+                ],
             }));
         } else {
             toast({
@@ -72,6 +85,11 @@ export const CircleMembershipButton = ({ circle }: CircleMembershipButtonProps) 
                 variant: "destructive",
             });
         }
+    };
+
+    const onQuestionnaireSubmit = (answers: Record<string, string>) => {
+        setIsQuestionnaireOpen(false);
+        processJoinRequest(answers);
     };
 
     const handleLeaveCircleClick = () => {
@@ -186,9 +204,17 @@ export const CircleMembershipButton = ({ circle }: CircleMembershipButtonProps) 
         case "not-logged-in":
         default:
             return (
-                <Button className="w-[150px]" onClick={onJoinCircleClick}>
-                    {isCompact ? "Join" : "Join Circle"}
-                </Button>
+                <>
+                    <Button className="w-[150px]" onClick={onJoinCircleClick}>
+                        {isCompact ? "Join" : "Join Circle"}
+                    </Button>
+                    <CircleQuestionnaireDialog
+                        isOpen={isQuestionnaireOpen}
+                        onClose={() => setIsQuestionnaireOpen(false)}
+                        onSubmit={onQuestionnaireSubmit}
+                        questions={circle.questionnaire || []}
+                    />
+                </>
             );
     }
 };

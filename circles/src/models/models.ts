@@ -70,6 +70,7 @@ export type Membership = {
     userGroups: string[];
     joinedAt: Date;
     circle: Circle;
+    questionnaireAnswers?: Record<string, string>;
 };
 
 export interface UserPrivate extends User {
@@ -97,6 +98,7 @@ export const membershipRequestSchema = z.object({
     name: z.string().optional(),
     email: z.string().optional(),
     picture: z.string().optional(),
+    questionnaireAnswers: z.record(z.string(), z.string()).optional(),
 });
 
 export type MembershipRequest = z.infer<typeof membershipRequestSchema>;
@@ -154,6 +156,15 @@ export const fileInfoSchema = z.object({
     url: z.string(),
 });
 
+export type QuestionType = "text" | "yesno";
+
+export const questionSchema = z.object({
+    question: z.string(),
+    type: z.enum(["text", "yesno"]),
+});
+
+export type Question = z.infer<typeof questionSchema>;
+
 export const circleSchema = z.object({
     _id: z.any().optional(),
     did: didSchema.optional(),
@@ -167,6 +178,7 @@ export const circleSchema = z.object({
     pages: z.array(pageSchema).default([]).optional(),
     accessRules: accessRulesSchema.optional(),
     members: z.number().default(0).optional(),
+    questionnaire: z.array(questionSchema).default([]).optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;
@@ -184,6 +196,7 @@ export const serverSettingsSchema = z.object({
     activeRegistryInfo: registryInfoSchema.optional(),
     jwtSecret: z.string().optional(),
     serverInfo: registryInfoSchema.optional(),
+    questionnaire: z.string().optional(),
 });
 
 export type ServerSettings = z.infer<typeof serverSettingsSchema>;
@@ -333,7 +346,8 @@ export type FormFieldType =
     | "select"
     | "handle"
     | "access-rules"
-    | "registry-info";
+    | "registry-info"
+    | "questionnaire";
 
 export type FormField = {
     name: string;

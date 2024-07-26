@@ -6,6 +6,7 @@ import { circleUserGroupsFormActionHandler } from "./circle-settings/user-groups
 import { circleAccessRulesFormActionHandler } from "./circle-settings/access-rules/circle-access-rules-form-action-handler";
 import { circlePagesFormActionHandler } from "./circle-settings/pages/circle-pages-form-action-handler";
 import { serverSettingsFormActionHandler } from "./circle-settings/server-settings/server-settings-action-handler";
+import { circleQuestionnaireFormActionHandler } from "./circle-settings/questionnaire/circle-questionnaire-action-handler";
 
 export const formActionHandlers: Record<string, FormActionHandler> = {
     "signup-form": signupFormActionHandler,
@@ -14,5 +15,6 @@ export const formActionHandlers: Record<string, FormActionHandler> = {
     "circle-user-groups-form": circleUserGroupsFormActionHandler,
     "circle-access-rules-form": circleAccessRulesFormActionHandler,
     "circle-pages-form": circlePagesFormActionHandler,
+    "circle-questionnaire-form": circleQuestionnaireFormActionHandler,
     "server-settings-form": serverSettingsFormActionHandler,
 };

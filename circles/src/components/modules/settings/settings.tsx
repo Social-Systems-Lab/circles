@@ -19,6 +19,8 @@ export default async function SettingsModule({ circle, page, subpage, isDefaultC
                 return "circle-access-rules-form";
             case "pages":
                 return "circle-pages-form";
+            case "questionnaire":
+                return "circle-questionnaire-form";
             case "server-settings":
                 return "server-settings-form";
         }
