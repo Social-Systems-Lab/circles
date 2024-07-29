@@ -5,6 +5,7 @@ import { Question } from "@/models/models";
 import { useForm, Controller } from "react-hook-form";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 type CircleQuestionnaireDialogProps = {
     isOpen: boolean;
@@ -40,9 +41,7 @@ export const CircleQuestionnaireDialog: React.FC<CircleQuestionnaireDialogProps>
                                     name={`question_${index}`}
                                     control={control}
                                     rules={{ required: "This field is required" }}
-                                    render={({ field }) => (
-                                        <input {...field} type="text" className="w-full rounded border p-2" />
-                                    )}
+                                    render={({ field }) => <Textarea {...field} className="w-full p-2" />}
                                 />
                             ) : (
                                 <Controller
