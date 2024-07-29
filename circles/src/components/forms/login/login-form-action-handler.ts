@@ -13,6 +13,7 @@ export const loginFormActionHandler: FormActionHandler = {
         }
 
         // set logged in user and authenticate status
+        console.log("setting user to", response.data.user);
         tools.setUser(response.data.user);
         tools.setAuthenticated(true);
 

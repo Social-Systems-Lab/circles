@@ -2,25 +2,25 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Circle } from "../../models/models";
 import { ProfileMenu } from "./profile-menu";
-import LeftBarNavItems from "./left-bar-nav-items";
+import NavBarItems from "./nav-bar-items";
 
 type LeftBarProps = {
     circle: Circle;
     isDefaultCircle: boolean;
 };
 
-export default function LeftBar({ circle, isDefaultCircle }: LeftBarProps) {
+export default function NavBar({ circle, isDefaultCircle }: LeftBarProps) {
     return (
         <>
-            <div className={`h-full w-[72px] flex-shrink-0`}></div>
+            <div className={`order-last h-[72px] w-full flex-shrink-0 md:order-first md:h-full md:w-[72px]`}></div>
             <div
-                className={`fixed top-0 z-[100] h-full w-[72px] bg-white`}
+                className={`fixed bottom-0 z-[100] h-[72px] w-full bg-white md:top-0 md:h-full md:w-[72px]`}
                 style={{
                     boxShadow: "0 2px 6px 2px rgba(60, 64, 67, 0.15)",
                 }}
             >
-                <div className={`flex w-[72px] flex-col items-center justify-center`}>
-                    <div className="mb-4 mt-4 flex flex-shrink-0 flex-col items-center justify-center">
+                <div className={`flex h-[72px] flex-row items-center justify-center md:h-auto md:w-[72px] md:flex-col`}>
+                    <div className="ml-4 mr-4 flex flex-shrink-0 flex-col items-center justify-center md:mb-4 md:ml-0 md:mr-0 md:mt-4">
                         <Link href="/">
                             <Image
                                 src={circle?.picture?.url ?? "/images/default-picture.png"}
@@ -31,7 +31,7 @@ export default function LeftBar({ circle, isDefaultCircle }: LeftBarProps) {
                             />
                         </Link>
                     </div>
-                    <LeftBarNavItems circle={circle} isDefaultCircle={isDefaultCircle} />
+                    <NavBarItems circle={circle} isDefaultCircle={isDefaultCircle} />
                 </div>
             </div>
         </>

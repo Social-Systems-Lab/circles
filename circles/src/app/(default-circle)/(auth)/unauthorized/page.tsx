@@ -6,7 +6,7 @@ import RedirectButtons from "@/components/redirectPage/redirect-buttons";
 export default function Unauthenticated() {
     return (
         <div className="flex flex-1 items-center justify-center">
-            <div className="flex flex-col items-center justify-center pb-[200px]">
+            <div className="flex flex-col items-center justify-center pb-[200px] pt-[40px]">
                 <Image src={unauthorized} alt="" width={400} />
                 <h4>Access Denied</h4>
                 You do not have permission to view this page.

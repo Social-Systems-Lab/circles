@@ -27,7 +27,7 @@ export function useIsMobile() {
     const [matches, setMatches] = useState<boolean | null>(null);
 
     useEffect(() => {
-        const mediaQueryList = window.matchMedia("(max-width: 600px)");
+        const mediaQueryList = window.matchMedia("(max-width: 768px)");
 
         const handleMatchChange = (e: any) => {
             setMatches(e.matches);
