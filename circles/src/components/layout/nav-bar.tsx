@@ -22,13 +22,16 @@ export default function NavBar({ circle, isDefaultCircle }: LeftBarProps) {
                 <div className={`flex h-[72px] flex-row items-center justify-center md:h-auto md:w-[72px] md:flex-col`}>
                     <div className="ml-4 mr-4 flex flex-shrink-0 flex-col items-center justify-center md:mb-4 md:ml-0 md:mr-0 md:mt-4">
                         <Link href="/">
-                            <Image
-                                src={circle?.picture?.url ?? "/images/default-picture.png"}
-                                alt="Logo"
-                                width={40}
-                                height={40}
-                                className="h-[40px] w-[40px] overflow-hidden rounded-full"
-                            />
+                            <div className="h-[40px] w-[40px]">
+                                <Image
+                                    src={circle?.picture?.url ?? "/images/default-picture.png"}
+                                    alt="Logo"
+                                    className="h-[40px] w-[40px] overflow-hidden rounded-full object-cover"
+                                    width={40}
+                                    height={40}
+                                    objectFit="cover"
+                                />
+                            </div>
                         </Link>
                     </div>
                     <NavBarItems circle={circle} isDefaultCircle={isDefaultCircle} />

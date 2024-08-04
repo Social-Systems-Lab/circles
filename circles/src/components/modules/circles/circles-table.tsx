@@ -52,6 +52,7 @@ import InviteButton from "../home/invite-button";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { CirclePicture } from "./circle-picture";
 import DynamicForm from "@/components/forms/dynamic-form";
+import { useRouter } from "next/navigation";
 
 interface InviteButtonProps {
     circle: Circle;
@@ -122,6 +123,7 @@ const CirclesTable: React.FC<CirclesTableProps> = ({ circle, circles, page, isDe
     const [user, setUser] = useAtom(userAtom);
     const isCompact = useIsCompact();
     const canCreateSubcircle = isAuthorized(user, circle, features.create_subcircle);
+    const router = useRouter();
 
     const { toast } = useToast();
 
@@ -223,7 +225,14 @@ const CirclesTable: React.FC<CirclesTableProps> = ({ circle, circles, page, isDe
                                                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                             </TableCell>
                                         ))}
-                                        <TableCell />
+                                        <TableCell>
+                                            <Button
+                                                variant="outline"
+                                                onClick={() => router.push(`/circles/${row.original.handle}`)}
+                                            >
+                                                Open
+                                            </Button>
+                                        </TableCell>
                                     </TableRow>
                                 );
                             })

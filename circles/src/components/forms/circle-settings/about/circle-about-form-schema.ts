@@ -33,7 +33,6 @@ export const circleAboutFormSchema: FormSchema = {
             type: "textarea",
             placeholder: "Description",
             description: "Describe the circle in a few words.",
-            minLength: 10,
             maxLength: 200,
         },
         {

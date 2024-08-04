@@ -26,7 +26,7 @@ export const createCircleFormSchema: FormSchema = {
             name: "description",
             label: "Description",
             type: "textarea",
-            required: true,
+            required: false,
         },
         {
             name: "picture",

@@ -21,30 +21,31 @@ export const removeSubCircleAction = async (
     page: Page,
 ): Promise<RemoveSubCircleResponse> => {
     try {
-        const userDid = await getAuthenticatedUserDid();
+        // TODO incomplete logic to delete subcircle
+        // const userDid = await getAuthenticatedUserDid();
 
-        // confirm the user is authorized to remove member
-        let authorized = await isAuthorized(userDid, parentCircle._id ?? "", features.delete_lower_subcircles);
-        let canRemoveSameLevel = await isAuthorized(
-            userDid,
-            parentCircle._id ?? "",
-            features.delete_same_level_subcircles,
-        );
+        // // confirm the user is authorized to remove member
+        // let authorized = await isAuthorized(userDid, parentCircle._id ?? "", features.delete_lower_subcircles);
+        // let canRemoveSameLevel = await isAuthorized(
+        //     userDid,
+        //     parentCircle._id ?? "",
+        //     features.delete_same_level_subcircles,
+        // );
 
-        if (!authorized && !canRemoveSameLevel) {
-            return { success: false, message: "You are not authorized to remove this subcircle" };
-        }
-        // TODO check if user has higher access than the circle
-        authorized = await hasHigherAccess(userDid, circle.userDid, parentCircle._id ?? "", canRemoveSameLevel);
-        if (!authorized) {
-            return { success: false, message: "You don't have high enough access to remove this subcircle" };
-        }
+        // if (!authorized && !canRemoveSameLevel) {
+        //     return { success: false, message: "You are not authorized to remove this subcircle" };
+        // }
+        // // TODO check if user has higher access than the circle
+        // authorized = await hasHigherAccess(userDid, circle.userDid, parentCircle._id ?? "", canRemoveSameLevel);
+        // if (!authorized) {
+        //     return { success: false, message: "You don't have high enough access to remove this subcircle" };
+        // }
 
-        // TODO delete circle
+        // // TODO delete circle
 
-        // clear page cache so page update
-        let circlePath = await getCirclePath(parentCircle);
-        revalidatePath(`${circlePath}${page?.handle}`);
+        // // clear page cache so page update
+        // let circlePath = await getCirclePath(parentCircle);
+        // revalidatePath(`${circlePath}${page?.handle}`);
 
         return { success: true };
     } catch (error) {

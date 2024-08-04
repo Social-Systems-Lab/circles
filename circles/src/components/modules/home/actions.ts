@@ -7,7 +7,11 @@ import { addMember, countAdmins, getMember, removeMember } from "@/lib/data/memb
 import { Circle } from "@/models/models";
 import { cookies } from "next/headers";
 import { createPendingMembershipRequest, deletePendingMembershipRequest } from "@/lib/data/membership-requests";
-import { getCircleById } from "@/lib/data/circle";
+import { getCircleById, getCirclePath, updateCircle } from "@/lib/data/circle";
+import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
+import { features } from "@/lib/data/constants";
+import { isFile, saveFile } from "@/lib/data/storage";
+import { revalidatePath } from "next/cache";
 
 type CircleActionResponse = {
     success: boolean;
@@ -96,5 +100,33 @@ export const cancelJoinRequest = async (circle: Circle): Promise<CircleActionRes
         return { success: true, message: "Your join request has been canceled" };
     } catch (error) {
         return { success: false, message: "Failed to cancel join request. " + error?.toString() };
+    }
+};
+
+export const updateCircleField = async (circleId: string, field: string, value: any): Promise<CircleActionResponse> => {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        let authorized = await isAuthorized(userDid, circleId, features.settings_edit);
+        if (!authorized) {
+            return { success: false, message: "You are not authorized to edit circle settings" };
+        }
+
+        let updateData: Partial<Circle> = { _id: circleId };
+        updateData[field] = value;
+
+        if (field === "picture" || field === "cover") {
+            if (isFile(value)) {
+                updateData[field] = await saveFile(value, field, circleId, true);
+            }
+        }
+
+        await updateCircle(updateData);
+
+        let circlePath = await getCirclePath({ _id: circleId } as Circle);
+        revalidatePath(circlePath);
+
+        return { success: true, message: `Circle ${field} updated successfully` };
+    } catch (error) {
+        return { success: false, message: `Failed to update circle ${field}. ${error}` };
     }
 };
