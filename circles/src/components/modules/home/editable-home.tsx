@@ -1,7 +1,7 @@
 // EditableHomeModule.tsx
 "use client";
 
-import { useState, KeyboardEvent } from "react";
+import { useState, KeyboardEvent, useEffect } from "react";
 import Image from "next/image";
 import { Circle } from "@/models/models";
 import JoinButton from "./join-button";
@@ -138,6 +138,16 @@ export default function EditableHomeModule({ circle, isDefaultCircle }: Editable
     const [isEditingName, setIsEditingName] = useState(false);
     const [isEditingDescription, setIsEditingDescription] = useState(false);
     const { toast } = useToast();
+
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
+    if (!isMounted) {
+        return null;
+    }
 
     const handleSave = async (field: string, value: any) => {
         const formData = new FormData();
