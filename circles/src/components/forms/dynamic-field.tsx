@@ -200,7 +200,7 @@ export const DynamicImageField: React.FC<RenderFieldProps> = ({ field, formField
             )}
 
             {!readOnly && (
-                <Button type="button" variant="outline" onClick={triggerFileInput}>
+                <Button type="button" variant="outline" onClick={triggerFileInput} className="flex">
                     Upload new image
                 </Button>
             )}

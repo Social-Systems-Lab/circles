@@ -37,6 +37,12 @@ export const features = {
         description: "Manage membership requests to join the circle",
         defaultUserGroups: ["admins", "moderators"],
     },
+    create_subcircle: {
+        name: "Create Sub-Circle",
+        handle: "create_subcircle",
+        description: "Create a new sub-circle that is part of this circle",
+        defaultUserGroups: ["admins", "moderators"],
+    },
 };
 
 export const maxAccessLevel = 9999999;

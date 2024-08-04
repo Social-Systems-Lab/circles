@@ -151,7 +151,7 @@ export const CircleMembershipButton = ({ circle }: CircleMembershipButtonProps) 
                         <DropdownMenuTrigger asChild>
                             <Button
                                 variant={isCompact ? "ghost" : "outline"}
-                                className={isCompact ? "h-[32px] w-[32px] p-0" : ""}
+                                className={isCompact ? "h-[32px] w-[32px] p-0" : "rounded-full"}
                             >
                                 {isCompact ? (
                                     <MoreVertical className="h-4 w-4" />
@@ -191,7 +191,7 @@ export const CircleMembershipButton = ({ circle }: CircleMembershipButtonProps) 
             return (
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="outline">
+                        <Button variant="outline" className="rounded-full">
                             Pending <ChevronDown className="ml-2 h-4 w-4" />
                         </Button>
                     </DropdownMenuTrigger>
@@ -205,7 +205,7 @@ export const CircleMembershipButton = ({ circle }: CircleMembershipButtonProps) 
         default:
             return (
                 <>
-                    <Button className="w-[150px]" onClick={onJoinCircleClick}>
+                    <Button className="w-[100px] rounded-full md:w-[150px]" onClick={onJoinCircleClick}>
                         {isCompact ? "Join" : "Join Circle"}
                     </Button>
                     <CircleQuestionnaireDialog

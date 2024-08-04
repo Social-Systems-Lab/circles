@@ -86,24 +86,3 @@ export const saveFile = async (
     };
     return fileInfo;
 };
-
-// export const saveFile = async (file: File, circleId: string): Promise<string> => {
-//     await ensureBucketExists();
-//     let buckets = await minioClient.listBuckets();
-//     console.log(buckets);
-//     return "";
-
-//     // }
-
-//     //     const objectName = `${circleId}/${file.name}`;
-//     //     await minioClient.fPutObject(bucketName, objectName, file.filepath);
-//     //     return minioClient.presignedUrl('GET', bucketName, objectName, 24 * 60 * 60); // URL valid for 24 hours
-// };
-
-// export const saveFile = async (file: File, circleId: string): Promise<string> => {
-//     const uploadDir = path.join(APP_DIR, "circles", circleId);
-//     await fs.ensureDir(uploadDir);
-//     const filePath = path.join(uploadDir, file.name);
-//     await fs.writeFile(filePath, Buffer.from(await file.arrayBuffer()));
-//     return `${APP_DIR}/circles/${circleId}/${file.name}`;
-// };

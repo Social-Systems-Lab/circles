@@ -25,6 +25,16 @@ export const getDefaultCircle = async (inServerConfig: ServerSettings | null = n
     return circle;
 };
 
+export const getCircles = async (parentCircleId: string): Promise<Circle[]> => {
+    let circles = await Circles.find({ parentCircleId: parentCircleId }).toArray();
+    circles.forEach((circle: Circle) => {
+        if (circle._id) {
+            circle._id = circle._id.toString();
+        }
+    });
+    return circles;
+};
+
 export const createDefaultCircle = (): Circle => {
     let circle: Circle = {
         name: "Circles",
@@ -38,6 +48,28 @@ export const createDefaultCircle = (): Circle => {
         questionnaire: [],
         isPublic: true,
     };
+    return circle;
+};
+
+export const createCircle = async (circle: Circle): Promise<Circle> => {
+    if (!circle?.name || !circle?.handle) {
+        throw new Error("Missing required fields");
+    }
+
+    // check if handle is already in use
+    let existingCircle = await Circles.findOne({ handle: circle.handle });
+    if (existingCircle) {
+        throw new Error("Handle already in use");
+    }
+
+    circle.createdAt = new Date();
+    circle.userGroups = defaultUserGroups;
+    circle.accessRules = getDefaultAccessRules();
+    circle.pages = defaultPages;
+    circle.questionnaire = [];
+
+    let result = await Circles.insertOne(circle);
+    circle._id = result.insertedId.toString();
     return circle;
 };
 

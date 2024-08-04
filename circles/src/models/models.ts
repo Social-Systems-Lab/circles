@@ -61,6 +61,7 @@ export const memberSchema = z.object({
     circleId: z.string(),
     userGroups: z.array(z.string()).optional(),
     joinedAt: z.date().optional(),
+    questionnaireAnswers: z.record(z.string(), z.string()).optional(),
 });
 
 export type Member = z.infer<typeof memberSchema>;
@@ -167,7 +168,6 @@ export type Question = z.infer<typeof questionSchema>;
 
 export const circleSchema = z.object({
     _id: z.any().optional(),
-    did: didSchema.optional(),
     name: z.string().default("Circles").optional(),
     handle: handleSchema.optional(),
     picture: fileInfoSchema.optional(),
@@ -179,6 +179,9 @@ export const circleSchema = z.object({
     accessRules: accessRulesSchema.optional(),
     members: z.number().default(0).optional(),
     questionnaire: z.array(questionSchema).default([]).optional(),
+    parentCircleId: z.string().optional(),
+    createdBy: didSchema.optional(),
+    createdAt: z.date().optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;

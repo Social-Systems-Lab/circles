@@ -7,6 +7,7 @@ import { circleAccessRulesFormSchema } from "./circle-settings/access-rules/circ
 import { circlePagesFormSchema } from "./circle-settings/pages/circle-pages-form-schema";
 import { serverSettingsFormSchema } from "./circle-settings/server-settings/server-settings-schema";
 import { circleQuestionnaireFormSchema } from "./circle-settings/questionnaire/circle-questionnaire-form-schema";
+import { createCircleFormSchema } from "./create-circle/create-circle-form-schema";
 
 export const formSchemas: Record<string, FormSchema> = {
     "signup-form": signupFormSchema,
@@ -17,4 +18,5 @@ export const formSchemas: Record<string, FormSchema> = {
     "circle-pages-form": circlePagesFormSchema,
     "circle-questionnaire-form": circleQuestionnaireFormSchema,
     "server-settings-form": serverSettingsFormSchema,
+    "create-circle-form": createCircleFormSchema,
 };
