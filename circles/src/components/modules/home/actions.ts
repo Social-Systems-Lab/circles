@@ -103,7 +103,7 @@ export const cancelJoinRequest = async (circle: Circle): Promise<CircleActionRes
     }
 };
 
-export const updateCircleField = async (circleId: string, field: string, value: any): Promise<CircleActionResponse> => {
+export const updateCircleField = async (circleId: string, formData: FormData): Promise<CircleActionResponse> => {
     try {
         const userDid = await getAuthenticatedUserDid();
         let authorized = await isAuthorized(userDid, circleId, features.settings_edit);
@@ -112,11 +112,17 @@ export const updateCircleField = async (circleId: string, field: string, value: 
         }
 
         let updateData: Partial<Circle> = { _id: circleId };
-        updateData[field] = value;
 
-        if (field === "picture" || field === "cover") {
-            if (isFile(value)) {
-                updateData[field] = await saveFile(value, field, circleId, true);
+        for (const [key, value] of formData.entries() as any) {
+            if (key === "picture" || key === "cover") {
+                console.log("Saving file", key, circleId);
+                let fileInfo = await saveFile(value, key, circleId, true);
+                updateData[key] = fileInfo;
+
+                console.log("new circle data", updateData);
+                revalidatePath(fileInfo.url);
+            } else {
+                updateData[key] = value as string;
             }
         }
 
@@ -125,8 +131,8 @@ export const updateCircleField = async (circleId: string, field: string, value: 
         let circlePath = await getCirclePath({ _id: circleId } as Circle);
         revalidatePath(circlePath);
 
-        return { success: true, message: `Circle ${field} updated successfully` };
+        return { success: true, message: `Circle updated successfully` };
     } catch (error) {
-        return { success: false, message: `Failed to update circle ${field}. ${error}` };
+        return { success: false, message: `Failed to update circle. ${error}` };
     }
 };

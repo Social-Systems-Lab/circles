@@ -72,7 +72,7 @@ export const saveFile = async (
         }
     }
 
-    const objectName = `${circleId}/${fileName}`;
+    const objectName = `${circleId}/${fileName + Date.now()}`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
     await minioClient.putObject(bucketName, objectName, buffer, buffer.length, {
