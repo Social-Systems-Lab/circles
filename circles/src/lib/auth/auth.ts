@@ -9,6 +9,8 @@ import { ObjectId } from "mongodb";
 import { maxAccessLevel } from "../data/constants";
 import { cookies } from "next/headers";
 import { verifyUserToken } from "./jwt";
+import { createNewUser } from "../data/user";
+import { addMember } from "../data/member";
 
 const SALT_FILENAME = "salt.bin";
 const IV_FILENAME = "iv.bin";
@@ -83,9 +85,13 @@ export const createUser = async (
     fs.writeFileSync(path.join(accountPath, ENCRYPTED_PRIVATE_KEY_FILENAME), encryptedPrivateKey);
 
     // add user to the database
-    let user: User = { did: did, name: name, handle: handle, type: type, email: email };
+    let user: User = createNewUser(did, name, handle, type, email);
     let res = await Users.insertOne(user);
     user._id = res.insertedId.toString();
+
+    // add user as member of their own circle
+    await addMember(did, user._id!, ["admins", "moderators", "members"], undefined, true);
+
     return user;
 };
 
@@ -246,10 +252,22 @@ export const getAuthenticatedUserDid = async (): Promise<string> => {
 };
 
 // checks if user is authorized to use a given feature
-export const isAuthorized = async (userDid: string, circleId: string, feature: Feature): Promise<boolean> => {
+export const isAuthorized = async (
+    userDid: string,
+    circleId: string,
+    feature: Feature,
+    isUser?: boolean,
+): Promise<boolean> => {
     // lookup access rules in circle for the features
-    let circle = await Circles.findOne({ _id: new ObjectId(circleId) });
+    let circle = null;
+    if (isUser) {
+        circle = await Users.findOne({ _id: new ObjectId(circleId) });
+    } else {
+        circle = await Circles.findOne({ _id: new ObjectId(circleId) });
+    }
     if (!circle) return false;
+
+    console.log("ISAUTHORIZED CALLED", feature.handle);
 
     let allowedUserGroups = circle?.accessRules?.[feature.handle];
     if (!allowedUserGroups) return false;

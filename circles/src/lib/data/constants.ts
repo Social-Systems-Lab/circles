@@ -75,6 +75,61 @@ export const defaultUserGroups: UserGroup[] = [
     },
 ];
 
+// default user groups that all users will be created with
+export const defaultUserGroupsForUser: UserGroup[] = [
+    {
+        name: "Admins",
+        handle: "admins",
+        title: "Admin",
+        description: "Administrators",
+        accessLevel: 100,
+        readOnly: true,
+    },
+    {
+        name: "Moderators",
+        handle: "moderators",
+        title: "Moderator",
+        description: "Moderators",
+        accessLevel: 200,
+        readOnly: true,
+    },
+    {
+        name: "Friends",
+        handle: "members",
+        title: "Friend",
+        description: "Friends",
+        accessLevel: 300,
+        readOnly: true,
+    },
+];
+
+// default pages every circle will be created with
+export const defaultPagesForUser: Page[] = [
+    {
+        name: "Home",
+        handle: "",
+        description: "Home page",
+        module: "home",
+        readOnly: true,
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Friends",
+        handle: "friends",
+        description: "Friends page",
+        module: "members",
+        defaultUserGroups: ["admins", "moderators", "members"],
+    },
+    {
+        name: "Settings",
+        handle: "settings",
+        description: "Settings page",
+        module: "settings",
+        readOnly: true,
+        defaultUserGroups: ["admins"],
+    },
+];
+
 // default pages every circle will be created with
 export const defaultPages: Page[] = [
     {
@@ -111,6 +166,19 @@ export const getDefaultAccessRules = () => {
     }
     // add default access rules for default pages
     for (let page of defaultPages) {
+        accessRules[pageFeaturePrefix + page.handle] = page.defaultUserGroups ?? [];
+    }
+
+    return accessRules;
+};
+
+export const getDefaultAccessRulesForUser = () => {
+    let accessRules: Record<string, string[]> = {};
+    for (let feature in features) {
+        accessRules[feature] = (features as { [key: string]: Feature })[feature].defaultUserGroups ?? [];
+    }
+    // add default access rules for default pages
+    for (let page of defaultPagesForUser) {
         accessRules[pageFeaturePrefix + page.handle] = page.defaultUserGroups ?? [];
     }
 

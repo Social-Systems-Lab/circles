@@ -8,9 +8,10 @@ import InviteButton from "./invite-button";
 type StaticHomeModuleProps = {
     circle: Circle;
     isDefaultCircle: boolean;
+    isUser?: boolean;
 };
 
-export default function StaticHomeModule({ circle, isDefaultCircle }: StaticHomeModuleProps) {
+export default function StaticHomeModule({ circle, isDefaultCircle, isUser }: StaticHomeModuleProps) {
     return (
         <div className="flex flex-1 flex-col">
             <div className="relative h-[400px] w-full">
@@ -42,13 +43,16 @@ export default function StaticHomeModule({ circle, isDefaultCircle }: StaticHome
 
             <div className="mb-8 mt-[44px] flex flex-col items-center justify-center">
                 <h4>{circle.name}</h4>
-                <p className="pl-4 pr-4">{circle.description}</p>
-                <div className="flex flex-row items-center justify-center pt-4">
-                    <FaUsers />
-                    <p className="m-0 ml-2 mr-4">
-                        {circle?.members} {circle?.members !== 1 ? "Members" : "Member"}
-                    </p>
-                </div>
+                {circle.description && <p className="pl-4 pr-4">{circle.description}</p>}
+                {circle?.members && circle?.members > 0 && (
+                    <div className="flex flex-row items-center justify-center pt-4">
+                        <FaUsers />
+                        <p className="m-0 ml-2 mr-4">
+                            {circle?.members}{" "}
+                            {circle?.members !== 1 ? (isUser ? "Friends" : "Members") : isUser ? "Friend" : "Member"}
+                        </p>
+                    </div>
+                )}
             </div>
         </div>
     );

@@ -47,6 +47,7 @@ export const createDefaultCircle = (): Circle => {
         pages: defaultPages,
         questionnaire: [],
         isPublic: true,
+        circleType: "circle",
     };
     return circle;
 };
@@ -67,6 +68,7 @@ export const createCircle = async (circle: Circle): Promise<Circle> => {
     circle.accessRules = getDefaultAccessRules();
     circle.pages = defaultPages;
     circle.questionnaire = [];
+    circle.circleType = "circle";
 
     let result = await Circles.insertOne(circle);
     circle._id = result.insertedId.toString();
@@ -102,5 +104,5 @@ export const getCirclePath = async (circle: Circle): Promise<string> => {
     if (circle._id === serverConfig.defaultCircleId) {
         return "/";
     }
-    return `/circles/${circle.handle}/`;
+    return `/${circle.circleType === "user" ? "users" : "circles"}/${circle.handle}/`;
 };

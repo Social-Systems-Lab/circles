@@ -132,22 +132,13 @@ const EditableImage: React.FC<EditableImageProps> = ({ id, src, alt, onSave, cla
 type EditableHomeModuleProps = {
     circle: Circle;
     isDefaultCircle: boolean;
+    isUser?: boolean;
 };
 
-export default function EditableHomeModule({ circle, isDefaultCircle }: EditableHomeModuleProps) {
+export default function EditableHomeModule({ circle, isDefaultCircle, isUser }: EditableHomeModuleProps) {
     const [isEditingName, setIsEditingName] = useState(false);
     const [isEditingDescription, setIsEditingDescription] = useState(false);
     const { toast } = useToast();
-
-    const [isMounted, setIsMounted] = useState(false);
-
-    useEffect(() => {
-        setIsMounted(true);
-    }, []);
-
-    if (!isMounted) {
-        return null;
-    }
 
     const handleSave = async (field: string, value: any) => {
         const formData = new FormData();
@@ -155,7 +146,7 @@ export default function EditableHomeModule({ circle, isDefaultCircle }: Editable
 
         console.log("Updating field", field, value);
 
-        const result = await updateCircleField(circle._id!, formData);
+        const result = await updateCircleField(circle._id!, formData, isUser);
         if (result.success) {
             toast({ title: "Success", description: result.message });
         } else {
@@ -203,20 +194,23 @@ export default function EditableHomeModule({ circle, isDefaultCircle }: Editable
                         setIsEditing={setIsEditingName}
                     />
                 </h4>
-                <p className="pl-4 pr-4">
+                <div className="pl-4 pr-4">
                     <EditableField
                         value={circle.description ?? ""}
                         onSave={(value) => handleSave("description", value)}
                         isEditing={isEditingDescription}
                         setIsEditing={setIsEditingDescription}
                     />
-                </p>
-                <div className="flex flex-row items-center justify-center pt-4">
-                    <FaUsers />
-                    <p className="m-0 ml-2 mr-4">
-                        {circle?.members} {circle?.members !== 1 ? "Members" : "Member"}
-                    </p>
                 </div>
+                {circle?.members && circle?.members > 0 && (
+                    <div className="flex flex-row items-center justify-center pt-4">
+                        <FaUsers />
+                        <p className="m-0 ml-2 mr-4">
+                            {circle?.members}{" "}
+                            {circle?.members !== 1 ? (isUser ? "Friends" : "Members") : isUser ? "Friend" : "Member"}
+                        </p>
+                    </div>
+                )}
             </div>
         </div>
     );

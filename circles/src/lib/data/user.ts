@@ -5,6 +5,14 @@ import { Members, Users } from "./db";
 import { ObjectId } from "mongodb";
 import { signRegisterUserChallenge } from "../auth/auth";
 import { getUserPendingMembershipRequests } from "./membership-requests";
+import {
+    defaultPages,
+    defaultPagesForUser,
+    defaultUserGroups,
+    defaultUserGroupsForUser,
+    getDefaultAccessRules,
+    getDefaultAccessRulesForUser,
+} from "./constants";
 
 export const getUser = async (userDid: string): Promise<User> => {
     let user = await Users.findOne(
@@ -17,6 +25,42 @@ export const getUser = async (userDid: string): Promise<User> => {
     return user;
 };
 
+export const getUserById = async (id: string): Promise<User> => {
+    let user = (await Users.findOne({ _id: new ObjectId(id) })) as User;
+    if (user?._id) {
+        user._id = user._id.toString();
+    }
+    return user;
+};
+
+export const createNewUser = (did: string, name: string, handle: string, type: AccountType, email: string): User => {
+    let user: User = {
+        did,
+        name,
+        handle,
+        type,
+        email,
+        circleType: "user",
+        description: "",
+        picture: { url: "/images/default-user-picture.png" },
+        cover: { url: "/images/default-user-cover.png" },
+        userGroups: defaultUserGroupsForUser,
+        accessRules: getDefaultAccessRulesForUser(),
+        pages: defaultPagesForUser,
+        questionnaire: [],
+        isPublic: false,
+    };
+    return user;
+};
+
+export const getUserByHandle = async (handle: string): Promise<User> => {
+    let user = (await Users.findOne({ handle: handle })) as User;
+    if (user?._id) {
+        user._id = user._id.toString();
+    }
+    return user;
+};
+
 // gets the user including private information that should only be returned to the user
 export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
     let user = (await Users.findOne({ did: userDid })) as UserPrivate;
@@ -25,7 +69,7 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
     }
     user._id = user?._id?.toString();
 
-    // add user memberships
+    // add user circle memberships
     let memberships = await Members.aggregate([
         { $match: { userDid: userDid } },
         {
@@ -34,7 +78,7 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
                 let: { circle_id: { $toObjectId: "$circleId" } },
                 pipeline: [
                     { $match: { $expr: { $eq: ["$_id", "$$circle_id"] } } },
-                    { $project: { name: 1, handle: 1, description: 1, picture: 1, cover: 1 } },
+                    { $project: { name: 1, handle: 1, description: 1, picture: 1, cover: 1, circleType: 1 } },
                 ],
                 as: "circle",
             },
@@ -53,11 +97,48 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
                     description: "$circle.description",
                     picture: "$circle.picture",
                     cover: "$circle.cover",
+                    circleType: "$circle.circleType",
                 },
             },
         },
     ]).toArray();
     user.memberships = memberships as Membership[];
+
+    // add user friend memberships
+    let friends = await Members.aggregate([
+        { $match: { userDid: userDid } },
+        {
+            $lookup: {
+                from: "users",
+                let: { circle_id: { $toObjectId: "$circleId" } },
+                pipeline: [
+                    { $match: { $expr: { $eq: ["$_id", "$$circle_id"] } } },
+                    { $project: { name: 1, handle: 1, description: 1, picture: 1, cover: 1, circleType: 1 } },
+                ],
+                as: "circle",
+            },
+        },
+        { $unwind: "$circle" },
+        {
+            $project: {
+                _id: 0,
+                circleId: 1,
+                userGroups: 1,
+                joinedAt: 1,
+                circle: {
+                    _id: { $toString: "$circle._id" },
+                    name: "$circle.name",
+                    handle: "$circle.handle",
+                    description: "$circle.description",
+                    picture: "$circle.picture",
+                    cover: "$circle.cover",
+                    circleType: "$circle.circleType",
+                },
+            },
+        },
+    ]).toArray();
+
+    user.memberships = user.memberships.concat(friends as Membership[]);
 
     // add pending membership requests
     let pendingRequests = await getUserPendingMembershipRequests(userDid);

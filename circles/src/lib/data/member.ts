@@ -1,5 +1,5 @@
 import { Member, MemberDisplay } from "@/models/models";
-import { Circles, Members } from "./db";
+import { Circles, Members, Users } from "./db";
 import { ObjectId } from "mongodb";
 
 export const getMember = async (userDid: string, circleId: string): Promise<Member | null> => {
@@ -42,6 +42,7 @@ export const addMember = async (
     circleId: string,
     userGroups: string[],
     answers?: Record<string, string>,
+    isUser?: boolean,
 ): Promise<Member> => {
     const existingMember = await Members.findOne({ userDid: userDid, circleId: circleId });
     if (existingMember) {
@@ -64,19 +65,35 @@ export const addMember = async (
     await Members.insertOne(member);
 
     // increase member count in circle
-    await Circles.updateOne({ _id: new ObjectId(circleId) }, { $inc: { members: 1 } });
+    if (isUser) {
+        await Users.updateOne({ _id: new ObjectId(circleId) }, { $inc: { members: 1 } });
+    } else {
+        await Circles.updateOne({ _id: new ObjectId(circleId) }, { $inc: { members: 1 } });
+    }
 
     return member;
 };
 
-export const removeMember = async (userDid: string, circleId: string): Promise<boolean> => {
+export const removeMember = async (userDid: string, circleId: string, isUser: boolean): Promise<boolean> => {
+    // ensure user can't be removed from their own circle
+    if (isUser) {
+        let user = await Users.findOne({ _id: new ObjectId(circleId) });
+        if (user?.did === userDid) {
+            throw new Error("User can't leave their own circle");
+        }
+    }
+
     let result = await Members.deleteOne({ userDid: userDid, circleId: circleId });
     if (result.deletedCount === 0) {
         throw new Error("User is not a member of this circle");
     }
 
     // decrease member count in circle
-    await Circles.updateOne({ _id: new ObjectId(circleId) }, { $inc: { members: -1 } });
+    if (isUser) {
+        await Users.updateOne({ _id: new ObjectId(circleId) }, { $inc: { members: -1 } });
+    } else {
+        await Circles.updateOne({ _id: new ObjectId(circleId) }, { $inc: { members: -1 } });
+    }
 
     return true;
 };

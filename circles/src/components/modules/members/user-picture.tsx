@@ -20,7 +20,7 @@ export const UserPicture = ({ name, picture, size }: UserPictureProps) => {
 
     return (
         <Avatar style={size ? { width: size, height: size } : {}}>
-            <AvatarImage src={picture} />
+            <AvatarImage src={picture ?? "/images/default-user-picture.png"} />
             <AvatarFallback>{getInitials()}</AvatarFallback>
         </Avatar>
     );

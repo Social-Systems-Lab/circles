@@ -54,12 +54,12 @@ export const ProfileMenu = () => {
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button className="h-auto w-auto rounded-full p-0" variant="ghost">
-                                <UserPicture name={user.name} picture={user.picture} size="32px" />
+                                <UserPicture name={user.name} picture={user.picture?.url} size="32px" />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                             <div className="flex w-[160px] flex-col items-center justify-center pt-4">
-                                <UserPicture name={user.name} picture={user.picture} size="108px" />
+                                <UserPicture name={user.name} picture={user.picture?.url} size="108px" />
                                 <span className="text-md pb-4 pt-4 font-bold">{user.name}</span>
                             </div>
                             <DropdownMenuSeparator />

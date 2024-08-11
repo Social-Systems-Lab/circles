@@ -17,14 +17,15 @@ type BaseLayoutProps = {
     circle: Circle;
     serverConfig: ServerSettings;
     isDefaultCircle: boolean;
+    isUser?: boolean;
 };
 
-const BaseLayout = ({ children, circle, serverConfig, isDefaultCircle }: BaseLayoutProps) => (
+const BaseLayout = ({ children, circle, serverConfig, isDefaultCircle, isUser }: BaseLayoutProps) => (
     <Provider>
         <html lang="en" className={`${wix.variable} ${libre.variable}`}>
             <body className={inter.className}>
                 <main className="relative flex flex-col md:flex-row">
-                    <NavBar circle={circle} isDefaultCircle={isDefaultCircle} />
+                    <NavBar circle={circle} isDefaultCircle={isDefaultCircle} isUser={isUser} />
                     <div className="flex flex-1 flex-row">
                         <div className={`relative flex min-w-[420px] flex-1`}>{children}</div>
                         <Map mapboxKey={serverConfig?.mapboxKey ?? ""} />

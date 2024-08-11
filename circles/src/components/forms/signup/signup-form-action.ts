@@ -2,7 +2,7 @@ import { FormAction, AuthData, FormSubmitResponse } from "../../../models/models
 import { AuthenticationError, createUser, getUserPublicKey } from "@/lib/auth/auth";
 import { createSession, generateUserToken } from "@/lib/auth/jwt";
 import { getServerSettings } from "@/lib/data/server-settings";
-import { registerUser, updateUser } from "@/lib/data/user";
+import { getUserPrivate, registerUser, updateUser } from "@/lib/data/user";
 
 export const signupFormAction: FormAction = {
     id: "signup-form",
@@ -32,7 +32,7 @@ export const signupFormAction: FormAction = {
                         currentServerSettings.did!,
                         currentServerSettings.registryUrl,
                         publicKey,
-                        user.picture,
+                        user.picture?.url,
                     );
 
                     // update user with registry info
@@ -42,7 +42,8 @@ export const signupFormAction: FormAction = {
                 }
             }
 
-            return { success: true, message: "User signed up successfully", data: { user } };
+            let privateUser = getUserPrivate(user.did);
+            return { success: true, message: "User signed up successfully", data: { user: privateUser } };
         } catch (error) {
             if (error instanceof AuthenticationError) {
                 return { success: false, message: error.message };

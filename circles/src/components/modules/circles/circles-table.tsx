@@ -228,7 +228,11 @@ const CirclesTable: React.FC<CirclesTableProps> = ({ circle, circles, page, isDe
                                         <TableCell>
                                             <Button
                                                 variant="outline"
-                                                onClick={() => router.push(`/circles/${row.original.handle}`)}
+                                                onClick={() =>
+                                                    router.push(
+                                                        `/${row.original.circleType === "user" ? "users" : "circles"}/${row.original.handle}`,
+                                                    )
+                                                }
                                             >
                                                 Open
                                             </Button>

@@ -13,6 +13,7 @@ export const handleSchema = z
     .regex(/^[a-zA-Z0-9_]*$/, { message: "Handle can only contain letters, numbers and underscores." });
 
 export const accountTypeSchema = z.enum(["user", "organization"]);
+export const circleTypeSchema = z.enum(["user", "circle"]);
 export const emailSchema = z.string().email({ message: "Enter valid email" });
 
 const DEFAULT_MAX_IMAGE_FILE_SIZE = 5000000; // 5MB
@@ -32,6 +33,12 @@ export const getImageSchema = (maxSize?: number) => {
         );
 };
 
+export const fileInfoSchema = z.object({
+    originalName: z.string().optional(),
+    fileName: z.string().optional(),
+    url: z.string(),
+});
+
 export const registryInfoSchema = z.object({
     registeredAt: z.date().optional(),
     registryUrl: z.string().optional(),
@@ -41,19 +48,7 @@ export type RegistryInfo = z.infer<typeof registryInfoSchema>;
 
 export type AccountType = z.infer<typeof accountTypeSchema>;
 
-export const userSchema = z.object({
-    _id: z.any().optional(),
-    did: didSchema,
-    type: accountTypeSchema.default("user"),
-    name: z.string().default("Anonymous User"),
-    email: z.string().email(),
-    handle: handleSchema,
-    picture: z.string().optional(),
-    cover: z.string().optional(),
-    activeRegistryInfo: registryInfoSchema.optional(),
-});
-
-export type User = z.infer<typeof userSchema>;
+export type CircleType = z.infer<typeof circleTypeSchema>;
 
 export const memberSchema = z.object({
     _id: z.any().optional(),
@@ -76,6 +71,7 @@ export type Membership = {
 
 export interface UserPrivate extends User {
     memberships: Membership[];
+    friends: Membership[];
     pendingRequests: MembershipRequest[];
 }
 
@@ -151,12 +147,6 @@ export const pageSchema = z.object({
 
 export type Page = z.infer<typeof pageSchema>;
 
-export const fileInfoSchema = z.object({
-    originalName: z.string().optional(),
-    fileName: z.string().optional(),
-    url: z.string(),
-});
-
 export type QuestionType = "text" | "yesno";
 
 export const questionSchema = z.object({
@@ -182,9 +172,33 @@ export const circleSchema = z.object({
     parentCircleId: z.string().optional(),
     createdBy: didSchema.optional(),
     createdAt: z.date().optional(),
+    circleType: circleTypeSchema.optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;
+
+export const userSchema = z.object({
+    _id: z.any().optional(),
+    did: didSchema,
+    type: accountTypeSchema.default("user"),
+    name: z.string().default("Anonymous User"),
+    email: z.string().email(),
+    handle: handleSchema,
+    picture: fileInfoSchema.optional(),
+    cover: fileInfoSchema.optional(),
+    activeRegistryInfo: registryInfoSchema.optional(),
+    circleType: circleTypeSchema.optional(),
+
+    description: z.string().optional(),
+    isPublic: z.boolean().optional(),
+    userGroups: z.array(userGroupSchema).default([]).optional(),
+    pages: z.array(pageSchema).default([]).optional(),
+    accessRules: accessRulesSchema.optional(),
+    members: z.number().default(0).optional(),
+    questionnaire: z.array(questionSchema).default([]).optional(),
+});
+
+export type User = z.infer<typeof userSchema>;
 
 export const serverSettingsSchema = z.object({
     _id: z.any().optional(),

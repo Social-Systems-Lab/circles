@@ -16,7 +16,7 @@ export const createCircleFormActionHandler: FormActionHandler = {
 
         // navigate to new circle
         let circle = response.data.circle;
-        router.push(`/circles/${circle.handle}`);
+        router.push(`/${circle.circleType === "user" ? "users" : "circles"}/${circle.handle}`);
 
         return response;
     },

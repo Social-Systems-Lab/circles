@@ -34,6 +34,9 @@ export const getAllMembershipRequestsAction = async (circleId: string): Promise<
         }
 
         const { pendingRequests, rejectedRequests } = await getAllMembershipRequests(circleId);
+
+        console.log("GETTING ALL MEMBERSHIP REQUESTS", circleId, pendingRequests, rejectedRequests);
+
         return { success: true, pendingRequests, rejectedRequests };
     } catch (error) {
         return { success: false, message: "Failed to fetch membership requests. " + error?.toString() };

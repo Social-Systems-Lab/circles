@@ -1,4 +1,4 @@
-import { getCircleByHandle } from "@/lib/data/circle";
+import { getUserByHandle } from "@/lib/data/user";
 import HomeModule from "@/components/modules/home/home";
 import { redirect } from "next/navigation";
 
@@ -7,11 +7,10 @@ type HomeProps = {
 };
 
 export default async function Home({ params }: HomeProps) {
-    let circle = await getCircleByHandle(params.handle);
-    if (!circle) {
+    let user = await getUserByHandle(params.handle);
+    if (!user) {
         // redirect to not-found
         redirect("/not-found");
     }
-
-    return <HomeModule circle={circle} isDefaultCircle={false} />;
+    return <HomeModule circle={user} isDefaultCircle={false} isUser={true} />;
 }

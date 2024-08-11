@@ -38,6 +38,7 @@ export const CircleMembershipButton = ({ circle }: CircleMembershipButtonProps) 
     const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
     const [isQuestionnaireOpen, setIsQuestionnaireOpen] = useState(false);
     const isCompact = useIsCompact();
+    const isUserCircle = circle.circleType === "user";
 
     const membershipStatus = useMemo(() => {
         if (!user) return "not-logged-in";
@@ -64,19 +65,38 @@ export const CircleMembershipButton = ({ circle }: CircleMembershipButtonProps) 
     const processJoinRequest = async (answers?: Record<string, string>) => {
         let result = await joinCircle(circle, answers);
         if (result.success) {
-            toast({
-                icon: "success",
-                title: "Request Sent",
-                description: `Your request to join ${circle.name} has been sent.`,
-            });
-            // Update user state to include the new pending request
-            setUser((prevUser) => ({
-                ...prevUser!,
-                pendingRequests: [
-                    ...(prevUser!.pendingRequests || []),
-                    { circleId: circle._id, status: "pending", userDid: user!.did, requestedAt: new Date() },
-                ],
-            }));
+            if (!result.pending) {
+                toast({
+                    icon: "success",
+                    title: "Request Sent",
+                    description: isUserCircle
+                        ? `You have joined ${circle.name} as friend.`
+                        : `You've joined ${circle.name}.`,
+                });
+                setUser((prevUser) => ({
+                    ...prevUser!,
+                    memberships: [
+                        ...(prevUser!.memberships || []),
+                        { circleId: circle._id, circle: circle, userGroups: ["members"], joinedAt: new Date() },
+                    ],
+                }));
+            } else {
+                toast({
+                    icon: "success",
+                    title: "Request Sent",
+                    description: isUserCircle
+                        ? `Your request to ${circle.name} as friend has been sent.`
+                        : `Your request to join ${circle.name} has been sent.`,
+                });
+                // Update user state to include the new pending request
+                setUser((prevUser) => ({
+                    ...prevUser!,
+                    pendingRequests: [
+                        ...(prevUser!.pendingRequests || []),
+                        { circleId: circle._id, status: "pending", userDid: user!.did, requestedAt: new Date() },
+                    ],
+                }));
+            }
         } else {
             toast({
                 icon: "error",
@@ -103,7 +123,9 @@ export const CircleMembershipButton = ({ circle }: CircleMembershipButtonProps) 
             toast({
                 icon: "success",
                 title: "Left Circle",
-                description: `You've left the circle ${circle.name}`,
+                description: isUserCircle
+                    ? `You've left ${circle.name} as friend`
+                    : `You've left the circle ${circle.name}`,
             });
             // Update user state to remove the membership
             setUser((prevUser) => ({
@@ -143,6 +165,10 @@ export const CircleMembershipButton = ({ circle }: CircleMembershipButtonProps) 
         }
     };
 
+    if (circle._id === user?._id) {
+        return null;
+    }
+
     switch (membershipStatus) {
         case "member":
             return (
@@ -157,22 +183,34 @@ export const CircleMembershipButton = ({ circle }: CircleMembershipButtonProps) 
                                     <MoreVertical className="h-4 w-4" />
                                 ) : (
                                     <>
-                                        Member <ChevronDown className="ml-2 h-4 w-4" />
+                                        {isUserCircle ? "Friend" : "Member"} <ChevronDown className="ml-2 h-4 w-4" />
                                     </>
                                 )}
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>
-                            <DropdownMenuItem onClick={handleLeaveCircleClick}>Leave Circle</DropdownMenuItem>
+                            <DropdownMenuItem onClick={handleLeaveCircleClick}>
+                                {isUserCircle ? "Leave as Friend" : "Leave Circle"}
+                            </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
                     <Dialog open={isLeaveDialogOpen} onOpenChange={setIsLeaveDialogOpen}>
                         <DialogContent>
                             <DialogHeader>
-                                <DialogTitle>Leave Circle</DialogTitle>
+                                <DialogTitle>{isUserCircle ? "Leave as Friend" : "Leave Circle"}</DialogTitle>
                                 <DialogDescription>
-                                    Are you sure you want to leave the circle "{circle.name}"? This action cannot be
-                                    undone.
+                                    {isUserCircle && (
+                                        <>
+                                            Are you sure you want to leave {circle.name} as friend? This action cannot
+                                            be undone.
+                                        </>
+                                    )}
+                                    {!isUserCircle && (
+                                        <>
+                                            `Are you sure you want to leave the circle {circle.name}? This action cannot
+                                            be undone.
+                                        </>
+                                    )}
                                 </DialogDescription>
                             </DialogHeader>
                             <DialogFooter>
@@ -180,11 +218,12 @@ export const CircleMembershipButton = ({ circle }: CircleMembershipButtonProps) 
                                     Cancel
                                 </Button>
                                 <Button variant="destructive" onClick={handleConfirmLeave}>
-                                    Leave Circle
+                                    {isUserCircle ? "Leave as Friend" : "Leave Circle"}
                                 </Button>
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
+                    {/* <pre>{JSON.stringify(user, null, 2)}</pre> */}
                 </>
             );
         case "pending":
@@ -206,7 +245,7 @@ export const CircleMembershipButton = ({ circle }: CircleMembershipButtonProps) 
             return (
                 <>
                     <Button className="w-[100px] rounded-full md:w-[150px]" onClick={onJoinCircleClick}>
-                        {isCompact ? "Join" : "Join Circle"}
+                        {isCompact ? (isUserCircle ? "Add" : "Join") : isUserCircle ? "Join as Friend" : "Join Circle"}
                     </Button>
                     <CircleQuestionnaireDialog
                         isOpen={isQuestionnaireOpen}

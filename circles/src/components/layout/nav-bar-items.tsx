@@ -8,7 +8,15 @@ import { Circle, Page } from "@/models/models";
 import PageIcon from "../modules/page-icon";
 import { useIsMobile } from "../utils/use-is-mobile";
 
-export default function NavBarItems({ circle, isDefaultCircle }: { circle: Circle; isDefaultCircle: boolean }) {
+export default function NavBarItems({
+    circle,
+    isDefaultCircle,
+    isUser,
+}: {
+    circle: Circle;
+    isDefaultCircle: boolean;
+    isUser?: boolean;
+}) {
     const pathname = usePathname();
     const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
     const isMobile = useIsMobile();
@@ -18,10 +26,10 @@ export default function NavBarItems({ circle, isDefaultCircle }: { circle: Circl
             if (isDefaultCircle) {
                 return `/${page.handle}`;
             } else {
-                return `/circles/${circle.handle}${page.handle ? `/${page.handle}` : ""}`;
+                return `/${isUser ? "users" : "circles"}/${circle.handle}${page.handle ? `/${page.handle}` : ""}`;
             }
         },
-        [isDefaultCircle, circle.handle],
+        [isDefaultCircle, isUser, circle.handle],
     );
 
     const currentNavItem = useMemo(() => {
@@ -34,7 +42,7 @@ export default function NavBarItems({ circle, isDefaultCircle }: { circle: Circl
     }, [circle.pages, getPath, pathname]);
 
     const visiblePages = useMemo(
-        () => (isMobile ? circle?.pages?.slice(1, 4) : circle?.pages) ?? [],
+        () => (isMobile ? circle?.pages?.slice(0, 3) : circle?.pages) ?? [],
         [circle?.pages, isMobile],
     );
     const morePages = useMemo(() => (isMobile ? circle?.pages?.slice(4) : []) ?? [], [circle?.pages, isMobile]);
@@ -117,91 +125,3 @@ function NavItem({
         </Link>
     );
 }
-
-// export default function NavBarItems({ circle, isDefaultCircle }: { circle: Circle; isDefaultCircle: boolean }) {
-//     const pathname = usePathname();
-//     const [navMenuOpen, setNavMenuOpen] = useState(false);
-//     const isMobile = useIsMobile();
-
-//     const getPath = useCallback(
-//         (page: Page) => {
-//             if (isDefaultCircle) {
-//                 return `/${page.handle}`;
-//             } else {
-//                 return `/circles/${circle.handle}${page.handle ? `/${page.handle}` : ""}`;
-//             }
-//         },
-//         [isDefaultCircle, circle.handle],
-//     );
-
-//     const currentNavItem = useMemo(() => {
-//         return circle?.pages?.find((x) => {
-//             if (x.handle === "") {
-//                 return pathname === getPath(x);
-//             }
-//             return pathname.startsWith(getPath(x));
-//         });
-//     }, [circle.pages, getPath, pathname]);
-
-//     const visiblePages = useMemo(
-//         () => (isMobile ? circle?.pages?.slice(1, 4) : circle?.pages) ?? [],
-//         [circle?.pages, isMobile],
-//     );
-//     const morePages = useMemo(() => (isMobile ? circle?.pages?.slice(4) : []) ?? [], [circle?.pages, isMobile]);
-
-//     return (
-//         <nav
-//             className={`flex h-[72px] w-full flex-1 flex-row items-center justify-around overflow-hidden md:h-auto md:w-[72px] md:flex-col md:justify-normal`}
-//         >
-//             {visiblePages.map((item) => (
-//                 <Link key={item.handle} href={getPath(item)}>
-//                     <div
-//                         className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center pb-2 pt-2 ${
-//                             item === currentNavItem ? "text-[#495cff]" : "text-[#696969]"
-//                         }`}
-//                     >
-//                         <PageIcon module={item.module} size="24px" />
-//                         <span className="mt-[4px] text-[11px]">{item.name}</span>
-//                     </div>
-//                 </Link>
-//             ))}
-
-//             {morePages.length > 0 && (
-//                 <Popover open={navMenuOpen} onOpenChange={setNavMenuOpen}>
-//                     <PopoverTrigger>
-//                         <div
-//                             className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center pb-2 pt-2 ${
-//                                 morePages.includes(currentNavItem as Page) ? "text-[#495cff]" : "text-[#696969]"
-//                             }`}
-//                         >
-//                             <PageIcon
-//                                 module={
-//                                     morePages.includes(currentNavItem as Page) ? currentNavItem?.module ?? "" : "pages"
-//                                 }
-//                                 size="24px"
-//                             />
-//                             <div className="mt-[4px] flex flex-row items-center">
-//                                 <span className="text-[11px]">
-//                                     {morePages.includes(currentNavItem as Page) ? currentNavItem?.name : "More"}
-//                                 </span>
-//                                 <HiChevronDown size="16px" />
-//                             </div>
-//                         </div>
-//                     </PopoverTrigger>
-//                     <PopoverContent className="z-[400] w-auto overflow-hidden p-0 md:ml-4">
-//                         {morePages.map((item) => (
-//                             <Link key={item.handle} href={getPath(item)}>
-//                                 <div
-//                                     className="cursor-pointer p-2 hover:bg-[#f0f0f0]"
-//                                     onClick={() => setNavMenuOpen(false)}
-//                                 >
-//                                     {item.name}
-//                                 </div>
-//                             </Link>
-//                         ))}
-//                     </PopoverContent>
-//                 </Popover>
-//             )}
-//         </nav>
-//     );
-// }

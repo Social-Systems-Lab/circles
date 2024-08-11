@@ -27,6 +27,7 @@ const InviteButton: React.FC<InviteButtonProps> = ({ circle, isDefaultCircle }) 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const isCompact = useIsCompact();
     const { toast } = useToast();
+    const isUser = circle.circleType === "user";
 
     const getCirclePagePath = (
         circle: Circle,
@@ -42,7 +43,7 @@ const InviteButton: React.FC<InviteButtonProps> = ({ circle, isDefaultCircle }) 
         if (isDefaultCircle) {
             return `${rootPath}${pageHandle ? `/${pageHandle}` : ""}`;
         }
-        return `${rootPath}/circles/${circle.handle}${pageHandle ? `/${pageHandle}` : ""}`;
+        return `${rootPath}/${isUser ? "users" : "circles"}/${circle.handle}${pageHandle ? `/${pageHandle}` : ""}`;
     };
 
     const inviteLink = getCirclePagePath(circle, isDefaultCircle, "", true);
@@ -80,8 +81,12 @@ const InviteButton: React.FC<InviteButtonProps> = ({ circle, isDefaultCircle }) 
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Invite people to the circle</DialogTitle>
-                    <DialogDescription>Anyone with this link can request to join the circle.</DialogDescription>
+                    <DialogTitle>{isUser ? "Invite people to the user" : "Invite people to the circle"}</DialogTitle>
+                    <DialogDescription>
+                        {isUser
+                            ? "Anyone with this link can request to join the user as friend."
+                            : "Anyone with this link can request to join the circle."}
+                    </DialogDescription>
                 </DialogHeader>
                 <div className="flex items-center space-x-2">
                     <Input className="flex-1" value={inviteLink} readOnly />
