@@ -1,6 +1,6 @@
 "use client";
 
-import React, { forwardRef, useEffect, useState, useTransition } from "react";
+import React, { forwardRef, useEffect, useMemo, useState, useTransition } from "react";
 import {
     ColumnDef,
     ColumnFiltersState,
@@ -116,14 +116,27 @@ const SortIcon = ({ sortDir }: { sortDir: string | boolean }) => {
     }
 };
 
+import { FaUsers } from "react-icons/fa"; // Import the FaUsers icon
+import { useIsMobile } from "@/components/utils/use-is-mobile";
+
 const CirclesTable: React.FC<CirclesTableProps> = ({ circle, circles, page, isDefaultCircle }) => {
     const data = React.useMemo(() => circles, [circles]);
     const [sorting, setSorting] = React.useState<SortingState>([]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
     const [user, setUser] = useAtom(userAtom);
     const isCompact = useIsCompact();
+    const isMobile = useIsMobile();
     const canCreateSubcircle = isAuthorized(user, circle, features.create_subcircle);
     const router = useRouter();
+    const isUser = circle.circleType === "user";
+    const [searchQuery, setSearchQuery] = useState("");
+    const filteredCircles = useMemo(() => {
+        if (searchQuery) {
+            return circles.filter((circle) => circle?.name?.toLowerCase().includes(searchQuery.toLowerCase()));
+        } else {
+            return circles;
+        }
+    }, [searchQuery]);
 
     const { toast } = useToast();
 
@@ -184,74 +197,156 @@ const CirclesTable: React.FC<CirclesTableProps> = ({ circle, circles, page, isDe
         },
     });
 
+    // if (isCompact) {
+    //     // Table View for Compact Mode
+    //     return (
+    //         <div className="flex flex-1 flex-row justify-center">
+    //             <div className="ml-2 mr-2 mt-4 flex max-w-[1000px] flex-1 flex-col">
+    //                 <div className="flex w-full flex-row items-center gap-2">
+    //                     <div className="flex flex-1 flex-col">
+    //                         <Input
+    //                             placeholder="Search circle..."
+    //                             value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
+    //                             onChange={(event) => table.getColumn("name")?.setFilterValue(event.target.value)}
+    //                         />
+    //                     </div>
+    //                     {canCreateSubcircle && <CreateCircleButton circle={circle} isDefaultCircle={isDefaultCircle} />}
+    //                 </div>
+    //                 <Table className="mt-1">
+    //                     <TableHeader>
+    //                         {table.getHeaderGroups().map((headerGroup) => (
+    //                             <TableRow key={headerGroup.id}>
+    //                                 {headerGroup.headers.map((header) => {
+    //                                     return (
+    //                                         <TableHead key={header.id}>
+    //                                             {header.isPlaceholder
+    //                                                 ? null
+    //                                                 : flexRender(header.column.columnDef.header, header.getContext())}
+    //                                         </TableHead>
+    //                                     );
+    //                                 })}
+    //                                 <TableHead className="w-[40px]"></TableHead>
+    //                             </TableRow>
+    //                         ))}
+    //                     </TableHeader>
+    //                     <TableBody>
+    //                         {table.getRowModel().rows?.length ? (
+    //                             table.getRowModel().rows.map((row) => {
+    //                                 return (
+    //                                     <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
+    //                                         {row.getVisibleCells().map((cell) => (
+    //                                             <TableCell key={cell.id}>
+    //                                                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
+    //                                             </TableCell>
+    //                                         ))}
+    //                                         <TableCell>
+    //                                             <Button
+    //                                                 variant="outline"
+    //                                                 onClick={() =>
+    //                                                     router.push(
+    //                                                         `/${row.original.circleType === "user" ? "users" : "circles"}/${row.original.handle}`,
+    //                                                     )
+    //                                                 }
+    //                                             >
+    //                                                 Open
+    //                                             </Button>
+    //                                         </TableCell>
+    //                                     </TableRow>
+    //                                 );
+    //                             })
+    //                         ) : (
+    //                             <TableRow>
+    //                                 <TableCell colSpan={columns.length + 2} className="h-24 text-center">
+    //                                     No circles.
+    //                                 </TableCell>
+    //                             </TableRow>
+    //                         )}
+    //                     </TableBody>
+    //                 </Table>
+    //             </div>
+    //         </div>
+    //     );
+    // } else {
+    // Card View for Default Mode
     return (
         <div className="flex flex-1 flex-row justify-center">
-            <div className="ml-2 mr-2 mt-4 flex max-w-[1000px] flex-1 flex-col">
-                <div className="flex w-full flex-row items-center gap-2">
-                    <div className="flex flex-1 flex-col">
-                        <Input
-                            placeholder="Search circle..."
-                            value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
-                            onChange={(event) => table.getColumn("name")?.setFilterValue(event.target.value)}
-                        />
-                    </div>
-                    {/* <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} /> */}
+            <div className="ml-4 mr-4 mt-4 flex max-w-[1000px] flex-1 flex-col">
+                <div
+                    className="mb-4 flex w-full flex-row items-center gap-2"
+                    style={{
+                        paddingRight: isCompact && !isMobile ? "16px" : "0",
+                    }}
+                >
+                    <Input
+                        placeholder="Search circle..."
+                        value={searchQuery}
+                        onChange={(event) => setSearchQuery(event.target.value)}
+                        className="flex-1"
+                    />
                     {canCreateSubcircle && <CreateCircleButton circle={circle} isDefaultCircle={isDefaultCircle} />}
                 </div>
-                <Table className="mt-1">
-                    <TableHeader>
-                        {table.getHeaderGroups().map((headerGroup) => (
-                            <TableRow key={headerGroup.id}>
-                                {headerGroup.headers.map((header) => {
-                                    return (
-                                        <TableHead key={header.id}>
-                                            {header.isPlaceholder
-                                                ? null
-                                                : flexRender(header.column.columnDef.header, header.getContext())}
-                                        </TableHead>
-                                    );
-                                })}
-                                <TableHead className="w-[40px]"></TableHead>
-                            </TableRow>
-                        ))}
-                    </TableHeader>
-                    <TableBody>
-                        {table.getRowModel().rows?.length ? (
-                            table.getRowModel().rows.map((row) => {
-                                return (
-                                    <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
-                                        {row.getVisibleCells().map((cell) => (
-                                            <TableCell key={cell.id}>
-                                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                            </TableCell>
-                                        ))}
-                                        <TableCell>
-                                            <Button
-                                                variant="outline"
-                                                onClick={() =>
-                                                    router.push(
-                                                        `/${row.original.circleType === "user" ? "users" : "circles"}/${row.original.handle}`,
-                                                    )
-                                                }
-                                            >
-                                                Open
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                );
-                            })
-                        ) : (
-                            <TableRow>
-                                <TableCell colSpan={columns.length + 2} className="h-24 text-center">
-                                    No circles.
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
+                <div
+                    className={
+                        isCompact && !isMobile
+                            ? "mr-4 grid grid-cols-1 gap-4"
+                            : "grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+                    }
+                >
+                    {filteredCircles.map((circle) => (
+                        <div
+                            key={circle._id}
+                            className="overflow-hidden rounded-lg border shadow transition-shadow duration-200 hover:shadow-md"
+                        >
+                            <div className="relative h-[150px] w-full overflow-hidden">
+                                <Image
+                                    src={circle.cover?.url ?? "/images/default-cover.png"}
+                                    alt="Cover"
+                                    layout="fill"
+                                    objectFit="cover"
+                                />
+                            </div>
+                            <div className="relative flex justify-center">
+                                <div className="absolute top-[-32px] flex justify-center">
+                                    <div className="h-[64px] w-[64px]">
+                                        <CirclePicture name={circle.name} picture={circle.picture?.url} size="64px" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="pt-[32px] text-center">
+                                <h4 className="mb-0 mt-2 text-lg font-bold">{circle.name}</h4>
+                                <div className="flex flex-row items-center justify-center text-sm text-gray-500">
+                                    {/* <FaUsers className="mr-1 inline-block" /> */}
+                                    {circle.members}{" "}
+                                    {circle?.members !== 1
+                                        ? isUser
+                                            ? "friends"
+                                            : "members"
+                                        : isUser
+                                          ? "friend"
+                                          : "member"}
+                                </div>
+                                {/* {circle.description && <p className="pl-4 pr-4">{circle.description}</p>} */}
+                            </div>
+                            <div className="flex flex-1">
+                                <Button
+                                    variant="outline"
+                                    className="m-2 mt-4 w-full"
+                                    onClick={() =>
+                                        router.push(
+                                            `/${circle.circleType === "user" ? "users" : "circles"}/${circle.handle}`,
+                                        )
+                                    }
+                                >
+                                    Open
+                                </Button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
         </div>
     );
+    // }
 };
 
 export default CirclesTable;
