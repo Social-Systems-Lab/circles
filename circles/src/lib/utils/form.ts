@@ -116,6 +116,10 @@ export const generateZodSchema = (fields: FormField[]): ZodSchema<any> => {
                     schema = handleSchema;
                     break;
 
+                case "number":
+                    schema = z.number();
+                    break;
+
                 default:
                     schema = z.string();
                     break;

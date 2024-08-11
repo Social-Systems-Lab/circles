@@ -17,9 +17,13 @@ type MembershipRequestsResponse = {
     message?: string;
     pendingRequests?: MembershipRequest[];
     rejectedRequests?: MembershipRequest[];
+    isUser?: boolean;
 };
 
-export const getAllMembershipRequestsAction = async (circleId: string): Promise<MembershipRequestsResponse> => {
+export const getAllMembershipRequestsAction = async (
+    circleId: string,
+    isUser?: boolean,
+): Promise<MembershipRequestsResponse> => {
     try {
         if (!circleId) {
             return { success: false, message: "Invalid circle ID" };
@@ -28,15 +32,12 @@ export const getAllMembershipRequestsAction = async (circleId: string): Promise<
         const userDid = await getAuthenticatedUserDid();
 
         // check if the user is authorized to view membership requests
-        const authorized = await isAuthorized(userDid, circleId, features.manage_membership_requests);
+        const authorized = await isAuthorized(userDid, circleId, features.manage_membership_requests, isUser);
         if (!authorized) {
             return { success: false, message: "You are not authorized to view membership requests" };
         }
 
         const { pendingRequests, rejectedRequests } = await getAllMembershipRequests(circleId);
-
-        console.log("GETTING ALL MEMBERSHIP REQUESTS", circleId, pendingRequests, rejectedRequests);
-
         return { success: true, pendingRequests, rejectedRequests };
     } catch (error) {
         return { success: false, message: "Failed to fetch membership requests. " + error?.toString() };

@@ -9,9 +9,10 @@ export type SettingsFormProps = {
     initialFormData: any;
     formSchemaId: string;
     subpage?: string;
+    isUser?: boolean;
 };
 
-export const SettingsForm = ({ formSchemaId, page, subpage, initialFormData }: SettingsFormProps) => {
+export const SettingsForm = ({ formSchemaId, page, subpage, initialFormData, isUser }: SettingsFormProps) => {
     const isCompact = useIsCompact();
 
     return (
@@ -29,6 +30,7 @@ export const SettingsForm = ({ formSchemaId, page, subpage, initialFormData }: S
                 page={page}
                 subpage={subpage}
                 showReset={true}
+                isUser={isUser}
             />
         </div>
     );

@@ -409,7 +409,12 @@ export type FormSubmitResponse = {
 
 export type FormAction = {
     id: string;
-    onSubmit: (values: Record<string, any>, page?: Page, subpage?: string) => Promise<FormSubmitResponse>;
+    onSubmit: (
+        values: Record<string, any>,
+        page?: Page,
+        subpage?: string,
+        isUser?: boolean,
+    ) => Promise<FormSubmitResponse>;
 };
 
 export type FormActionHandler = {

@@ -5,10 +5,16 @@ import { getServerSettings } from "@/lib/data/server-settings";
 import { saveFile, isFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
+import { updateUser } from "@/lib/data/user";
 
 export const circleAboutFormAction: FormAction = {
     id: "circle-about-form",
-    onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
+    onSubmit: async (
+        values: Record<string, any>,
+        page?: Page,
+        subpage?: string,
+        isUser?: boolean,
+    ): Promise<FormSubmitResponse> => {
         try {
             // console.log("Saving circle settings with values", values);
 
@@ -22,7 +28,7 @@ export const circleAboutFormAction: FormAction = {
 
             // check if user is authorized to edit circle settings
             const userDid = await getAuthenticatedUserDid();
-            let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
+            let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit, isUser);
             if (!authorized) {
                 console.log("userDid", userDid);
                 return { success: false, message: "You are not authorized to edit circle settings" };
@@ -40,7 +46,11 @@ export const circleAboutFormAction: FormAction = {
                 revalidatePath(circle.cover.url);
             }
 
-            await updateCircle(circle);
+            if (isUser) {
+                await updateUser(circle);
+            } else {
+                await updateCircle(circle);
+            }
 
             // clear page cache so pages update
             let circlePath = await getCirclePath(circle);

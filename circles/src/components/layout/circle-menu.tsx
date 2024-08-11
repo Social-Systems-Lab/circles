@@ -33,6 +33,11 @@ export default function CircleMenu({
 
     const handleCircleClick = (circle: Circle) => {
         setCircleMenuOpen(false);
+        if (circle.handle === "default" && circle.circleType !== "user") {
+            router.push("/");
+            return;
+        }
+
         router.push(`/${circle.circleType === "user" ? "users" : "circles"}/${circle.handle}`);
     };
 

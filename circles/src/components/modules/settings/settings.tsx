@@ -8,7 +8,7 @@ import MembershipGateway from "../membership-requests/membership-requests";
 import { getAllMembershipRequestsAction } from "../membership-requests/actions";
 import { SettingsForm } from "./settings-form";
 
-export default async function SettingsModule({ circle, page, subpage, isDefaultCircle }: ModulePageProps) {
+export default async function SettingsModule({ circle, page, subpage, isDefaultCircle, isUser }: ModulePageProps) {
     const getFormSchemaId = () => {
         switch (subpage) {
             default:
@@ -36,11 +36,13 @@ export default async function SettingsModule({ circle, page, subpage, isDefaultC
                         initialFormData={initialFormData}
                         page={page}
                         subpage={subpage}
+                        isUser={isUser}
                     />
                 );
             case "membership-requests":
                 const { success, pendingRequests, rejectedRequests, message } = await getAllMembershipRequestsAction(
                     circle._id,
+                    isUser,
                 );
                 if (!success) {
                     // Handle error, maybe return an error component

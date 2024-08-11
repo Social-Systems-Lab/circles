@@ -11,6 +11,7 @@ export async function onFormSubmit(
     values: FormData,
     page?: Page,
     subpage?: string,
+    isUser?: boolean,
 ): Promise<FormSubmitResponse> {
     try {
         console.log("onFormSubmit");
@@ -25,7 +26,7 @@ export async function onFormSubmit(
         // call form server action
         const formAction = formActions[formSchemaId];
         const { onSubmit } = formAction;
-        let response = await onSubmit(formValues, page, subpage);
+        let response = await onSubmit(formValues, page, subpage, isUser);
 
         return response;
     } catch (error) {

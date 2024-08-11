@@ -27,6 +27,7 @@ interface DynamicFormProps {
     page?: Page;
     subpage?: string;
     showReset?: boolean;
+    isUser?: boolean;
 }
 
 export const DynamicForm: React.FC<DynamicFormProps> = ({
@@ -37,6 +38,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
     page,
     subpage,
     showReset,
+    isUser,
 }) => {
     const [user, setUser] = useAtom(userAtom);
     const [authenticated, setAuthenticated] = useAtom(authenticatedAtom);
@@ -77,7 +79,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
 
                 formData.append(key, values[key]);
             });
-            let result = await onFormSubmit(formSchemaId, formData, page, subpage);
+            let result = await onFormSubmit(formSchemaId, formData, page, subpage, isUser);
 
             // call client action handler
             const formActionHandler = formActionHandlers[formSchemaId];
