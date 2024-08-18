@@ -1,6 +1,7 @@
 import {
     FormField,
     FormSchema,
+    UserAndCircleInfo,
     accessRulesSchema,
     emailSchema,
     getImageSchema,
@@ -8,6 +9,14 @@ import {
     passwordSchema,
 } from "@/models/models";
 import { z, ZodIssue, ZodSchema, ZodString } from "zod";
+
+export const getUserOrCircleInfo = (input: string | UserAndCircleInfo, isUser?: boolean) => {
+    if (typeof input === "string") {
+        return input;
+    } else {
+        return isUser ? input.user : input.circle;
+    }
+};
 
 export const getFormValues = (formData: FormData, formSchema: FormSchema): Record<string, any> => {
     const values: Record<string, any> = {};
@@ -17,12 +26,17 @@ export const getFormValues = (formData: FormData, formSchema: FormSchema): Recor
         let fieldInfo = formSchema.fields.find((x) => x.name === key);
         if (fieldInfo?.type === "array" || fieldInfo?.type === "table" || fieldInfo?.type === "access-rules") {
             values[key] = JSON.parse(value);
-            continue;
         } else if (fieldInfo?.type === "switch") {
             values[key] = value === "true";
-            continue;
+        } else if (fieldInfo?.type === "tags") {
+            if (value === "undefined") {
+                values[key] = [];
+            } else {
+                values[key] = value ? value?.split(",") : [];
+            }
+        } else {
+            values[key] = value;
         }
-        values[key] = value;
     }
 
     return values;
@@ -118,6 +132,10 @@ export const generateZodSchema = (fields: FormField[]): ZodSchema<any> => {
 
                 case "number":
                     schema = z.number();
+                    break;
+
+                case "tags":
+                    schema = z.array(z.string());
                     break;
 
                 default:

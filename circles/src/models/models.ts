@@ -39,6 +39,8 @@ export const fileInfoSchema = z.object({
     url: z.string(),
 });
 
+export type FileInfo = z.infer<typeof fileInfoSchema>;
+
 export const registryInfoSchema = z.object({
     registeredAt: z.date().optional(),
     registryUrl: z.string().optional(),
@@ -81,7 +83,7 @@ export type Partial<T> = {
 
 export interface MemberDisplay extends Member {
     name: string;
-    picture: string;
+    picture: FileInfo;
 }
 
 export const membershipRequestSchema = z.object({
@@ -173,6 +175,8 @@ export const circleSchema = z.object({
     createdBy: didSchema.optional(),
     createdAt: z.date().optional(),
     circleType: circleTypeSchema.optional(),
+    interests: z.array(z.string()).optional(),
+    offers_needs: z.array(z.string()).optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;
@@ -196,6 +200,8 @@ export const userSchema = z.object({
     accessRules: accessRulesSchema.optional(),
     members: z.number().default(0).optional(),
     questionnaire: z.array(questionSchema).default([]).optional(),
+    interests: z.array(z.string()).optional(),
+    offers_needs: z.array(z.string()).optional(),
 });
 
 export type User = z.infer<typeof userSchema>;
@@ -364,11 +370,12 @@ export type FormFieldType =
     | "handle"
     | "access-rules"
     | "registry-info"
-    | "questionnaire";
+    | "questionnaire"
+    | "tags";
 
 export type FormField = {
     name: string;
-    label: string;
+    label: string | UserAndCircleInfo;
     type: FormFieldType;
     placeholder?: string;
     autoComplete?: string;
@@ -387,10 +394,15 @@ export type FormField = {
     defaultValue?: any;
 };
 
+export type UserAndCircleInfo = {
+    user: string;
+    circle: string;
+};
+
 export type FormSchema = {
     id: string;
-    title: string;
-    description: string;
+    title: string | UserAndCircleInfo;
+    description: string | UserAndCircleInfo;
     footer?: {
         text: string;
         link: { href: string; text: string };

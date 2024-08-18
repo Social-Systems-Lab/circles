@@ -139,6 +139,7 @@ export default function EditableHomeModule({ circle, isDefaultCircle, isUser }: 
     const [isEditingName, setIsEditingName] = useState(false);
     const [isEditingDescription, setIsEditingDescription] = useState(false);
     const { toast } = useToast();
+    const memberCount = circle?.members ? (isUser ? circle.members - 1 : circle.members) : 0;
 
     const handleSave = async (field: string, value: any) => {
         const formData = new FormData();
@@ -202,12 +203,12 @@ export default function EditableHomeModule({ circle, isDefaultCircle, isUser }: 
                         setIsEditing={setIsEditingDescription}
                     />
                 </div>
-                {circle?.members && circle?.members > 0 && (
+                {memberCount > 0 && (
                     <div className="flex flex-row items-center justify-center pt-4">
                         <FaUsers />
                         <p className="m-0 ml-2 mr-4">
-                            {circle?.members}{" "}
-                            {circle?.members !== 1 ? (isUser ? "Friends" : "Members") : isUser ? "Friend" : "Member"}
+                            {memberCount}{" "}
+                            {memberCount !== 1 ? (isUser ? "Friends" : "Members") : isUser ? "Friend" : "Member"}
                         </p>
                     </div>
                 )}

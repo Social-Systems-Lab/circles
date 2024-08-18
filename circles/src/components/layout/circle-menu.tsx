@@ -15,10 +15,12 @@ import { userAtom } from "@/lib/data/atoms";
 
 export default function CircleMenu({
     circle,
+    defaultCircle,
     isDefaultCircle,
     isUser,
 }: {
     circle: Circle;
+    defaultCircle: Circle;
     isDefaultCircle: boolean;
     isUser?: boolean;
 }) {
@@ -28,12 +30,17 @@ export default function CircleMenu({
 
     const circles = useMemo(() => {
         if (!user) return [];
-        return user.memberships?.filter((x) => x.circle.circleType !== "user").map((m) => m.circle);
-    }, [user]);
+        let memberCircles = user.memberships
+            ?.filter((x) => x.circle.circleType !== "user" && x.circle.handle !== defaultCircle.handle)
+            .map((m) => m.circle);
+
+        console.log("memberCircles", memberCircles);
+        return [defaultCircle, ...memberCircles];
+    }, [defaultCircle, user]);
 
     const handleCircleClick = (circle: Circle) => {
         setCircleMenuOpen(false);
-        if (circle.handle === "default" && circle.circleType !== "user") {
+        if (circle.handle === defaultCircle.handle && circle.circleType !== "user") {
             router.push("/");
             return;
         }

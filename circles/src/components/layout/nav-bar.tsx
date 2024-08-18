@@ -4,6 +4,7 @@ import type { Circle } from "../../models/models";
 import { ProfileMenu } from "./profile-menu";
 import NavBarItems from "./nav-bar-items";
 import CircleMenu from "./circle-menu";
+import { getDefaultCircle } from "@/lib/data/circle";
 
 type LeftBarProps = {
     circle: Circle;
@@ -11,7 +12,9 @@ type LeftBarProps = {
     isUser?: boolean;
 };
 
-export default function NavBar({ circle, isDefaultCircle, isUser }: LeftBarProps) {
+export default async function NavBar({ circle, isDefaultCircle, isUser }: LeftBarProps) {
+    let defaultCircle = await getDefaultCircle();
+
     return (
         <>
             <div className={`order-last h-[72px] w-full flex-shrink-0 md:order-first md:h-full md:w-[72px]`}></div>
@@ -22,7 +25,12 @@ export default function NavBar({ circle, isDefaultCircle, isUser }: LeftBarProps
                 }}
             >
                 <div className={`flex h-[72px] flex-row items-center justify-center md:h-auto md:w-[72px] md:flex-col`}>
-                    <CircleMenu circle={circle} isDefaultCircle={isDefaultCircle} isUser={isUser} />
+                    <CircleMenu
+                        circle={circle}
+                        defaultCircle={defaultCircle}
+                        isDefaultCircle={isDefaultCircle}
+                        isUser={isUser}
+                    />
                     <NavBarItems circle={circle} isDefaultCircle={isDefaultCircle} isUser={isUser} />
                 </div>
             </div>

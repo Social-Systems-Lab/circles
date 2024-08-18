@@ -8,6 +8,7 @@ import { circlePagesFormActionHandler } from "./circle-settings/pages/circle-pag
 import { serverSettingsFormActionHandler } from "./circle-settings/server-settings/server-settings-action-handler";
 import { circleQuestionnaireFormActionHandler } from "./circle-settings/questionnaire/circle-questionnaire-action-handler";
 import { createCircleFormActionHandler } from "./create-circle/create-circle-form-action-handler";
+import { circleMatchmakingFormActionHandler } from "./circle-settings/matchmaking/circle-matchmaking-action-handler";
 
 export const formActionHandlers: Record<string, FormActionHandler> = {
     "signup-form": signupFormActionHandler,
@@ -19,4 +20,5 @@ export const formActionHandlers: Record<string, FormActionHandler> = {
     "circle-questionnaire-form": circleQuestionnaireFormActionHandler,
     "server-settings-form": serverSettingsFormActionHandler,
     "create-circle-form": createCircleFormActionHandler,
+    "circle-matchmaking-form": circleMatchmakingFormActionHandler,
 };

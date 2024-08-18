@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import Link from "next/link";
 import { DynamicField } from "@/components/forms/dynamic-field";
-import { generateZodSchema } from "@/lib/utils/form";
-import { FormSchema, FormTools, Page } from "@/models/models";
+import { generateZodSchema, getUserOrCircleInfo } from "@/lib/utils/form";
+import { FormSchema, FormTools, Page, UserAndCircleInfo } from "@/models/models";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { formSchemas } from "@/components/forms/form-schemas";
 import { onFormSubmit } from "./actions";
@@ -118,8 +118,8 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
             }}
         >
             <div className="flex-1" style={{ maxWidth: isCompact ? "none" : maxWidth }}>
-                <h1 className="m-0 p-0 pb-3 text-3xl font-bold">{title}</h1>
-                <p className="pb-8 text-gray-500">{description}</p>
+                <h1 className="m-0 p-0 pb-3 text-3xl font-bold">{getUserOrCircleInfo(title, isUser)}</h1>
+                <p className="pb-8 text-gray-500">{getUserOrCircleInfo(description, isUser)}</p>
                 <Form {...form}>
                     <form onSubmit={handleSubmit(onSubmit)} autoComplete="off">
                         <div className="space-y-8">
@@ -131,7 +131,12 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
                                         control={control}
                                         name={field.name}
                                         render={({ field: formField }) => (
-                                            <DynamicField field={field} formField={formField} control={control} />
+                                            <DynamicField
+                                                field={field}
+                                                formField={formField}
+                                                control={control}
+                                                isUser={isUser}
+                                            />
                                         )}
                                     />
                                 ))}

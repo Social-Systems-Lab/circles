@@ -1,10 +1,16 @@
 "use client";
 
 import { useIsCompact } from "@/components/utils/use-is-compact";
-import { Circle } from "@/models/models";
-import { FormNav } from "@/components/forms/form-nav";
+import { Circle, UserAndCircleInfo } from "@/models/models";
+import { FormNav, NavItem } from "@/components/forms/form-nav";
+import { getUserOrCircleInfo } from "@/lib/utils/form";
 
-const settingsForms = [
+type SettingsForm = {
+    name: string | UserAndCircleInfo;
+    handle: string;
+};
+
+const settingsForms: SettingsForm[] = [
     {
         name: "About",
         handle: "",
@@ -30,6 +36,10 @@ const settingsForms = [
         handle: "questionnaire",
     },
     {
+        name: { user: "Interests and Offers", circle: "Interests and Needs" },
+        handle: "matchmaking",
+    },
+    {
         name: "Server",
         handle: "server-settings",
     },
@@ -43,6 +53,11 @@ export type SettingsLayoutWrapperProps = {
 
 export const SettingsLayoutWrapper = ({ children, circle, isDefaultCircle }: SettingsLayoutWrapperProps) => {
     const isCompact = useIsCompact();
+    const isUser = circle.circleType === "user";
+    const navItems = settingsForms.map((item) => ({
+        name: getUserOrCircleInfo(item.name, isUser),
+        handle: item.handle,
+    })) as NavItem[];
 
     return (
         <div
@@ -60,7 +75,7 @@ export const SettingsLayoutWrapper = ({ children, circle, isDefaultCircle }: Set
                     minWidth: isCompact ? "0px" : "240px",
                 }}
             >
-                <FormNav items={settingsForms} circle={circle} isDefaultCircle={isDefaultCircle} />
+                <FormNav items={navItems} circle={circle} isDefaultCircle={isDefaultCircle} />
             </div>
             {children}
         </div>

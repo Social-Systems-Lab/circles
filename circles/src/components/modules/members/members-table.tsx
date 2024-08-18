@@ -93,6 +93,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
     const [isPending, startTransition] = useTransition();
     const [selectedUserGroups, setSelectedUserGroups] = useState<string[]>([]);
     const isCompact = useIsCompact();
+    const isUser = circle.circleType === "user";
 
     // if user is allowed to edit settings show edit button
     const canEditUserGroups =
@@ -120,13 +121,13 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                 header: ({ column }) => {
                     return (
                         <Button variant="ghost" onClick={() => column.toggleSorting()}>
-                            Member
+                            {isUser ? "Friend" : "Member"}
                             <SortIcon sortDir={column.getIsSorted()} />
                         </Button>
                     );
                 },
                 cell: (info) => {
-                    let picture = info.row.original.picture;
+                    let picture = info.row.original.picture?.url;
                     let memberName = info.getValue() as string;
                     return (
                         <div className="flex items-center gap-2">
@@ -160,7 +161,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                 filterFn: multiSelectFilter,
             },
         ],
-        [circle.userGroups],
+        [circle.userGroups, isUser],
     );
 
     const table = useReactTable({
@@ -354,7 +355,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={columns.length + (canEdit ? 1 : 0)} className="h-24 text-center">
-                                    No members.
+                                    {isUser ? "No friends." : "No members."}
                                 </TableCell>
                             </TableRow>
                         )}

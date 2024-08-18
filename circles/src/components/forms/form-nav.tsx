@@ -7,7 +7,7 @@ import { buttonVariants } from "../ui/button";
 import { Circle } from "@/models/models";
 import { useIsCompact } from "../utils/use-is-compact";
 
-type NavItem = {
+export type NavItem = {
     name: string;
     handle: string;
 };

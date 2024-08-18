@@ -24,6 +24,8 @@ export default async function SettingsModule({ circle, page, subpage, isDefaultC
                 return "circle-questionnaire-form";
             case "server-settings":
                 return "server-settings-form";
+            case "matchmaking":
+                return "circle-matchmaking-form";
         }
     };
 
