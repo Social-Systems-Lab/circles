@@ -39,7 +39,7 @@ export const CircleTags: React.FC<CircleTagsProps> = ({
     }
 
     return (
-        <div className={`mt-2 flex flex-wrap justify-center ${isCompact ? "gap-1" : "gap-2"}`}>
+        <div className={`mt-2 flex flex-wrap ${isCompact ? "gap-1" : "gap-2"}`}>
             {circle.interests.slice(0, showAll ? circle.interests.length : 2).map((tag) => (
                 <span
                     key={tag}

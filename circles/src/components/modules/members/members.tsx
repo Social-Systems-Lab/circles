@@ -7,8 +7,6 @@ import { useIsCompact } from "@/components/utils/use-is-compact";
 import { User } from "@/models/models";
 
 export default async function MembersModule({ circle, page, subpage, isDefaultCircle }: ModulePageProps) {
-    console.log("Members Module", circle, page, subpage, isDefaultCircle);
-
     // get members of circle
     let members = await getMembers(circle?._id);
     if (circle?.circleType === "user") {

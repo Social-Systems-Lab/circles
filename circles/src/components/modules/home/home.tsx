@@ -3,6 +3,10 @@ import { features } from "@/lib/data/constants";
 import { Circle } from "@/models/models";
 import EditableHomeModule from "./editable-home";
 import StaticHomeModule from "./static-home";
+import HomeModuleWrapper from "./home-module-wrapper";
+import StaticCircleCover from "./static-circle-cover";
+import HomeCover from "./home-cover";
+import HomeContent from "./home-content";
 
 type HomeModuleProps = {
     circle: Circle;
@@ -19,11 +23,20 @@ export default async function HomeModule({ circle, isDefaultCircle, isUser }: Ho
 
     return (
         <>
-            {authorizedToEdit ? (
-                <EditableHomeModule circle={circle} isDefaultCircle={isDefaultCircle} isUser={isUser} />
-            ) : (
-                <StaticHomeModule circle={circle} isDefaultCircle={isDefaultCircle} isUser={isUser} />
-            )}
+            <HomeModuleWrapper circle={circle}>
+                <HomeCover
+                    circle={circle}
+                    isDefaultCircle={isDefaultCircle}
+                    isUser={isUser}
+                    authorizedToEdit={authorizedToEdit}
+                />
+                <HomeContent
+                    circle={circle}
+                    isDefaultCircle={isDefaultCircle}
+                    isUser={isUser}
+                    authorizedToEdit={authorizedToEdit}
+                />
+            </HomeModuleWrapper>
         </>
     );
 }

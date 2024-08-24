@@ -1,0 +1,82 @@
+// HomeModule.tsx
+import React from "react";
+import Image from "next/image";
+import { Circle } from "@/models/models";
+import JoinButton from "./join-button";
+import { FaUsers } from "react-icons/fa";
+import InviteButton from "./invite-button";
+import EditableImage from "./editable-image";
+import EditableField from "./editable-field";
+
+type HomeContentProps = {
+    circle: Circle;
+    isDefaultCircle: boolean;
+    isUser?: boolean;
+    authorizedToEdit: boolean;
+};
+
+export default function HomeContent({ circle, isDefaultCircle, isUser, authorizedToEdit }: HomeContentProps) {
+    const memberCount = circle?.members ? (isUser ? circle.members - 1 : circle.members) : 0;
+
+    return (
+        <div className="flex flex-1 flex-col">
+            <div className="relative flex justify-center">
+                <div className="absolute top-[-60px]">
+                    <div className="h-[124px] w-[124px]">
+                        {authorizedToEdit ? (
+                            <EditableImage
+                                id="picture"
+                                src={circle?.picture?.url ?? "/images/default-picture.png"}
+                                alt="Picture"
+                                className="rounded-full border-2 border-white object-cover"
+                                fill
+                                circleId={circle._id!}
+                            />
+                        ) : (
+                            <Image
+                                className="rounded-full border-2 border-white object-cover"
+                                src={circle?.picture?.url ?? "/images/default-picture.png"}
+                                alt="Picture"
+                                objectFit="cover"
+                                fill
+                            />
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            <div className="mb-8 mt-[44px] flex flex-col items-center justify-center">
+                <h4>
+                    {authorizedToEdit ? (
+                        <EditableField id="name" value={circle.name ?? ""} circleId={circle._id!} />
+                    ) : (
+                        circle.name
+                    )}
+                </h4>
+                {circle.description && (
+                    <p className="pl-4 pr-4">
+                        {authorizedToEdit ? (
+                            <EditableField
+                                id="description"
+                                value={circle.description}
+                                circleId={circle._id!}
+                                multiline
+                            />
+                        ) : (
+                            circle.description
+                        )}
+                    </p>
+                )}
+                {memberCount > 0 && (
+                    <div className="flex flex-row items-center justify-center pt-4">
+                        <FaUsers />
+                        <p className="m-0 ml-2 mr-4">
+                            {memberCount}{" "}
+                            {memberCount !== 1 ? (isUser ? "Friends" : "Members") : isUser ? "Friend" : "Member"}
+                        </p>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
