@@ -17,6 +17,7 @@ type AutoCompleteProps = {
     isLoading?: boolean;
     disabled?: boolean;
     placeholder?: string;
+    onSearch: (query: string) => void;
 };
 
 export const AutoComplete = ({
@@ -26,6 +27,7 @@ export const AutoComplete = ({
     value,
     onValueChange,
     disabled,
+    onSearch,
     isLoading = false,
 }: AutoCompleteProps) => {
     const inputRef = useRef<HTMLInputElement>(null);
@@ -83,13 +85,20 @@ export const AutoComplete = ({
         [onValueChange],
     );
 
+    const handleInputChange = (search: string) => {
+        setInputValue(search);
+        if (onSearch) {
+            onSearch(search);
+        }
+    };
+
     return (
         <CommandPrimitive onKeyDown={handleKeyDown}>
             <div>
                 <CommandInput
                     ref={inputRef}
                     value={inputValue}
-                    onValueChange={isLoading ? undefined : setInputValue}
+                    onValueChange={handleInputChange}
                     onBlur={handleBlur}
                     onFocus={() => setOpen(true)}
                     placeholder={placeholder}
