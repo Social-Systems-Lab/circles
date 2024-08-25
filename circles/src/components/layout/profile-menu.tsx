@@ -4,7 +4,6 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Button } from "../ui/button";
 import { useTransition } from "react";
 import { logOut } from "../auth/actions";
-import { Loader2 } from "lucide-react";
 import { userAtom, authenticatedAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import {
@@ -17,6 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { UserPicture } from "../modules/members/user-picture";
 import { HiOutlineLogout } from "react-icons/hi";
+import Link from "next/link";
 
 export const ProfileMenu = () => {
     const router = useRouter();
@@ -58,10 +58,12 @@ export const ProfileMenu = () => {
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            <div className="flex w-[160px] flex-col items-center justify-center pt-4">
-                                <UserPicture name={user.name} picture={user.picture?.url} size="108px" />
-                                <span className="text-md pb-4 pt-4 font-bold">{user.name}</span>
-                            </div>
+                            <Link href={`/users/${user.handle}`}>
+                                <div className="flex w-[160px] flex-col items-center justify-center pt-4">
+                                    <UserPicture name={user.name} picture={user.picture?.url} size="108px" />
+                                    <span className="text-md pb-4 pt-4 font-bold">{user.name}</span>
+                                </div>
+                            </Link>
                             <DropdownMenuSeparator />
                             {/* <DropdownMenuItem>Edit Profile</DropdownMenuItem> */}
                             <DropdownMenuItem onClick={onLogOutClick}>

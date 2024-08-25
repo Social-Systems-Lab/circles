@@ -7,7 +7,7 @@ import { sidePanelWidth, topBarHeight } from "../../app/constants";
 import useWindowDimensions from "@/components/utils/use-window-dimensions";
 import mapboxgl from "mapbox-gl"; // eslint-disable-line import/no-webpack-loader-syntax
 import { useAtom } from "jotai";
-import { mapOpenAtom } from "@/lib/data/atoms";
+import { mapboxKeyAtom, mapOpenAtom } from "@/lib/data/atoms";
 
 const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
     const mapContainer = useRef(null);
@@ -23,20 +23,29 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
             return; // wait for map container to be available
         }
         if (map.current) return; // initialize map only once
+        if (!mapboxKey) return;
+
         map.current = new mapboxgl.Map({
             container: mapContainer.current,
             style: "mapbox://styles/mapbox/streets-v12",
             center: [lng, lat],
             zoom: zoom,
         });
-    }, [mapContainer, lat, lng, zoom]);
+    }, [mapContainer, lat, lng, zoom, mapboxKey]);
 
     return <div ref={mapContainer} className="map-container z-10" style={{ width: "100%", height: "100%" }} />;
 };
 
 export default function Map({ mapboxKey }: { mapboxKey: string }) {
     const [mapOpen, setMapOpen] = useAtom(mapOpenAtom);
+    const [, setMapboxKey] = useAtom(mapboxKeyAtom);
     const { windowWidth, windowHeight } = useWindowDimensions();
+
+    useEffect(() => {
+        if (mapboxKey) {
+            setMapboxKey(mapboxKey);
+        }
+    }, [mapboxKey, setMapboxKey]);
 
     if (!mapboxKey) return null;
 

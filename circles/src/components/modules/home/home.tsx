@@ -1,10 +1,7 @@
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { Circle } from "@/models/models";
-import EditableHomeModule from "./editable-home";
-import StaticHomeModule from "./static-home";
 import HomeModuleWrapper from "./home-module-wrapper";
-import StaticCircleCover from "./static-circle-cover";
 import HomeCover from "./home-cover";
 import HomeContent from "./home-content";
 

@@ -72,7 +72,12 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
             Object.keys(values).forEach((key) => {
                 // if key is an array object we stringify it before adding to form data
                 let fieldInfo = formSchema.fields.find((x) => x.name === key);
-                if (fieldInfo?.type === "array" || fieldInfo?.type === "table" || fieldInfo?.type === "access-rules") {
+                if (
+                    fieldInfo?.type === "array" ||
+                    fieldInfo?.type === "table" ||
+                    fieldInfo?.type === "access-rules" ||
+                    fieldInfo?.type === "location"
+                ) {
                     formData.append(key, JSON.stringify(values[key]));
                     return;
                 }

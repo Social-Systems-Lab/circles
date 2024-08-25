@@ -6,6 +6,7 @@ import {
     emailSchema,
     getImageSchema,
     handleSchema,
+    locationSchema,
     passwordSchema,
 } from "@/models/models";
 import { z, ZodIssue, ZodSchema, ZodString } from "zod";
@@ -24,7 +25,12 @@ export const getFormValues = (formData: FormData, formSchema: FormSchema): Recor
     for (const [key, value] of formData.entries() as any) {
         // if key is an array object we parse the json to get the value
         let fieldInfo = formSchema.fields.find((x) => x.name === key);
-        if (fieldInfo?.type === "array" || fieldInfo?.type === "table" || fieldInfo?.type === "access-rules") {
+        if (
+            fieldInfo?.type === "array" ||
+            fieldInfo?.type === "table" ||
+            fieldInfo?.type === "access-rules" ||
+            fieldInfo?.type === "location"
+        ) {
             values[key] = JSON.parse(value);
         } else if (fieldInfo?.type === "switch") {
             values[key] = value === "true";
@@ -136,6 +142,10 @@ export const generateZodSchema = (fields: FormField[]): ZodSchema<any> => {
 
                 case "tags":
                     schema = z.array(z.string());
+                    break;
+
+                case "location":
+                    schema = locationSchema;
                     break;
 
                 default:

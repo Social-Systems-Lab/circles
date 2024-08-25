@@ -7,6 +7,7 @@ import { Authenticator } from "@/components/auth/authenticator";
 import { Circle, ServerSettings } from "@/models/models";
 import NavBar from "./nav-bar";
 import { ProfileMenu } from "./profile-menu";
+import "mapbox-gl/dist/mapbox-gl.css";
 
 const inter = Inter({ subsets: ["latin"] });
 const wix = Wix_Madefor_Display({ subsets: ["latin"], variable: "--font-wix-display" });

@@ -54,7 +54,7 @@ export default function HomeContent({ circle, isDefaultCircle, isUser, authorize
                     )}
                 </h4>
                 {circle.description && (
-                    <p className="pl-4 pr-4">
+                    <div className="pl-4 pr-4">
                         {authorizedToEdit ? (
                             <EditableField
                                 id="description"
@@ -65,12 +65,12 @@ export default function HomeContent({ circle, isDefaultCircle, isUser, authorize
                         ) : (
                             circle.description
                         )}
-                    </p>
+                    </div>
                 )}
                 {memberCount > 0 && (
                     <div className="flex flex-row items-center justify-center pt-4">
                         <FaUsers />
-                        <p className="m-0 ml-2 mr-4">
+                        <p className="m-0 ml-2">
                             {memberCount}{" "}
                             {memberCount !== 1 ? (isUser ? "Friends" : "Members") : isUser ? "Friend" : "Member"}
                         </p>

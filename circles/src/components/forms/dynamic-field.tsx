@@ -37,6 +37,7 @@ import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { Switch } from "../ui/switch";
 import { WithContext as ReactTags } from "react-tag-input";
 import { getUserOrCircleInfo } from "@/lib/utils/form";
+import LocationPicker, { LocationGranularity } from "./location-picker";
 
 type RenderFieldProps = {
     field: FormFieldType;
@@ -59,7 +60,7 @@ export const DynamicTextField: React.FC<RenderFieldProps> = ({ field, formField,
                 {...formField}
             />
         </FormControl>
-        {field.description && <FormDescription>{field.description}</FormDescription>}
+        {field.description && <FormDescription>{getUserOrCircleInfo(field.description, isUser)}</FormDescription>}
         <FormMessage />
     </FormItem>
 );
@@ -85,7 +86,7 @@ export const DynamicTextareaField: React.FC<RenderFieldProps> = ({ field, formFi
                     {...formField}
                 />
             </FormControl>
-            {field.description && <FormDescription>{field.description}</FormDescription>}
+            {field.description && <FormDescription>{getUserOrCircleInfo(field.description, isUser)}</FormDescription>}
             <FormMessage />
         </FormItem>
     );
@@ -144,7 +145,7 @@ export const DynamicPasswordField: React.FC<RenderFieldProps> = ({ field, formFi
                     </div>
                 </div>
             </FormControl>
-            {field.description && <FormDescription>{field.description}</FormDescription>}
+            {field.description && <FormDescription>{getUserOrCircleInfo(field.description, isUser)}</FormDescription>}
             <FormMessage />
         </FormItem>
     );
@@ -208,7 +209,7 @@ export const DynamicImageField: React.FC<RenderFieldProps> = ({ field, formField
                 </Button>
             )}
 
-            {field.description && <FormDescription>{field.description}</FormDescription>}
+            {field.description && <FormDescription>{getUserOrCircleInfo(field.description, isUser)}</FormDescription>}
             <FormMessage />
         </FormItem>
     );
@@ -694,7 +695,9 @@ export const DynamicRegistryInfoField: React.FC<RenderFieldProps> = ({
                     <div className="flex items-center space-x-2">
                         <Input type="text" placeholder="Registry URL" readOnly={readOnly} {...formField} />
                     </div>
-                    {field.description && <FormDescription>{field.description}</FormDescription>}
+                    {field.description && (
+                        <FormDescription>{getUserOrCircleInfo(field.description, isUser)}</FormDescription>
+                    )}
 
                     <div className="flex flex-row items-center gap-1">
                         {isRegistered ? (
@@ -726,7 +729,11 @@ export const DynamicSwitchField: React.FC<RenderFieldProps> = ({ field, formFiel
             <div className="flex items-center justify-between space-x-2">
                 <Label htmlFor={field.name} className="flex flex-col space-y-2">
                     <span>{getUserOrCircleInfo(field.label, isUser)}</span>
-                    <span className="font-normal leading-snug text-muted-foreground">{field.description}</span>
+                    {field.description && (
+                        <span className="font-normal leading-snug text-muted-foreground">
+                            {getUserOrCircleInfo(field.description, isUser)}
+                        </span>
+                    )}
                 </Label>
                 <Switch
                     id={field.name}
@@ -852,7 +859,20 @@ export const DynamicTagsField: React.FC<RenderFieldProps> = ({ field, formField,
                 />
             </FormControl>
 
-            {field.description && <FormDescription>{field.description}</FormDescription>}
+            {field.description && <FormDescription>{getUserOrCircleInfo(field.description, isUser)}</FormDescription>}
+            <FormMessage />
+        </FormItem>
+    );
+};
+
+export const DynamicLocationField: React.FC<RenderFieldProps> = ({ field, formField, readOnly, isUser }) => {
+    return (
+        <FormItem>
+            <FormLabel>{getUserOrCircleInfo(field.label, isUser)}</FormLabel>
+            <FormControl>
+                <LocationPicker value={formField.value} onChange={formField.onChange} />
+            </FormControl>
+            {field.description && <FormDescription>{getUserOrCircleInfo(field.description, isUser)}</FormDescription>}
             <FormMessage />
         </FormItem>
     );
@@ -889,6 +909,8 @@ export const DynamicField: React.FC<RenderFieldProps> = ({ field, formField, con
             return DynamicQuestionnaireField({ field, formField, control, readOnly, isUser });
         case "tags":
             return DynamicTagsField({ field, formField, control, readOnly, isUser });
+        case "location":
+            return DynamicLocationField({ field, formField, control, readOnly, isUser });
         default:
             return null;
     }

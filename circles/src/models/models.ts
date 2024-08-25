@@ -46,6 +46,24 @@ export const registryInfoSchema = z.object({
     registryUrl: z.string().optional(),
 });
 
+export const lngLatSchema = z.object({
+    lng: z.number(),
+    lat: z.number(),
+});
+
+export type LngLat = z.infer<typeof lngLatSchema>;
+
+export const locationSchema = z.object({
+    precision: z.number(),
+    country: z.string().optional(),
+    region: z.string().optional(),
+    city: z.string().optional(),
+    street: z.string().optional(),
+    lngLat: lngLatSchema.optional(),
+});
+
+export type Location = z.infer<typeof locationSchema>;
+
 export type RegistryInfo = z.infer<typeof registryInfoSchema>;
 
 export type AccountType = z.infer<typeof accountTypeSchema>;
@@ -84,6 +102,7 @@ export type Partial<T> = {
 export interface MemberDisplay extends Member {
     name: string;
     picture: FileInfo;
+    location?: Location;
 }
 
 export const membershipRequestSchema = z.object({
@@ -177,6 +196,7 @@ export const circleSchema = z.object({
     circleType: circleTypeSchema.optional(),
     interests: z.array(z.string()).optional(),
     offers_needs: z.array(z.string()).optional(),
+    location: locationSchema.optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;
@@ -202,6 +222,7 @@ export const userSchema = z.object({
     questionnaire: z.array(questionSchema).default([]).optional(),
     interests: z.array(z.string()).optional(),
     offers_needs: z.array(z.string()).optional(),
+    location: locationSchema.optional(),
 });
 
 export type User = z.infer<typeof userSchema>;
@@ -371,7 +392,8 @@ export type FormFieldType =
     | "access-rules"
     | "registry-info"
     | "questionnaire"
-    | "tags";
+    | "tags"
+    | "location";
 
 export type FormField = {
     name: string;
@@ -379,7 +401,7 @@ export type FormField = {
     type: FormFieldType;
     placeholder?: string;
     autoComplete?: string;
-    description?: string;
+    description?: string | UserAndCircleInfo;
     options?: FormFieldOption[];
     minLength?: number;
     maxLength?: number;

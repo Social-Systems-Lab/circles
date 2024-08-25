@@ -34,7 +34,6 @@ export default function CircleMenu({
             ?.filter((x) => x.circle.circleType !== "user" && x.circle.handle !== defaultCircle.handle)
             .map((m) => m.circle);
 
-        console.log("memberCircles", memberCircles);
         return [defaultCircle, ...memberCircles];
     }, [defaultCircle, user]);
 
