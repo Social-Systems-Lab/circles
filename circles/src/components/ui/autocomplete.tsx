@@ -1,11 +1,39 @@
 import { CommandGroup, CommandItem, CommandList, CommandInput } from "./command";
 import { Command as CommandPrimitive } from "cmdk";
-import { useState, useRef, useCallback, type KeyboardEvent } from "react";
+import React, { useState, useRef, useCallback, useEffect, type KeyboardEvent } from "react";
 
 import { Skeleton } from "./skeleton";
 
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+import { MapPin } from "lucide-react";
+import { RiMapPinLine } from "react-icons/ri";
+import { RiMapPinFill } from "react-icons/ri";
+
+interface LocationInputProps extends React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input> {
+    isConfirmed: boolean;
+}
+
+export const LocationInput = React.forwardRef<React.ElementRef<typeof CommandPrimitive.Input>, LocationInputProps>(
+    ({ className, isConfirmed, ...props }, ref) => (
+        <div className="flex items-center rounded-lg border px-3" cmdk-input-wrapper="">
+            {isConfirmed ? (
+                <RiMapPinFill className={"mr-2 h-4 w-4 shrink-0 text-[#e54242]"} />
+            ) : (
+                <RiMapPinLine className={"mr-2 h-4 w-4 shrink-0 text-gray-400"} />
+            )}
+            <CommandPrimitive.Input
+                ref={ref}
+                className={cn(
+                    "flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
+                    className,
+                )}
+                {...props}
+            />
+        </div>
+    ),
+);
 
 export type Option = Record<"value" | "label", string> & Record<string, string>;
 
@@ -18,6 +46,7 @@ type AutoCompleteProps = {
     disabled?: boolean;
     placeholder?: string;
     onSearch: (query: string) => void;
+    isLocationConfirmed: boolean;
 };
 
 export const AutoComplete = ({
@@ -28,13 +57,21 @@ export const AutoComplete = ({
     onValueChange,
     disabled,
     onSearch,
+    isLocationConfirmed,
     isLoading = false,
 }: AutoCompleteProps) => {
     const inputRef = useRef<HTMLInputElement>(null);
 
     const [isOpen, setOpen] = useState(false);
-    const [selected, setSelected] = useState<Option>(value as Option);
+    const [selected, setSelected] = useState<Option | undefined>(value);
     const [inputValue, setInputValue] = useState<string>(value?.label || "");
+
+    useEffect(() => {
+        if (value && value.label !== inputValue) {
+            setSelected(value);
+            setInputValue(value.label);
+        }
+    }, [value]);
 
     const handleKeyDown = useCallback(
         (event: KeyboardEvent<HTMLDivElement>) => {
@@ -43,12 +80,10 @@ export const AutoComplete = ({
                 return;
             }
 
-            // Keep the options displayed when the user is typing
             if (!isOpen) {
                 setOpen(true);
             }
 
-            // This is not a default behaviour of the <input /> field
             if (event.key === "Enter" && input.value !== "") {
                 const optionToSelect = options.find((option) => option.label === input.value);
                 if (optionToSelect) {
@@ -66,18 +101,14 @@ export const AutoComplete = ({
 
     const handleBlur = useCallback(() => {
         setOpen(false);
-        setInputValue(selected?.label);
-    }, [selected]);
+    }, []);
 
     const handleSelectOption = useCallback(
         (selectedOption: Option) => {
             setInputValue(selectedOption.label);
-
             setSelected(selectedOption);
             onValueChange?.(selectedOption);
 
-            // This is a hack to prevent the input from being focused after the user selects an option
-            // We can call this hack: "The next tick"
             setTimeout(() => {
                 inputRef?.current?.blur();
             }, 0);
@@ -85,17 +116,20 @@ export const AutoComplete = ({
         [onValueChange],
     );
 
-    const handleInputChange = (search: string) => {
-        setInputValue(search);
-        if (onSearch) {
-            onSearch(search);
-        }
-    };
+    const handleInputChange = useCallback(
+        (search: string) => {
+            setInputValue(search);
+            if (onSearch) {
+                onSearch(search);
+            }
+        },
+        [onSearch],
+    );
 
     return (
         <CommandPrimitive onKeyDown={handleKeyDown}>
             <div>
-                <CommandInput
+                <LocationInput
                     ref={inputRef}
                     value={inputValue}
                     onValueChange={handleInputChange}
@@ -103,6 +137,7 @@ export const AutoComplete = ({
                     onFocus={() => setOpen(true)}
                     placeholder={placeholder}
                     disabled={disabled}
+                    isConfirmed={isLocationConfirmed}
                     className="text-base"
                 />
             </div>
