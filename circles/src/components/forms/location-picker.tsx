@@ -185,7 +185,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange }) => {
                 onValueChange={handleSuggestionSelect}
                 value={autoCompleteValue}
                 isLoading={isLoading}
-                placeholder="Type location or click on map to set location"
+                placeholder="Type or tap map to set location"
                 emptyMessage="No results found"
                 onSearch={fetchSuggestions}
                 isLocationConfirmed={isLocationConfirmed}

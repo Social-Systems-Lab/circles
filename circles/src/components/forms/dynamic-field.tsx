@@ -55,7 +55,7 @@ export const DynamicTextField: React.FC<RenderFieldProps> = ({ field, formField,
             <Input
                 type="text"
                 placeholder={field.placeholder}
-                autoComplete={field.autoComplete}
+                autoComplete={!field.autoComplete ?? "one-time-code"}
                 readOnly={readOnly}
                 {...formField}
             />
@@ -852,10 +852,12 @@ export const DynamicTagsField: React.FC<RenderFieldProps> = ({ field, formField,
                     handleAddition={handleAddition}
                     handleDrag={handleDrag}
                     inputFieldPosition="top"
-                    autocomplete={false}
                     autoFocus={false}
                     readOnly={readOnly}
                     placeholder="Type and press enter to add new tag"
+                    inputProps={{
+                        autoComplete: "one-time-code",
+                    }}
                 />
             </FormControl>
 

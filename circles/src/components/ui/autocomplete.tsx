@@ -16,23 +16,33 @@ interface LocationInputProps extends React.ComponentPropsWithoutRef<typeof Comma
 }
 
 export const LocationInput = React.forwardRef<React.ElementRef<typeof CommandPrimitive.Input>, LocationInputProps>(
-    ({ className, isConfirmed, ...props }, ref) => (
-        <div className="flex items-center rounded-lg border px-3" cmdk-input-wrapper="">
-            {isConfirmed ? (
-                <RiMapPinFill className={"mr-2 h-4 w-4 shrink-0 text-[#e54242]"} />
-            ) : (
-                <RiMapPinLine className={"mr-2 h-4 w-4 shrink-0 text-gray-400"} />
-            )}
-            <CommandPrimitive.Input
-                ref={ref}
-                className={cn(
-                    "flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
-                    className,
+    ({ className, isConfirmed, ...props }, ref) => {
+        // workaround for chrome autofilling the input box with wrong values
+        useEffect(() => {
+            if (ref && (ref as any).current) {
+                (ref as any).current.setAttribute("autocomplete", "one-time-code");
+            }
+        }, [ref]);
+
+        return (
+            <div className="flex items-center rounded-lg border px-3" cmdk-input-wrapper="">
+                {isConfirmed ? (
+                    <RiMapPinFill className={"mr-2 h-4 w-4 shrink-0 text-[#e54242]"} />
+                ) : (
+                    <RiMapPinLine className={"mr-2 h-4 w-4 shrink-0 text-gray-400"} />
                 )}
-                {...props}
-            />
-        </div>
-    ),
+                <CommandPrimitive.Input
+                    ref={ref}
+                    className={cn(
+                        "flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
+                        className,
+                    )}
+                    {...props}
+                    autocomplete="one-time-code"
+                />
+            </div>
+        );
+    },
 );
 
 export type Option = Record<"value" | "label", string> & Record<string, string>;

@@ -156,7 +156,7 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                                 </div>
 
                                 <div className="flex justify-center pl-2 pr-2">
-                                    <CircleTags circle={circle} userInterests={user?.interests} isCompact={true} />
+                                    <CircleTags tags={circle.interests} isCompact={true} />
                                 </div>
 
                                 {circle.description && (

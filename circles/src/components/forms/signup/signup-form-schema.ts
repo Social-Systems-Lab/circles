@@ -42,7 +42,7 @@ export const signupFormSchema: FormSchema = {
             label: "Email",
             type: "email",
             placeholder: "email",
-            autoComplete: "nope",
+            autoComplete: "one-time-code",
             required: true,
         },
         {
@@ -50,7 +50,7 @@ export const signupFormSchema: FormSchema = {
             label: "Password",
             type: "password",
             placeholder: "",
-            autoComplete: "new-password",
+            autoComplete: "one-time-code",
             required: true,
         },
     ],

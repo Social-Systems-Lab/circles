@@ -27,7 +27,7 @@ export const circleMatchmakingFormSchema: FormSchema = {
             label: { circle: "Needs", user: "Offers" },
             type: "tags",
             required: false,
-            autoComplete: "nope",
+            autoComplete: "one-time-code",
         },
     ],
 };
