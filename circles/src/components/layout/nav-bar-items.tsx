@@ -7,6 +7,44 @@ import { HiChevronDown, HiX } from "react-icons/hi";
 import { Circle, Page } from "@/models/models";
 import PageIcon from "../modules/page-icon";
 import { useIsMobile } from "../utils/use-is-mobile";
+import { motion, AnimatePresence } from "framer-motion";
+
+function NavItem({
+    item,
+    currentNavItem,
+    getPath,
+    index,
+}: {
+    item: Page;
+    currentNavItem: Page | undefined;
+    getPath: (page: Page) => string;
+    index: number;
+}) {
+    return (
+        <Link href={getPath(item)}>
+            <motion.div
+                className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
+                    item === currentNavItem ? "text-[#495cff]" : "text-[#696969]"
+                }`}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+            >
+                <PageIcon module={item.module} size="24px" />
+                <motion.span
+                    className="mt-[4px] text-[11px]"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.3, delay: 0.2 + index * 0.1 }}
+                >
+                    {item.name}
+                </motion.span>
+            </motion.div>
+        </Link>
+    );
+}
 
 export default function NavBarItems({
     circle,
@@ -49,79 +87,99 @@ export default function NavBarItems({
 
     return (
         <>
-            <nav
+            <motion.nav
                 className={`flex h-[72px] w-full flex-1 flex-row items-center justify-around overflow-hidden md:h-auto md:w-[72px] md:flex-col md:justify-normal`}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, ease: "easeOut" }}
             >
-                {visiblePages.map((item) => (
-                    <NavItem key={item.handle} item={item} currentNavItem={currentNavItem} getPath={getPath} />
+                {visiblePages.map((item, index) => (
+                    <NavItem
+                        key={item.handle}
+                        item={item}
+                        currentNavItem={currentNavItem}
+                        getPath={getPath}
+                        index={index}
+                    />
                 ))}
 
                 {morePages.length > 0 && (
-                    <div
+                    <motion.div
                         className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center pb-2 pt-2 ${
                             morePages.includes(currentNavItem as Page) ? "text-[#495cff]" : "text-[#696969]"
                         }`}
                         onClick={() => setIsMoreMenuOpen(true)}
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.95 }}
                     >
                         <PageIcon
                             module={morePages.includes(currentNavItem as Page) ? currentNavItem?.module ?? "" : "pages"}
                             size="24px"
                         />
-                        <div className="mt-[4px] flex flex-row items-center">
+                        <motion.div
+                            className="mt-[4px] flex flex-row items-center"
+                            animate={{ y: [0, 2, 0] }}
+                            transition={{ repeat: Infinity, duration: 1.5 }}
+                        >
                             <span className="text-[11px]">
                                 {morePages.includes(currentNavItem as Page) ? currentNavItem?.name : "More"}
                             </span>
                             <HiChevronDown size="16px" />
-                        </div>
-                    </div>
+                        </motion.div>
+                    </motion.div>
                 )}
-            </nav>
+            </motion.nav>
 
-            {isMoreMenuOpen && (
-                <div className="fixed inset-0 z-40 bg-white">
-                    <div className="flex h-full flex-col">
-                        <div className="flex items-center justify-between p-4">
-                            {/* <h2 className="text-xl font-bold">More Apps</h2> */}
-                            <button onClick={() => setIsMoreMenuOpen(false)} className="text-2xl">
-                                <HiX />
-                            </button>
+            <AnimatePresence>
+                {isMoreMenuOpen && (
+                    <motion.div
+                        className="fixed inset-0 z-40 bg-white"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.3 }}
+                    >
+                        <div className="flex h-full flex-col">
+                            <div className="flex items-center justify-between p-4">
+                                <motion.button
+                                    onClick={() => setIsMoreMenuOpen(false)}
+                                    className="text-2xl"
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.95 }}
+                                >
+                                    <HiX />
+                                </motion.button>
+                            </div>
+                            <motion.div
+                                className="grid grid-cols-3 gap-4 overflow-y-auto p-4"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.5, ease: "easeOut" }}
+                            >
+                                {circle?.pages?.map((item, index) => (
+                                    <Link
+                                        key={item.handle}
+                                        href={getPath(item)}
+                                        onClick={() => setIsMoreMenuOpen(false)}
+                                    >
+                                        <motion.div
+                                            className="flex flex-col items-center justify-center rounded-lg border p-4 hover:bg-gray-100"
+                                            whileHover={{ scale: 1.05 }}
+                                            whileTap={{ scale: 0.95 }}
+                                            initial={{ opacity: 0, y: 20 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ duration: 0.3, delay: index * 0.05 }}
+                                        >
+                                            <PageIcon module={item.module} size="40px" />
+                                            <span className="mt-2 text-center text-sm">{item.name}</span>
+                                        </motion.div>
+                                    </Link>
+                                ))}
+                            </motion.div>
                         </div>
-                        <div className="grid grid-cols-3 gap-4 overflow-y-auto p-4">
-                            {circle?.pages?.map((item) => (
-                                <Link key={item.handle} href={getPath(item)} onClick={() => setIsMoreMenuOpen(false)}>
-                                    <div className="flex flex-col items-center justify-center rounded-lg border p-4 hover:bg-gray-100">
-                                        <PageIcon module={item.module} size="40px" />
-                                        <span className="mt-2 text-center text-sm">{item.name}</span>
-                                    </div>
-                                </Link>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </>
-    );
-}
-
-function NavItem({
-    item,
-    currentNavItem,
-    getPath,
-}: {
-    item: Page;
-    currentNavItem: Page | undefined;
-    getPath: (page: Page) => string;
-}) {
-    return (
-        <Link href={getPath(item)}>
-            <div
-                className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
-                    item === currentNavItem ? "text-[#495cff]" : "text-[#696969]"
-                }`}
-            >
-                <PageIcon module={item.module} size="24px" />
-                <span className="mt-[4px] text-[11px]">{item.name}</span>
-            </div>
-        </Link>
     );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { ColumnDef, FilterFn, Row } from "@tanstack/react-table";
 import { Input } from "@/components/ui/input";
 import { Circle, Page } from "@/models/models";
@@ -71,7 +72,7 @@ interface CirclesListProps {
 }
 
 const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefaultCircle }) => {
-    const [user, setUser] = useAtom(userAtom);
+    const [user] = useAtom(userAtom);
     const isCompact = useIsCompact();
     const isMobile = useIsMobile();
     const canCreateSubcircle = isAuthorized(user, circle, features.create_subcircle);
@@ -86,10 +87,31 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
         }
     }, [circles, searchQuery]);
 
-    const { toast } = useToast();
+    const containerVariants = {
+        hidden: {},
+        visible: {
+            transition: {
+                staggerChildren: 0.1, // Adjust this value to control the delay between animations
+            },
+        },
+    };
+
+    const itemVariants = {
+        hidden: { opacity: 0, y: 20 },
+        visible: (index: number) => ({
+            opacity: 1,
+            y: 0,
+            transition: {
+                delay: index * 0.1, // Adjust this multiplier to control the delay for each item
+                type: "spring",
+                stiffness: 100,
+                damping: 15,
+            },
+        }),
+    };
 
     return (
-        <div className="flex flex-1 flex-row justify-center">
+        <div className="flex flex-1 flex-row justify-center overflow-hidden">
             <div className="mb-4 ml-4 mr-4 mt-4 flex max-w-[1100px] flex-1 flex-col">
                 <div
                     className="mb-4 flex w-full flex-row items-center gap-2"
@@ -105,84 +127,97 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                     />
                     {canCreateSubcircle && <CreateCircleButton circle={circle} isDefaultCircle={isDefaultCircle} />}
                 </div>
-                <div
+                <motion.div
+                    variants={containerVariants}
+                    initial="hidden"
+                    animate="visible"
                     className={
                         isCompact && !isMobile
                             ? "mr-4 grid grid-cols-1 gap-4"
                             : "grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
                     }
                 >
-                    {filteredCircles.map((circle) => (
-                        <div
-                            key={circle._id}
-                            className="flex h-full flex-col overflow-hidden rounded-[15px] border shadow transition-shadow duration-200 hover:shadow-md"
-                        >
-                            <div className="relative h-[150px] w-full overflow-hidden">
-                                <Image
-                                    src={circle.cover?.url ?? "/images/default-cover.png"}
-                                    alt="Cover"
-                                    layout="fill"
-                                    objectFit="cover"
-                                />
-                            </div>
-                            <div className="relative flex justify-center">
-                                <div className="absolute top-[-32px] flex justify-center">
-                                    <div className="h-[64px] w-[64px]">
-                                        <CirclePicture name={circle.name} picture={circle.picture?.url} size="64px" />
+                    <AnimatePresence mode="popLayout">
+                        {filteredCircles.map((circle, index) => (
+                            <motion.div
+                                key={circle._id}
+                                variants={itemVariants}
+                                custom={index}
+                                initial="hidden"
+                                animate="visible"
+                                exit="hidden"
+                                layout
+                                className="flex h-full flex-col overflow-hidden rounded-[15px] border shadow transition-shadow duration-200 hover:shadow-md"
+                            >
+                                <div className="relative h-[150px] w-full overflow-hidden">
+                                    <Image
+                                        src={circle.cover?.url ?? "/images/default-cover.png"}
+                                        alt="Cover"
+                                        layout="fill"
+                                        objectFit="cover"
+                                    />
+                                </div>
+                                <div className="relative flex justify-center">
+                                    <div className="absolute top-[-32px] flex justify-center">
+                                        <div className="h-[64px] w-[64px]">
+                                            <CirclePicture
+                                                name={circle.name}
+                                                picture={circle.picture?.url}
+                                                size="64px"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div className="pt-[32px] text-center">
-                                <h4
-                                    className="mb-0 mt-2 cursor-pointer text-lg font-bold"
-                                    onClick={() =>
-                                        router.push(
-                                            `/${circle.circleType === "user" ? "users" : "circles"}/${circle.handle}`,
-                                        )
-                                    }
-                                >
-                                    {circle.name}
-                                </h4>
-                                <div className="flex flex-row items-center justify-center text-sm text-gray-500">
-                                    {/* <FaUsers className="mr-1 inline-block" /> */}
-                                    {circle.members}{" "}
-                                    {circle?.members !== 1
-                                        ? isUser
-                                            ? "friends"
-                                            : "members"
-                                        : isUser
-                                          ? "friend"
-                                          : "member"}
-                                </div>
+                                <div className="pt-[32px] text-center">
+                                    <h4
+                                        className="mb-0 mt-2 cursor-pointer text-lg font-bold"
+                                        onClick={() =>
+                                            router.push(
+                                                `/${circle.circleType === "user" ? "users" : "circles"}/${circle.handle}`,
+                                            )
+                                        }
+                                    >
+                                        {circle.name}
+                                    </h4>
+                                    <div className="flex flex-row items-center justify-center text-sm text-gray-500">
+                                        {circle.members}{" "}
+                                        {circle?.members !== 1
+                                            ? isUser
+                                                ? "friends"
+                                                : "members"
+                                            : isUser
+                                              ? "friend"
+                                              : "member"}
+                                    </div>
 
-                                <div className="flex justify-center pl-2 pr-2">
-                                    <CircleTags tags={circle.interests} isCompact={true} />
-                                </div>
+                                    <div className="flex justify-center pl-2 pr-2">
+                                        <CircleTags tags={circle.interests} isCompact={true} />
+                                    </div>
 
-                                {circle.description && (
-                                    <p className="line-clamp-2 pl-1 pr-1 pt-2 text-[15px]">{circle.description}</p>
-                                )}
-                            </div>
-                            <div className="mt-auto flex">
-                                <Button
-                                    variant="outline"
-                                    className="m-2 mt-4 w-full"
-                                    onClick={() =>
-                                        router.push(
-                                            `/${circle.circleType === "user" ? "users" : "circles"}/${circle.handle}`,
-                                        )
-                                    }
-                                >
-                                    Open
-                                </Button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                                    {circle.description && (
+                                        <p className="line-clamp-2 pl-1 pr-1 pt-2 text-[15px]">{circle.description}</p>
+                                    )}
+                                </div>
+                                <div className="mt-auto flex">
+                                    <Button
+                                        variant="outline"
+                                        className="m-2 mt-4 w-full"
+                                        onClick={() =>
+                                            router.push(
+                                                `/${circle.circleType === "user" ? "users" : "circles"}/${circle.handle}`,
+                                            )
+                                        }
+                                    >
+                                        Open
+                                    </Button>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </AnimatePresence>
+                </motion.div>
             </div>
         </div>
     );
-    // }
 };
 
 export default CirclesList;
