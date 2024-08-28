@@ -118,7 +118,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
             className="flex flex-1 flex-row items-center justify-center"
             style={{
                 paddingLeft: isCompact ? "24px" : "24px",
-                paddingRight: isCompact ? "34px" : "24px",
+                paddingRight: isCompact ? "24px" : "24px",
                 paddingBottom: isCompact ? "0" : "32px",
             }}
         >

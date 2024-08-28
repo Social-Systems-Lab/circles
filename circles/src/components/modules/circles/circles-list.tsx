@@ -133,7 +133,7 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                     animate="visible"
                     className={
                         isCompact && !isMobile
-                            ? "mr-4 grid grid-cols-1 gap-4"
+                            ? "grid grid-cols-1 gap-4"
                             : "grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
                     }
                 >
@@ -147,7 +147,7 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                                 animate="visible"
                                 exit="hidden"
                                 layout
-                                className="flex h-full flex-col overflow-hidden rounded-[15px] border shadow transition-shadow duration-200 hover:shadow-md"
+                                className="flex h-full flex-col overflow-hidden rounded-[15px] border bg-white shadow transition-shadow duration-200 hover:shadow-md md:min-w-[200px] md:max-w-[420px]"
                             >
                                 <div className="relative h-[150px] w-full overflow-hidden">
                                     <Image
