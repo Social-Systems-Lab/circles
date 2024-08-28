@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useCallback } from "react";
 import { createRoot } from "react-dom/client";
 import { useEffect, useRef, useState } from "react";
 import { AiOutlineRead } from "react-icons/ai";
@@ -12,6 +12,8 @@ import { useAtom } from "jotai";
 import { mapboxKeyAtom, mapOpenAtom, displayedContentAtom } from "@/lib/data/atoms";
 import MapMarker from "./markers";
 import { isEqual } from "lodash"; // You might need to install lodash
+import { motion, AnimatePresence } from "framer-motion";
+import Image from "next/image";
 
 const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
     const mapContainer = useRef(null);
@@ -84,10 +86,20 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
     return <div ref={mapContainer} className="map-container z-10" style={{ width: "100%", height: "100%" }} />;
 };
 
-export default function Map({ mapboxKey }: { mapboxKey: string }) {
+export default function MapAndContentWrapper({
+    mapboxKey,
+    children,
+}: {
+    mapboxKey: string;
+    children: React.ReactNode;
+}) {
     const [mapOpen, setMapOpen] = useAtom(mapOpenAtom);
+    const [showMap, setShowMap] = useState(false);
     const [, setMapboxKey] = useAtom(mapboxKeyAtom);
+    const [triggerOpen, setTriggerOpen] = useState(false);
     const { windowWidth, windowHeight } = useWindowDimensions();
+
+    const innerWidth = document.documentElement.offsetWidth;
 
     useEffect(() => {
         if (mapboxKey) {
@@ -95,27 +107,75 @@ export default function Map({ mapboxKey }: { mapboxKey: string }) {
         }
     }, [mapboxKey, setMapboxKey]);
 
+    const handleAnimationComplete = () => {
+        // add a slight delay to the mapOpen state change to make the animation smoother
+        setMapOpen(triggerOpen);
+        if (triggerOpen) {
+            setTimeout(() => {
+                setShowMap(true);
+            }, 500);
+        } else {
+            setShowMap(false);
+        }
+    };
+
     if (!mapboxKey) return null;
 
     return (
-        <>
-            {mapOpen && (
+        <div className="relative flex w-full flex-row overflow-hidden bg-[#2e4c6b]">
+            <motion.div
+                className="relative min-h-screen bg-white"
+                animate={{ width: triggerOpen ? "420px" : windowWidth }}
+                transition={{ duration: 0.5 }}
+                initial={{ width: innerWidth }}
+                // style={{ width: windowWidth }}
+                onAnimationComplete={handleAnimationComplete}
+            >
+                {children}
+            </motion.div>
+
+            {triggerOpen && (
+                <motion.div
+                    className="pointer-events-none absolute right-0 top-0 z-20 flex h-screen flex-col items-center justify-center"
+                    animate={{ width: innerWidth - 420 - 72 }}
+                    transition={{ duration: 0.5, delay: 0.3 }}
+                    initial={{ width: 0 }}
+                >
+                    <motion.div
+                        initial={{ opacity: 1 }}
+                        animate={{ opacity: showMap ? 0 : 1 }}
+                        transition={{ duration: 0.8, delay: 0.2 }}
+                        className="flex items-center justify-center"
+                    >
+                        <Image src="/images/earth-placeholder.png" alt="map-background" width={933} height={933} />
+                    </motion.div>
+
+                    {/* <Image src="/images/earth.png" alt="map-background" width={933} height={933} /> */}
+                    {/* <div className="h-[800px] w-[800px] rounded-full bg-[#e0e0e0]"></div> */}
+                </motion.div>
+            )}
+
+            {showMap && (
                 <>
                     <div
-                        className="relative flex-grow-[1000]"
-                        style={{ width: windowWidth - sidePanelWidth - 72 + "px", height: windowHeight + "px" }}
+                        className="relative"
+                        style={{ width: innerWidth - sidePanelWidth - 72 + "px", height: windowHeight + "px" }}
                     ></div>
                     <div
-                        className={`fixed right-0`}
-                        style={{ width: windowWidth - sidePanelWidth - 72 + "px", height: windowHeight + "px" }}
+                        className={"fixed right-0"}
+                        style={{ width: innerWidth - sidePanelWidth - 72 + "px", height: windowHeight + "px" }}
                     >
                         <MapBox mapboxKey={mapboxKey} />
                     </div>
                 </>
             )}
+
             <div
                 className="group fixed bottom-[10px] right-5 z-30 cursor-pointer rounded-full bg-[#242424] p-[2px] hover:bg-[#304678e6]"
-                onClick={() => setMapOpen(!mapOpen)}
+                onClick={() => {
+                    setShowMap(false);
+                    setTriggerOpen(!triggerOpen);
+                }}
             >
                 {mapOpen ? (
                     <AiOutlineRead className="m-[4px] text-white group-hover:text-white" size="30px" />
@@ -123,6 +183,6 @@ export default function Map({ mapboxKey }: { mapboxKey: string }) {
                     <LiaGlobeAfricaSolid className="text-white group-hover:text-white" size="38px" />
                 )}
             </div>
-        </>
+        </div>
     );
 }

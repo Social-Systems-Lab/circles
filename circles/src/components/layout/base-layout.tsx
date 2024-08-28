@@ -1,6 +1,6 @@
 import { Wix_Madefor_Display, Libre_Franklin, Inter } from "next/font/google";
 import "@app/globals.css";
-import Map from "../map/map";
+import MapAndContentWrapper from "../map/map";
 import { Toaster } from "@/components/ui/toaster";
 import { Provider } from "jotai";
 import { Authenticator } from "@/components/auth/authenticator";
@@ -27,10 +27,7 @@ const BaseLayout = ({ children, circle, serverConfig, isDefaultCircle, isUser }:
             <body className={inter.className}>
                 <main className="relative flex flex-col md:flex-row">
                     <NavBar circle={circle} isDefaultCircle={isDefaultCircle} isUser={isUser} />
-                    <div className="flex flex-1 flex-row">
-                        <div className={`relative flex flex-1 md:min-w-[420px]`}>{children}</div>
-                        <Map mapboxKey={serverConfig?.mapboxKey ?? ""} />
-                    </div>
+                    <MapAndContentWrapper mapboxKey={serverConfig?.mapboxKey ?? ""}>{children}</MapAndContentWrapper>
                     <div className="fixed right-[20px] top-[10px] z-40">
                         <ProfileMenu />
                     </div>
