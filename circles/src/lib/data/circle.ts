@@ -5,6 +5,7 @@ import { getServerSettings } from "./server-settings";
 import { Circles } from "./db";
 import { ObjectId } from "mongodb";
 import { getDefaultAccessRules, defaultUserGroups, defaultPages, features } from "./constants";
+import { filterLocations } from "../utils";
 
 export const getDefaultCircle = async (inServerConfig: ServerSettings | null = null): Promise<Circle> => {
     if (process.env.IS_BUILD === "true") {
@@ -32,6 +33,7 @@ export const getCircles = async (parentCircleId: string): Promise<Circle[]> => {
             circle._id = circle._id.toString();
         }
     });
+    circles = filterLocations(circles) as any[];
     return circles;
 };
 

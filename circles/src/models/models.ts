@@ -245,6 +245,8 @@ export const serverSettingsSchema = z.object({
 
 export type ServerSettings = z.infer<typeof serverSettingsSchema>;
 
+export type Content = Circle | MemberDisplay;
+
 // server setup form wizard
 
 export const serverSetupDataSchema = z.object({

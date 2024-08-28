@@ -1,6 +1,6 @@
 // used by tailwindcss to merge classnames, shadcn/ui CLI assumes the file is here
 
-import { Circle, Page } from "@/models/models";
+import { Circle, Content, Page } from "@/models/models";
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { pageFeaturePrefix } from "./data/constants";
@@ -109,6 +109,38 @@ export function safeModifyAccessRules(
     }
 
     return updatedRules;
+}
+
+export function filterLocations(content: Content[]) {
+    for (const item of content) {
+        if (item.location) {
+            switch (item.location.precision) {
+                default:
+                case 0: // country
+                    item.location.region = undefined;
+                    item.location.city = undefined;
+                    item.location.street = undefined;
+                    item.location.lngLat = undefined;
+                    break;
+                case 1: // region
+                    item.location.city = undefined;
+                    item.location.street = undefined;
+                    item.location.lngLat = undefined;
+                    break;
+                case 2: // city
+                    item.location.street = undefined;
+                    item.location.lngLat = undefined;
+                    break;
+                case 3: // street
+                    item.location.lngLat = undefined;
+                    break;
+                case 4: // exact
+                    break;
+            }
+        }
+    }
+
+    return content;
 }
 
 export function safeModifyMemberUserGroups(

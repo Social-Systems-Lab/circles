@@ -1,6 +1,7 @@
 import { Member, MemberDisplay } from "@/models/models";
 import { Circles, Members, Users } from "./db";
 import { ObjectId } from "mongodb";
+import { filterLocations } from "../utils";
 
 export const getMember = async (userDid: string, circleId: string): Promise<Member | null> => {
     return await Members.findOne({ userDid: userDid, circleId: circleId });
@@ -30,10 +31,13 @@ export const getMembers = async (circleId?: string): Promise<MemberDisplay[]> =>
                 name: "$userDetails.name",
                 picture: "$userDetails.picture",
                 cover: "$userDetails.cover",
+                location: "$userDetails.location",
             },
         },
     ]).toArray();
 
+    // filter location data based on precision
+    members = filterLocations(members);
     return members as MemberDisplay[];
 };
 

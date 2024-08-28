@@ -115,7 +115,7 @@ function NavItem({
     return (
         <Link href={getPath(item)}>
             <div
-                className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center md:pb-2 md:pt-2 ${
+                className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
                     item === currentNavItem ? "text-[#495cff]" : "text-[#696969]"
                 }`}
             >

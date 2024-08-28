@@ -33,7 +33,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange }) => {
     const mapContainer = useRef<HTMLDivElement | null>(null);
     const mapMarker = useRef<mapboxgl.Marker | null>(null);
     const [searchOptions, setSearchOptions] = useState<Option[]>([]);
-    const [precision, setPrecision] = useState<PrecisionLevel>(4);
+    const [precision, setPrecision] = useState<PrecisionLevel>((value?.precision as PrecisionLevel) ?? 4);
     const [mapboxKey] = useAtom(mapboxKeyAtom);
     const [isLoading, setIsLoading] = useState(false);
     const [autoCompleteValue, setAutoCompleteValue] = useState<Option>({
