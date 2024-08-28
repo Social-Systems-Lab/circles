@@ -28,7 +28,7 @@ const BaseLayout = ({ children, circle, serverConfig, isDefaultCircle, isUser }:
                 <main className="relative flex flex-col md:flex-row">
                     <NavBar circle={circle} isDefaultCircle={isDefaultCircle} isUser={isUser} />
                     <div className="flex flex-1 flex-row">
-                        <div className={`relative flex min-w-[420px] flex-1`}>{children}</div>
+                        <div className={`relative flex flex-1 md:min-w-[420px]`}>{children}</div>
                         <Map mapboxKey={serverConfig?.mapboxKey ?? ""} />
                     </div>
                     <div className="fixed right-[20px] top-[10px] z-40">
