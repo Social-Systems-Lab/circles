@@ -116,6 +116,5 @@ echo "Starting Circles platform..."
 docker-compose up -d
 
 echo "Circles platform is now running!"
-echo "You can access it at https://$CIRCLES_DOMAIN""
-
+echo "You can access it at https://$CIRCLES_DOMAIN"
 echo "Please make sure to secure your .env file as it contains sensitive information."
