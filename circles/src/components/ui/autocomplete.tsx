@@ -1,4 +1,4 @@
-import { CommandGroup, CommandItem, CommandList, CommandInput } from "./command";
+import { CommandGroup, CommandItem, CommandList } from "./command";
 import { Command as CommandPrimitive } from "cmdk";
 import React, { useState, useRef, useCallback, useEffect, type KeyboardEvent } from "react";
 
@@ -7,7 +7,6 @@ import { Skeleton } from "./skeleton";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-import { MapPin } from "lucide-react";
 import { RiMapPinLine } from "react-icons/ri";
 import { RiMapPinFill } from "react-icons/ri";
 
@@ -38,12 +37,14 @@ export const LocationInput = React.forwardRef<React.ElementRef<typeof CommandPri
                         className,
                     )}
                     {...props}
-                    autocomplete="one-time-code"
+                    autoComplete="one-time-code"
                 />
             </div>
         );
     },
 );
+
+LocationInput.displayName = "LocationInput";
 
 export type Option = Record<"value" | "label", string> & Record<string, string>;
 

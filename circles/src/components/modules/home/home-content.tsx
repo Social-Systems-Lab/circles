@@ -35,7 +35,6 @@ export default function HomeContent({ circle, isDefaultCircle, isUser, authorize
                                 className="rounded-full border-2 border-white object-cover"
                                 src={circle?.picture?.url ?? "/images/default-picture.png"}
                                 alt="Picture"
-                                objectFit="cover"
                                 fill
                             />
                         )}

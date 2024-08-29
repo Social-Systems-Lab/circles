@@ -43,7 +43,7 @@ export const removeMemberAction = async (
         }
 
         // remove member from circle
-        await removeMember(member.userDid, circle._id ?? "");
+        await removeMember(member.userDid, circle._id ?? "", circle.circleType === "user");
 
         // clear page cache so page update
         let circlePath = await getCirclePath(circle);

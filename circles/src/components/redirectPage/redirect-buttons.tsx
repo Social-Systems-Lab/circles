@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
 export interface ButtonConfig {
     text: string;
@@ -14,7 +15,7 @@ interface RedirectButtonsProps {
     buttons: ButtonConfig[];
 }
 
-export default function RedirectButtons({ buttons }: RedirectButtonsProps) {
+export const RedirectButtonsLinks = ({ buttons }: RedirectButtonsProps) => {
     const searchParams = useSearchParams();
     const redirectTo = searchParams.get("redirectTo") ?? "/";
 
@@ -26,5 +27,13 @@ export default function RedirectButtons({ buttons }: RedirectButtonsProps) {
                 </Link>
             ))}
         </div>
+    );
+};
+
+export default function RedirectButtons({ buttons }: RedirectButtonsProps) {
+    return (
+        <Suspense>
+            <RedirectButtonsLinks buttons={buttons} />
+        </Suspense>
     );
 }

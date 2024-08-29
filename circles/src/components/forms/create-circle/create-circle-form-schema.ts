@@ -13,6 +13,7 @@ export const createCircleFormSchema: FormSchema = {
             label: "Name",
             type: "text",
             required: true,
+            autoComplete: "one-time-code",
         },
         {
             name: "handle",
@@ -21,6 +22,7 @@ export const createCircleFormSchema: FormSchema = {
             placeholder: "circle-handle",
             description: "Choose a unique handle for your circle.",
             required: true,
+            autoComplete: "one-time-code",
         },
         {
             name: "description",

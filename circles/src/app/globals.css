@@ -32,6 +32,11 @@ body {
     color: rgb(var(--foreground-rgb));
 }
 
+/* fixes issue with shadcn/ui adding padding to body  */
+body[data-scroll-locked] {
+    min-width: 100%;
+}
+
 html {
     font-family: var(--font-libre-franklin);
     overflow-y: scroll;

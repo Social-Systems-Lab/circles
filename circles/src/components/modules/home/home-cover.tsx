@@ -29,7 +29,9 @@ export default function HomeCover({ circle, isDefaultCircle, isUser, authorizedT
                 <Image
                     src={circle?.cover?.url ?? "/images/default-cover.png"}
                     alt="Cover"
-                    objectFit="cover"
+                    style={{
+                        objectFit: "cover",
+                    }}
                     sizes="100vw"
                     fill
                 />

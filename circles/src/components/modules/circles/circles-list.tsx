@@ -147,8 +147,8 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                                     <Image
                                         src={circle.cover?.url ?? "/images/default-cover.png"}
                                         alt="Cover"
-                                        layout="fill"
-                                        objectFit="cover"
+                                        className="object-cover"
+                                        fill
                                     />
                                 </div>
                                 <div className="relative flex justify-center">

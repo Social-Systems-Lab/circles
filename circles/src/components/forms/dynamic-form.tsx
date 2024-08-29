@@ -8,7 +8,7 @@ import Link from "next/link";
 import { DynamicField } from "@/components/forms/dynamic-field";
 import { generateZodSchema, getUserOrCircleInfo } from "@/lib/utils/form";
 import { FormTools, Page, UserAndCircleInfo } from "@/models/models";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { Suspense, useEffect, useMemo, useState, useTransition } from "react";
 import { formSchemas } from "@/components/forms/form-schemas";
 import { onFormSubmit } from "./actions";
 import { Loader2 } from "lucide-react";
@@ -30,7 +30,7 @@ interface DynamicFormProps {
     isUser?: boolean;
 }
 
-export const DynamicForm: React.FC<DynamicFormProps> = ({
+const DynamicFormManager: React.FC<DynamicFormProps> = ({
     initialFormData = {},
     formData = {},
     formSchemaId,
@@ -214,6 +214,32 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
                 </Form>
             </div>
         </div>
+    );
+};
+
+export const DynamicForm: React.FC<DynamicFormProps> = ({
+    initialFormData = {},
+    formData = {},
+    formSchemaId,
+    maxWidth = "400px",
+    page,
+    subpage,
+    showReset,
+    isUser,
+}) => {
+    return (
+        <Suspense>
+            <DynamicFormManager
+                initialFormData={initialFormData}
+                formData={formData}
+                formSchemaId={formSchemaId}
+                maxWidth={maxWidth}
+                page={page}
+                subpage={subpage}
+                showReset={showReset}
+                isUser={isUser}
+            />
+        </Suspense>
     );
 };
 

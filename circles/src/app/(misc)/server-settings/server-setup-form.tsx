@@ -74,7 +74,7 @@ export default function ServerSetupForm({ setupData }: { setupData: ServerSetupD
                 </ScrollArea>
             </div>
             <div className="relative flex-1  overflow-hidden bg-[#fdfdfd]">
-                <Image src="/images/cover2.png" alt="" objectFit="cover" fill />
+                <Image src="/images/cover2.png" alt="" className="object-cover" fill />
                 {/* <div className="p-8">
                     <pre>{JSON.stringify(data, null, 2)}</pre>
                 </div> */}

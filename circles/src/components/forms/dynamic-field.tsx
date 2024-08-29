@@ -54,7 +54,7 @@ export const DynamicTextField: React.FC<RenderFieldProps> = ({ field, formField,
             <Input
                 type="text"
                 placeholder={field.placeholder}
-                autoComplete={!field.autoComplete ?? "one-time-code"}
+                autoComplete={field.autoComplete}
                 readOnly={readOnly}
                 {...formField}
             />
@@ -193,9 +193,8 @@ export const DynamicImageField: React.FC<RenderFieldProps> = ({ field, formField
                     alt="Preview"
                     width={field.imagePreviewWidth ?? 120}
                     height={field.imagePreviewHeight ?? 120}
-                    objectFit="cover"
                     onClick={triggerFileInput}
-                    className="cursor-pointer"
+                    className="cursor-pointer object-cover"
                     style={{
                         cursor: readOnly ? "default" : "pointer",
                     }}

@@ -59,7 +59,6 @@ export default function CircleMenu({
                             className="h-[40px] w-[40px] overflow-hidden rounded-full object-cover"
                             width={40}
                             height={40}
-                            objectFit="cover"
                         />
                     </div>
                 </PopoverTrigger>
@@ -78,7 +77,6 @@ export default function CircleMenu({
                                         className="h-[40px] w-[40px] overflow-hidden rounded-full object-cover"
                                         width={40}
                                         height={40}
-                                        objectFit="cover"
                                     />
                                 </div>
                                 <div className="pl-2">{user.name}</div>
@@ -98,7 +96,6 @@ export default function CircleMenu({
                                         className="h-[40px] w-[40px] overflow-hidden rounded-full object-cover"
                                         width={40}
                                         height={40}
-                                        objectFit="cover"
                                     />
                                 </div>
                                 <div className="pl-2">{circleItem.name}</div>
