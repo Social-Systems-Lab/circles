@@ -65,6 +65,7 @@ prompt_for_value() {
 # Prompt for necessary configurations
 echo "Please provide the following configuration details:"
 
+prompt_for_value "CIRCLES_DOMAIN" "yourdomain.com" "Enter your domain name (e.g., example.com)"
 prompt_for_value "CIRCLES_PORT" "3000" "Enter the port for Circles to run on"
 prompt_for_value "NODE_ENV" "production" "Enter the Node environment (production/development)"
 
@@ -83,10 +84,33 @@ prompt_for_value "CIRCLES_JWT_SECRET" "change_me" "Enter the secret key for user
 
 echo "Configuration complete."
 
+read -p "Would you like to set up SSL certificates with Certbot? (y/n): " setup_ssl
+
+if [ "$setup_ssl" = "y" ] || [ "$setup_ssl" = "Y" ]; then
+    # Check if Certbot is installed
+    if ! [ -x "$(command -v certbot)" ]; then
+        echo "Certbot is required for this installation. Installing..."
+        sudo apt-get update
+        sudo apt-get install -y certbot
+    fi
+
+    # Stop any running Docker containers that might be using port 80
+    echo "Stopping running Docker containers..."
+    docker-compose down
+
+    # Obtain SSL certificate
+    echo "Obtaining SSL certificate for $CIRCLES_DOMAIN..."
+    sudo certbot certonly --standalone -d $CIRCLES_DOMAIN -d www.$CIRCLES_DOMAIN
+
+    echo "SSL certificate obtained successfully."
+fi
+
+
 # Start the services
 echo "Starting Circles platform..."
 docker-compose up -d
 
 echo "Circles platform is now running!"
-echo "You can access it at http://localhost"
+echo "You can access it at https://$CIRCLES_DOMAIN"
+
 echo "Please make sure to secure your .env file as it contains sensitive information."

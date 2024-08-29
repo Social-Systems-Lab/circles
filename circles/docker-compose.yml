@@ -67,8 +67,10 @@ services:
         volumes:
             - ./nginx.conf.template:/etc/nginx/nginx.conf.template:ro
             - ./docker-entrypoint.sh:/docker-entrypoint.sh:ro
+            - /etc/letsencrypt:/etc/letsencrypt:ro # Let's encrypt SSL certificates
         ports:
             - "80:80"
+            - "443:443"
         networks:
             - webnet
         command: ["/bin/sh", "-c", "/docker-entrypoint.sh && nginx -g 'daemon off;'"]
