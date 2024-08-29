@@ -1,14 +1,12 @@
 "use server";
 
 import { getAuthenticatedUserDid, getMemberAccessLevel, hasHigherAccess, isAuthorized } from "@/lib/auth/auth";
-import { verifyUserToken } from "@/lib/auth/jwt";
 import { getCircleById, getCirclePath } from "@/lib/data/circle";
 import { features } from "@/lib/data/constants";
 import { countAdmins, getMember, removeMember, updateMemberUserGroups } from "@/lib/data/member";
-import { safeModifyAccessRules, safeModifyMemberUserGroups } from "@/lib/utils";
+import { safeModifyMemberUserGroups } from "@/lib/utils";
 import { Circle, MemberDisplay, Page } from "@/models/models";
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
 
 type RemoveMemberResponse = {
     success: boolean;

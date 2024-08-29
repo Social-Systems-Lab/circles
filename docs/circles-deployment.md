@@ -28,4 +28,3 @@ Push the image to Docker Hub:
 docker push sslorg/circles-registry:latest
 ```
 
-## 

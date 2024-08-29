@@ -1,5 +1,4 @@
 import React from "react";
-import { Circle } from "@/models/models";
 
 interface CircleTagsProps {
     tags?: string[];

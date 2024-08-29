@@ -3,7 +3,6 @@ import { createCircle, updateCircle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { isFile, saveFile } from "@/lib/data/storage";
-import { revalidatePath } from "next/cache";
 import { addMember } from "@/lib/data/member";
 
 export const createCircleFormAction: FormAction = {

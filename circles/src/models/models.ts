@@ -1,6 +1,5 @@
 import { Toast } from "@/components/ui/use-toast";
 import { CoreMessage } from "ai";
-import { read } from "fs";
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { ReadonlyURLSearchParams } from "next/navigation";
 import { z } from "zod";

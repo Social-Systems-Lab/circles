@@ -118,8 +118,6 @@ export const createPendingMembershipRequest = async (
 };
 
 export const deletePendingMembershipRequest = async (userDid: string, circleId: string): Promise<boolean> => {
-    console.log("attempting to remove membership request", userDid, circleId);
-
     const result = await MembershipRequests.deleteOne({ userDid, circleId, status: "pending" });
     if (result.deletedCount === 0) {
         throw new Error("No pending request found for this user and circle");

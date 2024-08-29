@@ -3,7 +3,6 @@
 import { ModulePageProps } from "../dynamic-page";
 import { getMembers } from "@/lib/data/member";
 import MembersTable from "./members-table";
-import { useIsCompact } from "@/components/utils/use-is-compact";
 import { User } from "@/models/models";
 import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 

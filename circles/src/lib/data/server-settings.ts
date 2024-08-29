@@ -145,12 +145,10 @@ export const registerServer = async (
 
     let registerData = await registerResponse.json();
     if (registerResponse.status !== 200) {
-        console.log("Failed to register server", registerData);
         throw new Error("Failed to register server");
     }
 
     // sign the challenge
-    console.log("Received register response", registerData);
     const signature = signRegisterServerChallenge(registerData.challenge);
 
     // confirm registration
@@ -166,12 +164,10 @@ export const registerServer = async (
     let confirmResponseObject = await confirmResponse.json();
 
     if (confirmResponse.status !== 200) {
-        console.log("Failed to confirm registration", confirmResponseObject);
         throw new Error("Failed to confirm registration");
     }
 
     if (!confirmResponseObject.success) {
-        console.log("Failed to confirm registration", confirmResponseObject);
         throw new Error("Failed to confirm registration");
     }
 

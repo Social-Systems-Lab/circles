@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { userAtom } from "@/lib/data/atoms";
-import { Circle, MembershipRequest } from "@/models/models";
+import { Circle } from "@/models/models";
 import { useAtom } from "jotai";
 import { usePathname, useRouter } from "next/navigation";
 import { joinCircle, leaveCircle, cancelJoinRequest } from "./actions";

@@ -1,13 +1,13 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormField, FormMessage } from "@/components/ui/form";
 import Link from "next/link";
 import { DynamicField } from "@/components/forms/dynamic-field";
 import { generateZodSchema, getUserOrCircleInfo } from "@/lib/utils/form";
-import { FormSchema, FormTools, Page, UserAndCircleInfo } from "@/models/models";
+import { FormTools, Page, UserAndCircleInfo } from "@/models/models";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { formSchemas } from "@/components/forms/form-schemas";
 import { onFormSubmit } from "./actions";
@@ -66,8 +66,6 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
     const onSubmit = async (values: Record<string, any>) => {
         setFormError(null);
         startTransition(async () => {
-            console.log("Before onFormSubmit");
-
             const formData = new FormData();
             Object.keys(values).forEach((key) => {
                 // if key is an array object we stringify it before adding to form data

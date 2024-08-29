@@ -5,14 +5,7 @@ import { Members, Users } from "./db";
 import { ObjectId } from "mongodb";
 import { signRegisterUserChallenge } from "../auth/auth";
 import { getUserPendingMembershipRequests } from "./membership-requests";
-import {
-    defaultPages,
-    defaultPagesForUser,
-    defaultUserGroups,
-    defaultUserGroupsForUser,
-    getDefaultAccessRules,
-    getDefaultAccessRulesForUser,
-} from "./constants";
+import { defaultPagesForUser, defaultUserGroupsForUser, getDefaultAccessRulesForUser } from "./constants";
 
 export const getUser = async (userDid: string): Promise<User> => {
     let user = await Users.findOne(
@@ -184,12 +177,10 @@ export const registerUser = async (
 
     let registerData = await registerResponse.json();
     if (registerResponse.status !== 200) {
-        console.log("Failed to register user", registerData);
         throw new Error("Failed to register user");
     }
 
     // sign the challenge
-    console.log("Received register response", registerData);
     const signature = signRegisterUserChallenge(did, password, registerData.challenge);
 
     // confirm registration
@@ -205,12 +196,10 @@ export const registerUser = async (
     let confirmResponseObject = await confirmResponse.json();
 
     if (confirmResponse.status !== 200) {
-        console.log("Failed to confirm registration", confirmResponseObject);
         throw new Error("Failed to confirm registration");
     }
 
     if (!confirmResponseObject.success) {
-        console.log("Failed to confirm registration", confirmResponseObject);
         throw new Error("Failed to confirm registration");
     }
 
@@ -218,6 +207,5 @@ export const registerUser = async (
         registryUrl,
         registeredAt: new Date(),
     };
-    console.log("Received confirm response", confirmResponseObject);
     return registryInfo;
 };

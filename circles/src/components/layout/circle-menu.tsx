@@ -1,15 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import React, { useState, useMemo, useCallback } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import { HiChevronDown, HiX } from "react-icons/hi";
-import { Circle, Page } from "@/models/models";
-import PageIcon from "../modules/page-icon";
-import { useIsMobile } from "../utils/use-is-mobile";
+import React, { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { Circle } from "@/models/models";
 import Image from "next/image";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
-import { FaUserLock } from "react-icons/fa6";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 

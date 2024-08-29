@@ -1,7 +1,6 @@
 import Image from "next/image";
 import loggedOut from "@images/logged-out.png";
 import RedirectButtons from "@/components/redirectPage/redirect-buttons";
-import { Suspense } from "react";
 
 export default function LoggedOut() {
     return (

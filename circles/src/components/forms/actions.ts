@@ -14,7 +14,6 @@ export async function onFormSubmit(
     isUser?: boolean,
 ): Promise<FormSubmitResponse> {
     try {
-        console.log("onFormSubmit");
         const formSchema = formSchemas[formSchemaId];
         const zodSchema = generateZodSchema(formSchema.fields);
 

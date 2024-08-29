@@ -1,7 +1,7 @@
 "use server";
 
 import { verifyUserToken } from "@/lib/auth/jwt";
-import { getUser, getUserPrivate } from "@/lib/data/user";
+import { getUserPrivate } from "@/lib/data/user";
 import { UserPrivate } from "@/models/models";
 import { cookies } from "next/headers";
 

@@ -1,7 +1,6 @@
 import { getCirclePath, updateCircle } from "@/lib/data/circle";
 import { Circle, FormAction, FormSubmitResponse, Page } from "../../../../models/models";
 import { revalidatePath } from "next/cache";
-import { getServerSettings } from "@/lib/data/server-settings";
 import { saveFile, isFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
@@ -31,7 +30,6 @@ export const circleAboutFormAction: FormAction = {
             const userDid = await getAuthenticatedUserDid();
             let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit, isUser);
             if (!authorized) {
-                console.log("userDid", userDid);
                 return { success: false, message: "You are not authorized to edit circle settings" };
             }
 

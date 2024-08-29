@@ -1,18 +1,18 @@
 "use client";
 
-import React, { useCallback } from "react";
+import React from "react";
 import { createRoot } from "react-dom/client";
 import { useEffect, useRef, useState } from "react";
 import { AiOutlineRead } from "react-icons/ai";
 import { LiaGlobeAfricaSolid } from "react-icons/lia";
-import { sidePanelWidth, topBarHeight } from "../../app/constants";
+import { sidePanelWidth } from "../../app/constants";
 import useWindowDimensions from "@/components/utils/use-window-dimensions";
 import mapboxgl from "mapbox-gl"; // eslint-disable-line import/no-webpack-loader-syntax
 import { useAtom } from "jotai";
 import { mapboxKeyAtom, mapOpenAtom, displayedContentAtom } from "@/lib/data/atoms";
 import MapMarker from "./markers";
 import { isEqual } from "lodash"; // You might need to install lodash
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import Image from "next/image";
 
 const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
@@ -28,7 +28,6 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
 
     useEffect(() => {
         if (!mapContainer.current) {
-            console.log("Map Container not available");
             return; // wait for map container to be available
         }
         if (map.current) return; // initialize map only once

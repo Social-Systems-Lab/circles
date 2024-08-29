@@ -1,5 +1,4 @@
 import DynamicForm from "@/components/forms/dynamic-form";
-import { Suspense } from "react";
 
 export default function Signup() {
     return (

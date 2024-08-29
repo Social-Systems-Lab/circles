@@ -10,7 +10,7 @@ import { createPendingMembershipRequest, deletePendingMembershipRequest } from "
 import { getCircleById, getCirclePath, updateCircle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
-import { isFile, saveFile } from "@/lib/data/storage";
+import { saveFile } from "@/lib/data/storage";
 import { revalidatePath } from "next/cache";
 import { getUserById, updateUser } from "@/lib/data/user";
 
@@ -144,14 +144,11 @@ export const updateCircleField = async (
 
         for (const [key, value] of formData.entries() as any) {
             if (key === "picture" || key === "cover") {
-                console.log("Saving file", key, circleId);
                 let fileInfo = await saveFile(value, key, circleId, true);
-                updateData[key] = fileInfo;
-
-                console.log("new circle data", updateData);
+                updateData[key as keyof Circle] = fileInfo;
                 revalidatePath(fileInfo.url);
             } else {
-                updateData[key] = value as string;
+                updateData[key as keyof Circle] = value as string;
             }
         }
 

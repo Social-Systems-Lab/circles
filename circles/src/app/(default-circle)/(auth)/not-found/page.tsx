@@ -1,9 +1,6 @@
 import Image from "next/image";
 import notFound from "@images/not-found.png";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import RedirectButtons from "@/components/redirectPage/redirect-buttons";
-import { Suspense } from "react";
 
 export default function NotFound() {
     return (

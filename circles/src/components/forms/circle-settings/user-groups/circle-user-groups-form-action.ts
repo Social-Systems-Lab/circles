@@ -15,9 +15,6 @@ export const circleUserGroupsFormAction: FormAction = {
         isUser?: boolean,
     ): Promise<FormSubmitResponse> => {
         try {
-            // TODO check if user is authorized to save circle settings
-            console.log("Saving circle settings with values", values);
-
             let circle: Circle = {
                 _id: values._id,
             };

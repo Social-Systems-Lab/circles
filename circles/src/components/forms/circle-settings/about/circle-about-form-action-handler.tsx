@@ -1,6 +1,5 @@
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { FormSubmitResponse, FormActionHandler, FormTools } from "../../../../models/models";
-import { CheckIcon } from "lucide-react";
 
 export const circleAboutFormActionHandler: FormActionHandler = {
     id: "circle-about-form",

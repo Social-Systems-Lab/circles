@@ -1,8 +1,6 @@
 "use server";
 
-import DynamicForm from "@/components/forms/dynamic-form";
 import { ModulePageProps } from "../dynamic-page";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { getServerSettings } from "@/lib/data/server-settings";
 import MembershipGateway from "../membership-requests/membership-requests";
 import { getAllMembershipRequestsAction } from "../membership-requests/actions";

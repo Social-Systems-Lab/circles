@@ -1,7 +1,4 @@
-import Image from "next/image";
-import Link from "next/link";
 import type { Circle } from "../../models/models";
-import { ProfileMenu } from "./profile-menu";
 import NavBarItems from "./nav-bar-items";
 import CircleMenu from "./circle-menu";
 import { getDefaultCircle } from "@/lib/data/circle";

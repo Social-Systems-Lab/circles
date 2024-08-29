@@ -1,6 +1,5 @@
 import Image from "next/image";
 import unauthorized from "@images/unauthorized.png";
-import { Suspense } from "react";
 import RedirectButtons from "@/components/redirectPage/redirect-buttons";
 
 export default function Unauthenticated() {

@@ -1,6 +1,5 @@
 import DynamicForm from "@/components/forms/dynamic-form";
 import { getServerSettings } from "@/lib/data/server-settings";
-import { Suspense } from "react";
 
 export default async function ServerSettings() {
     // get current server settings

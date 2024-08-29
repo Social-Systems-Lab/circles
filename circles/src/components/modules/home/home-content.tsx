@@ -2,9 +2,7 @@
 import React from "react";
 import Image from "next/image";
 import { Circle } from "@/models/models";
-import JoinButton from "./join-button";
 import { FaUsers } from "react-icons/fa";
-import InviteButton from "./invite-button";
 import EditableImage from "./editable-image";
 import EditableField from "./editable-field";
 

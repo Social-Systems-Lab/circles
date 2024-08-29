@@ -13,7 +13,6 @@ import {
 } from "react-hook-form";
 import {
     Circle,
-    Feature,
     FormField as FormFieldType,
     MemberDisplay,
     Page,
@@ -29,15 +28,15 @@ import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import { cn } from "@/lib/utils";
 import { FaLock } from "react-icons/fa6";
-import { FaArrowCircleUp, FaArrowCircleDown, FaCheck } from "react-icons/fa";
+import { FaCheck } from "react-icons/fa";
 import { features, features as featuresList, pageFeaturePrefix } from "@/lib/data/constants";
 import { CheckCircle2, ChevronDown, ChevronUp, XCircle } from "lucide-react";
-import { getMemberAccessLevel, hasHigherAccess, isAuthorized } from "@/lib/auth/client-auth";
+import { getMemberAccessLevel, isAuthorized } from "@/lib/auth/client-auth";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { Switch } from "../ui/switch";
 import { WithContext as ReactTags } from "react-tag-input";
 import { getUserOrCircleInfo } from "@/lib/utils/form";
-import LocationPicker, { LocationGranularity } from "./location-picker";
+import LocationPicker from "./location-picker";
 
 type RenderFieldProps = {
     field: FormFieldType;
@@ -285,7 +284,6 @@ export const DynamicTableField: React.FC<RenderFieldProps> = ({ field, formField
     }
 
     const onRowClick = (id: string) => {
-        console.log("setting editing id", id);
         setEditingId(editingId === id ? null : id);
     };
 

@@ -1,4 +1,4 @@
-import { FormAction, AuthData, FormSubmitResponse } from "../../../models/models";
+import { FormAction, FormSubmitResponse } from "../../../models/models";
 import { AuthenticationError, createUser, getUserPublicKey } from "@/lib/auth/auth";
 import { createSession, generateUserToken } from "@/lib/auth/jwt";
 import { getServerSettings } from "@/lib/data/server-settings";

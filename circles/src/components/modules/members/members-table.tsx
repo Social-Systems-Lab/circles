@@ -1,6 +1,6 @@
 "use client";
 
-import React, { forwardRef, useState, useTransition } from "react";
+import React, { useState, useTransition } from "react";
 import {
     ColumnDef,
     ColumnFiltersState,
@@ -13,12 +13,12 @@ import {
     getSortedRowModel,
     useReactTable,
 } from "@tanstack/react-table";
-import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Circle, Feature, MemberDisplay, Page, User, UserPrivate } from "@/models/models";
+import { Circle, MemberDisplay, Page } from "@/models/models";
 import { Button } from "@/components/ui/button";
-import { ArrowDown, ArrowUp, ArrowUpDown, Loader2, MoreHorizontal } from "lucide-react";
+import { ArrowDown, ArrowUp, Loader2, MoreHorizontal } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -27,12 +27,10 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import Image from "next/image";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
-import { features, maxAccessLevel } from "@/lib/data/constants";
-import { getMemberAccessLevel, hasHigherAccess, isAuthorized } from "@/lib/auth/client-auth";
+import { features } from "@/lib/data/constants";
+import { hasHigherAccess, isAuthorized } from "@/lib/auth/client-auth";
 import {
     Dialog,
     DialogClose,
@@ -44,7 +42,6 @@ import {
 } from "@/components/ui/dialog";
 import { removeMemberAction, updateUserGroupsAction } from "./actions";
 import { useToast } from "@/components/ui/use-toast";
-import { Checkbox } from "@/components/ui/checkbox";
 import { FormProvider, useForm } from "react-hook-form";
 import { MemberUserGroupsGrid } from "@/components/forms/dynamic-field";
 import InviteButton from "../home/invite-button";

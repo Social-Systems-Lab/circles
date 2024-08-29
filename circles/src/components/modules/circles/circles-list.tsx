@@ -2,18 +2,16 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ColumnDef, FilterFn, Row } from "@tanstack/react-table";
 import { Input } from "@/components/ui/input";
 import { Circle, Page } from "@/models/models";
 import { Button } from "@/components/ui/button";
-import { ArrowDown, ArrowUp, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import Image from "next/image";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { features } from "@/lib/data/constants";
 import { isAuthorized } from "@/lib/auth/client-auth";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
-import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { CirclePicture } from "./circle-picture";
 import DynamicForm from "@/components/forms/dynamic-form";
@@ -37,10 +35,6 @@ interface InviteButtonProps {
 const CreateCircleButton: React.FC<InviteButtonProps> = ({ circle, isDefaultCircle }) => {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const isCompact = useIsCompact();
-
-    useEffect(() => {
-        console.log("CreateCircleButton", circle);
-    }, [circle]);
 
     return (
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

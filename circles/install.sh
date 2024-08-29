@@ -18,10 +18,10 @@ cd circles
 
 # Download docker-compose.yml and .env.example
 echo "Downloading configuration files..."
-curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/main/circles/docker-compose.yml
-curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/main/circles/.env
-curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/main/circles/nginx.conf.template
-curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/main/circles/docker-entrypoint.sh
+curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/dev/circles/docker-compose.yml
+curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/dev/circles/.env
+curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/dev/circles/nginx.conf.template
+curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/dev/circles/docker-entrypoint.sh
 
 # Check if files were downloaded successfully
 if [ ! -f docker-compose.yml ] || [ ! -f .env ] || [ ! -f nginx.conf.template ]  || [ ! -f docker-entrypoint.sh ]; then
@@ -36,6 +36,8 @@ chmod +x docker-entrypoint.sh
 generate_random_string() {
     openssl rand -base64 32
 }
+
+CIRCLES_DOMAIN=""
 
 # Function to prompt for a value with a default
 prompt_for_value() {
@@ -60,6 +62,9 @@ prompt_for_value() {
         fi
     fi
     sed -i "s|^$var_name=.*|$var_name=$user_input|" .env
+
+    # Also set the result as a local variable
+    eval "$var_name=\"$result\""
 }
 
 # Prompt for necessary configurations
@@ -74,10 +79,10 @@ prompt_for_value "MONGO_USER" "admin" "Enter MongoDB username"
 prompt_for_value "MONGO_PASSWORD" "change_me" "Enter MongoDB password" true
 
 prompt_for_value "MINIO_PORT" "9000" "Enter MinIO port"
-prompt_for_value "MINIO_ACCESS_KEY" "minioadmin" "Enter MinIO access key"
-prompt_for_value "MINIO_SECRET_KEY" "change_me" "Enter MinIO secret key" true
+prompt_for_value "MINIO_ACCESS_KEY" "minioadmin" "Enter MinIO username"
+prompt_for_value "MINIO_SECRET_KEY" "change_me" "Enter MinIO password" true
 
-prompt_for_value "CIRCLES_URL" "127.0.0.1" "Enter the URL of your Circles instance"
+prompt_for_value "CIRCLES_URL" "https://$CIRCLES_DOMAIN" "Enter the URL to your Circles instance"
 prompt_for_value "CIRCLES_REGISTRY_URL" "http://161.35.244.159:3001" "Enter the URL of a Circles Registry server"
 prompt_for_value "CIRCLES_JWT_SECRET" "change_me" "Enter the secret key for user authentication (used for JWT token generation)" true
 
@@ -111,6 +116,6 @@ echo "Starting Circles platform..."
 docker-compose up -d
 
 echo "Circles platform is now running!"
-echo "You can access it at https://$CIRCLES_DOMAIN"
+echo "You can access it at https://$CIRCLES_DOMAIN""
 
 echo "Please make sure to secure your .env file as it contains sensitive information."

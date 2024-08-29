@@ -3,7 +3,6 @@
 import { ModulePageProps } from "../dynamic-page";
 import { getCircles } from "@/lib/data/circle";
 import CirclesList from "./circles-list";
-import { useIsCompact } from "@/components/utils/use-is-compact";
 import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 
 export default async function CirclesModule({ circle, page, subpage, isDefaultCircle }: ModulePageProps) {

@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { getServerSettings } from "@/lib/data/server-settings";
-import { getCircleByHandle, getDefaultCircle } from "@/lib/data/circle";
 import BaseLayout from "@/components/layout/base-layout";
 import { redirect } from "next/navigation";
 import { getUserByHandle } from "@/lib/data/user";

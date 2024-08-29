@@ -4,7 +4,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { Circles, Members, Users } from "../data/db";
-import { AccountType, Feature, RegistryInfo, User } from "@/models/models";
+import { AccountType, Feature, User } from "@/models/models";
 import { ObjectId } from "mongodb";
 import { maxAccessLevel } from "../data/constants";
 import { cookies } from "next/headers";
@@ -266,8 +266,6 @@ export const isAuthorized = async (
         circle = await Circles.findOne({ _id: new ObjectId(circleId) });
     }
     if (!circle) return false;
-
-    console.log("ISAUTHORIZED CALLED", feature.handle);
 
     let allowedUserGroups = circle?.accessRules?.[feature.handle];
     if (!allowedUserGroups) return false;
