@@ -50,6 +50,7 @@ import { MemberUserGroupsGrid } from "@/components/forms/dynamic-field";
 import InviteButton from "../home/invite-button";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { UserPicture } from "./user-picture";
+import { motion } from "framer-motion";
 
 interface MemberTableProps {
     members: MemberDisplay[];
@@ -80,6 +81,18 @@ const SortIcon = ({ sortDir }: { sortDir: string | boolean }) => {
 
 const ThreeColumnLayout = ({ children }: { children: React.ReactNode }) => {
     return <div className="grid grid-cols-3 gap-2">{children}</div>;
+};
+
+const tableRowVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: (i: number) => ({
+        opacity: 1,
+        y: 0,
+        transition: {
+            delay: i * 0.05,
+            duration: 0.3,
+        },
+    }),
 };
 
 const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefaultCircle }) => {
@@ -282,7 +295,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                         </SelectContent>
                     </Select>
                 </div>
-                <Table className="mt-1">
+                <Table className="mt-1 overflow-hidden">
                     <TableHeader>
                         {table.getHeaderGroups().map((headerGroup) => (
                             <TableRow key={headerGroup.id}>
@@ -301,7 +314,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                     </TableHeader>
                     <TableBody>
                         {table.getRowModel().rows?.length ? (
-                            table.getRowModel().rows.map((row) => {
+                            table.getRowModel().rows.map((row, index) => {
                                 const member = row.original;
                                 const canEditUserGroupRow =
                                     canEditUserGroups &&
@@ -310,7 +323,14 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                                     canRemoveUser && hasHigherAccess(user, member, circle, canRemoveSameLevelUser);
 
                                 return (
-                                    <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
+                                    <motion.tr
+                                        key={row.id}
+                                        custom={index}
+                                        initial="hidden"
+                                        animate="visible"
+                                        variants={tableRowVariants}
+                                        className={`${row.getIsSelected() ? "bg-muted" : ""}`}
+                                    >
                                         {row.getVisibleCells().map((cell) => (
                                             <TableCell key={cell.id}>
                                                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -349,7 +369,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                                                 </DropdownMenu>
                                             )}
                                         </TableCell>
-                                    </TableRow>
+                                    </motion.tr>
                                 );
                             })
                         ) : (
