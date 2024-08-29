@@ -25,6 +25,6 @@ docker build -t sslorg/circles:latest .
 Push the image to Docker Hub:
 
 ```bash
-docker push sslorg/circles-registry:latest
+docker push sslorg/circles:latest
 ```
 

@@ -98,7 +98,10 @@ export default function MapAndContentWrapper({
     const [triggerOpen, setTriggerOpen] = useState(false);
     const { windowWidth, windowHeight } = useWindowDimensions();
 
-    const innerWidth = document.documentElement.offsetWidth;
+    let innerWidth = 0;
+    if (typeof document !== "undefined") {
+        document.documentElement.offsetWidth;
+    }
 
     useEffect(() => {
         if (mapboxKey) {

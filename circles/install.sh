@@ -75,12 +75,12 @@ prompt_for_value "CIRCLES_PORT" "3000" "Enter the port for Circles to run on"
 prompt_for_value "NODE_ENV" "production" "Enter the Node environment (production/development)"
 
 prompt_for_value "MONGO_PORT" "27017" "Enter MongoDB port"
-prompt_for_value "MONGO_USER" "admin" "Enter MongoDB username"
-prompt_for_value "MONGO_PASSWORD" "change_me" "Enter MongoDB password" true
+prompt_for_value "MONGO_ROOT_USERNAME" "admin" "Enter MongoDB username"
+prompt_for_value "MONGO_ROOT_PASSWORD" "change_me" "Enter MongoDB password" true
 
 prompt_for_value "MINIO_PORT" "9000" "Enter MinIO port"
-prompt_for_value "MINIO_ACCESS_KEY" "minioadmin" "Enter MinIO username"
-prompt_for_value "MINIO_SECRET_KEY" "change_me" "Enter MinIO password" true
+prompt_for_value "MINIO_ROOT_USERNAME" "minioadmin" "Enter MinIO username"
+prompt_for_value "MINIO_ROOT_PASSWORD" "change_me" "Enter MinIO password" true
 
 prompt_for_value "CIRCLES_URL" "https://$CIRCLES_DOMAIN" "Enter the URL to your Circles instance"
 prompt_for_value "CIRCLES_REGISTRY_URL" "http://161.35.244.159:3001" "Enter the URL of a Circles Registry server"
