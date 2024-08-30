@@ -1,7 +1,10 @@
 version: "3.8"
 services:
     circles:
-        profiles: ["do-not-start"]
+        image: alpine # dummy service to prevent errors
+        command: ["sh", "-c", "echo 'Dummy Circles service' && tail -f /dev/null"]
+        networks:
+            - webnet
     watchtower:
         profiles: ["do-not-start"]
 
@@ -16,8 +19,6 @@ services:
             - .env.local
 
     nginx:
-        depends_on:
-            - minio
         env_file:
             - .env
             - .env.local

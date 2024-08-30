@@ -1,4 +1,9 @@
 /** @type {import('next').NextConfig} */
+
+import fs from "fs";
+const packageJson = JSON.parse(fs.readFileSync("./package.json", "utf8"));
+const version = packageJson.version;
+
 const nextConfig = {
     output: "standalone",
     images: {
@@ -12,6 +17,9 @@ const nextConfig = {
                 hostname: "**",
             },
         ],
+    },
+    env: {
+        version,
     },
 };
 

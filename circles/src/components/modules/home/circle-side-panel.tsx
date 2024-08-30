@@ -6,13 +6,14 @@ import CircleTags from "../circles/circle-tags";
 interface CircleSidePanelProps {
     circle: Circle;
     isCompact: boolean;
+    isDefaultCircle: boolean;
 }
 
-export const CircleSidePanel: React.FC<CircleSidePanelProps> = ({ circle, isCompact }) => {
+export const CircleSidePanel: React.FC<CircleSidePanelProps> = ({ circle, isCompact, isDefaultCircle }) => {
     return (
-        <div className={`${isCompact ? "order-2 p-4" : "mt-[50px] w-64 p-4"}`}>
+        <div className={`${isCompact ? "order-2 flex flex-col gap-4 p-4" : "mt-[50px] flex w-64 flex-col gap-4 p-4"}`}>
             {circle.interests && circle.interests.length > 0 && (
-                <div className="mb-4 flex flex-col justify-start">
+                <div className="flex flex-col justify-start">
                     <div className="mb-2 font-semibold">Interests</div>
                     <CircleTags tags={circle.interests} showAll={true} isCompact={isCompact} />
                 </div>
@@ -22,6 +23,13 @@ export const CircleSidePanel: React.FC<CircleSidePanelProps> = ({ circle, isComp
                 <div>
                     <div className="mb-2 font-semibold">{circle.circleType === "user" ? "Offers" : "Needs"}</div>
                     <CircleTags tags={circle.offers_needs} showAll={true} isCompact={isCompact} />
+                </div>
+            )}
+
+            {isDefaultCircle && (
+                <div>
+                    <div className="mb-2 font-semibold">Version</div>
+                    <div>{process.env.version}</div>
                 </div>
             )}
         </div>

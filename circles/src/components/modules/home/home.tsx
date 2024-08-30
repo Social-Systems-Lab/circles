@@ -20,7 +20,7 @@ export default async function HomeModule({ circle, isDefaultCircle, isUser }: Ho
 
     return (
         <>
-            <HomeModuleWrapper circle={circle}>
+            <HomeModuleWrapper circle={circle} isDefaultCircle={isDefaultCircle}>
                 <HomeCover
                     circle={circle}
                     isDefaultCircle={isDefaultCircle}

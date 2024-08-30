@@ -58,29 +58,12 @@ Follow these steps to set up the Circles platform on your local machine:
      bun install
      ```
 
-3. Run MongoDB Database in Docker:
+3. Run MongoDB, MinIO and Nginx in Docker:
 
-   - In the project root folder, run the following command to start the MongoDB database:
+   ```
+   docker-compose -f docker-compose.local.yml up -d
+   ```
 
-     ```
-     docker-compose up -d db
-     ```
-
-4. Run MinIO Storage in Docker:
-
-   - Start the MinIO storage service using the following command:
-
-     ```bash
-     docker-compose up -d minio
-     ```
-
-5. Run Nginx Reverse Proxy in Docker:
-
-   - Start the Nginx reverse proxy service using the following command:
-
-     ```bash
-     docker-compose up -d nginx
-     ```
 
 ## **Run Circles Locally**
 

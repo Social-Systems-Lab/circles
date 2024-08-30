@@ -59,7 +59,7 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
                     currentMarkerIds.delete(markerId);
                 } else {
                     // Create new marker
-                    const markerElement = document.createElement("div");
+                    const markerElement = document?.createElement("div");
                     const root = createRoot(markerElement);
                     root.render(<MapMarker picture={item.picture?.url} />);
 
@@ -100,7 +100,7 @@ export default function MapAndContentWrapper({
 
     let innerWidth = 0;
     if (typeof document !== "undefined") {
-        document.documentElement.offsetWidth;
+        innerWidth = document.documentElement.offsetWidth;
     }
 
     useEffect(() => {
@@ -121,17 +121,16 @@ export default function MapAndContentWrapper({
         }
     };
 
-    if (!mapboxKey) return null;
-
     return (
         <div className="relative flex w-full flex-row overflow-hidden bg-[#2e4c6b]">
             <motion.div
                 className="relative min-h-screen bg-white"
-                animate={{ width: triggerOpen ? "420px" : windowWidth }}
+                animate={{ width: triggerOpen ? "420px" : windowWidth - 72 }}
                 transition={{ duration: 0.5 }}
-                initial={{ width: innerWidth }}
+                // initial={{ width: innerWidth }}
                 // style={{ width: windowWidth }}
                 onAnimationComplete={handleAnimationComplete}
+                initial={false}
             >
                 {children}
             </motion.div>
@@ -157,7 +156,7 @@ export default function MapAndContentWrapper({
                 </motion.div>
             )}
 
-            {showMap && (
+            {showMap && mapboxKey && (
                 <>
                     <div
                         className="relative"
@@ -172,19 +171,21 @@ export default function MapAndContentWrapper({
                 </>
             )}
 
-            <div
-                className="group fixed bottom-[10px] right-5 z-30 cursor-pointer rounded-full bg-[#242424] p-[2px] hover:bg-[#304678e6]"
-                onClick={() => {
-                    setShowMap(false);
-                    setTriggerOpen(!triggerOpen);
-                }}
-            >
-                {mapOpen ? (
-                    <AiOutlineRead className="m-[4px] text-white group-hover:text-white" size="30px" />
-                ) : (
-                    <LiaGlobeAfricaSolid className="text-white group-hover:text-white" size="38px" />
-                )}
-            </div>
+            {mapboxKey && (
+                <div
+                    className="group fixed bottom-[10px] right-5 z-30 cursor-pointer rounded-full bg-[#242424] p-[2px] hover:bg-[#304678e6]"
+                    onClick={() => {
+                        setShowMap(false);
+                        setTriggerOpen(!triggerOpen);
+                    }}
+                >
+                    {mapOpen ? (
+                        <AiOutlineRead className="m-[4px] text-white group-hover:text-white" size="30px" />
+                    ) : (
+                        <LiaGlobeAfricaSolid className="text-white group-hover:text-white" size="38px" />
+                    )}
+                </div>
+            )}
         </div>
     );
 }

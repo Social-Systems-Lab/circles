@@ -8,6 +8,8 @@ import { Circle, Page } from "@/models/models";
 import PageIcon from "../modules/page-icon";
 import { useIsMobile } from "../utils/use-is-mobile";
 import { motion, AnimatePresence } from "framer-motion";
+import { userAtom } from "@/lib/data/atoms";
+import { useAtom } from "jotai";
 
 function NavItem({
     item,
@@ -58,6 +60,7 @@ export default function NavBarItems({
     const pathname = usePathname();
     const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
     const isMobile = useIsMobile();
+    const [user] = useAtom(userAtom);
 
     const getPath = useCallback(
         (page: Page) => {
@@ -79,11 +82,29 @@ export default function NavBarItems({
         });
     }, [circle.pages, getPath, pathname]);
 
-    const visiblePages = useMemo(
-        () => (isMobile ? circle?.pages?.slice(0, 3) : circle?.pages) ?? [],
-        [circle?.pages, isMobile],
+    const userGroups = useMemo(() => {
+        const membership = user?.memberships.find((m) => m.circleId === circle._id);
+        return membership ? membership.userGroups : [];
+    }, [user, circle]);
+
+    const hasAccess = useCallback(
+        (page: Page) => {
+            const allowedUserGroups = circle?.accessRules?.[`__page_${page.handle}`] || [];
+
+            // allow access if everyone has access or if user belongs to an allowed group
+            return (
+                allowedUserGroups.includes("everyone") || userGroups.some((group) => allowedUserGroups.includes(group))
+            );
+        },
+        [circle, userGroups],
     );
-    const morePages = useMemo(() => (isMobile ? circle?.pages?.slice(4) : []) ?? [], [circle?.pages, isMobile]);
+
+    const authorizedPages = useMemo(() => circle?.pages?.filter(hasAccess) ?? [], [circle?.pages, hasAccess]);
+    const visiblePages = useMemo(
+        () => (isMobile ? authorizedPages?.slice(0, 3) : authorizedPages) ?? [],
+        [authorizedPages, isMobile],
+    );
+    const morePages = useMemo(() => (isMobile ? authorizedPages.slice(4) : []) ?? [], [authorizedPages, isMobile]);
 
     return (
         <>

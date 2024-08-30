@@ -74,6 +74,9 @@ services:
         networks:
             - webnet
         command: ["/bin/sh", "-c", "/docker-entrypoint.sh && nginx -g 'daemon off;'"]
+        depends_on:
+            - circles
+            - minio
 
     watchtower:
         image: containrrr/watchtower
@@ -82,6 +85,9 @@ services:
         restart: always
         environment:
             WATCHTOWER_POLL_INTERVAL: 60 # Check for updates every minute
+        depends_on:
+            - circles
+            - minio
 
 volumes:
     db:
