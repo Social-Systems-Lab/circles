@@ -1,18 +1,25 @@
 import { getCircleByHandle, getDefaultCircle } from "@/lib/data/circle";
 import { getMember } from "@/lib/data/member";
+import { getUserByHandle } from "@/lib/data/user";
 import { Circle } from "@/models/models";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
     try {
-        const { userDid, circleHandle, pageHandle } = await req.json();
+        const { userDid, circleHandle, pageHandle, isUser } = await req.json();
 
         // get circle
-        let circle: Circle;
-        if (circleHandle) {
-            circle = await getCircleByHandle(circleHandle);
+        let circle: Circle | null = null;
+        if (!isUser) {
+            if (circleHandle) {
+                circle = await getCircleByHandle(circleHandle);
+            } else {
+                circle = await getDefaultCircle();
+            }
         } else {
-            circle = await getDefaultCircle();
+            if (circleHandle) {
+                circle = await getUserByHandle(circleHandle);
+            }
         }
 
         if (!circle) {
@@ -23,7 +30,7 @@ export async function POST(req: Request) {
         const allowedUserGroups = accessRules["__page_" + pageHandle];
 
         // if the page allows access to "everyone", consider it authorized
-        if (allowedUserGroups.includes("everyone")) {
+        if (allowedUserGroups?.includes("everyone")) {
             return NextResponse.json({ authenticated: true, authorized: true });
         }
 
@@ -38,7 +45,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ authenticated: true, authorized: false });
         }
 
-        const isUserAuthorized = allowedUserGroups.some((group) => membership.userGroups?.includes(group));
+        const isUserAuthorized = allowedUserGroups?.some((group) => membership.userGroups?.includes(group));
         return NextResponse.json({ authenticated: true, authorized: isUserAuthorized });
     } catch (error) {
         console.error("Error in /api/access:", error);

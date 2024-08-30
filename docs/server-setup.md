@@ -29,3 +29,14 @@ chmod +x install.sh
 ```
 
 Follow the prompts.
+
+## Fix issue with watchtower (optional)
+
+Following fixes issues with watchtower being unable to update Docker images in some instances.
+
+https://medium.com/devops-technical-notes-and-manuals/how-to-solve-cannot-kill-docker-container-permission-denied-error-message-e3af7ccb7e29
+
+```bash
+sudo aa-remove-unknown
+```
+
