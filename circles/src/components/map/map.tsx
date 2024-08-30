@@ -14,6 +14,7 @@ import MapMarker from "./markers";
 import { isEqual } from "lodash"; // You might need to install lodash
 import { motion } from "framer-motion";
 import Image from "next/image";
+import { useIsMobile } from "../utils/use-is-mobile";
 
 const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
     const mapContainer = useRef(null);
@@ -97,11 +98,15 @@ export default function MapAndContentWrapper({
     const [, setMapboxKey] = useAtom(mapboxKeyAtom);
     const [triggerOpen, setTriggerOpen] = useState(false);
     const { windowWidth, windowHeight } = useWindowDimensions();
+    const isMobile = windowWidth <= 768;
 
     let innerWidth = 0;
     if (typeof document !== "undefined") {
         innerWidth = document.documentElement.offsetWidth;
     }
+
+    const contentWidth = isMobile ? (triggerOpen ? 0 : innerWidth) : triggerOpen ? 420 : innerWidth - 72;
+    const mapWidth = isMobile ? innerWidth : innerWidth - 420 - 72;
 
     useEffect(() => {
         if (mapboxKey) {
@@ -124,11 +129,9 @@ export default function MapAndContentWrapper({
     return (
         <div className="relative flex w-full flex-row overflow-hidden bg-[#2e4c6b]">
             <motion.div
-                className="relative min-h-screen bg-white"
-                animate={{ width: triggerOpen ? "420px" : windowWidth - 72 }}
+                className="relative min-h-screen overflow-x-hidden bg-white"
+                animate={{ width: contentWidth }}
                 transition={{ duration: 0.5 }}
-                // initial={{ width: innerWidth }}
-                // style={{ width: windowWidth }}
                 onAnimationComplete={handleAnimationComplete}
                 initial={false}
             >
@@ -137,8 +140,8 @@ export default function MapAndContentWrapper({
 
             {triggerOpen && (
                 <motion.div
-                    className="pointer-events-none absolute right-0 top-0 z-20 flex h-screen flex-col items-center justify-center"
-                    animate={{ width: innerWidth - 420 - 72 }}
+                    className="pointer-events-none absolute right-0 top-0 z-30 flex h-screen flex-col items-center justify-center"
+                    animate={{ width: mapWidth }}
                     transition={{ duration: 0.5, delay: 0.3 }}
                     initial={{ width: 0 }}
                 >
@@ -158,14 +161,8 @@ export default function MapAndContentWrapper({
 
             {showMap && mapboxKey && (
                 <>
-                    <div
-                        className="relative"
-                        style={{ width: innerWidth - sidePanelWidth - 72 + "px", height: windowHeight + "px" }}
-                    ></div>
-                    <div
-                        className={"fixed right-0"}
-                        style={{ width: innerWidth - sidePanelWidth - 72 + "px", height: windowHeight + "px" }}
-                    >
+                    <div className="relative" style={{ width: mapWidth, height: windowHeight + "px" }}></div>
+                    <div className={"fixed right-0 z-30"} style={{ width: mapWidth, height: windowHeight + "px" }}>
                         <MapBox mapboxKey={mapboxKey} />
                     </div>
                 </>
@@ -173,7 +170,7 @@ export default function MapAndContentWrapper({
 
             {mapboxKey && (
                 <div
-                    className="group fixed bottom-[10px] right-5 z-30 cursor-pointer rounded-full bg-[#242424] p-[2px] hover:bg-[#304678e6]"
+                    className="group fixed bottom-[100px] right-5 z-30 cursor-pointer rounded-full bg-[#242424] p-[2px] hover:bg-[#304678e6] md:bottom-[30px]"
                     onClick={() => {
                         setShowMap(false);
                         setTriggerOpen(!triggerOpen);
