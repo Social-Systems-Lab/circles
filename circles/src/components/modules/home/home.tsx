@@ -19,21 +19,19 @@ export default async function HomeModule({ circle, isDefaultCircle, isUser }: Ho
     } catch (error) {}
 
     return (
-        <>
-            <HomeModuleWrapper circle={circle} isDefaultCircle={isDefaultCircle}>
-                <HomeCover
-                    circle={circle}
-                    isDefaultCircle={isDefaultCircle}
-                    isUser={isUser}
-                    authorizedToEdit={authorizedToEdit}
-                />
-                <HomeContent
-                    circle={circle}
-                    isDefaultCircle={isDefaultCircle}
-                    isUser={isUser}
-                    authorizedToEdit={authorizedToEdit}
-                />
-            </HomeModuleWrapper>
-        </>
+        <HomeModuleWrapper circle={circle} isDefaultCircle={isDefaultCircle}>
+            <HomeCover
+                circle={circle}
+                isDefaultCircle={isDefaultCircle}
+                isUser={isUser}
+                authorizedToEdit={authorizedToEdit}
+            />
+            <HomeContent
+                circle={circle}
+                isDefaultCircle={isDefaultCircle}
+                isUser={isUser}
+                authorizedToEdit={authorizedToEdit}
+            />
+        </HomeModuleWrapper>
     );
 }

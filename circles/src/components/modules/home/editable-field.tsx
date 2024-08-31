@@ -12,9 +12,10 @@ type EditableFieldProps = {
     value: string;
     circleId: string;
     multiline?: boolean;
+    isUser?: boolean;
 };
 
-const EditableField: React.FC<EditableFieldProps> = ({ id, value, circleId, multiline = false }) => {
+const EditableField: React.FC<EditableFieldProps> = ({ id, value, circleId, isUser, multiline = false }) => {
     const [editValue, setEditValue] = useState(value);
     const [isEditing, setIsEditing] = useState(false);
     const { toast } = useToast();
@@ -24,7 +25,7 @@ const EditableField: React.FC<EditableFieldProps> = ({ id, value, circleId, mult
         if (editValue !== value) {
             const formData = new FormData();
             formData.append(id, editValue);
-            const result = await updateCircleField(circleId, formData);
+            const result = await updateCircleField(circleId, formData, isUser);
             if (result.success) {
                 toast({ title: "Success", description: result.message });
             } else {

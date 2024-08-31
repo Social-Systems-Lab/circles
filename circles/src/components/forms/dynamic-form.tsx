@@ -76,7 +76,9 @@ const DynamicFormManager: React.FC<DynamicFormProps> = ({
                     fieldInfo?.type === "access-rules" ||
                     fieldInfo?.type === "location"
                 ) {
-                    formData.append(key, JSON.stringify(values[key]));
+                    if (values[key] !== undefined) {
+                        formData.append(key, JSON.stringify(values[key]));
+                    }
                     return;
                 }
 

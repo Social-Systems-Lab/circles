@@ -82,7 +82,12 @@ export const saveFile = async (
     let fileInfo: FileInfo = {
         originalName: file.name,
         fileName: fileName,
-        url: `http://${process.env.MINIO_HOST || "127.0.0.1"}/storage/` + objectName,
+        url:
+            (process.env.NODE_ENV === "production"
+                ? process.env.CIRCLES_URL
+                : `http://${process.env.MINIO_HOST || "127.0.0.1"}`) +
+            "/storage/" +
+            objectName,
     };
     return fileInfo;
 };

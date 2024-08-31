@@ -24,6 +24,7 @@ export default function HomeCover({ circle, isDefaultCircle, isUser, authorizedT
                     className="object-cover"
                     fill
                     circleId={circle._id!}
+                    isUser={isUser}
                 />
             ) : (
                 <Image

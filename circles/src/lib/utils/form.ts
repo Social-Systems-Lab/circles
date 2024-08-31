@@ -31,7 +31,9 @@ export const getFormValues = (formData: FormData, formSchema: FormSchema): Recor
             fieldInfo?.type === "access-rules" ||
             fieldInfo?.type === "location"
         ) {
-            values[key] = JSON.parse(value);
+            if (value !== undefined && value !== "undefined") {
+                values[key] = JSON.parse(value);
+            }
         } else if (fieldInfo?.type === "switch") {
             values[key] = value === "true";
         } else if (fieldInfo?.type === "tags") {

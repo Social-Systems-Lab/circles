@@ -29,6 +29,7 @@ export default function HomeContent({ circle, isDefaultCircle, isUser, authorize
                                 className="rounded-full border-2 border-white object-cover"
                                 fill
                                 circleId={circle._id!}
+                                isUser={isUser}
                             />
                         ) : (
                             <Image
@@ -45,7 +46,7 @@ export default function HomeContent({ circle, isDefaultCircle, isUser, authorize
             <div className="mb-8 mt-[44px] flex flex-col items-center justify-center">
                 <h4>
                     {authorizedToEdit ? (
-                        <EditableField id="name" value={circle.name ?? ""} circleId={circle._id!} />
+                        <EditableField id="name" value={circle.name ?? ""} circleId={circle._id!} isUser={isUser} />
                     ) : (
                         circle.name
                     )}
@@ -57,6 +58,7 @@ export default function HomeContent({ circle, isDefaultCircle, isUser, authorize
                                 id="description"
                                 value={circle.description}
                                 circleId={circle._id!}
+                                isUser={isUser}
                                 multiline
                             />
                         ) : (
