@@ -1,10 +1,13 @@
-// HomeModule.tsx
+"use client";
+
 import React from "react";
 import Image from "next/image";
 import { Circle } from "@/models/models";
 import JoinButton from "./join-button";
 import InviteButton from "./invite-button";
 import EditableImage from "./editable-image";
+import { useIsCompact } from "@/components/utils/use-is-compact";
+import { useIsMobile } from "@/components/utils/use-is-mobile";
 
 type HomeContentProps = {
     circle: Circle;
@@ -14,8 +17,9 @@ type HomeContentProps = {
 };
 
 export default function HomeCover({ circle, isDefaultCircle, isUser, authorizedToEdit }: HomeContentProps) {
+    const isMobile = useIsMobile();
     return (
-        <div className="relative h-[400px] w-full">
+        <div className={isMobile ? "relative h-[270px] w-full" : "relative h-[400px] w-full"}>
             {authorizedToEdit ? (
                 <EditableImage
                     id="cover"

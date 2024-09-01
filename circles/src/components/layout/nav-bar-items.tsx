@@ -104,7 +104,7 @@ export default function NavBarItems({
         () => (isMobile ? authorizedPages?.slice(0, 3) : authorizedPages) ?? [],
         [authorizedPages, isMobile],
     );
-    const morePages = useMemo(() => (isMobile ? authorizedPages.slice(4) : []) ?? [], [authorizedPages, isMobile]);
+    const morePages = useMemo(() => (isMobile ? authorizedPages.slice(3) : []) ?? [], [authorizedPages, isMobile]);
 
     return (
         <>
