@@ -130,11 +130,17 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                     variants={containerVariants}
                     initial="hidden"
                     animate="visible"
-                    className={
-                        isCompact && !isMobile
-                            ? "grid grid-cols-1 gap-4"
-                            : "grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
-                    }
+                    className="grid gap-4"
+                    // {
+                    // isCompact && !isMobile
+                    //     ? "grid grid-cols-1 gap-4"
+                    //     : "grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+                    // }
+
+                    style={{
+                        gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                        gridAutoRows: "1fr",
+                    }}
                 >
                     <AnimatePresence mode="popLayout">
                         {filteredCircles.map((circle, index) => (

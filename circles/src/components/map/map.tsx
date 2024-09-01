@@ -9,7 +9,13 @@ import { sidePanelWidth } from "../../app/constants";
 import useWindowDimensions from "@/components/utils/use-window-dimensions";
 import mapboxgl from "mapbox-gl"; // eslint-disable-line import/no-webpack-loader-syntax
 import { useAtom } from "jotai";
-import { mapboxKeyAtom, mapOpenAtom, displayedContentAtom, contentPreviewAtom } from "@/lib/data/atoms";
+import {
+    mapboxKeyAtom,
+    mapOpenAtom,
+    displayedContentAtom,
+    contentPreviewAtom,
+    triggerMapOpenAtom,
+} from "@/lib/data/atoms";
 import MapMarker from "./markers";
 import { isEqual } from "lodash"; // You might need to install lodash
 import { motion } from "framer-motion";
@@ -105,7 +111,7 @@ export default function MapAndContentWrapper({
     const [mapOpen, setMapOpen] = useAtom(mapOpenAtom);
     const [showMap, setShowMap] = useState(false);
     const [, setMapboxKey] = useAtom(mapboxKeyAtom);
-    const [triggerOpen, setTriggerOpen] = useState(false);
+    const [triggerOpen, setTriggerOpen] = useAtom(triggerMapOpenAtom);
     const { windowWidth, windowHeight } = useWindowDimensions();
     const isMobile = windowWidth <= 768;
 
@@ -192,14 +198,6 @@ export default function MapAndContentWrapper({
                     )}
                 </div>
             )}
-
-            {/* <motion.div
-                    className="pointer-events-none absolute right-0 top-0 z-30 flex h-screen flex-col items-center justify-center"
-                    animate={{ width: mapWidth }}
-                    transition={{ duration: 0.5, delay: 0.3 }}
-                    initial={{ width: 0 }}
-                >
-                    </motion.div> */}
 
             <ContentPreview />
         </div>
