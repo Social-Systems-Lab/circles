@@ -18,6 +18,7 @@ export const loginFormSchema: FormSchema = {
             type: "email",
             placeholder: "email",
             required: true,
+            autoComplete: "on",
         },
         {
             name: "password",
@@ -25,6 +26,7 @@ export const loginFormSchema: FormSchema = {
             type: "password",
             placeholder: "",
             required: true,
+            autoComplete: "on",
         },
     ],
 };

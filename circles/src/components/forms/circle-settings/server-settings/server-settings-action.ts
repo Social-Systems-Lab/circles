@@ -6,7 +6,12 @@ import { revalidatePath } from "next/cache";
 
 export const serverSettingsFormAction: FormAction = {
     id: "server-settings-form",
-    onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
+    onSubmit: async (
+        values: Record<string, any>,
+        page?: Page,
+        subpage?: string,
+        isUser?: boolean,
+    ): Promise<FormSubmitResponse> => {
         try {
             //console.log("Saving server settings with values", values);
             let registrySuccess = true;

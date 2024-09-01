@@ -7,7 +7,7 @@ import { Form, FormField, FormMessage } from "@/components/ui/form";
 import Link from "next/link";
 import { DynamicField } from "@/components/forms/dynamic-field";
 import { generateZodSchema, getUserOrCircleInfo } from "@/lib/utils/form";
-import { FormTools, Page, UserAndCircleInfo } from "@/models/models";
+import { FormTools, Page } from "@/models/models";
 import { Suspense, useEffect, useMemo, useState, useTransition } from "react";
 import { formSchemas } from "@/components/forms/form-schemas";
 import { onFormSubmit } from "./actions";
@@ -126,7 +126,7 @@ const DynamicFormManager: React.FC<DynamicFormProps> = ({
                 <h1 className="m-0 p-0 pb-3 text-3xl font-bold">{getUserOrCircleInfo(title, isUser)}</h1>
                 <p className="pb-8 text-gray-500">{getUserOrCircleInfo(description, isUser)}</p>
                 <Form {...form}>
-                    <form onSubmit={handleSubmit(onSubmit)} autoComplete="off">
+                    <form onSubmit={handleSubmit(onSubmit)}>
                         <div className="space-y-8">
                             {formSchema.fields
                                 .filter((x) => x.type !== "hidden")

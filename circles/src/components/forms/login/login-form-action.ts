@@ -1,4 +1,4 @@
-import { FormAction, FormSubmitResponse } from "../../../models/models";
+import { FormAction, FormSubmitResponse, Page } from "../../../models/models";
 import { AuthenticationError, authenticateUser } from "@/lib/auth/auth";
 import { createSession, generateUserToken } from "@/lib/auth/jwt";
 import { Users } from "@/lib/data/db";
@@ -6,9 +6,13 @@ import { getUserPrivate } from "@/lib/data/user";
 
 export const loginFormAction: FormAction = {
     id: "login-form",
-    onSubmit: async (values: Record<string, any>): Promise<FormSubmitResponse> => {
+    onSubmit: async (
+        values: Record<string, any>,
+        page?: Page,
+        subpage?: string,
+        isUser?: boolean,
+    ): Promise<FormSubmitResponse> => {
         try {
-            //console.log("Logging in user with values", values);
             let email = values.email;
             let password = values.password;
 
@@ -23,7 +27,7 @@ export const loginFormAction: FormAction = {
 
             createSession(token);
 
-            let privateUser = getUserPrivate(user.did);
+            let privateUser = await getUserPrivate(user.did);
             return { success: true, message: "User authenticated successfully", data: { user: privateUser } };
         } catch (error) {
             if (error instanceof AuthenticationError) {

@@ -1,4 +1,4 @@
-import { FormAction, FormSubmitResponse } from "../../../models/models";
+import { FormAction, FormSubmitResponse, Page } from "../../../models/models";
 import { AuthenticationError, createUser, getUserPublicKey } from "@/lib/auth/auth";
 import { createSession, generateUserToken } from "@/lib/auth/jwt";
 import { getServerSettings } from "@/lib/data/server-settings";
@@ -6,7 +6,12 @@ import { getUserPrivate, registerUser, updateUser } from "@/lib/data/user";
 
 export const signupFormAction: FormAction = {
     id: "signup-form",
-    onSubmit: async (values: Record<string, any>): Promise<FormSubmitResponse> => {
+    onSubmit: async (
+        values: Record<string, any>,
+        page?: Page,
+        subpage?: string,
+        isUser?: boolean,
+    ): Promise<FormSubmitResponse> => {
         try {
             //console.log("Signing up user with values", values);
             let user = await createUser(values.name, values.handle, values.type, values._email, values._password);
@@ -42,7 +47,7 @@ export const signupFormAction: FormAction = {
                 }
             }
 
-            let privateUser = getUserPrivate(user.did);
+            let privateUser = await getUserPrivate(user.did);
             return { success: true, message: "User signed up successfully", data: { user: privateUser } };
         } catch (error) {
             if (error instanceof AuthenticationError) {

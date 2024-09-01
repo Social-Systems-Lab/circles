@@ -1,4 +1,4 @@
-import { Circle, FormAction, FormSubmitResponse } from "@/models/models";
+import { Circle, FormAction, FormSubmitResponse, Page } from "@/models/models";
 import { createCircle, updateCircle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
@@ -7,7 +7,12 @@ import { addMember } from "@/lib/data/member";
 
 export const createCircleFormAction: FormAction = {
     id: "create-circle-form",
-    onSubmit: async (values: Record<string, any>): Promise<FormSubmitResponse> => {
+    onSubmit: async (
+        values: Record<string, any>,
+        page?: Page,
+        subpage?: string,
+        isUser?: boolean,
+    ): Promise<FormSubmitResponse> => {
         try {
             let circle: Circle = {
                 name: values.name,
