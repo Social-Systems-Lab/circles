@@ -101,8 +101,12 @@ export type Partial<T> = {
 export interface MemberDisplay extends Member {
     name: string;
     picture: FileInfo;
+    cover?: FileInfo;
     location?: Location;
     description?: string;
+    members?: number;
+    circleType?: CircleType;
+    handle?: string;
 }
 
 export const membershipRequestSchema = z.object({

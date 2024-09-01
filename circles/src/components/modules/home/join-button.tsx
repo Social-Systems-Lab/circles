@@ -28,9 +28,10 @@ import { CircleQuestionnaireDialog } from "./questionnaire-dialog";
 
 type CircleMembershipButtonProps = {
     circle: Circle;
+    renderCompact?: boolean;
 };
 
-export const CircleMembershipButton = ({ circle }: CircleMembershipButtonProps) => {
+export const CircleMembershipButton = ({ circle, renderCompact }: CircleMembershipButtonProps) => {
     const [user, setUser] = useAtom(userAtom);
     const router = useRouter();
     const pathname = usePathname();
@@ -39,6 +40,7 @@ export const CircleMembershipButton = ({ circle }: CircleMembershipButtonProps) 
     const [isQuestionnaireOpen, setIsQuestionnaireOpen] = useState(false);
     const isCompact = useIsCompact();
     const isUserCircle = circle.circleType === "user";
+    const compact = isCompact || renderCompact;
 
     const membershipStatus = useMemo(() => {
         if (!user) return "not-logged-in";
@@ -176,10 +178,10 @@ export const CircleMembershipButton = ({ circle }: CircleMembershipButtonProps) 
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button
-                                variant={isCompact ? "ghost" : "outline"}
-                                className={isCompact ? "h-[32px] w-[32px] p-0" : "rounded-full"}
+                                variant={compact ? "ghost" : "outline"}
+                                className={compact ? "h-[32px] w-[32px] p-0" : "rounded-full"}
                             >
-                                {isCompact ? (
+                                {compact ? (
                                     <MoreVertical className="h-4 w-4" />
                                 ) : (
                                     <>
@@ -244,8 +246,12 @@ export const CircleMembershipButton = ({ circle }: CircleMembershipButtonProps) 
         default:
             return (
                 <>
-                    <Button className="w-[100px] rounded-full md:w-[150px]" onClick={onJoinCircleClick}>
-                        {isCompact ? (isUserCircle ? "Add" : "Join") : isUserCircle ? "Join as Friend" : "Join Circle"}
+                    <Button
+                        className={compact ? "w-[75px] rounded-full" : "w-[75px] rounded-full md:w-[150px]"}
+                        size={compact ? "sm" : "default"}
+                        onClick={onJoinCircleClick}
+                    >
+                        {compact ? (isUserCircle ? "Add" : "Join") : isUserCircle ? "Join as Friend" : "Join Circle"}
                     </Button>
                     <CircleQuestionnaireDialog
                         isOpen={isQuestionnaireOpen}

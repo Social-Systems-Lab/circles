@@ -33,6 +33,9 @@ export const getMembers = async (circleId?: string): Promise<MemberDisplay[]> =>
                 cover: "$userDetails.cover",
                 location: "$userDetails.location",
                 description: "$userDetails.description",
+                members: "$userDetails.members",
+                circleType: "$userDetails.circleType",
+                handle: "$userDetails.handle",
             },
         },
     ]).toArray();

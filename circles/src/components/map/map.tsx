@@ -173,8 +173,6 @@ export default function MapAndContentWrapper({
                     <div className="relative" style={{ width: mapWidth, height: windowHeight + "px" }}></div>
                     <div className={"fixed right-0 z-30"} style={{ width: mapWidth, height: windowHeight + "px" }}>
                         <MapBox mapboxKey={mapboxKey} />
-
-                        <ContentPreview />
                     </div>
                 </>
             )}
@@ -203,7 +201,7 @@ export default function MapAndContentWrapper({
                 >
                     </motion.div> */}
 
-            {!mapOpen && <ContentPreview />}
+            <ContentPreview />
         </div>
     );
 }

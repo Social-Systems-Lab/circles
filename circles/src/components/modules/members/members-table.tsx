@@ -323,7 +323,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                                     hasHigherAccess(user, member, circle, canEditSameLevelUserGroups);
                                 const canRemoveUserRow =
                                     canRemoveUser && hasHigherAccess(user, member, circle, canRemoveSameLevelUser);
-                                const isActive = contentPreview?.did === member.userDid;
+                                const isActive = (contentPreview as MemberDisplay)?.userDid === member.userDid;
 
                                 return (
                                     <motion.tr
@@ -335,6 +335,9 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                                         className={`cursor-pointer ${row.getIsSelected() ? "bg-muted" : ""}
                                         ${isActive ? "bg-gray-100" : "hover:bg-gray-50"}
                                         `}
+                                        style={{
+                                            clipPath: "xywh(0 0 100% 100% round 1em)",
+                                        }}
                                         onClick={() => handleRowClick(member)}
                                     >
                                         {row.getVisibleCells().map((cell) => (

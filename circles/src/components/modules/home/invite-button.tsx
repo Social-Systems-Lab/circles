@@ -21,13 +21,15 @@ import { useIsCompact } from "@/components/utils/use-is-compact";
 interface InviteButtonProps {
     circle: Circle;
     isDefaultCircle: boolean;
+    renderCompact?: boolean;
 }
 
-const InviteButton: React.FC<InviteButtonProps> = ({ circle, isDefaultCircle }) => {
+const InviteButton: React.FC<InviteButtonProps> = ({ circle, isDefaultCircle, renderCompact }) => {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const isCompact = useIsCompact();
     const { toast } = useToast();
     const isUser = circle.circleType === "user";
+    const compact = isCompact || renderCompact;
 
     const getCirclePagePath = (
         circle: Circle,
@@ -71,12 +73,9 @@ const InviteButton: React.FC<InviteButtonProps> = ({ circle, isDefaultCircle }) 
     return (
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-                <Button
-                    variant={isCompact ? "ghost" : "outline"}
-                    className={isCompact ? "h-[32px] w-[32px] p-0" : "gap-2"}
-                >
+                <Button variant={compact ? "ghost" : "outline"} className={compact ? "h-[32px] w-[32px] p-0" : "gap-2"}>
                     <UserPlus className="h-4 w-4" />
-                    {isCompact ? "" : "Invite"}
+                    {compact ? "" : "Invite"}
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">

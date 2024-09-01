@@ -169,16 +169,7 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                                     </div>
                                 </div>
                                 <div className="pt-[32px] text-center">
-                                    <h4
-                                        className="mb-0 mt-2 cursor-pointer text-lg font-bold"
-                                        onClick={() =>
-                                            router.push(
-                                                `/${circle.circleType === "user" ? "users" : "circles"}/${circle.handle}`,
-                                            )
-                                        }
-                                    >
-                                        {circle.name}
-                                    </h4>
+                                    <h4 className="mb-0 mt-2 cursor-pointer text-lg font-bold">{circle.name}</h4>
                                     <div className="flex flex-row items-center justify-center text-sm text-gray-500">
                                         {circle.members}{" "}
                                         {circle?.members !== 1
@@ -202,11 +193,12 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                                     <Button
                                         variant="outline"
                                         className="m-2 mt-4 w-full"
-                                        onClick={() =>
+                                        onClick={(e) => {
+                                            e.stopPropagation();
                                             router.push(
                                                 `/${circle.circleType === "user" ? "users" : "circles"}/${circle.handle}`,
-                                            )
-                                        }
+                                            );
+                                        }}
                                     >
                                         Open
                                     </Button>
