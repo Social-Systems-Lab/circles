@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useCallback } from "react";
 import { createRoot } from "react-dom/client";
 import { useEffect, useRef, useState } from "react";
 import { AiOutlineRead } from "react-icons/ai";
@@ -9,12 +9,13 @@ import { sidePanelWidth } from "../../app/constants";
 import useWindowDimensions from "@/components/utils/use-window-dimensions";
 import mapboxgl from "mapbox-gl"; // eslint-disable-line import/no-webpack-loader-syntax
 import { useAtom } from "jotai";
-import { mapboxKeyAtom, mapOpenAtom, displayedContentAtom } from "@/lib/data/atoms";
+import { mapboxKeyAtom, mapOpenAtom, displayedContentAtom, contentPreviewAtom } from "@/lib/data/atoms";
 import MapMarker from "./markers";
 import { isEqual } from "lodash"; // You might need to install lodash
 import { motion } from "framer-motion";
 import Image from "next/image";
-import { useIsMobile } from "../utils/use-is-mobile";
+import ContentPreview from "../layout/content-preview";
+import { Content } from "@/models/models";
 
 const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
     const mapContainer = useRef(null);
@@ -24,8 +25,16 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
     const [lat, setLat] = useState(20);
     const [zoom, setZoom] = useState(2.2);
     mapboxgl.accessToken = mapboxKey;
+    const [, setContentPreview] = useAtom(contentPreviewAtom);
 
     const markersRef = useRef<Map<string, mapboxgl.Marker>>(new globalThis.Map());
+
+    const onMarkerClick = useCallback(
+        (content: Content) => {
+            setContentPreview((x) => (content === x ? undefined : content));
+        },
+        [setContentPreview],
+    );
 
     useEffect(() => {
         if (!mapContainer.current) {
@@ -62,7 +71,7 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
                     // Create new marker
                     const markerElement = document?.createElement("div");
                     const root = createRoot(markerElement);
-                    root.render(<MapMarker picture={item.picture?.url} />);
+                    root.render(<MapMarker content={item} onClick={onMarkerClick} />);
 
                     const newMarker = new mapboxgl.Marker(markerElement)
                         .setLngLat(item.location.lngLat)
@@ -81,7 +90,7 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
                 markersRef.current.delete(id);
             }
         });
-    }, [displayedContent]);
+    }, [displayedContent, onMarkerClick]);
 
     return <div ref={mapContainer} className="map-container z-10" style={{ width: "100%", height: "100%" }} />;
 };
@@ -164,13 +173,15 @@ export default function MapAndContentWrapper({
                     <div className="relative" style={{ width: mapWidth, height: windowHeight + "px" }}></div>
                     <div className={"fixed right-0 z-30"} style={{ width: mapWidth, height: windowHeight + "px" }}>
                         <MapBox mapboxKey={mapboxKey} />
+
+                        <ContentPreview />
                     </div>
                 </>
             )}
 
             {mapboxKey && (
                 <div
-                    className="group fixed bottom-[100px] right-5 z-30 cursor-pointer rounded-full bg-[#242424] p-[2px] hover:bg-[#304678e6] md:bottom-[30px]"
+                    className="group fixed bottom-[100px] right-5 z-[50] cursor-pointer rounded-full bg-[#242424] p-[2px] hover:bg-[#304678e6] md:bottom-[30px]"
                     onClick={() => {
                         setShowMap(false);
                         setTriggerOpen(!triggerOpen);
@@ -183,6 +194,16 @@ export default function MapAndContentWrapper({
                     )}
                 </div>
             )}
+
+            {/* <motion.div
+                    className="pointer-events-none absolute right-0 top-0 z-30 flex h-screen flex-col items-center justify-center"
+                    animate={{ width: mapWidth }}
+                    transition={{ duration: 0.5, delay: 0.3 }}
+                    initial={{ width: 0 }}
+                >
+                    </motion.div> */}
+
+            {!mapOpen && <ContentPreview />}
         </div>
     );
 }

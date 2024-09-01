@@ -102,6 +102,7 @@ export interface MemberDisplay extends Member {
     name: string;
     picture: FileInfo;
     location?: Location;
+    description?: string;
 }
 
 export const membershipRequestSchema = z.object({

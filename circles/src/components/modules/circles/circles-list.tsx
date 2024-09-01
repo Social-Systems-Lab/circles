@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import Image from "next/image";
 import { useAtom } from "jotai";
-import { userAtom } from "@/lib/data/atoms";
+import { contentPreviewAtom, userAtom } from "@/lib/data/atoms";
 import { features } from "@/lib/data/constants";
 import { isAuthorized } from "@/lib/auth/client-auth";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
@@ -72,6 +72,7 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
     const canCreateSubcircle = isAuthorized(user, circle, features.create_subcircle);
     const router = useRouter();
     const isUser = circle.circleType === "user";
+    const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [searchQuery, setSearchQuery] = useState("");
     const filteredCircles = useMemo(() => {
         if (searchQuery) {
@@ -102,6 +103,10 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                 damping: 15,
             },
         }),
+    };
+
+    const handleCircleClick = (circle: Circle) => {
+        setContentPreview((x) => (x === circle ? undefined : circle));
     };
 
     return (
@@ -141,7 +146,8 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                                 animate="visible"
                                 exit="hidden"
                                 layout
-                                className="flex h-full flex-col overflow-hidden rounded-[15px] border bg-white shadow transition-shadow duration-200 hover:shadow-md md:min-w-[200px] md:max-w-[420px]"
+                                className="flex h-full cursor-pointer flex-col overflow-hidden rounded-[15px] border bg-white shadow transition-shadow duration-200 hover:shadow-md md:min-w-[200px] md:max-w-[420px]"
+                                onClick={() => handleCircleClick(circle)}
                             >
                                 <div className="relative h-[150px] w-full overflow-hidden">
                                     <Image

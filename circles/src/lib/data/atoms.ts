@@ -6,3 +6,4 @@ export const authenticatedAtom = atom<boolean | undefined>(undefined);
 export const mapOpenAtom = atom<boolean>(false);
 export const mapboxKeyAtom = atom<string>("");
 export const displayedContentAtom = atom<Content[]>([]);
+export const contentPreviewAtom = atom<Content | undefined>(undefined);

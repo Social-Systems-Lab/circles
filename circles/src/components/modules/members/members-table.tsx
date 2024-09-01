@@ -28,7 +28,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAtom } from "jotai";
-import { userAtom } from "@/lib/data/atoms";
+import { contentPreviewAtom, userAtom } from "@/lib/data/atoms";
 import { features } from "@/lib/data/constants";
 import { hasHigherAccess, isAuthorized } from "@/lib/auth/client-auth";
 import {
@@ -104,6 +104,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
     const [selectedUserGroups, setSelectedUserGroups] = useState<string[]>([]);
     const isCompact = useIsCompact();
     const isUser = circle.circleType === "user";
+    const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
 
     // if user is allowed to edit settings show edit button
     const canEditUserGroups =
@@ -257,6 +258,10 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
         setEditUserGroupsDialogOpen(true);
     };
 
+    const handleRowClick = (member: MemberDisplay) => {
+        setContentPreview((x) => (x === member ? undefined : member));
+    };
+
     return (
         <div className="flex flex-1 flex-row justify-center">
             <div className="ml-2 mr-2 mt-4 flex max-w-[1100px] flex-1 flex-col">
@@ -318,6 +323,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                                     hasHigherAccess(user, member, circle, canEditSameLevelUserGroups);
                                 const canRemoveUserRow =
                                     canRemoveUser && hasHigherAccess(user, member, circle, canRemoveSameLevelUser);
+                                const isActive = contentPreview?.did === member.userDid;
 
                                 return (
                                     <motion.tr
@@ -326,7 +332,10 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                                         initial="hidden"
                                         animate="visible"
                                         variants={tableRowVariants}
-                                        className={`${row.getIsSelected() ? "bg-muted" : ""}`}
+                                        className={`cursor-pointer ${row.getIsSelected() ? "bg-muted" : ""}
+                                        ${isActive ? "bg-gray-100" : "hover:bg-gray-50"}
+                                        `}
+                                        onClick={() => handleRowClick(member)}
                                     >
                                         {row.getVisibleCells().map((cell) => (
                                             <TableCell key={cell.id}>
