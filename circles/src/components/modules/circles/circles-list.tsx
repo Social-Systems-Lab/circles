@@ -131,14 +131,8 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                     initial="hidden"
                     animate="visible"
                     className="grid gap-4"
-                    // {
-                    // isCompact && !isMobile
-                    //     ? "grid grid-cols-1 gap-4"
-                    //     : "grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
-                    // }
-
                     style={{
-                        gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
                         gridAutoRows: "1fr",
                     }}
                 >
@@ -152,7 +146,7 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                                 animate="visible"
                                 exit="hidden"
                                 layout
-                                className="flex h-full cursor-pointer flex-col overflow-hidden rounded-[15px] border bg-white shadow transition-shadow duration-200 hover:shadow-md md:min-w-[200px] md:max-w-[420px]"
+                                className={`flex h-full cursor-pointer flex-col overflow-hidden rounded-[15px] border ${circle.handle === contentPreview?.handle ? "bg-[#f7f7f7]" : "bg-white"} shadow transition-shadow duration-200 hover:shadow-md md:min-w-[200px] md:max-w-[420px]`}
                                 onClick={() => handleCircleClick(circle)}
                             >
                                 <div className="relative h-[150px] w-full overflow-hidden">

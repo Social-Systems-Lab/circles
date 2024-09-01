@@ -54,7 +54,7 @@ export const ContentPreview: React.FC = () => {
                         animate={{ x: 0 }}
                         exit={{ x: "110%" }}
                         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                        className={`fixed bottom-1 right-1 z-40 w-full overflow-hidden bg-white shadow-lg md:w-[400px] md:rounded-[15px] ${
+                        className={`fixed bottom-2 right-2 z-40 w-full overflow-hidden bg-white shadow-lg md:w-[400px] md:rounded-[15px] ${
                             isMobile ? "top-0" : "top-[64px]"
                         }`}
                     >

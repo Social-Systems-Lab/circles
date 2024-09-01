@@ -11,7 +11,7 @@ interface MapMarkerProps {
 }
 
 const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick }) => {
-    const [, setContentPreview] = useAtom(contentPreviewAtom);
+    const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
 
     const handleClick = () => {
         if (content) {
@@ -27,7 +27,7 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick }) => {
         <div className="group relative cursor-pointer" onClick={handleClick}>
             <div className="absolute bottom-[4px] left-1/2 -translate-x-1/2 transform">
                 <div
-                    className="h-9 w-9 rounded-full border-2 border-white bg-cover bg-center shadow-md transition-transform duration-300 group-hover:scale-110"
+                    className={`h-9 w-9 rounded-full border-2 ${contentPreview && contentPreview.handle === content?.handle ? "border-[#f8dd53]" : "border-white"} bg-cover bg-center shadow-md transition-transform duration-300 group-hover:scale-110`}
                     style={{ backgroundImage: content?.picture?.url ? `url(${content?.picture?.url})` : "none" }}
                 />
             </div>
