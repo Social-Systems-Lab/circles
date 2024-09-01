@@ -9,8 +9,9 @@ import { ObjectId } from "mongodb";
 import { maxAccessLevel } from "../data/constants";
 import { cookies } from "next/headers";
 import { verifyUserToken } from "./jwt";
-import { createNewUser } from "../data/user";
+import { createNewUser, getUserById } from "../data/user";
 import { addMember } from "../data/member";
+import { getCircleById } from "../data/circle";
 
 const SALT_FILENAME = "salt.bin";
 const IV_FILENAME = "iv.bin";
@@ -200,7 +201,7 @@ export const authenticateUser = (did: string, password: string): boolean => {
     return true;
 };
 
-export const getMemberAccessLevel = async (userDid: string, circleId: string): Promise<number> => {
+export const getMemberAccessLevel = async (userDid: string, circleId: string, isUser: boolean): Promise<number> => {
     let user = await Users.findOne({ did: userDid });
     if (!user) return maxAccessLevel;
 
@@ -210,7 +211,12 @@ export const getMemberAccessLevel = async (userDid: string, circleId: string): P
     let userGroups = membership.userGroups;
     if (!userGroups || userGroups.length <= 0) return maxAccessLevel;
 
-    let circle = await Circles.findOne({ _id: new ObjectId(circleId) });
+    let circle = null;
+    if (isUser) {
+        circle = await Users.findOne({ _id: new ObjectId(circleId) });
+    } else {
+        circle = await Circles.findOne({ _id: new ObjectId(circleId) });
+    }
     if (!circle) return maxAccessLevel;
 
     return Math.min(
@@ -224,9 +230,10 @@ export const hasHigherAccess = async (
     memberDid: string,
     circleId: string,
     acceptSameLevel: boolean,
+    isUser: boolean,
 ): Promise<boolean> => {
-    const userAccessLevel = await getMemberAccessLevel(userDid, circleId);
-    const memberAccessLevel = await getMemberAccessLevel(memberDid, circleId);
+    const userAccessLevel = await getMemberAccessLevel(userDid, circleId, isUser);
+    const memberAccessLevel = await getMemberAccessLevel(memberDid, circleId, isUser);
 
     if (acceptSameLevel) {
         return userAccessLevel <= memberAccessLevel;

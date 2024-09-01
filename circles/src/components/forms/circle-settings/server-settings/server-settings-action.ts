@@ -19,7 +19,7 @@ export const serverSettingsFormAction: FormAction = {
 
             // check if user is authorized to edit server settings, we use the same permission as for default circle settings
             const userDid = await getAuthenticatedUserDid();
-            let authorized = await isAuthorized(userDid, circleId ?? "", features.settings_edit);
+            let authorized = await isAuthorized(userDid, circleId ?? "", features.settings_edit, false);
             if (!authorized) {
                 return { success: false, message: "You are not authorized to edit server settings" };
             }

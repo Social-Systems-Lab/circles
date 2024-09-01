@@ -24,7 +24,12 @@ export const createCircleFormAction: FormAction = {
 
             // check if user is authorized to edit circle settings
             const userDid = await getAuthenticatedUserDid();
-            let authorized = await isAuthorized(userDid, circle.parentCircleId ?? "", features.create_subcircle);
+            let authorized = await isAuthorized(
+                userDid,
+                circle.parentCircleId ?? "",
+                features.create_subcircle,
+                isUser,
+            );
             if (!authorized) {
                 return { success: false, message: "You are not authorized to create new circles" };
             }
