@@ -6,6 +6,8 @@ import {
     AiOutlineHome,
     AiOutlineQuestion,
     AiOutlineSetting,
+    AiOutlineUnorderedList,
+    AiOutlineWifi,
 } from "react-icons/ai";
 import { FaRegCircle } from "react-icons/fa6";
 
@@ -26,6 +28,8 @@ export const PageIcon = ({ module, size }: PageIconProps) => {
             return <AiOutlineContacts size={size} />;
         case "circles":
             return <FaRegCircle size={size} />;
+        case "feeds":
+            return <AiOutlineWifi size={size} />;
         default:
             return <AiOutlineQuestion size={size} />;
     }

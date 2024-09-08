@@ -158,6 +158,39 @@ export const moduleSchema = z.object({
 
 export type Module = z.infer<typeof moduleSchema>;
 
+export const feedSchema = z.object({
+    _id: z.any().optional(),
+    name: z.string(),
+    circleId: z.string(),
+    createdBy: didSchema,
+    createdAt: z.date(),
+    userGroups: z.array(z.string()).default([]),
+});
+
+export type Feed = z.infer<typeof feedSchema>;
+
+export const postSchema = z.object({
+    _id: z.any().optional(),
+    feedId: z.string(),
+    createdBy: didSchema,
+    createdAt: z.date(),
+    content: z.string(),
+    reactions: z.record(z.string(), z.number()).default({}),
+    parentFeedId: z.string().optional(),
+    location: locationSchema.optional(),
+    media: z
+        .array(
+            z.object({
+                name: z.string(),
+                type: z.string(),
+                fileInfo: fileInfoSchema,
+            }),
+        )
+        .optional(),
+});
+
+export type Post = z.infer<typeof postSchema>;
+
 // access rules are a map of features to array of user groups that are granted access to the feature
 export const accessRulesSchema = z.record(z.string(), z.array(z.string()));
 

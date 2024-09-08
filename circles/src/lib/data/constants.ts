@@ -114,6 +114,13 @@ export const defaultPagesForUser: Page[] = [
         defaultUserGroups: ["admins", "moderators", "members", "everyone"],
     },
     {
+        name: "Feeds",
+        handle: "feeds",
+        description: "Feeds page",
+        module: "feeds",
+        defaultUserGroups: ["admins", "moderators", "members"],
+    },
+    {
         name: "Friends",
         handle: "friends",
         description: "Friends page",
@@ -139,6 +146,13 @@ export const defaultPages: Page[] = [
         module: "home",
         readOnly: true,
         defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Feeds",
+        handle: "feeds",
+        description: "Feeds page",
+        module: "feeds",
+        defaultUserGroups: ["admins", "moderators", "members"],
     },
     {
         name: "Members",

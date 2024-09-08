@@ -62,6 +62,23 @@ Once the module component and config is created, new pages with the module can b
 
 
 
+### Module icon
+
+Specify the module icon in the `src/components/modules/page-icon.tsx` file.
+
+```js
+export const PageIcon = ({ module, size }: PageIconProps) => {
+    switch (module) {
+		...
+        case "poke":
+            return <AiOutlineUnorderedList size={size} />;
+		...
+    }
+};
+```
+
+
+
 ### Add module page
 
 Navigate to the setting menu on the circle and the pages submenu. There you can add a new page and specify the new poke module to be rendered. 
