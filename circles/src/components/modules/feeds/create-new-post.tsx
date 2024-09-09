@@ -21,6 +21,8 @@ import {
 import { useDropzone } from "react-dropzone";
 import { createPostAction } from "./actions";
 import { useToast } from "@/components/ui/use-toast";
+import { useIsCompact } from "@/components/utils/use-is-compact";
+import { whiteUi } from "@/lib/data/constants";
 
 type CreateNewPostProps = {
     circle: Circle;
@@ -39,6 +41,7 @@ export function CreateNewPost({ circle, feed }: CreateNewPostProps) {
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
     const [isPending, startTransition] = useTransition();
     const { toast } = useToast();
+    const isCompact = useIsCompact();
 
     // Handle image drop
     const onDrop = useCallback(
@@ -128,7 +131,13 @@ export function CreateNewPost({ circle, feed }: CreateNewPostProps) {
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                <div className="flex flex-1 cursor-pointer items-center space-x-4 border-gray-200 bg-white p-4 shadow">
+                <div
+                    className={
+                        whiteUi
+                            ? "flex flex-1 cursor-pointer items-center space-x-4 border-b border-gray-200 bg-white p-4"
+                            : `mb-4 mt-4 flex flex-1 cursor-pointer items-center space-x-4  ${isCompact ? "" : "rounded-lg"} bg-white p-4 shadow`
+                    }
+                >
                     <UserPicture name={user?.name} picture={user?.picture?.url} size="40px" />
                     <div className="flex-grow">
                         <input

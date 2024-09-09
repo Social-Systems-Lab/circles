@@ -1,5 +1,7 @@
 import { Page, UserGroup, Module, Feature } from "@/models/models";
 
+export const whiteUi = true;
+// f3f3f3
 export const features = {
     settings_edit: {
         name: "Edit Settings",

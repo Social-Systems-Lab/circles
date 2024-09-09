@@ -4,6 +4,7 @@ import { useIsCompact } from "@/components/utils/use-is-compact";
 import { Circle, Feed } from "@/models/models";
 import { FormNav, NavItem } from "@/components/forms/form-nav";
 import { FeedsNav } from "./feeds-nav";
+import { whiteUi } from "@/lib/data/constants";
 
 export type FeedsLayoutWrapperProps = {
     circle: Circle;
@@ -21,7 +22,7 @@ export const FeedsLayoutWrapper = ({ children, circle, feeds, isDefaultCircle }:
 
     return (
         <div
-            className="flex w-full bg-[#fbfbfb]"
+            className={whiteUi ? "flex w-full bg-[#fbfbfb]" : "flex w-full bg-[#fbfbfb]"}
             style={{
                 flexDirection: isCompact ? "column" : "row",
             }}

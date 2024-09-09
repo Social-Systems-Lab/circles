@@ -13,6 +13,8 @@ import {
     CarouselPrevious,
 } from "@/components/ui/carousel";
 import { useState } from "react";
+import { useIsCompact } from "@/components/utils/use-is-compact";
+import { whiteUi } from "@/lib/data/constants";
 
 type PostItemProps = {
     post: PostDisplay;
@@ -23,13 +25,20 @@ type PostItemProps = {
 const PostItem = ({ post, circle }: PostItemProps) => {
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
     const formattedDate = new Date(post.createdAt).toDateString();
+    const isCompact = useIsCompact();
 
     // Calculate total likes
     const totalLikes = Object.values(post.reactions).reduce((sum, count) => sum + count, 0);
     const totalComments = post.comments?.length || 0;
 
     return (
-        <div className="flex flex-col gap-4 border-b border-gray-200">
+        <div
+            className={
+                whiteUi
+                    ? `flex flex-col gap-4 border-b border-gray-200 bg-white`
+                    : `flex flex-col gap-4 ${isCompact ? "" : "rounded-lg"} bg-white shadow`
+            }
+        >
             {/* Header with user information */}
             <div className="flex items-center gap-4 pl-4 pr-4 pt-4">
                 <UserPicture name={post.author?.name} picture={post.author?.picture?.url} />
@@ -117,11 +126,11 @@ type PostListProps = {
 
 const PostList = ({ feed, circle, posts }: PostListProps) => {
     return (
-        <>
+        <div className={whiteUi ? "" : "flex flex-col gap-4"}>
             {posts.map((post) => (
                 <PostItem key={post._id} post={post} circle={circle} feed={feed} />
             ))}
-        </>
+        </div>
     );
 };
 

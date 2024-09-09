@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Circle } from "@/models/models";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { buttonVariants } from "@/components/ui/button";
+import { whiteUi } from "@/lib/data/constants";
 
 export type NavItem = {
     name: string;
@@ -66,7 +67,7 @@ export const FeedsNav: React.FC<FeedsNavProps> = ({ items, circle, isDefaultCirc
                     </Link>
                 ))}
             </nav>
-            {isCompact && <hr className="mt-2" />}
+            {isCompact && whiteUi && <hr className="mt-2" />}
         </>
     );
 };
