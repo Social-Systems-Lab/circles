@@ -144,7 +144,7 @@ export default function MapAndContentWrapper({
     return (
         <div className="relative flex w-full flex-row overflow-hidden bg-[#2e4c6b]">
             <motion.div
-                className="relative min-h-screen overflow-x-hidden bg-white"
+                className="relative min-h-screen overflow-x-hidden bg-[#fbfbfb]"
                 animate={{ width: contentWidth }}
                 transition={{ duration: 0.5 }}
                 onAnimationComplete={handleAnimationComplete}

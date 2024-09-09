@@ -297,99 +297,104 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                         </SelectContent>
                     </Select>
                 </div>
-                <Table className="mt-1 overflow-hidden">
-                    <TableHeader>
-                        {table.getHeaderGroups().map((headerGroup) => (
-                            <TableRow key={headerGroup.id}>
-                                {headerGroup.headers.map((header) => {
-                                    return (
-                                        <TableHead key={header.id}>
-                                            {header.isPlaceholder
-                                                ? null
-                                                : flexRender(header.column.columnDef.header, header.getContext())}
-                                        </TableHead>
-                                    );
-                                })}
-                                <TableHead className="w-[40px]"></TableHead>
-                            </TableRow>
-                        ))}
-                    </TableHeader>
-                    <TableBody>
-                        {table.getRowModel().rows?.length ? (
-                            table.getRowModel().rows.map((row, index) => {
-                                const member = row.original;
-                                const canEditUserGroupRow =
-                                    canEditUserGroups &&
-                                    hasHigherAccess(user, member, circle, canEditSameLevelUserGroups);
-                                const canRemoveUserRow =
-                                    canRemoveUser && hasHigherAccess(user, member, circle, canRemoveSameLevelUser);
-                                const isActive = (contentPreview as MemberDisplay)?.userDid === member.userDid;
+                <div className="mt-2 overflow-hidden rounded-sm border border-gray-200">
+                    <Table className="overflow-hidden">
+                        <TableHeader className="bg-white">
+                            {table.getHeaderGroups().map((headerGroup) => (
+                                <TableRow key={headerGroup.id}>
+                                    {headerGroup.headers.map((header) => {
+                                        return (
+                                            <TableHead key={header.id}>
+                                                {header.isPlaceholder
+                                                    ? null
+                                                    : flexRender(header.column.columnDef.header, header.getContext())}
+                                            </TableHead>
+                                        );
+                                    })}
+                                    <TableHead className="w-[40px]"></TableHead>
+                                </TableRow>
+                            ))}
+                        </TableHeader>
+                        <TableBody className="bg-white">
+                            {table.getRowModel().rows?.length ? (
+                                table.getRowModel().rows.map((row, index) => {
+                                    const member = row.original;
+                                    const canEditUserGroupRow =
+                                        canEditUserGroups &&
+                                        hasHigherAccess(user, member, circle, canEditSameLevelUserGroups);
+                                    const canRemoveUserRow =
+                                        canRemoveUser && hasHigherAccess(user, member, circle, canRemoveSameLevelUser);
+                                    const isActive = (contentPreview as MemberDisplay)?.userDid === member.userDid;
 
-                                return (
-                                    <motion.tr
-                                        key={row.id}
-                                        custom={index}
-                                        initial="hidden"
-                                        animate="visible"
-                                        variants={tableRowVariants}
-                                        className={`cursor-pointer ${row.getIsSelected() ? "bg-muted" : ""}
+                                    return (
+                                        <motion.tr
+                                            key={row.id}
+                                            custom={index}
+                                            initial="hidden"
+                                            animate="visible"
+                                            variants={tableRowVariants}
+                                            className={`cursor-pointer ${row.getIsSelected() ? "bg-muted" : ""}
                                         ${isActive ? "bg-gray-100" : "hover:bg-gray-50"}
                                         `}
-                                        style={{
-                                            clipPath: "xywh(0 0 100% 100% round 1em)",
-                                        }}
-                                        onClick={() => handleRowClick(member)}
-                                    >
-                                        {row.getVisibleCells().map((cell) => (
-                                            <TableCell key={cell.id}>
-                                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                            // style={{
+                                            //     clipPath: "xywh(0 0 100% 100% round 1em)",
+                                            // }}
+                                            onClick={() => handleRowClick(member)}
+                                        >
+                                            {row.getVisibleCells().map((cell) => (
+                                                <TableCell key={cell.id}>
+                                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                                </TableCell>
+                                            ))}
+                                            <TableCell className="w-[40px]">
+                                                {(canEditUserGroupRow || canRemoveUserRow) && (
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button variant="ghost" className="h-8 w-8 p-0">
+                                                                <span className="sr-only">Open menu</span>
+                                                                <MoreHorizontal className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                            <DropdownMenuSeparator />
+                                                            {canEditUserGroupRow && (
+                                                                <DropdownMenuItem
+                                                                    onClick={() => onOpenEditUserGroupsDialog(member)}
+                                                                >
+                                                                    Edit User Groups
+                                                                </DropdownMenuItem>
+                                                            )}
+                                                            {canRemoveUserRow && (
+                                                                <DropdownMenuItem
+                                                                    onClick={() => {
+                                                                        setSelectedMember(member);
+                                                                        setRemoveMemberDialogOpen(true);
+                                                                    }}
+                                                                >
+                                                                    Remove User
+                                                                </DropdownMenuItem>
+                                                            )}
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                )}
                                             </TableCell>
-                                        ))}
-                                        <TableCell className="w-[40px]">
-                                            {(canEditUserGroupRow || canRemoveUserRow) && (
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" className="h-8 w-8 p-0">
-                                                            <span className="sr-only">Open menu</span>
-                                                            <MoreHorizontal className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                        <DropdownMenuSeparator />
-                                                        {canEditUserGroupRow && (
-                                                            <DropdownMenuItem
-                                                                onClick={() => onOpenEditUserGroupsDialog(member)}
-                                                            >
-                                                                Edit User Groups
-                                                            </DropdownMenuItem>
-                                                        )}
-                                                        {canRemoveUserRow && (
-                                                            <DropdownMenuItem
-                                                                onClick={() => {
-                                                                    setSelectedMember(member);
-                                                                    setRemoveMemberDialogOpen(true);
-                                                                }}
-                                                            >
-                                                                Remove User
-                                                            </DropdownMenuItem>
-                                                        )}
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            )}
-                                        </TableCell>
-                                    </motion.tr>
-                                );
-                            })
-                        ) : (
-                            <TableRow>
-                                <TableCell colSpan={columns.length + (canEdit ? 1 : 0)} className="h-24 text-center">
-                                    {isUser ? "No friends." : "No members."}
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
+                                        </motion.tr>
+                                    );
+                                })
+                            ) : (
+                                <TableRow>
+                                    <TableCell
+                                        colSpan={columns.length + (canEdit ? 1 : 0)}
+                                        className="h-24 text-center"
+                                    >
+                                        {isUser ? "No friends." : "No members."}
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
                 <Dialog open={removeMemberDialogOpen} onOpenChange={setRemoveMemberDialogOpen}>
                     <DialogContent>
                         <DialogHeader>

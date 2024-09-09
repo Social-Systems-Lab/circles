@@ -35,7 +35,7 @@ export const ContentPreview: React.FC = () => {
             <AnimatePresence>
                 {contentPreview && !mapOpen && (
                     <motion.div
-                        className="relative flex-shrink-0 bg-white"
+                        className="relative flex-shrink-0 bg-[#fbfbfb]"
                         initial={{ width: 0 }}
                         animate={{ width: 420 }}
                         transition={{ type: "spring", stiffness: 300, damping: 30 }}
