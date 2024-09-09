@@ -136,7 +136,7 @@ export const createDefaultFeeds = async (circleId: string, isUser: boolean): Pro
     let membersFeed = await getFeedByHandle(circleId, "members");
     if (!membersFeed) {
         membersFeed = {
-            name: circle.circleType === "user" ? "Inner Circle" : "Member Discussion",
+            name: circle.circleType === "user" ? "Friends Only" : "Members Only",
             handle: "members",
             circleId,
             userGroups: ["admins", "moderators", "members"],

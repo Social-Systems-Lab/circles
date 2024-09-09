@@ -22,7 +22,7 @@ export const FeedComponent = ({ circle, posts, page, subpage, feed }: FeedCompon
         <div
             className={
                 whiteUi
-                    ? `flex h-full min-h-screen flex-1 items-start justify-center ${isCompact ? "" : "border-l border-r border-gray-200"}`
+                    ? `flex h-full min-h-screen flex-1 items-start justify-center bg-white ${isCompact ? "" : "border-l border-r border-gray-200"}`
                     : `flex h-full min-h-screen flex-1 items-start justify-center`
             }
             style={{
