@@ -26,10 +26,16 @@ import { Label } from "../ui/label";
 import { Button } from "../ui/button";
 import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
-import { cn } from "@/lib/utils";
+import { cn, removeLast } from "@/lib/utils";
 import { FaLock } from "react-icons/fa6";
 import { FaCheck } from "react-icons/fa";
-import { features, features as featuresList, pageFeaturePrefix } from "@/lib/data/constants";
+import {
+    features,
+    features as featuresList,
+    feedFeatures,
+    pageFeaturePrefix,
+    feedFeaturePrefix,
+} from "@/lib/data/constants";
 import { CheckCircle2, ChevronDown, ChevronUp, XCircle } from "lucide-react";
 import { getMemberAccessLevel, isAuthorized } from "@/lib/auth/client-auth";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
@@ -488,6 +494,17 @@ export const DynamicAccessRulesGrid: React.FC<DynamicAccessRulesGridProps> = ({
             // get name from page
             const page = pages.find((p) => p.handle === pageHandle);
             return "View Page: " + page?.name;
+        } else if (feature.startsWith(feedFeaturePrefix)) {
+            // get feed handle
+            const featureWithoutPrefix = feature.replace(feedFeaturePrefix, "");
+
+            // loop through feed features and see if the feature relates to it
+            for (const feedFeature of feedFeatures) {
+                if (featureWithoutPrefix.endsWith(`_${feedFeature.handle}`)) {
+                    const feedHandle = removeLast(featureWithoutPrefix, `_${feedFeature.handle}`);
+                    return `${feedFeature.name} Feed: ${feedHandle}`;
+                }
+            }
         } else {
             if (feature in featuresList) {
                 return featuresList[feature as keyof typeof featuresList]?.name ?? feature;

@@ -4,6 +4,7 @@ import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { isFile, saveFile } from "@/lib/data/storage";
 import { addMember } from "@/lib/data/member";
+import { updateUser } from "@/lib/data/user";
 
 export const createCircleFormAction: FormAction = {
     id: "create-circle-form",

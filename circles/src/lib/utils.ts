@@ -1,9 +1,9 @@
 // used by tailwindcss to merge classnames, shadcn/ui CLI assumes the file is here
 
-import { Circle, Content, Page } from "@/models/models";
+import { Circle, Content, Feed, Page } from "@/models/models";
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { pageFeaturePrefix } from "./data/constants";
+import { feedFeaturePrefix, feedFeatures, pageFeaturePrefix } from "./data/constants";
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -72,6 +72,97 @@ export function addPagesAccessRules(
     }
 
     return existingAccessRules;
+}
+
+export function addFeedsAccessRules(
+    feeds: Feed[],
+    existingAccessRules: Record<string, string[]>,
+): Record<string, string[]> {
+    // add rules for feed if it doesn't exist
+    for (const feed of feeds) {
+        for (const feedFeature of feedFeatures) {
+            let feedFeatureHandle = feedFeaturePrefix + feed.handle + "_" + feedFeature.handle;
+            if (!existingAccessRules[feedFeatureHandle]) {
+                // handle special case for default feeds that have default user groups
+                if (feed.handle === "default") {
+                    switch (feedFeature.handle) {
+                        case "view":
+                            existingAccessRules[feedFeatureHandle] = ["admins", "moderators", "members", "everyone"];
+                            break;
+                        case "post":
+                            existingAccessRules[feedFeatureHandle] = ["admins", "moderators"];
+                            break;
+                        case "comment":
+                            existingAccessRules[feedFeatureHandle] = ["admins", "moderators", "members"];
+                            break;
+                        case "moderate":
+                            existingAccessRules[feedFeatureHandle] = ["admins", "moderators"];
+                            break;
+                        default:
+                            existingAccessRules[feedFeatureHandle] = feedFeature.defaultUserGroups ?? [
+                                "admins",
+                                "moderators",
+                                "members",
+                            ];
+                            break;
+                    }
+                } else if (feed.handle === "members") {
+                    switch (feedFeature.handle) {
+                        case "view":
+                            existingAccessRules[feedFeatureHandle] = ["admins", "moderators", "members"];
+                            break;
+                        case "post":
+                            existingAccessRules[feedFeatureHandle] = ["admins", "moderators", "members"];
+                            break;
+                        case "comment":
+                            existingAccessRules[feedFeatureHandle] = ["admins", "moderators", "members"];
+                            break;
+                        case "moderate":
+                            existingAccessRules[feedFeatureHandle] = ["admins", "moderators"];
+                            break;
+                        default:
+                            existingAccessRules[feedFeatureHandle] = feedFeature.defaultUserGroups ?? [
+                                "admins",
+                                "moderators",
+                                "members",
+                            ];
+                            break;
+                    }
+                } else {
+                    existingAccessRules[feedFeatureHandle] = feedFeature.defaultUserGroups ?? [
+                        "admins",
+                        "moderators",
+                        "members",
+                    ];
+                }
+            }
+        }
+    }
+
+    console.log("new access rules:", existingAccessRules);
+
+    // remove rules for feeds that don't exist
+    for (const rule in existingAccessRules) {
+        if (rule.startsWith(feedFeaturePrefix)) {
+            let handle = rule.replace(feedFeaturePrefix, "");
+            // remove feed feature postfix from handle
+            handle = handle.substring(0, handle.lastIndexOf("_"));
+            if (!feeds.find((feed) => feed.handle === handle)) {
+                console.log("can't find feed with handle, deleting access rule", handle, rule);
+                delete existingAccessRules[rule];
+            }
+        }
+    }
+
+    return existingAccessRules;
+}
+
+export function removeLast(str: string, pattern: string): string {
+    const n = str.lastIndexOf(pattern);
+    if (n >= 0 && n + pattern.length >= str.length) {
+        return str.substring(0, n);
+    }
+    return str;
 }
 
 export function safeModifyAccessRules(

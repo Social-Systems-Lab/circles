@@ -262,7 +262,7 @@ export const getAuthenticatedUserDid = async (): Promise<string> => {
 export const isAuthorized = async (
     userDid: string,
     circleId: string,
-    feature: Feature,
+    feature: Feature | string,
     isUser?: boolean,
 ): Promise<boolean> => {
     // lookup access rules in circle for the features
@@ -274,7 +274,8 @@ export const isAuthorized = async (
     }
     if (!circle) return false;
 
-    let allowedUserGroups = circle?.accessRules?.[feature.handle];
+    let featureHandle = typeof feature === "string" ? feature : feature.handle;
+    let allowedUserGroups = circle?.accessRules?.[featureHandle];
     if (!allowedUserGroups) return false;
     if (allowedUserGroups.includes("everyone")) return true;
 

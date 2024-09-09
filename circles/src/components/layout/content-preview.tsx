@@ -30,10 +30,6 @@ export const ContentPreview: React.FC = () => {
         setContentPreview(undefined);
     };
 
-    useEffect(() => {
-        console.log("ContentPreview", contentPreview);
-    }, [contentPreview]);
-
     return (
         <>
             <AnimatePresence>

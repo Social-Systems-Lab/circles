@@ -151,7 +151,6 @@ export const moduleSchema = z.object({
     description: z.string(),
     component: z.any(),
     layoutComponent: z.any().optional(),
-    features: z.array(z.string()).optional(),
     excludeFromMenu: z.boolean().optional(),
     defaultIcon: z.string().optional(),
 });
@@ -161,13 +160,21 @@ export type Module = z.infer<typeof moduleSchema>;
 export const feedSchema = z.object({
     _id: z.any().optional(),
     name: z.string(),
+    handle: handleSchema,
     circleId: z.string(),
-    createdBy: didSchema,
     createdAt: z.date(),
     userGroups: z.array(z.string()).default([]),
 });
 
 export type Feed = z.infer<typeof feedSchema>;
+
+export const mediaSchema = z.object({
+    name: z.string(),
+    type: z.string(),
+    fileInfo: fileInfoSchema,
+});
+
+export type Media = z.infer<typeof mediaSchema>;
 
 export const postSchema = z.object({
     _id: z.any().optional(),
@@ -176,20 +183,15 @@ export const postSchema = z.object({
     createdAt: z.date(),
     content: z.string(),
     reactions: z.record(z.string(), z.number()).default({}),
-    parentFeedId: z.string().optional(),
     location: locationSchema.optional(),
-    media: z
-        .array(
-            z.object({
-                name: z.string(),
-                type: z.string(),
-                fileInfo: fileInfoSchema,
-            }),
-        )
-        .optional(),
+    media: z.array(mediaSchema).optional(),
 });
 
 export type Post = z.infer<typeof postSchema>;
+
+export interface PostDisplay extends Post {
+    author: MemberDisplay;
+}
 
 // access rules are a map of features to array of user groups that are granted access to the feature
 export const accessRulesSchema = z.record(z.string(), z.array(z.string()));

@@ -159,7 +159,7 @@ export const defaultPages: Page[] = [
         handle: "members",
         description: "Members page",
         module: "members",
-        defaultUserGroups: ["admins", "moderators", "members"],
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
     },
     {
         name: "Settings",
@@ -168,6 +168,34 @@ export const defaultPages: Page[] = [
         module: "settings",
         readOnly: true,
         defaultUserGroups: ["admins"],
+    },
+];
+
+export const feedFeaturePrefix = "__feed_";
+export const feedFeatures: Feature[] = [
+    {
+        name: "View",
+        handle: "view",
+        description: "View the feed",
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Post",
+        handle: "post",
+        description: "Create a post in the feed",
+        defaultUserGroups: ["admins", "moderators", "members"],
+    },
+    {
+        name: "Comment",
+        handle: "comment",
+        description: "Comment on posts in the feed",
+        defaultUserGroups: ["admins", "moderators", "members"],
+    },
+    {
+        name: "Moderate",
+        handle: "moderate",
+        description: "Moderate posts in the feed",
+        defaultUserGroups: ["admins", "moderators"],
     },
 ];
 
