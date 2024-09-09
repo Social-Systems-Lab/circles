@@ -38,8 +38,8 @@ export const FeedsNav: React.FC<FeedsNavProps> = ({ items, circle, isDefaultCirc
                 className={cn("flex", className)}
                 style={{
                     position: isCompact ? "relative" : "fixed",
-                    marginLeft: isCompact ? "5px" : "20px",
-                    marginRight: isCompact ? "5px" : "20px",
+                    marginLeft: isCompact ? "10px" : "20px",
+                    marginRight: isCompact ? "10px" : "20px",
                     flexDirection: isCompact ? "row" : "column",
                     gap: isCompact ? "4px" : "4px",
                     flexWrap: isCompact ? "wrap" : "nowrap",
@@ -66,7 +66,7 @@ export const FeedsNav: React.FC<FeedsNavProps> = ({ items, circle, isDefaultCirc
                     </Link>
                 ))}
             </nav>
-            {isCompact && <hr className="mb-2 mt-2" />}
+            {isCompact && <hr className="mt-2" />}
         </>
     );
 };

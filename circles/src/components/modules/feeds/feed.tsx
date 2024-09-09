@@ -19,7 +19,7 @@ export const FeedComponent = ({ circle, posts, page, subpage, feed }: FeedCompon
 
     return (
         <div
-            className={`flex h-full flex-1 items-start justify-center ${isCompact ? "pl-4 pr-4" : ""}`}
+            className={`flex h-full min-h-screen flex-1 items-start justify-center ${isCompact ? "" : "border-l border-r border-gray-200"}`}
             style={{
                 flexGrow: isCompact ? "1" : "3",
                 maxWidth: isCompact ? "none" : "700px",

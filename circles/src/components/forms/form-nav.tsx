@@ -38,8 +38,8 @@ export const FormNav: React.FC<FormNavProps> = ({ items, circle, isDefaultCircle
                 className={cn("flex", className)}
                 style={{
                     position: isCompact ? "relative" : "fixed",
-                    marginLeft: isCompact ? "5px" : "20px",
-                    marginRight: isCompact ? "5px" : "20px",
+                    marginLeft: isCompact ? "10px" : "20px",
+                    marginRight: isCompact ? "10px" : "20px",
                     flexDirection: isCompact ? "row" : "column",
                     gap: isCompact ? "4px" : "4px",
                     flexWrap: isCompact ? "wrap" : "nowrap",

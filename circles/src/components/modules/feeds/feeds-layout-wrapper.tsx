@@ -21,18 +21,18 @@ export const FeedsLayoutWrapper = ({ children, circle, feeds, isDefaultCircle }:
 
     return (
         <div
-            className="flex w-full"
+            className="flex w-full bg-[#fbfbfb]"
             style={{
                 flexDirection: isCompact ? "column" : "row",
-                paddingTop: isCompact ? "0" : "20px",
             }}
         >
             <div
-                className="relative flex flex-col items-center pb-2"
+                className="relative flex flex-col items-center"
                 style={{
                     flex: isCompact ? "0" : "1",
                     alignItems: isCompact ? "normal" : "flex-end",
                     minWidth: isCompact ? "0px" : "240px",
+                    paddingTop: isCompact ? "0" : "20px",
                 }}
             >
                 <FeedsNav items={navItems} circle={circle} isDefaultCircle={isDefaultCircle} />

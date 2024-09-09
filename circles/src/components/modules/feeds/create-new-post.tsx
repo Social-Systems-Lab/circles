@@ -128,7 +128,7 @@ export function CreateNewPost({ circle, feed }: CreateNewPostProps) {
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                <div className="flex flex-1 cursor-pointer items-center space-x-4 rounded-lg">
+                <div className="flex flex-1 cursor-pointer items-center space-x-4 border-gray-200 bg-white p-4 shadow">
                     <UserPicture name={user?.name} picture={user?.picture?.url} size="40px" />
                     <div className="flex-grow">
                         <input
