@@ -16,7 +16,14 @@ export default async function FeedsModule({ circle, page, subpage, isDefaultCirc
 
     return (
         <>
-            <FeedComponent posts={posts} feed={feed} circle={circle} page={page} subpage={subpage} />
+            <FeedComponent
+                posts={posts}
+                feed={feed}
+                circle={circle}
+                page={page}
+                subpage={subpage}
+                isDefaultCircle={isDefaultCircle}
+            />
             <div className="flex flex-1"></div>
         </>
     );

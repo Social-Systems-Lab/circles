@@ -57,8 +57,8 @@ export default function CircleMenu({
                             src={circle?.picture?.url ?? "/images/default-picture.png"}
                             alt="Logo"
                             className="h-[40px] w-[40px] overflow-hidden rounded-full object-cover shadow"
-                            width={40}
-                            height={40}
+                            width={100}
+                            height={100}
                         />
                     </div>
                 </PopoverTrigger>
@@ -75,8 +75,8 @@ export default function CircleMenu({
                                         src={user.picture?.url ?? "/images/default-user-picture.png"}
                                         alt="Logo"
                                         className="h-[40px] w-[40px] overflow-hidden rounded-full object-cover shadow"
-                                        width={40}
-                                        height={40}
+                                        width={100}
+                                        height={100}
                                     />
                                 </div>
                                 <div className="pl-3">{user.name}</div>
@@ -94,8 +94,8 @@ export default function CircleMenu({
                                         src={circleItem?.picture?.url ?? "/images/default-picture.png"}
                                         alt="Logo"
                                         className="h-[40px] w-[40px] overflow-hidden rounded-full object-cover shadow"
-                                        width={40}
-                                        height={40}
+                                        width={100}
+                                        height={100}
                                     />
                                 </div>
                                 <div className="pl-3">{circleItem.name}</div>

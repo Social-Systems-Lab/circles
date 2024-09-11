@@ -62,10 +62,10 @@ const ProfileMenuBar = () => {
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button className="h-auto w-auto rounded-full p-0" variant="ghost">
-                            <UserPicture name={user?.name} picture={user?.picture?.url} size="32px" />
+                            <UserPicture name={user?.name} picture={user?.picture?.url} size="40px" />
                         </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent align="end" className="rounded-[15px]">
                         <Link href={`/users/${user?.handle}`}>
                             <div className="flex w-[160px] flex-col items-center justify-center pt-4">
                                 <UserPicture name={user?.name} picture={user?.picture?.url} size="108px" />

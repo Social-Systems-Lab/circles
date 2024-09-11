@@ -12,9 +12,10 @@ import {
     CarouselNext,
     CarouselPrevious,
 } from "@/components/ui/carousel";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { whiteUi } from "@/lib/data/constants";
+import Image from "next/image";
 
 type PostItemProps = {
     post: PostDisplay;
@@ -26,10 +27,26 @@ const PostItem = ({ post, circle }: PostItemProps) => {
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
     const formattedDate = new Date(post.createdAt).toDateString();
     const isCompact = useIsCompact();
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
     // Calculate total likes
     const totalLikes = Object.values(post.reactions).reduce((sum, count) => sum + count, 0);
     const totalComments = post.comments?.length || 0;
+
+    useEffect(() => {
+        if (!carouselApi) return;
+
+        const updateSelectedSlide = () => {
+            setCurrentImageIndex(carouselApi.selectedScrollSnap());
+        };
+
+        setCurrentImageIndex(carouselApi.selectedScrollSnap() || 0);
+        carouselApi.on("select", updateSelectedSlide);
+
+        return () => {
+            carouselApi.off("select", updateSelectedSlide);
+        };
+    }, [carouselApi]);
 
     return (
         <div
@@ -53,23 +70,39 @@ const PostItem = ({ post, circle }: PostItemProps) => {
 
             {/* Media carousel (if exists) */}
             {post.media && post.media.length > 0 && (
-                <div className="relative h-64 w-full overflow-hidden rounded-lg pl-4 pr-4">
-                    <Carousel setApi={setCarouselApi}>
-                        <CarouselContent>
-                            {post.media.map((mediaItem, index) => (
-                                <CarouselItem key={index} className="relative">
-                                    <img
-                                        src={mediaItem.fileInfo.url} // Use the media file's URL
-                                        alt={mediaItem.name}
-                                        className="h-64 w-full rounded-lg object-cover"
-                                    />
-                                </CarouselItem>
-                            ))}
-                        </CarouselContent>
-                        <CarouselPrevious />
-                        <CarouselNext />
-                    </Carousel>
-                </div>
+                <>
+                    <div className="relative h-64 w-full rounded-lg pl-4 pr-4">
+                        <Carousel setApi={setCarouselApi}>
+                            <CarouselContent>
+                                {post.media.map((mediaItem, index) => (
+                                    <CarouselItem key={index}>
+                                        {/* className="basis-[90%]" */}
+                                        <img
+                                            src={mediaItem.fileInfo.url}
+                                            alt={mediaItem.name}
+                                            className="h-64 w-full rounded-lg object-cover"
+                                        />
+                                    </CarouselItem>
+                                ))}
+                            </CarouselContent>
+                        </Carousel>
+                        {post.media.length > 1 && (
+                            <div className="relative flex justify-center">
+                                <div className="absolute -bottom-[30px] flex flex-row items-center justify-center">
+                                    {post.media.map((_, index) => (
+                                        <button
+                                            key={index}
+                                            onClick={() => carouselApi?.scrollTo(index)}
+                                            className={`mx-1 h-2 w-2 rounded-full ${
+                                                index === currentImageIndex ? "bg-blue-500" : "bg-gray-300"
+                                            }`}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </>
             )}
 
             {/* Actions (like and comment) */}

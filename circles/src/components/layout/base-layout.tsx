@@ -28,7 +28,7 @@ const BaseLayout = ({ children, circle, serverConfig, isDefaultCircle, isUser }:
                 <main className="relative flex flex-col md:flex-row">
                     <NavBar circle={circle} isDefaultCircle={isDefaultCircle} isUser={isUser} />
                     <MapAndContentWrapper mapboxKey={serverConfig?.mapboxKey ?? ""}>{children}</MapAndContentWrapper>
-                    <div className="fixed right-[20px] top-[10px] z-40">
+                    <div className="fixed right-6 top-4 z-40">
                         <ProfileMenu />
                     </div>
 

@@ -33,7 +33,7 @@ export const FeedsLayoutWrapper = ({ children, circle, feeds, isDefaultCircle }:
                     flex: isCompact ? "0" : "1",
                     alignItems: isCompact ? "normal" : "flex-end",
                     minWidth: isCompact ? "0px" : "240px",
-                    paddingTop: isCompact ? "0" : "20px",
+                    paddingTop: isCompact ? "0" : "72px",
                 }}
             >
                 <FeedsNav items={navItems} circle={circle} isDefaultCircle={isDefaultCircle} />

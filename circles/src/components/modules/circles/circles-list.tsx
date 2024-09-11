@@ -18,6 +18,7 @@ import DynamicForm from "@/components/forms/dynamic-form";
 import { useRouter } from "next/navigation";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import CircleTags from "./circle-tags";
+import CircleHeader from "./circle-header";
 
 export const twoLineEllipsisStyle = {
     WebkitLineClamp: 2,
@@ -112,6 +113,7 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
     return (
         <div className="flex flex-1 flex-row justify-center overflow-hidden">
             <div className="mb-4 ml-4 mr-4 mt-4 flex max-w-[1100px] flex-1 flex-col">
+                <CircleHeader circle={circle} page={page} isDefaultCircle={isDefaultCircle} />
                 <div
                     className="mb-4 flex w-full flex-row items-center gap-2"
                     style={{
