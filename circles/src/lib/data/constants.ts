@@ -1,6 +1,6 @@
 import { Page, UserGroup, Module, Feature } from "@/models/models";
 
-export const whiteUi = true;
+export const whiteUi = false;
 // f3f3f3
 export const features = {
     settings_edit: {

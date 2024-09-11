@@ -136,6 +136,7 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                         gridAutoRows: "1fr",
                     }}
                 >
+                    {/* fcfbf7 */}
                     <AnimatePresence mode="popLayout">
                         {filteredCircles.map((circle, index) => (
                             <motion.div
@@ -146,14 +147,14 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                                 animate="visible"
                                 exit="hidden"
                                 layout
-                                className={`flex h-full cursor-pointer flex-col overflow-hidden rounded-[15px] border ${circle.handle === contentPreview?.handle ? "bg-[#f7f7f7]" : "bg-white"} shadow transition-shadow duration-200 hover:shadow-md md:min-w-[200px] md:max-w-[420px]`}
+                                className={`flex h-full cursor-pointer flex-col overflow-hidden rounded-[15px] border-0 ${circle.handle === contentPreview?.handle ? "bg-[#f7f7f7]" : "bg-white"} shadow-lg transition-shadow duration-200 hover:shadow-md md:min-w-[200px] md:max-w-[420px]`}
                                 onClick={() => handleCircleClick(circle)}
                             >
                                 <div className="relative h-[150px] w-full overflow-hidden">
                                     <Image
                                         src={circle.cover?.url ?? "/images/default-cover.png"}
                                         alt="Cover"
-                                        className="object-cover"
+                                        className="bg-white object-cover"
                                         fill
                                     />
                                 </div>

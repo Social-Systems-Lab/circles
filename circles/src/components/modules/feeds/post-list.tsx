@@ -36,7 +36,7 @@ const PostItem = ({ post, circle }: PostItemProps) => {
             className={
                 whiteUi
                     ? `flex flex-col gap-4 border-b border-gray-200 bg-white`
-                    : `flex flex-col gap-4 ${isCompact ? "" : ""} border border-gray-200 bg-white`
+                    : `flex flex-col gap-4 ${isCompact ? "" : "rounded-[15px] border-0 shadow-lg"}  bg-white`
             }
         >
             {/* Header with user information */}
@@ -126,7 +126,7 @@ type PostListProps = {
 
 const PostList = ({ feed, circle, posts }: PostListProps) => {
     return (
-        <div className={whiteUi ? "" : "flex flex-col gap-3"}>
+        <div className={whiteUi ? "" : "flex flex-col gap-6"}>
             {posts.map((post) => (
                 <PostItem key={post._id} post={post} circle={circle} feed={feed} />
             ))}

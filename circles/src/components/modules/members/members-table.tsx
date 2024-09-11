@@ -297,11 +297,11 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="mt-2 overflow-hidden rounded-sm border border-gray-200">
+                <div className="mt-3 overflow-hidden rounded-[15px] shadow-lg">
                     <Table className="overflow-hidden">
-                        <TableHeader className="bg-white">
+                        <TableHeader className=" bg-white">
                             {table.getHeaderGroups().map((headerGroup) => (
-                                <TableRow key={headerGroup.id}>
+                                <TableRow key={headerGroup.id} className="!border-b-0">
                                     {headerGroup.headers.map((header) => {
                                         return (
                                             <TableHead key={header.id}>

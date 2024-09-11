@@ -19,32 +19,43 @@ type HomeContentProps = {
 export default function HomeCover({ circle, isDefaultCircle, isUser, authorizedToEdit }: HomeContentProps) {
     const isMobile = useIsMobile();
     return (
-        <div className={isMobile ? "relative h-[270px] w-full" : "relative h-[400px] w-full"}>
-            {authorizedToEdit ? (
-                <EditableImage
-                    id="cover"
-                    src={circle?.cover?.url ?? "/images/default-cover.png"}
-                    alt="Cover"
-                    className="object-cover"
-                    fill
-                    circleId={circle._id!}
-                    isUser={isUser}
-                />
-            ) : (
-                <Image
-                    src={circle?.cover?.url ?? "/images/default-cover.png"}
-                    alt="Cover"
-                    style={{
-                        objectFit: "cover",
-                    }}
-                    sizes="100vw"
-                    fill
-                />
-            )}
-            <div className="absolute bottom-[-45px] right-2 flex flex-row gap-1">
-                <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />
-                <JoinButton circle={circle} />
+        <>
+            <div className="relative">
+                <div
+                    className={
+                        isMobile
+                            ? "relative h-[270px] w-full overflow-hidden"
+                            : "relative h-[350px] w-full overflow-hidden"
+                    }
+                >
+                    {authorizedToEdit ? (
+                        <EditableImage
+                            id="cover"
+                            src={circle?.cover?.url ?? "/images/default-cover.png"}
+                            alt="Cover"
+                            className="object-cover"
+                            fill
+                            circleId={circle._id!}
+                            isUser={isUser}
+                        />
+                    ) : (
+                        <Image
+                            src={circle?.cover?.url ?? "/images/default-cover.png"}
+                            alt="Cover"
+                            className=""
+                            style={{
+                                objectFit: "cover",
+                            }}
+                            sizes="100vw"
+                            fill
+                        />
+                    )}
+                </div>
+                <div className="absolute bottom-[-50px] right-2 flex flex-row gap-1">
+                    <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />
+                    <JoinButton circle={circle} />
+                </div>
             </div>
-        </div>
+        </>
     );
 }

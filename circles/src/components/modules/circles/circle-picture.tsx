@@ -19,7 +19,7 @@ export const CirclePicture = ({ name, picture, size }: CirclePictureProps) => {
     };
 
     return (
-        <Avatar style={size ? { width: size, height: size } : {}}>
+        <Avatar className="bg-white shadow-lg" style={size ? { width: size, height: size } : {}}>
             <AvatarImage src={picture} />
             <AvatarFallback>{getInitials()}</AvatarFallback>
         </Avatar>

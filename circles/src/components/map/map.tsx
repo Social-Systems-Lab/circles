@@ -185,7 +185,7 @@ export default function MapAndContentWrapper({
 
             {mapboxKey && (
                 <div
-                    className="group fixed bottom-[100px] right-5 z-[50] cursor-pointer rounded-full bg-[#242424] p-[2px] hover:bg-[#304678e6] md:bottom-[30px]"
+                    className="group fixed bottom-[100px] right-6 z-[50] cursor-pointer rounded-full bg-[#242424] p-[2px] hover:bg-[#304678e6] md:bottom-[30px]"
                     onClick={() => {
                         setShowMap(false);
                         setTriggerOpen(!triggerOpen);

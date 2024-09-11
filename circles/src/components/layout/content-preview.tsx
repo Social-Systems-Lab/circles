@@ -50,7 +50,7 @@ export const ContentPreview: React.FC = () => {
                         animate={{ x: 0 }}
                         exit={{ x: "110%" }}
                         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                        className={`fixed bottom-2 right-2 z-40 w-full overflow-hidden bg-white shadow-lg md:w-[400px] md:rounded-[15px] ${
+                        className={`fixed bottom-4 right-4 z-40 w-full overflow-hidden bg-white shadow-lg md:w-[400px] md:rounded-[15px] ${
                             isMobile ? "top-0" : "top-[64px]"
                         }`}
                     >
@@ -93,7 +93,7 @@ export const ContentPreview: React.FC = () => {
                                 <div className="absolute top-[-60px]">
                                     <div className="h-[124px] w-[124px]">
                                         <Image
-                                            className="rounded-full border-2 border-white object-cover"
+                                            className="rounded-full border-2 border-white bg-white object-cover shadow-lg"
                                             src={contentPreview?.picture?.url ?? "/images/default-picture.png"}
                                             alt="Picture"
                                             fill

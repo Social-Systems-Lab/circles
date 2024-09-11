@@ -135,7 +135,7 @@ export function CreateNewPost({ circle, feed }: CreateNewPostProps) {
                     className={
                         whiteUi
                             ? "flex flex-1 cursor-pointer items-center space-x-4 border-b border-gray-200 bg-white p-4"
-                            : `mb-3 mt-3 flex flex-1 cursor-pointer items-center space-x-4  ${isCompact ? "" : ""} border border-gray-200 bg-white p-4`
+                            : `mb-6 mt-6 flex flex-1 cursor-pointer items-center space-x-4  ${isCompact ? "" : "rounded-[15px] border-0 shadow-lg"}  bg-white p-4`
                     }
                 >
                     <UserPicture name={user?.name} picture={user?.picture?.url} size="40px" />

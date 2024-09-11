@@ -5,6 +5,8 @@ import { Circle } from "@/models/models";
 import { FaUsers } from "react-icons/fa";
 import EditableImage from "./editable-image";
 import EditableField from "./editable-field";
+import InviteButton from "./invite-button";
+import JoinButton from "./join-button";
 
 type HomeContentProps = {
     circle: Circle;
@@ -19,21 +21,21 @@ export default function HomeContent({ circle, isDefaultCircle, isUser, authorize
     return (
         <div className="flex flex-1 flex-col">
             <div className="relative flex justify-center">
-                <div className="absolute top-[-60px]">
-                    <div className="h-[124px] w-[124px]">
+                <div className="absolute top-[-75px]">
+                    <div className="h-[150px] w-[150px]">
                         {authorizedToEdit ? (
                             <EditableImage
                                 id="picture"
                                 src={circle?.picture?.url ?? "/images/default-picture.png"}
                                 alt="Picture"
-                                className="rounded-full border-2 border-white object-cover"
+                                className="rounded-full border-2 border-white bg-white object-cover shadow-lg"
                                 fill
                                 circleId={circle._id!}
                                 isUser={isUser}
                             />
                         ) : (
                             <Image
-                                className="rounded-full border-2 border-white object-cover"
+                                className="rounded-full border-2 border-white bg-white object-cover shadow-lg"
                                 src={circle?.picture?.url ?? "/images/default-picture.png"}
                                 alt="Picture"
                                 fill
@@ -43,8 +45,8 @@ export default function HomeContent({ circle, isDefaultCircle, isUser, authorize
                 </div>
             </div>
 
-            <div className="mb-8 mt-[44px] flex flex-col items-center justify-center">
-                <h4>
+            <div className="mb-8 mt-[65px] flex flex-col items-center justify-center">
+                <h4 className="text-4xl font-bold text-gray-800">
                     {authorizedToEdit ? (
                         <EditableField id="name" value={circle.name ?? ""} circleId={circle._id!} isUser={isUser} />
                     ) : (
@@ -52,7 +54,7 @@ export default function HomeContent({ circle, isDefaultCircle, isUser, authorize
                     )}
                 </h4>
                 {circle.description && (
-                    <div className="pl-4 pr-4">
+                    <div className="pl-4 pr-4 text-center text-gray-600">
                         {authorizedToEdit ? (
                             <EditableField
                                 id="description"
@@ -67,7 +69,7 @@ export default function HomeContent({ circle, isDefaultCircle, isUser, authorize
                     </div>
                 )}
                 {memberCount > 0 && (
-                    <div className="flex flex-row items-center justify-center pt-4">
+                    <div className="flex flex-row items-center justify-center pt-4 text-gray-600">
                         <FaUsers />
                         <p className="m-0 ml-2">
                             {memberCount}{" "}
@@ -75,6 +77,10 @@ export default function HomeContent({ circle, isDefaultCircle, isUser, authorize
                         </p>
                     </div>
                 )}
+                {/* <div className="flex flex-row gap-1 pt-4">
+                    <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />
+                    <JoinButton circle={circle} />
+                </div> */}
             </div>
         </div>
     );

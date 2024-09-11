@@ -25,6 +25,7 @@ export const FeedComponent = ({ circle, posts, page, subpage, feed }: FeedCompon
                     ? `flex h-full min-h-screen flex-1 items-start justify-center bg-white ${isCompact ? "" : "border-l border-r border-gray-200"}`
                     : `flex h-full min-h-screen flex-1 items-start justify-center`
             }
+            // `flex h-full min-h-screen flex-1 items-start justify-center bg-white ${isCompact ? "" : "mt-3 overflow-hidden rounded-t-[15px]"}`
             style={{
                 flexGrow: isCompact ? "1" : "3",
                 maxWidth: isCompact ? "none" : "700px",
