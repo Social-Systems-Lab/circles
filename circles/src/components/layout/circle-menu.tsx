@@ -56,7 +56,7 @@ export default function CircleMenu({
                         <Image
                             src={circle?.picture?.url ?? "/images/default-picture.png"}
                             alt="Logo"
-                            className="h-[40px] w-[40px] overflow-hidden rounded-full object-cover"
+                            className="h-[40px] w-[40px] overflow-hidden rounded-full object-cover shadow"
                             width={40}
                             height={40}
                         />
@@ -74,12 +74,12 @@ export default function CircleMenu({
                                     <Image
                                         src={user.picture?.url ?? "/images/default-user-picture.png"}
                                         alt="Logo"
-                                        className="h-[40px] w-[40px] overflow-hidden rounded-full object-cover"
+                                        className="h-[40px] w-[40px] overflow-hidden rounded-full object-cover shadow"
                                         width={40}
                                         height={40}
                                     />
                                 </div>
-                                <div className="pl-2">{user.name}</div>
+                                <div className="pl-3">{user.name}</div>
                             </div>
                         )}
 
@@ -93,12 +93,12 @@ export default function CircleMenu({
                                     <Image
                                         src={circleItem?.picture?.url ?? "/images/default-picture.png"}
                                         alt="Logo"
-                                        className="h-[40px] w-[40px] overflow-hidden rounded-full object-cover"
+                                        className="h-[40px] w-[40px] overflow-hidden rounded-full object-cover shadow"
                                         width={40}
                                         height={40}
                                     />
                                 </div>
-                                <div className="pl-2">{circleItem.name}</div>
+                                <div className="pl-3">{circleItem.name}</div>
                             </div>
                         ))}
                     </div>

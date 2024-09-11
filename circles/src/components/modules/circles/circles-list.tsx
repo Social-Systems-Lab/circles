@@ -130,7 +130,7 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                     variants={containerVariants}
                     initial="hidden"
                     animate="visible"
-                    className="grid gap-4"
+                    className="grid gap-6"
                     style={{
                         gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
                         gridAutoRows: "1fr",
