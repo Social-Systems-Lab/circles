@@ -22,7 +22,6 @@ import { useDropzone } from "react-dropzone";
 import { createPostAction } from "./actions";
 import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "@/components/utils/use-is-compact";
-import { whiteUi } from "@/lib/data/constants";
 
 type CreateNewPostProps = {
     circle: Circle;
@@ -132,11 +131,7 @@ export function CreateNewPost({ circle, feed }: CreateNewPostProps) {
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
                 <div
-                    className={
-                        whiteUi
-                            ? "flex flex-1 cursor-pointer items-center space-x-4 border-b border-gray-200 bg-white p-4"
-                            : `mb-6 flex flex-1 cursor-pointer items-center space-x-4  ${isCompact ? "" : "rounded-[15px] border-0 shadow-lg"}  bg-white p-4`
-                    }
+                    className={`mb-6 flex flex-1 cursor-pointer items-center space-x-4  ${isCompact ? "" : "rounded-[15px] border-0 shadow-lg"}  bg-white p-4`}
                 >
                     <UserPicture name={user?.name} picture={user?.picture?.url} size="40px" />
                     <div className="flex-grow">

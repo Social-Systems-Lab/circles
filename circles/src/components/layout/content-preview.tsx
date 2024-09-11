@@ -50,8 +50,8 @@ export const ContentPreview: React.FC = () => {
                         animate={{ x: 0 }}
                         exit={{ x: "110%" }}
                         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                        className={`fixed bottom-4 right-4 z-40 w-full overflow-hidden bg-white shadow-lg md:w-[400px] md:rounded-[15px] ${
-                            isMobile ? "top-0" : "top-[64px]"
+                        className={`fixed bottom-4 z-40 w-full overflow-hidden bg-white shadow-lg md:w-[400px] md:rounded-[15px] ${
+                            isMobile ? "right-0 top-0" : "right-4 top-[64px]"
                         }`}
                     >
                         <div className="relative h-[270px] w-full">
@@ -128,7 +128,7 @@ export const ContentPreview: React.FC = () => {
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="absolute right-2 top-[48px] rounded-full bg-gray-100 md:top-2"
+                            className={`absolute ${isMobile ? "right-6 top-[68px]" : "right-2 top-[48px]"} rounded-full bg-gray-100 md:top-2`}
                             onClick={closePreview}
                         >
                             <X className="h-4 w-4" />

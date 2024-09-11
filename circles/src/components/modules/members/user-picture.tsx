@@ -4,9 +4,10 @@ type UserPictureProps = {
     name?: string;
     picture?: string;
     size?: string;
+    onClick?: () => void;
 };
 
-export const UserPicture = ({ name, picture, size }: UserPictureProps) => {
+export const UserPicture = ({ name, picture, size, onClick }: UserPictureProps) => {
     var getInitials = () => {
         if (!name) return "";
         var names = name.split(" ");
@@ -19,7 +20,11 @@ export const UserPicture = ({ name, picture, size }: UserPictureProps) => {
     };
 
     return (
-        <Avatar style={size ? { width: size, height: size } : {}}>
+        <Avatar
+            style={size ? { width: size, height: size } : {}}
+            onClick={onClick}
+            className={onClick ? "cursor-pointer" : ""}
+        >
             <AvatarImage src={picture ?? "/images/default-user-picture.png"} />
             <AvatarFallback>{getInitials()}</AvatarFallback>
         </Avatar>

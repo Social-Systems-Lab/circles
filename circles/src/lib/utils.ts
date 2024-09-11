@@ -282,3 +282,67 @@ export function safeModifyMemberUserGroups(
 
     return resultingUserGroupsArray;
 }
+
+export const timeSince = (date: Date, timeUntil: boolean, useShort = false) => {
+    if (typeof date !== "object") {
+        date = new Date(date);
+    }
+
+    let seconds = 0;
+    if (timeUntil) {
+        seconds = Math.floor((date.valueOf() - new Date().valueOf()) / 1000);
+    } else {
+        seconds = Math.floor((new Date().valueOf() - date.valueOf()) / 1000);
+    }
+    var intervalType;
+
+    var interval = Math.floor(seconds / 31536000);
+    if (interval >= 1) {
+        intervalType = interval == 1 ? (useShort ? "y" : "year") : useShort ? "y" : "years";
+    } else {
+        interval = Math.floor(seconds / 2592000);
+        if (interval >= 1) {
+            intervalType = interval == 1 ? (useShort ? "mo" : "month") : useShort ? "mo" : "months";
+        } else {
+            interval = Math.floor(seconds / 86400);
+            if (interval >= 1) {
+                intervalType = interval == 1 ? (useShort ? "d" : "day") : useShort ? "d" : "days";
+            } else {
+                interval = Math.floor(seconds / 3600);
+                if (interval >= 1) {
+                    intervalType = interval == 1 ? (useShort ? "h" : "hour") : useShort ? "h" : "hours";
+                } else {
+                    interval = Math.floor(seconds / 60);
+                    if (interval >= 1) {
+                        intervalType = interval == 1 ? (useShort ? "m" : "minute") : useShort ? "m" : "minutes";
+                    } else {
+                        interval = seconds;
+                        intervalType = interval == 1 ? (useShort ? "s" : "second") : useShort ? "s" : "seconds";
+                    }
+                }
+            }
+        }
+    }
+    if (useShort) return interval + intervalType;
+    else return interval + " " + intervalType;
+};
+
+export const getDateLong = (date: Date) => {
+    return date?.toLocaleDateString?.(undefined, { month: "long", day: "numeric" });
+};
+
+export const isToday = (date: Date) => {
+    let currentDate = new Date().setHours(0, 0, 0, 0);
+    let compareDate = new Date(date).setHours(0, 0, 0, 0);
+    return currentDate === compareDate;
+};
+
+export const getPublishTime = (createdAt: Date) => {
+    if (!createdAt) return "";
+
+    if (isToday(createdAt)) {
+        return timeSince(createdAt, false, true);
+    } else {
+        return getDateLong(createdAt);
+    }
+};

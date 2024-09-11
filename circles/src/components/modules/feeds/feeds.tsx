@@ -4,6 +4,7 @@ import { ModulePageProps } from "../dynamic-page";
 import { getFeedByHandle, getPosts } from "@/lib/data/feed";
 import { FeedComponent } from "./feed";
 import { redirect } from "next/navigation";
+import { ThirdColumn } from "./third-column";
 
 export default async function FeedsModule({ circle, page, subpage, isDefaultCircle }: ModulePageProps) {
     const feed = await getFeedByHandle(circle?._id, subpage);
@@ -24,7 +25,7 @@ export default async function FeedsModule({ circle, page, subpage, isDefaultCirc
                 subpage={subpage}
                 isDefaultCircle={isDefaultCircle}
             />
-            <div className="flex flex-1"></div>
+            <ThirdColumn />
         </>
     );
 }

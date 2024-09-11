@@ -5,7 +5,6 @@ import { useIsCompact } from "@/components/utils/use-is-compact";
 import { Circle, Feed, Page, PostDisplay } from "@/models/models";
 import { CreateNewPost } from "./create-new-post";
 import PostList from "./post-list";
-import { whiteUi } from "@/lib/data/constants";
 import CircleHeader from "../circles/circle-header";
 
 export type FeedComponentProps = {
@@ -22,11 +21,7 @@ export const FeedComponent = ({ circle, posts, page, subpage, feed, isDefaultCir
 
     return (
         <div
-            className={
-                whiteUi
-                    ? `flex h-full min-h-screen flex-1 items-start justify-center bg-white ${isCompact ? "" : "border-l border-r border-gray-200"}`
-                    : `flex h-full min-h-screen flex-1 items-start justify-center`
-            }
+            className={`flex h-full min-h-screen flex-1 items-start justify-center`}
             // `flex h-full min-h-screen flex-1 items-start justify-center bg-white ${isCompact ? "" : "mt-3 overflow-hidden rounded-t-[15px]"}`
             style={{
                 flexGrow: isCompact ? "1" : "3",
