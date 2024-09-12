@@ -3,15 +3,8 @@
 import { Circle, Content, Feed, Post, PostDisplay } from "@/models/models";
 import { UserPicture } from "../members/user-picture";
 import { Button } from "@/components/ui/button";
-import { Edit, Heart, MessageCircle, MoreVertical, Trash2, TrendingUp } from "lucide-react"; // Assuming you are using Lucide for icons
-import {
-    Carousel,
-    CarouselApi,
-    CarouselContent,
-    CarouselItem,
-    CarouselNext,
-    CarouselPrevious,
-} from "@/components/ui/carousel";
+import { Edit, Heart, MessageCircle, MoreVertical, Trash2 } from "lucide-react"; // Assuming you are using Lucide for icons
+import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import { useEffect, useState } from "react";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import Image from "next/image";
@@ -40,9 +33,15 @@ const PostItem = ({ post, circle }: PostItemProps) => {
     const [user] = useAtom(userAtom);
     const isAuthor = user && post.author._id === user?._id;
 
-    // Calculate total likes
-    const totalLikes = Object.values(post.reactions).reduce((sum, count) => sum + count, 0);
-    const totalComments = post.comments?.length || 0;
+    // State for likes
+    const initialLikes = Object.values(post.reactions).reduce((sum, count) => sum + count, 0);
+    const [likes, setLikes] = useState<number>(initialLikes);
+    const [isLiked, setIsLiked] = useState<boolean>(false);
+
+    // State for comments
+    const [comments, setComments] = useState(post.comments || []);
+    const [showAllComments, setShowAllComments] = useState(false);
+    const [newCommentContent, setNewCommentContent] = useState("");
 
     useEffect(() => {
         if (!carouselApi) return;
@@ -66,6 +65,36 @@ const PostItem = ({ post, circle }: PostItemProps) => {
     const handleEditClick = () => {};
 
     const handleDeleteClick = () => {};
+
+    const handleLikePost = () => {
+        if (isLiked) {
+            setLikes((prev) => prev - 1);
+        } else {
+            setLikes((prev) => prev + 1);
+        }
+        setIsLiked(!isLiked);
+        // Simulate backend call here
+    };
+
+    const handleAddComment = () => {
+        if (!newCommentContent.trim()) return;
+
+        const newComment = {
+            _id: "temp-id-" + Date.now(),
+            content: newCommentContent,
+            author: user,
+            likes: 0,
+            replies: [],
+            createdAt: new Date().toISOString(),
+        };
+        setComments([...comments, newComment]);
+        setNewCommentContent("");
+        // Simulate backend call
+    };
+
+    // Find the most liked comment
+    const mostLikedComment =
+        comments.length > 0 ? comments.reduce((prev, current) => (prev.likes > current.likes ? prev : current)) : null;
 
     return (
         <div className={`flex flex-col gap-4 ${isCompact ? "" : "rounded-[15px] border-0 shadow-lg"}  bg-white`}>
@@ -150,45 +179,152 @@ const PostItem = ({ post, circle }: PostItemProps) => {
             {/* Actions (like and comment) */}
             <div className="flex items-center justify-between pl-4 pr-4 text-gray-500">
                 {/* Likes Section */}
-                <div className="flex items-center gap-2">
-                    <div className="flex cursor-pointer items-center gap-1 text-gray-500">
-                        <Heart className="h-5 w-5" />
-                        {totalLikes > 0 && <span>{totalLikes}</span>}
-                    </div>
+                <div className="flex cursor-pointer items-center gap-1 text-gray-500" onClick={handleLikePost}>
+                    <Heart className={`h-5 w-5 ${isLiked ? "fill-current text-red-500" : ""}`} />
+                    {likes > 0 && <span>{likes}</span>}
                 </div>
 
                 {/* Comments Section */}
                 <div className="flex items-center gap-2 pl-4 pr-4">
-                    <div className="flex cursor-pointer items-center gap-1 text-gray-500">
+                    <div className="flex items-center gap-1 text-gray-500">
                         <MessageCircle className="h-5 w-5" />
-                        {totalComments > 0 && <span>{totalComments}</span>}
+                        {comments.length > 0 && <span>{comments.length}</span>}
                     </div>
                 </div>
             </div>
 
-            {/* Write Comment Section */}
+            {/* Comments Section */}
             <div className="flex flex-col gap-2 pb-4 pl-4 pr-4">
-                {post.comments?.map((comment, index) => (
-                    <div key={index} className="flex items-start gap-2">
-                        {/* Smaller profile picture for comments */}
-                        <UserPicture name={comment.author.name} picture={comment.author.picture.url} size="small" />
-                        <div className="flex w-auto flex-col rounded-lg bg-gray-100 p-2">
-                            <div className="text-sm font-semibold">{comment.author.name}</div>
-                            <div className="text-sm text-gray-500">{comment.content}</div>
-                        </div>
+                {/* Show "Show more comments" if more than one comment and not showing all */}
+                {!showAllComments && comments.length > 1 && (
+                    <div className="cursor-pointer text-xs text-blue-500" onClick={() => setShowAllComments(true)}>
+                        Show more comments
                     </div>
-                ))}
+                )}
+
+                {/* Display comments */}
+                {comments.length > 0 && (
+                    <>
+                        {showAllComments
+                            ? comments.map((comment) => <CommentItem key={comment._id} comment={comment} user={user} />)
+                            : mostLikedComment && (
+                                  <CommentItem key={mostLikedComment._id} comment={mostLikedComment} user={user} />
+                              )}
+                    </>
+                )}
 
                 {/* Comment input box */}
-                <div className="flex items-center gap-2">
-                    {/* No profile icon next to input */}
+                <div className="mt-2 flex items-center gap-2">
+                    <UserPicture name={user.name} picture={user.picture.url} size="small" />
                     <input
                         type="text"
+                        value={newCommentContent}
+                        onChange={(e) => setNewCommentContent(e.target.value)}
                         placeholder="Write a comment..."
                         className="flex-grow rounded-full bg-gray-100 p-2 pl-4 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
+                    <button onClick={handleAddComment} className="ml-2 text-blue-500">
+                        Post
+                    </button>
                 </div>
             </div>
+        </div>
+    );
+};
+
+// CommentItem Component
+type CommentItemProps = {
+    comment: any;
+    user: any;
+};
+
+const CommentItem = ({ comment, user }: CommentItemProps) => {
+    const [showReplies, setShowReplies] = useState(false);
+    const [replies, setReplies] = useState(comment.replies || []);
+    const [likes, setLikes] = useState(comment.likes || 0);
+    const [isLiked, setIsLiked] = useState(false);
+    const [showReplyInput, setShowReplyInput] = useState(false);
+    const [newReplyContent, setNewReplyContent] = useState("");
+
+    const handleLikeComment = () => {
+        if (isLiked) {
+            setLikes((prev) => prev - 1);
+        } else {
+            setLikes((prev) => prev + 1);
+        }
+        setIsLiked(!isLiked);
+        // Simulate backend call
+    };
+
+    const handleReplyClick = () => {
+        setShowReplyInput(!showReplyInput);
+    };
+
+    const handleAddReply = () => {
+        if (!newReplyContent.trim()) return;
+
+        const newReply = {
+            _id: "temp-id-" + Date.now(),
+            content: newReplyContent,
+            author: user,
+            likes: 0,
+            replies: [],
+            createdAt: new Date().toISOString(),
+        };
+        setReplies([...replies, newReply]);
+        setNewReplyContent("");
+        setShowReplyInput(false);
+        // Simulate backend call
+    };
+
+    return (
+        <div className="ml-4 flex flex-col">
+            {/* Comment Content */}
+            <div className="flex items-start gap-2">
+                <UserPicture name={comment.author.name} picture={comment.author.picture.url} size="small" />
+                <div className="flex flex-col">
+                    <div className="rounded-lg bg-gray-100 p-2">
+                        <div className="text-sm font-semibold">{comment.author.name}</div>
+                        <div className="text-sm text-gray-500">{comment.content}</div>
+                    </div>
+                    <div className="mt-1 flex items-center gap-4 text-xs text-gray-500">
+                        <span onClick={handleLikeComment} className="cursor-pointer">
+                            {isLiked ? "Unlike" : "Like"} {likes > 0 && `(${likes})`}
+                        </span>
+                        <span onClick={handleReplyClick} className="cursor-pointer">
+                            Reply
+                        </span>
+                    </div>
+                    {showReplyInput && (
+                        <div className="mt-2 flex items-center">
+                            <UserPicture name={user.name} picture={user.picture.url} size="small" />
+                            <input
+                                type="text"
+                                value={newReplyContent}
+                                onChange={(e) => setNewReplyContent(e.target.value)}
+                                placeholder="Write a reply..."
+                                className="flex-grow rounded-full bg-gray-100 p-2 pl-4 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <button onClick={handleAddReply} className="ml-2 text-blue-500">
+                                Post
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Replies */}
+            {replies.length > 0 && (
+                <div className="ml-8 mt-2">
+                    {!showReplies ? (
+                        <div className="cursor-pointer text-xs text-blue-500" onClick={() => setShowReplies(true)}>
+                            Show {replies.length} {replies.length > 1 ? "replies" : "reply"}
+                        </div>
+                    ) : (
+                        replies.map((reply) => <CommentItem key={reply._id} comment={reply} user={user} />)
+                    )}
+                </div>
+            )}
         </div>
     );
 };
