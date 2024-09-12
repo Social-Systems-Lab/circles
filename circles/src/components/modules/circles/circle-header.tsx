@@ -33,7 +33,8 @@ export const CircleHeader: React.FC<CircleHeaderProps> = ({ circle, page, subpag
     }
 
     return (
-        <div className="mx-auto mb-4 flex max-w-7xl justify-center px-4 sm:px-6 lg:px-8">
+        <div className="mb-4 flex justify-center">
+            {/* mx-auto max-w-7xl justify-center px-4 sm:px-6 lg:px-8 */}
             <div className="flex items-center justify-center space-x-2 rounded-full bg-white px-4 py-2 shadow-sm">
                 <Link href={getPath()} className="flex flex-row items-center justify-center gap-2">
                     {circle?.picture && (

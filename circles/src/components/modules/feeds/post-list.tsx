@@ -3,7 +3,7 @@
 import { Circle, Content, Feed, Post, PostDisplay } from "@/models/models";
 import { UserPicture } from "../members/user-picture";
 import { Button } from "@/components/ui/button";
-import { Heart, MessageCircle } from "lucide-react"; // Assuming you are using Lucide for icons
+import { Edit, Heart, MessageCircle, MoreVertical, Trash2, TrendingUp } from "lucide-react"; // Assuming you are using Lucide for icons
 import {
     Carousel,
     CarouselApi,
@@ -16,8 +16,14 @@ import { useEffect, useState } from "react";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import Image from "next/image";
 import { getPublishTime } from "@/lib/utils";
-import { contentPreviewAtom } from "@/lib/data/atoms";
+import { contentPreviewAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type PostItemProps = {
     post: PostDisplay;
@@ -31,6 +37,8 @@ const PostItem = ({ post, circle }: PostItemProps) => {
     const isCompact = useIsCompact();
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
+    const [user] = useAtom(userAtom);
+    const isAuthor = user && post.author._id === user?._id;
 
     // Calculate total likes
     const totalLikes = Object.values(post.reactions).reduce((sum, count) => sum + count, 0);
@@ -55,20 +63,47 @@ const PostItem = ({ post, circle }: PostItemProps) => {
         setContentPreview((x) => (x === content ? undefined : content));
     };
 
+    const handleEditClick = () => {};
+
+    const handleDeleteClick = () => {};
+
     return (
         <div className={`flex flex-col gap-4 ${isCompact ? "" : "rounded-[15px] border-0 shadow-lg"}  bg-white`}>
             {/* Header with user information */}
-            <div className="flex items-center gap-4 pl-4 pr-4 pt-4">
-                <UserPicture
-                    name={post.author?.name}
-                    picture={post.author?.picture?.url}
-                    onClick={() => handleContentClick(post.author)}
-                />
-                <div className="flex flex-col">
-                    <span className="cursor-pointer font-semibold" onClick={() => handleContentClick(post.author)}>
-                        {post.author?.name}
-                    </span>
-                    <span className="text-sm text-gray-500">{formattedDate}</span>
+            <div className="flex items-center justify-between pl-4 pr-4 pt-4">
+                <div className="flex items-center gap-4">
+                    <UserPicture
+                        name={post.author?.name}
+                        picture={post.author?.picture?.url}
+                        onClick={() => handleContentClick(post.author)}
+                    />
+                    <div className="flex flex-col">
+                        <span className="cursor-pointer font-semibold" onClick={() => handleContentClick(post.author)}>
+                            {post.author?.name}
+                        </span>
+                        <span className="text-sm text-gray-500">{formattedDate}</span>
+                    </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                    {isAuthor && (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="rounded-full">
+                                    <MoreVertical className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={handleEditClick}>
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    <span>Edit</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={handleDeleteClick}>
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    <span>Delete</span>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    )}
                 </div>
             </div>
 
