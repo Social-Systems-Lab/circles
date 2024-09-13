@@ -26,7 +26,6 @@ export async function middleware(request: NextRequest) {
     const urlSegments = request.nextUrl.pathname.split("/").filter(Boolean);
     let circleHandle = "";
     let pageHandle = "";
-    let isUser = false;
     if (urlSegments.length === 0) {
         // route: /
         pageHandle = "";
@@ -42,20 +41,6 @@ export async function middleware(request: NextRequest) {
             // route: /circles/<circle-handle>/<page-handle>
             pageHandle = urlSegments[2];
         }
-    } else if (urlSegments[0] === "users") {
-        circleHandle = urlSegments[1];
-        if (urlSegments.length === 1) {
-            // route: /users
-            pageHandle = "users";
-        } else if (urlSegments.length === 2) {
-            // route: /users/<user-handle>
-            pageHandle = "";
-            isUser = true;
-        } else if (urlSegments.length >= 3) {
-            // route: /users/<user-handle>/<page-handle>
-            pageHandle = urlSegments[2];
-            isUser = true;
-        }
     } else {
         // route: /<page-handle>
         pageHandle = urlSegments[0];
@@ -65,7 +50,7 @@ export async function middleware(request: NextRequest) {
     try {
         const response = await fetch(`http://${host}:${port}/api/access`, {
             method: "POST",
-            body: JSON.stringify({ userDid, circleHandle, pageHandle, isUser }),
+            body: JSON.stringify({ userDid, circleHandle, pageHandle }),
             headers: {
                 "Content-Type": "application/json",
             },

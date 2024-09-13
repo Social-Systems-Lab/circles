@@ -1,14 +1,14 @@
 // user creation and management
 
-import { AccountType, Membership, RegistryInfo, User, UserPrivate } from "@/models/models";
-import { Members, Users } from "./db";
+import { AccountType, Circle, Membership, RegistryInfo, UserPrivate } from "@/models/models";
+import { Circles, Members } from "./db";
 import { ObjectId } from "mongodb";
 import { signRegisterUserChallenge } from "../auth/auth";
 import { getUserPendingMembershipRequests } from "./membership-requests";
 import { defaultPagesForUser, defaultUserGroupsForUser, getDefaultAccessRulesForUser } from "./constants";
 
-export const getUser = async (userDid: string): Promise<User> => {
-    let user = await Users.findOne(
+export const getUser = async (userDid: string): Promise<Circle> => {
+    let user = await Circles.findOne(
         { did: userDid },
         { projection: { did: 1, type: 1, handle: 1, name: 1, picture: 1, cover: 1 } },
     );
@@ -18,16 +18,16 @@ export const getUser = async (userDid: string): Promise<User> => {
     return user;
 };
 
-export const getUserById = async (id: string): Promise<User> => {
-    let user = (await Users.findOne({ _id: new ObjectId(id) })) as User;
+export const getUserById = async (id: string): Promise<Circle> => {
+    let user = (await Circles.findOne({ _id: new ObjectId(id) })) as Circle;
     if (user?._id) {
         user._id = user._id.toString();
     }
     return user;
 };
 
-export const createNewUser = (did: string, name: string, handle: string, type: AccountType, email: string): User => {
-    let user: User = {
+export const createNewUser = (did: string, name: string, handle: string, type: AccountType, email: string): Circle => {
+    let user: Circle = {
         did,
         name,
         handle,
@@ -46,8 +46,8 @@ export const createNewUser = (did: string, name: string, handle: string, type: A
     return user;
 };
 
-export const getUserByHandle = async (handle: string): Promise<User> => {
-    let user = (await Users.findOne({ handle: handle })) as User;
+export const getUserByHandle = async (handle: string): Promise<Circle> => {
+    let user = (await Circles.findOne({ handle: handle })) as Circle;
     if (user?._id) {
         user._id = user._id.toString();
     }
@@ -56,7 +56,7 @@ export const getUserByHandle = async (handle: string): Promise<User> => {
 
 // gets the user including private information that should only be returned to the user
 export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
-    let user = (await Users.findOne({ did: userDid })) as UserPrivate;
+    let user = (await Circles.findOne({ did: userDid })) as UserPrivate;
     if (!user) {
         throw new Error("User not found");
     }
@@ -97,42 +97,6 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
     ]).toArray();
     user.memberships = memberships as Membership[];
 
-    // add user friend memberships
-    let friends = await Members.aggregate([
-        { $match: { userDid: userDid } },
-        {
-            $lookup: {
-                from: "users",
-                let: { circle_id: { $toObjectId: "$circleId" } },
-                pipeline: [
-                    { $match: { $expr: { $eq: ["$_id", "$$circle_id"] } } },
-                    { $project: { name: 1, handle: 1, description: 1, picture: 1, cover: 1, circleType: 1 } },
-                ],
-                as: "circle",
-            },
-        },
-        { $unwind: "$circle" },
-        {
-            $project: {
-                _id: 0,
-                circleId: 1,
-                userGroups: 1,
-                joinedAt: 1,
-                circle: {
-                    _id: { $toString: "$circle._id" },
-                    name: "$circle.name",
-                    handle: "$circle.handle",
-                    description: "$circle.description",
-                    picture: "$circle.picture",
-                    cover: "$circle.cover",
-                    circleType: "$circle.circleType",
-                },
-            },
-        },
-    ]).toArray();
-
-    user.memberships = user.memberships.concat(friends as Membership[]);
-
     // add pending membership requests
     let pendingRequests = await getUserPendingMembershipRequests(userDid);
     user.pendingRequests = pendingRequests;
@@ -142,7 +106,7 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
 // update user
 export const updateUser = async (user: Partial<UserPrivate>): Promise<void> => {
     let { _id, ...userWithoutId } = user;
-    let result = await Users.updateOne({ _id: new ObjectId(_id) }, { $set: userWithoutId });
+    let result = await Circles.updateOne({ _id: new ObjectId(_id) }, { $set: userWithoutId });
     if (result.matchedCount === 0) {
         throw new Error("User not found");
     }

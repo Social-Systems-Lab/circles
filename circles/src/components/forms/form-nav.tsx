@@ -28,7 +28,7 @@ export const FormNav: React.FC<FormNavProps> = ({ items, circle, isDefaultCircle
         if (isDefaultCircle) {
             return `/settings${item.handle ? `/${item.handle}` : ""}`;
         } else {
-            return `/${circle.circleType === "user" ? "users" : "circles"}/${circle.handle}/settings${item.handle ? `/${item.handle}` : ""}`;
+            return `/circles/${circle.handle}/settings${item.handle ? `/${item.handle}` : ""}`;
         }
     };
 

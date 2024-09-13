@@ -66,7 +66,7 @@ const ProfileMenuBar = () => {
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="rounded-[15px]">
-                        <Link href={`/users/${user?.handle}`}>
+                        <Link href={`/circles/${user?.handle}`}>
                             <div className="flex w-[160px] flex-col items-center justify-center pt-4">
                                 <UserPicture name={user?.name} picture={user?.picture?.url} size="108px" />
                                 <span className="text-md pb-4 pt-4 font-bold">{user?.name}</span>

@@ -22,7 +22,7 @@ export const getAllMembershipRequests = async (
         { $match: { circleId: objectId.toString() } },
         {
             $lookup: {
-                from: "users",
+                from: "circles",
                 localField: "userDid",
                 foreignField: "did",
                 as: "userDetails",
@@ -60,7 +60,7 @@ export const getUserPendingMembershipRequests = async (userDid: string): Promise
         { $match: { userDid: userDid } },
         {
             $lookup: {
-                from: "users",
+                from: "circles",
                 localField: "userDid",
                 foreignField: "did",
                 as: "userDetails",

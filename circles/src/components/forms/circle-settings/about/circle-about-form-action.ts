@@ -8,16 +8,11 @@ import { updateUser } from "@/lib/data/user";
 
 export const circleAboutFormAction: FormAction = {
     id: "circle-about-form",
-    onSubmit: async (
-        values: Record<string, any>,
-        page?: Page,
-        subpage?: string,
-        isUser?: boolean,
-    ): Promise<FormSubmitResponse> => {
+    onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
         try {
             // console.log("Saving circle settings with values", values);
 
-            let circle: Circle = {
+            let circle: Partial<Circle> = {
                 _id: values._id,
                 name: values.name,
                 handle: values.handle,
@@ -28,7 +23,7 @@ export const circleAboutFormAction: FormAction = {
 
             // check if user is authorized to edit circle settings
             const userDid = await getAuthenticatedUserDid();
-            let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit, isUser);
+            let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
             if (!authorized) {
                 return { success: false, message: "You are not authorized to edit circle settings" };
             }
@@ -45,11 +40,7 @@ export const circleAboutFormAction: FormAction = {
                 revalidatePath(circle.cover.url);
             }
 
-            if (isUser) {
-                await updateUser(circle);
-            } else {
-                await updateCircle(circle);
-            }
+            await updateCircle(circle);
 
             // clear page cache so pages update
             let circlePath = await getCirclePath(circle);

@@ -6,10 +6,9 @@ import { getDefaultCircle } from "@/lib/data/circle";
 type LeftBarProps = {
     circle: Circle;
     isDefaultCircle: boolean;
-    isUser?: boolean;
 };
 
-export default async function NavBar({ circle, isDefaultCircle, isUser }: LeftBarProps) {
+export default async function NavBar({ circle, isDefaultCircle }: LeftBarProps) {
     let defaultCircle = await getDefaultCircle();
 
     return (
@@ -22,13 +21,8 @@ export default async function NavBar({ circle, isDefaultCircle, isUser }: LeftBa
                 // }}
             >
                 <div className={`flex h-[72px] flex-row items-center justify-center md:h-auto md:w-[72px] md:flex-col`}>
-                    <CircleMenu
-                        circle={circle}
-                        defaultCircle={defaultCircle}
-                        isDefaultCircle={isDefaultCircle}
-                        isUser={isUser}
-                    />
-                    <NavBarItems circle={circle} isDefaultCircle={isDefaultCircle} isUser={isUser} />
+                    <CircleMenu circle={circle} defaultCircle={defaultCircle} isDefaultCircle={isDefaultCircle} />
+                    <NavBarItems circle={circle} isDefaultCircle={isDefaultCircle} />
                 </div>
             </div>
         </>

@@ -28,7 +28,7 @@ export const FeedsNav: React.FC<FeedsNavProps> = ({ items, circle, isDefaultCirc
         if (isDefaultCircle) {
             return `/feeds${item.handle && item.handle !== "default" ? `/${item.handle}` : ""}`;
         } else {
-            return `/${circle.circleType === "user" ? "users" : "circles"}/${circle.handle}/feeds${item.handle && item.handle !== "default" ? `/${item.handle}` : ""}`;
+            return `/circles/${circle.handle}/feeds${item.handle && item.handle !== "default" ? `/${item.handle}` : ""}`;
         }
     };
 

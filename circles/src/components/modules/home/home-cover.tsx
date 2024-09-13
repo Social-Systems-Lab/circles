@@ -12,11 +12,10 @@ import { useIsMobile } from "@/components/utils/use-is-mobile";
 type HomeContentProps = {
     circle: Circle;
     isDefaultCircle: boolean;
-    isUser?: boolean;
     authorizedToEdit: boolean;
 };
 
-export default function HomeCover({ circle, isDefaultCircle, isUser, authorizedToEdit }: HomeContentProps) {
+export default function HomeCover({ circle, isDefaultCircle, authorizedToEdit }: HomeContentProps) {
     const isMobile = useIsMobile();
     return (
         <>
@@ -36,7 +35,6 @@ export default function HomeCover({ circle, isDefaultCircle, isUser, authorizedT
                             className="object-cover"
                             fill
                             circleId={circle._id!}
-                            isUser={isUser}
                         />
                     ) : (
                         <Image

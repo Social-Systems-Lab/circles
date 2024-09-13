@@ -5,7 +5,7 @@ import { UserPicture } from "../members/user-picture";
 import { Button } from "@/components/ui/button";
 import { Edit, Heart, Loader2, MessageCircle, MoreVertical, Trash2 } from "lucide-react";
 import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel";
-import { useEffect, useState, useTransition } from "react";
+import { KeyboardEvent, useEffect, useState, useTransition } from "react";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { getPublishTime } from "@/lib/utils";
@@ -152,14 +152,10 @@ const PostItem = ({ post, circle }: PostItemProps) => {
 
         startTransition(async () => {
             try {
-                const result = await createCommentAction({
-                    postId: post._id,
-                    parentCommentId: null,
-                    content: newCommentContent,
-                });
+                const result = await createCommentAction(post._id, null, newCommentContent);
                 if (result.success && result.comment) {
                     const newComment = result.comment as CommentDisplay;
-                    newComment.author = user as MemberDisplay;
+                    newComment.author = user as Circle;
 
                     setComments([...comments, newComment]);
                     setNewCommentContent("");
@@ -171,7 +167,7 @@ const PostItem = ({ post, circle }: PostItemProps) => {
         });
     };
 
-    const handleCommentKeyDown = (e) => {
+    const handleCommentKeyDown = (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             handleAddComment();
@@ -460,11 +456,7 @@ const CommentItem = ({ comment, user, postId, depth = 0 }: CommentItemProps) => 
 
         startTransition(async () => {
             try {
-                const result = await createCommentAction(
-                    postId: postId,
-                    parentCommentId: comment._id ?? null,
-                    content: newReplyContent,
-                );
+                const result = await createCommentAction(postId, comment._id ?? null, newReplyContent);
                 if (result.success && result.comment) {
                     const newReply = result.comment as CommentDisplay;
                     setReplies([...replies, newReply]);
@@ -478,7 +470,7 @@ const CommentItem = ({ comment, user, postId, depth = 0 }: CommentItemProps) => 
         });
     };
 
-    const handleReplyKeyDown = (e) => {
+    const handleReplyKeyDown = (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             handleAddReply();
@@ -497,7 +489,7 @@ const CommentItem = ({ comment, user, postId, depth = 0 }: CommentItemProps) => 
         // Implement delete comment
     };
 
-    const handleEditKeyDown = (e) => {
+    const handleEditKeyDown = (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             // Save edited comment

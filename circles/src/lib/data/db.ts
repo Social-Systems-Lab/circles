@@ -1,15 +1,5 @@
 import { MongoClient, MongoClientOptions, Db, Collection } from "mongodb";
-import {
-    ServerSettings,
-    User,
-    Circle,
-    Member,
-    MembershipRequest,
-    Feed,
-    Post,
-    Reaction,
-    Comment,
-} from "@/models/models";
+import { ServerSettings, Circle, Member, MembershipRequest, Feed, Post, Reaction, Comment } from "@/models/models";
 
 const MONGO_HOST = process.env.MONGO_HOST || "127.0.0.1";
 const MONGO_PORT = parseInt(process.env.MONGO_PORT || "27017");
@@ -22,7 +12,6 @@ const options: MongoClientOptions = {};
 // Initialize client and collections conditionally
 let client: MongoClient;
 let db: Db;
-let Users: Collection<User>;
 let Circles: Collection<Circle>;
 let ServerSettingsCollection: Collection<ServerSettings>;
 let Members: Collection<Member>;
@@ -37,7 +26,6 @@ if (process.env.IS_BUILD !== "true") {
     client = new MongoClient(MONGO_CONNECTION_STRING, options);
     db = client.db("circles");
 
-    Users = db.collection<User>("users");
     Circles = db.collection<Circle>("circles");
     ServerSettingsCollection = db.collection<ServerSettings>("serverSettings");
     Members = db.collection<Member>("members");
@@ -51,7 +39,6 @@ if (process.env.IS_BUILD !== "true") {
 export {
     client,
     db,
-    Users,
     Circles,
     ServerSettingsCollection,
     Members,

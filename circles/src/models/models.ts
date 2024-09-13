@@ -88,7 +88,7 @@ export type Membership = {
     questionnaireAnswers?: Record<string, string>;
 };
 
-export interface UserPrivate extends User {
+export interface UserPrivate extends Circle {
     memberships: Membership[];
     friends: Membership[];
     pendingRequests: MembershipRequest[];
@@ -191,7 +191,7 @@ export const postSchema = z.object({
 export type Post = z.infer<typeof postSchema>;
 
 export interface PostDisplay extends Post {
-    author: MemberDisplay;
+    author: Circle;
     highlightedComment?: CommentDisplay;
 }
 
@@ -208,7 +208,7 @@ export const commentSchema = z.object({
 export type Comment = z.infer<typeof commentSchema>;
 
 export interface CommentDisplay extends Comment {
-    author: MemberDisplay;
+    author: Circle;
 }
 
 export const reactionSchema = z.object({
@@ -247,7 +247,10 @@ export type Question = z.infer<typeof questionSchema>;
 
 export const circleSchema = z.object({
     _id: z.any().optional(),
+    did: didSchema.optional(),
     name: z.string().default("Circles").optional(),
+    type: accountTypeSchema.default("user").optional(),
+    email: z.string().email().optional(),
     handle: handleSchema.optional(),
     picture: fileInfoSchema.optional(),
     cover: fileInfoSchema.optional(),
@@ -268,32 +271,6 @@ export const circleSchema = z.object({
 });
 
 export type Circle = z.infer<typeof circleSchema>;
-
-export const userSchema = z.object({
-    _id: z.any().optional(),
-    did: didSchema,
-    type: accountTypeSchema.default("user"),
-    name: z.string().default("Anonymous User"),
-    email: z.string().email(),
-    handle: handleSchema,
-    picture: fileInfoSchema.optional(),
-    cover: fileInfoSchema.optional(),
-    activeRegistryInfo: registryInfoSchema.optional(),
-    circleType: circleTypeSchema.optional(),
-
-    description: z.string().optional(),
-    isPublic: z.boolean().optional(),
-    userGroups: z.array(userGroupSchema).default([]).optional(),
-    pages: z.array(pageSchema).default([]).optional(),
-    accessRules: accessRulesSchema.optional(),
-    members: z.number().default(0).optional(),
-    questionnaire: z.array(questionSchema).default([]).optional(),
-    interests: z.array(z.string()).optional(),
-    offers_needs: z.array(z.string()).optional(),
-    location: locationSchema.optional(),
-});
-
-export type User = z.infer<typeof userSchema>;
 
 export const serverSettingsSchema = z.object({
     _id: z.any().optional(),
@@ -393,7 +370,7 @@ export type AddedMessages = {
 
 export type AuthData = {
     type: "auth-data";
-    user: User;
+    user: Circle;
     token: string;
 };
 
@@ -513,12 +490,7 @@ export type FormSubmitResponse = {
 
 export type FormAction = {
     id: string;
-    onSubmit: (
-        values: Record<string, any>,
-        page?: Page,
-        subpage?: string,
-        isUser?: boolean,
-    ) => Promise<FormSubmitResponse>;
+    onSubmit: (values: Record<string, any>, page?: Page, subpage?: string) => Promise<FormSubmitResponse>;
 };
 
 export type FormActionHandler = {
@@ -531,7 +503,7 @@ export type FormActionHandler = {
 };
 
 export type FormTools = {
-    user?: User;
+    user?: Circle;
     setUser: (user: UserPrivate) => void;
     authenticated?: boolean;
     setAuthenticated: (authenticated: boolean) => void;

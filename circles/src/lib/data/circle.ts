@@ -27,7 +27,7 @@ export const getDefaultCircle = async (inServerConfig: ServerSettings | null = n
 };
 
 export const getCircles = async (parentCircleId: string): Promise<Circle[]> => {
-    let circles = await Circles.find({ parentCircleId: parentCircleId }).toArray();
+    let circles = await Circles.find({ parentCircleId: parentCircleId, circleType: "circle" }).toArray();
     circles.forEach((circle: Circle) => {
         if (circle._id) {
             circle._id = circle._id.toString();
@@ -93,7 +93,7 @@ export const getCircleById = async (id: string): Promise<Circle> => {
     return circle;
 };
 
-export const updateCircle = async (circle: Circle): Promise<void> => {
+export const updateCircle = async (circle: Partial<Circle>): Promise<void> => {
     let { _id, ...circleWithoutId } = circle;
     let result = await Circles.updateOne({ _id: new ObjectId(_id) }, { $set: circleWithoutId });
     if (result.matchedCount === 0) {
@@ -101,10 +101,10 @@ export const updateCircle = async (circle: Circle): Promise<void> => {
     }
 };
 
-export const getCirclePath = async (circle: Circle): Promise<string> => {
+export const getCirclePath = async (circle: Partial<Circle>): Promise<string> => {
     let serverConfig = await getServerSettings();
     if (circle._id === serverConfig.defaultCircleId) {
         return "/";
     }
-    return `/${circle.circleType === "user" ? "users" : "circles"}/${circle.handle}/`;
+    return `/circles/${circle.handle}/`;
 };

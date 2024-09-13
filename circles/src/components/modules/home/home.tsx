@@ -8,30 +8,19 @@ import HomeContent from "./home-content";
 type HomeModuleProps = {
     circle: Circle;
     isDefaultCircle: boolean;
-    isUser?: boolean;
 };
 
-export default async function HomeModule({ circle, isDefaultCircle, isUser }: HomeModuleProps) {
+export default async function HomeModule({ circle, isDefaultCircle }: HomeModuleProps) {
     let authorizedToEdit = false;
     try {
         const userDid = await getAuthenticatedUserDid();
-        authorizedToEdit = await isAuthorized(userDid, circle._id ?? "", features.settings_edit, isUser);
+        authorizedToEdit = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
     } catch (error) {}
 
     return (
         <HomeModuleWrapper circle={circle} isDefaultCircle={isDefaultCircle}>
-            <HomeCover
-                circle={circle}
-                isDefaultCircle={isDefaultCircle}
-                isUser={isUser}
-                authorizedToEdit={authorizedToEdit}
-            />
-            <HomeContent
-                circle={circle}
-                isDefaultCircle={isDefaultCircle}
-                isUser={isUser}
-                authorizedToEdit={authorizedToEdit}
-            />
+            <HomeCover circle={circle} isDefaultCircle={isDefaultCircle} authorizedToEdit={authorizedToEdit} />
+            <HomeContent circle={circle} isDefaultCircle={isDefaultCircle} authorizedToEdit={authorizedToEdit} />
         </HomeModuleWrapper>
     );
 }

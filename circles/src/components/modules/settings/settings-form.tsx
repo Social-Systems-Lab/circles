@@ -2,18 +2,19 @@
 
 import DynamicForm from "@/components/forms/dynamic-form";
 import { useIsCompact } from "@/components/utils/use-is-compact";
-import { Page } from "@/models/models";
+import { Circle, Page } from "@/models/models";
 
 export type SettingsFormProps = {
     page: Page;
     initialFormData: any;
     formSchemaId: string;
     subpage?: string;
-    isUser?: boolean;
+    circle?: Circle;
 };
 
-export const SettingsForm = ({ formSchemaId, page, subpage, initialFormData, isUser }: SettingsFormProps) => {
+export const SettingsForm = ({ formSchemaId, page, subpage, initialFormData, circle }: SettingsFormProps) => {
     const isCompact = useIsCompact();
+    const isUser = circle?.circleType === "user";
 
     return (
         <div

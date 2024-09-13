@@ -3,8 +3,8 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import { Circles, Members, Users } from "../data/db";
-import { AccountType, Feature, User } from "@/models/models";
+import { Circles, Members } from "../data/db";
+import { AccountType, Circle, Feature } from "@/models/models";
 import { ObjectId } from "mongodb";
 import { maxAccessLevel } from "../data/constants";
 import { cookies } from "next/headers";
@@ -29,19 +29,19 @@ export const createUser = async (
     type: AccountType,
     email: string,
     password: string,
-): Promise<User> => {
+): Promise<Circle> => {
     if (!name || !email || !password || !handle) {
         throw new Error("Missing required fields");
     }
 
     // check if email is already in use
-    let existingUser = await Users.findOne({ email: email });
+    let existingUser = await Circles.findOne({ email: email });
     if (existingUser) {
         throw new Error("Email already in use");
     }
 
     // check if handle is already in use
-    existingUser = await Users.findOne({ handle: handle });
+    existingUser = await Circles.findOne({ handle: handle });
     if (existingUser) {
         throw new Error("Handle already in use");
     }
@@ -86,12 +86,12 @@ export const createUser = async (
     fs.writeFileSync(path.join(accountPath, ENCRYPTED_PRIVATE_KEY_FILENAME), encryptedPrivateKey);
 
     // add user to the database
-    let user: User = createNewUser(did, name, handle, type, email);
-    let res = await Users.insertOne(user);
+    let user: Circle = createNewUser(did, name, handle, type, email);
+    let res = await Circles.insertOne(user);
     user._id = res.insertedId.toString();
 
     // add user as member of their own circle
-    await addMember(did, user._id!, ["admins", "moderators", "members"], undefined, true);
+    await addMember(did, user._id!, ["admins", "moderators", "members"], undefined);
 
     return user;
 };
@@ -201,8 +201,8 @@ export const authenticateUser = (did: string, password: string): boolean => {
     return true;
 };
 
-export const getMemberAccessLevel = async (userDid: string, circleId: string, isUser: boolean): Promise<number> => {
-    let user = await Users.findOne({ did: userDid });
+export const getMemberAccessLevel = async (userDid: string, circleId: string): Promise<number> => {
+    let user = await Circles.findOne({ did: userDid });
     if (!user) return maxAccessLevel;
 
     let membership = await Members.findOne({ userDid: userDid, circleId: circleId });
@@ -211,12 +211,7 @@ export const getMemberAccessLevel = async (userDid: string, circleId: string, is
     let userGroups = membership.userGroups;
     if (!userGroups || userGroups.length <= 0) return maxAccessLevel;
 
-    let circle = null;
-    if (isUser) {
-        circle = await Users.findOne({ _id: new ObjectId(circleId) });
-    } else {
-        circle = await Circles.findOne({ _id: new ObjectId(circleId) });
-    }
+    let circle = await Circles.findOne({ _id: new ObjectId(circleId) });
     if (!circle) return maxAccessLevel;
 
     return Math.min(
@@ -230,10 +225,9 @@ export const hasHigherAccess = async (
     memberDid: string,
     circleId: string,
     acceptSameLevel: boolean,
-    isUser: boolean,
 ): Promise<boolean> => {
-    const userAccessLevel = await getMemberAccessLevel(userDid, circleId, isUser);
-    const memberAccessLevel = await getMemberAccessLevel(memberDid, circleId, isUser);
+    const userAccessLevel = await getMemberAccessLevel(userDid, circleId);
+    const memberAccessLevel = await getMemberAccessLevel(memberDid, circleId);
 
     if (acceptSameLevel) {
         return userAccessLevel <= memberAccessLevel;
@@ -259,19 +253,9 @@ export const getAuthenticatedUserDid = async (): Promise<string> => {
 };
 
 // checks if user is authorized to use a given feature
-export const isAuthorized = async (
-    userDid: string,
-    circleId: string,
-    feature: Feature | string,
-    isUser?: boolean,
-): Promise<boolean> => {
+export const isAuthorized = async (userDid: string, circleId: string, feature: Feature | string): Promise<boolean> => {
     // lookup access rules in circle for the features
-    let circle = null;
-    if (isUser) {
-        circle = await Users.findOne({ _id: new ObjectId(circleId) });
-    } else {
-        circle = await Circles.findOne({ _id: new ObjectId(circleId) });
-    }
+    let circle = await Circles.findOne({ _id: new ObjectId(circleId) });
     if (!circle) return false;
 
     let featureHandle = typeof feature === "string" ? feature : feature.handle;

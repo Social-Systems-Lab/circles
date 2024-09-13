@@ -28,7 +28,7 @@ const InviteButton: React.FC<InviteButtonProps> = ({ circle, isDefaultCircle, re
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const isCompact = useIsCompact();
     const { toast } = useToast();
-    const isUser = circle.circleType === "user";
+    const isUser = circle?.circleType === "user";
     const compact = isCompact || renderCompact;
 
     const getCirclePagePath = (
@@ -45,7 +45,7 @@ const InviteButton: React.FC<InviteButtonProps> = ({ circle, isDefaultCircle, re
         if (isDefaultCircle) {
             return `${rootPath}${pageHandle ? `/${pageHandle}` : ""}`;
         }
-        return `${rootPath}/${isUser ? "users" : "circles"}/${circle.handle}${pageHandle ? `/${pageHandle}` : ""}`;
+        return `${rootPath}/circles/${circle.handle}${pageHandle ? `/${pageHandle}` : ""}`;
     };
 
     const inviteLink = getCirclePagePath(circle, isDefaultCircle, "", true);

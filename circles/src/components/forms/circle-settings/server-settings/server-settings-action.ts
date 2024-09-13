@@ -6,12 +6,7 @@ import { revalidatePath } from "next/cache";
 
 export const serverSettingsFormAction: FormAction = {
     id: "server-settings-form",
-    onSubmit: async (
-        values: Record<string, any>,
-        page?: Page,
-        subpage?: string,
-        isUser?: boolean,
-    ): Promise<FormSubmitResponse> => {
+    onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
         try {
             //console.log("Saving server settings with values", values);
             let registrySuccess = true;
@@ -19,7 +14,7 @@ export const serverSettingsFormAction: FormAction = {
 
             // check if user is authorized to edit server settings, we use the same permission as for default circle settings
             const userDid = await getAuthenticatedUserDid();
-            let authorized = await isAuthorized(userDid, circleId ?? "", features.settings_edit, false);
+            let authorized = await isAuthorized(userDid, circleId ?? "", features.settings_edit);
             if (!authorized) {
                 return { success: false, message: "You are not authorized to edit server settings" };
             }

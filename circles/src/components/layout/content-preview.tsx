@@ -73,9 +73,7 @@ export const ContentPreview: React.FC = () => {
                                         className="m-2 w-full"
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            router.push(
-                                                `/${contentPreview.circleType === "user" ? "users" : "circles"}/${contentPreview.handle}`,
-                                            );
+                                            router.push(`/circles/${contentPreview.handle}`);
                                         }}
                                     >
                                         Open

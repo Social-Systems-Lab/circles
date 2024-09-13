@@ -84,7 +84,7 @@ const DynamicFormManager: React.FC<DynamicFormProps> = ({
 
                 formData.append(key, values[key]);
             });
-            let result = await onFormSubmit(formSchemaId, formData, page, subpage, isUser);
+            let result = await onFormSubmit(formSchemaId, formData, page, subpage);
 
             // call client action handler
             const formActionHandler = formActionHandlers[formSchemaId];

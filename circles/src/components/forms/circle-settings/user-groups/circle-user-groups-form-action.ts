@@ -4,35 +4,25 @@ import { revalidatePath } from "next/cache";
 import { safeModifyArray } from "@/lib/utils";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
-import { getUserById, updateUser } from "@/lib/data/user";
 
 export const circleUserGroupsFormAction: FormAction = {
     id: "circle-user-groups-form",
-    onSubmit: async (
-        values: Record<string, any>,
-        page?: Page,
-        subpage?: string,
-        isUser?: boolean,
-    ): Promise<FormSubmitResponse> => {
+    onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
         try {
-            let circle: Circle = {
+            let circle: Partial<Circle> = {
                 _id: values._id,
             };
 
             // check if user is authorized to edit circle settings
             const userDid = await getAuthenticatedUserDid();
-            let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit, isUser);
+            let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
             if (!authorized) {
                 return { success: false, message: "You are not authorized to edit circle settings" };
             }
 
             // make sure readOnly rows in userGroups are not updated
-            let existingCircle = null;
-            if (isUser) {
-                existingCircle = await getUserById(values._id);
-            } else {
-                existingCircle = await getCircleById(values._id);
-            }
+            let existingCircle = await getCircleById(values._id);
+
             if (!existingCircle) {
                 throw new Error("Circle not found");
             }
@@ -44,11 +34,7 @@ export const circleUserGroupsFormAction: FormAction = {
             // circle.accessRules = defaultAccessRules;
 
             // update the circle
-            if (isUser) {
-                await updateUser(circle);
-            } else {
-                await updateCircle(circle);
-            }
+            await updateCircle(circle);
 
             // clear page cache so pages update
             let circlePath = await getCirclePath(circle);

@@ -19,10 +19,10 @@ export default function TopBarNavItems({ circle, isDefaultCircle }: { circle: Ci
             if (isDefaultCircle) {
                 return `/${page.handle}`;
             } else {
-                return `/${circle.circleType === "user" ? "users" : "circles"}/${circle.handle}${page.handle ? `/${page.handle}` : ""}`;
+                return `/circles/${circle.handle}${page.handle ? `/${page.handle}` : ""}`;
             }
         },
-        [isDefaultCircle, circle.circleType, circle.handle],
+        [isDefaultCircle, circle.handle],
     );
 
     const currentNavItem = useMemo(() => {

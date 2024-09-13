@@ -37,18 +37,15 @@ export const joinCircle = async (circle: Circle, answers?: Record<string, string
 
         // Fetch the latest circle data
         let updatedCircle = null;
-        if (isUser) {
-            updatedCircle = await getUserById(circle._id ?? "");
-        } else {
-            updatedCircle = await getCircleById(circle._id ?? "");
-        }
+        updatedCircle = await getCircleById(circle._id ?? "");
+
         if (!updatedCircle) {
             return { success: false, message: isUser ? "User not found" : "Circle not found" };
         }
 
         if (updatedCircle.isPublic) {
             // For public circles, add member directly
-            await addMember(userDid, updatedCircle._id ?? "", ["members"], answers, isUser);
+            await addMember(userDid, updatedCircle._id ?? "", ["members"], answers);
             return {
                 success: true,
                 message: isUser ? "You have added user as friend" : "You have joined the circle",
@@ -98,7 +95,7 @@ export const leaveCircle = async (circle: Circle): Promise<CircleActionResponse>
                 return { success: false, message: "Cannot leave as last admin." };
             }
         }
-        await removeMember(userDid, circle._id ?? "", isUser);
+        await removeMember(userDid, circle._id ?? "");
         return { success: true, message: isUser ? "You have unfriended the user" : "You have left the circle" };
     } catch (error) {
         return {
@@ -128,14 +125,10 @@ export const cancelJoinRequest = async (circle: Circle): Promise<CircleActionRes
     }
 };
 
-export const updateCircleField = async (
-    circleId: string,
-    formData: FormData,
-    isUser?: boolean,
-): Promise<CircleActionResponse> => {
+export const updateCircleField = async (circleId: string, formData: FormData): Promise<CircleActionResponse> => {
     try {
         const userDid = await getAuthenticatedUserDid();
-        let authorized = await isAuthorized(userDid, circleId, features.settings_edit, isUser);
+        let authorized = await isAuthorized(userDid, circleId, features.settings_edit);
         if (!authorized) {
             return { success: false, message: "You are not authorized to edit circle settings" };
         }
@@ -152,13 +145,9 @@ export const updateCircleField = async (
             }
         }
 
-        if (isUser) {
-            await updateUser(updateData);
-        } else {
-            await updateCircle(updateData);
-        }
+        await updateCircle(updateData);
 
-        let circlePath = await getCirclePath({ _id: circleId, circleType: isUser ? "user" : "circle" } as Circle);
+        let circlePath = await getCirclePath({ _id: circleId } as Circle);
         revalidatePath(circlePath);
 
         return { success: true, message: `Circle updated successfully` };

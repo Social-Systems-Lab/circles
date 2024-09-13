@@ -1,6 +1,6 @@
-import { Feeds, Posts, Comments, Reactions, Users } from "./db";
+import { Feeds, Posts, Comments, Reactions, Users, Circles } from "./db";
 import { ObjectId } from "mongodb";
-import { Feed, Post, PostDisplay, Comment, CommentDisplay, Reaction, MemberDisplay } from "@/models/models";
+import { Feed, Post, PostDisplay, Comment, CommentDisplay, Reaction, MemberDisplay, Circle } from "@/models/models";
 import { getUserById, updateUser } from "./user";
 import { getCircleById, updateCircle } from "./circle";
 import { addFeedsAccessRules } from "../utils";
@@ -44,13 +44,8 @@ export const getFeeds = async (circleId: string): Promise<Feed[]> => {
     return feeds;
 };
 
-export const createDefaultFeeds = async (circleId: string, isUser: boolean): Promise<Feed[] | null> => {
-    let circle = null;
-    if (isUser) {
-        circle = await getUserById(circleId);
-    } else {
-        circle = await getCircleById(circleId);
-    }
+export const createDefaultFeeds = async (circleId: string): Promise<Feed[] | null> => {
+    let circle = await getCircleById(circleId);
     if (!circle) {
         return null;
     }
@@ -90,12 +85,7 @@ export const createDefaultFeeds = async (circleId: string, isUser: boolean): Pro
     circle.accessRules = finalAccessRules;
 
     // update the circle
-    if (isUser) {
-        await updateUser(circle);
-    } else {
-        await updateCircle(circle);
-    }
-
+    await updateCircle(circle);
     return existingFeeds;
 };
 
@@ -131,7 +121,7 @@ export const getPosts = async (feedId: string, limit: number = 10, offset: numbe
         { $limit: limit },
         {
             $lookup: {
-                from: "users",
+                from: "circles",
                 localField: "createdBy",
                 foreignField: "did",
                 as: "authorDetails",
@@ -149,7 +139,7 @@ export const getPosts = async (feedId: string, limit: number = 10, offset: numbe
         { $unwind: { path: "$highlightedComment", preserveNullAndEmptyArrays: true } },
         {
             $lookup: {
-                from: "users",
+                from: "circles",
                 localField: "highlightedComment.createdBy",
                 foreignField: "did",
                 as: "highlightedCommentAuthor",
@@ -214,7 +204,7 @@ export const getComments = async (postId: string, parentCommentId: string | null
         { $sort: { createdAt: 1 } },
         {
             $lookup: {
-                from: "users",
+                from: "circles",
                 localField: "createdBy",
                 foreignField: "did",
                 as: "authorDetails",
@@ -295,19 +285,19 @@ export const unlikeContent = async (
     }
 };
 
-export const getReactions = async (contentId: string, contentType: "post" | "comment"): Promise<MemberDisplay[]> => {
+export const getReactions = async (contentId: string, contentType: "post" | "comment"): Promise<Circle[]> => {
     const reactions = await Reactions.find({ contentId, contentType }).limit(20).toArray();
     const userDids = reactions.map((r) => r.userDid);
-    const users = await Users.find({ did: { $in: userDids } }).toArray();
+    const users = await Circles.find({ did: { $in: userDids } }).toArray();
     return users.map((user) => ({
-        userDid: user.did,
+        did: user.did,
         name: user.name,
         picture: user.picture,
         location: user.location,
         description: user.description,
         cover: user.cover,
         handle: user.handle,
-    })) as MemberDisplay[];
+    })) as Circle[];
 };
 
 export const checkIfLiked = async (

@@ -22,10 +22,10 @@ export const CircleHeader: React.FC<CircleHeaderProps> = ({ circle, page, subpag
             if (isDefaultCircle) {
                 return `/${pageHandle}`;
             } else {
-                return `/${circle.circleType === "user" ? "users" : "circles"}/${circle.handle}${pageHandle ? `/${pageHandle}` : ""}`;
+                return `/circles/${circle.handle}${pageHandle ? `/${pageHandle}` : ""}`;
             }
         },
-        [isDefaultCircle, circle.circleType, circle.handle],
+        [isDefaultCircle, circle.handle],
     );
 
     if (isCompact) {

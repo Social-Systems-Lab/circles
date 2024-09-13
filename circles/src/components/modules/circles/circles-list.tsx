@@ -198,9 +198,7 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                                         className="m-2 mt-4 w-full"
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            router.push(
-                                                `/${circle.circleType === "user" ? "users" : "circles"}/${circle.handle}`,
-                                            );
+                                            router.push(`/circles/${circle.handle}`);
                                         }}
                                     >
                                         Open

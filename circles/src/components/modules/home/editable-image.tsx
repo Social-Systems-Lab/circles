@@ -15,20 +15,9 @@ type EditableImageProps = {
     height?: number;
     fill?: boolean;
     circleId: string;
-    isUser?: boolean;
 };
 
-const EditableImage: React.FC<EditableImageProps> = ({
-    id,
-    src,
-    alt,
-    className,
-    width,
-    height,
-    fill,
-    circleId,
-    isUser,
-}) => {
+const EditableImage: React.FC<EditableImageProps> = ({ id, src, alt, className, width, height, fill, circleId }) => {
     const [currentSrc, setCurrentSrc] = useState(src);
     const { toast } = useToast();
 
@@ -38,7 +27,7 @@ const EditableImage: React.FC<EditableImageProps> = ({
             const formData = new FormData();
             formData.append(id, file);
 
-            const result = await updateCircleField(circleId, formData, isUser);
+            const result = await updateCircleField(circleId, formData);
             if (result.success) {
                 toast({ title: "Success", description: result.message });
 

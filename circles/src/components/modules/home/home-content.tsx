@@ -11,11 +11,11 @@ import JoinButton from "./join-button";
 type HomeContentProps = {
     circle: Circle;
     isDefaultCircle: boolean;
-    isUser?: boolean;
     authorizedToEdit: boolean;
 };
 
-export default function HomeContent({ circle, isDefaultCircle, isUser, authorizedToEdit }: HomeContentProps) {
+export default function HomeContent({ circle, isDefaultCircle, authorizedToEdit }: HomeContentProps) {
+    const isUser = circle?.circleType === "user";
     const memberCount = circle?.members ? (isUser ? circle.members - 1 : circle.members) : 0;
 
     return (
@@ -31,7 +31,6 @@ export default function HomeContent({ circle, isDefaultCircle, isUser, authorize
                                 className="rounded-full border-2 border-white bg-white object-cover shadow-lg"
                                 fill
                                 circleId={circle._id!}
-                                isUser={isUser}
                             />
                         ) : (
                             <Image
@@ -48,7 +47,7 @@ export default function HomeContent({ circle, isDefaultCircle, isUser, authorize
             <div className="mb-8 mt-[65px] flex flex-col items-center justify-center">
                 <h4 className="text-4xl font-bold text-gray-800">
                     {authorizedToEdit ? (
-                        <EditableField id="name" value={circle.name ?? ""} circleId={circle._id!} isUser={isUser} />
+                        <EditableField id="name" value={circle.name ?? ""} circleId={circle._id!} />
                     ) : (
                         circle.name
                     )}
@@ -60,7 +59,6 @@ export default function HomeContent({ circle, isDefaultCircle, isUser, authorize
                                 id="description"
                                 value={circle.description}
                                 circleId={circle._id!}
-                                isUser={isUser}
                                 multiline
                             />
                         ) : (
@@ -77,10 +75,6 @@ export default function HomeContent({ circle, isDefaultCircle, isUser, authorize
                         </p>
                     </div>
                 )}
-                {/* <div className="flex flex-row gap-1 pt-4">
-                    <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />
-                    <JoinButton circle={circle} />
-                </div> */}
             </div>
         </div>
     );

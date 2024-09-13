@@ -9,7 +9,6 @@ export type DynamicLayoutPageProps = {
     pageHandle?: string;
     isDefaultCircle: boolean;
     children: React.ReactNode;
-    isUser?: boolean;
 };
 
 export type ModuleLayoutPageProps = {
@@ -17,7 +16,6 @@ export type ModuleLayoutPageProps = {
     page: Page;
     isDefaultCircle: boolean;
     children: React.ReactNode;
-    isUser?: boolean;
 };
 
 export const DynamicPageLayout = async ({
@@ -25,17 +23,12 @@ export const DynamicPageLayout = async ({
     circleHandle,
     pageHandle,
     isDefaultCircle,
-    isUser = false,
 }: DynamicLayoutPageProps) => {
     let circle: Circle = {};
     if (isDefaultCircle) {
         circle = await getDefaultCircle();
     } else if (circleHandle) {
-        if (isUser) {
-            circle = await getUserByHandle(circleHandle);
-        } else {
-            circle = await getCircleByHandle(circleHandle);
-        }
+        circle = await getCircleByHandle(circleHandle);
     }
 
     let page = circle?.pages?.find((p) => p.handle === pageHandle);
@@ -55,7 +48,7 @@ export const DynamicPageLayout = async ({
     }
 
     return (
-        <_module.layoutComponent circle={circle} page={page} isDefaultCircle={isDefaultCircle} isUser={isUser}>
+        <_module.layoutComponent circle={circle} page={page} isDefaultCircle={isDefaultCircle}>
             {children}
         </_module.layoutComponent>
     );

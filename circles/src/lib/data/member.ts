@@ -1,5 +1,5 @@
-import { Member, MemberDisplay } from "@/models/models";
-import { Circles, Members, Users } from "./db";
+import { Content, Member, MemberDisplay } from "@/models/models";
+import { Circles, Members } from "./db";
 import { ObjectId } from "mongodb";
 import { filterLocations } from "../utils";
 
@@ -14,7 +14,7 @@ export const getMembers = async (circleId?: string): Promise<MemberDisplay[]> =>
         { $match: { circleId: circleId } },
         {
             $lookup: {
-                from: "users",
+                from: "circles",
                 localField: "userDid",
                 foreignField: "did",
                 as: "userDetails",
@@ -41,7 +41,7 @@ export const getMembers = async (circleId?: string): Promise<MemberDisplay[]> =>
     ]).toArray();
 
     // filter location data based on precision
-    members = filterLocations(members);
+    members = filterLocations(members as Content[]);
     return members as MemberDisplay[];
 };
 
@@ -50,7 +50,6 @@ export const addMember = async (
     circleId: string,
     userGroups: string[],
     answers?: Record<string, string>,
-    isUser?: boolean,
 ): Promise<Member> => {
     const existingMember = await Members.findOne({ userDid: userDid, circleId: circleId });
     if (existingMember) {
@@ -73,22 +72,19 @@ export const addMember = async (
     await Members.insertOne(member);
 
     // increase member count in circle
-    if (isUser) {
-        await Users.updateOne({ _id: new ObjectId(circleId) }, { $inc: { members: 1 } });
-    } else {
-        await Circles.updateOne({ _id: new ObjectId(circleId) }, { $inc: { members: 1 } });
-    }
+    await Circles.updateOne({ _id: new ObjectId(circleId) }, { $inc: { members: 1 } });
 
     return member;
 };
 
-export const removeMember = async (userDid: string, circleId: string, isUser: boolean): Promise<boolean> => {
+export const removeMember = async (userDid: string, circleId: string): Promise<boolean> => {
     // ensure user can't be removed from their own circle
-    if (isUser) {
-        let user = await Users.findOne({ _id: new ObjectId(circleId) });
-        if (user?.did === userDid) {
-            throw new Error("User can't leave their own circle");
-        }
+    const circle = await Circles.findOne({ _id: new ObjectId(circleId) });
+    if (!circle) {
+        throw new Error("Circle not found");
+    }
+    if (circle.did === userDid) {
+        throw new Error("User can't leave their own circle");
     }
 
     let result = await Members.deleteOne({ userDid: userDid, circleId: circleId });
@@ -97,11 +93,7 @@ export const removeMember = async (userDid: string, circleId: string, isUser: bo
     }
 
     // decrease member count in circle
-    if (isUser) {
-        await Users.updateOne({ _id: new ObjectId(circleId) }, { $inc: { members: -1 } });
-    } else {
-        await Circles.updateOne({ _id: new ObjectId(circleId) }, { $inc: { members: -1 } });
-    }
+    await Circles.updateOne({ _id: new ObjectId(circleId) }, { $inc: { members: -1 } });
 
     return true;
 };

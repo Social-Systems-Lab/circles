@@ -6,12 +6,7 @@ import { getUserPrivate, registerUser, updateUser } from "@/lib/data/user";
 
 export const signupFormAction: FormAction = {
     id: "signup-form",
-    onSubmit: async (
-        values: Record<string, any>,
-        page?: Page,
-        subpage?: string,
-        isUser?: boolean,
-    ): Promise<FormSubmitResponse> => {
+    onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
         try {
             //console.log("Signing up user with values", values);
             let user = await createUser(values.name, values.handle, values.type, values._email, values._password);

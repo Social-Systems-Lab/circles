@@ -8,12 +8,7 @@ import { updateUser } from "@/lib/data/user";
 
 export const createCircleFormAction: FormAction = {
     id: "create-circle-form",
-    onSubmit: async (
-        values: Record<string, any>,
-        page?: Page,
-        subpage?: string,
-        isUser?: boolean,
-    ): Promise<FormSubmitResponse> => {
+    onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
         try {
             let circle: Circle = {
                 name: values.name,
@@ -25,12 +20,7 @@ export const createCircleFormAction: FormAction = {
 
             // check if user is authorized to edit circle settings
             const userDid = await getAuthenticatedUserDid();
-            let authorized = await isAuthorized(
-                userDid,
-                circle.parentCircleId ?? "",
-                features.create_subcircle,
-                isUser,
-            );
+            let authorized = await isAuthorized(userDid, circle.parentCircleId ?? "", features.create_subcircle);
             if (!authorized) {
                 return { success: false, message: "You are not authorized to create new circles" };
             }

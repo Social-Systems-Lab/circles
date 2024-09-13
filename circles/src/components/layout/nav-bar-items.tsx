@@ -48,29 +48,22 @@ function NavItem({
     );
 }
 
-export default function NavBarItems({
-    circle,
-    isDefaultCircle,
-    isUser,
-}: {
-    circle: Circle;
-    isDefaultCircle: boolean;
-    isUser?: boolean;
-}) {
+export default function NavBarItems({ circle, isDefaultCircle }: { circle: Circle; isDefaultCircle: boolean }) {
     const pathname = usePathname();
     const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
     const isMobile = useIsMobile();
     const [user] = useAtom(userAtom);
+    const isUser = circle?.circleType === "user";
 
     const getPath = useCallback(
         (page: Page) => {
             if (isDefaultCircle) {
                 return `/${page.handle}`;
             } else {
-                return `/${isUser ? "users" : "circles"}/${circle.handle}${page.handle ? `/${page.handle}` : ""}`;
+                return `/circles/${circle.handle}${page.handle ? `/${page.handle}` : ""}`;
             }
         },
-        [isDefaultCircle, isUser, circle.handle],
+        [isDefaultCircle, circle.handle],
     );
 
     const currentNavItem = useMemo(() => {

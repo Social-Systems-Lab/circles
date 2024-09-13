@@ -12,12 +12,10 @@ export default function CircleMenu({
     circle,
     defaultCircle,
     isDefaultCircle,
-    isUser,
 }: {
     circle: Circle;
     defaultCircle: Circle;
     isDefaultCircle: boolean;
-    isUser?: boolean;
 }) {
     const [circleMenuOpen, setCircleMenuOpen] = useState(false);
     const [user, setUser] = useAtom(userAtom);
@@ -39,13 +37,13 @@ export default function CircleMenu({
             return;
         }
 
-        router.push(`/${circle.circleType === "user" ? "users" : "circles"}/${circle.handle}`);
+        router.push(`/circles/${circle.handle}`);
     };
 
     const handleUserClick = () => {
         if (!user) return;
         setCircleMenuOpen(false);
-        router.push(`/users/${user.handle}`);
+        router.push(`/circles/${user.handle}`);
     };
 
     return (

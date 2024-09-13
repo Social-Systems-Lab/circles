@@ -1,25 +1,18 @@
 import { getCircleByHandle, getDefaultCircle } from "@/lib/data/circle";
 import { getMember } from "@/lib/data/member";
-import { getUserByHandle } from "@/lib/data/user";
 import { Circle } from "@/models/models";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
     try {
-        const { userDid, circleHandle, pageHandle, isUser } = await req.json();
+        const { userDid, circleHandle, pageHandle } = await req.json();
 
         // get circle
         let circle: Circle | null = null;
-        if (!isUser) {
-            if (circleHandle) {
-                circle = await getCircleByHandle(circleHandle);
-            } else {
-                circle = await getDefaultCircle();
-            }
+        if (circleHandle) {
+            circle = await getCircleByHandle(circleHandle);
         } else {
-            if (circleHandle) {
-                circle = await getUserByHandle(circleHandle);
-            }
+            circle = await getDefaultCircle();
         }
 
         if (!circle) {

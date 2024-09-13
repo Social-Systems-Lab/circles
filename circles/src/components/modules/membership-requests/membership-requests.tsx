@@ -17,7 +17,6 @@ interface MembershipGatewayProps {
 
 const MembershipGateway: React.FC<MembershipGatewayProps> = ({ circle, page, pendingRequests, rejectedRequests }) => {
     const isCompact = useIsCompact();
-    const isUser = circle.circleType === "user";
 
     return (
         <div

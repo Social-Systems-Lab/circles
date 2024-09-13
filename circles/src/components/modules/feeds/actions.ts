@@ -20,7 +20,6 @@ import { getCircleById } from "@/lib/data/circle";
 
 export async function createPostAction(
     formData: FormData,
-    isUser: boolean,
 ): Promise<{ success: boolean; message?: string; post?: Post }> {
     try {
         const content = formData.get("content") as string;
@@ -34,7 +33,7 @@ export async function createPostAction(
         }
 
         const feature = feedFeaturePrefix + feed.handle + "_post";
-        const authorized = await isAuthorized(userDid, circleId, feature, isUser);
+        const authorized = await isAuthorized(userDid, circleId, feature);
         if (!authorized) {
             return { success: false, message: "You are not authorized to post in this feed" };
         }
@@ -82,14 +81,14 @@ export async function createPostAction(
     }
 }
 
-export async function createCommentAction(commentData: {
-    postId: string;
-    parentCommentId: string | null;
-    content: string;
-}): Promise<{ success: boolean; message?: string; comment?: Comment }> {
+export async function createCommentAction(
+    postId: string,
+    parentCommentId: string | null,
+    content: string,
+): Promise<{ success: boolean; message?: string; comment?: Comment }> {
     try {
         const userDid = await getAuthenticatedUserDid();
-        const post = await getPost(commentData.postId);
+        const post = await getPost(postId);
         if (!post) {
             return { success: false, message: "Post not found" };
         }
@@ -100,17 +99,16 @@ export async function createCommentAction(commentData: {
             return { success: false, message: "Feed not found" };
         }
 
-        const circle = await getCircleById(feed.circleId);
         const feature = feedFeaturePrefix + feed.handle + "_comment";
-        const authorized = await isAuthorized(userDid, circle._id, feature, circle.circleType === "user");
+        const authorized = await isAuthorized(userDid, feed.circleId, feature);
         if (!authorized) {
-            return { success: false, message: "You are not authorized to post in this feed" };
+            return { success: false, message: "You are not authorized to comment in this feed" };
         }
 
         const comment: Comment = {
-            postId: commentData.postId,
-            parentCommentId: commentData.parentCommentId,
-            content: commentData.content,
+            postId: postId,
+            parentCommentId: parentCommentId,
+            content: content,
             createdBy: userDid,
             createdAt: new Date(),
             reactions: {},
