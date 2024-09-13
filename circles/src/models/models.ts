@@ -185,13 +185,42 @@ export const postSchema = z.object({
     reactions: z.record(z.string(), z.number()).default({}),
     location: locationSchema.optional(),
     media: z.array(mediaSchema).optional(),
+    highlightedCommentId: z.string().optional(),
 });
 
 export type Post = z.infer<typeof postSchema>;
 
 export interface PostDisplay extends Post {
     author: MemberDisplay;
+    highlightedComment?: CommentDisplay;
 }
+
+export const commentSchema = z.object({
+    _id: z.string().optional(),
+    postId: z.string(),
+    parentCommentId: z.string().nullable(), // Null for root-level comments
+    content: z.string(),
+    createdBy: didSchema,
+    createdAt: z.date(),
+    reactions: z.record(z.string(), z.number()).default({}),
+});
+
+export type Comment = z.infer<typeof commentSchema>;
+
+export interface CommentDisplay extends Comment {
+    author: MemberDisplay;
+}
+
+export const reactionSchema = z.object({
+    _id: z.any().optional(),
+    contentId: z.string(), // ID of the post or comment
+    contentType: z.enum(["post", "comment"]),
+    userDid: didSchema,
+    reactionType: z.string(),
+    createdAt: z.date(),
+});
+
+export type Reaction = z.infer<typeof reactionSchema>;
 
 // access rules are a map of features to array of user groups that are granted access to the feature
 export const accessRulesSchema = z.record(z.string(), z.array(z.string()));
