@@ -1,5 +1,15 @@
 import { MongoClient, MongoClientOptions, Db, Collection } from "mongodb";
-import { ServerSettings, User, Circle, Member, MembershipRequest } from "@/models/models";
+import {
+    ServerSettings,
+    User,
+    Circle,
+    Member,
+    MembershipRequest,
+    Feed,
+    Post,
+    Reaction,
+    Comment,
+} from "@/models/models";
 
 const MONGO_HOST = process.env.MONGO_HOST || "127.0.0.1";
 const MONGO_PORT = parseInt(process.env.MONGO_PORT || "27017");
@@ -17,6 +27,10 @@ let Circles: Collection<Circle>;
 let ServerSettingsCollection: Collection<ServerSettings>;
 let Members: Collection<Member>;
 let MembershipRequests: Collection<MembershipRequest>;
+let Feeds: Collection<Feed>;
+let Posts: Collection<Post>;
+let Comments: Collection<Comment>;
+let Reactions: Collection<Reaction>;
 
 // Only initialize the database connection if not in build mode
 if (process.env.IS_BUILD !== "true") {
@@ -28,14 +42,22 @@ if (process.env.IS_BUILD !== "true") {
     ServerSettingsCollection = db.collection<ServerSettings>("serverSettings");
     Members = db.collection<Member>("members");
     MembershipRequests = db.collection<MembershipRequest>("membershipRequests");
+    Feeds = db.collection<Feed>("feeds");
+    Posts = db.collection<Post>("posts");
+    Comments = db.collection<Comment>("comments");
+    Reactions = db.collection<Reaction>("reactions");
 }
 
-export { client, db, Users, Circles, ServerSettingsCollection, Members, MembershipRequests };
-
-// export const client = new MongoClient(MONGO_CONNECTION_STRING, options);
-// export const db = client.db("circles");
-
-// export const Users = db.collection<User>("users");
-// export const Circles = db.collection<Circle>("circles");
-// export const ServerSettingsCollection = db.collection<ServerSettings>("serverSettings");
-// export const Members = db.collection<Member>("members");
+export {
+    client,
+    db,
+    Users,
+    Circles,
+    ServerSettingsCollection,
+    Members,
+    MembershipRequests,
+    Feeds,
+    Posts,
+    Comments,
+    Reactions,
+};

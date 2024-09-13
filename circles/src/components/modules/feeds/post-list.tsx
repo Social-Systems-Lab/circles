@@ -1,11 +1,11 @@
 "use client";
 
-import { Circle, Content, Feed, PostDisplay } from "@/models/models";
+import { Circle, Content, Feed, PostDisplay, CommentDisplay } from "@/models/models";
 import { UserPicture } from "../members/user-picture";
 import { Button } from "@/components/ui/button";
-import { Edit, Heart, MessageCircle, MoreVertical, Trash2 } from "lucide-react"; // Assuming you are using Lucide for icons
+import { Edit, Heart, Loader2, MessageCircle, MoreVertical, Trash2 } from "lucide-react";
 import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { getPublishTime } from "@/lib/utils";
@@ -18,6 +18,22 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import TextareaAutosize from "react-textarea-autosize";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MemberDisplay } from "@/models/models";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import {
+    createPostAction,
+    createCommentAction,
+    likeContentAction,
+    unlikeContentAction,
+    getReactionsAction,
+    checkIfLikedAction,
+} from "./actions";
+import { Arrow } from "@radix-ui/react-popover";
+import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
+import { HoverCardArrow } from "@radix-ui/react-hover-card";
+import { start } from "repl";
 
 type PostItemProps = {
     post: PostDisplay;
@@ -33,15 +49,19 @@ const PostItem = ({ post, circle }: PostItemProps) => {
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [user] = useAtom(userAtom);
-    const isAuthor = user && post.author._id === user?._id;
+    const isAuthor = user && post.createdBy === user?.did;
+    const [isPending, startTransition] = useTransition();
+    const router = useRouter();
 
     // State for likes
-    const initialLikes = Object.values(post.reactions).reduce((sum, count) => sum + count, 0);
+    const initialLikes = post.reactions.like || 0;
     const [likes, setLikes] = useState<number>(initialLikes);
     const [isLiked, setIsLiked] = useState<boolean>(false);
+    const [likedByUsers, setLikedByUsers] = useState<MemberDisplay[] | undefined>(undefined);
+    const [isLikesPopoverOpen, setIsLikesPopoverOpen] = useState(false);
 
     // State for comments
-    const [comments, setComments] = useState(post.comments || []);
+    const [comments, setComments] = useState<CommentDisplay[]>([]);
     const [showAllComments, setShowAllComments] = useState(false);
     const [newCommentContent, setNewCommentContent] = useState("");
 
@@ -60,40 +80,95 @@ const PostItem = ({ post, circle }: PostItemProps) => {
         };
     }, [carouselApi]);
 
+    useEffect(() => {
+        // Check if the user has liked the post
+        const checkIfLiked = async () => {
+            if (user) {
+                try {
+                    const result = await checkIfLikedAction(post._id, "post");
+                    if (result.success) {
+                        setIsLiked(result.isLiked || false);
+                    }
+                } catch (error) {
+                    console.error("Failed to check if liked", error);
+                }
+            }
+        };
+        checkIfLiked();
+    }, [post._id, user]);
+
     const handleContentClick = (content: Content) => {
         setContentPreview((x) => (x === content ? undefined : content));
     };
 
-    const handleEditClick = () => {};
+    const handleEditClick = () => {
+        // Implement edit functionality
+    };
 
-    const handleDeleteClick = () => {};
+    const handleDeleteClick = () => {
+        // Implement delete functionality
+    };
 
     const handleLikePost = () => {
-        if (isLiked) {
-            setLikes((prev) => prev - 1);
-        } else {
-            setLikes((prev) => prev + 1);
-        }
-        setIsLiked(!isLiked);
-        // Simulate backend call here
+        if (!user) return;
+
+        startTransition(async () => {
+            try {
+                if (isLiked) {
+                    const result = await unlikeContentAction(post._id, "post");
+                    if (result.success) {
+                        setLikes((prev) => prev - 1);
+                        setIsLiked(false);
+                    }
+                } else {
+                    const result = await likeContentAction(post._id, "post");
+                    if (result.success) {
+                        setLikes((prev) => prev + 1);
+                        setIsLiked(true);
+                    }
+                }
+            } catch (error) {
+                console.error("Failed to like/unlike post", error);
+            }
+        });
+    };
+
+    const handleLikesPopoverHover = async (open: boolean) => {
+        if (likedByUsers !== undefined || !open) return;
+        startTransition(async () => {
+            try {
+                const result = await getReactionsAction(post._id, "post");
+                if (result.success && result.reactions) {
+                    setLikedByUsers(result.reactions);
+                }
+            } catch (error) {
+                console.error("Failed to fetch likes", error);
+            }
+        });
     };
 
     const handleAddComment = () => {
         if (!newCommentContent.trim()) return;
 
-        const newComment = {
-            _id: "temp-id-" + Date.now(),
-            content: newCommentContent,
-            author: user,
-            likes: 0,
-            likedBy: [],
-            replies: [],
-            createdAt: new Date().toISOString(),
-        };
-        setComments([...comments, newComment]);
-        setNewCommentContent("");
-        setShowAllComments(true); // Show all comments to see the new one
-        // Simulate backend call
+        startTransition(async () => {
+            try {
+                const result = await createCommentAction({
+                    postId: post._id,
+                    parentCommentId: null,
+                    content: newCommentContent,
+                });
+                if (result.success && result.comment) {
+                    const newComment = result.comment as CommentDisplay;
+                    newComment.author = user as MemberDisplay;
+
+                    setComments([...comments, newComment]);
+                    setNewCommentContent("");
+                    setShowAllComments(true);
+                }
+            } catch (error) {
+                console.error("Failed to add comment", error);
+            }
+        });
     };
 
     const handleCommentKeyDown = (e) => {
@@ -103,12 +178,22 @@ const PostItem = ({ post, circle }: PostItemProps) => {
         }
     };
 
-    // Find the most liked comment
-    const mostLikedComment =
-        comments.length > 0 ? comments.reduce((prev, current) => (prev.likes > current.likes ? prev : current)) : null;
+    useEffect(() => {
+        // TODO fix this
+        // const fetchComments = async () => {
+        //     try {
+        //         const response = await fetch(`/api/comments?postId=${post._id}`);
+        //         const data = await response.json();
+        //         setComments(data.comments);
+        //     } catch (error) {
+        //         console.error("Failed to fetch comments", error);
+        //     }
+        // };
+        // fetchComments();
+    }, [post._id]);
 
     return (
-        <div className={`flex flex-col gap-4 ${isCompact ? "" : "rounded-[15px] border-0 shadow-lg"}  bg-white`}>
+        <div className={`flex flex-col gap-4 ${isCompact ? "" : "rounded-[15px] border-0 shadow-lg"} bg-white`}>
             {/* Header with user information */}
             <div className="flex items-center justify-between pl-4 pr-4 pt-4">
                 <div className="flex items-center gap-4">
@@ -158,7 +243,6 @@ const PostItem = ({ post, circle }: PostItemProps) => {
                             <CarouselContent>
                                 {post.media.map((mediaItem, index) => (
                                     <CarouselItem key={index}>
-                                        {/* className="basis-[90%]" */}
                                         <img
                                             src={mediaItem.fileInfo.url}
                                             alt={mediaItem.name}
@@ -190,14 +274,44 @@ const PostItem = ({ post, circle }: PostItemProps) => {
             {/* Actions (like and comment) */}
             <div className="flex items-center justify-between pl-4 pr-4 text-gray-500">
                 {/* Likes Section */}
-                <div className="flex cursor-pointer items-center gap-1 text-gray-500" onClick={handleLikePost}>
-                    <Heart className={`h-5 w-5 ${isLiked ? "fill-current text-red-500" : ""}`} />
-                    {likes > 1 && <span>{likes}</span>}
+                <div className="flex cursor-pointer items-center gap-1.5 text-gray-500">
+                    <Heart
+                        className={`h-5 w-5 ${isLiked ? "fill-current text-red-500" : ""}`}
+                        onClick={handleLikePost}
+                    />
+                    {likes > 0 && (
+                        <HoverCard openDelay={200} onOpenChange={(open) => handleLikesPopoverHover(open)}>
+                            <HoverCardTrigger>
+                                <span>{likes}</span>
+                            </HoverCardTrigger>
+                            <HoverCardContent className="w-auto border-0 bg-[#333333] p-2 pt-[6px]">
+                                <HoverCardArrow className="text-[#333333]" fill="#333333" color="#333333" />
+                                <div className="text-[14px] text-white">
+                                    <div className="font-bold">Likes</div>
+                                    {isPending && (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        </>
+                                    )}
+
+                                    {likedByUsers?.map((user) => (
+                                        <div key={user.userDid} className="flex items-center gap-2 text-[12px]">
+                                            {/* <UserPicture name={user.name} picture={user.picture?.url} size="small" /> */}
+                                            <span>{user.name}</span>
+                                        </div>
+                                    ))}
+                                    {likes > 20 && (
+                                        <div className="text-sm text-gray-500">...and {likes - 20} more</div>
+                                    )}
+                                </div>
+                            </HoverCardContent>
+                        </HoverCard>
+                    )}
                 </div>
 
                 {/* Comments Section */}
                 <div className="flex items-center gap-2 pl-4 pr-4">
-                    <div className="flex items-center gap-1 text-gray-500">
+                    <div className="flex items-center gap-1.5 text-gray-500">
                         <MessageCircle className="h-5 w-5" />
                         {comments.length > 0 && <span>{comments.length}</span>}
                     </div>
@@ -217,32 +331,39 @@ const PostItem = ({ post, circle }: PostItemProps) => {
                 {comments.length > 0 && (
                     <>
                         {showAllComments
-                            ? comments.map((comment) => <CommentItem key={comment._id} comment={comment} user={user} />)
-                            : mostLikedComment && (
-                                  <CommentItem key={mostLikedComment._id} comment={mostLikedComment} user={user} />
+                            ? comments.map((comment) => (
+                                  <CommentItem key={comment._id} comment={comment} user={user} postId={post._id} />
+                              ))
+                            : post.highlightedComment && (
+                                  <CommentItem
+                                      key={post.highlightedComment._id}
+                                      comment={post.highlightedComment}
+                                      user={user}
+                                      postId={post._id}
+                                  />
                               )}
                     </>
                 )}
 
                 {/* Comment input box */}
-                <div className="mt-2 flex items-start gap-2">
-                    <UserPicture name={user?.name} picture={user?.picture?.url} size="small" />
-                    <TextareaAutosize
-                        value={newCommentContent}
-                        onChange={(e) => setNewCommentContent(e.target.value)}
-                        onKeyDown={handleCommentKeyDown}
-                        placeholder="Write a comment..."
-                        className="flex-grow resize-none rounded-[20px] bg-gray-100 p-2 pl-4 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        minRows={1}
-                        maxRows={6}
-                    />
-                    {/* On mobile, show send button */}
-                    {isMobile && (
-                        <button onClick={handleAddComment} className="mt-1 text-blue-500">
-                            Send
-                        </button>
-                    )}
-                </div>
+                {user && (
+                    <div className="mt-2 flex items-start gap-2">
+                        <TextareaAutosize
+                            value={newCommentContent}
+                            onChange={(e) => setNewCommentContent(e.target.value)}
+                            onKeyDown={handleCommentKeyDown}
+                            placeholder="Write a comment..."
+                            className="flex-grow resize-none rounded-[20px] bg-gray-100 p-2 pl-4 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            minRows={1}
+                            maxRows={6}
+                        />
+                        {isMobile && (
+                            <button onClick={handleAddComment} className="mt-1 text-blue-500">
+                                Send
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -250,40 +371,84 @@ const PostItem = ({ post, circle }: PostItemProps) => {
 
 // CommentItem Component
 type CommentItemProps = {
-    comment: any;
+    comment: CommentDisplay;
     user: any;
+    postId: string;
     depth?: number;
 };
 
-const CommentItem = ({ comment, user, depth = 0 }: CommentItemProps) => {
+const CommentItem = ({ comment, user, postId, depth = 0 }: CommentItemProps) => {
     const [showReplies, setShowReplies] = useState(false);
-    const [replies, setReplies] = useState(comment.replies || []);
-    const [likes, setLikes] = useState(comment.likes || 0);
-    const [isLiked, setIsLiked] = useState(false);
+    const [replies, setReplies] = useState<CommentDisplay[]>([]);
+    const [likes, setLikes] = useState<number>(comment.reactions.like || 0);
+    const [isLiked, setIsLiked] = useState<boolean>(false);
     const [showReplyInput, setShowReplyInput] = useState(false);
     const [newReplyContent, setNewReplyContent] = useState("");
     const [isEditing, setIsEditing] = useState(false);
     const [editContent, setEditContent] = useState(comment.content);
     const isMobile = useIsMobile();
+    const [likedByUsers, setLikedByUsers] = useState<MemberDisplay[]>([]);
+    const [isLikesPopoverOpen, setIsLikesPopoverOpen] = useState(false);
+    const [isPending, startTransition] = useTransition();
 
-    const isAuthor = user && comment.author._id === user?._id;
+    const isAuthor = user && comment.createdBy === user?.did;
 
     const formattedDate = getPublishTime(comment.createdAt);
 
-    const handleLikeComment = () => {
-        if (comment.author._id === user._id) return; // Can't like own comment
+    useEffect(() => {
+        // Check if the user has liked the comment
+        const checkIfLiked = async () => {
+            // TODO fix this, should be done server-side when comments are fetched
+            // if (user) {
+            //     try {
+            //         const result = await checkIfLikedAction(comment._id!, "comment");
+            //         if (result.success) {
+            //             setIsLiked(result.isLiked || false);
+            //         }
+            //     } catch (error) {
+            //         console.error("Failed to check if liked", error);
+            //     }
+            // }
+        };
+        checkIfLiked();
+    }, [comment._id, user]);
 
-        if (isLiked) {
-            setLikes((prev) => prev - 1);
-            // Remove user from likedBy
-            comment.likedBy = comment.likedBy.filter((id) => id !== user._id);
-        } else {
-            setLikes((prev) => prev + 1);
-            // Add user to likedBy
-            comment.likedBy.push(user._id);
+    const handleLikeComment = () => {
+        if (!user || comment.createdBy === user.did) return;
+
+        startTransition(async () => {
+            try {
+                if (isLiked) {
+                    const result = await unlikeContentAction(comment._id!, "comment");
+                    if (result.success) {
+                        setLikes((prev) => prev - 1);
+                        setIsLiked(false);
+                    }
+                } else {
+                    const result = await likeContentAction(comment._id!, "comment");
+                    if (result.success) {
+                        setLikes((prev) => prev + 1);
+                        setIsLiked(true);
+                    }
+                }
+            } catch (error) {
+                console.error("Failed to like/unlike comment", error);
+            }
+        });
+    };
+
+    const handleLikesPopoverOpen = async (open: boolean) => {
+        setIsLikesPopoverOpen(open);
+        if (open && likes > 0 && likedByUsers.length === 0) {
+            try {
+                const result = await getReactionsAction(comment._id!, "comment");
+                if (result.success && result.reactions) {
+                    setLikedByUsers(result.reactions);
+                }
+            } catch (error) {
+                console.error("Failed to fetch likes", error);
+            }
         }
-        setIsLiked(!isLiked);
-        // Simulate backend call
     };
 
     const handleReplyClick = () => {
@@ -293,20 +458,24 @@ const CommentItem = ({ comment, user, depth = 0 }: CommentItemProps) => {
     const handleAddReply = () => {
         if (!newReplyContent.trim()) return;
 
-        const newReply = {
-            _id: "temp-id-" + Date.now(),
-            content: newReplyContent,
-            author: user,
-            likes: 0,
-            likedBy: [],
-            replies: [],
-            createdAt: new Date().toISOString(),
-        };
-        setReplies([...replies, newReply]);
-        setNewReplyContent("");
-        setShowReplyInput(false);
-        setShowReplies(true); // Show replies after adding a reply
-        // Simulate backend call
+        startTransition(async () => {
+            try {
+                const result = await createCommentAction(
+                    postId: postId,
+                    parentCommentId: comment._id ?? null,
+                    content: newReplyContent,
+                );
+                if (result.success && result.comment) {
+                    const newReply = result.comment as CommentDisplay;
+                    setReplies([...replies, newReply]);
+                    setNewReplyContent("");
+                    setShowReplyInput(false);
+                    setShowReplies(true);
+                }
+            } catch (error) {
+                console.error("Failed to add reply", error);
+            }
+        });
     };
 
     const handleReplyKeyDown = (e) => {
@@ -325,7 +494,7 @@ const CommentItem = ({ comment, user, depth = 0 }: CommentItemProps) => {
     };
 
     const handleDeleteClick = () => {
-        // Simulate delete comment
+        // Implement delete comment
     };
 
     const handleEditKeyDown = (e) => {
@@ -333,7 +502,7 @@ const CommentItem = ({ comment, user, depth = 0 }: CommentItemProps) => {
             e.preventDefault();
             // Save edited comment
             setIsEditing(false);
-            // Simulate backend call
+            // Implement backend call to update comment
         } else if (e.key === "Escape") {
             e.preventDefault();
             setIsEditing(false);
@@ -351,42 +520,25 @@ const CommentItem = ({ comment, user, depth = 0 }: CommentItemProps) => {
         setNewReplyContent("");
     };
 
-    const [flatReplies, setFlatReplies] = useState([]);
-
     useEffect(() => {
-        // Flatten replies
-        const flattenReplies = (replies) => {
-            let flatReplies = [];
-
-            const traverse = (replies) => {
-                for (let reply of replies) {
-                    flatReplies.push(reply);
-                    if (reply.replies && reply.replies.length > 0) {
-                        traverse(reply.replies);
-                    }
-                }
-            };
-
-            traverse(replies);
-
-            // Sort by createdAt
-            flatReplies.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-
-            return flatReplies;
-        };
-
-        const flat = flattenReplies(replies);
-        setFlatReplies(flat);
-    }, [replies]);
-
-    // Users who liked the comment (simulated)
-    const likedByUsers = comment.likedBy || [];
+        // TODO fix this
+        // const fetchReplies = async () => {
+        //     try {
+        //         const response = await fetch(`/api/comments?parentCommentId=${comment._id}`);
+        //         const data = await response.json();
+        //         setReplies(data.comments);
+        //     } catch (error) {
+        //         console.error("Failed to fetch replies", error);
+        //     }
+        // };
+        // fetchReplies();
+    }, [comment._id]);
 
     return (
         <div className={`flex flex-col ${depth > 0 ? "ml-8" : ""} mt-2`}>
             {/* Comment Content */}
             <div className="group flex items-start gap-2">
-                <UserPicture name={comment.author.name} picture={comment.author.picture.url} size="small" />
+                <UserPicture name={comment.author.name} picture={comment.author.picture?.url} size="small" />
                 <div className="flex w-auto max-w-[80%] flex-col">
                     <div className="inline-block rounded-lg bg-gray-100 p-2">
                         <div className="text-sm font-semibold">{comment.author.name}</div>
@@ -417,7 +569,7 @@ const CommentItem = ({ comment, user, depth = 0 }: CommentItemProps) => {
                                 <span
                                     onClick={handleLikeComment}
                                     className={`cursor-pointer ${
-                                        comment.author._id === user._id ? "text-gray-400" : ""
+                                        comment.createdBy === user?.did ? "text-gray-400" : ""
                                     }`}
                                 >
                                     Like
@@ -427,12 +579,37 @@ const CommentItem = ({ comment, user, depth = 0 }: CommentItemProps) => {
                                 </span>
                             </div>
                             {likes > 0 && (
-                                <div className="flex items-center" title={likedByUsers.map((u) => u.name).join(", ")}>
-                                    <Heart
-                                        className={`h-4 w-4 ${isLiked ? "fill-current text-red-500" : "text-gray-500"}`}
-                                    />
-                                    {likes > 1 && <span className="ml-1 text-xs text-gray-500">{likes}</span>}
-                                </div>
+                                <Popover open={isLikesPopoverOpen} onOpenChange={handleLikesPopoverOpen}>
+                                    <PopoverTrigger asChild>
+                                        <div className="flex items-center">
+                                            <Heart
+                                                className={`h-4 w-4 ${
+                                                    isLiked ? "fill-current text-red-500" : "text-gray-500"
+                                                }`}
+                                                onClick={handleLikeComment}
+                                            />
+                                            {likes > 0 && <span className="ml-1 text-xs text-gray-500">{likes}</span>}
+                                        </div>
+                                    </PopoverTrigger>
+                                    <PopoverContent>
+                                        <div>
+                                            <h4 className="font-bold">Likes</h4>
+                                            {likedByUsers.map((user) => (
+                                                <div key={user.did} className="flex items-center gap-2">
+                                                    <UserPicture
+                                                        name={user.name}
+                                                        picture={user.picture?.url}
+                                                        size="small"
+                                                    />
+                                                    <span>{user.name}</span>
+                                                </div>
+                                            ))}
+                                            {likes > 20 && (
+                                                <div className="text-sm text-gray-500">...and {likes - 20} more</div>
+                                            )}
+                                        </div>
+                                    </PopoverContent>
+                                </Popover>
                             )}
                         </div>
                     )}
@@ -449,7 +626,6 @@ const CommentItem = ({ comment, user, depth = 0 }: CommentItemProps) => {
                                 maxRows={6}
                             />
                             <div className="mt-1 flex items-center gap-2">
-                                {/* On mobile, show send button */}
                                 {isMobile && (
                                     <button onClick={handleAddReply} className="self-end text-blue-500">
                                         Send
@@ -492,15 +668,16 @@ const CommentItem = ({ comment, user, depth = 0 }: CommentItemProps) => {
                 <div className={`ml-8 mt-2`}>
                     {!showReplies ? (
                         <div className="cursor-pointer text-xs text-blue-500" onClick={() => setShowReplies(true)}>
-                            Show {flatReplies.length} {flatReplies.length > 1 ? "replies" : "reply"}
+                            Show {replies.length} {replies.length > 1 ? "replies" : "reply"}
                         </div>
                     ) : (
-                        flatReplies.map((reply) => (
+                        replies.map((reply) => (
                             <CommentItem
                                 key={reply._id}
                                 comment={reply}
                                 user={user}
-                                depth={1} // Keep depth at 1
+                                postId={postId}
+                                depth={depth + 1}
                             />
                         ))
                     )}
