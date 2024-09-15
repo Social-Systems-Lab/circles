@@ -1,9 +1,9 @@
 "use client";
 
-import { Circle, Content, Feed, PostDisplay, CommentDisplay } from "@/models/models";
+import { Circle, Content, Feed, PostDisplay, CommentDisplay, Page } from "@/models/models";
 import { UserPicture } from "../members/user-picture";
 import { Button } from "@/components/ui/button";
-import { Edit, Heart, Loader2, MessageCircle, MoreVertical, Trash2 } from "lucide-react";
+import { Edit, Heart, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Trash2 } from "lucide-react";
 import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import { KeyboardEvent, useEffect, useState, useTransition } from "react";
 import { useIsCompact } from "@/components/utils/use-is-compact";
@@ -15,8 +15,20 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
 import TextareaAutosize from "react-textarea-autosize";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MemberDisplay } from "@/models/models";
@@ -29,19 +41,30 @@ import {
     unlikeContentAction,
     getReactionsAction,
     checkIfLikedAction,
+    updatePostAction,
+    deletePostAction,
 } from "./actions";
 import { Arrow } from "@radix-ui/react-popover";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { HoverCardArrow } from "@radix-ui/react-hover-card";
 import { start } from "repl";
+import { AiOutlineHeart, AiFillHeart } from "react-icons/ai";
+import { CreateNewPost } from "./create-new-post";
+import { EditPost } from "./edit-post";
+import { useToast } from "@/components/ui/use-toast";
+import { PostForm } from "./post-form";
+import { isAuthorized } from "@/lib/auth/client-auth";
+import { feedFeaturePrefix } from "@/lib/data/constants";
 
 type PostItemProps = {
     post: PostDisplay;
     circle: Circle;
     feed: Feed;
+    page: Page;
+    subpage?: string;
 };
 
-const PostItem = ({ post, circle }: PostItemProps) => {
+const PostItem = ({ post, circle, feed, page, subpage }: PostItemProps) => {
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
     const formattedDate = getPublishTime(post?.createdAt);
     const isCompact = useIsCompact();
@@ -50,14 +73,18 @@ const PostItem = ({ post, circle }: PostItemProps) => {
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [user] = useAtom(userAtom);
     const isAuthor = user && post.createdBy === user?.did;
+    const canModerateFeature = feedFeaturePrefix + feed.handle + "_moderate";
+    const canModerate = isAuthorized(user, circle, canModerateFeature);
     const [isPending, startTransition] = useTransition();
-    const router = useRouter();
+    const { toast } = useToast();
+
+    const [openDropdown, setOpenDropdown] = useState(false);
 
     // State for likes
     const initialLikes = post.reactions.like || 0;
     const [likes, setLikes] = useState<number>(initialLikes);
     const [isLiked, setIsLiked] = useState<boolean>(false);
-    const [likedByUsers, setLikedByUsers] = useState<MemberDisplay[] | undefined>(undefined);
+    const [likedByUsers, setLikedByUsers] = useState<Circle[] | undefined>(undefined);
     const [isLikesPopoverOpen, setIsLikesPopoverOpen] = useState(false);
 
     // State for comments
@@ -82,31 +109,63 @@ const PostItem = ({ post, circle }: PostItemProps) => {
 
     useEffect(() => {
         // Check if the user has liked the post
-        const checkIfLiked = async () => {
-            if (user) {
-                try {
-                    const result = await checkIfLikedAction(post._id, "post");
-                    if (result.success) {
-                        setIsLiked(result.isLiked || false);
-                    }
-                } catch (error) {
-                    console.error("Failed to check if liked", error);
-                }
-            }
-        };
-        checkIfLiked();
+        // TODO fix this to be done server-side when posts are fetched
+        // const checkIfLiked = async () => {
+        //     if (user) {
+        //         try {
+        //             const result = await checkIfLikedAction(post._id, "post");
+        //             if (result.success) {
+        //                 setIsLiked(result.isLiked || false);
+        //             }
+        //         } catch (error) {
+        //             console.error("Failed to check if liked", error);
+        //         }
+        //     }
+        // };
+        // checkIfLiked();
     }, [post._id, user]);
 
     const handleContentClick = (content: Content) => {
         setContentPreview((x) => (x === content ? undefined : content));
     };
 
-    const handleEditClick = () => {
-        // Implement edit functionality
+    const handleEditSubmit = async (formData: FormData) => {
+        startTransition(async () => {
+            const response = await updatePostAction(formData, page, subpage);
+
+            if (!response.success) {
+                toast({
+                    title: response.message,
+                    variant: "destructive",
+                });
+                return;
+            } else {
+                toast({
+                    title: "Post updated successfully",
+                    variant: "success",
+                });
+            }
+            setOpenDropdown(false);
+        });
     };
 
-    const handleDeleteClick = () => {
-        // Implement delete functionality
+    const handleDeleteConfirm = async () => {
+        startTransition(async () => {
+            const response = await deletePostAction(post._id, page, subpage);
+
+            if (!response.success) {
+                toast({
+                    title: response.message,
+                    variant: "destructive",
+                });
+                return;
+            } else {
+                toast({
+                    title: "Post deleted successfully",
+                    variant: "success",
+                });
+            }
+        });
     };
 
     const handleLikePost = () => {
@@ -206,22 +265,71 @@ const PostItem = ({ post, circle }: PostItemProps) => {
                     </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                    {isAuthor && (
-                        <DropdownMenu>
+                    {(isAuthor || canModerate) && (
+                        <DropdownMenu modal={false} open={openDropdown} onOpenChange={setOpenDropdown}>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon" className="rounded-full">
-                                    <MoreVertical className="h-4 w-4" />
+                                    <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={handleEditClick}>
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    <span>Edit</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={handleDeleteClick}>
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    <span>Delete</span>
-                                </DropdownMenuItem>
+                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                {isAuthor && (
+                                    <Dialog onOpenChange={(open) => setOpenDropdown(open)}>
+                                        <DialogTrigger asChild>
+                                            <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                                <Edit className="mr-2 h-4 w-4" />
+                                                <span>Edit</span>
+                                            </DropdownMenuItem>
+                                        </DialogTrigger>
+                                        <DialogContent className="overflow-hidden rounded-[15px] p-0 sm:max-w-[425px] sm:rounded-[15px]">
+                                            <PostForm
+                                                circle={circle}
+                                                feed={feed}
+                                                user={user}
+                                                initialPost={post}
+                                                onSubmit={handleEditSubmit}
+                                                onCancel={() => setOpenDropdown(false)}
+                                            />
+                                        </DialogContent>
+                                    </Dialog>
+                                )}
+                                <Dialog onOpenChange={(open) => setOpenDropdown(open)}>
+                                    <DialogTrigger asChild>
+                                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            <span>Delete</span>
+                                        </DropdownMenuItem>
+                                    </DialogTrigger>
+                                    <DialogContent>
+                                        <DialogHeader>
+                                            <DialogTitle>Delete Post</DialogTitle>
+                                            <DialogDescription>
+                                                Are you sure you want to delete this post? This action cannot be undone.
+                                            </DialogDescription>
+                                        </DialogHeader>
+                                        <DialogFooter>
+                                            <DialogClose asChild>
+                                                <Button variant="outline">Cancel</Button>
+                                            </DialogClose>
+                                            <Button
+                                                variant="destructive"
+                                                onClick={handleDeleteConfirm}
+                                                disabled={isPending}
+                                            >
+                                                {isPending ? (
+                                                    <>
+                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                        Deleting...
+                                                    </>
+                                                ) : (
+                                                    <>Delete</>
+                                                )}
+                                            </Button>
+                                        </DialogFooter>
+                                    </DialogContent>
+                                </Dialog>
                             </DropdownMenuContent>
                         </DropdownMenu>
                     )}
@@ -271,10 +379,11 @@ const PostItem = ({ post, circle }: PostItemProps) => {
             <div className="flex items-center justify-between pl-4 pr-4 text-gray-500">
                 {/* Likes Section */}
                 <div className="flex cursor-pointer items-center gap-1.5 text-gray-500">
-                    <Heart
-                        className={`h-5 w-5 ${isLiked ? "fill-current text-red-500" : ""}`}
-                        onClick={handleLikePost}
-                    />
+                    {isLiked ? (
+                        <AiFillHeart className={`h-5 w-5 text-[#ff4772]`} onClick={handleLikePost} />
+                    ) : (
+                        <AiOutlineHeart className={`h-5 w-5 text-gray-500`} onClick={handleLikePost} />
+                    )}
                     {likes > 0 && (
                         <HoverCard openDelay={200} onOpenChange={(open) => handleLikesPopoverHover(open)}>
                             <HoverCardTrigger>
@@ -291,7 +400,7 @@ const PostItem = ({ post, circle }: PostItemProps) => {
                                     )}
 
                                     {likedByUsers?.map((user) => (
-                                        <div key={user.userDid} className="flex items-center gap-2 text-[12px]">
+                                        <div key={user.did} className="flex items-center gap-2 text-[12px]">
                                             {/* <UserPicture name={user.name} picture={user.picture?.url} size="small" /> */}
                                             <span>{user.name}</span>
                                         </div>
@@ -361,6 +470,45 @@ const PostItem = ({ post, circle }: PostItemProps) => {
                     </div>
                 )}
             </div>
+            {/* 
+            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <PostForm
+                        circle={circle}
+                        feed={feed}
+                        user={user}
+                        initialPost={post}
+                        onSubmit={handleEditSubmit}
+                        onCancel={() => setIsEditDialogOpen(false)}
+                    />
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete Post</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete this post? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button variant="destructive" onClick={handleDeleteConfirm} disabled={isPending}>
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Deleting...
+                                </>
+                            ) : (
+                                <>Delete</>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog> */}
         </div>
     );
 };
@@ -383,7 +531,7 @@ const CommentItem = ({ comment, user, postId, depth = 0 }: CommentItemProps) => 
     const [isEditing, setIsEditing] = useState(false);
     const [editContent, setEditContent] = useState(comment.content);
     const isMobile = useIsMobile();
-    const [likedByUsers, setLikedByUsers] = useState<MemberDisplay[]>([]);
+    const [likedByUsers, setLikedByUsers] = useState<Circle[]>([]);
     const [isLikesPopoverOpen, setIsLikesPopoverOpen] = useState(false);
     const [isPending, startTransition] = useTransition();
 
@@ -574,12 +722,17 @@ const CommentItem = ({ comment, user, postId, depth = 0 }: CommentItemProps) => 
                                 <Popover open={isLikesPopoverOpen} onOpenChange={handleLikesPopoverOpen}>
                                     <PopoverTrigger asChild>
                                         <div className="flex items-center">
-                                            <Heart
-                                                className={`h-4 w-4 ${
-                                                    isLiked ? "fill-current text-red-500" : "text-gray-500"
-                                                }`}
-                                                onClick={handleLikeComment}
-                                            />
+                                            {isLiked ? (
+                                                <AiFillHeart
+                                                    className={`h-4 w-4 text-[#ff4772]`}
+                                                    onClick={handleLikeComment}
+                                                />
+                                            ) : (
+                                                <AiOutlineHeart
+                                                    className={`h-4 w-4 text-gray-500`}
+                                                    onClick={handleLikeComment}
+                                                />
+                                            )}
                                             {likes > 0 && <span className="ml-1 text-xs text-gray-500">{likes}</span>}
                                         </div>
                                     </PopoverTrigger>
@@ -683,13 +836,15 @@ type PostListProps = {
     feed: Feed;
     circle: Circle;
     posts: PostDisplay[];
+    page: Page;
+    subpage?: string;
 };
 
-const PostList = ({ feed, circle, posts }: PostListProps) => {
+const PostList = ({ feed, circle, posts, page, subpage }: PostListProps) => {
     return (
         <div className={"flex flex-col gap-6"}>
             {posts.map((post) => (
-                <PostItem key={post._id} post={post} circle={circle} feed={feed} />
+                <PostItem key={post._id} post={post} circle={circle} feed={feed} page={page} subpage={subpage} />
             ))}
         </div>
     );

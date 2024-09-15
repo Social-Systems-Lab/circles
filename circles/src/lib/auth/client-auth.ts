@@ -36,9 +36,10 @@ export const hasHigherAccess = (
     }
 };
 
-export const isAuthorized = (user: UserPrivate | undefined, circle: Circle, feature: Feature): boolean => {
+export const isAuthorized = (user: UserPrivate | undefined, circle: Circle, feature: Feature | string): boolean => {
     // lookup access rules in circle for the features
-    let allowedUserGroups = circle.accessRules?.[feature.handle];
+    let featureHandle = typeof feature === "string" ? feature : feature.handle;
+    let allowedUserGroups = circle.accessRules?.[featureHandle];
 
     if (!allowedUserGroups) return false;
     if (allowedUserGroups.includes("everyone")) return true;

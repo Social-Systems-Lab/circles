@@ -5,6 +5,8 @@ import { getFeedByHandle, getPosts } from "@/lib/data/feed";
 import { FeedComponent } from "./feed";
 import { redirect } from "next/navigation";
 import { ThirdColumn } from "./third-column";
+import { feedFeaturePrefix } from "@/lib/data/constants";
+import { isAuthorized } from "@/lib/auth/auth";
 
 export default async function FeedsModule({ circle, page, subpage, isDefaultCircle }: ModulePageProps) {
     const feed = await getFeedByHandle(circle?._id, subpage);

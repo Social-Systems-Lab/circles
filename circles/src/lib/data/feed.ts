@@ -94,6 +94,13 @@ export const createPost = async (post: Post): Promise<Post> => {
     return { ...post, _id: result.insertedId.toString() };
 };
 
+export const deletePost = async (postId: string): Promise<void> => {
+    await Posts.deleteOne({ _id: new ObjectId(postId) });
+
+    // delete comments
+    await Comments.deleteMany({ postId });
+};
+
 export const getPost = async (postId: string): Promise<Post | null> => {
     let post = (await Posts.findOne({ _id: new ObjectId(postId) })) as Post;
     if (post) {
@@ -114,11 +121,8 @@ export const createComment = async (comment: Comment): Promise<Comment> => {
 };
 
 export const getPosts = async (feedId: string, limit: number = 10, offset: number = 0): Promise<PostDisplay[]> => {
-    const posts = await Posts.aggregate([
+    const posts = (await Posts.aggregate([
         { $match: { feedId: feedId } },
-        { $sort: { createdAt: -1 } },
-        { $skip: offset },
-        { $limit: limit },
         {
             $lookup: {
                 from: "circles",
@@ -131,8 +135,8 @@ export const getPosts = async (feedId: string, limit: number = 10, offset: numbe
         {
             $lookup: {
                 from: "comments",
-                localField: "highlightedCommentId",
-                foreignField: "_id",
+                let: { highlightedCommentId: { $toObjectId: "$highlightedCommentId" } },
+                pipeline: [{ $match: { $expr: { $eq: ["$_id", "$$highlightedCommentId"] } } }, { $limit: 1 }],
                 as: "highlightedComment",
             },
         },
@@ -147,6 +151,24 @@ export const getPosts = async (feedId: string, limit: number = 10, offset: numbe
         },
         { $unwind: { path: "$highlightedCommentAuthor", preserveNullAndEmptyArrays: true } },
         {
+            $group: {
+                _id: "$_id",
+                feedId: { $first: "$feedId" },
+                content: { $first: "$content" },
+                createdAt: { $first: "$createdAt" },
+                reactions: { $first: "$reactions" },
+                media: { $first: "$media" },
+                createdBy: { $first: "$createdBy" },
+                highlightedCommentId: { $first: "$highlightedCommentId" },
+                authorDetails: { $first: "$authorDetails" },
+                highlightedComment: { $first: "$highlightedComment" },
+                highlightedCommentAuthor: { $first: "$highlightedCommentAuthor" },
+            },
+        },
+        { $sort: { createdAt: -1 } },
+        { $skip: offset },
+        { $limit: limit },
+        {
             $project: {
                 _id: { $toString: "$_id" },
                 feedId: 1,
@@ -155,7 +177,7 @@ export const getPosts = async (feedId: string, limit: number = 10, offset: numbe
                 reactions: 1,
                 media: 1,
                 createdBy: 1,
-                highlightedCommentId: 1,
+                highlightedCommentId: { $toString: "$highlightedCommentId" }, // Convert to string
                 author: {
                     did: "$authorDetails.did",
                     name: "$authorDetails.name",
@@ -166,28 +188,34 @@ export const getPosts = async (feedId: string, limit: number = 10, offset: numbe
                     handle: "$authorDetails.handle",
                 },
                 highlightedComment: {
-                    _id: { $toString: "$highlightedComment._id" },
-                    postId: "$highlightedComment.postId",
-                    parentCommentId: "$highlightedComment.parentCommentId",
-                    content: "$highlightedComment.content",
-                    createdBy: "$highlightedComment.createdBy",
-                    createdAt: "$highlightedComment.createdAt",
-                    reactions: "$highlightedComment.reactions",
-                    author: {
-                        did: "$highlightedCommentAuthor.did",
-                        name: "$highlightedCommentAuthor.name",
-                        picture: "$highlightedCommentAuthor.picture",
-                        location: "$highlightedCommentAuthor.location",
-                        description: "$highlightedCommentAuthor.description",
-                        cover: "$highlightedCommentAuthor.cover",
-                        handle: "$highlightedCommentAuthor.handle",
+                    $cond: {
+                        if: { $ifNull: ["$highlightedComment", false] },
+                        then: {
+                            _id: { $toString: "$highlightedComment._id" },
+                            postId: "$highlightedComment.postId",
+                            parentCommentId: { $toString: "$highlightedComment.parentCommentId" }, // Convert to string
+                            content: "$highlightedComment.content",
+                            createdBy: "$highlightedComment.createdBy",
+                            createdAt: "$highlightedComment.createdAt",
+                            reactions: "$highlightedComment.reactions",
+                            author: {
+                                did: "$highlightedCommentAuthor.did",
+                                name: "$highlightedCommentAuthor.name",
+                                picture: "$highlightedCommentAuthor.picture",
+                                location: "$highlightedCommentAuthor.location",
+                                description: "$highlightedCommentAuthor.description",
+                                cover: "$highlightedCommentAuthor.cover",
+                                handle: "$highlightedCommentAuthor.handle",
+                            },
+                        },
+                        else: null,
                     },
                 },
             },
         },
-    ]).toArray();
+    ]).toArray()) as PostDisplay[];
 
-    return posts as PostDisplay[];
+    return posts;
 };
 
 export const updatePost = async (post: Partial<Post>): Promise<void> => {
@@ -199,7 +227,7 @@ export const updatePost = async (post: Partial<Post>): Promise<void> => {
 };
 
 export const getComments = async (postId: string, parentCommentId: string | null = null): Promise<CommentDisplay[]> => {
-    const comments = await Comments.aggregate([
+    const comments = (await Comments.aggregate([
         { $match: { postId: postId, parentCommentId: parentCommentId } },
         { $sort: { createdAt: 1 } },
         {
@@ -231,9 +259,15 @@ export const getComments = async (postId: string, parentCommentId: string | null
                 },
             },
         },
-    ]).toArray();
+    ]).toArray()) as CommentDisplay[];
 
-    return comments as CommentDisplay[];
+    comments.forEach((comment: CommentDisplay) => {
+        if (comment._id) {
+            comment._id = comment._id.toString();
+        }
+    });
+
+    return comments;
 };
 
 export const likeContent = async (

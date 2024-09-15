@@ -10,16 +10,19 @@ import {
     getFeed,
     updatePost,
     getPost,
+    deletePost,
 } from "@/lib/data/feed";
 import { saveFile, isFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { feedFeaturePrefix } from "@/lib/data/constants";
-import { Media, Post, postSchema, Comment, commentSchema } from "@/models/models";
+import { Media, Post, postSchema, Comment, commentSchema, Circle, Page, PostDisplay } from "@/models/models";
 import { revalidatePath } from "next/cache";
-import { getCircleById } from "@/lib/data/circle";
+import { getCircleById, getCirclePath } from "@/lib/data/circle";
 
 export async function createPostAction(
     formData: FormData,
+    page: Page,
+    subpage?: string,
 ): Promise<{ success: boolean; message?: string; post?: Post }> {
     try {
         const content = formData.get("content") as string;
@@ -75,9 +78,111 @@ export async function createPostAction(
             console.log("Failed to save post media", error);
         }
 
+        let circlePath = await getCirclePath({ _id: circleId } as Circle);
+        revalidatePath(`${circlePath}${page?.handle ?? ""}${subpage ? `/${subpage}` : ""}`);
+
         return { success: true, message: "Post created successfully", post: newPost };
     } catch (error) {
         return { success: false, message: error instanceof Error ? error.message : "Failed to create post." };
+    }
+}
+
+export async function updatePostAction(
+    formData: FormData,
+    page: Page,
+    subpage?: string,
+): Promise<{ success: boolean; message?: string; post?: Post }> {
+    try {
+        const postId = formData.get("postId") as string;
+        const content = formData.get("content") as string;
+        const circleId = formData.get("circleId") as string;
+
+        const userDid = await getAuthenticatedUserDid();
+        const post = await getPost(postId);
+        if (!post) {
+            return { success: false, message: "Post not found" };
+        }
+        if (post.createdBy !== userDid) {
+            return { success: false, message: "You are not authorized to edit this post" };
+        }
+
+        let feedId = post.feedId;
+        const updatedPost: Partial<Post> = {
+            _id: postId,
+            content,
+            editedAt: new Date(),
+        };
+
+        let existingMedia: Media[] = [];
+        let mediaStr = formData.getAll("existingMedia") as string[];
+        if (mediaStr) {
+            for (const media of mediaStr) {
+                existingMedia.push(JSON.parse(media));
+            }
+        }
+        const newMedia: Media[] = [];
+        const images = formData.getAll("media") as File[];
+        let imageIndex = existingMedia.length;
+        for (const image of images) {
+            if (isFile(image)) {
+                const savedImage = await saveFile(
+                    image,
+                    `feeds/${feedId}/${postId}/post-image-${imageIndex}`,
+                    circleId,
+                    true,
+                );
+                newMedia.push({ name: image.name, type: image.type, fileInfo: savedImage });
+                imageIndex++;
+            }
+        }
+
+        updatedPost.media = [...existingMedia, ...newMedia];
+
+        await updatePost(updatedPost);
+
+        let circlePath = await getCirclePath({ _id: circleId } as Circle);
+        revalidatePath(`${circlePath}${page.handle ?? ""}${subpage ? `/${subpage}` : ""}`);
+
+        return { success: true, message: "Post updated successfully" };
+    } catch (error) {
+        return { success: false, message: error instanceof Error ? error.message : "Failed to update post." };
+    }
+}
+
+export async function deletePostAction(
+    postId: string,
+    page: Page,
+    subpage?: string,
+): Promise<{ success: boolean; message?: string }> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        const post = await getPost(postId);
+        if (!post) {
+            return { success: false, message: "Post not found" };
+        }
+
+        const feed = await getFeed(post.feedId);
+        let canModerate = false;
+        if (feed) {
+            const feature = feedFeaturePrefix + feed.handle + "_moderate";
+            canModerate = await isAuthorized(userDid, feed.circleId, feature);
+        }
+
+        // check if user can moderate feed or is creator of the post
+        if (post.createdBy !== userDid && !canModerate) {
+            return { success: false, message: "You are not authorized to delete this post" };
+        }
+
+        // delete post
+        await deletePost(postId);
+
+        // revalidate the page to reflect the changes
+        revalidatePath(`/${page.handle}${subpage ? `/${subpage}` : ""}`);
+
+        return { success: true, message: "Post deleted successfully" };
+    } catch (error) {
+        console.error("Error deleting post:", error);
+        return { success: false, message: "An error occurred while deleting the post" };
     }
 }
 

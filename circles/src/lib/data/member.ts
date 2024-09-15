@@ -41,7 +41,7 @@ export const getMembers = async (circleId?: string): Promise<MemberDisplay[]> =>
     ]).toArray();
 
     // filter location data based on precision
-    members = filterLocations(members as Content[]);
+    //members = filterLocations(members as Content[]);
     return members as MemberDisplay[];
 };
 

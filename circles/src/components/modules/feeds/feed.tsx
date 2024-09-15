@@ -6,6 +6,10 @@ import { Circle, Feed, Page, PostDisplay } from "@/models/models";
 import { CreateNewPost } from "./create-new-post";
 import PostList from "./post-list";
 import CircleHeader from "../circles/circle-header";
+import { feedFeaturePrefix } from "@/lib/data/constants";
+import { userAtom } from "@/lib/data/atoms";
+import { useAtom } from "jotai";
+import { isAuthorized } from "@/lib/auth/client-auth";
 
 export type FeedComponentProps = {
     circle: Circle;
@@ -18,6 +22,11 @@ export type FeedComponentProps = {
 
 export const FeedComponent = ({ circle, posts, page, subpage, feed, isDefaultCircle }: FeedComponentProps) => {
     const isCompact = useIsCompact();
+    const [user] = useAtom(userAtom);
+
+    // check if authorized to post
+    const canPostFeature = feedFeaturePrefix + feed.handle + "_post";
+    const canPost = isAuthorized(user, circle, canPostFeature);
 
     return (
         <div
@@ -37,11 +46,13 @@ export const FeedComponent = ({ circle, posts, page, subpage, feed, isDefaultCir
                         isDefaultCircle={isDefaultCircle}
                     />
                 </div>
-                <div>
-                    {/* className="mt-6" */}
-                    <CreateNewPost circle={circle} feed={feed} />
-                </div>
-                <PostList posts={posts} feed={feed} circle={circle} />
+                {canPost && (
+                    <div>
+                        {/* className="mt-6" */}
+                        <CreateNewPost circle={circle} feed={feed} page={page} subpage={subpage} />
+                    </div>
+                )}
+                <PostList posts={posts} feed={feed} circle={circle} page={page} subpage={subpage} />
             </div>
         </div>
     );

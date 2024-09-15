@@ -33,7 +33,7 @@ export const getCircles = async (parentCircleId: string): Promise<Circle[]> => {
             circle._id = circle._id.toString();
         }
     });
-    circles = filterLocations(circles) as any[];
+    //circles = filterLocations(circles) as any[];
     return circles;
 };
 

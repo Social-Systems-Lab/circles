@@ -181,6 +181,7 @@ export const postSchema = z.object({
     feedId: z.string(),
     createdBy: didSchema,
     createdAt: z.date(),
+    editedAt: z.date().optional(),
     content: z.string(),
     reactions: z.record(z.string(), z.number()).default({}),
     location: locationSchema.optional(),
