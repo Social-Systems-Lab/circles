@@ -1,7 +1,7 @@
 "use client";
 
 import { contentPreviewAtom } from "@/lib/data/atoms";
-import { Content } from "@/models/models";
+import { Content, ContentPreviewData } from "@/models/models";
 import { useAtom, useSetAtom } from "jotai";
 import React from "react";
 
@@ -16,7 +16,11 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick }) => {
     const handleClick = () => {
         if (content) {
             console.log("content clicked");
-            setContentPreview(content);
+            let contentPreviewData: ContentPreviewData = {
+                type: content.circleType,
+                content: content,
+            };
+            setContentPreview(contentPreviewData);
             if (onClick) {
                 onClick(content);
             }

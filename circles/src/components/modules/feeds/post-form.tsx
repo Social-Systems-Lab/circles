@@ -15,6 +15,8 @@ import {
 import { useDropzone } from "react-dropzone";
 import { Button } from "@/components/ui/button";
 import LocationPicker from "@/components/forms/location-picker";
+import { useAtom } from "jotai";
+import { imageGalleryAtom } from "@/lib/data/atoms";
 
 type ImageItem = {
     file?: File;
@@ -149,7 +151,8 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                 placeholder="Share your story"
                 value={postContent}
                 onChange={(e) => setPostContent(e.target.value)}
-                className="min-h-[150px] w-full resize-none border-0 text-lg focus-visible:ring-0 focus-visible:ring-transparent focus-visible:ring-offset-0"
+                className="min-h-[150px] w-full resize-none border-0 p-0 pt-6 text-lg focus-visible:ring-0 focus-visible:ring-transparent focus-visible:ring-offset-0"
+                autoFocus
             />
             {images.length > 0 && (
                 <div className="relative mt-4">

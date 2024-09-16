@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Input } from "@/components/ui/input";
-import { Circle, Page } from "@/models/models";
+import { Circle, ContentPreviewData, Page } from "@/models/models";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import Image from "next/image";
@@ -107,7 +107,12 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
     };
 
     const handleCircleClick = (circle: Circle) => {
-        setContentPreview((x) => (x === circle ? undefined : circle));
+        let contentPreviewData: ContentPreviewData = {
+            type: "circle",
+            content: circle,
+        };
+
+        setContentPreview((x) => (x?.content === circle ? undefined : contentPreviewData));
     };
 
     return (

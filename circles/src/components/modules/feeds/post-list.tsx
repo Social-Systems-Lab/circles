@@ -1,6 +1,15 @@
 "use client";
 
-import { Circle, Content, Feed, PostDisplay, CommentDisplay, Page } from "@/models/models";
+import {
+    Circle,
+    Content,
+    Feed,
+    PostDisplay,
+    CommentDisplay,
+    Page,
+    PostItemProps,
+    ContentPreviewData,
+} from "@/models/models";
 import { UserPicture } from "../members/user-picture";
 import { Button } from "@/components/ui/button";
 import { Edit, Heart, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Trash2 } from "lucide-react";
@@ -9,7 +18,7 @@ import { KeyboardEvent, useEffect, useState, useTransition } from "react";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { getPublishTime } from "@/lib/utils";
-import { contentPreviewAtom, userAtom } from "@/lib/data/atoms";
+import { contentPreviewAtom, imageGalleryAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import {
     DropdownMenu,
@@ -56,15 +65,7 @@ import { PostForm } from "./post-form";
 import { isAuthorized } from "@/lib/auth/client-auth";
 import { feedFeaturePrefix } from "@/lib/data/constants";
 
-type PostItemProps = {
-    post: PostDisplay;
-    circle: Circle;
-    feed: Feed;
-    page: Page;
-    subpage?: string;
-};
-
-const PostItem = ({ post, circle, feed, page, subpage }: PostItemProps) => {
+export const PostItem = ({ post, circle, feed, page, subpage }: PostItemProps) => {
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
     const formattedDate = getPublishTime(post?.createdAt);
     const isCompact = useIsCompact();
@@ -77,6 +78,7 @@ const PostItem = ({ post, circle, feed, page, subpage }: PostItemProps) => {
     const canModerate = isAuthorized(user, circle, canModerateFeature);
     const [isPending, startTransition] = useTransition();
     const { toast } = useToast();
+    const [, setImageGallery] = useAtom(imageGalleryAtom);
 
     const [openDropdown, setOpenDropdown] = useState(false);
 
@@ -125,8 +127,12 @@ const PostItem = ({ post, circle, feed, page, subpage }: PostItemProps) => {
         // checkIfLiked();
     }, [post._id, user]);
 
-    const handleContentClick = (content: Content) => {
-        setContentPreview((x) => (x === content ? undefined : content));
+    const handleAuthorClick = (author: Circle) => {
+        let contentPreviewData: ContentPreviewData = {
+            type: "user",
+            content: author,
+        };
+        setContentPreview((x) => (x?.content === author ? undefined : contentPreviewData));
     };
 
     const handleEditSubmit = async (formData: FormData) => {
@@ -247,6 +253,19 @@ const PostItem = ({ post, circle, feed, page, subpage }: PostItemProps) => {
         // fetchComments();
     }, [post._id]);
 
+    const handleImageClick = (index: number) => {
+        if (post.media && post.media.length > 0) {
+            // open content preview
+            let contentPreviewData: ContentPreviewData = {
+                type: "post",
+                content: post,
+                props: { post, circle, feed, page, subpage },
+            };
+            setContentPreview(contentPreviewData);
+            setImageGallery({ images: post.media, initialIndex: 0 });
+        }
+    };
+
     return (
         <div className={`flex flex-col gap-4 ${isCompact ? "" : "rounded-[15px] border-0 shadow-lg"} bg-white`}>
             {/* Header with user information */}
@@ -255,10 +274,10 @@ const PostItem = ({ post, circle, feed, page, subpage }: PostItemProps) => {
                     <UserPicture
                         name={post.author?.name}
                         picture={post.author?.picture?.url}
-                        onClick={() => handleContentClick(post.author)}
+                        onClick={() => handleAuthorClick(post.author)}
                     />
                     <div className="flex flex-col">
-                        <span className="cursor-pointer font-semibold" onClick={() => handleContentClick(post.author)}>
+                        <span className="cursor-pointer font-semibold" onClick={() => handleAuthorClick(post.author)}>
                             {post.author?.name}
                         </span>
                         <span className="text-sm text-gray-500">{formattedDate}</span>
@@ -351,6 +370,7 @@ const PostItem = ({ post, circle, feed, page, subpage }: PostItemProps) => {
                                             src={mediaItem.fileInfo.url}
                                             alt={mediaItem.name}
                                             className="h-64 w-full rounded-lg object-cover"
+                                            onClick={() => handleImageClick(index)}
                                         />
                                     </CarouselItem>
                                 ))}

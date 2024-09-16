@@ -21,7 +21,8 @@ import { isEqual } from "lodash"; // You might need to install lodash
 import { motion } from "framer-motion";
 import Image from "next/image";
 import ContentPreview from "../layout/content-preview";
-import { Content } from "@/models/models";
+import { Content, ContentPreviewData } from "@/models/models";
+import ImageGallery from "../layout/image-gallery";
 
 const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
     const mapContainer = useRef(null);
@@ -37,7 +38,11 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
 
     const onMarkerClick = useCallback(
         (content: Content) => {
-            setContentPreview((x) => (content === x ? undefined : content));
+            let contentPreviewData: ContentPreviewData = {
+                type: content.circleType,
+                content: content,
+            };
+            setContentPreview((x) => (content === x?.content ? undefined : contentPreviewData));
         },
         [setContentPreview],
     );

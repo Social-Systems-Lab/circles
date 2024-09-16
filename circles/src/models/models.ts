@@ -194,6 +194,7 @@ export type Post = z.infer<typeof postSchema>;
 export interface PostDisplay extends Post {
     author: Circle;
     highlightedComment?: CommentDisplay;
+    circleType: "post";
 }
 
 export const commentSchema = z.object({
@@ -291,7 +292,22 @@ export const serverSettingsSchema = z.object({
 
 export type ServerSettings = z.infer<typeof serverSettingsSchema>;
 
-export type Content = Circle | MemberDisplay;
+export type Content = Circle | MemberDisplay | PostDisplay;
+
+export type PostItemProps = {
+    post: PostDisplay;
+    circle: Circle;
+    feed: Feed;
+    page: Page;
+    subpage?: string;
+};
+
+export type ContentPreviewData =
+    | { type: "post"; content: Post; props: PostItemProps }
+    | { type: "member"; content: MemberDisplay; props?: never }
+    | { type: "user"; content: Circle; props?: never }
+    | { type: "circle"; content: Circle; props?: never }
+    | { type: "default"; content: Content; props?: Record<string, unknown> };
 
 // server setup form wizard
 

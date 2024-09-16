@@ -16,7 +16,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Circle, MemberDisplay, Page } from "@/models/models";
+import { Circle, Content, ContentPreviewData, MemberDisplay, Page } from "@/models/models";
 import { Button } from "@/components/ui/button";
 import { ArrowDown, ArrowUp, Loader2, MoreHorizontal } from "lucide-react";
 import {
@@ -260,7 +260,11 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
     };
 
     const handleRowClick = (member: MemberDisplay) => {
-        setContentPreview((x) => (x === member ? undefined : member));
+        let contentPreviewData: ContentPreviewData = {
+            type: "member",
+            content: member,
+        };
+        setContentPreview((x) => (x?.content === member ? undefined : contentPreviewData));
     };
 
     return (

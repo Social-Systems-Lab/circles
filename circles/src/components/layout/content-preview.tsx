@@ -12,22 +12,119 @@ import { FaUsers } from "react-icons/fa6";
 import { useRouter } from "next/navigation";
 import InviteButton from "../modules/home/invite-button";
 import JoinButton from "../modules/home/join-button";
-import { Circle } from "@/models/models";
+import { Circle, PostDisplay, PostItemProps } from "@/models/models";
+import { PostItem } from "../modules/feeds/post-list";
+
+export const PostPreview = ({ post, circle, feed, page, subpage }: PostItemProps) => {
+    return (
+        <>
+            <PostItem post={post} circle={circle} feed={feed} page={page} subpage={subpage} />
+        </>
+    );
+};
+
+type CirclePreviewProps = {
+    circle: Circle;
+};
+export const CirclePreview = ({ circle }: CirclePreviewProps) => {
+    const router = useRouter();
+    const memberCount = circle?.members ? (circle.circleType === "user" ? circle.members - 1 : circle.members) : 0;
+
+    return (
+        <>
+            <div className="relative h-[270px] w-full">
+                <Image
+                    src={circle?.cover?.url ?? "/images/default-cover.png"}
+                    alt="Cover"
+                    style={{
+                        objectFit: "cover",
+                    }}
+                    sizes="100vw"
+                    fill
+                />
+            </div>
+            <div className="flex flex-1 flex-col">
+                <div className="relative flex justify-center">
+                    <div className="absolute left-1 top-1 flex w-[100px]">
+                        <Button
+                            variant="outline"
+                            className="m-2 w-full"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/circles/${circle.handle}`);
+                            }}
+                        >
+                            Open
+                        </Button>
+                    </div>
+                    <div className="absolute bottom-[-45px] right-2 flex flex-row gap-1">
+                        <InviteButton circle={circle as Circle} isDefaultCircle={false} renderCompact={true} />
+                        <JoinButton circle={circle as Circle} renderCompact={true} />
+                    </div>
+
+                    <div className="absolute top-[-60px]">
+                        <div className="h-[124px] w-[124px]">
+                            <Image
+                                className="rounded-full border-2 border-white bg-white object-cover shadow-lg"
+                                src={circle?.picture?.url ?? "/images/default-picture.png"}
+                                alt="Picture"
+                                fill
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="mb-8 mt-[44px] flex flex-col items-center justify-center overflow-y-auto">
+                    <h4>{circle.name}</h4>
+                    {circle.description && <div className="pl-4 pr-4">{circle.description}</div>}
+                    {memberCount > 0 && (
+                        <div className="flex flex-row items-center justify-center pt-4">
+                            <FaUsers />
+                            <p className="m-0 ml-2">
+                                {memberCount}{" "}
+                                {memberCount !== 1
+                                    ? circle.circleType === "user"
+                                        ? "Friends"
+                                        : "Members"
+                                    : circle.circleType === "user"
+                                      ? "Friend"
+                                      : "Member"}
+                            </p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </>
+    );
+};
 
 export const ContentPreview: React.FC = () => {
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [mapOpen] = useAtom(mapOpenAtom);
-    const [triggerMapOpen] = useAtom(triggerMapOpenAtom);
     const isMobile = useIsMobile();
-    const router = useRouter();
-    const memberCount = contentPreview?.members
-        ? contentPreview.circleType === "user"
-            ? contentPreview.members - 1
-            : contentPreview.members
-        : 0;
 
     const closePreview = () => {
         setContentPreview(undefined);
+    };
+
+    const getPreviewContent = () => {
+        switch (contentPreview?.content?.circleType) {
+            default:
+            case "member":
+            case "user":
+            case "circle":
+                return <CirclePreview circle={contentPreview!.content as Circle} />;
+            case "post":
+                return (
+                    <PostPreview
+                        post={(contentPreview.props! as PostItemProps).post}
+                        circle={(contentPreview.props! as PostItemProps).circle}
+                        feed={(contentPreview.props! as PostItemProps).feed}
+                        page={(contentPreview.props! as PostItemProps).page}
+                        subpage={(contentPreview.props! as PostItemProps).subpage}
+                    />
+                );
+        }
     };
 
     return (
@@ -54,75 +151,7 @@ export const ContentPreview: React.FC = () => {
                             isMobile ? "right-0 top-0" : "right-4 top-[64px]"
                         }`}
                     >
-                        <div className="relative h-[270px] w-full">
-                            <Image
-                                src={contentPreview?.cover?.url ?? "/images/default-cover.png"}
-                                alt="Cover"
-                                style={{
-                                    objectFit: "cover",
-                                }}
-                                sizes="100vw"
-                                fill
-                            />
-                        </div>
-                        <div className="flex flex-1 flex-col">
-                            <div className="relative flex justify-center">
-                                <div className="absolute left-1 top-1 flex w-[100px]">
-                                    <Button
-                                        variant="outline"
-                                        className="m-2 w-full"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            router.push(`/circles/${contentPreview.handle}`);
-                                        }}
-                                    >
-                                        Open
-                                    </Button>
-                                </div>
-                                <div className="absolute bottom-[-45px] right-2 flex flex-row gap-1">
-                                    <InviteButton
-                                        circle={contentPreview as Circle}
-                                        isDefaultCircle={false}
-                                        renderCompact={true}
-                                    />
-                                    <JoinButton circle={contentPreview as Circle} renderCompact={true} />
-                                </div>
-
-                                <div className="absolute top-[-60px]">
-                                    <div className="h-[124px] w-[124px]">
-                                        <Image
-                                            className="rounded-full border-2 border-white bg-white object-cover shadow-lg"
-                                            src={contentPreview?.picture?.url ?? "/images/default-picture.png"}
-                                            alt="Picture"
-                                            fill
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="mb-8 mt-[44px] flex flex-col items-center justify-center overflow-y-auto">
-                                <h4>{contentPreview.name}</h4>
-                                {contentPreview.description && (
-                                    <div className="pl-4 pr-4">{contentPreview.description}</div>
-                                )}
-                                {memberCount > 0 && (
-                                    <div className="flex flex-row items-center justify-center pt-4">
-                                        <FaUsers />
-                                        <p className="m-0 ml-2">
-                                            {memberCount}{" "}
-                                            {memberCount !== 1
-                                                ? contentPreview.circleType === "user"
-                                                    ? "Friends"
-                                                    : "Members"
-                                                : contentPreview.circleType === "user"
-                                                  ? "Friend"
-                                                  : "Member"}
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
+                        {getPreviewContent()}
                         <Button
                             variant="ghost"
                             size="icon"

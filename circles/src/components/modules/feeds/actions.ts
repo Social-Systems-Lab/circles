@@ -11,6 +11,7 @@ import {
     updatePost,
     getPost,
     deletePost,
+    getComment,
 } from "@/lib/data/feed";
 import { saveFile, isFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -238,6 +239,29 @@ export async function likeContentAction(
 ): Promise<{ success: boolean; message?: string }> {
     try {
         const userDid = await getAuthenticatedUserDid();
+
+        let postId: string | undefined = contentId;
+        if (contentType === "comment") {
+            let comment = await getComment(contentId);
+            if (!comment) {
+                return { success: false, message: "Comment not found" };
+            }
+            postId = comment.postId;
+        }
+
+        const post = await getPost(postId);
+        if (!post) {
+            return { success: false, message: "Post not found" };
+        }
+
+        const feed = await getFeed(post.feedId);
+        if (feed) {
+            const feature = feedFeaturePrefix + feed.handle + "_view";
+            let canReact = await isAuthorized(userDid, feed.circleId, feature);
+            if (!canReact) {
+                return { success: false, message: "You are not authorized to like content in this feed" };
+            }
+        }
 
         await likeContent(contentId, contentType, userDid, reactionType);
 

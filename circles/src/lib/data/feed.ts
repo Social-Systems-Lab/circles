@@ -177,6 +177,7 @@ export const getPosts = async (feedId: string, limit: number = 10, offset: numbe
                 reactions: 1,
                 media: 1,
                 createdBy: 1,
+                circleType: { $literal: "post" },
                 highlightedCommentId: { $toString: "$highlightedCommentId" }, // Convert to string
                 author: {
                     did: "$authorDetails.did",
@@ -270,12 +271,32 @@ export const getComments = async (postId: string, parentCommentId: string | null
     return comments;
 };
 
+export const getComment = async (commentId: string): Promise<Comment | null> => {
+    let comment = (await Comments.findOne({ _id: new ObjectId(commentId) })) as Comment;
+    if (comment) {
+        comment._id = comment._id?.toString();
+    }
+    return comment;
+};
+
 export const likeContent = async (
     contentId: string,
     contentType: "post" | "comment",
     userDid: string,
     reactionType: string = "like",
 ): Promise<void> => {
+    // make sure like doesn't already exist
+    const existingReaction = await Reactions.findOne({
+        contentId,
+        contentType,
+        userDid,
+        reactionType,
+    });
+
+    if (existingReaction) {
+        return;
+    }
+
     await Reactions.insertOne({
         contentId,
         contentType,
