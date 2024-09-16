@@ -1,10 +1,11 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { MouseEventHandler } from "react";
 
 type UserPictureProps = {
     name?: string;
     picture?: string;
     size?: string;
-    onClick?: () => void;
+    onClick?: MouseEventHandler<HTMLDivElement> | undefined;
 };
 
 export const UserPicture = ({ name, picture, size, onClick }: UserPictureProps) => {

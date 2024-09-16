@@ -1,18 +1,9 @@
 "use client";
 
-import {
-    Circle,
-    Content,
-    Feed,
-    PostDisplay,
-    CommentDisplay,
-    Page,
-    PostItemProps,
-    ContentPreviewData,
-} from "@/models/models";
+import { Circle, Feed, PostDisplay, CommentDisplay, Page, PostItemProps, ContentPreviewData } from "@/models/models";
 import { UserPicture } from "../members/user-picture";
 import { Button } from "@/components/ui/button";
-import { Edit, Heart, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Trash2 } from "lucide-react";
+import { Edit, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Trash2 } from "lucide-react";
 import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import { KeyboardEvent, useEffect, useState, useTransition } from "react";
 import { useIsCompact } from "@/components/utils/use-is-compact";
@@ -40,38 +31,29 @@ import {
 } from "@/components/ui/dialog";
 import TextareaAutosize from "react-textarea-autosize";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { MemberDisplay } from "@/models/models";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
 import {
-    createPostAction,
     createCommentAction,
     likeContentAction,
     unlikeContentAction,
     getReactionsAction,
-    checkIfLikedAction,
     updatePostAction,
     deletePostAction,
 } from "./actions";
-import { Arrow } from "@radix-ui/react-popover";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { HoverCardArrow } from "@radix-ui/react-hover-card";
-import { start } from "repl";
 import { AiOutlineHeart, AiFillHeart } from "react-icons/ai";
-import { CreateNewPost } from "./create-new-post";
-import { EditPost } from "./edit-post";
 import { useToast } from "@/components/ui/use-toast";
 import { PostForm } from "./post-form";
 import { isAuthorized } from "@/lib/auth/client-auth";
 import { feedFeaturePrefix } from "@/lib/data/constants";
 
-export const PostItem = ({ post, circle, feed, page, subpage }: PostItemProps) => {
+export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostItemProps) => {
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
     const formattedDate = getPublishTime(post?.createdAt);
     const isCompact = useIsCompact();
     const isMobile = useIsMobile();
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
-    const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
+    const [, setContentPreview] = useAtom(contentPreviewAtom);
     const [user] = useAtom(userAtom);
     const isAuthor = user && post.createdBy === user?.did;
     const canModerateFeature = feedFeaturePrefix + feed.handle + "_moderate";
@@ -87,7 +69,6 @@ export const PostItem = ({ post, circle, feed, page, subpage }: PostItemProps) =
     const [likes, setLikes] = useState<number>(initialLikes);
     const [isLiked, setIsLiked] = useState<boolean>(false);
     const [likedByUsers, setLikedByUsers] = useState<Circle[] | undefined>(undefined);
-    const [isLikesPopoverOpen, setIsLikesPopoverOpen] = useState(false);
 
     // State for comments
     const [comments, setComments] = useState<CommentDisplay[]>([]);
@@ -262,32 +243,67 @@ export const PostItem = ({ post, circle, feed, page, subpage }: PostItemProps) =
                 props: { post, circle, feed, page, subpage },
             };
             setContentPreview(contentPreviewData);
-            setImageGallery({ images: post.media, initialIndex: 0 });
+            setImageGallery({ images: post.media, initialIndex: index });
         }
     };
 
+    const handlePostClick = () => {
+        // open content preview
+        let contentPreviewData: ContentPreviewData = {
+            type: "post",
+            content: post,
+            props: { post, circle, feed, page, subpage },
+        };
+        setContentPreview((x) => (x?.content === post ? undefined : contentPreviewData));
+    };
+
     return (
-        <div className={`flex flex-col gap-4 ${isCompact ? "" : "rounded-[15px] border-0 shadow-lg"} bg-white`}>
+        <div
+            className={`flex flex-col gap-4 ${isCompact || inPreview ? "" : "rounded-[15px] border-0 shadow-lg"} bg-white`}
+        >
             {/* Header with user information */}
-            <div className="flex items-center justify-between pl-4 pr-4 pt-4">
+            <div
+                className="flex cursor-pointer items-center justify-between pl-4 pr-4 pt-4"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    handlePostClick();
+                }}
+            >
                 <div className="flex items-center gap-4">
                     <UserPicture
                         name={post.author?.name}
                         picture={post.author?.picture?.url}
-                        onClick={() => handleAuthorClick(post.author)}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleAuthorClick(post.author);
+                        }}
                     />
                     <div className="flex flex-col">
-                        <span className="cursor-pointer font-semibold" onClick={() => handleAuthorClick(post.author)}>
+                        <span
+                            className="cursor-pointer font-semibold"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleAuthorClick(post.author);
+                            }}
+                        >
                             {post.author?.name}
                         </span>
-                        <span className="text-sm text-gray-500">{formattedDate}</span>
+                        <span className="cursor-pointer text-sm text-gray-500">{formattedDate}</span>
                     </div>
                 </div>
                 <div className="flex items-center space-x-2">
                     {(isAuthor || canModerate) && (
                         <DropdownMenu modal={false} open={openDropdown} onOpenChange={setOpenDropdown}>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="rounded-full">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className={
+                                        inPreview && !isMobile
+                                            ? "absolute right-[55px] top-[8px] rounded-full"
+                                            : "rounded-full"
+                                    }
+                                >
                                     <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                             </DropdownMenuTrigger>
@@ -490,45 +506,6 @@ export const PostItem = ({ post, circle, feed, page, subpage }: PostItemProps) =
                     </div>
                 )}
             </div>
-            {/* 
-            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-                <DialogContent className="sm:max-w-[425px]">
-                    <PostForm
-                        circle={circle}
-                        feed={feed}
-                        user={user}
-                        initialPost={post}
-                        onSubmit={handleEditSubmit}
-                        onCancel={() => setIsEditDialogOpen(false)}
-                    />
-                </DialogContent>
-            </Dialog>
-
-            <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Delete Post</DialogTitle>
-                        <DialogDescription>
-                            Are you sure you want to delete this post? This action cannot be undone.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <DialogClose asChild>
-                            <Button variant="outline">Cancel</Button>
-                        </DialogClose>
-                        <Button variant="destructive" onClick={handleDeleteConfirm} disabled={isPending}>
-                            {isPending ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Deleting...
-                                </>
-                            ) : (
-                                <>Delete</>
-                            )}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog> */}
         </div>
     );
 };

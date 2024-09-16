@@ -300,6 +300,7 @@ export type PostItemProps = {
     feed: Feed;
     page: Page;
     subpage?: string;
+    inPreview?: boolean;
 };
 
 export type ContentPreviewData =

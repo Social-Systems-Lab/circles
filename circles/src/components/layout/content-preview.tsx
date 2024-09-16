@@ -18,7 +18,7 @@ import { PostItem } from "../modules/feeds/post-list";
 export const PostPreview = ({ post, circle, feed, page, subpage }: PostItemProps) => {
     return (
         <>
-            <PostItem post={post} circle={circle} feed={feed} page={page} subpage={subpage} />
+            <PostItem post={post} circle={circle} feed={feed} page={page} subpage={subpage} inPreview={true} />
         </>
     );
 };
