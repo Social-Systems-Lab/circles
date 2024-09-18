@@ -1,7 +1,6 @@
-import { Feeds, Posts, Comments, Reactions, Users, Circles } from "./db";
+import { Feeds, Posts, Comments, Reactions, Circles } from "./db";
 import { ObjectId } from "mongodb";
-import { Feed, Post, PostDisplay, Comment, CommentDisplay, Reaction, MemberDisplay, Circle } from "@/models/models";
-import { getUserById, updateUser } from "./user";
+import { Feed, Post, PostDisplay, Comment, CommentDisplay, Circle } from "@/models/models";
 import { getCircleById, updateCircle } from "./circle";
 import { addFeedsAccessRules } from "../utils";
 
@@ -112,6 +111,7 @@ export const getPost = async (postId: string): Promise<Post | null> => {
 export const createComment = async (comment: Comment): Promise<Comment> => {
     const result = await Comments.insertOne(comment);
     const insertedComment = { ...comment, _id: result.insertedId.toString() };
+    await Posts.updateOne({ _id: new ObjectId(comment.postId) }, { $inc: { comments: 1 } });
 
     if (!comment.parentCommentId) {
         await updateHighlightedComment(comment.postId);
@@ -120,7 +120,51 @@ export const createComment = async (comment: Comment): Promise<Comment> => {
     return insertedComment;
 };
 
-export const getPosts = async (feedId: string, limit: number = 10, offset: number = 0): Promise<PostDisplay[]> => {
+export const deleteComment = async (commentId: string): Promise<void> => {
+    const comment = await Comments.findOne({ _id: new ObjectId(commentId) });
+    if (!comment) return;
+
+    if (comment.replies > 0) {
+        // mark the comment as deleted and anonymize its data
+        await Comments.updateOne(
+            { _id: new ObjectId(commentId) },
+            {
+                $set: {
+                    isDeleted: true,
+                    content: "",
+                    createdBy: undefined,
+                    reactions: {},
+                },
+                $unset: { createdBy: "", author: "" },
+            },
+        );
+    } else {
+        // If the comment has no replies, delete it
+        await Comments.deleteOne({ _id: new ObjectId(commentId) });
+
+        // Decrement comment count for the post
+        await Posts.updateOne({ _id: new ObjectId(comment.postId) }, { $inc: { comments: -1 } });
+
+        if (comment.parentCommentId) {
+            // Decrement comment count for the parent comment
+            await Comments.updateOne({ _id: new ObjectId(comment.parentCommentId) }, { $inc: { comments: -1 } });
+        }
+    }
+
+    if (!comment.parentCommentId) {
+        await updateHighlightedComment(comment.postId);
+    }
+};
+
+export const getPosts = async (
+    feedId: string,
+    userDid?: string,
+    limit: number = 10,
+    offset: number = 0,
+): Promise<PostDisplay[]> => {
+    const safeLimit = Math.max(1, limit);
+    const safeOffset = Math.max(0, offset);
+
     const posts = (await Posts.aggregate([
         { $match: { feedId: feedId } },
         {
@@ -151,6 +195,34 @@ export const getPosts = async (feedId: string, limit: number = 10, offset: numbe
         },
         { $unwind: { path: "$highlightedCommentAuthor", preserveNullAndEmptyArrays: true } },
         {
+            $lookup: {
+                from: "reactions",
+                let: { postId: { $toString: "$_id" } },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: { $and: [{ $eq: ["$contentId", "$$postId"] }, { $eq: ["$userDid", userDid] }] },
+                        },
+                    },
+                ],
+                as: "userReaction",
+            },
+        },
+        {
+            $lookup: {
+                from: "reactions",
+                let: { commentId: { $toString: "$highlightedComment._id" } },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: { $and: [{ $eq: ["$contentId", "$$commentId"] }, { $eq: ["$userDid", userDid] }] },
+                        },
+                    },
+                ],
+                as: "highlightedCommentUserReaction",
+            },
+        },
+        {
             $group: {
                 _id: "$_id",
                 feedId: { $first: "$feedId" },
@@ -163,11 +235,13 @@ export const getPosts = async (feedId: string, limit: number = 10, offset: numbe
                 authorDetails: { $first: "$authorDetails" },
                 highlightedComment: { $first: "$highlightedComment" },
                 highlightedCommentAuthor: { $first: "$highlightedCommentAuthor" },
+                userReaction: { $first: "$userReaction" },
+                highlightedCommentUserReaction: { $first: "$highlightedCommentUserReaction" },
             },
         },
         { $sort: { createdAt: -1 } },
-        { $skip: offset },
-        { $limit: limit },
+        { $skip: safeOffset },
+        { $limit: safeLimit },
         {
             $project: {
                 _id: { $toString: "$_id" },
@@ -177,8 +251,9 @@ export const getPosts = async (feedId: string, limit: number = 10, offset: numbe
                 reactions: 1,
                 media: 1,
                 createdBy: 1,
+                comments: 1,
                 circleType: { $literal: "post" },
-                highlightedCommentId: { $toString: "$highlightedCommentId" }, // Convert to string
+                highlightedCommentId: { $toString: "$highlightedCommentId" },
                 author: {
                     did: "$authorDetails.did",
                     name: "$authorDetails.name",
@@ -194,11 +269,12 @@ export const getPosts = async (feedId: string, limit: number = 10, offset: numbe
                         then: {
                             _id: { $toString: "$highlightedComment._id" },
                             postId: "$highlightedComment.postId",
-                            parentCommentId: { $toString: "$highlightedComment.parentCommentId" }, // Convert to string
+                            parentCommentId: { $toString: "$highlightedComment.parentCommentId" },
                             content: "$highlightedComment.content",
                             createdBy: "$highlightedComment.createdBy",
                             createdAt: "$highlightedComment.createdAt",
                             reactions: "$highlightedComment.reactions",
+                            replies: "$highlightedComment.replies",
                             author: {
                                 did: "$highlightedCommentAuthor.did",
                                 name: "$highlightedCommentAuthor.name",
@@ -208,17 +284,18 @@ export const getPosts = async (feedId: string, limit: number = 10, offset: numbe
                                 cover: "$highlightedCommentAuthor.cover",
                                 handle: "$highlightedCommentAuthor.handle",
                             },
+                            userReaction: { $arrayElemAt: ["$highlightedCommentUserReaction.reactionType", 0] },
                         },
                         else: null,
                     },
                 },
+                userReaction: { $arrayElemAt: ["$userReaction.reactionType", 0] },
             },
         },
     ]).toArray()) as PostDisplay[];
 
     return posts;
 };
-
 export const updatePost = async (post: Partial<Post>): Promise<void> => {
     const { _id, ...postWithoutId } = post;
     let result = await Posts.updateOne({ _id: new ObjectId(_id) }, { $set: postWithoutId });

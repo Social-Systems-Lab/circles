@@ -6,7 +6,7 @@ import { FeedComponent } from "./feed";
 import { redirect } from "next/navigation";
 import { ThirdColumn } from "./third-column";
 import { feedFeaturePrefix } from "@/lib/data/constants";
-import { isAuthorized } from "@/lib/auth/auth";
+import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 
 export default async function FeedsModule({ circle, page, subpage, isDefaultCircle }: ModulePageProps) {
     const feed = await getFeedByHandle(circle?._id, subpage);
@@ -14,8 +14,13 @@ export default async function FeedsModule({ circle, page, subpage, isDefaultCirc
         return <div></div>;
     }
 
+    let userDid = undefined;
+    try {
+        userDid = await getAuthenticatedUserDid();
+    } catch (error) {}
+
     // get posts for feed
-    const posts = await getPosts(feed._id, 20, 0);
+    const posts = await getPosts(feed._id, userDid, 20, 0);
 
     return (
         <>

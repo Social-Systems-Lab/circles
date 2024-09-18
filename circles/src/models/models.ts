@@ -187,6 +187,7 @@ export const postSchema = z.object({
     location: locationSchema.optional(),
     media: z.array(mediaSchema).optional(),
     highlightedCommentId: z.string().optional(),
+    comments: z.number().default(0),
 });
 
 export type Post = z.infer<typeof postSchema>;
@@ -195,6 +196,7 @@ export interface PostDisplay extends Post {
     author: Circle;
     highlightedComment?: CommentDisplay;
     circleType: "post";
+    userReaction?: string;
 }
 
 export const commentSchema = z.object({
@@ -205,12 +207,15 @@ export const commentSchema = z.object({
     createdBy: didSchema,
     createdAt: z.date(),
     reactions: z.record(z.string(), z.number()).default({}),
+    replies: z.number().default(0),
+    isDeleted: z.boolean().optional(),
 });
 
 export type Comment = z.infer<typeof commentSchema>;
 
 export interface CommentDisplay extends Comment {
     author: Circle;
+    userReaction?: string;
 }
 
 export const reactionSchema = z.object({

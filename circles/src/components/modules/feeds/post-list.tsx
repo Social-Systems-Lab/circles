@@ -67,7 +67,7 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
     // State for likes
     const initialLikes = post.reactions.like || 0;
     const [likes, setLikes] = useState<number>(initialLikes);
-    const [isLiked, setIsLiked] = useState<boolean>(false);
+    const [isLiked, setIsLiked] = useState<boolean>(post.userReaction !== undefined);
     const [likedByUsers, setLikedByUsers] = useState<Circle[] | undefined>(undefined);
 
     // State for comments
@@ -89,24 +89,6 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
             carouselApi.off("select", updateSelectedSlide);
         };
     }, [carouselApi]);
-
-    useEffect(() => {
-        // Check if the user has liked the post
-        // TODO fix this to be done server-side when posts are fetched
-        // const checkIfLiked = async () => {
-        //     if (user) {
-        //         try {
-        //             const result = await checkIfLikedAction(post._id, "post");
-        //             if (result.success) {
-        //                 setIsLiked(result.isLiked || false);
-        //             }
-        //         } catch (error) {
-        //             console.error("Failed to check if liked", error);
-        //         }
-        //     }
-        // };
-        // checkIfLiked();
-    }, [post._id, user]);
 
     const handleAuthorClick = (author: Circle) => {
         let contentPreviewData: ContentPreviewData = {
@@ -158,19 +140,25 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
     const handleLikePost = () => {
         if (!user) return;
 
+        if (isLiked) {
+            setLikes((prev) => prev - 1);
+            setIsLiked(false);
+        } else {
+            setLikes((prev) => prev + 1);
+            setIsLiked(true);
+        }
+
         startTransition(async () => {
             try {
                 if (isLiked) {
                     const result = await unlikeContentAction(post._id, "post");
-                    if (result.success) {
-                        setLikes((prev) => prev - 1);
-                        setIsLiked(false);
+                    if (!result.success) {
+                        // fail silently for now
                     }
                 } else {
                     const result = await likeContentAction(post._id, "post");
-                    if (result.success) {
-                        setLikes((prev) => prev + 1);
-                        setIsLiked(true);
+                    if (!result.success) {
+                        // fail silently for now
                     }
                 }
             } catch (error) {
@@ -220,20 +208,6 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
         }
     };
 
-    useEffect(() => {
-        // TODO fix this
-        // const fetchComments = async () => {
-        //     try {
-        //         const response = await fetch(`/api/comments?postId=${post._id}`);
-        //         const data = await response.json();
-        //         setComments(data.comments);
-        //     } catch (error) {
-        //         console.error("Failed to fetch comments", error);
-        //     }
-        // };
-        // fetchComments();
-    }, [post._id]);
-
     const handleImageClick = (index: number) => {
         if (post.media && post.media.length > 0) {
             // open content preview
@@ -257,6 +231,16 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
         setContentPreview((x) => (x?.content === post ? undefined : contentPreviewData));
     };
 
+    // fixes hydration error
+    const [isMounted, setIsMounted] = useState(false);
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
+    if (!isMounted) {
+        return null;
+    }
+
     return (
         <div
             className={`flex flex-col gap-4 ${isCompact || inPreview ? "" : "rounded-[15px] border-0 shadow-lg"} bg-white`}
@@ -279,7 +263,7 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
                         }}
                     />
                     <div className="flex flex-col">
-                        <span
+                        <div
                             className="cursor-pointer font-semibold"
                             onClick={(e) => {
                                 e.stopPropagation();
@@ -287,8 +271,8 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
                             }}
                         >
                             {post.author?.name}
-                        </span>
-                        <span className="cursor-pointer text-sm text-gray-500">{formattedDate}</span>
+                        </div>
+                        <div className="cursor-pointer text-sm text-gray-500">{formattedDate}</div>
                     </div>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -315,7 +299,7 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
                                         <DialogTrigger asChild>
                                             <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                                                 <Edit className="mr-2 h-4 w-4" />
-                                                <span>Edit</span>
+                                                <div>Edit</div>
                                             </DropdownMenuItem>
                                         </DialogTrigger>
                                         <DialogContent className="overflow-hidden rounded-[15px] p-0 sm:max-w-[425px] sm:rounded-[15px]">
@@ -334,7 +318,7 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
                                     <DialogTrigger asChild>
                                         <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                                             <Trash2 className="mr-2 h-4 w-4" />
-                                            <span>Delete</span>
+                                            <div>Delete</div>
                                         </DropdownMenuItem>
                                     </DialogTrigger>
                                     <DialogContent>
@@ -423,7 +407,7 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
                     {likes > 0 && (
                         <HoverCard openDelay={200} onOpenChange={(open) => handleLikesPopoverHover(open)}>
                             <HoverCardTrigger>
-                                <span>{likes}</span>
+                                <div>{likes}</div>
                             </HoverCardTrigger>
                             <HoverCardContent className="w-auto border-0 bg-[#333333] p-2 pt-[6px]">
                                 <HoverCardArrow className="text-[#333333]" fill="#333333" color="#333333" />
@@ -438,7 +422,7 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
                                     {likedByUsers?.map((user) => (
                                         <div key={user.did} className="flex items-center gap-2 text-[12px]">
                                             {/* <UserPicture name={user.name} picture={user.picture?.url} size="small" /> */}
-                                            <span>{user.name}</span>
+                                            <div>{user.name}</div>
                                         </div>
                                     ))}
                                     {likes > 20 && (
@@ -454,7 +438,7 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
                 <div className="flex items-center gap-2 pl-4 pr-4">
                     <div className="flex items-center gap-1.5 text-gray-500">
                         <MessageCircle className="h-5 w-5" />
-                        {comments.length > 0 && <span>{comments.length}</span>}
+                        {comments.length > 0 && <div>{comments.length}</div>}
                     </div>
                 </div>
             </div>
@@ -462,29 +446,25 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
             {/* Comments Section */}
             <div className="flex flex-col gap-2 pb-4 pl-4 pr-4">
                 {/* Show "Show more comments" if more than one comment and not showing all */}
-                {!showAllComments && comments.length > 1 && (
+                {!showAllComments && post.comments > 1 && (
                     <div className="cursor-pointer text-xs text-blue-500" onClick={() => setShowAllComments(true)}>
                         Show more comments
                     </div>
                 )}
 
                 {/* Display comments */}
-                {comments.length > 0 && (
-                    <>
-                        {showAllComments
-                            ? comments.map((comment) => (
-                                  <CommentItem key={comment._id} comment={comment} user={user} postId={post._id} />
-                              ))
-                            : post.highlightedComment && (
-                                  <CommentItem
-                                      key={post.highlightedComment._id}
-                                      comment={post.highlightedComment}
-                                      user={user}
-                                      postId={post._id}
-                                  />
-                              )}
-                    </>
-                )}
+                {showAllComments
+                    ? comments.map((comment) => (
+                          <CommentItem key={comment._id} comment={comment} user={user} postId={post._id} />
+                      ))
+                    : post.highlightedComment && (
+                          <CommentItem
+                              key={post.highlightedComment._id}
+                              comment={post.highlightedComment}
+                              user={user}
+                              postId={post._id}
+                          />
+                      )}
 
                 {/* Comment input box */}
                 {user && (
@@ -522,7 +502,7 @@ const CommentItem = ({ comment, user, postId, depth = 0 }: CommentItemProps) => 
     const [showReplies, setShowReplies] = useState(false);
     const [replies, setReplies] = useState<CommentDisplay[]>([]);
     const [likes, setLikes] = useState<number>(comment.reactions.like || 0);
-    const [isLiked, setIsLiked] = useState<boolean>(false);
+    const [isLiked, setIsLiked] = useState<boolean>(comment.userReaction !== undefined);
     const [showReplyInput, setShowReplyInput] = useState(false);
     const [newReplyContent, setNewReplyContent] = useState("");
     const [isEditing, setIsEditing] = useState(false);
@@ -535,24 +515,6 @@ const CommentItem = ({ comment, user, postId, depth = 0 }: CommentItemProps) => 
     const isAuthor = user && comment.createdBy === user?.did;
 
     const formattedDate = getPublishTime(comment.createdAt);
-
-    useEffect(() => {
-        // Check if the user has liked the comment
-        const checkIfLiked = async () => {
-            // TODO fix this, should be done server-side when comments are fetched
-            // if (user) {
-            //     try {
-            //         const result = await checkIfLikedAction(comment._id!, "comment");
-            //         if (result.success) {
-            //             setIsLiked(result.isLiked || false);
-            //         }
-            //     } catch (error) {
-            //         console.error("Failed to check if liked", error);
-            //     }
-            // }
-        };
-        checkIfLiked();
-    }, [comment._id, user]);
 
     const handleLikeComment = () => {
         if (!user || comment.createdBy === user.did) return;
@@ -657,107 +619,67 @@ const CommentItem = ({ comment, user, postId, depth = 0 }: CommentItemProps) => 
         setNewReplyContent("");
     };
 
-    useEffect(() => {
-        // TODO fix this
-        // const fetchReplies = async () => {
-        //     try {
-        //         const response = await fetch(`/api/comments?parentCommentId=${comment._id}`);
-        //         const data = await response.json();
-        //         setReplies(data.comments);
-        //     } catch (error) {
-        //         console.error("Failed to fetch replies", error);
-        //     }
-        // };
-        // fetchReplies();
-    }, [comment._id]);
-
     return (
         <div className={`flex flex-col ${depth > 0 ? "ml-8" : ""} mt-2`}>
             {/* Comment Content */}
             <div className="group flex items-start gap-2">
-                <UserPicture name={comment.author.name} picture={comment.author.picture?.url} size="small" />
+                <div className="pt-1">
+                    {comment.isDeleted ? (
+                        <div className="h-[32px] w-[32px] rounded-full bg-gray-100" />
+                    ) : (
+                        <UserPicture name={comment.author.name} picture={comment.author.picture?.url} size="32px" />
+                    )}
+                </div>
                 <div className="flex w-auto max-w-[80%] flex-col">
-                    <div className="inline-block rounded-lg bg-gray-100 p-2">
-                        <div className="text-sm font-semibold">{comment.author.name}</div>
-                        {isEditing ? (
-                            <TextareaAutosize
-                                value={editContent}
-                                onChange={(e) => setEditContent(e.target.value)}
-                                onKeyDown={handleEditKeyDown}
-                                className="w-full resize-none rounded-[20px] bg-white p-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                minRows={1}
-                                maxRows={6}
-                            />
+                    <div className="inline-block rounded-[15px] bg-gray-100 p-2">
+                        {comment.isDeleted ? (
+                            <div className="text-sm text-gray-400">Comment removed</div>
                         ) : (
-                            <div className="text-sm text-gray-500">{comment.content}</div>
+                            <>
+                                <div className="text-sm font-semibold">{comment.author.name}</div>
+                                {isEditing ? (
+                                    <TextareaAutosize
+                                        value={editContent}
+                                        onChange={(e) => setEditContent(e.target.value)}
+                                        onKeyDown={handleEditKeyDown}
+                                        className="w-full resize-none rounded-[20px] bg-white p-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        minRows={1}
+                                        maxRows={6}
+                                    />
+                                ) : (
+                                    <div className="text-sm">{comment.content}</div>
+                                )}
+                            </>
                         )}
                     </div>
                     {isEditing && (
                         <div className="mt-1 flex items-center gap-2">
-                            <span className="cursor-pointer text-xs text-blue-500" onClick={handleCancelEdit}>
+                            <div className="cursor-pointer text-xs text-blue-500" onClick={handleCancelEdit}>
                                 Cancel
-                            </span>
+                            </div>
                         </div>
                     )}
-                    {!isEditing && (
+                    {!isEditing && !comment.isDeleted && (
                         <div className="mt-1 flex items-center justify-between">
                             <div className="flex items-center gap-4 text-xs text-gray-500">
-                                <span>{formattedDate}</span>
-                                <span
-                                    onClick={handleLikeComment}
-                                    className={`cursor-pointer ${
-                                        comment.createdBy === user?.did ? "text-gray-400" : ""
-                                    }`}
-                                >
-                                    Like
-                                </span>
-                                <span onClick={handleReplyClick} className="cursor-pointer">
+                                <div>{formattedDate}</div>
+                                {comment.createdBy !== user?.did && (
+                                    <div
+                                        onClick={handleLikeComment}
+                                        className={isLiked ? `cursor-pointer text-[#ff4772]` : `cursor-pointer`}
+                                    >
+                                        Like
+                                    </div>
+                                )}
+                                <div onClick={handleReplyClick} className="cursor-pointer">
                                     Reply
-                                </span>
+                                </div>
                             </div>
-                            {likes > 0 && (
-                                <Popover open={isLikesPopoverOpen} onOpenChange={handleLikesPopoverOpen}>
-                                    <PopoverTrigger asChild>
-                                        <div className="flex items-center">
-                                            {isLiked ? (
-                                                <AiFillHeart
-                                                    className={`h-4 w-4 text-[#ff4772]`}
-                                                    onClick={handleLikeComment}
-                                                />
-                                            ) : (
-                                                <AiOutlineHeart
-                                                    className={`h-4 w-4 text-gray-500`}
-                                                    onClick={handleLikeComment}
-                                                />
-                                            )}
-                                            {likes > 0 && <span className="ml-1 text-xs text-gray-500">{likes}</span>}
-                                        </div>
-                                    </PopoverTrigger>
-                                    <PopoverContent>
-                                        <div>
-                                            <h4 className="font-bold">Likes</h4>
-                                            {likedByUsers.map((user) => (
-                                                <div key={user.did} className="flex items-center gap-2">
-                                                    <UserPicture
-                                                        name={user.name}
-                                                        picture={user.picture?.url}
-                                                        size="small"
-                                                    />
-                                                    <span>{user.name}</span>
-                                                </div>
-                                            ))}
-                                            {likes > 20 && (
-                                                <div className="text-sm text-gray-500">...and {likes - 20} more</div>
-                                            )}
-                                        </div>
-                                    </PopoverContent>
-                                </Popover>
-                            )}
                         </div>
                     )}
                     {showReplyInput && (
                         <div className="mt-2 flex flex-col">
-                            <span className="mb-1 text-xs text-gray-500">Replying to {comment.author.name}</span>
+                            <div className="mb-1 text-xs text-gray-500">Replying to {comment.author.name}</div>
                             <TextareaAutosize
                                 value={newReplyContent}
                                 onChange={(e) => setNewReplyContent(e.target.value)}
@@ -773,30 +695,64 @@ const CommentItem = ({ comment, user, postId, depth = 0 }: CommentItemProps) => 
                                         Send
                                     </button>
                                 )}
-                                <span className="cursor-pointer text-xs text-blue-500" onClick={handleCancelReply}>
+                                <div className="cursor-pointer text-xs text-blue-500" onClick={handleCancelReply}>
                                     Cancel
-                                </span>
+                                </div>
                             </div>
                         </div>
                     )}
                 </div>
+
+                {likes > 0 && (
+                    <div className="relative self-end bg-blue-100">
+                        <div className="absolute bottom-[20px] right-[0px] rounded-[15px] bg-white">
+                            <Popover open={isLikesPopoverOpen} onOpenChange={handleLikesPopoverOpen}>
+                                <PopoverTrigger asChild>
+                                    <div className="flex items-center">
+                                        <AiFillHeart className={`h-4 w-4 text-[#ff4772]`} onClick={handleLikeComment} />
+                                        {likes > 0 && <div className="ml-1 text-xs text-gray-500">{likes}</div>}
+                                    </div>
+                                </PopoverTrigger>
+                                <PopoverContent>
+                                    <div>
+                                        <h4 className="font-bold">Likes</h4>
+                                        {likedByUsers.map((user) => (
+                                            <div key={user.did} className="flex items-center gap-2">
+                                                <UserPicture
+                                                    name={user.name}
+                                                    picture={user.picture?.url}
+                                                    size="small"
+                                                />
+                                                <div>{user.name}</div>
+                                            </div>
+                                        ))}
+                                        {likes > 20 && (
+                                            <div className="text-sm text-gray-500">...and {likes - 20} more</div>
+                                        )}
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                    </div>
+                )}
+
                 {isAuthor && !isEditing && (
                     <div className="relative">
-                        <div className="absolute right-0 top-0 opacity-0 group-hover:opacity-100">
+                        <div className="absolute left-[-10px] top-0 opacity-0 group-hover:opacity-100">
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="icon" className="rounded-full">
-                                        <MoreVertical className="h-4 w-4" />
+                                        <MoreHorizontal className="h-4 w-4" />
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                     <DropdownMenuItem onClick={handleEditClick}>
                                         <Edit className="mr-2 h-4 w-4" />
-                                        <span>Edit</span>
+                                        <div>Edit</div>
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={handleDeleteClick}>
                                         <Trash2 className="mr-2 h-4 w-4" />
-                                        <span>Delete</span>
+                                        <div>Delete</div>
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
@@ -810,7 +766,7 @@ const CommentItem = ({ comment, user, postId, depth = 0 }: CommentItemProps) => 
                 <div className={`ml-8 mt-2`}>
                     {!showReplies ? (
                         <div className="cursor-pointer text-xs text-blue-500" onClick={() => setShowReplies(true)}>
-                            Show {replies.length} {replies.length > 1 ? "replies" : "reply"}
+                            Show {comment.replies} {comment.replies > 1 ? "replies" : "reply"}
                         </div>
                     ) : (
                         replies.map((reply) => (
@@ -843,6 +799,7 @@ const PostList = ({ feed, circle, posts, page, subpage }: PostListProps) => {
             {posts.map((post) => (
                 <PostItem key={post._id} post={post} circle={circle} feed={feed} page={page} subpage={subpage} />
             ))}
+            <pre>{JSON.stringify(posts, null, 2)}</pre>
         </div>
     );
 };

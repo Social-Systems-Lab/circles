@@ -8,5 +8,6 @@
         "**/Thumbs.db": true,
         "**/node_modules": true
     },
-    "editor.gotoLocation.multipleDefinitions": "goto"
+    "editor.gotoLocation.multipleDefinitions": "goto",
+    "vscode_custom_css.imports": ["file:///D:/pretty-ts-errors.css"]
 }

@@ -83,8 +83,12 @@ const ProfileMenuBar = () => {
             )}
 
             {authenticated === false && (
-                <div className="flex flex-row">
-                    <Button className="h-full w-full" onClick={onLogInClick} variant="link">
+                <div className="flex flex-row gap-2">
+                    <Button
+                        className="h-full w-full bg-[#00000077] text-white"
+                        onClick={onLogInClick}
+                        variant="outline"
+                    >
                         Log in
                     </Button>
                     <Button className="h-full w-full" onClick={onSignUpClick} variant="outline">

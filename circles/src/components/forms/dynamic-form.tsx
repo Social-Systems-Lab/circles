@@ -119,7 +119,7 @@ const DynamicFormManager: React.FC<DynamicFormProps> = ({
             style={{
                 paddingLeft: isCompact ? "24px" : "24px",
                 paddingRight: isCompact ? "24px" : "24px",
-                paddingBottom: isCompact ? "0" : "32px",
+                paddingBottom: isCompact ? "32px" : "32px",
             }}
         >
             <div className="flex-1" style={{ maxWidth: isCompact ? "none" : maxWidth }}>
