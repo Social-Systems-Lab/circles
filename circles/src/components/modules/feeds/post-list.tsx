@@ -38,6 +38,7 @@ import {
     getReactionsAction,
     updatePostAction,
     deletePostAction,
+    getAllCommentsAction,
 } from "./actions";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { HoverCardArrow } from "@radix-ui/react-hover-card";
@@ -231,6 +232,22 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
         setContentPreview((x) => (x?.content === post ? undefined : contentPreviewData));
     };
 
+    const fetchComments = async () => {
+        if (post.comments > 0 && comments.length === 0) {
+            startTransition(async () => {
+                try {
+                    const result = await getAllCommentsAction(post._id);
+                    if (result.success && result.comments) {
+                        setComments(result.comments);
+                        setShowAllComments(true);
+                    }
+                } catch (error) {
+                    console.error("Failed to fetch comments", error);
+                }
+            });
+        }
+    };
+
     // fixes hydration error
     const [isMounted, setIsMounted] = useState(false);
     useEffect(() => {
@@ -278,7 +295,7 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
                 <div className="flex items-center space-x-2">
                     {(isAuthor || canModerate) && (
                         <DropdownMenu modal={false} open={openDropdown} onOpenChange={setOpenDropdown}>
-                            <DropdownMenuTrigger asChild>
+                            <DropdownMenuTrigger asChild onClick={(event) => event.stopPropagation()}>
                                 <Button
                                     variant="ghost"
                                     size="icon"
@@ -297,7 +314,12 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
                                 {isAuthor && (
                                     <Dialog onOpenChange={(open) => setOpenDropdown(open)}>
                                         <DialogTrigger asChild>
-                                            <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                            <DropdownMenuItem
+                                                onSelect={(e) => {
+                                                    e.stopPropagation();
+                                                    e.preventDefault();
+                                                }}
+                                            >
                                                 <Edit className="mr-2 h-4 w-4" />
                                                 <div>Edit</div>
                                             </DropdownMenuItem>
@@ -316,7 +338,12 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
                                 )}
                                 <Dialog onOpenChange={(open) => setOpenDropdown(open)}>
                                     <DialogTrigger asChild>
-                                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                        <DropdownMenuItem
+                                            onSelect={(e) => {
+                                                e.stopPropagation();
+                                                e.preventDefault();
+                                            }}
+                                        >
                                             <Trash2 className="mr-2 h-4 w-4" />
                                             <div>Delete</div>
                                         </DropdownMenuItem>
@@ -436,9 +463,9 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
 
                 {/* Comments Section */}
                 <div className="flex items-center gap-2 pl-4 pr-4">
-                    <div className="flex items-center gap-1.5 text-gray-500">
+                    <div className="flex cursor-pointer items-center gap-1.5 text-gray-500" onClick={fetchComments}>
                         <MessageCircle className="h-5 w-5" />
-                        {comments.length > 0 && <div>{comments.length}</div>}
+                        {post.comments > 0 && <div>{post.comments}</div>}
                     </div>
                 </div>
             </div>
@@ -447,20 +474,32 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
             <div className="flex flex-col gap-2 pb-4 pl-4 pr-4">
                 {/* Show "Show more comments" if more than one comment and not showing all */}
                 {!showAllComments && post.comments > 1 && (
-                    <div className="cursor-pointer text-xs text-blue-500" onClick={() => setShowAllComments(true)}>
+                    <div
+                        className="cursor-pointer text-[15px] font-bold text-gray-500 hover:underline"
+                        onClick={fetchComments}
+                    >
                         Show more comments
                     </div>
                 )}
 
                 {/* Display comments */}
                 {showAllComments
-                    ? comments.map((comment) => (
-                          <CommentItem key={comment._id} comment={comment} user={user} postId={post._id} />
-                      ))
+                    ? comments
+                          .filter((c) => c.parentCommentId === null)
+                          .map((comment) => (
+                              <CommentItem
+                                  key={comment._id}
+                                  comment={comment}
+                                  comments={comments}
+                                  user={user}
+                                  postId={post._id}
+                              />
+                          ))
                     : post.highlightedComment && (
                           <CommentItem
                               key={post.highlightedComment._id}
                               comment={post.highlightedComment}
+                              comments={comments}
                               user={user}
                               postId={post._id}
                           />
@@ -496,11 +535,14 @@ type CommentItemProps = {
     user: any;
     postId: string;
     depth?: number;
+    comments?: CommentDisplay[];
 };
 
-const CommentItem = ({ comment, user, postId, depth = 0 }: CommentItemProps) => {
+const CommentItem = ({ comment, comments, user, postId, depth = 0 }: CommentItemProps) => {
     const [showReplies, setShowReplies] = useState(false);
-    const [replies, setReplies] = useState<CommentDisplay[]>([]);
+    const [replies, setReplies] = useState<CommentDisplay[]>(
+        comments?.filter((c) => c.parentCommentId === comment._id) || [],
+    );
     const [likes, setLikes] = useState<number>(comment.reactions.like || 0);
     const [isLiked, setIsLiked] = useState<boolean>(comment.userReaction !== undefined);
     const [showReplyInput, setShowReplyInput] = useState(false);
@@ -619,8 +661,12 @@ const CommentItem = ({ comment, user, postId, depth = 0 }: CommentItemProps) => 
         setNewReplyContent("");
     };
 
+    const fetchReplies = async () => {
+        setShowReplies(true);
+    };
+
     return (
-        <div className={`flex flex-col ${depth > 0 ? "ml-8" : ""} mt-2`}>
+        <div className={`flex flex-col ${depth > 0 ? "ml-5" : ""} mt-2`}>
             {/* Comment Content */}
             <div className="group flex items-start gap-2">
                 <div className="pt-1">
@@ -738,7 +784,7 @@ const CommentItem = ({ comment, user, postId, depth = 0 }: CommentItemProps) => 
 
                 {isAuthor && !isEditing && (
                     <div className="relative">
-                        <div className="absolute left-[-10px] top-0 opacity-0 group-hover:opacity-100">
+                        <div className="absolute left-[-5px] top-0 opacity-0 group-hover:opacity-100">
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="icon" className="rounded-full">
@@ -762,19 +808,23 @@ const CommentItem = ({ comment, user, postId, depth = 0 }: CommentItemProps) => 
             </div>
 
             {/* Replies */}
-            {replies.length > 0 && (
+            {(comment.replies > 0 || replies?.length > 0) && (
                 <div className={`ml-8 mt-2`}>
                     {!showReplies ? (
-                        <div className="cursor-pointer text-xs text-blue-500" onClick={() => setShowReplies(true)}>
+                        <div
+                            className="cursor-pointer pl-2 text-xs font-bold text-gray-500 hover:underline"
+                            onClick={fetchReplies}
+                        >
                             Show {comment.replies} {comment.replies > 1 ? "replies" : "reply"}
                         </div>
                     ) : (
-                        replies.map((reply) => (
+                        replies?.map((reply) => (
                             <CommentItem
                                 key={reply._id}
                                 comment={reply}
                                 user={user}
                                 postId={postId}
+                                comments={comments}
                                 depth={depth + 1}
                             />
                         ))
@@ -799,7 +849,7 @@ const PostList = ({ feed, circle, posts, page, subpage }: PostListProps) => {
             {posts.map((post) => (
                 <PostItem key={post._id} post={post} circle={circle} feed={feed} page={page} subpage={subpage} />
             ))}
-            <pre>{JSON.stringify(posts, null, 2)}</pre>
+            {/* <pre>{JSON.stringify(posts, null, 2)}</pre> */}
         </div>
     );
 };

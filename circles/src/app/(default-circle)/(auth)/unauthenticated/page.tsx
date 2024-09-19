@@ -7,7 +7,7 @@ export default function Unauthenticated() {
         <div className="flex min-h-screen flex-col items-center justify-start pt-[10vh] md:pt-[15vh]">
             <div className="flex flex-col items-center justify-center">
                 <Image src={unauthenticated} alt="" width={400} />
-                <h4>Oops! You&apos;re not logged in 2</h4>
+                <h4>Oops! You&apos;re not logged in</h4>
                 Please log in to access this page.
                 <RedirectButtons
                     buttons={[

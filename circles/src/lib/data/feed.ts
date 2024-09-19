@@ -3,6 +3,7 @@ import { ObjectId } from "mongodb";
 import { Feed, Post, PostDisplay, Comment, CommentDisplay, Circle } from "@/models/models";
 import { getCircleById, updateCircle } from "./circle";
 import { addFeedsAccessRules } from "../utils";
+import { comment } from "postcss";
 
 export const createFeed = async (feed: Feed): Promise<Feed> => {
     const result = await Feeds.insertOne(feed);
@@ -115,6 +116,9 @@ export const createComment = async (comment: Comment): Promise<Comment> => {
 
     if (!comment.parentCommentId) {
         await updateHighlightedComment(comment.postId);
+    } else {
+        // update replies
+        await Comments.updateOne({ _id: new ObjectId(comment.parentCommentId) }, { $inc: { replies: 1 } });
     }
 
     return insertedComment;
@@ -147,7 +151,7 @@ export const deleteComment = async (commentId: string): Promise<void> => {
 
         if (comment.parentCommentId) {
             // Decrement comment count for the parent comment
-            await Comments.updateOne({ _id: new ObjectId(comment.parentCommentId) }, { $inc: { comments: -1 } });
+            await Comments.updateOne({ _id: new ObjectId(comment.parentCommentId) }, { $inc: { replies: -1 } });
         }
     }
 
@@ -231,6 +235,7 @@ export const getPosts = async (
                 reactions: { $first: "$reactions" },
                 media: { $first: "$media" },
                 createdBy: { $first: "$createdBy" },
+                comments: { $first: "$comments" },
                 highlightedCommentId: { $first: "$highlightedCommentId" },
                 authorDetails: { $first: "$authorDetails" },
                 highlightedComment: { $first: "$highlightedComment" },
@@ -296,6 +301,7 @@ export const getPosts = async (
 
     return posts;
 };
+
 export const updatePost = async (post: Partial<Post>): Promise<void> => {
     const { _id, ...postWithoutId } = post;
     let result = await Posts.updateOne({ _id: new ObjectId(_id) }, { $set: postWithoutId });
@@ -339,13 +345,46 @@ export const getComments = async (postId: string, parentCommentId: string | null
         },
     ]).toArray()) as CommentDisplay[];
 
-    comments.forEach((comment: CommentDisplay) => {
-        if (comment._id) {
-            comment._id = comment._id.toString();
-        }
-    });
-
     return comments;
+};
+
+export const getAllComments = async (postId: string): Promise<CommentDisplay[]> => {
+    const comments = await Comments.aggregate([
+        { $match: { postId: postId } },
+        { $sort: { createdAt: 1 } },
+        {
+            $lookup: {
+                from: "circles",
+                localField: "createdBy",
+                foreignField: "did",
+                as: "authorDetails",
+            },
+        },
+        { $unwind: "$authorDetails" },
+        {
+            $project: {
+                _id: { $toString: "$_id" },
+                postId: 1,
+                parentCommentId: 1,
+                content: 1,
+                createdBy: 1,
+                createdAt: 1,
+                reactions: 1,
+                replies: 1,
+                author: {
+                    did: "$authorDetails.did",
+                    name: "$authorDetails.name",
+                    picture: "$authorDetails.picture",
+                    location: "$authorDetails.location",
+                    description: "$authorDetails.description",
+                    cover: "$authorDetails.cover",
+                    handle: "$authorDetails.handle",
+                },
+            },
+        },
+    ]).toArray();
+
+    return comments as CommentDisplay[];
 };
 
 export const getComment = async (commentId: string): Promise<Comment | null> => {

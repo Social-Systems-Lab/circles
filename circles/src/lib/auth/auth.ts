@@ -253,7 +253,11 @@ export const getAuthenticatedUserDid = async (): Promise<string> => {
 };
 
 // checks if user is authorized to use a given feature
-export const isAuthorized = async (userDid: string, circleId: string, feature: Feature | string): Promise<boolean> => {
+export const isAuthorized = async (
+    userDid: string | undefined,
+    circleId: string,
+    feature: Feature | string,
+): Promise<boolean> => {
     // lookup access rules in circle for the features
     let circle = await Circles.findOne({ _id: new ObjectId(circleId) });
     if (!circle) return false;

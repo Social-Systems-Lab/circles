@@ -26,6 +26,14 @@ export const getUserById = async (id: string): Promise<Circle> => {
     return user;
 };
 
+export const getUserByDid = async (did: string): Promise<Circle> => {
+    let user = (await Circles.findOne({ did })) as Circle;
+    if (user?._id) {
+        user._id = user._id.toString();
+    }
+    return user;
+};
+
 export const createNewUser = (did: string, name: string, handle: string, type: AccountType, email: string): Circle => {
     let user: Circle = {
         did,

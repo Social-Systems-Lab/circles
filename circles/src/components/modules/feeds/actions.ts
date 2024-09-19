@@ -12,13 +12,54 @@ import {
     getPost,
     deletePost,
     getComment,
+    getAllComments,
+    getPosts,
 } from "@/lib/data/feed";
 import { saveFile, isFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { feedFeaturePrefix } from "@/lib/data/constants";
-import { Media, Post, postSchema, Comment, commentSchema, Circle, Page, PostDisplay } from "@/models/models";
+import {
+    Media,
+    Post,
+    postSchema,
+    Comment,
+    commentSchema,
+    Circle,
+    Page,
+    PostDisplay,
+    CommentDisplay,
+} from "@/models/models";
 import { revalidatePath } from "next/cache";
 import { getCircleById, getCirclePath } from "@/lib/data/circle";
+import { getUserByDid, getUserById } from "@/lib/data/user";
+import { redirect } from "next/navigation";
+
+export async function getPostsAction(
+    feedId: string,
+    circleId: string,
+    limit: number,
+    skip: number,
+): Promise<PostDisplay[]> {
+    let userDid = undefined;
+    try {
+        userDid = await getAuthenticatedUserDid();
+    } catch (error) {}
+
+    const feed = await getFeed(feedId);
+    if (!feed) {
+        redirect("/not-found");
+    }
+
+    const feature = feedFeaturePrefix + feed.handle + "_view";
+    const authorized = await isAuthorized(userDid, circleId, feature);
+    if (!authorized) {
+        redirect("/not-authorized");
+    }
+
+    // get posts for feed
+    const posts = await getPosts(feedId, userDid, limit, skip);
+    return posts;
+}
 
 export async function createPostAction(
     formData: FormData,
@@ -48,6 +89,7 @@ export async function createPostAction(
             createdBy: userDid,
             createdAt: new Date(),
             reactions: {},
+            comments: 0,
         };
 
         await postSchema.parseAsync(post);
@@ -191,7 +233,7 @@ export async function createCommentAction(
     postId: string,
     parentCommentId: string | null,
     content: string,
-): Promise<{ success: boolean; message?: string; comment?: Comment }> {
+): Promise<{ success: boolean; message?: string; comment?: CommentDisplay }> {
     try {
         const userDid = await getAuthenticatedUserDid();
         const post = await getPost(postId);
@@ -211,24 +253,59 @@ export async function createCommentAction(
             return { success: false, message: "You are not authorized to comment in this feed" };
         }
 
-        const comment: Comment = {
+        const user = await getUserByDid(userDid);
+
+        let comment: CommentDisplay = {
             postId: postId,
             parentCommentId: parentCommentId,
             content: content,
             createdBy: userDid,
             createdAt: new Date(),
             reactions: {},
+            replies: 0,
+            author: user,
         };
 
         await commentSchema.parseAsync(comment);
 
         let newComment = await createComment(comment);
+        comment._id = newComment._id;
 
-        revalidatePath(`/posts/${comment.postId}`); // TODO fix correct revalidate path
-
-        return { success: true, message: "Comment created successfully", comment: newComment };
+        return { success: true, message: "Comment created successfully", comment };
     } catch (error) {
         return { success: false, message: error instanceof Error ? error.message : "Failed to create comment." };
+    }
+}
+
+export async function getAllCommentsAction(
+    postId: string,
+): Promise<{ success: boolean; comments?: CommentDisplay[]; message?: string }> {
+    try {
+        let post = await getPost(postId);
+        if (!post) {
+            return { success: false, message: "Post not found" };
+        }
+
+        let userDid = undefined;
+        try {
+            userDid = await getAuthenticatedUserDid();
+        } catch (error) {}
+
+        const feed = await getFeed(post.feedId);
+        if (!feed) {
+            return { success: false, message: "Feed not found" };
+        }
+
+        const feature = feedFeaturePrefix + feed.handle + "_view";
+        const authorized = await isAuthorized(userDid, feed.circleId, feature);
+        if (!authorized) {
+            return { success: false, message: "You are not authorized to view comments in this feed" };
+        }
+
+        const comments = await getAllComments(postId);
+        return { success: true, comments };
+    } catch (error) {
+        return { success: false, message: error instanceof Error ? error.message : "Failed to get comments." };
     }
 }
 
