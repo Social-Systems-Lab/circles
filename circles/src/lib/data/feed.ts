@@ -136,10 +136,9 @@ export const deleteComment = async (commentId: string): Promise<void> => {
                 $set: {
                     isDeleted: true,
                     content: "",
-                    createdBy: undefined,
+                    createdBy: "anonymous",
                     reactions: {},
                 },
-                $unset: { createdBy: "", author: "" },
             },
         );
     } else {
@@ -311,7 +310,7 @@ export const updatePost = async (post: Partial<Post>): Promise<void> => {
 };
 
 export const getAllComments = async (postId: string, userDid: string | undefined): Promise<CommentDisplay[]> => {
-    const comments = await Comments.aggregate([
+    const comments = (await Comments.aggregate([
         { $match: { postId: postId } },
         {
             $lookup: {
@@ -359,7 +358,36 @@ export const getAllComments = async (postId: string, userDid: string | undefined
                 userReaction: { $arrayElemAt: ["$userReaction.reactionType", 0] },
             },
         },
-    ]).toArray();
+    ]).toArray()) as CommentDisplay[];
+
+    // compute rootParentId for each comment
+    const commentMap = new Map<string, CommentDisplay>();
+    comments.forEach((comment) => {
+        commentMap.set(comment._id!, comment);
+    });
+
+    comments.forEach((comment) => {
+        let rootParentId: string | undefined = undefined;
+        let currentComment = comment;
+
+        // If the comment is a top-level comment, rootParentId remains null
+        if (!currentComment.parentCommentId) {
+            comment.rootParentId = undefined;
+        } else {
+            // Walk up the parent chain to find the top-level comment
+            while (currentComment.parentCommentId) {
+                const parentComment = commentMap.get(currentComment.parentCommentId);
+                if (parentComment) {
+                    rootParentId = parentComment._id!;
+                    currentComment = parentComment;
+                } else {
+                    // Parent comment not found, break the loop
+                    break;
+                }
+            }
+            comment.rootParentId = rootParentId;
+        }
+    });
 
     return comments as CommentDisplay[];
 };
@@ -370,6 +398,22 @@ export const getComment = async (commentId: string): Promise<Comment | null> => 
         comment._id = comment._id?.toString();
     }
     return comment;
+};
+
+export const updateComment = async (commentId: string, updatedContent: string): Promise<void> => {
+    const result = await Comments.updateOne(
+        { _id: new ObjectId(commentId) },
+        {
+            $set: {
+                content: updatedContent,
+                editedAt: new Date(), // Set the edited date
+            },
+        },
+    );
+
+    if (result.matchedCount === 0) {
+        throw new Error("Comment not found");
+    }
 };
 
 export const likeContent = async (

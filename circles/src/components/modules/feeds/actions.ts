@@ -14,6 +14,8 @@ import {
     getComment,
     getAllComments,
     getPosts,
+    updateComment,
+    deleteComment,
 } from "@/lib/data/feed";
 import { saveFile, isFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -306,6 +308,62 @@ export async function getAllCommentsAction(
         return { success: true, comments };
     } catch (error) {
         return { success: false, message: error instanceof Error ? error.message : "Failed to get comments." };
+    }
+}
+
+export async function editCommentAction(
+    commentId: string,
+    updatedContent: string,
+): Promise<{ success: boolean; message?: string }> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        const comment = await getComment(commentId);
+
+        if (!comment) {
+            return { success: false, message: "Comment not found" };
+        }
+
+        if (comment.createdBy !== userDid) {
+            return { success: false, message: "You are not authorized to edit this comment" };
+        }
+
+        await updateComment(commentId, updatedContent);
+        return { success: true, message: "Comment edited successfully" };
+    } catch (error) {
+        return { success: false, message: error instanceof Error ? error.message : "Failed to edit comment." };
+    }
+}
+
+export async function deleteCommentAction(commentId: string): Promise<{ success: boolean; message?: string }> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        const comment = await getComment(commentId);
+
+        if (!comment) {
+            return { success: false, message: "Comment not found" };
+        }
+
+        const post = await getPost(comment.postId);
+        if (!post) {
+            return { success: false, message: "Post not found" };
+        }
+
+        const feed = await getFeed(post.feedId);
+        if (!feed) {
+            return { success: false, message: "Feed not found" };
+        }
+
+        const canModerate = await isAuthorized(userDid, feed.circleId, feedFeaturePrefix + feed.handle + "_moderate");
+
+        if (comment.createdBy !== userDid && !canModerate) {
+            return { success: false, message: "You are not authorized to delete this comment" };
+        }
+
+        await deleteComment(commentId);
+
+        return { success: true, message: "Comment deleted successfully" };
+    } catch (error) {
+        return { success: false, message: error instanceof Error ? error.message : "Failed to delete comment." };
     }
 }
 

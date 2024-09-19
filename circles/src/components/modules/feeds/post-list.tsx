@@ -5,7 +5,16 @@ import { UserPicture } from "../members/user-picture";
 import { Button } from "@/components/ui/button";
 import { Edit, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Trash2 } from "lucide-react";
 import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel";
-import { KeyboardEvent, useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import {
+    Dispatch,
+    KeyboardEvent,
+    SetStateAction,
+    useCallback,
+    useEffect,
+    useMemo,
+    useState,
+    useTransition,
+} from "react";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { getPublishTime } from "@/lib/utils";
@@ -39,6 +48,8 @@ import {
     updatePostAction,
     deletePostAction,
     getAllCommentsAction,
+    editCommentAction,
+    deleteCommentAction,
 } from "./actions";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { HoverCardArrow } from "@radix-ui/react-hover-card";
@@ -86,17 +97,12 @@ export const PostItem = ({
     const [showAllComments, setShowAllComments] = useState(initialShowAllComments ?? false);
     const [newCommentContent, setNewCommentContent] = useState("");
 
-    const flattenedComments = useMemo<CommentDisplay[]>(() => {
+    const topLevelComments = useMemo(() => {
         if (!comments || comments.length <= 0) return [];
-        let flattened: CommentDisplay[] = [];
 
-        // top-level comments
-        let topLevelComments = comments.filter((c) => c.parentCommentId === null);
-        topLevelComments.sort((a, b) => (b.reactions.like || 0) - (a.reactions.like || 0));
-
-        // for each top-level comment, collect its replies (flattened)
-
-        return flattened;
+        let topComments = comments.filter((c) => c.parentCommentId === null);
+        topComments.sort((a, b) => (b.reactions.like || 0) - (a.reactions.like || 0));
+        return topComments;
     }, [comments]);
 
     useEffect(() => {
@@ -230,6 +236,11 @@ export const PostItem = ({
             e.preventDefault();
             handleAddComment();
         }
+    };
+
+    const onDeleteComment = (commentId: string) => {
+        // TODO if top level comment anonymize it and if nested comment remove it
+        setComments((prev) => prev.filter((c) => c._id !== commentId));
     };
 
     const handleImageClick = (index: number) => {
@@ -522,24 +533,31 @@ export const PostItem = ({
 
                 {/* Display comments */}
                 {showAllComments
-                    ? flattenedComments
-                          .filter((c) => c.parentCommentId === null)
-                          .map((comment) => (
-                              <CommentItem
-                                  key={comment._id}
-                                  comment={comment}
-                                  comments={flattenedComments}
-                                  user={user}
-                                  postId={post._id}
-                              />
-                          ))
+                    ? topLevelComments.map((comment) => (
+                          <CommentItem
+                              key={comment._id}
+                              comment={comment}
+                              comments={comments}
+                              setComments={setComments}
+                              user={user}
+                              postId={post._id}
+                              feed={feed}
+                              circle={circle}
+                              onDeleteComment={onDeleteComment}
+                          />
+                      ))
                     : post.highlightedComment && (
                           <CommentItem
                               key={post.highlightedComment._id}
                               comment={post.highlightedComment}
-                              comments={flattenedComments}
+                              comments={comments}
+                              setComments={setComments}
                               user={user}
                               postId={post._id}
+                              feed={feed}
+                              circle={circle}
+                              onDeleteComment={onDeleteComment}
+                              isHighlighted={true}
                           />
                       )}
 
@@ -562,6 +580,7 @@ export const PostItem = ({
                         )}
                     </div>
                 )}
+                <pre>{JSON.stringify(comments, null, 2)}</pre>
             </div>
         </div>
     );
@@ -574,13 +593,26 @@ type CommentItemProps = {
     postId: string;
     depth?: number;
     comments?: CommentDisplay[];
+    setComments: Dispatch<SetStateAction<CommentDisplay[]>>;
+    feed: Feed;
+    circle: Circle;
+    onDeleteComment: (commentId: string) => void;
+    isHighlighted?: boolean;
 };
 
-const CommentItem = ({ comment, comments, user, postId, depth = 0 }: CommentItemProps) => {
+const CommentItem = ({
+    comment,
+    comments,
+    setComments,
+    feed,
+    circle,
+    user,
+    postId,
+    onDeleteComment,
+    isHighlighted,
+    depth = 0,
+}: CommentItemProps) => {
     const [showReplies, setShowReplies] = useState(false);
-    const [replies, setReplies] = useState<CommentDisplay[]>(
-        comments?.filter((c) => c.parentCommentId === comment._id) || [],
-    );
     const [likes, setLikes] = useState<number>(comment.reactions.like || 0);
     const [isLiked, setIsLiked] = useState<boolean>(comment.userReaction !== undefined);
     const [showReplyInput, setShowReplyInput] = useState(false);
@@ -593,8 +625,19 @@ const CommentItem = ({ comment, comments, user, postId, depth = 0 }: CommentItem
     const [isPending, startTransition] = useTransition();
 
     const isAuthor = user && comment.createdBy === user?.did;
-
+    const canModerateFeature = feedFeaturePrefix + feed.handle + "_moderate";
+    const canModerate = isAuthorized(user, circle, canModerateFeature);
     const formattedDate = getPublishTime(comment.createdAt);
+
+    const replies = useMemo<CommentDisplay[]>(
+        () =>
+            (comments?.filter((c) => c.rootParentId === comment._id) || []).sort(
+                (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+            ),
+        [comments, comment._id],
+    );
+
+    const { toast } = useToast();
 
     const handleLikeComment = () => {
         if (!user || comment.createdBy === user.did) return;
@@ -646,7 +689,9 @@ const CommentItem = ({ comment, comments, user, postId, depth = 0 }: CommentItem
                 const result = await createCommentAction(postId, comment._id ?? null, newReplyContent);
                 if (result.success && result.comment) {
                     const newReply = result.comment as CommentDisplay;
-                    setReplies([...replies, newReply]);
+                    newReply.rootParentId = comment.rootParentId || comment._id;
+                    setComments((prevComments: CommentDisplay[]) => [...prevComments, newReply]);
+
                     setNewReplyContent("");
                     setShowReplyInput(false);
                     setShowReplies(true);
@@ -673,15 +718,45 @@ const CommentItem = ({ comment, comments, user, postId, depth = 0 }: CommentItem
     };
 
     const handleDeleteClick = () => {
-        // Implement delete comment
+        startTransition(async () => {
+            const result = await deleteCommentAction(comment._id!);
+            if (result.success) {
+                toast({
+                    title: "Comment deleted",
+                    variant: "success",
+                });
+                onDeleteComment(comment._id!);
+            } else {
+                toast({
+                    title: result.message,
+                    variant: "destructive",
+                });
+            }
+        });
     };
 
     const handleEditKeyDown = (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
-            // Save edited comment
             setIsEditing(false);
-            // Implement backend call to update comment
+
+            // implement backend call to update comment
+            startTransition(async () => {
+                const result = await editCommentAction(comment._id!, editContent);
+                if (result.success) {
+                    setIsEditing(false);
+                    toast({
+                        title: "Comment updated",
+                        variant: "success",
+                    });
+                } else {
+                    // Handle failure (e.g., show toast message)
+                    toast({
+                        title: result.message,
+                        variant: "destructive",
+                    });
+                }
+            });
         } else if (e.key === "Escape") {
             e.preventDefault();
             setIsEditing(false);
@@ -761,6 +836,42 @@ const CommentItem = ({ comment, comments, user, postId, depth = 0 }: CommentItem
                             </div>
                         </div>
                     )}
+                    {likes > 0 && (
+                        <div className="relative self-end">
+                            <div className="absolute bottom-[16px] left-[-16px] rounded-[15px] bg-white">
+                                <Popover open={isLikesPopoverOpen} onOpenChange={handleLikesPopoverOpen}>
+                                    <PopoverTrigger asChild>
+                                        <div className="flex items-center">
+                                            <AiFillHeart
+                                                className={`h-4 w-4 text-[#ff4772]`}
+                                                onClick={handleLikeComment}
+                                            />
+                                            {likes > 0 && <div className="ml-1 text-xs text-gray-500">{likes}</div>}
+                                        </div>
+                                    </PopoverTrigger>
+                                    <PopoverContent>
+                                        <div>
+                                            <h4 className="font-bold">Likes</h4>
+                                            {likedByUsers.map((user) => (
+                                                <div key={user.did} className="flex items-center gap-2">
+                                                    <UserPicture
+                                                        name={user.name}
+                                                        picture={user.picture?.url}
+                                                        size="small"
+                                                    />
+                                                    <div>{user.name}</div>
+                                                </div>
+                                            ))}
+                                            {likes > 20 && (
+                                                <div className="text-sm text-gray-500">...and {likes - 20} more</div>
+                                            )}
+                                        </div>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                        </div>
+                    )}
+
                     {showReplyInput && (
                         <div className="mt-2 flex flex-col">
                             <div className="mb-1 text-xs text-gray-500">Replying to {comment.author.name}</div>
@@ -787,40 +898,7 @@ const CommentItem = ({ comment, comments, user, postId, depth = 0 }: CommentItem
                     )}
                 </div>
 
-                {likes > 0 && (
-                    <div className="relative self-end bg-blue-100">
-                        <div className="absolute bottom-[16px] left-[-16px] rounded-[15px] bg-white">
-                            <Popover open={isLikesPopoverOpen} onOpenChange={handleLikesPopoverOpen}>
-                                <PopoverTrigger asChild>
-                                    <div className="flex items-center">
-                                        <AiFillHeart className={`h-4 w-4 text-[#ff4772]`} onClick={handleLikeComment} />
-                                        {likes > 0 && <div className="ml-1 text-xs text-gray-500">{likes}</div>}
-                                    </div>
-                                </PopoverTrigger>
-                                <PopoverContent>
-                                    <div>
-                                        <h4 className="font-bold">Likes</h4>
-                                        {likedByUsers.map((user) => (
-                                            <div key={user.did} className="flex items-center gap-2">
-                                                <UserPicture
-                                                    name={user.name}
-                                                    picture={user.picture?.url}
-                                                    size="small"
-                                                />
-                                                <div>{user.name}</div>
-                                            </div>
-                                        ))}
-                                        {likes > 20 && (
-                                            <div className="text-sm text-gray-500">...and {likes - 20} more</div>
-                                        )}
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
-                        </div>
-                    </div>
-                )}
-
-                {isAuthor && !isEditing && (
+                {(isAuthor || canModerate) && !isEditing && (
                     <div className="relative">
                         <div className="absolute left-[-5px] top-0 opacity-0 group-hover:opacity-100">
                             <DropdownMenu>
@@ -830,10 +908,12 @@ const CommentItem = ({ comment, comments, user, postId, depth = 0 }: CommentItem
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={handleEditClick}>
-                                        <Edit className="mr-2 h-4 w-4" />
-                                        <div>Edit</div>
-                                    </DropdownMenuItem>
+                                    {isAuthor && (
+                                        <DropdownMenuItem onClick={handleEditClick}>
+                                            <Edit className="mr-2 h-4 w-4" />
+                                            <div>Edit</div>
+                                        </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuItem onClick={handleDeleteClick}>
                                         <Trash2 className="mr-2 h-4 w-4" />
                                         <div>Delete</div>
@@ -846,7 +926,8 @@ const CommentItem = ({ comment, comments, user, postId, depth = 0 }: CommentItem
             </div>
 
             {/* Replies */}
-            {(comment.replies > 0 || replies?.length > 0) && (
+            {/* Only show for top level comments since we flattened the hierarchy beyond */}
+            {!isHighlighted && !comment.parentCommentId && (comment.replies > 0 || replies?.length > 0) && (
                 <div className={`ml-8 mt-2`}>
                     {!showReplies ? (
                         <div
@@ -863,7 +944,11 @@ const CommentItem = ({ comment, comments, user, postId, depth = 0 }: CommentItem
                                 user={user}
                                 postId={postId}
                                 comments={comments}
+                                setComments={setComments}
                                 depth={depth + 1}
+                                feed={feed}
+                                circle={circle}
+                                onDeleteComment={onDeleteComment}
                             />
                         ))
                     )}
