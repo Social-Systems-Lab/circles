@@ -302,7 +302,7 @@ export async function getAllCommentsAction(
             return { success: false, message: "You are not authorized to view comments in this feed" };
         }
 
-        const comments = await getAllComments(postId);
+        const comments = await getAllComments(postId, userDid);
         return { success: true, comments };
     } catch (error) {
         return { success: false, message: error instanceof Error ? error.message : "Failed to get comments." };

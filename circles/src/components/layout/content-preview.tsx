@@ -15,10 +15,27 @@ import JoinButton from "../modules/home/join-button";
 import { Circle, PostDisplay, PostItemProps } from "@/models/models";
 import { PostItem } from "../modules/feeds/post-list";
 
-export const PostPreview = ({ post, circle, feed, page, subpage }: PostItemProps) => {
+export const PostPreview = ({
+    post,
+    circle,
+    feed,
+    page,
+    subpage,
+    initialComments,
+    initialShowAllComments,
+}: PostItemProps) => {
     return (
         <>
-            <PostItem post={post} circle={circle} feed={feed} page={page} subpage={subpage} inPreview={true} />
+            <PostItem
+                post={post}
+                circle={circle}
+                feed={feed}
+                page={page}
+                subpage={subpage}
+                inPreview={true}
+                initialComments={initialComments}
+                initialShowAllComments={initialShowAllComments}
+            />
         </>
     );
 };
@@ -122,6 +139,8 @@ export const ContentPreview: React.FC = () => {
                         feed={(contentPreview.props! as PostItemProps).feed}
                         page={(contentPreview.props! as PostItemProps).page}
                         subpage={(contentPreview.props! as PostItemProps).subpage}
+                        initialComments={(contentPreview.props! as PostItemProps).initialComments}
+                        initialShowAllComments={(contentPreview.props! as PostItemProps).initialShowAllComments}
                     />
                 );
         }

@@ -310,48 +310,9 @@ export const updatePost = async (post: Partial<Post>): Promise<void> => {
     }
 };
 
-export const getComments = async (postId: string, parentCommentId: string | null = null): Promise<CommentDisplay[]> => {
-    const comments = (await Comments.aggregate([
-        { $match: { postId: postId, parentCommentId: parentCommentId } },
-        { $sort: { createdAt: 1 } },
-        {
-            $lookup: {
-                from: "circles",
-                localField: "createdBy",
-                foreignField: "did",
-                as: "authorDetails",
-            },
-        },
-        { $unwind: "$authorDetails" },
-        {
-            $project: {
-                _id: { $toString: "$_id" },
-                postId: 1,
-                parentCommentId: 1,
-                content: 1,
-                createdBy: 1,
-                createdAt: 1,
-                reactions: 1,
-                author: {
-                    did: "$authorDetails.did",
-                    name: "$authorDetails.name",
-                    picture: "$authorDetails.picture",
-                    location: "$authorDetails.location",
-                    description: "$authorDetails.description",
-                    cover: "$authorDetails.cover",
-                    handle: "$authorDetails.handle",
-                },
-            },
-        },
-    ]).toArray()) as CommentDisplay[];
-
-    return comments;
-};
-
-export const getAllComments = async (postId: string): Promise<CommentDisplay[]> => {
+export const getAllComments = async (postId: string, userDid: string | undefined): Promise<CommentDisplay[]> => {
     const comments = await Comments.aggregate([
         { $match: { postId: postId } },
-        { $sort: { createdAt: 1 } },
         {
             $lookup: {
                 from: "circles",
@@ -361,6 +322,20 @@ export const getAllComments = async (postId: string): Promise<CommentDisplay[]> 
             },
         },
         { $unwind: "$authorDetails" },
+        {
+            $lookup: {
+                from: "reactions",
+                let: { commentId: { $toString: "$_id" } },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: { $and: [{ $eq: ["$contentId", "$$commentId"] }, { $eq: ["$userDid", userDid] }] },
+                        },
+                    },
+                ],
+                as: "userReaction",
+            },
+        },
         {
             $project: {
                 _id: { $toString: "$_id" },
@@ -371,6 +346,7 @@ export const getAllComments = async (postId: string): Promise<CommentDisplay[]> 
                 createdAt: 1,
                 reactions: 1,
                 replies: 1,
+                isDeleted: 1,
                 author: {
                     did: "$authorDetails.did",
                     name: "$authorDetails.name",
@@ -380,6 +356,7 @@ export const getAllComments = async (postId: string): Promise<CommentDisplay[]> 
                     cover: "$authorDetails.cover",
                     handle: "$authorDetails.handle",
                 },
+                userReaction: { $arrayElemAt: ["$userReaction.reactionType", 0] },
             },
         },
     ]).toArray();

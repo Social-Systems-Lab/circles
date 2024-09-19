@@ -5,7 +5,7 @@ import { UserPicture } from "../members/user-picture";
 import { Button } from "@/components/ui/button";
 import { Edit, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Trash2 } from "lucide-react";
 import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel";
-import { KeyboardEvent, useEffect, useState, useTransition } from "react";
+import { KeyboardEvent, useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { getPublishTime } from "@/lib/utils";
@@ -48,7 +48,16 @@ import { PostForm } from "./post-form";
 import { isAuthorized } from "@/lib/auth/client-auth";
 import { feedFeaturePrefix } from "@/lib/data/constants";
 
-export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostItemProps) => {
+export const PostItem = ({
+    post,
+    circle,
+    feed,
+    page,
+    subpage,
+    inPreview,
+    initialComments,
+    initialShowAllComments,
+}: PostItemProps) => {
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
     const formattedDate = getPublishTime(post?.createdAt);
     const isCompact = useIsCompact();
@@ -60,6 +69,7 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
     const canModerateFeature = feedFeaturePrefix + feed.handle + "_moderate";
     const canModerate = isAuthorized(user, circle, canModerateFeature);
     const [isPending, startTransition] = useTransition();
+    const [isFetchingComments, startCommentsTransition] = useTransition();
     const { toast } = useToast();
     const [, setImageGallery] = useAtom(imageGalleryAtom);
 
@@ -72,9 +82,22 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
     const [likedByUsers, setLikedByUsers] = useState<Circle[] | undefined>(undefined);
 
     // State for comments
-    const [comments, setComments] = useState<CommentDisplay[]>([]);
-    const [showAllComments, setShowAllComments] = useState(false);
+    const [comments, setComments] = useState<CommentDisplay[]>(initialComments ?? []);
+    const [showAllComments, setShowAllComments] = useState(initialShowAllComments ?? false);
     const [newCommentContent, setNewCommentContent] = useState("");
+
+    const flattenedComments = useMemo<CommentDisplay[]>(() => {
+        if (!comments || comments.length <= 0) return [];
+        let flattened: CommentDisplay[] = [];
+
+        // top-level comments
+        let topLevelComments = comments.filter((c) => c.parentCommentId === null);
+        topLevelComments.sort((a, b) => (b.reactions.like || 0) - (a.reactions.like || 0));
+
+        // for each top-level comment, collect its replies (flattened)
+
+        return flattened;
+    }, [comments]);
 
     useEffect(() => {
         if (!carouselApi) return;
@@ -227,14 +250,14 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
         let contentPreviewData: ContentPreviewData = {
             type: "post",
             content: post,
-            props: { post, circle, feed, page, subpage },
+            props: { post, circle, feed, page, subpage, initialComments: comments, initialShowAllComments: true },
         };
         setContentPreview((x) => (x?.content === post ? undefined : contentPreviewData));
     };
 
-    const fetchComments = async () => {
+    const fetchComments = useCallback(async () => {
         if (post.comments > 0 && comments.length === 0) {
-            startTransition(async () => {
+            startCommentsTransition(async () => {
                 try {
                     const result = await getAllCommentsAction(post._id);
                     if (result.success && result.comments) {
@@ -246,7 +269,13 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
                 }
             });
         }
-    };
+    }, [comments.length, post._id, post.comments]);
+
+    useEffect(() => {
+        if (initialShowAllComments && (initialComments === undefined || initialComments.length < post.comments)) {
+            fetchComments();
+        }
+    }, [post.comments, initialComments, initialShowAllComments, fetchComments]);
 
     // fixes hydration error
     const [isMounted, setIsMounted] = useState(false);
@@ -472,25 +501,34 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
 
             {/* Comments Section */}
             <div className="flex flex-col gap-2 pb-4 pl-4 pr-4">
-                {/* Show "Show more comments" if more than one comment and not showing all */}
-                {!showAllComments && post.comments > 1 && (
-                    <div
-                        className="cursor-pointer text-[15px] font-bold text-gray-500 hover:underline"
-                        onClick={fetchComments}
-                    >
-                        Show more comments
+                {isFetchingComments ? (
+                    <div className="flex items-center justify-center">
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Loading comments...
                     </div>
+                ) : (
+                    <>
+                        {/* Show "Show more comments" if more than one comment and not showing all */}
+                        {!showAllComments && post.comments > 1 && (
+                            <div
+                                className="cursor-pointer text-[15px] font-bold text-gray-500 hover:underline"
+                                onClick={fetchComments}
+                            >
+                                Show more comments
+                            </div>
+                        )}
+                    </>
                 )}
 
                 {/* Display comments */}
                 {showAllComments
-                    ? comments
+                    ? flattenedComments
                           .filter((c) => c.parentCommentId === null)
                           .map((comment) => (
                               <CommentItem
                                   key={comment._id}
                                   comment={comment}
-                                  comments={comments}
+                                  comments={flattenedComments}
                                   user={user}
                                   postId={post._id}
                               />
@@ -499,7 +537,7 @@ export const PostItem = ({ post, circle, feed, page, subpage, inPreview }: PostI
                           <CommentItem
                               key={post.highlightedComment._id}
                               comment={post.highlightedComment}
-                              comments={comments}
+                              comments={flattenedComments}
                               user={user}
                               postId={post._id}
                           />
@@ -751,7 +789,7 @@ const CommentItem = ({ comment, comments, user, postId, depth = 0 }: CommentItem
 
                 {likes > 0 && (
                     <div className="relative self-end bg-blue-100">
-                        <div className="absolute bottom-[20px] right-[0px] rounded-[15px] bg-white">
+                        <div className="absolute bottom-[16px] left-[-16px] rounded-[15px] bg-white">
                             <Popover open={isLikesPopoverOpen} onOpenChange={handleLikesPopoverOpen}>
                                 <PopoverTrigger asChild>
                                     <div className="flex items-center">

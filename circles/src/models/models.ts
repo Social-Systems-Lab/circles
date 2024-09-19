@@ -216,6 +216,7 @@ export type Comment = z.infer<typeof commentSchema>;
 export interface CommentDisplay extends Comment {
     author: Circle;
     userReaction?: string;
+    rootParentId?: string;
 }
 
 export const reactionSchema = z.object({
@@ -306,6 +307,8 @@ export type PostItemProps = {
     page: Page;
     subpage?: string;
     inPreview?: boolean;
+    initialComments?: CommentDisplay[];
+    initialShowAllComments?: boolean;
 };
 
 export type ContentPreviewData =
