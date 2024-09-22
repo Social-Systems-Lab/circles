@@ -65,7 +65,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import RichText from "./RichText";
 
-const defaultStyle = {
+export const defaultMentionsInputStyle = {
     control: {
         backgroundColor: "rgb(243 244 246)", // Tailwind bg-gray-100
         borderRadius: "1.25rem", // Tailwind rounded-[20px]
@@ -99,11 +99,11 @@ const defaultStyle = {
     },
 };
 
-const defaultMentionStyle = {
+export const defaultMentionStyle = {
     backgroundColor: "#e5e9ff",
 };
 
-const renderCircleSuggestion = (
+export const renderCircleSuggestion = (
     suggestion: any,
     search: string,
     highlightedDisplay: React.ReactNode,
@@ -120,7 +120,7 @@ const renderCircleSuggestion = (
     </div>
 );
 
-const handleMentionQuery = async (query: string, callback: (data: SuggestionDataItem[]) => void) => {
+export const handleMentionQuery = async (query: string, callback: (data: SuggestionDataItem[]) => void) => {
     //console.log("fetching mentions", query);
     const response = await searchCirclesAction(encodeURIComponent(query));
     if (!response?.success) {
@@ -670,7 +670,7 @@ export const PostItem = ({
                             onKeyDown={handleCommentKeyDown}
                             placeholder="Write a comment..."
                             className="flex-grow rounded-[20px] bg-gray-100"
-                            style={defaultStyle}
+                            style={defaultMentionsInputStyle}
                         >
                             <Mention
                                 trigger="@"
@@ -965,7 +965,7 @@ const CommentItem = ({
                                             onKeyDown={handleEditKeyDown}
                                             placeholder="Write a comment..."
                                             className="flex-grow rounded-[20px] bg-gray-200"
-                                            style={defaultStyle}
+                                            style={defaultMentionsInputStyle}
                                         >
                                             <Mention
                                                 trigger="@"

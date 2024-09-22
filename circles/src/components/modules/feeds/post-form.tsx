@@ -17,6 +17,52 @@ import { Button } from "@/components/ui/button";
 import LocationPicker from "@/components/forms/location-picker";
 import { useAtom } from "jotai";
 import { imageGalleryAtom } from "@/lib/data/atoms";
+import { Mention, MentionsInput } from "react-mentions";
+import {
+    defaultMentionsInputStyle,
+    defaultMentionStyle,
+    handleMentionQuery,
+    renderCircleSuggestion,
+} from "./post-list";
+
+const postMentionsInputStyle = {
+    control: {
+        backgroundColor: "rgb(255 255 255)",
+    },
+    input: {
+        padding: "0 0",
+        outline: "none",
+        fontSize: "1.125rem",
+        lineHeight: "1.75rem",
+        paddingTop: "1.5rem",
+    },
+    highlighter: {
+        padding: "0 0", // Same as input
+        paddingTop: "1.5rem",
+        fontSize: "1.125rem",
+        lineHeight: "1.75rem",
+    },
+    suggestions: {
+        control: {
+            backgroundColor: "transparent",
+        },
+        list: {
+            backgroundColor: "transparent",
+            border: "0px solid rgba(0,0,0,0.15)",
+            borderRadius: "15px",
+            fontSize: 14,
+            overflow: "hidden",
+        },
+        item: {
+            backgroundColor: "white",
+            padding: "5px 15px",
+            // borderBottom: "1px solid rgba(0,0,0,0.15)",
+            "&focused": {
+                backgroundColor: "#cee4e5",
+            },
+        },
+    },
+};
 
 type ImageItem = {
     file?: File;
@@ -133,7 +179,7 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
     };
 
     return (
-        <div {...getRootProps()} className="bg-white p-4">
+        <div {...getRootProps()} className="p-4">
             <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                     <UserPicture name={user?.name} picture={user?.picture?.url} size="40px" />
@@ -147,13 +193,32 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                     </div>
                 </div>
             </div>
-            <Textarea
+            <MentionsInput
+                value={postContent}
+                onChange={(e) => setPostContent(e.target.value)}
+                placeholder="Share your story..."
+                className="flex-grow"
+                autoFocus
+                style={postMentionsInputStyle}
+            >
+                <Mention
+                    trigger="@"
+                    data={handleMentionQuery}
+                    style={defaultMentionStyle}
+                    displayTransform={(id, display) => `${display}`}
+                    renderSuggestion={renderCircleSuggestion}
+                    markup="[__display__](/circles/__id__)"
+                    // regex={/\[([^\]]+)\]\(\/circles\/([^)]+)\)/} // TODO probably not necessary let's see
+                />
+            </MentionsInput>
+
+            {/* <Textarea
                 placeholder="Share your story"
                 value={postContent}
                 onChange={(e) => setPostContent(e.target.value)}
                 className="min-h-[150px] w-full resize-none border-0 p-0 pt-6 text-lg focus-visible:ring-0 focus-visible:ring-transparent focus-visible:ring-offset-0"
                 autoFocus
-            />
+            /> */}
             {images.length > 0 && (
                 <div className="relative mt-4">
                     <Carousel setApi={setCarouselApi}>

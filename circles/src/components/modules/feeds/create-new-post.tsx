@@ -70,7 +70,7 @@ export function CreateNewPost({ circle, feed, page, subpage }: CreateNewPostProp
                 </div>
             </DialogTrigger>
 
-            <DialogContent className="overflow-hidden rounded-[15px] p-0 sm:max-w-[425px] sm:rounded-[15px]">
+            <DialogContent className="rounded-[15px] bg-white p-0 sm:max-w-[425px] sm:rounded-[15px]">
                 <PostForm
                     circle={circle}
                     feed={feed}
