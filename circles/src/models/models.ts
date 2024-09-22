@@ -176,6 +176,17 @@ export const mediaSchema = z.object({
 
 export type Media = z.infer<typeof mediaSchema>;
 
+export const mentionSchema = z.object({
+    type: z.enum(["circle"]),
+    id: z.string(),
+});
+
+export type Mention = z.infer<typeof mentionSchema>;
+
+export interface MentionDisplay extends Mention {
+    circle?: Circle;
+}
+
 export const postSchema = z.object({
     _id: z.any().optional(),
     feedId: z.string(),
@@ -188,6 +199,7 @@ export const postSchema = z.object({
     media: z.array(mediaSchema).optional(),
     highlightedCommentId: z.string().optional(),
     comments: z.number().default(0),
+    mentions: z.array(mentionSchema).optional(),
 });
 
 export type Post = z.infer<typeof postSchema>;
@@ -197,6 +209,7 @@ export interface PostDisplay extends Post {
     highlightedComment?: CommentDisplay;
     circleType: "post";
     userReaction?: string;
+    mentionsDisplay?: MentionDisplay[];
 }
 
 export const commentSchema = z.object({
@@ -209,6 +222,7 @@ export const commentSchema = z.object({
     reactions: z.record(z.string(), z.number()).default({}),
     replies: z.number().default(0),
     isDeleted: z.boolean().optional(),
+    mentions: z.array(mentionSchema).optional(),
 });
 
 export type Comment = z.infer<typeof commentSchema>;
@@ -217,6 +231,7 @@ export interface CommentDisplay extends Comment {
     author: Circle;
     userReaction?: string;
     rootParentId?: string;
+    mentionsDisplay?: MentionDisplay[];
 }
 
 export const reactionSchema = z.object({

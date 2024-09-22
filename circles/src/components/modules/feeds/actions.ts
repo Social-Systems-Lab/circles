@@ -16,6 +16,7 @@ import {
     getPosts,
     updateComment,
     deleteComment,
+    extractMentions,
 } from "@/lib/data/feed";
 import { saveFile, isFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -32,7 +33,7 @@ import {
     CommentDisplay,
 } from "@/models/models";
 import { revalidatePath } from "next/cache";
-import { getCircleById, getCirclePath } from "@/lib/data/circle";
+import { getCircleById, getCirclePath, getCirclesBySearchQuery } from "@/lib/data/circle";
 import { getUserByDid, getUserById } from "@/lib/data/user";
 import { redirect } from "next/navigation";
 
@@ -96,6 +97,10 @@ export async function createPostAction(
 
         await postSchema.parseAsync(post);
 
+        // parse mentions in the comment content
+        const mentions = extractMentions(post.content);
+        post.mentions = mentions;
+
         let newPost = await createPost(post);
 
         try {
@@ -157,6 +162,8 @@ export async function updatePostAction(
             content,
             editedAt: new Date(),
         };
+
+        updatedPost.mentions = extractMentions(content);
 
         let existingMedia: Media[] = [];
         let mediaStr = formData.getAll("existingMedia") as string[];
@@ -268,6 +275,12 @@ export async function createCommentAction(
             author: user,
         };
 
+        console.log("Creating comment", comment.content);
+
+        // parse mentions in the comment content
+        const mentions = extractMentions(comment.content);
+        comment.mentions = mentions;
+
         await commentSchema.parseAsync(comment);
 
         let newComment = await createComment(comment);
@@ -327,7 +340,11 @@ export async function editCommentAction(
             return { success: false, message: "You are not authorized to edit this comment" };
         }
 
-        await updateComment(commentId, updatedContent);
+        let updatedMentions = extractMentions(updatedContent);
+        await updateComment(commentId, updatedContent, updatedMentions);
+
+        // TODO get updated comment with mentions and update it in UI
+
         return { success: true, message: "Comment edited successfully" };
     } catch (error) {
         return { success: false, message: error instanceof Error ? error.message : "Failed to edit comment." };
@@ -447,5 +464,16 @@ export async function checkIfLikedAction(
         return { success: true, isLiked };
     } catch (error) {
         return { success: false, message: error instanceof Error ? error.message : "Failed to check if liked." };
+    }
+}
+
+export async function searchCirclesAction(
+    query: string,
+): Promise<{ success: boolean; circles?: Circle[]; message?: string }> {
+    try {
+        const circles = await getCirclesBySearchQuery(query, 10);
+        return { success: true, circles };
+    } catch (error) {
+        return { success: false, message: error instanceof Error ? error.message : "Failed to search circles." };
     }
 }

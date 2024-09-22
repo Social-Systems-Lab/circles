@@ -1,9 +1,23 @@
 import { Feeds, Posts, Comments, Reactions, Circles } from "./db";
 import { ObjectId } from "mongodb";
-import { Feed, Post, PostDisplay, Comment, CommentDisplay, Circle } from "@/models/models";
+import { Feed, Post, PostDisplay, Comment, CommentDisplay, Circle, Mention } from "@/models/models";
 import { getCircleById, updateCircle } from "./circle";
 import { addFeedsAccessRules } from "../utils";
 import { comment } from "postcss";
+
+export function extractMentions(content: string): Mention[] {
+    const mentionPattern = /\[([^\]]+)\]\(\/circles\/([^)]+)\)/g;
+    let match;
+    const mentions: Mention[] = [];
+
+    while ((match = mentionPattern.exec(content)) !== null) {
+        //const display = match[1];
+        const id = match[2];
+        mentions.push({ type: "circle", id });
+    }
+
+    return mentions;
+}
 
 export const createFeed = async (feed: Feed): Promise<Feed> => {
     const result = await Feeds.insertOne(feed);
@@ -170,6 +184,8 @@ export const getPosts = async (
 
     const posts = (await Posts.aggregate([
         { $match: { feedId: feedId } },
+
+        // Lookup for author details
         {
             $lookup: {
                 from: "circles",
@@ -179,24 +195,8 @@ export const getPosts = async (
             },
         },
         { $unwind: "$authorDetails" },
-        {
-            $lookup: {
-                from: "comments",
-                let: { highlightedCommentId: { $toObjectId: "$highlightedCommentId" } },
-                pipeline: [{ $match: { $expr: { $eq: ["$_id", "$$highlightedCommentId"] } } }, { $limit: 1 }],
-                as: "highlightedComment",
-            },
-        },
-        { $unwind: { path: "$highlightedComment", preserveNullAndEmptyArrays: true } },
-        {
-            $lookup: {
-                from: "circles",
-                localField: "highlightedComment.createdBy",
-                foreignField: "did",
-                as: "highlightedCommentAuthor",
-            },
-        },
-        { $unwind: { path: "$highlightedCommentAuthor", preserveNullAndEmptyArrays: true } },
+
+        // Lookup for reactions on the post
         {
             $lookup: {
                 from: "reactions",
@@ -211,41 +211,119 @@ export const getPosts = async (
                 as: "userReaction",
             },
         },
+
+        // **Adjusted Lookup for mentions in the post**
         {
             $lookup: {
-                from: "reactions",
-                let: { commentId: { $toString: "$highlightedComment._id" } },
+                from: "circles",
+                let: {
+                    mentionIds: {
+                        $ifNull: [{ $map: { input: "$mentions", as: "m", in: "$$m.id" } }, []],
+                    },
+                },
                 pipeline: [
                     {
                         $match: {
-                            $expr: { $and: [{ $eq: ["$contentId", "$$commentId"] }, { $eq: ["$userDid", userDid] }] },
+                            $expr: { $in: [{ $toString: "$_id" }, "$$mentionIds"] },
+                        },
+                    },
+                    {
+                        $project: {
+                            _id: { $toString: "$_id" },
+                            did: 1,
+                            name: 1,
+                            picture: 1,
+                            location: 1,
+                            description: 1,
+                            cover: 1,
+                            handle: 1,
                         },
                     },
                 ],
-                as: "highlightedCommentUserReaction",
+                as: "mentionsDetails",
             },
         },
+
+        // Lookup for highlighted comment
         {
-            $group: {
-                _id: "$_id",
-                feedId: { $first: "$feedId" },
-                content: { $first: "$content" },
-                createdAt: { $first: "$createdAt" },
-                reactions: { $first: "$reactions" },
-                media: { $first: "$media" },
-                createdBy: { $first: "$createdBy" },
-                comments: { $first: "$comments" },
-                highlightedCommentId: { $first: "$highlightedCommentId" },
-                authorDetails: { $first: "$authorDetails" },
-                highlightedComment: { $first: "$highlightedComment" },
-                highlightedCommentAuthor: { $first: "$highlightedCommentAuthor" },
-                userReaction: { $first: "$userReaction" },
-                highlightedCommentUserReaction: { $first: "$highlightedCommentUserReaction" },
+            $lookup: {
+                from: "comments",
+                let: { highlightedCommentId: { $toObjectId: "$highlightedCommentId" } },
+                pipeline: [
+                    { $match: { $expr: { $eq: ["$_id", "$$highlightedCommentId"] } } },
+                    // Lookup for highlighted comment author
+                    {
+                        $lookup: {
+                            from: "circles",
+                            localField: "createdBy",
+                            foreignField: "did",
+                            as: "authorDetails",
+                        },
+                    },
+                    { $unwind: "$authorDetails" },
+                    // Lookup for reactions on highlighted comment
+                    {
+                        $lookup: {
+                            from: "reactions",
+                            let: { commentId: { $toString: "$_id" } },
+                            pipeline: [
+                                {
+                                    $match: {
+                                        $expr: {
+                                            $and: [
+                                                { $eq: ["$contentId", "$$commentId"] },
+                                                { $eq: ["$userDid", userDid] },
+                                            ],
+                                        },
+                                    },
+                                },
+                            ],
+                            as: "userReaction",
+                        },
+                    },
+                    // **Adjusted Lookup for mentions in highlighted comment**
+                    {
+                        $lookup: {
+                            from: "circles",
+                            let: {
+                                mentionIds: {
+                                    $ifNull: [{ $map: { input: "$mentions", as: "m", in: "$$m.id" } }, []],
+                                },
+                            },
+                            pipeline: [
+                                {
+                                    $match: {
+                                        $expr: { $in: [{ $toString: "$_id" }, "$$mentionIds"] },
+                                    },
+                                },
+                                {
+                                    $project: {
+                                        _id: { $toString: "$_id" },
+                                        did: 1,
+                                        name: 1,
+                                        picture: 1,
+                                        location: 1,
+                                        description: 1,
+                                        cover: 1,
+                                        handle: 1,
+                                    },
+                                },
+                            ],
+                            as: "mentionsDetails",
+                        },
+                    },
+                ],
+                as: "highlightedComment",
             },
         },
+        { $unwind: { path: "$highlightedComment", preserveNullAndEmptyArrays: true } },
+
+        // Sorting and pagination
         { $sort: { createdAt: -1 } },
         { $skip: safeOffset },
         { $limit: safeLimit },
+
+        // Final projection
         {
             $project: {
                 _id: { $toString: "$_id" },
@@ -258,6 +336,30 @@ export const getPosts = async (
                 comments: 1,
                 circleType: { $literal: "post" },
                 highlightedCommentId: { $toString: "$highlightedCommentId" },
+                mentions: 1,
+                // **Adjusted mapping of mentionsDisplay**
+                mentionsDisplay: {
+                    $map: {
+                        input: { $ifNull: ["$mentions", []] },
+                        as: "mention",
+                        in: {
+                            type: "$$mention.type",
+                            id: "$$mention.id",
+                            circle: {
+                                $arrayElemAt: [
+                                    {
+                                        $filter: {
+                                            input: { $ifNull: ["$mentionsDetails", []] },
+                                            as: "circle",
+                                            cond: { $eq: ["$$circle._id", "$$mention.id"] },
+                                        },
+                                    },
+                                    0,
+                                ],
+                            },
+                        },
+                    },
+                },
                 author: {
                     did: "$authorDetails.did",
                     name: "$authorDetails.name",
@@ -267,6 +369,9 @@ export const getPosts = async (
                     cover: "$authorDetails.cover",
                     handle: "$authorDetails.handle",
                 },
+                userReaction: { $arrayElemAt: ["$userReaction.reactionType", 0] },
+
+                // Project highlightedComment
                 highlightedComment: {
                     $cond: {
                         if: { $ifNull: ["$highlightedComment", false] },
@@ -279,21 +384,45 @@ export const getPosts = async (
                             createdAt: "$highlightedComment.createdAt",
                             reactions: "$highlightedComment.reactions",
                             replies: "$highlightedComment.replies",
-                            author: {
-                                did: "$highlightedCommentAuthor.did",
-                                name: "$highlightedCommentAuthor.name",
-                                picture: "$highlightedCommentAuthor.picture",
-                                location: "$highlightedCommentAuthor.location",
-                                description: "$highlightedCommentAuthor.description",
-                                cover: "$highlightedCommentAuthor.cover",
-                                handle: "$highlightedCommentAuthor.handle",
+                            isDeleted: "$highlightedComment.isDeleted",
+                            mentions: "$highlightedComment.mentions",
+                            // **Adjusted mapping of mentionsDisplay in highlightedComment**
+                            mentionsDisplay: {
+                                $map: {
+                                    input: { $ifNull: ["$highlightedComment.mentions", []] },
+                                    as: "mention",
+                                    in: {
+                                        type: "$$mention.type",
+                                        id: "$$mention.id",
+                                        circle: {
+                                            $arrayElemAt: [
+                                                {
+                                                    $filter: {
+                                                        input: { $ifNull: ["$highlightedComment.mentionsDetails", []] },
+                                                        as: "circle",
+                                                        cond: { $eq: ["$$circle._id", "$$mention.id"] },
+                                                    },
+                                                },
+                                                0,
+                                            ],
+                                        },
+                                    },
+                                },
                             },
-                            userReaction: { $arrayElemAt: ["$highlightedCommentUserReaction.reactionType", 0] },
+                            author: {
+                                did: "$highlightedComment.authorDetails.did",
+                                name: "$highlightedComment.authorDetails.name",
+                                picture: "$highlightedComment.authorDetails.picture",
+                                location: "$highlightedComment.authorDetails.location",
+                                description: "$highlightedComment.authorDetails.description",
+                                cover: "$highlightedComment.authorDetails.cover",
+                                handle: "$highlightedComment.authorDetails.handle",
+                            },
+                            userReaction: { $arrayElemAt: ["$highlightedComment.userReaction.reactionType", 0] },
                         },
                         else: null,
                     },
                 },
-                userReaction: { $arrayElemAt: ["$userReaction.reactionType", 0] },
             },
         },
     ]).toArray()) as PostDisplay[];
@@ -312,6 +441,8 @@ export const updatePost = async (post: Partial<Post>): Promise<void> => {
 export const getAllComments = async (postId: string, userDid: string | undefined): Promise<CommentDisplay[]> => {
     const comments = (await Comments.aggregate([
         { $match: { postId: postId } },
+
+        // Lookup for author details
         {
             $lookup: {
                 from: "circles",
@@ -321,6 +452,8 @@ export const getAllComments = async (postId: string, userDid: string | undefined
             },
         },
         { $unwind: "$authorDetails" },
+
+        // Lookup for reactions on the comment
         {
             $lookup: {
                 from: "reactions",
@@ -335,6 +468,42 @@ export const getAllComments = async (postId: string, userDid: string | undefined
                 as: "userReaction",
             },
         },
+
+        // **Adjusted Lookup for mentions in the comment**
+        {
+            $lookup: {
+                from: "circles",
+                let: {
+                    mentionIds: {
+                        $ifNull: [{ $map: { input: "$mentions", as: "m", in: "$$m.id" } }, []],
+                    },
+                },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: {
+                                $in: [{ $toString: "$_id" }, "$$mentionIds"],
+                            },
+                        },
+                    },
+                    {
+                        $project: {
+                            _id: { $toString: "$_id" },
+                            did: 1,
+                            name: 1,
+                            picture: 1,
+                            location: 1,
+                            description: 1,
+                            cover: 1,
+                            handle: 1,
+                        },
+                    },
+                ],
+                as: "mentionsDetails",
+            },
+        },
+
+        // Final projection
         {
             $project: {
                 _id: { $toString: "$_id" },
@@ -346,6 +515,32 @@ export const getAllComments = async (postId: string, userDid: string | undefined
                 reactions: 1,
                 replies: 1,
                 isDeleted: 1,
+                mentions: 1,
+                // **Adjusted mapping of mentionsDisplay**
+                mentionsDisplay: {
+                    $map: {
+                        input: { $ifNull: ["$mentions", []] },
+                        as: "mention",
+                        in: {
+                            type: "$$mention.type",
+                            id: "$$mention.id",
+                            circle: {
+                                $arrayElemAt: [
+                                    {
+                                        $filter: {
+                                            input: { $ifNull: ["$mentionsDetails", []] },
+                                            as: "circle",
+                                            cond: {
+                                                $eq: ["$$circle._id", "$$mention.id"],
+                                            },
+                                        },
+                                    },
+                                    0,
+                                ],
+                            },
+                        },
+                    },
+                },
                 author: {
                     did: "$authorDetails.did",
                     name: "$authorDetails.name",
@@ -360,7 +555,7 @@ export const getAllComments = async (postId: string, userDid: string | undefined
         },
     ]).toArray()) as CommentDisplay[];
 
-    // compute rootParentId for each comment
+    // Compute rootParentId for each comment
     const commentMap = new Map<string, CommentDisplay>();
     comments.forEach((comment) => {
         commentMap.set(comment._id!, comment);
@@ -370,7 +565,7 @@ export const getAllComments = async (postId: string, userDid: string | undefined
         let rootParentId: string | undefined = undefined;
         let currentComment = comment;
 
-        // If the comment is a top-level comment, rootParentId remains null
+        // If the comment is a top-level comment, rootParentId remains undefined
         if (!currentComment.parentCommentId) {
             comment.rootParentId = undefined;
         } else {
@@ -389,7 +584,7 @@ export const getAllComments = async (postId: string, userDid: string | undefined
         }
     });
 
-    return comments as CommentDisplay[];
+    return comments;
 };
 
 export const getComment = async (commentId: string): Promise<Comment | null> => {
@@ -400,12 +595,17 @@ export const getComment = async (commentId: string): Promise<Comment | null> => 
     return comment;
 };
 
-export const updateComment = async (commentId: string, updatedContent: string): Promise<void> => {
+export const updateComment = async (
+    commentId: string,
+    updatedContent: string,
+    updatedMentions: Mention[],
+): Promise<void> => {
     const result = await Comments.updateOne(
         { _id: new ObjectId(commentId) },
         {
             $set: {
                 content: updatedContent,
+                mentions: updatedMentions,
                 editedAt: new Date(), // Set the edited date
             },
         },

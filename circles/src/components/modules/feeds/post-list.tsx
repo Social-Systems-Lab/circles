@@ -50,6 +50,7 @@ import {
     getAllCommentsAction,
     editCommentAction,
     deleteCommentAction,
+    searchCirclesAction,
 } from "./actions";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { HoverCardArrow } from "@radix-ui/react-hover-card";
@@ -58,6 +59,81 @@ import { useToast } from "@/components/ui/use-toast";
 import { PostForm } from "./post-form";
 import { isAuthorized } from "@/lib/auth/client-auth";
 import { feedFeaturePrefix } from "@/lib/data/constants";
+import { MentionsInput, Mention, MentionItem, SuggestionDataItem } from "react-mentions";
+import { over, set } from "lodash";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import RichText from "./RichText";
+
+const defaultStyle = {
+    control: {
+        backgroundColor: "rgb(243 244 246)", // Tailwind bg-gray-100
+        borderRadius: "1.25rem", // Tailwind rounded-[20px]
+    },
+    input: {
+        padding: "0.5rem 1rem", // Tailwind p-2 pl-4
+        outline: "none",
+    },
+    highlighter: {
+        padding: "0.5rem 1rem", // Same as input
+    },
+    suggestions: {
+        control: {
+            backgroundColor: "transparent",
+        },
+        list: {
+            backgroundColor: "transparent",
+            border: "0px solid rgba(0,0,0,0.15)",
+            borderRadius: "15px",
+            fontSize: 14,
+            overflow: "hidden",
+        },
+        item: {
+            backgroundColor: "white",
+            padding: "5px 15px",
+            // borderBottom: "1px solid rgba(0,0,0,0.15)",
+            "&focused": {
+                backgroundColor: "#cee4e5",
+            },
+        },
+    },
+};
+
+const defaultMentionStyle = {
+    backgroundColor: "#e5e9ff",
+};
+
+const renderCircleSuggestion = (
+    suggestion: any,
+    search: string,
+    highlightedDisplay: React.ReactNode,
+    index: number,
+    focused: boolean,
+) => (
+    <div className="flex items-center p-2">
+        <img
+            src={suggestion.picture || "/default-profile.png"}
+            alt={suggestion.display}
+            className="mr-2 h-6 w-6 rounded-full"
+        />
+        <span>{highlightedDisplay}</span>
+    </div>
+);
+
+const handleMentionQuery = async (query: string, callback: (data: SuggestionDataItem[]) => void) => {
+    //console.log("fetching mentions", query);
+    const response = await searchCirclesAction(encodeURIComponent(query));
+    if (!response?.success) {
+        return;
+    }
+    let suggestions =
+        response.circles?.map((circle) => ({
+            id: circle._id,
+            display: circle.name,
+            picture: circle.picture?.url,
+        })) ?? [];
+    callback(suggestions);
+};
 
 export const PostItem = ({
     post,
@@ -92,7 +168,6 @@ export const PostItem = ({
     const [isLiked, setIsLiked] = useState<boolean>(post.userReaction !== undefined);
     const [likedByUsers, setLikedByUsers] = useState<Circle[] | undefined>(undefined);
 
-    // State for comments
     const [comments, setComments] = useState<CommentDisplay[]>(initialComments ?? []);
     const [showAllComments, setShowAllComments] = useState(initialShowAllComments ?? false);
     const [newCommentContent, setNewCommentContent] = useState("");
@@ -214,6 +289,20 @@ export const PostItem = ({
     const handleAddComment = () => {
         if (!newCommentContent.trim()) return;
 
+        const tempComment: CommentDisplay = {
+            _id: "temp-comment", // Temporary ID to distinguish it
+            content: newCommentContent,
+            createdAt: new Date(),
+            author: user as Circle,
+            createdBy: user!.did!,
+            postId: post._id,
+            reactions: {},
+            parentCommentId: null,
+            replies: 0,
+        };
+        setComments([...comments, tempComment]);
+        setShowAllComments(true);
+
         startTransition(async () => {
             try {
                 const result = await createCommentAction(post._id, null, newCommentContent);
@@ -221,12 +310,13 @@ export const PostItem = ({
                     const newComment = result.comment as CommentDisplay;
                     newComment.author = user as Circle;
 
-                    setComments([...comments, newComment]);
+                    setComments((prev) => prev.map((c) => (c._id === "temp-comment" ? newComment : c)));
                     setNewCommentContent("");
                     setShowAllComments(true);
                 }
             } catch (error) {
                 console.error("Failed to add comment", error);
+                setComments((prev) => prev.filter((comment) => comment._id !== "temp-comment"));
             }
         });
     };
@@ -249,7 +339,7 @@ export const PostItem = ({
             let contentPreviewData: ContentPreviewData = {
                 type: "post",
                 content: post,
-                props: { post, circle, feed, page, subpage },
+                props: { post, circle, feed, page, subpage, initialComments: comments, initialShowAllComments: true },
             };
             setContentPreview(contentPreviewData);
             setImageGallery({ images: post.media, initialIndex: index });
@@ -287,6 +377,10 @@ export const PostItem = ({
             fetchComments();
         }
     }, [post.comments, initialComments, initialShowAllComments, fetchComments]);
+
+    // useEffect(() => {
+    //     console.log("re-rendering post-list");
+    // }, []);
 
     // fixes hydration error
     const [isMounted, setIsMounted] = useState(false);
@@ -423,7 +517,9 @@ export const PostItem = ({
             </div>
 
             {/* Post content */}
-            <div className="pl-4 pr-4 text-lg">{post.content}</div>
+            <div className="pl-4 pr-4 text-lg">
+                <RichText content={post.content} mentions={post.mentionsDisplay} />
+            </div>
 
             {/* Media carousel (if exists) */}
             {post.media && post.media.length > 0 && (
@@ -539,11 +635,13 @@ export const PostItem = ({
                               comment={comment}
                               comments={comments}
                               setComments={setComments}
+                              setShowAllComments={setShowAllComments}
                               user={user}
                               postId={post._id}
                               feed={feed}
                               circle={circle}
                               onDeleteComment={onDeleteComment}
+                              onShowAllComments={fetchComments}
                           />
                       ))
                     : post.highlightedComment && (
@@ -552,27 +650,39 @@ export const PostItem = ({
                               comment={post.highlightedComment}
                               comments={comments}
                               setComments={setComments}
+                              setShowAllComments={setShowAllComments}
                               user={user}
                               postId={post._id}
                               feed={feed}
                               circle={circle}
                               onDeleteComment={onDeleteComment}
                               isHighlighted={true}
+                              onShowAllComments={fetchComments}
                           />
                       )}
 
                 {/* Comment input box */}
                 {user && (
                     <div className="mt-2 flex items-start gap-2">
-                        <TextareaAutosize
+                        <MentionsInput
                             value={newCommentContent}
                             onChange={(e) => setNewCommentContent(e.target.value)}
                             onKeyDown={handleCommentKeyDown}
                             placeholder="Write a comment..."
-                            className="flex-grow resize-none rounded-[20px] bg-gray-100 p-2 pl-4 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            minRows={1}
-                            maxRows={6}
-                        />
+                            className="flex-grow rounded-[20px] bg-gray-100"
+                            style={defaultStyle}
+                        >
+                            <Mention
+                                trigger="@"
+                                data={handleMentionQuery}
+                                style={defaultMentionStyle}
+                                displayTransform={(id, display) => `${display}`}
+                                renderSuggestion={renderCircleSuggestion}
+                                markup="[__display__](/circles/__id__)"
+                                // regex={/\[([^\]]+)\]\(\/circles\/([^)]+)\)/} // TODO probably not necessary let's see
+                            />
+                        </MentionsInput>
+
                         {isMobile && (
                             <button onClick={handleAddComment} className="mt-1 text-blue-500">
                                 Send
@@ -580,7 +690,7 @@ export const PostItem = ({
                         )}
                     </div>
                 )}
-                <pre>{JSON.stringify(comments, null, 2)}</pre>
+                {/* <pre>{JSON.stringify(comments, null, 2)}</pre> */}
             </div>
         </div>
     );
@@ -594,16 +704,20 @@ type CommentItemProps = {
     depth?: number;
     comments?: CommentDisplay[];
     setComments: Dispatch<SetStateAction<CommentDisplay[]>>;
+    setShowAllComments: Dispatch<SetStateAction<boolean>>;
     feed: Feed;
     circle: Circle;
     onDeleteComment: (commentId: string) => void;
     isHighlighted?: boolean;
+    onShowAllComments: () => void;
 };
 
 const CommentItem = ({
     comment,
     comments,
     setComments,
+    setShowAllComments,
+    onShowAllComments,
     feed,
     circle,
     user,
@@ -623,6 +737,7 @@ const CommentItem = ({
     const [likedByUsers, setLikedByUsers] = useState<Circle[]>([]);
     const [isLikesPopoverOpen, setIsLikesPopoverOpen] = useState(false);
     const [isPending, startTransition] = useTransition();
+    const [, setContentPreview] = useAtom(contentPreviewAtom);
 
     const isAuthor = user && comment.createdBy === user?.did;
     const canModerateFeature = feedFeaturePrefix + feed.handle + "_moderate";
@@ -638,6 +753,14 @@ const CommentItem = ({
     );
 
     const { toast } = useToast();
+
+    const handleAuthorClick = (author: Circle) => {
+        let contentPreviewData: ContentPreviewData = {
+            type: "user",
+            content: author,
+        };
+        setContentPreview((x) => (x?.content === author ? undefined : contentPreviewData));
+    };
 
     const handleLikeComment = () => {
         if (!user || comment.createdBy === user.did) return;
@@ -684,13 +807,29 @@ const CommentItem = ({
     const handleAddReply = () => {
         if (!newReplyContent.trim()) return;
 
+        const tempComment: CommentDisplay = {
+            _id: "temp-reply", // Temporary ID to distinguish it
+            content: newReplyContent,
+            createdAt: new Date(),
+            author: user as Circle,
+            createdBy: user!.did!,
+            postId: postId,
+            reactions: {},
+            parentCommentId: comment._id!,
+            rootParentId: comment.rootParentId || comment._id,
+            replies: 0,
+        };
+
+        setComments([...comments!, tempComment]);
         startTransition(async () => {
             try {
                 const result = await createCommentAction(postId, comment._id ?? null, newReplyContent);
                 if (result.success && result.comment) {
                     const newReply = result.comment as CommentDisplay;
                     newReply.rootParentId = comment.rootParentId || comment._id;
-                    setComments((prevComments: CommentDisplay[]) => [...prevComments, newReply]);
+                    setComments((prevComments: CommentDisplay[]) =>
+                        prevComments.map((c) => (c._id === "temp-reply" ? newReply : c)),
+                    );
 
                     setNewReplyContent("");
                     setShowReplyInput(false);
@@ -740,17 +879,25 @@ const CommentItem = ({
             e.preventDefault();
             setIsEditing(false);
 
-            // implement backend call to update comment
+            const oldComment: CommentDisplay = { ...comment };
+            const updatedComment: CommentDisplay = { ...comment, content: editContent };
+            setComments((prevComments) => prevComments.map((c) => (c._id === comment._id ? updatedComment : c)));
+
+            // TODO handle editing of highlighted comment
+
+            // update comment
             startTransition(async () => {
                 const result = await editCommentAction(comment._id!, editContent);
                 if (result.success) {
                     setIsEditing(false);
+                    // TODO get updated comment with mentions and update it in UI
                     toast({
                         title: "Comment updated",
                         variant: "success",
                     });
                 } else {
                     // Handle failure (e.g., show toast message)
+                    setComments((prevComments) => prevComments.map((c) => (c._id === comment._id ? oldComment : c)));
                     toast({
                         title: result.message,
                         variant: "destructive",
@@ -776,6 +923,10 @@ const CommentItem = ({
 
     const fetchReplies = async () => {
         setShowReplies(true);
+        if (isHighlighted) {
+            // fetch all comments
+            onShowAllComments();
+        }
     };
 
     return (
@@ -786,7 +937,12 @@ const CommentItem = ({
                     {comment.isDeleted ? (
                         <div className="h-[32px] w-[32px] rounded-full bg-gray-100" />
                     ) : (
-                        <UserPicture name={comment.author.name} picture={comment.author.picture?.url} size="32px" />
+                        <UserPicture
+                            name={comment.author.name}
+                            picture={comment.author.picture?.url}
+                            onClick={() => handleAuthorClick(comment.author)}
+                            size="32px"
+                        />
                     )}
                 </div>
                 <div className="flex w-auto max-w-[80%] flex-col">
@@ -795,18 +951,37 @@ const CommentItem = ({
                             <div className="text-sm text-gray-400">Comment removed</div>
                         ) : (
                             <>
-                                <div className="text-sm font-semibold">{comment.author.name}</div>
+                                <div
+                                    className="cursor-pointer text-sm font-semibold"
+                                    onClick={() => handleAuthorClick(comment.author)}
+                                >
+                                    {comment.author.name}
+                                </div>
                                 {isEditing ? (
-                                    <TextareaAutosize
-                                        value={editContent}
-                                        onChange={(e) => setEditContent(e.target.value)}
-                                        onKeyDown={handleEditKeyDown}
-                                        className="w-full resize-none rounded-[20px] bg-white p-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                        minRows={1}
-                                        maxRows={6}
-                                    />
+                                    <>
+                                        <MentionsInput
+                                            value={editContent}
+                                            onChange={(e) => setEditContent(e.target.value)}
+                                            onKeyDown={handleEditKeyDown}
+                                            placeholder="Write a comment..."
+                                            className="flex-grow rounded-[20px] bg-gray-200"
+                                            style={defaultStyle}
+                                        >
+                                            <Mention
+                                                trigger="@"
+                                                data={handleMentionQuery}
+                                                style={defaultMentionStyle}
+                                                displayTransform={(id, display) => `${display}`}
+                                                renderSuggestion={renderCircleSuggestion}
+                                                markup="[__display__](/circles/__id__)"
+                                                // regex={/\[([^\]]+)\]\(\/circles\/([^)]+)\)/} // TODO probably not necessary let's see
+                                            />
+                                        </MentionsInput>
+                                    </>
                                 ) : (
-                                    <div className="text-sm">{comment.content}</div>
+                                    <div className="text-sm">
+                                        <RichText content={comment.content} mentions={comment.mentionsDisplay} />
+                                    </div>
                                 )}
                             </>
                         )}
@@ -927,16 +1102,9 @@ const CommentItem = ({
 
             {/* Replies */}
             {/* Only show for top level comments since we flattened the hierarchy beyond */}
-            {!isHighlighted && !comment.parentCommentId && (comment.replies > 0 || replies?.length > 0) && (
+            {!comment.parentCommentId && (comment.replies > 0 || replies?.length > 0) && (
                 <div className={`ml-8 mt-2`}>
-                    {!showReplies ? (
-                        <div
-                            className="cursor-pointer pl-2 text-xs font-bold text-gray-500 hover:underline"
-                            onClick={fetchReplies}
-                        >
-                            Show {comment.replies} {comment.replies > 1 ? "replies" : "reply"}
-                        </div>
-                    ) : (
+                    {showReplies &&
                         replies?.map((reply) => (
                             <CommentItem
                                 key={reply._id}
@@ -945,12 +1113,21 @@ const CommentItem = ({
                                 postId={postId}
                                 comments={comments}
                                 setComments={setComments}
+                                setShowAllComments={setShowAllComments}
                                 depth={depth + 1}
                                 feed={feed}
                                 circle={circle}
                                 onDeleteComment={onDeleteComment}
+                                onShowAllComments={onShowAllComments}
                             />
-                        ))
+                        ))}
+                    {(!showReplies || isHighlighted) && (
+                        <div
+                            className="cursor-pointer pl-2 text-xs font-bold text-gray-500 hover:underline"
+                            onClick={fetchReplies}
+                        >
+                            Show {comment.replies} {comment.replies > 1 ? "replies" : "reply"}
+                        </div>
                     )}
                 </div>
             )}

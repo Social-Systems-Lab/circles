@@ -108,3 +108,14 @@ export const getCirclePath = async (circle: Partial<Circle>): Promise<string> =>
     }
     return `/circles/${circle.handle}/`;
 };
+
+export const getCirclesBySearchQuery = async (query: string, limit: number = 10) => {
+    const regex = new RegExp(query, "i"); // case-insensitive search
+    const circles = await Circles.find({ name: regex }).limit(limit).toArray();
+    circles.forEach((circle: Circle) => {
+        if (circle._id) {
+            circle._id = circle._id.toString();
+        }
+    });
+    return circles as Circle[];
+};

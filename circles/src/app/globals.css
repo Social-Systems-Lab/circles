@@ -414,3 +414,8 @@ div.ReactTags__suggestions ul li.ReactTags__activeSuggestion {
     flex: 0 0 100%;
     min-width: 0;
 }
+
+/* react-mentions */
+.flex-grow__suggestions {
+    background-color: transparent !important;
+}
