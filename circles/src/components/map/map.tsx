@@ -23,6 +23,7 @@ import Image from "next/image";
 import ContentPreview from "../layout/content-preview";
 import { Content, ContentPreviewData } from "@/models/models";
 import ImageGallery from "../layout/image-gallery";
+import { TbFocus2 } from "react-icons/tb";
 
 const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
     const mapContainer = useRef(null);
@@ -103,7 +104,33 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
         });
     }, [displayedContent, onMarkerClick]);
 
-    return <div ref={mapContainer} className="map-container z-10" style={{ width: "100%", height: "100%" }} />;
+    // Function to zoom in on user's location
+    const zoomToUserLocation = useCallback(() => {
+        navigator.geolocation.getCurrentPosition((position) => {
+            const userLng = position.coords.longitude;
+            const userLat = position.coords.latitude;
+
+            if (map.current) {
+                map.current.flyTo({
+                    center: [userLng, userLat],
+                    zoom: 12, // Adjust this value for city-level zoom
+                    essential: true, // this animation is considered essential with respect to prefers-reduced-motion
+                });
+            }
+        });
+    }, []);
+
+    return (
+        <div ref={mapContainer} className="map-container z-10" style={{ width: "100%", height: "100%" }}>
+            {/* Add the button for zooming into the user's location */}
+            <div
+                className="fixed bottom-[160px] right-6 z-[50] cursor-pointer rounded-full bg-[#242424] p-[2px] hover:bg-[#304678e6] md:bottom-[90px]"
+                onClick={zoomToUserLocation}
+            >
+                <TbFocus2 className="m-[4px] text-white group-hover:text-white" size="30px" />
+            </div>
+        </div>
+    );
 };
 
 export default function MapAndContentWrapper({
