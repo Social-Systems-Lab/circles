@@ -9,6 +9,7 @@ import NavBar from "./nav-bar";
 import { ProfileMenu } from "./profile-menu";
 import "mapbox-gl/dist/mapbox-gl.css";
 import ImageGallery from "./image-gallery";
+import Onboarding from "../onboarding/onboarding";
 
 const inter = Inter({ subsets: ["latin"] });
 const wix = Wix_Madefor_Display({ subsets: ["latin"], variable: "--font-wix-display" });
@@ -35,6 +36,7 @@ const BaseLayout = ({ children, circle, serverConfig, isDefaultCircle }: BaseLay
                     <Toaster />
                     <Authenticator />
                     <ImageGallery />
+                    <Onboarding />
                 </main>
             </body>
         </html>

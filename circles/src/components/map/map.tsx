@@ -24,6 +24,8 @@ import ContentPreview from "../layout/content-preview";
 import { Content, ContentPreviewData } from "@/models/models";
 import ImageGallery from "../layout/image-gallery";
 import { TbFocus2 } from "react-icons/tb";
+import Onboarding from "../onboarding/onboarding";
+import { Dialog, DialogContent } from "../ui/dialog";
 
 const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
     const mapContainer = useRef(null);

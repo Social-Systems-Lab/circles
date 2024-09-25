@@ -76,6 +76,56 @@ export default function HomeContent({ circle, isDefaultCircle, authorizedToEdit 
                     </div>
                 )}
             </div>
+
+            {circle.handle === "default" && (
+                <div className="flex flex-col items-center justify-center">
+                    <div className="mb-8 flex max-w-[700px] flex-col">
+                        <div className="text-[20px] text-lg font-bold">Welcome</div>
+                        <div className="card pt-2 text-[18px]">
+                            Circles is an open-source social media platform for change makers, for co-creators, for
+                            problem solvers, for people that want to make a real difference in the world. For people
+                            that care. For people that dream of a better world for everyone. Welcome!
+                            <br />
+                            <br />
+                            We receive contributions from a number of different people and networks. We will never allow
+                            any form of funding that will influence the platform in any direction the community does not
+                            approve of. We will not mine or sell personal data and we will not host any ads.
+                            <br />
+                            <br />
+                            This is an early version of the platform, we have a lot of ideas about where we want to take
+                            this next. If you’d like to join our team and volunteer network or contribute in any other
+                            way, please get in touch.
+                            <br />
+                            <br />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {circle.handle === "grabogro" && (
+                <div className="flex flex-col items-center justify-center">
+                    <div className="mb-8 flex max-w-[700px] flex-col">
+                        <div className="text-[20px] text-lg font-bold">Om oss</div>
+                        <div className="card pt-2 text-[18px]">
+                            Vi arbetar för att främja hållbar odling och grönska i Gråbo. Vi vill hjälpa, aktivera och
+                            inspirera människor till att skapa en frodande grön miljö i Gråbo. Vi vill att det ska vara
+                            lätt att välja hållbara livsmönster och livnära sig på närodlat. Vi vill bereda plats för
+                            möten över kulturgränser och generationsmöten kring odling – ”Odling är för alla”.
+                        </div>
+                        <div className="pt-8 text-[20px] text-lg font-bold">Medskaparparken</div>
+                        <div className="card pt-2 text-[18px]">
+                            Projektets mål är att etablera en odlingspark, anlagd och upprätthållen enligt
+                            permakultur-principer. Med permakultur-principer avses både social permakultur, dvs att alla
+                            berörda bidrar på det sätt som passar dem och gynnas därefter, och biologisk permakultur.
+                            Platsen skulle förse lokalbefolkningen med närodlad mat och öppna, naturliga mötes- och
+                            aktivitetsplatser. Den skulle dessutom användas till att, med stöd från lärare, bedriva
+                            workshops med grundskolornas elever för att öka förståelsen för vår närmiljö och konsumtion
+                            – från matjord till matbord. Syftet är att gynna lokal matproduktion, praktisk utbildning,
+                            naturliga möten i samhället, gemenskap, medborgardelaktighet och citizen science.
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

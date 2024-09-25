@@ -9,7 +9,7 @@ export const passwordSchema = z.string().min(8, { message: "Password must be at 
 export const handleSchema = z
     .string()
     .max(20, { message: "Handle can't be more than 20 characters long" })
-    .regex(/^[a-zA-Z0-9_]*$/, { message: "Handle can only contain letters, numbers and underscores." });
+    .regex(/^[a-zA-Z0-9\-]*$/, { message: "Handle can only contain letters, numbers and hyphens (-)." });
 
 export const accountTypeSchema = z.enum(["user", "organization"]);
 export const circleTypeSchema = z.enum(["user", "circle"]);
