@@ -6,13 +6,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
-import { contentPreviewAtom, mapOpenAtom, triggerMapOpenAtom } from "@/lib/data/atoms";
+import { contentPreviewAtom, imageGalleryAtom, mapOpenAtom, triggerMapOpenAtom } from "@/lib/data/atoms";
 import Image from "next/image";
 import { FaUsers } from "react-icons/fa6";
 import { useRouter } from "next/navigation";
 import InviteButton from "../modules/home/invite-button";
 import JoinButton from "../modules/home/join-button";
-import { Circle, PostDisplay, PostItemProps } from "@/models/models";
+import { Circle, ContentPreviewData, FileInfo, Media, PostDisplay, PostItemProps } from "@/models/models";
 import { PostItem } from "../modules/feeds/post-list";
 
 export const PostPreview = ({
@@ -46,6 +46,17 @@ type CirclePreviewProps = {
 export const CirclePreview = ({ circle }: CirclePreviewProps) => {
     const router = useRouter();
     const memberCount = circle?.members ? (circle.circleType === "user" ? circle.members - 1 : circle.members) : 0;
+    const [, setImageGallery] = useAtom(imageGalleryAtom);
+
+    const handleImageClick = (name: string, image?: FileInfo) => {
+        if (!image?.url) return;
+        let media: Media = {
+            name: name,
+            type: "image",
+            fileInfo: image,
+        };
+        setImageGallery({ images: [media], initialIndex: 0 });
+    };
 
     return (
         <>
@@ -58,6 +69,7 @@ export const CirclePreview = ({ circle }: CirclePreviewProps) => {
                     }}
                     sizes="100vw"
                     fill
+                    onClick={() => handleImageClick("Cover Image", circle?.cover)}
                 />
             </div>
             <div className="flex flex-1 flex-col">
@@ -86,6 +98,7 @@ export const CirclePreview = ({ circle }: CirclePreviewProps) => {
                                 src={circle?.picture?.url ?? "/images/default-picture.png"}
                                 alt="Picture"
                                 fill
+                                onClick={() => handleImageClick("Profile Picture", circle?.picture)}
                             />
                         </div>
                     </div>

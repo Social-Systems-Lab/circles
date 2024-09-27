@@ -8,6 +8,7 @@ import InviteButton from "./invite-button";
 import EditableImage from "./editable-image";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
+import GalleryTrigger from "./gallery-trigger";
 
 type HomeContentProps = {
     circle: Circle;
@@ -48,6 +49,9 @@ export default function HomeCover({ circle, isDefaultCircle, authorizedToEdit }:
                             fill
                         />
                     )}
+                    <div className="absolute top-0 h-full w-full">
+                        <GalleryTrigger name="Cover Image" image={circle.cover} />
+                    </div>
                 </div>
                 <div className="absolute bottom-[-50px] right-2 flex flex-row gap-1">
                     <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />

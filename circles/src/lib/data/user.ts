@@ -10,7 +10,7 @@ import { defaultPagesForUser, defaultUserGroupsForUser, getDefaultAccessRulesFor
 export const getUser = async (userDid: string): Promise<Circle> => {
     let user = await Circles.findOne(
         { did: userDid },
-        { projection: { did: 1, type: 1, handle: 1, name: 1, picture: 1, cover: 1 } },
+        { projection: { did: 1, type: 1, handle: 1, name: 1, picture: 1, cover: 1, mission: 1, location: 1 } },
     );
     if (!user) {
         throw new Error("User not found");
@@ -79,7 +79,18 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
                 let: { circle_id: { $toObjectId: "$circleId" } },
                 pipeline: [
                     { $match: { $expr: { $eq: ["$_id", "$$circle_id"] } } },
-                    { $project: { name: 1, handle: 1, description: 1, picture: 1, cover: 1, circleType: 1 } },
+                    {
+                        $project: {
+                            name: 1,
+                            handle: 1,
+                            description: 1,
+                            picture: 1,
+                            cover: 1,
+                            circleType: 1,
+                            mission: 1,
+                            location: 1,
+                        },
+                    },
                 ],
                 as: "circle",
             },
@@ -98,6 +109,8 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
                     description: "$circle.description",
                     picture: "$circle.picture",
                     cover: "$circle.cover",
+                    mission: "$circle.mission",
+                    location: "$circle.location",
                     circleType: "$circle.circleType",
                 },
             },

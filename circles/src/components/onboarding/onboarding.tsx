@@ -24,6 +24,7 @@ type Cause = {
     name: string;
     picture: string;
     description: string;
+    champions?: number;
 };
 
 const allCauses: Cause[] = [
@@ -32,186 +33,217 @@ const allCauses: Cause[] = [
         name: "Climate Action",
         picture: "/images/causes/climate-action.png",
         description: "Working together to combat climate change and secure a sustainable future for all.",
+        champions: 1230,
     },
     {
         handle: "renewable-energy",
         name: "Renewable Energy",
         picture: "/images/causes/renewable-energy.png",
         description: "Advocating for clean, sustainable energy solutions to power our world.",
+        champions: 980,
     },
     {
         handle: "wildlife-protection",
         name: "Wildlife Protection",
         picture: "/images/causes/wildlife-protection.png",
         description: "Safeguarding Earth's diverse species for a thriving planet.",
+        champions: 750,
     },
     {
         handle: "healthy-oceans",
         name: "Healthy Oceans",
         picture: "/images/causes/healthy-oceans.png",
         description: "Preserving our oceans for the well-being of marine life and future generations.",
+        champions: 620,
     },
     {
         handle: "sustainable-forestry",
         name: "Sustainable Forestry",
         picture: "/images/causes/sustainable-forestry.png",
         description: "Promoting responsible forest management to sustain ecosystems and communities.",
+        champions: 540,
     },
     {
         handle: "sustainable-cities",
         name: "Sustainable Cities",
         picture: "/images/causes/sustainable-cities.png",
         description: "Building eco-friendly and resilient urban spaces for a better tomorrow.",
+        champions: 480,
     },
     {
         handle: "no-poverty",
         name: "No Poverty",
         picture: "/images/causes/no-poverty.png",
         description: "Eliminate poverty in all its forms everywhere.",
+        champions: 430,
     },
     {
         handle: "quality-education",
         name: "Quality Education",
         picture: "/images/causes/quality-education.png",
         description: "Ensuring inclusive and equitable education for all.",
+        champions: 1390,
     },
     {
         handle: "global-health",
         name: "Global Health & Well-being",
         picture: "/images/causes/global-health.png",
         description: "Promoting health and well-being worldwide for a brighter future.",
+        champions: 1120,
     },
     {
         handle: "gender-equality",
         name: "Gender Equality",
         picture: "/images/causes/gender-equality.png",
         description: "Advocating for equal rights and opportunities for all genders.",
+        champions: 980,
     },
     {
         handle: "human-rights",
         name: "Human Rights",
         picture: "/images/causes/human-rights.png",
         description: "Upholding the fundamental rights and dignities of all people.",
+        champions: 2593,
     },
     {
         handle: "asylum-rights",
         name: "Asylum Rights",
         picture: "/images/causes/asylum-rights.png",
         description: "Protecting the rights of refugees and displaced persons seeking safety.",
+        champions: 980,
     },
     {
         handle: "democracy",
         name: "Democracy",
         picture: "/images/causes/democracy.png",
         description: "Supporting fair, transparent, and representative governance.",
+        champions: 4890,
     },
     {
         handle: "social-justice",
         name: "Social Justice",
         picture: "/images/causes/social-justice.png",
         description: "Advocating for equality, fairness, and rights for all individuals.",
+        champions: 4980,
     },
     {
         handle: "security",
         name: "Security & Protection",
         picture: "/images/causes/security.png",
         description: "Ensuring safety and protection for all members of society.",
+        champions: 582,
     },
     {
         handle: "peace",
         name: "Peace & Global Unity",
         picture: "/images/causes/peace.png",
         description: "Fostering harmony and cooperation among all nations.",
+        champions: 2980,
     },
     {
         handle: "indigenous-rights",
         name: "Indigenous Peoples' Rights",
         picture: "/images/causes/indigenous-rights.png",
         description: "Upholding the rights and cultures of Indigenous communities worldwide.",
+        champions: 680,
     },
     {
         handle: "arts-and-culture",
         name: "Arts & Culture",
         picture: "/images/causes/arts-and-culture.png",
         description: "Celebrating and preserving the diverse expressions of human creativity.",
+        champions: 482,
     },
     {
         handle: "humanitarian-aid",
         name: "Humanitarian Aid",
         picture: "/images/causes/humanitarian-aid.png",
         description: "Providing relief and support to those in crisis around the world.",
+        champions: 4280,
     },
     {
         handle: "animal-rights",
         name: "Animal Rights",
         picture: "/images/causes/animal-rights.png",
         description: "Ensuring the ethical treatment and protection of all animals.",
+        champions: 1380,
     },
     {
         handle: "freedom-of-press",
         name: "Freedom of the Press",
         picture: "/images/causes/freedom-of-press.png",
         description: "Supporting a free and independent media worldwide.",
+        champions: 532,
     },
     {
         handle: "access-to-justice",
         name: "Access to Justice",
         picture: "/images/causes/access-to-justice.png",
         description: "Ensuring fair legal processes and equal access to justice for all.",
+        champions: 394,
     },
     {
         handle: "lgbtq-rights",
         name: "LGBTQ+ Rights",
         picture: "/images/causes/lgbtq-rights.png",
         description: "Advocating for equal rights and acceptance of LGBTQ+ individuals.",
+        champions: 4893,
     },
     {
         handle: "digital-rights",
         name: "Digital Rights & Privacy",
         picture: "/images/causes/digital-rights.png",
         description: "Ensuring the protection of individual freedoms and privacy in the digital age.",
+        champions: 3980,
     },
     {
         handle: "civic-engagement",
         name: "Civic Engagement",
         picture: "/images/causes/civic-engagement.png",
         description: "Empowering citizens to actively participate in shaping their communities and governments.",
+        champions: 280,
     },
     {
         handle: "disability-rights",
         name: "Disability Rights",
         picture: "/images/causes/disability-rights.png",
         description: "Promoting equal rights and opportunities for individuals with disabilities.",
+        champions: 998,
     },
     {
         handle: "child-rights",
         name: "Child Rights",
         picture: "/images/causes/child-rights.png",
         description: "Protecting and promoting the rights and well-being of children worldwide.",
+        champions: 1283,
     },
     {
         handle: "elderly-care",
         name: "Elderly Care",
         picture: "/images/causes/elderly-care.png",
         description: "Ensuring dignity, care, and support for elderly individuals in our communities.",
+        champions: 7380,
     },
     {
         handle: "food-security",
         name: "Food Security",
         picture: "/images/causes/food-security.png",
         description: "Working to ensure all individuals have access to safe, nutritious food.",
+        champions: 1400,
     },
     {
         handle: "water-sanitation",
         name: "Water & Sanitation",
         picture: "/images/causes/water-sanitation.png",
         description: "Promoting access to clean water and sanitation for all communities.",
+        champions: 5426,
     },
     {
         handle: "housing-rights",
         name: "Housing Rights",
         picture: "/images/causes/housing-rights.png",
         description: "Advocating for safe, affordable, and adequate housing for all individuals.",
+        champions: 120,
     },
 ];
 
@@ -482,9 +514,9 @@ export default function Onboarding() {
     );
 
     const SelectedItemBadge = ({ item, onRemove }) => (
-        <Badge variant="secondary" className="m-1 p-2">
+        <Badge className="mb-2 mr-2 bg-[#66a5ff] pl-4 pr-2">
             {item.name}
-            <Button variant="ghost" size="sm" className="ml-2 p-0" onClick={() => onRemove(item)}>
+            <Button variant="ghost" size="sm" className="ml-2  p-0" onClick={() => onRemove(item)}>
                 <X className="h-4 w-4" />
             </Button>
         </Badge>
@@ -492,7 +524,7 @@ export default function Onboarding() {
 
     const ProfileSummary = () => {
         return (
-            <div className="w-64 rounded-[15px] bg-white/90 p-4 backdrop-blur-sm">
+            <div className="w-64 rounded-[15px] bg-white/90 p-4 shadow-lg backdrop-blur-sm">
                 <div className="space-y-4">
                     <div className="relative flex flex-col items-center">
                         <div className="relative">
@@ -675,8 +707,8 @@ export default function Onboarding() {
                                                     className="pl-10"
                                                 />
                                             </div>
-                                            <ScrollArea className="h-[360px] w-full rounded-md border">
-                                                <div className="grid grid-cols-3 gap-4 p-4">
+                                            <ScrollArea className="h-[360px] w-full rounded-md border-0">
+                                                <div className="grid grid-cols-3 gap-4 p-[4px]">
                                                     {visibleCauses.map((cause) => (
                                                         <ItemCard
                                                             key={cause.handle}

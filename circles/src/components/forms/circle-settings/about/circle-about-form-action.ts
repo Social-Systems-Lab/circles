@@ -19,6 +19,7 @@ export const circleAboutFormAction: FormAction = {
                 description: values.description,
                 isPublic: values.isPublic,
                 location: values.location,
+                mission: values.mission,
             };
 
             // check if user is authorized to edit circle settings

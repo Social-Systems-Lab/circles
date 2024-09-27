@@ -278,6 +278,7 @@ export const circleSchema = z.object({
     picture: fileInfoSchema.optional(),
     cover: fileInfoSchema.optional(),
     description: z.string().optional(),
+    mission: z.string().optional(),
     isPublic: z.boolean().optional(),
     userGroups: z.array(userGroupSchema).default([]).optional(),
     pages: z.array(pageSchema).default([]).optional(),

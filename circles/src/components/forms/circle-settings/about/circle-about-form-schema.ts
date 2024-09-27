@@ -39,6 +39,17 @@ export const circleAboutFormSchema: FormSchema = {
             maxLength: 200,
         },
         {
+            name: "mission",
+            label: { user: "Your Mission", circle: "Mission" },
+            type: "textarea",
+            placeholder: "Description",
+            description: {
+                circle: "Define the circle's purpose and the change it wants to see in the world.",
+                user: "Define your purpose and the change you want to see in the world.",
+            },
+            maxLength: 500,
+        },
+        {
             name: "picture",
             label: "Picture",
             type: "image",
@@ -68,7 +79,7 @@ export const circleAboutFormSchema: FormSchema = {
             type: "location",
             description: {
                 circle: "Specify the location of the circle.",
-                user: "Specify your location. Your location will be shared with circles you give permissions to.",
+                user: "Specify your location. Your location will be shared with other users.",
             },
         },
     ],
