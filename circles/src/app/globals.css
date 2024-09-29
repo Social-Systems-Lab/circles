@@ -419,3 +419,25 @@ div.ReactTags__suggestions ul li.ReactTags__activeSuggestion {
 .flex-grow__suggestions {
     background-color: transparent !important;
 }
+
+/* Pin effect */
+.pin-effect::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0) 60%);
+    border-radius: 50%;
+    z-index: 1;
+}
+
+.pin-effect {
+    box-shadow:
+        0 4px 6px rgba(0, 0, 0, 0.1),
+        0 8px 15px rgba(0, 0, 0, 0.2);
+    position: relative;
+    overflow: hidden;
+    border-radius: 50%;
+}

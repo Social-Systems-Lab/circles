@@ -18,6 +18,7 @@ type CircleActionResponse = {
     success: boolean;
     message?: string;
     pending?: boolean;
+    circle?: Circle;
 };
 
 export const joinCircle = async (circle: Circle, answers?: Record<string, string>): Promise<CircleActionResponse> => {
@@ -150,7 +151,10 @@ export const updateCircleField = async (circleId: string, formData: FormData): P
         let circlePath = await getCirclePath({ _id: circleId } as Circle);
         revalidatePath(circlePath);
 
-        return { success: true, message: `Circle updated successfully` };
+        // get circle
+        let circle = await getCircleById(circleId);
+
+        return { success: true, message: `Circle updated successfully`, circle };
     } catch (error) {
         return { success: false, message: `Failed to update circle. ${error}` };
     }

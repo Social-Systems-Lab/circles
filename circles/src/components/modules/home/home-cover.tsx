@@ -38,20 +38,22 @@ export default function HomeCover({ circle, isDefaultCircle, authorizedToEdit }:
                             circleId={circle._id!}
                         />
                     ) : (
-                        <Image
-                            src={circle?.cover?.url ?? "/images/default-cover.png"}
-                            alt="Cover"
-                            className=""
-                            style={{
-                                objectFit: "cover",
-                            }}
-                            sizes="100vw"
-                            fill
-                        />
+                        <>
+                            <Image
+                                src={circle?.cover?.url ?? "/images/default-cover.png"}
+                                alt="Cover"
+                                className=""
+                                style={{
+                                    objectFit: "cover",
+                                }}
+                                sizes="100vw"
+                                fill
+                            />
+                            <div className="absolute top-0 h-full w-full">
+                                <GalleryTrigger name="Cover Image" image={circle.cover} />
+                            </div>
+                        </>
                     )}
-                    <div className="absolute top-0 h-full w-full">
-                        <GalleryTrigger name="Cover Image" image={circle.cover} />
-                    </div>
                 </div>
                 <div className="absolute bottom-[-50px] right-2 flex flex-row gap-1">
                     <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />

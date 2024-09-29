@@ -84,7 +84,34 @@ const config = {
             },
         },
     },
-    plugins: [require("tailwindcss-animate")],
+    plugins: [
+        require("tailwindcss-animate"),
+        function ({ addUtilities }: any) {
+            addUtilities({
+                ".clip-hexagon": {
+                    clipPath: "polygon(50% 0%, 90% 25%, 90% 75%, 50% 100%, 10% 75%, 10% 25%)",
+                },
+                ".clip-pennant": {
+                    clipPath: "polygon(10% 10%, 90% 50%, 10% 90%)",
+                },
+                ".clip-cause-80": {
+                    clipPath: "path('M 0,12 q 40,-20 80,0 q 0,40 -40,68 q -40,-24 -40,-68 z')",
+                },
+                ".clip-cause-90": {
+                    clipPath: "path('M 0,13.5 q 45,-22.5 90,0 q 0,45 -45,76.5 q -45,-27 -45,-76.5 z')",
+                },
+                ".clip-cause-100": {
+                    clipPath: "path('M 0,15 q 50,-25 100,0 q 0,50 -50,85 q -50,-30 -50,-85 z')",
+                },
+                ".clip-flag-80": {
+                    clipPath: "path('M 0 8 Q 20 0, 40 8 T 80 8 L 80 72 Q 60 80, 40 72 T 0 72 Z')",
+                },
+                ".clip-flag-200": {
+                    clipPath: "path('M 0 10% Q 25% 0%, 50% 10% T 100% 10% L 100% 90% Q 75% 100%, 50% 90% T 0 90% Z')",
+                },
+            });
+        },
+    ],
 } satisfies Config;
 
 export default config;

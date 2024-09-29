@@ -1,8 +1,14 @@
 import { getAuthenticatedUserDid, getServerPublicKey, isAuthorized } from "@/lib/auth/auth";
 import { FormAction, FormSubmitResponse, Page, ServerSettings } from "../../../../models/models";
 import { features } from "@/lib/data/constants";
-import { getServerSettings, registerServer, updateServerSettings } from "@/lib/data/server-settings";
+import {
+    getServerSettings,
+    registerServer,
+    updateServerSettings,
+    upsertCausesAndSkills,
+} from "@/lib/data/server-settings";
 import { revalidatePath } from "next/cache";
+import { upsertWeaviateCollections } from "@/lib/data/weaviate";
 
 export const serverSettingsFormAction: FormAction = {
     id: "server-settings-form",
@@ -56,6 +62,25 @@ export const serverSettingsFormAction: FormAction = {
                     console.log("Failed to register server with registry", error);
                     registrySuccess = false;
                 }
+            }
+
+            let appVersion = process.env.version;
+            console.log("Server version", serverSettings.serverVersion);
+            console.log("App version", appVersion);
+
+            // upsert weaviate collections if versions differ
+            if (serverSettings.serverVersion !== appVersion) {
+                console.log("Server version and app version differ, doing intitialization logic");
+
+                // update server version
+                serverSettings.serverVersion = appVersion;
+
+                // upsert causes and skills
+                console.log("Upserting causes and skills");
+                await upsertCausesAndSkills();
+
+                console.log("Upserting weviate collections");
+                await upsertWeaviateCollections();
             }
 
             // save server settings

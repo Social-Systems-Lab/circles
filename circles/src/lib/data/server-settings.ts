@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
-import { Circles, ServerSettingsCollection } from "./db";
+import { Causes, Circles, ServerSettingsCollection, Skills } from "./db";
 import { Circle, RegistryInfo, ServerSettings } from "@/models/models";
 import { createDefaultCircle } from "./circle";
 import { ObjectId } from "mongodb";
 import { createServerDid, getServerPublicKey, signRegisterServerChallenge } from "../auth/auth";
+import { causes, skills } from "./constants";
 
 const ENV_TO_SETTINGS_MAP: Record<string, keyof ServerSettings> = {
     CIRCLES_INSTANCE_NAME: "name",
@@ -12,6 +13,44 @@ const ENV_TO_SETTINGS_MAP: Record<string, keyof ServerSettings> = {
     CIRCLES_JWT_SECRET: "jwtSecret",
     OPENAI_API_KEY: "openaiKey",
     MAPBOX_API_KEY: "mapboxKey",
+};
+
+export const upsertCausesAndSkills = async () => {
+    try {
+        // Upsert causes
+        for (const cause of causes) {
+            await Causes.updateOne(
+                { handle: cause.handle }, // Find the document by handle
+                {
+                    $set: {
+                        name: cause.name,
+                        picture: cause.picture,
+                        description: cause.description,
+                    },
+                },
+                { upsert: true }, // Insert if it doesn't exist, update if it does
+            );
+        }
+        console.log("All causes upserted successfully.");
+
+        // Upsert skills
+        for (const skill of skills) {
+            await Skills.updateOne(
+                { handle: skill.handle }, // Find the document by handle
+                {
+                    $set: {
+                        name: skill.name,
+                        picture: skill.picture,
+                        description: skill.description,
+                    },
+                },
+                { upsert: true }, // Insert if it doesn't exist, update if it does
+            );
+        }
+        console.log("All skills upserted successfully.");
+    } catch (error) {
+        console.error("Error upserting causes or skills:", error);
+    }
 };
 
 export const getServerSettings = async (): Promise<ServerSettings> => {

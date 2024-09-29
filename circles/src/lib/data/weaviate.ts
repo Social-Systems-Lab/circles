@@ -1,0 +1,330 @@
+import weaviate, { generateUuid5, WeaviateClient } from "weaviate-client";
+import { Cause, Skill, Circle } from "../../models/models";
+import { ObjectId } from "mongodb";
+import { Causes, Circles, Skills } from "./db";
+import { getFullLocationName } from "../utils";
+
+let client: WeaviateClient | undefined = undefined;
+
+export const getWeaviateClient = async () => {
+    if (!client) {
+        client = await weaviate.connectToLocal({
+            port: 8080,
+            host: "host.docker.internal",
+            skipInitChecks: true,
+            headers: {
+                "X-OpenAI-Api-Key": process.env.OPENAI_API_KEY || "",
+            },
+            timeout: { init: 30, query: 60, insert: 120 },
+        });
+    }
+    return client;
+};
+
+export const upsertWeaviateCollections = async () => {
+    const client = await getWeaviateClient();
+
+    // Batch insert Causes
+    const causes = await Causes.find().toArray();
+    const causeDataObjects = causes.map((cause: Cause) => ({
+        properties: {
+            name: cause.name,
+            description: cause.description || "",
+            handle: cause.handle,
+        },
+        id: generateUuid5("Cause", cause.handle), // Deterministic UUID based on handle
+    }));
+
+    const causeCollection = client.collections.get("Cause");
+    await causeCollection.data.insertMany(causeDataObjects);
+    console.log("All Causes upserted into Weaviate.");
+
+    // Batch insert Skills
+    const skills = await Skills.find().toArray();
+    const skillDataObjects = skills.map((skill: Skill) => ({
+        properties: {
+            name: skill.name,
+            description: skill.description || "",
+            handle: skill.handle,
+        },
+        id: generateUuid5("Skill", skill.handle), // Deterministic UUID based on handle
+    }));
+
+    const skillCollection = client.collections.get("Skill");
+    await skillCollection.data.insertMany(skillDataObjects);
+    console.log("All Skills upserted into Weaviate.");
+
+    // Batch insert Circles
+    const circles = await Circles.find().toArray();
+    const circleDataObjects = circles.map((circle: Circle) => ({
+        properties: {
+            name: circle.name || "",
+            description: circle.description || "",
+            handle: circle.handle || "",
+            mission: circle.mission || "",
+            circleType: circle.circleType || "circle",
+            createdAt: circle.createdAt ? circle.createdAt.toISOString() : new Date().toISOString(),
+            isPublic: circle.isPublic || true,
+            locationName: getFullLocationName(circle.location),
+            location: circle.location?.lngLat
+                ? {
+                      latitude: circle.location.lngLat.lat,
+                      longitude: circle.location.lngLat.lng,
+                  }
+                : "",
+        },
+        id: generateUuid5("Circle", circle.handle), // Deterministic UUID based on handle
+        references: {
+            causes: circle.causes?.map((causeHandle: string) => generateUuid5("Cause", causeHandle)) ?? [],
+            skills: circle.skills?.map((skillHandle: string) => generateUuid5("Skill", skillHandle)) ?? [],
+        },
+    }));
+
+    const circleCollection = client.collections.get("Circle");
+    await circleCollection.data.insertMany(circleDataObjects);
+    console.log("All Circles upserted into Weaviate.");
+};
+
+export const upsertCauseWeaviate = async (cause: Cause): Promise<void> => {
+    const client = await getWeaviateClient();
+    const causeCollection = client.collections.get("Cause");
+
+    const properties = {
+        name: cause.name,
+        description: cause.description || "",
+        handle: cause.handle,
+    };
+
+    const id = generateUuid5("Cause", cause.handle);
+
+    try {
+        // Use insert to create or update the Cause in Weaviate
+        await causeCollection.data.insert({
+            properties,
+            id,
+        });
+        console.log(`Cause ${cause.name} upserted in Weaviate with ID ${id}.`);
+    } catch (error: any) {
+        if (error.message.includes("already exists")) {
+            // Object exists, perform an update
+            await causeCollection.data.update({
+                id,
+                properties,
+            });
+            console.log(`Cause ${cause.name} updated in Weaviate.`);
+        } else {
+            console.error(`Failed to upsert Cause ${cause.name} in Weaviate:`, error);
+        }
+    }
+};
+
+export const deleteCauseWeaviate = async (causeHandle: string): Promise<void> => {
+    const client = await getWeaviateClient();
+    const causeCollection = client.collections.get("Cause");
+    const id = generateUuid5("Cause", causeHandle);
+
+    try {
+        await causeCollection.data.deleteById(id);
+        console.log(`Cause with ID ${id} deleted from Weaviate.`);
+    } catch (error) {
+        console.error(`Failed to delete Cause with ID ${id} from Weaviate:`, error);
+    }
+};
+
+export const upsertSkillWeaviate = async (skill: Skill): Promise<void> => {
+    const client = await getWeaviateClient();
+    const skillCollection = client.collections.get("Skill");
+
+    const properties = {
+        name: skill.name,
+        description: skill.description || "",
+        handle: skill.handle,
+    };
+
+    const id = generateUuid5("Skill", skill.handle);
+
+    try {
+        await skillCollection.data.insert({
+            properties,
+            id,
+        });
+        console.log(`Skill ${skill.name} upserted in Weaviate with ID ${id}.`);
+    } catch (error: any) {
+        if (error.message.includes("already exists")) {
+            // Object exists, perform an update
+            await skillCollection.data.update({
+                id,
+                properties,
+            });
+            console.log(`Skill ${skill.name} updated in Weaviate.`);
+        } else {
+            console.error(`Failed to upsert Skill ${skill.name} in Weaviate:`, error);
+        }
+    }
+};
+
+export const deleteSkillWeaviate = async (skillHandle: string): Promise<void> => {
+    const client = await getWeaviateClient();
+    const skillCollection = client.collections.get("Skill");
+    const id = generateUuid5("Skill", skillHandle);
+
+    try {
+        await skillCollection.data.deleteById(id);
+        console.log(`Skill with ID ${id} deleted from Weaviate.`);
+    } catch (error) {
+        console.error(`Failed to delete Skill with ID ${id} from Weaviate:`, error);
+    }
+};
+
+export const upsertCircleWeaviate = async (circle: Circle): Promise<void> => {
+    const client = await getWeaviateClient();
+    const circleCollection = client.collections.get("Circle");
+
+    // Prepare properties
+    const properties: any = {
+        name: circle.name,
+        description: circle.description || "",
+        handle: circle.handle,
+        mission: circle.mission || "",
+        circleType: circle.circleType || "circle",
+        createdAt: circle.createdAt ? circle.createdAt.toISOString() : new Date().toISOString(),
+        isPublic: circle.isPublic || true,
+        locationName: circle.location?.city || "",
+    };
+
+    // Handle geoCoordinates
+    if (circle.location?.lngLat) {
+        properties.location = {
+            latitude: circle.location.lngLat.lat,
+            longitude: circle.location.lngLat.lng,
+        };
+    }
+
+    const id = generateUuid5("Circle", circle.handle ?? "");
+
+    // Prepare references
+    const references: Record<string, string[]> = {};
+    if (circle.causes && circle.causes.length > 0) {
+        references["causes"] = circle.causes.map((causeHandle) => generateUuid5("Cause", causeHandle));
+    }
+    if (circle.skills && circle.skills.length > 0) {
+        references["skills"] = circle.skills.map((skillHandle) => generateUuid5("Skill", skillHandle));
+    }
+
+    try {
+        // Insert or update the Circle in Weaviate
+        await circleCollection.data.insert({
+            properties,
+            id,
+            references, // Include cross-references
+        });
+        console.log(`Circle ${circle.name} upserted in Weaviate with ID ${id}.`);
+    } catch (error: any) {
+        if (error.message.includes("already exists")) {
+            // Object exists, perform an update
+            await circleCollection.data.update({
+                id,
+                properties,
+            });
+            console.log(`Circle ${circle.name} updated in Weaviate.`);
+
+            // Update cross-references
+            await updateCircleReferences(circle);
+        } else {
+            console.error(`Failed to upsert Circle ${circle.name} in Weaviate:`, error);
+        }
+    }
+};
+
+// Helper function to update cross-references for a Circle
+const updateCircleReferences = async (circle: Circle): Promise<void> => {
+    const client = await getWeaviateClient();
+    const circleCollection = client.collections.get("Circle");
+    const id = generateUuid5("Circle", circle.handle ?? "");
+
+    // Remove existing references
+    await removeCircleReferences(id);
+
+    // Add updated references
+    // Prepare references
+    if (circle.causes && circle.causes.length > 0) {
+        for (const causeHandle of circle.causes) {
+            const causeId = generateUuid5("Cause", causeHandle);
+            await circleCollection.data.referenceAdd({
+                fromUuid: id,
+                fromProperty: "causes",
+                to: causeId,
+            });
+        }
+    }
+
+    if (circle.skills && circle.skills.length > 0) {
+        for (const skillHandle of circle.skills) {
+            const skillId = generateUuid5("Skill", skillHandle);
+            await circleCollection.data.referenceAdd({
+                fromUuid: id,
+                fromProperty: "skills",
+                to: skillId,
+            });
+        }
+    }
+
+    console.log(`Cross-references updated for Circle ${circle.name}.`);
+};
+
+// Helper function to remove existing references for a Circle
+const removeCircleReferences = async (circleId: string): Promise<void> => {
+    const client = await getWeaviateClient();
+    const circleCollection = client.collections.get("Circle");
+
+    try {
+        // Fetch the Circle object by ID, including references to causes and skills
+        const circleObject = await circleCollection.query.fetchObjectById(circleId, {
+            returnReferences: [{ linkOn: "causes" }, { linkOn: "skills" }],
+        });
+
+        // Check if the circle object and references exist
+        if (circleObject && circleObject.references) {
+            const { causes, skills } = circleObject.references;
+
+            // Delete each cause reference if causes exist
+            if (causes && causes.objects && causes.objects.length > 0) {
+                for (const causeRef of causes.objects) {
+                    await circleCollection.data.referenceDelete({
+                        fromUuid: circleId,
+                        fromProperty: "causes",
+                        to: causeRef.uuid, // UUID of the referenced cause
+                    });
+                }
+            }
+
+            // Delete each skill reference if skills exist
+            if (skills && skills.objects && skills.objects.length > 0) {
+                for (const skillRef of skills.objects) {
+                    await circleCollection.data.referenceDelete({
+                        fromUuid: circleId,
+                        fromProperty: "skills",
+                        to: skillRef.uuid, // UUID of the referenced skill
+                    });
+                }
+            }
+        }
+
+        console.log(`All references removed for Circle with ID ${circleId}.`);
+    } catch (error) {
+        console.error(`Failed to delete references for Circle with ID ${circleId}:`, error);
+    }
+};
+
+export const deleteCircleWeaviate = async (circleHandle: string): Promise<void> => {
+    const client = await getWeaviateClient();
+    const circleCollection = client.collections.get("Circle");
+    const id = generateUuid5("Circle", circleHandle);
+
+    try {
+        await circleCollection.data.deleteById(id);
+        console.log(`Circle with ID ${id} deleted from Weaviate.`);
+    } catch (error) {
+        console.error(`Failed to delete Circle with ID ${id} from Weaviate:`, error);
+    }
+};

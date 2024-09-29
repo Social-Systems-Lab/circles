@@ -1,5 +1,16 @@
 import { MongoClient, MongoClientOptions, Db, Collection } from "mongodb";
-import { ServerSettings, Circle, Member, MembershipRequest, Feed, Post, Reaction, Comment } from "@/models/models";
+import {
+    ServerSettings,
+    Circle,
+    Member,
+    MembershipRequest,
+    Feed,
+    Post,
+    Reaction,
+    Comment,
+    Cause,
+    Skill,
+} from "@/models/models";
 
 const MONGO_HOST = process.env.MONGO_HOST || "127.0.0.1";
 const MONGO_PORT = parseInt(process.env.MONGO_PORT || "27017");
@@ -20,6 +31,8 @@ let Feeds: Collection<Feed>;
 let Posts: Collection<Post>;
 let Comments: Collection<Comment>;
 let Reactions: Collection<Reaction>;
+let Causes: Collection<Cause>;
+let Skills: Collection<Skill>;
 
 // Only initialize the database connection if not in build mode
 if (process.env.IS_BUILD !== "true") {
@@ -34,6 +47,8 @@ if (process.env.IS_BUILD !== "true") {
     Posts = db.collection<Post>("posts");
     Comments = db.collection<Comment>("comments");
     Reactions = db.collection<Reaction>("reactions");
+    Causes = db.collection<Cause>("causes");
+    Skills = db.collection<Skill>("skills");
 }
 
 export {
@@ -47,4 +62,6 @@ export {
     Posts,
     Comments,
     Reactions,
+    Skills,
+    Causes,
 };

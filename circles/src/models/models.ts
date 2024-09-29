@@ -245,6 +245,28 @@ export const reactionSchema = z.object({
 
 export type Reaction = z.infer<typeof reactionSchema>;
 
+export const causeSchema = z.object({
+    _id: z.any().optional(),
+    handle: handleSchema,
+    name: z.string(),
+    picture: fileInfoSchema.optional(),
+    description: z.string(),
+    users: z.number().optional(),
+});
+
+export type Cause = z.infer<typeof causeSchema>;
+
+export const skillSchema = z.object({
+    _id: z.any().optional(),
+    handle: handleSchema,
+    name: z.string(),
+    picture: fileInfoSchema.optional(),
+    description: z.string(),
+    users: z.number().optional(),
+});
+
+export type Skill = z.infer<typeof skillSchema>;
+
 // access rules are a map of features to array of user groups that are granted access to the feature
 export const accessRulesSchema = z.record(z.string(), z.array(z.string()));
 
@@ -292,6 +314,8 @@ export const circleSchema = z.object({
     interests: z.array(z.string()).optional(),
     offers_needs: z.array(z.string()).optional(),
     location: locationSchema.optional(),
+    causes: z.array(z.string()).optional(),
+    skills: z.array(z.string()).optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;
@@ -310,6 +334,7 @@ export const serverSettingsSchema = z.object({
     jwtSecret: z.string().optional(),
     serverInfo: registryInfoSchema.optional(),
     questionnaire: z.string().optional(),
+    serverVersion: z.string().optional(),
 });
 
 export type ServerSettings = z.infer<typeof serverSettingsSchema>;
