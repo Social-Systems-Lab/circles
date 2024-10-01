@@ -17,8 +17,11 @@ export const circleMatchmakingFormAction: FormAction = {
             if (!authorized) {
                 return { success: false, message: "You are not authorized to edit circle settings" };
             }
-            circle.interests = values.interests;
-            circle.offers_needs = values.offers_needs;
+            circle.causes = values.causes;
+            circle.skills = values.skills;
+
+            console.log("Causes", values.causes);
+            console.log("Skills", values.skills);
 
             await updateCircle(circle);
 
@@ -30,8 +33,8 @@ export const circleMatchmakingFormAction: FormAction = {
                 success: true,
                 message:
                     circle.circleType === "user"
-                        ? "Interests and Offers saved successfully"
-                        : "Interests and Needs saved successfully",
+                        ? "Causes and Skills saved successfully"
+                        : "Causes and Skills Needed saved successfully",
             };
         } catch (error) {
             if (error instanceof Error) {

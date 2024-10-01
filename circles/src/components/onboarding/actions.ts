@@ -6,6 +6,7 @@ import { causes, skills, features } from "@/lib/data/constants";
 import { getWeaviateClient } from "@/lib/data/weaviate";
 import { Cause, Circle, Metrics, Skill, WithMetric } from "@/models/models";
 import { revalidatePath } from "next/cache";
+import { generateUuid5 } from "weaviate-client";
 
 type SaveMissionActionResponse = {
     success: boolean;
@@ -122,33 +123,39 @@ type FetchCausesResponse = {
     message?: string;
 };
 
-export const fetchCausesByMission = async (mission: string): Promise<FetchCausesResponse> => {
+export const fetchCausesMatchedToCircle = async (circleHandle: string): Promise<FetchCausesResponse> => {
     try {
         const client = await getWeaviateClient();
-        if (!mission) {
-            mission = "mission undefined"; // default mission statement
+
+        let circleUuid = generateUuid5("Circle", circleHandle);
+        const circleObject = await client.collections.get("Circle").query.fetchObjectById(circleUuid, {
+            includeVector: true,
+        });
+        const circleVector = circleObject?.vectors.default;
+
+        let causesMatched: WithMetric<Cause>[] = [];
+        if (circleVector) {
+            const response = await client.collections.get("Cause").query.nearVector(circleVector, {
+                limit: 100,
+                returnMetadata: ["distance"],
+            });
+            // Map the response to the Cause type
+            causesMatched = response.objects.map((item: any) => {
+                const matchedCause = causes.find((cause: any) => cause.handle === item.properties.handle);
+
+                const metrics: Metrics = { vibe: item.metadata?.distance ?? 1 };
+
+                return {
+                    handle: item.properties.handle,
+                    name: item.properties.name,
+                    description: item.properties.description,
+                    picture: matchedCause?.picture ?? "",
+                    metrics,
+                } as WithMetric<Cause>;
+            });
+        } else {
+            causesMatched = causes;
         }
-
-        // Perform the vector search using `nearText` for the mission statement
-        const response = await client.collections.get("Cause").query.nearText(mission, {
-            limit: 100, // Adjust the limit as necessary
-            returnMetadata: ["distance"], // Optional: return similarity score if needed
-        });
-
-        // Map the response to the Cause type
-        const causesMatched = response.objects.map((item: any) => {
-            const matchedCause = causes.find((cause: any) => cause.handle === item.properties.handle);
-
-            const metrics: Metrics = { vibe: item.metadata?.distance ?? 1 };
-
-            return {
-                handle: item.properties.handle,
-                name: item.properties.name,
-                description: item.properties.description,
-                picture: matchedCause?.picture ?? "",
-                metrics,
-            };
-        });
 
         return { success: true, causes: causesMatched as WithMetric<Cause>[] };
     } catch (error) {
@@ -163,30 +170,40 @@ type FetchSkillsResponse = {
     message?: string;
 };
 
-export const fetchSkillsByProfile = async (mission: string): Promise<FetchSkillsResponse> => {
+export const fetchSkillsMatchedToCircle = async (circleHandle: string): Promise<FetchSkillsResponse> => {
     try {
         const client = await getWeaviateClient();
 
-        // Perform the vector search using `nearText` for the mission statement
-        const response = await client.collections.get("Skill").query.nearText(mission, {
-            limit: 100, // Adjust the limit as necessary
-            returnMetadata: ["distance"], // Optional: return similarity score if needed
+        let circleUuid = generateUuid5("Circle", circleHandle);
+        const circleObject = await client.collections.get("Circle").query.fetchObjectById(circleUuid, {
+            includeVector: true,
         });
+        const circleVector = circleObject?.vectors.default;
 
-        // Map the response to the Skill type
-        const skillsMatched = response.objects.map((item: any) => {
-            const matchedSkill = skills.find((skill: any) => skill.handle === item.properties.handle);
+        let skillsMatched: WithMetric<Skill>[] = [];
+        if (circleVector) {
+            const response = await client.collections.get("Skill").query.nearVector(circleVector, {
+                limit: 100,
+                returnMetadata: ["distance"],
+            });
 
-            const metrics: Metrics = { vibe: item.metadata?.distance ?? 1 };
+            // Map the response to the Skill type
+            skillsMatched = response.objects.map((item: any) => {
+                const matchedSkill = skills.find((skill: any) => skill.handle === item.properties.handle);
 
-            return {
-                handle: item.properties.handle,
-                name: item.properties.name,
-                description: item.properties.description,
-                picture: matchedSkill?.picture ?? "",
-                metrics,
-            };
-        });
+                const metrics: Metrics = { vibe: item.metadata?.distance ?? 1 };
+
+                return {
+                    handle: item.properties.handle,
+                    name: item.properties.name,
+                    description: item.properties.description,
+                    picture: matchedSkill?.picture ?? "",
+                    metrics,
+                } as WithMetric<Skill>;
+            });
+        } else {
+            skillsMatched = skills;
+        }
 
         return { success: true, skills: skillsMatched as WithMetric<Skill>[] };
     } catch (error) {

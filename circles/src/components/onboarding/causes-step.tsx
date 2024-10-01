@@ -9,7 +9,7 @@ import ItemCard from "./item-card";
 import SelectedItemBadge from "./selected-item-badge";
 import { OnboardingStepProps, OnboardingUserData } from "./onboarding";
 import { causes } from "@/lib/data/constants";
-import { fetchCausesByMission, saveCausesAction } from "./actions";
+import { fetchCausesMatchedToCircle, saveCausesAction } from "./actions";
 import { Cause } from "@/models/models";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
@@ -33,9 +33,11 @@ function CausesStep({ userData, setUserData, nextStep, prevStep }: OnboardingSte
     const [isPending, startTransition] = useTransition();
 
     useEffect(() => {
+        if (!user) return;
+
         // Use startTransition to fetch causes based on mission statement
         startTransition(async () => {
-            const response = await fetchCausesByMission(userData.mission);
+            const response = await fetchCausesMatchedToCircle(user!.handle!);
             if (response.success) {
                 setAllCauses(response.causes);
             } else {

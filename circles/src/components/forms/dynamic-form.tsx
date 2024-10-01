@@ -74,7 +74,9 @@ const DynamicFormManager: React.FC<DynamicFormProps> = ({
                     fieldInfo?.type === "array" ||
                     fieldInfo?.type === "table" ||
                     fieldInfo?.type === "access-rules" ||
-                    fieldInfo?.type === "location"
+                    fieldInfo?.type === "location" ||
+                    fieldInfo?.type === "skills" ||
+                    fieldInfo?.type === "causes"
                 ) {
                     if (values[key] !== undefined) {
                         formData.append(key, JSON.stringify(values[key]));

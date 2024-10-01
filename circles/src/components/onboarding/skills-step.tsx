@@ -9,7 +9,7 @@ import ItemCard from "./item-card";
 import SelectedItemBadge from "./selected-item-badge";
 import { OnboardingStepProps, OnboardingUserData } from "./onboarding";
 import { skills } from "@/lib/data/constants";
-import { fetchSkillsByProfile, saveSkillsAction } from "./actions";
+import { fetchSkillsMatchedToCircle, saveSkillsAction } from "./actions";
 import { Skill } from "@/models/models";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
@@ -34,9 +34,11 @@ function SkillsStep({ userData, setUserData, nextStep, prevStep }: OnboardingSte
     const [isPending, startTransition] = useTransition();
 
     useEffect(() => {
+        if (!user) return;
+
         // Use startTransition to fetch skills based on mission statement
         startTransition(async () => {
-            const response = await fetchSkillsByProfile(userData.mission);
+            const response = await fetchSkillsMatchedToCircle(user.handle!);
             if (response.success) {
                 setAllSkills(response.skills);
             } else {

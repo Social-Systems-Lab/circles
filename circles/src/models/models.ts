@@ -249,7 +249,7 @@ export const causeSchema = z.object({
     _id: z.any().optional(),
     handle: handleSchema,
     name: z.string(),
-    picture: fileInfoSchema.optional(),
+    picture: fileInfoSchema,
     description: z.string(),
     users: z.number().optional(),
 });
@@ -260,7 +260,7 @@ export const skillSchema = z.object({
     _id: z.any().optional(),
     handle: handleSchema,
     name: z.string(),
-    picture: fileInfoSchema.optional(),
+    picture: fileInfoSchema,
     description: z.string(),
     users: z.number().optional(),
 });
@@ -517,7 +517,9 @@ export type FormFieldType =
     | "registry-info"
     | "questionnaire"
     | "tags"
-    | "location";
+    | "location"
+    | "causes"
+    | "skills";
 
 export type FormField = {
     name: string;

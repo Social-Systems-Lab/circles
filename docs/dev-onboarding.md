@@ -58,7 +58,7 @@ Follow these steps to set up the Circles platform on your local machine:
      bun install
      ```
 
-3. Run MongoDB, MinIO and Nginx in Docker:
+3. Run MongoDB (db), MinIO (file storage), Weaviate (vector database) and Nginx (reverse proxy) in Docker:
 
    ```
    docker-compose -f docker-compose.local.yml up -d

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -35,14 +35,22 @@ import {
     feedFeatures,
     pageFeaturePrefix,
     feedFeaturePrefix,
+    causes,
+    skills,
 } from "@/lib/data/constants";
-import { CheckCircle2, ChevronDown, ChevronUp, XCircle } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronUp, Loader2, Search, XCircle } from "lucide-react";
 import { getMemberAccessLevel, isAuthorized } from "@/lib/auth/client-auth";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { Switch } from "../ui/switch";
 import { WithContext as ReactTags } from "react-tag-input";
 import { getUserOrCircleInfo } from "@/lib/utils/form";
 import LocationPicker from "./location-picker";
+import { useAtom } from "jotai";
+import { userAtom } from "@/lib/data/atoms";
+import { fetchCausesMatchedToCircle, fetchSkillsMatchedToCircle } from "../onboarding/actions";
+import { ScrollArea } from "../ui/scroll-area";
+import ItemCard from "../onboarding/item-card";
+import SelectedItemBadge from "../onboarding/selected-item-badge";
 
 type RenderFieldProps = {
     field: FormFieldType;
@@ -894,6 +902,116 @@ export const DynamicLocationField: React.FC<RenderFieldProps> = ({ field, formFi
     );
 };
 
+interface ItemSelectionFieldProps extends RenderFieldProps {
+    itemType: "causes" | "skills";
+}
+
+const ItemSelectionField: React.FC<ItemSelectionFieldProps> = ({
+    field,
+    formField,
+    control,
+    readOnly,
+    isUser,
+    itemType,
+}) => {
+    const [searchText, setSearchText] = useState("");
+    const [allItems, setAllItems] = useState<any[]>([]);
+    const [isPending, startTransition] = useTransition();
+    const circleHandle = useWatch({ control, name: "handle" });
+
+    const initialItems = itemType === "causes" ? causes : skills;
+    const fetchMatchedItems = itemType === "causes" ? fetchCausesMatchedToCircle : fetchSkillsMatchedToCircle;
+
+    const visibleItems = useMemo(() => {
+        if (searchText) {
+            return allItems.filter(
+                (item) =>
+                    item.name.toLowerCase().includes(searchText.toLowerCase()) ||
+                    item.description.toLowerCase().includes(searchText.toLowerCase()),
+            );
+        } else {
+            return allItems;
+        }
+    }, [allItems, searchText]);
+
+    useEffect(() => {
+        startTransition(async () => {
+            const response = await fetchMatchedItems(circleHandle);
+            if (response.success) {
+                setAllItems(response[itemType]);
+            } else {
+                setAllItems(initialItems);
+                console.error(response.message);
+            }
+        });
+    }, []);
+
+    const handleItemToggle = (item: any) => {
+        const currentHandles = formField.value || [];
+        const newSelectedHandles = currentHandles.includes(item.handle)
+            ? currentHandles.filter((handle: string) => handle !== item.handle)
+            : [...currentHandles, item.handle];
+        formField.onChange(newSelectedHandles);
+    };
+
+    return (
+        <FormItem>
+            <FormLabel>{getUserOrCircleInfo(field.label, isUser)}</FormLabel>
+            <div className="space-y-4">
+                <div className="relative">
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 transform text-gray-400" />
+                    <Input
+                        type="text"
+                        placeholder={field.placeholder || `Search ${itemType}...`}
+                        value={searchText}
+                        onChange={(e) => setSearchText(e.target.value)}
+                        className="pl-10"
+                        autoComplete="one-time-code"
+                    />
+                </div>
+                <ScrollArea className="h-[360px] w-full rounded-md border-0">
+                    <div className="grid grid-cols-3 gap-4 p-[4px]">
+                        {isPending && (!visibleItems || visibleItems.length <= 0) && (
+                            <div className="col-span-3 flex items-center justify-center">
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Loading {itemType}...
+                            </div>
+                        )}
+
+                        {visibleItems.map((item) => (
+                            <ItemCard
+                                key={item.handle}
+                                item={item}
+                                isSelected={(formField.value || []).includes(item.handle)}
+                                onToggle={() => handleItemToggle(item)}
+                            />
+                        ))}
+                    </div>
+                </ScrollArea>
+                <div className="flex flex-wrap">
+                    {(formField.value || []).map((handle: string) => {
+                        const item = allItems.find((i) => i.handle === handle);
+                        if (item) {
+                            return (
+                                <SelectedItemBadge
+                                    key={item.handle}
+                                    item={item}
+                                    onRemove={() => handleItemToggle(item)}
+                                />
+                            );
+                        }
+                        return null;
+                    })}
+                </div>
+                {field.description && (
+                    <FormDescription>{getUserOrCircleInfo(field.description, isUser)}</FormDescription>
+                )}
+                <FormMessage />
+            </div>
+        </FormItem>
+    );
+};
+
 export const DynamicField: React.FC<RenderFieldProps> = ({ field, formField, control, readOnly, isUser }) => {
     switch (field.type) {
         case "registry-info":
@@ -927,6 +1045,18 @@ export const DynamicField: React.FC<RenderFieldProps> = ({ field, formField, con
             return DynamicTagsField({ field, formField, control, readOnly, isUser });
         case "location":
             return DynamicLocationField({ field, formField, control, readOnly, isUser });
+        case "skills":
+        case "causes":
+            return (
+                <ItemSelectionField
+                    field={field}
+                    formField={formField}
+                    control={control}
+                    readOnly={readOnly}
+                    isUser={isUser}
+                    itemType={field.type}
+                />
+            );
         default:
             return null;
     }
