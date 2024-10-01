@@ -1,13 +1,23 @@
 "use server";
 
 import { ModulePageProps } from "../dynamic-page";
-import { getCircles } from "@/lib/data/circle";
+import { getCircles, getCirclesWithMetrics } from "@/lib/data/circle";
 import CirclesList from "./circles-list";
 import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
+import { getAuthenticatedUserDid } from "@/lib/auth/auth";
+import { getUserByDid } from "@/lib/data/user";
 
 export default async function CirclesModule({ circle, page, subpage, isDefaultCircle }: ModulePageProps) {
+    // get user handle
+    let userHandle = undefined;
+    try {
+        let userDid = await getAuthenticatedUserDid();
+        let user = await getUserByDid(userDid);
+        userHandle = user?.handle;
+    } catch (error) {}
+
     // get all circles
-    let circles = await getCircles(circle?._id);
+    let circles = await getCirclesWithMetrics(userHandle, circle?._id);
 
     return (
         <ContentDisplayWrapper content={circles}>

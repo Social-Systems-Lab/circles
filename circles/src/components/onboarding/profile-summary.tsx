@@ -69,11 +69,11 @@ function ProfileSummary({ userData }: ProfileSummaryProps) {
                         </div>
                     </div>
                 )}
-                {userData.selectedOffers.length > 0 && (
+                {userData.selectedSkills.length > 0 && (
                     <div>
                         <div className="mb-0 mt-0 font-semibold">Skills</div>
                         <div className="flex flex-wrap gap-1">
-                            {userData.selectedOffers.map((offer) => (
+                            {userData.selectedSkills.map((offer) => (
                                 <Badge key={offer.id} variant="secondary">
                                     {offer.name}
                                 </Badge>

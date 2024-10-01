@@ -1,11 +1,12 @@
 // circle creation and management
 
-import { Circle, ServerSettings } from "@/models/models";
+import { Circle, ServerSettings, WithMetric } from "@/models/models";
 import { getServerSettings } from "./server-settings";
 import { Circles } from "./db";
 import { ObjectId } from "mongodb";
 import { getDefaultAccessRules, defaultUserGroups, defaultPages, features } from "./constants";
 import { filterLocations } from "../utils";
+import { getVibeForCircleWeaviate, upsertCircleWeaviate } from "./weaviate";
 
 export const getDefaultCircle = async (inServerConfig: ServerSettings | null = null): Promise<Circle> => {
     if (process.env.IS_BUILD === "true") {
@@ -26,7 +27,7 @@ export const getDefaultCircle = async (inServerConfig: ServerSettings | null = n
     return circle;
 };
 
-export const getCircles = async (parentCircleId: string): Promise<Circle[]> => {
+export const getCircles = async (parentCircleId?: string): Promise<Circle[]> => {
     let circles = await Circles.find({ parentCircleId: parentCircleId, circleType: "circle" }).toArray();
     circles.forEach((circle: Circle) => {
         if (circle._id) {
@@ -34,6 +35,26 @@ export const getCircles = async (parentCircleId: string): Promise<Circle[]> => {
         }
     });
     //circles = filterLocations(circles) as any[];
+    return circles;
+};
+
+export const getCirclesWithMetrics = async (
+    userHandle?: string,
+    parentCircleId?: string,
+): Promise<WithMetric<Circle>[]> => {
+    let circles = (await getCircles(parentCircleId)) as WithMetric<Circle>[];
+    if (!userHandle) {
+        return circles;
+    }
+
+    for (const circle of circles) {
+        let vibe = await getVibeForCircleWeaviate(userHandle, circle.handle!);
+        if (!circle.metrics) {
+            circle.metrics = {};
+        }
+        circle.metrics.vibe = vibe;
+    }
+
     return circles;
 };
 
@@ -74,6 +95,10 @@ export const createCircle = async (circle: Circle): Promise<Circle> => {
 
     let result = await Circles.insertOne(circle);
     circle._id = result.insertedId.toString();
+
+    // update weaviate circle
+    await upsertCircleWeaviate(circle);
+
     return circle;
 };
 
@@ -99,6 +124,10 @@ export const updateCircle = async (circle: Partial<Circle>): Promise<void> => {
     if (result.matchedCount === 0) {
         throw new Error("Circle not found");
     }
+
+    // update weaviate circle
+    let c = await getCircleById(_id);
+    await upsertCircleWeaviate(c);
 };
 
 export const getCirclePath = async (circle: Partial<Circle>): Promise<string> => {

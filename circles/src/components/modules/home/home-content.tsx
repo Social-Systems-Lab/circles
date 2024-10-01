@@ -85,7 +85,7 @@ export default function HomeContent({ circle, isDefaultCircle, authorizedToEdit 
 
             {circle.handle === "default" && (
                 <div className="flex flex-col items-center justify-center">
-                    <div className="mb-8 flex max-w-[700px] flex-col">
+                    <div className="mb-8 flex max-w-[700px] flex-col pl-3 pr-3">
                         <div className="text-[20px] text-lg font-bold">Welcome</div>
                         <div className="card pt-2 text-[18px]">
                             Circles is an open-source social media platform for change makers, for co-creators, for
@@ -110,7 +110,7 @@ export default function HomeContent({ circle, isDefaultCircle, authorizedToEdit 
 
             {circle.handle === "grabogro" && (
                 <div className="flex flex-col items-center justify-center">
-                    <div className="mb-8 flex max-w-[700px] flex-col">
+                    <div className="mb-8 flex max-w-[700px] flex-col pl-3 pr-3">
                         <div className="text-[20px] text-lg font-bold">Om oss</div>
                         <div className="card pt-2 text-[18px]">
                             Vi arbetar för att främja hållbar odling och grönska i Gråbo. Vi vill hjälpa, aktivera och

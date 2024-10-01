@@ -1,7 +1,7 @@
 import weaviate, { generateUuid5, WeaviateClient } from "weaviate-client";
-import { Cause, Skill, Circle } from "../../models/models";
+import { Cause, Skill, Circle, Post } from "../../models/models";
 import { ObjectId } from "mongodb";
-import { Causes, Circles, Skills } from "./db";
+import { Causes, Circles, Posts, Skills } from "./db";
 import { getFullLocationName } from "../utils";
 
 let client: WeaviateClient | undefined = undefined;
@@ -83,6 +83,29 @@ export const upsertWeaviateCollections = async () => {
     const circleCollection = client.collections.get("Circle");
     await circleCollection.data.insertMany(circleDataObjects);
     console.log("All Circles upserted into Weaviate.");
+
+    // TODO see if we can vectorize post + images
+    // Batch insert Posts
+    const posts = await Posts.find().toArray();
+    const postDataObjects = posts.map((post: Post) => ({
+        properties: {
+            content: post.content,
+            createdAt: post.createdAt.toISOString(),
+            createdBy: post.createdBy,
+            locationName: getFullLocationName(post.location),
+            location: post.location?.lngLat
+                ? {
+                      latitude: post.location.lngLat.lat,
+                      longitude: post.location.lngLat.lng,
+                  }
+                : "",
+        },
+        id: generateUuid5("Post", post._id), // Deterministic UUID based on MongoDB ID
+    }));
+
+    const postCollection = client.collections.get("Post");
+    await postCollection.data.insertMany(postDataObjects);
+    console.log("All Posts upserted into Weaviate.");
 };
 
 export const upsertCauseWeaviate = async (cause: Cause): Promise<void> => {
@@ -189,16 +212,14 @@ export const upsertCircleWeaviate = async (circle: Circle): Promise<void> => {
         circleType: circle.circleType || "circle",
         createdAt: circle.createdAt ? circle.createdAt.toISOString() : new Date().toISOString(),
         isPublic: circle.isPublic || true,
-        locationName: circle.location?.city || "",
+        locationName: getFullLocationName(circle.location),
+        location: circle.location?.lngLat
+            ? {
+                  latitude: circle.location.lngLat.lat,
+                  longitude: circle.location.lngLat.lng,
+              }
+            : "",
     };
-
-    // Handle geoCoordinates
-    if (circle.location?.lngLat) {
-        properties.location = {
-            latitude: circle.location.lngLat.lat,
-            longitude: circle.location.lngLat.lng,
-        };
-    }
 
     const id = generateUuid5("Circle", circle.handle ?? "");
 
@@ -326,5 +347,74 @@ export const deleteCircleWeaviate = async (circleHandle: string): Promise<void> 
         console.log(`Circle with ID ${id} deleted from Weaviate.`);
     } catch (error) {
         console.error(`Failed to delete Circle with ID ${id} from Weaviate:`, error);
+    }
+};
+
+export const upsertPostWeaviate = async (post: Post): Promise<void> => {
+    const client = await getWeaviateClient();
+    const postCollection = client.collections.get("Post");
+
+    const properties = {
+        content: post.content,
+        createdAt: post.createdAt.toISOString(),
+        createdBy: post.createdBy,
+        locationName: getFullLocationName(post.location),
+        location: post.location?.lngLat
+            ? {
+                  latitude: post.location.lngLat.lat,
+                  longitude: post.location.lngLat.lng,
+              }
+            : "",
+    };
+
+    const id = generateUuid5("Post", post._id);
+
+    try {
+        await postCollection.data.insert({
+            properties,
+            id,
+        });
+    } catch (error: any) {
+        if (error.message.includes("already exists")) {
+            // Object exists, perform an update
+            await postCollection.data.update({
+                id,
+                properties,
+            });
+        } else {
+            console.error(`Failed to upsert Post ${post._id} in Weaviate:`, error);
+        }
+    }
+};
+
+export const deletePostWeaviate = async (postId: string): Promise<void> => {
+    const client = await getWeaviateClient();
+    const postCollection = client.collections.get("Post");
+    const id = generateUuid5("Post", postId);
+
+    try {
+        await postCollection.data.deleteById(id);
+    } catch (error) {
+        console.error(`Failed to delete Post with ID ${id} from Weaviate:`, error);
+    }
+};
+
+export const getVibeForCircleWeaviate = async (userHandle: string, circleHandle: string): Promise<any> => {
+    const client = await getWeaviateClient();
+    const circleCollection = client.collections.get("Circle");
+
+    try {
+        let userUuid = generateUuid5("Circle", userHandle);
+        const result = await client.collections.get("Circle").query.nearObject(userUuid, {
+            filters: circleCollection.filter.byProperty("handle").equal(circleHandle),
+            limit: 1,
+            returnMetadata: ["distance"],
+        });
+
+        // Augment each circle with the distance metric
+        const distance = result?.objects[0]?.metadata?.distance ?? null;
+        return distance;
+    } catch (error) {
+        console.error(`Error fetching vibe distance for circle ${circleHandle}:`, error);
     }
 };

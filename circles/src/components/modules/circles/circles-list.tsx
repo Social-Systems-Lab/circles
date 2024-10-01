@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Input } from "@/components/ui/input";
-import { Circle, ContentPreviewData, Page } from "@/models/models";
+import { Circle, ContentPreviewData, Page, WithMetric } from "@/models/models";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import Image from "next/image";
@@ -19,6 +19,7 @@ import { useRouter } from "next/navigation";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import CircleTags from "./circle-tags";
 import CircleHeader from "./circle-header";
+import Indicators from "@/components/utils/indicators";
 
 export const twoLineEllipsisStyle = {
     WebkitLineClamp: 2,
@@ -60,7 +61,7 @@ const CreateCircleButton: React.FC<InviteButtonProps> = ({ circle, isDefaultCirc
 };
 
 interface CirclesListProps {
-    circles: Circle[];
+    circles: WithMetric<Circle>[];
     circle: Circle;
     page: Page;
     isDefaultCircle: boolean;
@@ -126,7 +127,7 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                     }}
                 >
                     <Input
-                        placeholder="Search circle..."
+                        placeholder="Search circles..."
                         value={searchQuery}
                         onChange={(event) => setSearchQuery(event.target.value)}
                         className="flex-1"
@@ -154,7 +155,7 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                                 animate="visible"
                                 exit="hidden"
                                 layout
-                                className={`flex h-full cursor-pointer flex-col overflow-hidden rounded-[15px] border-0 ${circle.handle === contentPreview?.handle ? "bg-[#f7f7f7]" : "bg-white"} shadow-lg transition-shadow duration-200 hover:shadow-md md:min-w-[200px] md:max-w-[420px]`}
+                                className={`flex h-full cursor-pointer flex-col overflow-hidden rounded-[15px] border-0 ${circle.handle === contentPreview?.handle ? "bg-[#f7f7f7]" : "bg-white"} relative shadow-lg transition-shadow duration-200 hover:shadow-md md:min-w-[200px] md:max-w-[420px]`}
                                 onClick={() => handleCircleClick(circle)}
                             >
                                 <div className="relative h-[150px] w-full overflow-hidden">
@@ -165,6 +166,11 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                                         fill
                                     />
                                 </div>
+
+                                {circle.metrics && (
+                                    <Indicators metrics={circle.metrics} className="absolute left-2 top-2" />
+                                )}
+
                                 <div className="relative flex justify-center">
                                     <div className="absolute top-[-32px] flex justify-center">
                                         <div className="h-[64px] w-[64px]">

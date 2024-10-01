@@ -9,12 +9,16 @@ import ItemCard from "./item-card";
 import SelectedItemBadge from "./selected-item-badge";
 import { OnboardingStepProps, OnboardingUserData } from "./onboarding";
 import { causes } from "@/lib/data/constants";
-import { fetchCausesByMission } from "./actions";
+import { fetchCausesByMission, saveCausesAction } from "./actions";
 import { Cause } from "@/models/models";
+import { userAtom } from "@/lib/data/atoms";
+import { useAtom } from "jotai";
 
 function CausesStep({ userData, setUserData, nextStep, prevStep }: OnboardingStepProps) {
     const [causeSearch, setCauseSearch] = useState("");
     const [allCauses, setAllCauses] = useState<Cause[]>([]);
+    const [user, setUser] = useAtom(userAtom);
+
     const visibleCauses = useMemo(() => {
         if (causeSearch) {
             return allCauses.filter(
@@ -29,18 +33,16 @@ function CausesStep({ userData, setUserData, nextStep, prevStep }: OnboardingSte
     const [isPending, startTransition] = useTransition();
 
     useEffect(() => {
-        if (userData.mission) {
-            // Use startTransition to fetch causes based on mission statement
-            startTransition(async () => {
-                const response = await fetchCausesByMission(userData.mission);
-                if (response.success) {
-                    setAllCauses(response.causes);
-                } else {
-                    setAllCauses(causes);
-                    console.error(response.message);
-                }
-            });
-        }
+        // Use startTransition to fetch causes based on mission statement
+        startTransition(async () => {
+            const response = await fetchCausesByMission(userData.mission);
+            if (response.success) {
+                setAllCauses(response.causes);
+            } else {
+                setAllCauses(causes);
+                console.error(response.message);
+            }
+        });
     }, [userData.mission]);
 
     const handleCauseToggle = (cause: Cause) => {
@@ -56,8 +58,19 @@ function CausesStep({ userData, setUserData, nextStep, prevStep }: OnboardingSte
         });
     };
 
-    const handleNext = () => {
-        nextStep();
+    const handleNext = async () => {
+        startTransition(async () => {
+            let selectedCauses = userData.selectedCauses.map((x) => x.handle);
+            const response = await saveCausesAction(selectedCauses, user?._id);
+            if (!response.success) {
+                // Handle error
+                console.error(response.message);
+            } else {
+                // Update userAtom
+                setUser((prev) => ({ ...prev, causes: selectedCauses }));
+            }
+            nextStep();
+        });
     };
 
     return (
@@ -99,15 +112,22 @@ function CausesStep({ userData, setUserData, nextStep, prevStep }: OnboardingSte
                 ))}
             </div>
             <div className="mt-4 flex items-center justify-between">
-                <Button onClick={prevStep} variant="outline" className=" rounded-full">
+                <Button onClick={prevStep} variant="outline" className=" rounded-full" disabled={isPending}>
                     Back
                 </Button>
                 <Button
                     onClick={handleNext}
-                    disabled={userData.selectedCauses.length < 2}
+                    disabled={userData.selectedCauses.length < 2 || isPending}
                     className="min-w-[100px] rounded-full"
                 >
-                    {userData.selectedCauses.length < 2 ? "Select at least 2 causes" : "Next"}
+                    {isPending ? (
+                        <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Saving...
+                        </>
+                    ) : (
+                        <>{userData.selectedCauses.length < 2 ? "Select at least 2 causes" : "Next"}</>
+                    )}
                 </Button>
             </div>
         </div>

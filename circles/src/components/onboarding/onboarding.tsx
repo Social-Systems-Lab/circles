@@ -14,6 +14,7 @@ import QuestsStep from "./quests-step";
 import FinalStep from "./final-step";
 import ProfileSummary from "./profile-summary";
 import { Cause, Skill } from "@/models/models";
+import { causes, skills } from "@/lib/data/constants";
 
 export type Quest = {
     id: number;
@@ -29,7 +30,7 @@ export type OnboardingUserData = {
     name: string;
     mission: string;
     selectedCauses: Cause[];
-    selectedOffers: Skill[];
+    selectedSkills: Skill[];
     selectedQuests: Quest[];
     picture: string;
 };
@@ -53,8 +54,8 @@ export default function Onboarding() {
         setUserData({
             name: user?.name || "",
             mission: user?.mission || "",
-            selectedCauses: [],
-            selectedOffers: [],
+            selectedCauses: user?.causes?.map((x) => causes.find((y) => y.handle === x) as Cause) ?? [],
+            selectedSkills: user?.skills?.map((x) => skills.find((y) => y.handle === x) as Skill) ?? [],
             selectedQuests: [],
             picture: user?.picture?.url || "/images/default-user-picture.png",
         });

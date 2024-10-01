@@ -3,7 +3,7 @@
 import { Circle, Feed, PostDisplay, CommentDisplay, Page, PostItemProps, ContentPreviewData } from "@/models/models";
 import { UserPicture } from "../members/user-picture";
 import { Button } from "@/components/ui/button";
-import { Edit, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Trash2 } from "lucide-react";
+import { Edit, Heart, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Trash2 } from "lucide-react";
 import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import {
     Dispatch,
@@ -64,6 +64,7 @@ import { over, set } from "lodash";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import RichText from "./RichText";
+import { motion } from "framer-motion";
 
 export const defaultMentionsInputStyle = {
     control: {
@@ -133,6 +134,43 @@ export const handleMentionQuery = async (query: string, callback: (data: Suggest
             picture: circle.picture?.url,
         })) ?? [];
     callback(suggestions);
+};
+
+type LikeButtonProps = {
+    isLiked: boolean;
+    onClick: () => void;
+};
+
+export const LikeButton = ({ isLiked, onClick }: LikeButtonProps) => {
+    return (
+        <button
+            onClick={onClick}
+            className="relative flex h-5 w-5 items-center justify-center focus:outline-none"
+            aria-label={isLiked ? "Unlike" : "Like"}
+        >
+            <motion.div
+                initial={{ scale: 1, opacity: 1 }}
+                animate={{ scale: isLiked ? [1, 1.2, 1] : 1, opacity: isLiked ? [1, 1, 0] : 1 }}
+                transition={{ duration: 0.3 }}
+            >
+                <AiOutlineHeart
+                    className={`h-5 w-5 transition-colors duration-300 ${
+                        isLiked ? "fill-[#ff4772] stroke-[#ff4772]" : "stroke-gray-400"
+                    }`}
+                />
+            </motion.div>
+            {isLiked && (
+                <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: [0, 1] }}
+                    transition={{ duration: 0.3 }}
+                    className="absolute inset-0 flex items-center justify-center"
+                >
+                    <AiFillHeart className="h-5 w-5 fill-[#ff4772] stroke-[#ff4772]" />
+                </motion.div>
+            )}
+        </button>
+    );
 };
 
 export const PostItem = ({
@@ -561,12 +599,9 @@ export const PostItem = ({
             {/* Actions (like and comment) */}
             <div className="flex items-center justify-between pl-4 pr-4 text-gray-500">
                 {/* Likes Section */}
-                <div className="flex cursor-pointer items-center gap-1.5 text-gray-500">
-                    {isLiked ? (
-                        <AiFillHeart className={`h-5 w-5 text-[#ff4772]`} onClick={handleLikePost} />
-                    ) : (
-                        <AiOutlineHeart className={`h-5 w-5 text-gray-500`} onClick={handleLikePost} />
-                    )}
+                <div className="flex h-[24px] cursor-pointer items-center gap-1.5 text-gray-500">
+                    <LikeButton isLiked={isLiked} onClick={handleLikePost} />
+
                     {likes > 0 && (
                         <HoverCard openDelay={200} onOpenChange={(open) => handleLikesPopoverHover(open)}>
                             <HoverCardTrigger>

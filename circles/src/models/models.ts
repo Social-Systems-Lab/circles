@@ -267,6 +267,16 @@ export const skillSchema = z.object({
 
 export type Skill = z.infer<typeof skillSchema>;
 
+export type WithMetric<T> = T & {
+    metrics?: Metrics;
+};
+
+export type Metrics = {
+    vibe?: number;
+    proximity?: number;
+    popularity?: number;
+};
+
 // access rules are a map of features to array of user groups that are granted access to the feature
 export const accessRulesSchema = z.record(z.string(), z.array(z.string()));
 

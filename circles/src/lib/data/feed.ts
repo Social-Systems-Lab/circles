@@ -4,6 +4,7 @@ import { Feed, Post, PostDisplay, Comment, CommentDisplay, Circle, Mention } fro
 import { getCircleById, updateCircle } from "./circle";
 import { addFeedsAccessRules } from "../utils";
 import { comment } from "postcss";
+import { deletePostWeaviate, upsertPostWeaviate } from "./weaviate";
 
 export function extractMentions(content: string): Mention[] {
     const mentionPattern = /\[([^\]]+)\]\(\/circles\/([^)]+)\)/g;
@@ -105,11 +106,18 @@ export const createDefaultFeeds = async (circleId: string): Promise<Feed[] | nul
 
 export const createPost = async (post: Post): Promise<Post> => {
     const result = await Posts.insertOne(post);
-    return { ...post, _id: result.insertedId.toString() };
+    let newPost = { ...post, _id: result.insertedId.toString() };
+
+    // upsert post
+    await upsertPostWeaviate(newPost);
+    return newPost;
 };
 
 export const deletePost = async (postId: string): Promise<void> => {
     await Posts.deleteOne({ _id: new ObjectId(postId) });
+
+    // delete post
+    await deletePostWeaviate(postId);
 
     // delete comments
     await Comments.deleteMany({ postId });
@@ -436,6 +444,9 @@ export const updatePost = async (post: Partial<Post>): Promise<void> => {
     if (result.matchedCount === 0) {
         throw new Error("Post not found");
     }
+    // update weaviate post
+    let p = await getPost(_id);
+    await upsertPostWeaviate(p!);
 };
 
 export const getAllComments = async (postId: string, userDid: string | undefined): Promise<CommentDisplay[]> => {
