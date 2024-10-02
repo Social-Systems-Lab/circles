@@ -400,7 +400,7 @@ export const deletePostWeaviate = async (postId: string): Promise<void> => {
     }
 };
 
-export const getVibeForItemWeaviate = async (source: Circle, item: Post | Circle): Promise<number | undefined> => {
+export const getDistanceForItemWeaviate = async (source: Circle, item: Post | Circle): Promise<number | undefined> => {
     if (!source) return undefined;
     const collectionName = "circleType" in item ? "Circle" : "Post";
     const idName = "circleType" in item ? "handle" : "id";
@@ -433,51 +433,6 @@ export const getVibeForItemWeaviate = async (source: Circle, item: Post | Circle
         return distance;
     } catch (error) {
         console.error(`Error fetching vibe distance for ${collectionName} ${id}:`, error);
-        return undefined;
-    }
-};
-
-export const getVibeForCircleWeaviate = async (
-    userHandle: string,
-    circleHandle: string,
-): Promise<number | undefined> => {
-    const client = await getWeaviateClient();
-    const circleCollection = client.collections.get("Circle");
-
-    try {
-        let userUuid = generateUuid5("Circle", userHandle);
-        const result = await client.collections.get("Circle").query.nearObject(userUuid, {
-            filters: circleCollection.filter.byProperty("handle").equal(circleHandle),
-            limit: 1,
-            returnMetadata: ["distance"],
-        });
-
-        // Augment each circle with the distance metric
-        const distance = result?.objects[0]?.metadata?.distance ?? undefined;
-        return distance;
-    } catch (error) {
-        console.error(`Error fetching vibe distance for circle ${circleHandle}:`, error);
-        return undefined;
-    }
-};
-
-export const getVibeForPostWeaviate = async (userHandle: string, postId: string): Promise<number | undefined> => {
-    const client = await getWeaviateClient();
-    const postCollection = client.collections.get("Post");
-
-    try {
-        let userUuid = generateUuid5("Circle", userHandle);
-        const result = await client.collections.get("Circle").query.nearObject(userUuid, {
-            filters: postCollection.filter.byProperty("id").equal(postId),
-            limit: 1,
-            returnMetadata: ["distance"],
-        });
-
-        // Augment each circle with the distance metric
-        const distance = result?.objects[0]?.metadata?.distance ?? undefined;
-        return distance;
-    } catch (error) {
-        console.error(`Error fetching vibe distance for post ${postId}:`, error);
         return undefined;
     }
 };

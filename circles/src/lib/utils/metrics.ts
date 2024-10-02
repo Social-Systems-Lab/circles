@@ -1,6 +1,5 @@
 import { Circle, LngLat, Metrics, Post, Weights } from "@/models/models";
-import { getVibeForCircleWeaviate, getVibeForItemWeaviate, getVibeForPostWeaviate } from "../data/weaviate";
-import { custom } from "zod";
+import { getDistanceForItemWeaviate } from "../data/weaviate";
 
 const defaultWeights = {
     vibe: 0.25,
@@ -10,9 +9,12 @@ const defaultWeights = {
 };
 
 const postPopularityWeights = {
-    like: 1,
-    comment: 2,
+    like: 1, // how much like is worth
+    comment: 2, // how much a comment is worth
 };
+
+const maxPostPopularity = 1000; // for normalization of popularity
+const maxCirclePopularity = 1000; // for normalization of popularity
 
 export const getMetrics = async (
     user: Circle,
@@ -24,16 +26,29 @@ export const getMetrics = async (
     let metrics: Metrics = {};
 
     metrics.vibe = await getVibe(user, item);
-    metrics.proximity = getDistance(user.location?.lngLat, item.location?.lngLat);
+    metrics.distance = calculateDistance(user.location?.lngLat, item.location?.lngLat);
+    metrics.proximity = getProximity(user.location?.lngLat, item.location?.lngLat);
     metrics.recentness = getRecentness(item.createdAt, currentDate);
     metrics.popularity = getPopularity(item);
+    metrics.rank = getRank(metrics, weights);
 
     return metrics;
 };
 
+export const getRank = (metrics: Metrics, customWeights?: Weights): number => {
+    let weights = customWeights ?? defaultWeights;
+    return (
+        (metrics.vibe ?? 0.5) * weights.vibe +
+        (metrics.proximity ?? 0.5) * weights.proximity +
+        (metrics.recentness ?? 0) * weights.recentness +
+        (metrics.popularity ?? 0) * weights.popularity
+    );
+};
+
 export const getVibe = async (user: Circle, item: Post | Circle): Promise<number | undefined> => {
     if (!user) return undefined;
-    return await getVibeForItemWeaviate(user, item);
+    let distance = await getDistanceForItemWeaviate(user, item);
+    return distance ? distance / 2 : distance; // vibe between 0 and 1
 };
 
 export const getRecentness = (createdAt: Date | undefined, currentDate: Date): number | undefined => {
@@ -42,10 +57,43 @@ export const getRecentness = (createdAt: Date | undefined, currentDate: Date): n
     }
 
     const daysSinceCreation = (currentDate.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
-    return 1 / (1 + daysSinceCreation);
+    return 1 - 1 / (1 + daysSinceCreation);
 };
 
-export const getDistance = (lngLat1?: LngLat, lngLat2?: LngLat): number | undefined => {
+export const getProximity = (lngLat1?: LngLat, lngLat2?: LngLat): number | undefined => {
+    let distance = calculateDistance(lngLat1, lngLat2);
+    if (!distance) {
+        return undefined;
+    }
+
+    return distance / 20000; // max distance on earth is about 20000 km
+};
+
+export const getPopularity = (item: Post | Circle) => {
+    if ("circleType" in item) {
+        return getCirclePopularity(item as Circle);
+    } else {
+        return getPostPopularity(item as Post);
+    }
+};
+
+export const getPostPopularity = (post: Post): number | undefined => {
+    let totalReactions = 0;
+    for (const reactionCount of Object.values(post.reactions)) {
+        totalReactions += reactionCount;
+    }
+    let popularityScore = totalReactions * postPopularityWeights.like + post.comments * postPopularityWeights.comment;
+
+    // Apply a logarithmic scale to popularity and normalize it
+    return Math.log10(popularityScore + 1) / Math.log10(maxPostPopularity + 1);
+};
+
+export const getCirclePopularity = (circle: Circle): number | undefined => {
+    let popularityScore = circle.members ?? 0;
+    return Math.log10(popularityScore + 1) / Math.log10(maxCirclePopularity + 1);
+};
+
+export const calculateDistance = (lngLat1?: LngLat, lngLat2?: LngLat): number | undefined => {
     if (!lngLat1 || !lngLat2) {
         return undefined;
     }
@@ -63,34 +111,4 @@ export const getDistance = (lngLat1?: LngLat, lngLat2?: LngLat): number | undefi
         Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c; // Distance in kilometers
-};
-
-export const getPopularity = (item: Post | Circle) => {
-    if ("circleType" in item) {
-        return getCirclePopularity(item as Circle);
-    } else {
-        return getPostPopularity(item as Post);
-    }
-};
-
-export const getPostPopularity = (post: Post): number | undefined => {
-    let totalReactions = 0;
-    for (const reactionCount of Object.values(post.reactions)) {
-        totalReactions += reactionCount;
-    }
-    return totalReactions * postPopularityWeights.like + post.comments * postPopularityWeights.comment;
-};
-
-export const getCirclePopularity = (circle: Circle): number | undefined => {
-    return circle.members;
-};
-
-export const getRank = (metrics: Metrics, customWeights?: Weights): number => {
-    let weights = customWeights ?? defaultWeights;
-    return (
-        (metrics.vibe ?? 0) * weights.vibe +
-        (metrics.proximity ?? 0) * weights.proximity +
-        (metrics.recentness ?? 0) * weights.recentness +
-        (metrics.popularity ?? 0) * weights.popularity
-    );
 };

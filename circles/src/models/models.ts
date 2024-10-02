@@ -273,6 +273,7 @@ export type WithMetric<T> = T & {
 
 export type Metrics = {
     vibe?: number;
+    distance?: number;
     proximity?: number;
     popularity?: number;
     recentness?: number;

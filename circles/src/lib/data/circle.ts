@@ -58,6 +58,8 @@ export const getCirclesWithMetrics = async (
         circle.metrics = await getMetrics(user, circle, currentDate);
     }
 
+    // sort circles by rank
+    circles.sort((a, b) => (a.metrics?.rank ?? 0) - (b.metrics?.rank ?? 0));
     return circles;
 };
 

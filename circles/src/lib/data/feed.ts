@@ -6,7 +6,7 @@ import { addFeedsAccessRules } from "../utils";
 import { comment } from "postcss";
 import { deletePostWeaviate, getVibeForPostWeaviate, upsertPostWeaviate } from "./weaviate";
 import { getUserByDid } from "./user";
-import { getDistance, getMetrics } from "../utils/metrics";
+import { calculateDistance, getMetrics } from "../utils/metrics";
 
 export function extractMentions(content: string): Mention[] {
     const mentionPattern = /\[([^\]]+)\]\(\/circles\/([^)]+)\)/g;
@@ -202,6 +202,8 @@ export const getPostsWithMetrics = async (
         post.metrics = await getMetrics(user, post, currentDate);
     }
 
+    // sort circles by rank
+    posts.sort((a, b) => (a.metrics?.rank ?? 0) - (b.metrics?.rank ?? 0));
     return posts;
 };
 

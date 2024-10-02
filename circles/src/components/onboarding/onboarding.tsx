@@ -82,11 +82,11 @@ export default function Onboarding() {
             component: SkillsStep,
             title: "Your Skills and Powers",
         },
-        {
-            id: "quests",
-            component: QuestsStep,
-            title: "Embark on Quests",
-        },
+        // {
+        //     id: "quests",
+        //     component: QuestsStep,
+        //     title: "Embark on Quests",
+        // },
         {
             id: "final",
             component: FinalStep,
