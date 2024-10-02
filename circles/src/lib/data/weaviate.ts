@@ -355,6 +355,7 @@ export const upsertPostWeaviate = async (post: Post): Promise<void> => {
     const postCollection = client.collections.get("Post");
 
     const properties = {
+        id: post._id,
         content: post.content,
         createdAt: post.createdAt.toISOString(),
         createdBy: post.createdBy,
@@ -399,7 +400,47 @@ export const deletePostWeaviate = async (postId: string): Promise<void> => {
     }
 };
 
-export const getVibeForCircleWeaviate = async (userHandle: string, circleHandle: string): Promise<any> => {
+export const getVibeForItemWeaviate = async (source: Circle, item: Post | Circle): Promise<number | undefined> => {
+    if (!source) return undefined;
+    const collectionName = "circleType" in item ? "Circle" : "Post";
+    const idName = "circleType" in item ? "handle" : "id";
+    const id = "circleType" in item ? item.handle : item._id;
+
+    try {
+        const client = await getWeaviateClient();
+        const collection = client.collections.get(collectionName);
+
+        // get source circle vector
+        let circleUuid = generateUuid5("Circle", source.handle);
+        const circleObject = await client.collections.get("Circle").query.fetchObjectById(circleUuid, {
+            includeVector: true,
+        });
+        const circleVector = circleObject?.vectors.default;
+
+        if (!circleVector) {
+            return undefined;
+        }
+
+        // match with target item
+        const result = await collection.query.nearVector(circleVector, {
+            filters: collection.filter.byProperty(idName).equal(id),
+            limit: 1,
+            returnMetadata: ["distance"],
+        });
+
+        // return distance metric
+        const distance = result?.objects[0]?.metadata?.distance ?? undefined;
+        return distance;
+    } catch (error) {
+        console.error(`Error fetching vibe distance for ${collectionName} ${id}:`, error);
+        return undefined;
+    }
+};
+
+export const getVibeForCircleWeaviate = async (
+    userHandle: string,
+    circleHandle: string,
+): Promise<number | undefined> => {
     const client = await getWeaviateClient();
     const circleCollection = client.collections.get("Circle");
 
@@ -412,9 +453,31 @@ export const getVibeForCircleWeaviate = async (userHandle: string, circleHandle:
         });
 
         // Augment each circle with the distance metric
-        const distance = result?.objects[0]?.metadata?.distance ?? null;
+        const distance = result?.objects[0]?.metadata?.distance ?? undefined;
         return distance;
     } catch (error) {
         console.error(`Error fetching vibe distance for circle ${circleHandle}:`, error);
+        return undefined;
+    }
+};
+
+export const getVibeForPostWeaviate = async (userHandle: string, postId: string): Promise<number | undefined> => {
+    const client = await getWeaviateClient();
+    const postCollection = client.collections.get("Post");
+
+    try {
+        let userUuid = generateUuid5("Circle", userHandle);
+        const result = await client.collections.get("Circle").query.nearObject(userUuid, {
+            filters: postCollection.filter.byProperty("id").equal(postId),
+            limit: 1,
+            returnMetadata: ["distance"],
+        });
+
+        // Augment each circle with the distance metric
+        const distance = result?.objects[0]?.metadata?.distance ?? undefined;
+        return distance;
+    } catch (error) {
+        console.error(`Error fetching vibe distance for post ${postId}:`, error);
+        return undefined;
     }
 };

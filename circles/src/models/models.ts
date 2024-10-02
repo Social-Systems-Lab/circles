@@ -204,7 +204,7 @@ export const postSchema = z.object({
 
 export type Post = z.infer<typeof postSchema>;
 
-export interface PostDisplay extends Post {
+export interface PostDisplay extends WithMetric<Post> {
     author: Circle;
     highlightedComment?: CommentDisplay;
     circleType: "post";
@@ -275,6 +275,15 @@ export type Metrics = {
     vibe?: number;
     proximity?: number;
     popularity?: number;
+    recentness?: number;
+    rank?: number;
+};
+
+export type Weights = {
+    vibe: number;
+    proximity: number;
+    popularity: number;
+    recentness: number;
 };
 
 // access rules are a map of features to array of user groups that are granted access to the feature

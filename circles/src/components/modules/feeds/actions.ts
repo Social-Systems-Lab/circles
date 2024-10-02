@@ -17,6 +17,7 @@ import {
     updateComment,
     deleteComment,
     extractMentions,
+    getPostsWithMetrics,
 } from "@/lib/data/feed";
 import { saveFile, isFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -60,7 +61,7 @@ export async function getPostsAction(
     }
 
     // get posts for feed
-    const posts = await getPosts(feedId, userDid, limit, skip);
+    const posts = await getPostsWithMetrics(feedId, userDid, limit, skip);
     return posts;
 }
 

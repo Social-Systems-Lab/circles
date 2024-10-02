@@ -4,7 +4,9 @@ import { Feed, Post, PostDisplay, Comment, CommentDisplay, Circle, Mention } fro
 import { getCircleById, updateCircle } from "./circle";
 import { addFeedsAccessRules } from "../utils";
 import { comment } from "postcss";
-import { deletePostWeaviate, upsertPostWeaviate } from "./weaviate";
+import { deletePostWeaviate, getVibeForPostWeaviate, upsertPostWeaviate } from "./weaviate";
+import { getUserByDid } from "./user";
+import { getDistance, getMetrics } from "../utils/metrics";
 
 export function extractMentions(content: string): Mention[] {
     const mentionPattern = /\[([^\]]+)\]\(\/circles\/([^)]+)\)/g;
@@ -179,6 +181,28 @@ export const deleteComment = async (commentId: string): Promise<void> => {
     if (!comment.parentCommentId) {
         await updateHighlightedComment(comment.postId);
     }
+};
+
+export const getPostsWithMetrics = async (
+    feedId: string,
+    userDid?: string,
+    limit: number = 10,
+    offset: number = 0,
+): Promise<PostDisplay[]> => {
+    let posts = await getPosts(feedId, userDid, limit, offset);
+    let user: Circle | undefined = undefined;
+    if (userDid) {
+        user = await getUserByDid(userDid!);
+    }
+    const currentDate = new Date();
+    if (!user) return posts;
+
+    // get metrics for each circle
+    for (const post of posts) {
+        post.metrics = await getMetrics(user, post, currentDate);
+    }
+
+    return posts;
 };
 
 export const getPosts = async (

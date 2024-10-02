@@ -5,8 +5,8 @@ import { getServerSettings } from "./server-settings";
 import { Circles } from "./db";
 import { ObjectId } from "mongodb";
 import { getDefaultAccessRules, defaultUserGroups, defaultPages, features } from "./constants";
-import { filterLocations } from "../utils";
-import { getVibeForCircleWeaviate, upsertCircleWeaviate } from "./weaviate";
+import { upsertCircleWeaviate } from "./weaviate";
+import { getMetrics } from "../utils/metrics";
 
 export const getDefaultCircle = async (inServerConfig: ServerSettings | null = null): Promise<Circle> => {
     if (process.env.IS_BUILD === "true") {
@@ -47,12 +47,15 @@ export const getCirclesWithMetrics = async (
         return circles;
     }
 
+    const currentDate = new Date();
+    let user = await Circles.findOne({ handle: userHandle });
+    if (!user) {
+        return circles;
+    }
+
+    // get metrics for each circle
     for (const circle of circles) {
-        let vibe = await getVibeForCircleWeaviate(userHandle, circle.handle!);
-        if (!circle.metrics) {
-            circle.metrics = {};
-        }
-        circle.metrics.vibe = vibe;
+        circle.metrics = await getMetrics(user, circle, currentDate);
     }
 
     return circles;
