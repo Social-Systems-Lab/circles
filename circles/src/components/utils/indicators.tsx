@@ -103,13 +103,18 @@ interface IndicatorsProps {
 
 export function Indicators({ metrics, className }: IndicatorsProps) {
     return (
-        <div className={cn("flex space-x-2 rounded-lg bg-white pl-1 pr-2 shadow-md", className)}>
+        <div
+            className={cn(
+                "flex items-center justify-center space-x-2 rounded-lg bg-white pl-1 pr-2 shadow-md",
+                className,
+            )}
+        >
             {/* rounded-lg bg-white p-4 shadow */}
             {/* Render VibeScore if 'vibe' is defined */}
             {metrics.vibe !== undefined && <VibeScore score={metrics.vibe} />}
 
             {/* Render ProximityIndicator if 'proximity' is defined */}
-            {metrics.distance && <ProximityIndicator distance={metrics.distance} />}
+            {metrics.distance !== undefined && <ProximityIndicator distance={metrics.distance} />}
 
             {/* Render PopularityIndicator if 'popularity' is defined */}
             {/* {metrics.popularity !== undefined && <PopularityIndicator score={metrics.popularity} />} */}

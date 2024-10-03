@@ -1,11 +1,28 @@
-import { Circle, LngLat, MemberDisplay, Metrics, Post, Weights } from "@/models/models";
+import { Circle, LngLat, MemberDisplay, Metrics, Post, PostDisplay, SortingOptions, Weights } from "@/models/models";
 import { getDistanceForItemWeaviate } from "../data/weaviate";
 
-const defaultWeights = {
+const defaultWeights: Weights = {
     vibe: 0.25,
     proximity: 0.25,
     recentness: 0.25,
     popularity: 0.25,
+};
+
+const getWeightsBySortingOptions = (sortingOptions?: SortingOptions, customWeights?: Weights): Weights => {
+    switch (sortingOptions) {
+        case "vibe":
+            return { vibe: 1, proximity: 0, recentness: 0, popularity: 0 };
+        case "near":
+            return { vibe: 0, proximity: 1, recentness: 0, popularity: 0 };
+        case "new":
+            return { vibe: 0, proximity: 0, recentness: 1, popularity: 0 };
+        case "pop":
+            return { vibe: 0, proximity: 0, recentness: 0, popularity: 1 };
+        case "custom":
+            return customWeights ?? defaultWeights;
+        default:
+            return defaultWeights;
+    }
 };
 
 const postPopularityWeights = {
@@ -18,11 +35,12 @@ const maxCirclePopularity = 1000; // for normalization of popularity
 
 export const getMetrics = async (
     user: Circle | undefined,
-    item: Post | Circle | MemberDisplay,
+    item: PostDisplay | Circle | MemberDisplay,
     currentDate: Date,
+    sortingOptions?: SortingOptions,
     customWeights?: Weights,
 ): Promise<Metrics> => {
-    let weights = customWeights ?? defaultWeights;
+    let weights = getWeightsBySortingOptions(sortingOptions);
     let metrics: Metrics = {};
 
     if (user) {
@@ -37,7 +55,7 @@ export const getMetrics = async (
     return metrics;
 };
 
-export const getCreatedAt = (item: Post | Circle | MemberDisplay): Date | undefined => {
+export const getCreatedAt = (item: PostDisplay | Circle | MemberDisplay): Date | undefined => {
     if ("joinedAt" in item) {
         return item.joinedAt;
     } else if ("createdAt" in item) {
@@ -48,14 +66,17 @@ export const getCreatedAt = (item: Post | Circle | MemberDisplay): Date | undefi
 export const getRank = (metrics: Metrics, customWeights?: Weights): number => {
     let weights = customWeights ?? defaultWeights;
     return (
-        (metrics.vibe ?? 0.5) * weights.vibe +
-        (metrics.proximity ?? 0.5) * weights.proximity +
-        (metrics.recentness ?? 0) * weights.recentness +
-        (metrics.popularity ?? 0) * weights.popularity
+        (metrics.vibe !== undefined ? metrics.vibe : 0.5) * weights.vibe +
+        (metrics.proximity !== undefined ? metrics.proximity : 0.5) * weights.proximity +
+        (metrics.recentness !== undefined ? metrics.recentness : 0) * weights.recentness +
+        (metrics.popularity !== undefined ? metrics.popularity : 0) * weights.popularity
     );
 };
 
-export const getVibe = async (user: Circle, item: Post | Circle | MemberDisplay): Promise<number | undefined> => {
+export const getVibe = async (
+    user: Circle,
+    item: PostDisplay | Circle | MemberDisplay,
+): Promise<number | undefined> => {
     if (!user) return undefined;
     let distance = await getDistanceForItemWeaviate(user, item);
     return distance ? distance / 2 : distance; // vibe between 0 and 1
@@ -72,22 +93,23 @@ export const getRecentness = (createdAt: Date | undefined, currentDate: Date): n
 
 export const getProximity = (lngLat1?: LngLat, lngLat2?: LngLat): number | undefined => {
     let distance = calculateDistance(lngLat1, lngLat2);
-    if (!distance) {
+    if (distance === undefined) {
         return undefined;
     }
 
     return distance / 20000; // max distance on earth is about 20000 km
 };
 
-export const getPopularity = (item: Post | Circle | MemberDisplay) => {
-    if ("circleType" in item) {
+export const getPopularity = (item: PostDisplay | Circle | MemberDisplay) => {
+    let isCircle = item?.circleType === "circle" || item?.circleType === "user";
+    if (isCircle) {
         return getCirclePopularity(item as Circle);
     } else {
-        return getPostPopularity(item as Post);
+        return getPostPopularity(item as PostDisplay);
     }
 };
 
-export const getPostPopularity = (post: Post): number | undefined => {
+export const getPostPopularity = (post: PostDisplay): number | undefined => {
     let totalReactions = 0;
     for (const reactionCount of Object.values(post.reactions)) {
         totalReactions += reactionCount;
@@ -104,7 +126,7 @@ export const getCirclePopularity = (circle: Circle): number | undefined => {
 };
 
 export const calculateDistance = (lngLat1?: LngLat, lngLat2?: LngLat): number | undefined => {
-    if (!lngLat1 || !lngLat2) {
+    if (lngLat1 === undefined || lngLat2 === undefined) {
         return undefined;
     }
 

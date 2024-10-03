@@ -49,6 +49,9 @@ import { useIsCompact } from "@/components/utils/use-is-compact";
 import { UserPicture } from "./user-picture";
 import { motion } from "framer-motion";
 import CircleHeader from "../circles/circle-header";
+import { ListFilter } from "@/components/utils/list-filter";
+import { useRouter } from "next/navigation";
+import Indicators from "@/components/utils/indicators";
 
 interface MemberTableProps {
     members: MemberDisplay[];
@@ -104,6 +107,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
     const [isPending, startTransition] = useTransition();
     const [selectedUserGroups, setSelectedUserGroups] = useState<string[]>([]);
     const isCompact = useIsCompact();
+    const router = useRouter();
     const isUser = circle.circleType === "user";
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
 
@@ -140,11 +144,13 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                 },
                 cell: (info) => {
                     let picture = info.row.original.picture?.url;
+                    let metrics = info.row.original.metrics;
                     let memberName = info.getValue() as string;
                     return (
                         <div className="flex items-center gap-2">
                             <UserPicture name={memberName} picture={picture} />
                             <span className="ml-2 font-bold">{memberName}</span>
+                            {metrics && <Indicators metrics={metrics} className="shadow-none" />}
                         </div>
                     );
                 },
@@ -267,6 +273,10 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
         setContentPreview((x) => (x?.content === member ? undefined : contentPreviewData));
     };
 
+    const handleFilterChange = (filter: string) => {
+        router.push("?sort=" + filter);
+    };
+
     return (
         <div className="flex flex-1 flex-row justify-center">
             <div className="ml-2 mr-2 mt-4 flex max-w-[1100px] flex-1 flex-col">
@@ -304,6 +314,8 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                         </SelectContent>
                     </Select>
                 </div>
+                <ListFilter onFilterChange={handleFilterChange} />
+
                 <div className="mt-3 overflow-hidden rounded-[15px] shadow-lg">
                     <Table className="overflow-hidden">
                         <TableHeader className=" bg-white">

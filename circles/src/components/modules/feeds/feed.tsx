@@ -10,6 +10,8 @@ import { feedFeaturePrefix } from "@/lib/data/constants";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { isAuthorized } from "@/lib/auth/client-auth";
+import { useRouter } from "next/navigation";
+import { ListFilter } from "@/components/utils/list-filter";
 
 export type FeedComponentProps = {
     circle: Circle;
@@ -27,6 +29,12 @@ export const FeedComponent = ({ circle, posts, page, subpage, feed, isDefaultCir
     // check if authorized to post
     const canPostFeature = feedFeaturePrefix + feed.handle + "_post";
     const canPost = isAuthorized(user, circle, canPostFeature);
+
+    const router = useRouter();
+
+    const handleFilterChange = (filter: string) => {
+        router.push("?sort=" + filter);
+    };
 
     return (
         <div
@@ -52,6 +60,8 @@ export const FeedComponent = ({ circle, posts, page, subpage, feed, isDefaultCir
                         <CreateNewPost circle={circle} feed={feed} page={page} subpage={subpage} />
                     </div>
                 )}
+                <ListFilter onFilterChange={handleFilterChange} />
+
                 <PostList posts={posts} feed={feed} circle={circle} page={page} subpage={subpage} />
             </div>
         </div>

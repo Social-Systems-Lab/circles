@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Circle, ContentPreviewData, Page, WithMetric } from "@/models/models";
 import { Button } from "@/components/ui/button";
-import { AudioLines, Clock, MapPin, Plus, Star } from "lucide-react";
+import { Plus } from "lucide-react";
 import Image from "next/image";
 import { useAtom } from "jotai";
 import { contentPreviewAtom, userAtom } from "@/lib/data/atoms";
@@ -20,8 +20,7 @@ import { useIsMobile } from "@/components/utils/use-is-mobile";
 import CircleTags from "./circle-tags";
 import CircleHeader from "./circle-header";
 import Indicators from "@/components/utils/indicators";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { ListFilter } from "@/components/utils/list-filter";
 
 export const twoLineEllipsisStyle = {
     WebkitLineClamp: 2,
@@ -62,76 +61,6 @@ const CreateCircleButton: React.FC<InviteButtonProps> = ({ circle, isDefaultCirc
     );
 };
 
-type ListFilterProps = {
-    onFilterChange?: (filter: string) => void;
-};
-
-export const ListFilter = ({ onFilterChange }: ListFilterProps) => {
-    const [filter, setFilter] = useState("top");
-    const isCompact = useIsCompact();
-
-    const onValueChange = (value: string) => {
-        setFilter(value);
-        if (onFilterChange) {
-            onFilterChange(value);
-        }
-    };
-
-    return (
-        <div className={`${isCompact ? "w-full" : "w-[300px]"} border-gray-200 py-1 pb-2`}>
-            <RadioGroup defaultValue="top" onValueChange={onValueChange} className="flex space-x-1">
-                <div className="flex-1">
-                    <RadioGroupItem value="top" id="top" className="peer sr-only" />
-                    <Label
-                        htmlFor="top"
-                        className="flex h-8 cursor-pointer items-center justify-center rounded-md px-2 hover:bg-gray-100 peer-data-[state=checked]:border peer-data-[state=checked]:border-blue-500 peer-data-[state=checked]:bg-blue-50 dark:hover:bg-gray-800 dark:peer-data-[state=checked]:border-blue-400  dark:peer-data-[state=checked]:bg-blue-900"
-                    >
-                        <Star className="mr-1 h-3 w-3 text-gray-500 peer-data-[state=checked]:text-blue-500 dark:text-gray-400 dark:peer-data-[state=checked]:text-blue-400" />
-                        <span className="text-xs font-medium text-gray-700 peer-data-[state=checked]:text-blue-500 dark:text-gray-300 dark:peer-data-[state=checked]:text-blue-400">
-                            Top
-                        </span>
-                    </Label>
-                </div>
-                <div className="flex-1">
-                    <RadioGroupItem value="near" id="near" className="peer sr-only" />
-                    <Label
-                        htmlFor="near"
-                        className="flex h-8 cursor-pointer items-center justify-center rounded-md px-2 hover:bg-gray-100 peer-data-[state=checked]:border peer-data-[state=checked]:border-blue-500 peer-data-[state=checked]:bg-blue-50 dark:hover:bg-gray-800 dark:peer-data-[state=checked]:border-blue-400 dark:peer-data-[state=checked]:bg-blue-900"
-                    >
-                        <MapPin className="mr-1 h-3 w-3 text-gray-500 peer-data-[state=checked]:text-blue-500 dark:text-gray-400 dark:peer-data-[state=checked]:text-blue-400" />
-                        <span className="text-xs font-medium text-gray-700 peer-data-[state=checked]:text-blue-500 dark:text-gray-300 dark:peer-data-[state=checked]:text-blue-400">
-                            Near
-                        </span>
-                    </Label>
-                </div>
-                <div className="flex-1">
-                    <RadioGroupItem value="new" id="new" className="peer sr-only" />
-                    <Label
-                        htmlFor="new"
-                        className="flex h-8 cursor-pointer items-center justify-center rounded-md px-2 hover:bg-gray-100 peer-data-[state=checked]:border peer-data-[state=checked]:border-blue-500 peer-data-[state=checked]:bg-blue-50 dark:hover:bg-gray-800 dark:peer-data-[state=checked]:border-blue-400 dark:peer-data-[state=checked]:bg-blue-900"
-                    >
-                        <Clock className="mr-1 h-3 w-3 text-gray-500 peer-data-[state=checked]:text-blue-500 dark:text-gray-400 dark:peer-data-[state=checked]:text-blue-400" />
-                        <span className="text-xs font-medium text-gray-700 peer-data-[state=checked]:text-blue-500 dark:text-gray-300 dark:peer-data-[state=checked]:text-blue-400">
-                            New
-                        </span>
-                    </Label>
-                </div>
-                <div className="flex-1">
-                    <RadioGroupItem value="vibe" id="vibe" className="peer sr-only" />
-                    <Label
-                        htmlFor="vibe"
-                        className="flex h-8 cursor-pointer items-center justify-center rounded-md px-2 hover:bg-gray-100 peer-data-[state=checked]:border peer-data-[state=checked]:border-blue-500 peer-data-[state=checked]:bg-blue-50 dark:hover:bg-gray-800 dark:peer-data-[state=checked]:border-blue-400 dark:peer-data-[state=checked]:bg-blue-900"
-                    >
-                        <AudioLines className="mr-1 h-3 w-3 text-gray-500 peer-data-[state=checked]:text-blue-500 dark:text-gray-400 dark:peer-data-[state=checked]:text-blue-400" />
-                        <span className="text-xs font-medium text-gray-700 peer-data-[state=checked]:text-blue-500 dark:text-gray-300 dark:peer-data-[state=checked]:text-blue-400">
-                            Vibe
-                        </span>
-                    </Label>
-                </div>
-            </RadioGroup>
-        </div>
-    );
-};
 interface CirclesListProps {
     circles: WithMetric<Circle>[];
     circle: Circle;
@@ -188,6 +117,10 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
         setContentPreview((x) => (x?.content === circle ? undefined : contentPreviewData));
     };
 
+    const handleFilterChange = (filter: string) => {
+        router.push("?sort=" + filter);
+    };
+
     return (
         <div className="flex flex-1 flex-row justify-center overflow-hidden">
             <div className="mb-4 ml-4 mr-4 mt-4 flex max-w-[1100px] flex-1 flex-col">
@@ -207,7 +140,7 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                     {canCreateSubcircle && <CreateCircleButton circle={circle} isDefaultCircle={isDefaultCircle} />}
                 </div>
 
-                <ListFilter />
+                <ListFilter onFilterChange={handleFilterChange} />
 
                 <motion.div
                     variants={containerVariants}

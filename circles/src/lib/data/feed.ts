@@ -1,6 +1,6 @@
 import { Feeds, Posts, Comments, Reactions, Circles } from "./db";
 import { ObjectId } from "mongodb";
-import { Feed, Post, PostDisplay, Comment, CommentDisplay, Circle, Mention } from "@/models/models";
+import { Feed, Post, PostDisplay, Comment, CommentDisplay, Circle, Mention, SortingOptions } from "@/models/models";
 import { getCircleById, updateCircle } from "./circle";
 import { addFeedsAccessRules } from "../utils";
 import { deletePostWeaviate, upsertPostWeaviate } from "./weaviate";
@@ -187,6 +187,7 @@ export const getPostsWithMetrics = async (
     userDid?: string,
     limit: number = 10,
     offset: number = 0,
+    sort?: SortingOptions,
 ): Promise<PostDisplay[]> => {
     let posts = await getPosts(feedId, userDid, limit, offset);
     let user: Circle | undefined = undefined;
@@ -195,12 +196,12 @@ export const getPostsWithMetrics = async (
     }
     const currentDate = new Date();
 
-    // get metrics for each circle
+    // get metrics for each post
     for (const post of posts) {
-        post.metrics = await getMetrics(user, post, currentDate);
+        post.metrics = await getMetrics(user, post, currentDate, sort);
     }
 
-    // sort circles by rank
+    // sort posts by rank
     posts.sort((a, b) => (a.metrics?.rank ?? 0) - (b.metrics?.rank ?? 0));
     return posts;
 };

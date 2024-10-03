@@ -9,6 +9,7 @@ export type DynamicPageProps = {
     pageHandle?: string;
     subpage?: string;
     isDefaultCircle: boolean;
+    searchParams?: { [key: string]: string | string[] | undefined };
 };
 
 export type ModulePageProps = {
@@ -16,9 +17,16 @@ export type ModulePageProps = {
     page: Page;
     isDefaultCircle: boolean;
     subpage?: string;
+    searchParams?: { [key: string]: string | string[] | undefined };
 };
 
-export default async function DynamicPage({ circleHandle, pageHandle, subpage, isDefaultCircle }: DynamicPageProps) {
+export default async function DynamicPage({
+    circleHandle,
+    pageHandle,
+    subpage,
+    isDefaultCircle,
+    searchParams,
+}: DynamicPageProps) {
     let circle: Circle = {};
     if (isDefaultCircle) {
         circle = await getDefaultCircle();
@@ -38,5 +46,13 @@ export default async function DynamicPage({ circleHandle, pageHandle, subpage, i
         redirect(`/not-found`);
     }
 
-    return <_module.component circle={circle} page={page} subpage={subpage} isDefaultCircle={isDefaultCircle} />;
+    return (
+        <_module.component
+            circle={circle}
+            page={page}
+            subpage={subpage}
+            isDefaultCircle={isDefaultCircle}
+            searchParams={searchParams}
+        />
+    );
 }

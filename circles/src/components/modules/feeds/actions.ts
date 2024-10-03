@@ -32,6 +32,7 @@ import {
     Page,
     PostDisplay,
     CommentDisplay,
+    SortingOptions,
 } from "@/models/models";
 import { revalidatePath } from "next/cache";
 import { getCircleById, getCirclePath, getCirclesBySearchQuery } from "@/lib/data/circle";
@@ -43,6 +44,7 @@ export async function getPostsAction(
     circleId: string,
     limit: number,
     skip: number,
+    sortingOptions?: SortingOptions,
 ): Promise<PostDisplay[]> {
     let userDid = undefined;
     try {
@@ -61,7 +63,7 @@ export async function getPostsAction(
     }
 
     // get posts for feed
-    const posts = await getPostsWithMetrics(feedId, userDid, limit, skip);
+    const posts = await getPostsWithMetrics(feedId, userDid, limit, skip, sortingOptions);
     return posts;
 }
 

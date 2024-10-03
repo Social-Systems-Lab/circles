@@ -5,15 +5,16 @@ import { getMembers, getMembersWithMetrics } from "@/lib/data/member";
 import MembersTable from "./members-table";
 import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
+import { SortingOptions } from "@/models/models";
 
-export default async function MembersModule({ circle, page, subpage, isDefaultCircle }: ModulePageProps) {
+export default async function MembersModule({ circle, page, subpage, isDefaultCircle, searchParams }: ModulePageProps) {
     // get members of circle
     let userDid = undefined;
     try {
         userDid = await getAuthenticatedUserDid();
     } catch (error) {}
 
-    let members = await getMembersWithMetrics(userDid, circle?._id);
+    let members = await getMembersWithMetrics(userDid, circle?._id, searchParams?.sort as SortingOptions);
     if (circle?.circleType === "user") {
         members = members.filter((m) => m.userDid !== circle.did);
     }

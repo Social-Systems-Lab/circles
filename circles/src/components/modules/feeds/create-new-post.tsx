@@ -48,7 +48,7 @@ export function CreateNewPost({ circle, feed, page, subpage }: CreateNewPostProp
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
                 <div
-                    className={`mb-6 flex flex-1 cursor-pointer items-center space-x-4  ${
+                    className={`mb-2 flex flex-1 cursor-pointer items-center space-x-4  ${
                         isCompact ? "" : "rounded-[15px] border-0 shadow-lg"
                     }  bg-white p-4`}
                 >

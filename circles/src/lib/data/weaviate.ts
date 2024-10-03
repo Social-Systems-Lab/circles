@@ -1,5 +1,5 @@
 import weaviate, { generateUuid5, WeaviateClient } from "weaviate-client";
-import { Cause, Skill, Circle, Post, MemberDisplay } from "../../models/models";
+import { Cause, Skill, Circle, Post, MemberDisplay, PostDisplay } from "../../models/models";
 import { ObjectId } from "mongodb";
 import { Causes, Circles, Posts, Skills } from "./db";
 import { getFullLocationName } from "../utils";
@@ -354,12 +354,11 @@ export const upsertPostWeaviate = async (post: Post): Promise<void> => {
     const client = await getWeaviateClient();
     const postCollection = client.collections.get("Post");
 
-    const properties = {
-        id: post._id,
+    const properties: any = {
+        itemId: post._id,
         content: post.content,
         createdAt: post.createdAt.toISOString(),
         createdBy: post.createdBy,
-        locationName: getFullLocationName(post.location),
         location: post.location?.lngLat
             ? {
                   latitude: post.location.lngLat.lat,
@@ -402,13 +401,16 @@ export const deletePostWeaviate = async (postId: string): Promise<void> => {
 
 export const getDistanceForItemWeaviate = async (
     source: Circle,
-    item: Post | Circle | MemberDisplay,
+    item: PostDisplay | Circle | MemberDisplay,
 ): Promise<number | undefined> => {
     if (!source) return undefined;
 
-    const collectionName = "circleType" in item ? "Circle" : "Post";
-    const idName = "circleType" in item ? "handle" : "id";
-    const id = "circleType" in item ? item.handle : item._id;
+    let isCircle = item?.circleType === "circle" || item?.circleType === "user";
+    const collectionName = isCircle ? "Circle" : "Post";
+    const idName = isCircle ? "handle" : "itemId";
+    const id = isCircle ? item.handle : item._id;
+
+    if (!id) return undefined;
 
     try {
         const client = await getWeaviateClient();

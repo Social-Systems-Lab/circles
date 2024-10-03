@@ -1,6 +1,6 @@
 // circle creation and management
 
-import { Circle, ServerSettings, WithMetric } from "@/models/models";
+import { Circle, ServerSettings, SortingOptions, WithMetric } from "@/models/models";
 import { getServerSettings } from "./server-settings";
 import { Circles } from "./db";
 import { ObjectId } from "mongodb";
@@ -41,6 +41,7 @@ export const getCircles = async (parentCircleId?: string): Promise<Circle[]> => 
 export const getCirclesWithMetrics = async (
     userDid?: string,
     parentCircleId?: string,
+    sort?: SortingOptions,
 ): Promise<WithMetric<Circle>[]> => {
     let circles = (await getCircles(parentCircleId)) as WithMetric<Circle>[];
     const currentDate = new Date();
@@ -51,7 +52,7 @@ export const getCirclesWithMetrics = async (
 
     // get metrics for each circle
     for (const circle of circles) {
-        circle.metrics = await getMetrics(user, circle, currentDate);
+        circle.metrics = await getMetrics(user, circle, currentDate, sort);
     }
 
     // sort circles by rank

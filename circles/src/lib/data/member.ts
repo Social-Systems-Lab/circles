@@ -1,4 +1,4 @@
-import { Content, Member, MemberDisplay } from "@/models/models";
+import { Content, Member, MemberDisplay, SortingOptions } from "@/models/models";
 import { Circles, Members } from "./db";
 import { ObjectId } from "mongodb";
 import { filterLocations } from "../utils";
@@ -11,6 +11,7 @@ export const getMember = async (userDid: string, circleId: string): Promise<Memb
 export const getMembersWithMetrics = async (
     userDid: string | undefined,
     circleId?: string,
+    sort?: SortingOptions,
 ): Promise<MemberDisplay[]> => {
     let members = await getMembers(circleId);
 
@@ -22,9 +23,11 @@ export const getMembersWithMetrics = async (
 
     // get metrics for each member
     for (const member of members) {
-        member.metrics = await getMetrics(user, member, currentDate);
+        member.metrics = await getMetrics(user, member, currentDate, sort);
     }
 
+    // sort members by rank
+    members.sort((a, b) => (a.metrics?.rank ?? 0) - (b.metrics?.rank ?? 0));
     return members;
 };
 
