@@ -9,15 +9,13 @@ import { getUserByDid } from "@/lib/data/user";
 
 export default async function CirclesModule({ circle, page, subpage, isDefaultCircle }: ModulePageProps) {
     // get user handle
-    let userHandle = undefined;
+    let userDid = undefined;
     try {
-        let userDid = await getAuthenticatedUserDid();
-        let user = await getUserByDid(userDid);
-        userHandle = user?.handle;
+        userDid = await getAuthenticatedUserDid();
     } catch (error) {}
 
     // get all circles
-    let circles = await getCirclesWithMetrics(userHandle, circle?._id);
+    let circles = await getCirclesWithMetrics(userDid, circle?._id);
 
     return (
         <ContentDisplayWrapper content={circles}>

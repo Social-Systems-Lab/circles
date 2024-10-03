@@ -2,9 +2,30 @@ import { Content, Member, MemberDisplay } from "@/models/models";
 import { Circles, Members } from "./db";
 import { ObjectId } from "mongodb";
 import { filterLocations } from "../utils";
+import { getMetrics } from "../utils/metrics";
 
 export const getMember = async (userDid: string, circleId: string): Promise<Member | null> => {
     return await Members.findOne({ userDid: userDid, circleId: circleId });
+};
+
+export const getMembersWithMetrics = async (
+    userDid: string | undefined,
+    circleId?: string,
+): Promise<MemberDisplay[]> => {
+    let members = await getMembers(circleId);
+
+    const currentDate = new Date();
+    let user = undefined;
+    if (userDid) {
+        user = (await Circles.findOne({ did: userDid })) ?? undefined;
+    }
+
+    // get metrics for each member
+    for (const member of members) {
+        member.metrics = await getMetrics(user, member, currentDate);
+    }
+
+    return members;
 };
 
 export const getMembers = async (circleId?: string): Promise<MemberDisplay[]> => {

@@ -107,6 +107,7 @@ export interface MemberDisplay extends Member {
     members?: number;
     circleType?: CircleType;
     handle?: string;
+    metrics?: Metrics;
 }
 
 export const membershipRequestSchema = z.object({

@@ -1,4 +1,4 @@
-import { Circle, LngLat, Metrics, Post, Weights } from "@/models/models";
+import { Circle, LngLat, MemberDisplay, Metrics, Post, Weights } from "@/models/models";
 import { getDistanceForItemWeaviate } from "../data/weaviate";
 
 const defaultWeights = {
@@ -17,22 +17,32 @@ const maxPostPopularity = 1000; // for normalization of popularity
 const maxCirclePopularity = 1000; // for normalization of popularity
 
 export const getMetrics = async (
-    user: Circle,
-    item: Post | Circle,
+    user: Circle | undefined,
+    item: Post | Circle | MemberDisplay,
     currentDate: Date,
     customWeights?: Weights,
 ): Promise<Metrics> => {
     let weights = customWeights ?? defaultWeights;
     let metrics: Metrics = {};
 
-    metrics.vibe = await getVibe(user, item);
-    metrics.distance = calculateDistance(user.location?.lngLat, item.location?.lngLat);
-    metrics.proximity = getProximity(user.location?.lngLat, item.location?.lngLat);
-    metrics.recentness = getRecentness(item.createdAt, currentDate);
+    if (user) {
+        metrics.vibe = await getVibe(user, item);
+        metrics.distance = calculateDistance(user.location?.lngLat, item.location?.lngLat);
+        metrics.proximity = getProximity(user.location?.lngLat, item.location?.lngLat);
+    }
+    metrics.recentness = getRecentness(getCreatedAt(item), currentDate);
     metrics.popularity = getPopularity(item);
     metrics.rank = getRank(metrics, weights);
 
     return metrics;
+};
+
+export const getCreatedAt = (item: Post | Circle | MemberDisplay): Date | undefined => {
+    if ("joinedAt" in item) {
+        return item.joinedAt;
+    } else if ("createdAt" in item) {
+        return item.createdAt;
+    }
 };
 
 export const getRank = (metrics: Metrics, customWeights?: Weights): number => {
@@ -45,7 +55,7 @@ export const getRank = (metrics: Metrics, customWeights?: Weights): number => {
     );
 };
 
-export const getVibe = async (user: Circle, item: Post | Circle): Promise<number | undefined> => {
+export const getVibe = async (user: Circle, item: Post | Circle | MemberDisplay): Promise<number | undefined> => {
     if (!user) return undefined;
     let distance = await getDistanceForItemWeaviate(user, item);
     return distance ? distance / 2 : distance; // vibe between 0 and 1
@@ -69,7 +79,7 @@ export const getProximity = (lngLat1?: LngLat, lngLat2?: LngLat): number | undef
     return distance / 20000; // max distance on earth is about 20000 km
 };
 
-export const getPopularity = (item: Post | Circle) => {
+export const getPopularity = (item: Post | Circle | MemberDisplay) => {
     if ("circleType" in item) {
         return getCirclePopularity(item as Circle);
     } else {

@@ -1,16 +1,21 @@
 "use server";
 
 import { ModulePageProps } from "../dynamic-page";
-import { getMembers } from "@/lib/data/member";
+import { getMembers, getMembersWithMetrics } from "@/lib/data/member";
 import MembersTable from "./members-table";
-import { User } from "@/models/models";
 import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
+import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 
 export default async function MembersModule({ circle, page, subpage, isDefaultCircle }: ModulePageProps) {
     // get members of circle
-    let members = await getMembers(circle?._id);
+    let userDid = undefined;
+    try {
+        userDid = await getAuthenticatedUserDid();
+    } catch (error) {}
+
+    let members = await getMembersWithMetrics(userDid, circle?._id);
     if (circle?.circleType === "user") {
-        members = members.filter((m) => m.userDid !== (circle as User).did);
+        members = members.filter((m) => m.userDid !== circle.did);
     }
 
     return (

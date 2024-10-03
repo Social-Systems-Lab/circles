@@ -1,5 +1,5 @@
 import weaviate, { generateUuid5, WeaviateClient } from "weaviate-client";
-import { Cause, Skill, Circle, Post } from "../../models/models";
+import { Cause, Skill, Circle, Post, MemberDisplay } from "../../models/models";
 import { ObjectId } from "mongodb";
 import { Causes, Circles, Posts, Skills } from "./db";
 import { getFullLocationName } from "../utils";
@@ -400,8 +400,12 @@ export const deletePostWeaviate = async (postId: string): Promise<void> => {
     }
 };
 
-export const getDistanceForItemWeaviate = async (source: Circle, item: Post | Circle): Promise<number | undefined> => {
+export const getDistanceForItemWeaviate = async (
+    source: Circle,
+    item: Post | Circle | MemberDisplay,
+): Promise<number | undefined> => {
     if (!source) return undefined;
+
     const collectionName = "circleType" in item ? "Circle" : "Post";
     const idName = "circleType" in item ? "handle" : "id";
     const id = "circleType" in item ? item.handle : item._id;

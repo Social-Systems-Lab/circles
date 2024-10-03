@@ -39,18 +39,14 @@ export const getCircles = async (parentCircleId?: string): Promise<Circle[]> => 
 };
 
 export const getCirclesWithMetrics = async (
-    userHandle?: string,
+    userDid?: string,
     parentCircleId?: string,
 ): Promise<WithMetric<Circle>[]> => {
     let circles = (await getCircles(parentCircleId)) as WithMetric<Circle>[];
-    if (!userHandle) {
-        return circles;
-    }
-
     const currentDate = new Date();
-    let user = await Circles.findOne({ handle: userHandle });
-    if (!user) {
-        return circles;
+    let user = undefined;
+    if (userDid) {
+        user = (await Circles.findOne({ did: userDid })) ?? undefined;
     }
 
     // get metrics for each circle

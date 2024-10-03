@@ -3,10 +3,9 @@ import { ObjectId } from "mongodb";
 import { Feed, Post, PostDisplay, Comment, CommentDisplay, Circle, Mention } from "@/models/models";
 import { getCircleById, updateCircle } from "./circle";
 import { addFeedsAccessRules } from "../utils";
-import { comment } from "postcss";
-import { deletePostWeaviate, getVibeForPostWeaviate, upsertPostWeaviate } from "./weaviate";
+import { deletePostWeaviate, upsertPostWeaviate } from "./weaviate";
 import { getUserByDid } from "./user";
-import { calculateDistance, getMetrics } from "../utils/metrics";
+import { getMetrics } from "../utils/metrics";
 
 export function extractMentions(content: string): Mention[] {
     const mentionPattern = /\[([^\]]+)\]\(\/circles\/([^)]+)\)/g;
@@ -108,7 +107,7 @@ export const createDefaultFeeds = async (circleId: string): Promise<Feed[] | nul
 
 export const createPost = async (post: Post): Promise<Post> => {
     const result = await Posts.insertOne(post);
-    let newPost = { ...post, _id: result.insertedId.toString() };
+    let newPost = { ...post, _id: result.insertedId.toString() } as Post;
 
     // upsert post
     await upsertPostWeaviate(newPost);
@@ -195,7 +194,6 @@ export const getPostsWithMetrics = async (
         user = await getUserByDid(userDid!);
     }
     const currentDate = new Date();
-    if (!user) return posts;
 
     // get metrics for each circle
     for (const post of posts) {
