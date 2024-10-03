@@ -6,6 +6,7 @@ import { FeedComponent } from "./feed";
 import { ThirdColumn } from "./third-column";
 import { getPostsAction } from "./actions";
 import { SortingOptions } from "@/models/models";
+import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 
 export default async function FeedsModule({ circle, page, subpage, isDefaultCircle, searchParams }: ModulePageProps) {
     const feed = await getFeedByHandle(circle?._id, subpage);
@@ -15,7 +16,7 @@ export default async function FeedsModule({ circle, page, subpage, isDefaultCirc
     const posts = await getPostsAction(feed._id, circle._id, 20, 0, searchParams?.sort as SortingOptions);
 
     return (
-        <>
+        <ContentDisplayWrapper content={posts}>
             <FeedComponent
                 posts={posts}
                 feed={feed}
@@ -25,6 +26,6 @@ export default async function FeedsModule({ circle, page, subpage, isDefaultCirc
                 isDefaultCircle={isDefaultCircle}
             />
             <ThirdColumn />
-        </>
+        </ContentDisplayWrapper>
     );
 }

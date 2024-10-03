@@ -76,6 +76,8 @@ export async function createPostAction(
         const content = formData.get("content") as string;
         const circleId = formData.get("circleId") as string;
         const feedId = formData.get("feedId") as string;
+        const locationStr = formData.get("location") as string;
+        const location = locationStr ? JSON.parse(locationStr) : undefined;
 
         const userDid = await getAuthenticatedUserDid();
         const feed = await getFeed(feedId);
@@ -96,7 +98,10 @@ export async function createPostAction(
             createdAt: new Date(),
             reactions: {},
             comments: 0,
+            location,
         };
+
+        console.log("creating post", JSON.stringify(post.location));
 
         await postSchema.parseAsync(post);
 
@@ -149,6 +154,8 @@ export async function updatePostAction(
         const postId = formData.get("postId") as string;
         const content = formData.get("content") as string;
         const circleId = formData.get("circleId") as string;
+        const locationStr = formData.get("location") as string;
+        const location = locationStr ? JSON.parse(locationStr) : undefined;
 
         const userDid = await getAuthenticatedUserDid();
         const post = await getPost(postId);
@@ -164,7 +171,10 @@ export async function updatePostAction(
             _id: postId,
             content,
             editedAt: new Date(),
+            location,
         };
+
+        console.log("Updating post", JSON.stringify(updatedPost.location));
 
         updatedPost.mentions = extractMentions(content);
 

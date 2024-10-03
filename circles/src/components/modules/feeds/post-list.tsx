@@ -18,7 +18,7 @@ import {
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { getPublishTime } from "@/lib/utils";
-import { contentPreviewAtom, imageGalleryAtom, userAtom } from "@/lib/data/atoms";
+import { contentPreviewAtom, focusPostAtom, imageGalleryAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import {
     DropdownMenu,
@@ -200,6 +200,7 @@ export const PostItem = ({
     const [isFetchingComments, startCommentsTransition] = useTransition();
     const { toast } = useToast();
     const [, setImageGallery] = useAtom(imageGalleryAtom);
+    const [focusPost, setFocusPost] = useAtom(focusPostAtom);
 
     const [openDropdown, setOpenDropdown] = useState(false);
 
@@ -220,6 +221,24 @@ export const PostItem = ({
         topComments.sort((a, b) => (b.reactions.like || 0) - (a.reactions.like || 0));
         return topComments;
     }, [comments]);
+
+    useEffect(() => {
+        if (!focusPost) return;
+        if (focusPost._id !== post._id) {
+            return;
+        }
+
+        // TODO scroll to post
+
+        let contentPreviewData: ContentPreviewData = {
+            type: "post",
+            content: post,
+            props: { post, circle, feed, page, subpage, initialComments: comments, initialShowAllComments: true },
+        };
+        setContentPreview((x) => (x?.content === post ? undefined : contentPreviewData));
+
+        setFocusPost(null);
+    }, [focusPost]);
 
     useEffect(() => {
         if (!carouselApi) return;
@@ -636,13 +655,23 @@ export const PostItem = ({
                 </div>
 
                 {post.metrics && (
-                    <Indicators
-                        metrics={post.metrics}
-                        className="bg-transparent pl-0 pr-0 text-[16px] shadow-none"
-                        color="#6b7280"
-                        content={post}
-                        size="1.25rem"
-                    />
+                    <>
+                        {post.metrics.vibe !== undefined && (
+                            <div className="text-[16px]">
+                                <VibeScore score={post.metrics.vibe} color={"#6b7280"} size={"1.25rem"} />
+                            </div>
+                        )}
+                        {post.metrics.distance !== undefined && (
+                            <div className="text-[16px]">
+                                <ProximityIndicator
+                                    distance={post.metrics.distance}
+                                    color={"#6b7280"}
+                                    content={post}
+                                    size={"1.25rem"}
+                                />
+                            </div>
+                        )}
+                    </>
                 )}
 
                 {/* Comments Section */}

@@ -24,7 +24,7 @@ export const precisionLevels = [
 type PrecisionLevel = 0 | 1 | 2 | 3 | 4;
 
 interface LocationPickerProps {
-    value: Location;
+    value?: Location;
     onChange: (value: Location) => void;
 }
 

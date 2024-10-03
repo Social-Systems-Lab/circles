@@ -16,6 +16,7 @@ import {
     contentPreviewAtom,
     triggerMapOpenAtom,
     zoomContentAtom,
+    focusPostAtom,
 } from "@/lib/data/atoms";
 import MapMarker from "./markers";
 import { isEqual } from "lodash"; // You might need to install lodash
@@ -39,16 +40,21 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
     const [zoom, setZoom] = useState(2.2);
     mapboxgl.accessToken = mapboxKey;
     const [, setContentPreview] = useAtom(contentPreviewAtom);
+    const [, setFocusPost] = useAtom(focusPostAtom);
 
     const markersRef = useRef<Map<string, mapboxgl.Marker>>(new globalThis.Map());
 
     const onMarkerClick = useCallback(
         (content: Content) => {
-            let contentPreviewData: ContentPreviewData = {
-                type: content.circleType,
-                content: content,
-            };
-            setContentPreview((x) => (content === x?.content ? undefined : contentPreviewData));
+            if (content.circleType === "post") {
+                setFocusPost(content);
+            } else {
+                let contentPreviewData: ContentPreviewData = {
+                    type: content.circleType,
+                    content: content,
+                };
+                setContentPreview((x) => (content === x?.content ? undefined : contentPreviewData));
+            }
         },
         [setContentPreview],
     );

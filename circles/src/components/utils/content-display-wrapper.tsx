@@ -14,7 +14,7 @@ const ContentDisplayWrapper: React.FC<ContentDisplayWrapperProps> = ({ content, 
     const [, setDisplayedContent] = useAtom(displayedContentAtom);
 
     useEffect(() => {
-        // setting displayed content
+        //setting displayed content
         console.log(
             "setting displayed content",
             content.filter((item) => item?.location?.lngLat),

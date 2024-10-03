@@ -367,6 +367,7 @@ export const getPosts = async (
                 media: 1,
                 createdBy: 1,
                 comments: 1,
+                location: 1,
                 circleType: { $literal: "post" },
                 highlightedCommentId: { $toString: "$highlightedCommentId" },
                 mentions: 1,

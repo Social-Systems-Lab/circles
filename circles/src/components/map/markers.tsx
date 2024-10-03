@@ -7,6 +7,7 @@ import React from "react";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "../ui/hover-card";
 import { HoverCardArrow } from "@radix-ui/react-hover-card";
 import Indicators from "../utils/indicators";
+import Image from "next/image";
 
 interface MapMarkerProps {
     content?: Content;
@@ -21,12 +22,12 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
     const handleClick = () => {
         if (!content) return;
 
-        console.log("content clicked");
-        let contentPreviewData: ContentPreviewData = {
-            type: content.circleType,
-            content: content,
-        };
-        setContentPreview(contentPreviewData);
+        // console.log("content clicked");
+        // let contentPreviewData: ContentPreviewData = {
+        //     type: content.circleType,
+        //     content: content,
+        // };
+        // setContentPreview(contentPreviewData);
         if (onClick) {
             onClick(content);
         }
@@ -43,12 +44,24 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
             <HoverCardTrigger>
                 <div className="group relative cursor-pointer" onClick={handleClick}>
                     <div className="absolute bottom-[4px] left-1/2 -translate-x-1/2 transform">
-                        <div
-                            className={`h-9 w-9 rounded-full border-2 bg-white ${contentPreview && contentPreview.handle === content?.handle ? "border-[#f8dd53]" : "border-white"} bg-cover bg-center shadow-md transition-transform duration-300 group-hover:scale-110`}
-                            style={{
-                                backgroundImage: content?.picture?.url ? `url(${content?.picture?.url})` : "none",
-                            }}
-                        />
+                        {content?.circleType === "post" ? (
+                            <div className="h-9 w-9">
+                                <Image
+                                    className={`h-9 w-9 rounded-full border-2 bg-white ${contentPreview && contentPreview._id === content?._id ? "border-[#f8dd53]" : "border-white"} bg-cover bg-center shadow-md transition-transform duration-300 group-hover:scale-110`}
+                                    src="/images/default-post-picture.png"
+                                    alt="Post"
+                                    width={36}
+                                    height={36}
+                                />
+                            </div>
+                        ) : (
+                            <div
+                                className={`h-9 w-9 rounded-full border-2 bg-white ${contentPreview && contentPreview.handle === content?.handle ? "border-[#f8dd53]" : "border-white"} bg-cover bg-center shadow-md transition-transform duration-300 group-hover:scale-110`}
+                                style={{
+                                    backgroundImage: content?.picture?.url ? `url(${content?.picture?.url})` : "none",
+                                }}
+                            />
+                        )}
                     </div>
                     <div className="absolute bottom-0 left-1/2 h-2 w-2 -translate-x-1/2 transform rounded-full bg-white shadow-md" />
                 </div>
@@ -59,12 +72,28 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
             >
                 <HoverCardArrow className="text-[#333333]" fill="#333333" color="#333333" />
                 <div className="flex items-center space-x-2">
-                    <div
-                        className={`h-9 w-9 rounded-full bg-white bg-cover bg-center shadow-md`}
-                        style={{ backgroundImage: content?.picture?.url ? `url(${content?.picture?.url})` : "none" }}
-                    />
+                    {content?.circleType === "post" ? (
+                        <Image
+                            className={`h-9 w-9 rounded-full border-2 bg-white ${contentPreview && contentPreview._id === content?._id ? "border-[#f8dd53]" : "border-white"} bg-cover bg-center shadow-md transition-transform duration-300 group-hover:scale-110`}
+                            src="/images/default-post-picture.png"
+                            alt="Post"
+                            width={36}
+                            height={36}
+                        />
+                    ) : (
+                        <div
+                            className={`h-9 w-9 rounded-full bg-white bg-cover bg-center shadow-md`}
+                            style={{
+                                backgroundImage: content?.picture?.url ? `url(${content?.picture?.url})` : "none",
+                            }}
+                        />
+                    )}
                     <div>
-                        <p className="text-[14px] font-semibold text-white">{content?.name}</p>
+                        {content?.circleType === "post" ? (
+                            <p className="line-clamp-2 max-w-[300px] text-[14px] text-white">{content?.content}</p>
+                        ) : (
+                            <p className="text-[14px] font-semibold text-white">{content?.name}</p>
+                        )}
                         <div className="flex flex-row">
                             {content?.metrics && (
                                 <Indicators

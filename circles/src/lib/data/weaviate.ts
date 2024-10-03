@@ -1,4 +1,4 @@
-import weaviate, { generateUuid5, WeaviateClient } from "weaviate-client";
+import weaviate, { dataType, generateUuid5, WeaviateClient } from "weaviate-client";
 import { Cause, Skill, Circle, Post, MemberDisplay, PostDisplay } from "../../models/models";
 import { ObjectId } from "mongodb";
 import { Causes, Circles, Posts, Skills } from "./db";
@@ -23,6 +23,129 @@ export const getWeaviateClient = async () => {
 
 export const upsertWeaviateCollections = async () => {
     const client = await getWeaviateClient();
+
+    // create collections if they don't exist
+    if (!(await client.collections.exists("Circle"))) {
+        await client.collections.create({
+            name: "Circle",
+            properties: [
+                {
+                    name: "name",
+                    dataType: dataType.TEXT,
+                },
+                {
+                    name: "description",
+                    dataType: dataType.TEXT,
+                },
+                {
+                    name: "handle",
+                    dataType: dataType.TEXT,
+                },
+                {
+                    name: "mission",
+                    dataType: dataType.TEXT,
+                },
+                {
+                    name: "circleType",
+                    dataType: dataType.TEXT,
+                },
+                {
+                    name: "createdAt",
+                    dataType: dataType.DATE,
+                },
+                {
+                    name: "isPublic",
+                    dataType: dataType.BOOLEAN,
+                },
+                {
+                    name: "locationName",
+                    dataType: dataType.TEXT,
+                },
+                {
+                    name: "location",
+                    dataType: dataType.GEO_COORDINATES,
+                },
+            ],
+            references: [
+                {
+                    name: "causes",
+                    targetCollection: "Cause",
+                },
+                {
+                    name: "skills",
+                    targetCollection: "Skill",
+                },
+            ],
+        });
+    }
+
+    if (!(await client.collections.exists("Post"))) {
+        await client.collections.create({
+            name: "Post",
+            properties: [
+                {
+                    name: "content",
+                    dataType: dataType.TEXT,
+                },
+                {
+                    name: "createdAt",
+                    dataType: dataType.DATE,
+                },
+                {
+                    name: "createdBy",
+                    dataType: dataType.TEXT,
+                },
+                {
+                    name: "locationName",
+                    dataType: dataType.TEXT,
+                },
+                {
+                    name: "location",
+                    dataType: dataType.GEO_COORDINATES,
+                },
+            ],
+        });
+    }
+
+    if (!(await client.collections.exists("Cause"))) {
+        await client.collections.create({
+            name: "Cause",
+            properties: [
+                {
+                    name: "name",
+                    dataType: dataType.TEXT,
+                },
+                {
+                    name: "description",
+                    dataType: dataType.TEXT,
+                },
+                {
+                    name: "handle",
+                    dataType: dataType.TEXT,
+                },
+            ],
+        });
+    }
+
+    if (!(await client.collections.exists("Skill"))) {
+        await client.collections.create({
+            name: "Skill",
+            properties: [
+                {
+                    name: "name",
+                    dataType: dataType.TEXT,
+                },
+                {
+                    name: "description",
+                    dataType: dataType.TEXT,
+                },
+                {
+                    name: "handle",
+                    dataType: dataType.TEXT,
+                },
+            ],
+        });
+    }
 
     // Batch insert Causes
     const causes = await Causes.find().toArray();
@@ -56,29 +179,34 @@ export const upsertWeaviateCollections = async () => {
 
     // Batch insert Circles
     const circles = await Circles.find().toArray();
-    const circleDataObjects = circles.map((circle: Circle) => ({
-        properties: {
-            name: circle.name || "",
-            description: circle.description || "",
-            handle: circle.handle || "",
-            mission: circle.mission || "",
-            circleType: circle.circleType || "circle",
-            createdAt: circle.createdAt ? circle.createdAt.toISOString() : new Date().toISOString(),
-            isPublic: circle.isPublic || true,
-            locationName: getFullLocationName(circle.location),
-            location: circle.location?.lngLat
-                ? {
-                      latitude: circle.location.lngLat.lat,
-                      longitude: circle.location.lngLat.lng,
-                  }
-                : "",
-        },
-        id: generateUuid5("Circle", circle.handle), // Deterministic UUID based on handle
-        references: {
-            causes: circle.causes?.map((causeHandle: string) => generateUuid5("Cause", causeHandle)) ?? [],
-            skills: circle.skills?.map((skillHandle: string) => generateUuid5("Skill", skillHandle)) ?? [],
-        },
-    }));
+    const circleDataObjects = circles.map((circle: Circle) => {
+        let dataObject: any = {
+            properties: {
+                name: circle.name || "",
+                description: circle.description || "",
+                handle: circle.handle || "",
+                mission: circle.mission || "",
+                circleType: circle.circleType || "circle",
+                createdAt: circle.createdAt ? circle.createdAt.toISOString() : new Date().toISOString(),
+                isPublic: circle.isPublic || true,
+            },
+            id: generateUuid5("Circle", circle.handle), // Deterministic UUID based on handle
+            references: {
+                causes: circle.causes?.map((causeHandle: string) => generateUuid5("Cause", causeHandle)) ?? [],
+                skills: circle.skills?.map((skillHandle: string) => generateUuid5("Skill", skillHandle)) ?? [],
+            },
+        };
+        if (circle.location) {
+            dataObject.properties.locationName = getFullLocationName(circle.location);
+            if (circle.location.lngLat) {
+                dataObject.properties.location = {
+                    latitude: circle.location.lngLat.lat,
+                    longitude: circle.location.lngLat.lng,
+                };
+            }
+        }
+        return dataObject;
+    });
 
     const circleCollection = client.collections.get("Circle");
     await circleCollection.data.insertMany(circleDataObjects);
@@ -87,21 +215,28 @@ export const upsertWeaviateCollections = async () => {
     // TODO see if we can vectorize post + images
     // Batch insert Posts
     const posts = await Posts.find().toArray();
-    const postDataObjects = posts.map((post: Post) => ({
-        properties: {
-            content: post.content,
-            createdAt: post.createdAt.toISOString(),
-            createdBy: post.createdBy,
-            locationName: getFullLocationName(post.location),
-            location: post.location?.lngLat
-                ? {
-                      latitude: post.location.lngLat.lat,
-                      longitude: post.location.lngLat.lng,
-                  }
-                : "",
-        },
-        id: generateUuid5("Post", post._id), // Deterministic UUID based on MongoDB ID
-    }));
+    const postDataObjects = posts.map((post: Post) => {
+        let dataObject: any = {
+            properties: {
+                content: post.content,
+                createdAt: post.createdAt.toISOString(),
+                createdBy: post.createdBy,
+            },
+            id: generateUuid5("Post", post._id), // Deterministic UUID based on MongoDB ID
+        };
+
+        if (post.location) {
+            dataObject.properties.locationName = getFullLocationName(post.location);
+            if (post.location.lngLat) {
+                dataObject.properties.location = {
+                    latitude: post.location.lngLat.lat,
+                    longitude: post.location.lngLat.lng,
+                };
+            }
+        }
+
+        return dataObject;
+    });
 
     const postCollection = client.collections.get("Post");
     await postCollection.data.insertMany(postDataObjects);
@@ -212,14 +347,17 @@ export const upsertCircleWeaviate = async (circle: Circle): Promise<void> => {
         circleType: circle.circleType || "circle",
         createdAt: circle.createdAt ? circle.createdAt.toISOString() : new Date().toISOString(),
         isPublic: circle.isPublic || true,
-        locationName: getFullLocationName(circle.location),
-        location: circle.location?.lngLat
-            ? {
-                  latitude: circle.location.lngLat.lat,
-                  longitude: circle.location.lngLat.lng,
-              }
-            : "",
     };
+
+    if (circle.location) {
+        properties.locationName = getFullLocationName(circle.location);
+        if (circle.location.lngLat) {
+            properties.location = {
+                latitude: circle.location.lngLat.lat,
+                longitude: circle.location.lngLat.lng,
+            };
+        }
+    }
 
     const id = generateUuid5("Circle", circle.handle ?? "");
 
@@ -359,13 +497,17 @@ export const upsertPostWeaviate = async (post: Post): Promise<void> => {
         content: post.content,
         createdAt: post.createdAt.toISOString(),
         createdBy: post.createdBy,
-        location: post.location?.lngLat
-            ? {
-                  latitude: post.location.lngLat.lat,
-                  longitude: post.location.lngLat.lng,
-              }
-            : "",
     };
+
+    if (post.location) {
+        properties.locationName = getFullLocationName(post.location);
+        if (post.location.lngLat) {
+            properties.location = {
+                latitude: post.location.lngLat.lat,
+                longitude: post.location.lngLat.lng,
+            };
+        }
+    }
 
     const id = generateUuid5("Post", post._id);
 

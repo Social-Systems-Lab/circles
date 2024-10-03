@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useTransition } from "react";
 import { Textarea } from "@/components/ui/textarea";
-import { ImageIcon, MapPinIcon, BarChartIcon, Trash2, Loader2 } from "lucide-react";
+import { ImageIcon, MapPinIcon, BarChartIcon, Trash2, Loader2, MapPin } from "lucide-react";
 import { UserPicture } from "../members/user-picture";
 import { Circle, Feed, Location, Media, Page, PostDisplay } from "@/models/models";
 import { CirclePicture } from "../circles/circle-picture";
@@ -24,6 +24,8 @@ import {
     handleMentionQuery,
     renderCircleSuggestion,
 } from "./post-list";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { getFullLocationName } from "@/lib/utils";
 
 const postMentionsInputStyle = {
     control: {
@@ -81,7 +83,6 @@ type PostFormProps = {
 
 export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }: PostFormProps) {
     const [postContent, setPostContent] = useState(initialPost?.content || "");
-    const [showLocationPicker, setShowLocationPicker] = useState(false);
     const [showPollCreator, setShowPollCreator] = useState(false);
     const [images, setImages] = useState<ImageItem[]>([]);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -89,6 +90,7 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
     const [isPending, startTransition] = useTransition();
     const [location, setLocation] = useState<Location | undefined>(initialPost?.location);
+    const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
 
     useEffect(() => {
         if (initialPost) {
@@ -99,6 +101,7 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                     media: m,
                 })) || [];
             setImages(existingImages);
+            setLocation(initialPost.location);
         }
     }, [initialPost]);
 
@@ -258,11 +261,13 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                     </div>
                 </div>
             )}
-            {showLocationPicker && (
-                <div className="mt-4 rounded-lg bg-gray-100 p-4">
-                    <LocationPicker value={location!} onChange={setLocation} />
+            {location && (
+                <div className="mt-4 flex flex-row items-center justify-center rounded-lg bg-gray-100 p-4 pl-3">
+                    <MapPin className={`mr-3 h-5 w-5`} style={{ color: "#c3224d" }} />
+                    {getFullLocationName(location)}
                 </div>
             )}
+
             {showPollCreator && (
                 <div className="mt-4 rounded-lg bg-gray-100 p-4">
                     <p className="text-sm text-gray-600">📊 Poll creator placeholder</p>
@@ -287,7 +292,7 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                         variant="ghost"
                         size="icon"
                         className="rounded-full"
-                        onClick={() => setShowLocationPicker(!showLocationPicker)}
+                        onClick={() => setIsLocationDialogOpen(true)}
                     >
                         <MapPinIcon className="h-5 w-5 text-gray-500" />
                     </Button>
@@ -327,6 +332,23 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                     <p className="text-lg font-semibold text-gray-700">Drop images here</p>
                 </div>
             )}
+
+            <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Select Location</DialogTitle>
+                    </DialogHeader>
+                    <LocationPicker value={location!} onChange={setLocation} />
+                    <div className="mt-4 flex justify-end">
+                        <Button variant="secondary" onClick={() => setIsLocationDialogOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button variant="default" onClick={() => setIsLocationDialogOpen(false)} className="ml-2">
+                            Set Location
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
