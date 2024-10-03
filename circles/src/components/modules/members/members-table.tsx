@@ -150,7 +150,9 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                         <div className="flex items-center gap-2">
                             <UserPicture name={memberName} picture={picture} />
                             <span className="ml-2 font-bold">{memberName}</span>
-                            {metrics && <Indicators metrics={metrics} className="shadow-none" />}
+                            {metrics && (
+                                <Indicators metrics={metrics} className="shadow-none" content={info.row.original} />
+                            )}
                         </div>
                     );
                 },
@@ -195,7 +197,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
             columnFilters,
             columnVisibility: {
                 name: true,
-                joinedAt: true,
+                joinedAt: !isCompact,
                 userGroups: !isCompact,
             },
         },

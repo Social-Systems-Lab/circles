@@ -176,7 +176,11 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                                 </div>
 
                                 {circle.metrics && (
-                                    <Indicators metrics={circle.metrics} className="absolute left-2 top-2" />
+                                    <Indicators
+                                        metrics={circle.metrics}
+                                        className="absolute left-2 top-2"
+                                        content={circle}
+                                    />
                                 )}
 
                                 <div className="relative flex justify-center">

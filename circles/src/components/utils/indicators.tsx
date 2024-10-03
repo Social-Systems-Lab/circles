@@ -1,30 +1,36 @@
 import { AudioLines, Zap, MapPin, Star } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Metrics } from "@/models/models";
+import { Content, Metrics } from "@/models/models";
 import { cn } from "@/lib/utils";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "../ui/hover-card";
+import { mapOpenAtom, triggerMapOpenAtom, zoomContentAtom } from "@/lib/data/atoms";
+import { useAtom } from "jotai";
 
 interface VibeScoreProps {
     score: number;
+    color?: string;
+    size?: string;
 }
 
-export function VibeScore({ score }: VibeScoreProps) {
+export function VibeScore({ score, color, size }: VibeScoreProps) {
     const formattedScore = (1 + score * 100).toFixed(0);
-    // const color = score > 0.7 ? "text-green-500" : score > 0.4 ? "text-yellow-500" : "text-red-500";
-    const color = "text-[#ac22c3]";
-    // #c1449f #ac22c3
+    const defaultColor = "#ac22c3";
+    const iconColor = color ?? defaultColor;
+    const iconSize = size ?? "0.75rem";
 
     return (
         <HoverCard openDelay={200}>
             <HoverCardTrigger>
                 <div className="flex items-center space-x-1">
-                    <AudioLines className={`h-3 w-3 ${color}`} />
-                    <span className={`text-[12px] font-medium ${color}`}>{formattedScore}</span>
+                    <AudioLines className={``} style={{ color: iconColor, width: iconSize, height: iconSize }} />
+                    <span className={` font-medium`} style={{ color: iconColor }}>
+                        {formattedScore}
+                    </span>
                 </div>
             </HoverCardTrigger>
-            <HoverCardContent className="z-[500] w-[300px] p-2 pt-[6px]">
+            <HoverCardContent className="z-[500] w-[300px] p-2 pt-[6px] text-[14px]">
                 <p>
-                    <AudioLines className={`mr-1 h-5 w-5 ${color} inline-block`} />
+                    <AudioLines className={`mr-1 inline-block h-5 w-5`} style={{ color: defaultColor }} />
                     <b>Vibe:</b> How much your profile resonates with this content (lower number means higher resonance)
                 </p>
             </HoverCardContent>
@@ -34,10 +40,18 @@ export function VibeScore({ score }: VibeScoreProps) {
 
 interface ProximityIndicatorProps {
     distance: number;
+    color?: string;
+    content?: Content;
+    size?: string;
+    onMapPinClick?: () => void;
 }
 
-export function ProximityIndicator({ distance }: ProximityIndicatorProps) {
-    const color = "text-[#c3224d]";
+export function ProximityIndicator({ distance, color, content, size, onMapPinClick }: ProximityIndicatorProps) {
+    const defaultColor = "#c3224d";
+    const iconColor = color ?? defaultColor;
+    const [, setZoomContent] = useAtom(zoomContentAtom);
+    const [, setTriggerOpen] = useAtom(triggerMapOpenAtom);
+    const iconSize = size ?? "0.75rem";
 
     const getDistanceString = () => {
         if (!distance) {
@@ -56,17 +70,45 @@ export function ProximityIndicator({ distance }: ProximityIndicatorProps) {
         return `${(distance / 10).toFixed(0)} mil`;
     };
 
+    const handleMapPinClick = () => {
+        if (onMapPinClick) {
+            onMapPinClick();
+            return;
+        }
+
+        if (!content) {
+            return;
+        }
+        setZoomContent(content);
+        setTriggerOpen(true);
+    };
+
     return (
         <HoverCard openDelay={200}>
             <HoverCardTrigger>
-                <div className="flex items-center space-x-1">
-                    <MapPin className={`h-3 w-3 ${color}`} />
-                    <span className={`text-[12px] font-medium ${color}`}>{getDistanceString()}</span>
+                <div
+                    className="flex cursor-pointer items-center space-x-1"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        handleMapPinClick();
+                    }}
+                >
+                    <MapPin
+                        className={``}
+                        style={{
+                            color: iconColor,
+                            width: iconSize,
+                            height: iconSize,
+                        }}
+                    />
+                    <span className={`font-medium`} style={{ color: iconColor }}>
+                        {getDistanceString()}
+                    </span>
                 </div>
             </HoverCardTrigger>
-            <HoverCardContent className="z-[500] w-[300px] p-2 pt-[6px]">
+            <HoverCardContent className="z-[500] w-[300px] p-2 pt-[6px] text-[14px]">
                 <p>
-                    <MapPin className={`mr-1 h-5 w-5 ${color} inline-block`} />
+                    <MapPin className={`mr-1 inline-block h-5 w-5`} style={{ color: defaultColor }} />
                     <b>Proximity:</b> Distance from your location.
                 </p>
             </HoverCardContent>
@@ -99,22 +141,34 @@ export function PopularityIndicator({ score }: PopularityIndicatorProps) {
 interface IndicatorsProps {
     metrics: Metrics;
     className?: string;
+    color?: string;
+    content?: Content;
+    size?: string;
+    onMapPinClick?: () => void;
 }
 
-export function Indicators({ metrics, className }: IndicatorsProps) {
+export function Indicators({ metrics, className, color, content, size, onMapPinClick }: IndicatorsProps) {
     return (
         <div
             className={cn(
-                "flex items-center justify-center space-x-2 rounded-lg bg-white pl-1 pr-2 shadow-md",
+                "flex items-center justify-center space-x-2 rounded-lg bg-white pl-1 pr-2 text-[12px] shadow-md",
                 className,
             )}
         >
             {/* rounded-lg bg-white p-4 shadow */}
             {/* Render VibeScore if 'vibe' is defined */}
-            {metrics.vibe !== undefined && <VibeScore score={metrics.vibe} />}
+            {metrics.vibe !== undefined && <VibeScore score={metrics.vibe} color={color} size={size} />}
 
             {/* Render ProximityIndicator if 'proximity' is defined */}
-            {metrics.distance !== undefined && <ProximityIndicator distance={metrics.distance} />}
+            {metrics.distance !== undefined && (
+                <ProximityIndicator
+                    distance={metrics.distance}
+                    color={color}
+                    content={content}
+                    size={size}
+                    onMapPinClick={onMapPinClick}
+                />
+            )}
 
             {/* Render PopularityIndicator if 'popularity' is defined */}
             {/* {metrics.popularity !== undefined && <PopularityIndicator score={metrics.popularity} />} */}

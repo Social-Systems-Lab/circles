@@ -15,22 +15,25 @@ import {
     displayedContentAtom,
     contentPreviewAtom,
     triggerMapOpenAtom,
+    zoomContentAtom,
 } from "@/lib/data/atoms";
 import MapMarker from "./markers";
 import { isEqual } from "lodash"; // You might need to install lodash
 import { motion } from "framer-motion";
 import Image from "next/image";
 import ContentPreview from "../layout/content-preview";
-import { Content, ContentPreviewData } from "@/models/models";
+import { Content, ContentPreviewData, Location } from "@/models/models";
 import ImageGallery from "../layout/image-gallery";
 import { TbFocus2 } from "react-icons/tb";
 import Onboarding from "../onboarding/onboarding";
 import { Dialog, DialogContent } from "../ui/dialog";
+import { precisionLevels } from "../forms/location-picker";
 
 const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
     const mapContainer = useRef(null);
     const map = useRef<mapboxgl.Map | null>(null);
     const [displayedContent] = useAtom(displayedContentAtom);
+    const [zoomContent, setZoomContent] = useAtom(zoomContentAtom);
     const [lng, setLng] = useState(20);
     const [lat, setLat] = useState(20);
     const [zoom, setZoom] = useState(2.2);
@@ -48,6 +51,13 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
             setContentPreview((x) => (content === x?.content ? undefined : contentPreviewData));
         },
         [setContentPreview],
+    );
+
+    const onMapPinClick = useCallback(
+        (content: Content) => {
+            setZoomContent(content);
+        },
+        [setZoomContent],
     );
 
     useEffect(() => {
@@ -85,7 +95,7 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
                     // Create new marker
                     const markerElement = document?.createElement("div");
                     const root = createRoot(markerElement);
-                    root.render(<MapMarker content={item} onClick={onMarkerClick} />);
+                    root.render(<MapMarker content={item} onClick={onMarkerClick} onMapPinClick={onMapPinClick} />);
 
                     const newMarker = new mapboxgl.Marker(markerElement)
                         .setLngLat(item.location.lngLat)
@@ -105,6 +115,25 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
             }
         });
     }, [displayedContent, onMarkerClick]);
+
+    useEffect(() => {
+        console.log("Zooming to content", zoomContent);
+        if (!zoomContent) {
+            return;
+        }
+
+        // zoom in on content
+        let location = zoomContent?.location as Location;
+        if (location?.lngLat) {
+            let zoom = precisionLevels[location.precision].zoom ?? 14;
+            map.current?.flyTo({
+                center: location.lngLat,
+                zoom: zoom,
+                essential: true, // this animation is considered essential with respect to prefers-reduced-motion
+            });
+        }
+        setZoomContent(undefined);
+    }, [zoomContent]);
 
     // Function to zoom in on user's location
     const zoomToUserLocation = useCallback(() => {

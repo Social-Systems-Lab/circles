@@ -7,5 +7,6 @@ export const triggerMapOpenAtom = atom<boolean>(false);
 export const mapOpenAtom = atom<boolean>(false);
 export const mapboxKeyAtom = atom<string>("");
 export const displayedContentAtom = atom<Content[]>([]);
+export const zoomContentAtom = atom<Content | undefined>(undefined);
 export const contentPreviewAtom = atom<ContentPreviewData | undefined>(undefined);
 export const imageGalleryAtom = atom<{ images: Media[]; initialIndex: number } | null>(null);

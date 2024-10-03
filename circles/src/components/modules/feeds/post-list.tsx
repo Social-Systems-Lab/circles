@@ -67,6 +67,7 @@ import RichText from "./RichText";
 import { motion } from "framer-motion";
 import { ListFilter } from "@/components/utils/list-filter";
 import { useRouter } from "next/navigation";
+import Indicators, { ProximityIndicator, VibeScore } from "@/components/utils/indicators";
 
 export const defaultMentionsInputStyle = {
     control: {
@@ -633,6 +634,16 @@ export const PostItem = ({
                         </HoverCard>
                     )}
                 </div>
+
+                {post.metrics && (
+                    <Indicators
+                        metrics={post.metrics}
+                        className="bg-transparent pl-0 pr-0 text-[16px] shadow-none"
+                        color="#6b7280"
+                        content={post}
+                        size="1.25rem"
+                    />
+                )}
 
                 {/* Comments Section */}
                 <div className="flex items-center gap-2 pl-4 pr-4">

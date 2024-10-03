@@ -14,6 +14,7 @@ import InviteButton from "../modules/home/invite-button";
 import JoinButton from "../modules/home/join-button";
 import { Circle, ContentPreviewData, FileInfo, Media, PostDisplay, PostItemProps } from "@/models/models";
 import { PostItem } from "../modules/feeds/post-list";
+import Indicators from "../utils/indicators";
 
 export const PostPreview = ({
     post,
@@ -71,6 +72,9 @@ export const CirclePreview = ({ circle }: CirclePreviewProps) => {
                     fill
                     onClick={() => handleImageClick("Cover Image", circle?.cover)}
                 />
+                {circle?.metrics && (
+                    <Indicators metrics={circle.metrics} className="absolute left-2 top-2" content={circle} />
+                )}
             </div>
             <div className="flex flex-1 flex-col">
                 <div className="relative flex justify-center">

@@ -13,10 +13,10 @@ import { useAtom } from "jotai";
 import { LngLat, Location } from "@/models/models";
 import { AutoComplete, Option } from "@/components/ui/autocomplete";
 
-const precisionLevels = [
+export const precisionLevels = [
     { name: "Country", icon: Globe, zoom: 3 },
     { name: "Region", icon: MapIcon, zoom: 5 },
-    { name: "City", icon: PiCityLight, zoom: 10 },
+    { name: "City", icon: PiCityLight, zoom: 12 },
     { name: "Street", icon: Milestone, zoom: 15 },
     { name: "Exact", icon: MapPin, zoom: 18 },
 ];

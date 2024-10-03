@@ -23,7 +23,7 @@ const ItemCard = ({ item, isSelected, onToggle }) => (
             <p className="mt-1 line-clamp-2 text-xs text-gray-600">{item.description}</p>
 
             {/* Render the indicators if metrics are provided */}
-            {item.metrics && <Indicators metrics={item.metrics} className="absolute left-2 top-2" />}
+            {item.metrics && <Indicators metrics={item.metrics} className="absolute left-2 top-2" content={item} />}
 
             {item.metric && <p className="mt-1 text-xs text-blue-600">{item.metric}</p>}
             {item.goal && <p className="mt-1 text-xs text-green-600">{item.goal}</p>}
