@@ -5,6 +5,8 @@ import MembersModule from "./members/members";
 import CirclesModule from "./circles/circles";
 import FeedsModule from "./feeds/feeds";
 import FeedsModuleLayout from "./feeds/feeds-layout";
+import ChatModule from "./chat/chat";
+import ChatModuleLayout from "./chat/chat-layout";
 
 export const modules: Record<string, Module> = {
     home: {
@@ -44,5 +46,13 @@ export const modules: Record<string, Module> = {
         component: FeedsModule,
         layoutComponent: FeedsModuleLayout,
         defaultIcon: "AiOutlineWifi",
+    },
+    chat: {
+        name: "Chat",
+        handle: "chat",
+        description: "Chat page",
+        component: ChatModule,
+        layoutComponent: ChatModuleLayout,
+        defaultIcon: "IoChatbubbleOutline",
     },
 };

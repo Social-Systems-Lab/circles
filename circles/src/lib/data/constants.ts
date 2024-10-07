@@ -118,7 +118,14 @@ export const defaultPagesForUser: Page[] = [
         handle: "feeds",
         description: "Feeds page",
         module: "feeds",
-        defaultUserGroups: ["admins", "moderators", "members"],
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Chat",
+        handle: "chat",
+        description: "Chat page",
+        module: "chat",
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
     },
     {
         name: "Friends",
@@ -566,7 +573,14 @@ export const defaultPages: Page[] = [
         handle: "feeds",
         description: "Feeds page",
         module: "feeds",
-        defaultUserGroups: ["admins", "moderators", "members"],
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Chat",
+        handle: "chat",
+        description: "Chat page",
+        module: "chat",
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
     },
     {
         name: "Members",
@@ -582,6 +596,22 @@ export const defaultPages: Page[] = [
         module: "settings",
         readOnly: true,
         defaultUserGroups: ["admins"],
+    },
+];
+
+export const chatFeaturePrefix = "__chat_";
+export const chatFeatures: Feature[] = [
+    {
+        name: "View",
+        handle: "view",
+        description: "View the chat messages",
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Moderate",
+        handle: "moderate",
+        description: "Moderate chat messages in the chat",
+        defaultUserGroups: ["admins", "moderators"],
     },
 ];
 

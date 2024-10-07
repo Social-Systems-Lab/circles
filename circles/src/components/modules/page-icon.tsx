@@ -10,6 +10,7 @@ import {
     AiOutlineWifi,
 } from "react-icons/ai";
 import { FaRegCircle } from "react-icons/fa6";
+import { IoChatbubbleOutline } from "react-icons/io5";
 
 type PageIconProps = {
     module: string;
@@ -30,6 +31,8 @@ export const PageIcon = ({ module, size }: PageIconProps) => {
             return <FaRegCircle size={size} />;
         case "feeds":
             return <AiOutlineWifi size={size} />;
+        case "chat":
+            return <IoChatbubbleOutline size={size} />;
         default:
             return <AiOutlineQuestion size={size} />;
     }

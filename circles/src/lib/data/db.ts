@@ -10,6 +10,8 @@ import {
     Comment,
     Cause,
     Skill,
+    ChatRoom,
+    ChatMessage,
 } from "@/models/models";
 
 const MONGO_HOST = process.env.MONGO_HOST || "127.0.0.1";
@@ -33,6 +35,8 @@ let Comments: Collection<Comment>;
 let Reactions: Collection<Reaction>;
 let Causes: Collection<Cause>;
 let Skills: Collection<Skill>;
+let ChatRooms: Collection<ChatRoom>;
+let ChatMessages: Collection<ChatMessage>;
 
 // Only initialize the database connection if not in build mode
 if (process.env.IS_BUILD !== "true") {
@@ -49,6 +53,8 @@ if (process.env.IS_BUILD !== "true") {
     Reactions = db.collection<Reaction>("reactions");
     Causes = db.collection<Cause>("causes");
     Skills = db.collection<Skill>("skills");
+    ChatRooms = db.collection<ChatRoom>("chatRooms");
+    ChatMessages = db.collection<ChatMessage>("chatMessages");
 }
 
 export {
@@ -64,4 +70,6 @@ export {
     Reactions,
     Skills,
     Causes,
+    ChatRooms,
+    ChatMessages,
 };

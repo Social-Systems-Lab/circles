@@ -239,13 +239,44 @@ export interface CommentDisplay extends Comment {
 export const reactionSchema = z.object({
     _id: z.any().optional(),
     contentId: z.string(), // ID of the post or comment
-    contentType: z.enum(["post", "comment"]),
+    contentType: z.enum(["post", "comment", "chatMessage"]),
     userDid: didSchema,
     reactionType: z.string(),
     createdAt: z.date(),
 });
 
 export type Reaction = z.infer<typeof reactionSchema>;
+
+export const chatRoomSchema = z.object({
+    _id: z.any().optional(),
+    name: z.string(),
+    handle: handleSchema,
+    circleId: z.string(),
+    createdAt: z.date(),
+    userGroups: z.array(z.string()).default([]),
+});
+
+export type ChatRoom = z.infer<typeof chatRoomSchema>;
+
+export const chatMessageSchema = z.object({
+    _id: z.any().optional(),
+    chatRoomId: z.string(),
+    createdBy: didSchema,
+    createdAt: z.date(),
+    content: z.string(),
+    media: z.array(mediaSchema).optional(),
+    repliesToMessageId: z.string().nullable(),
+    reactions: z.record(z.string(), z.number()).default({}),
+    mentions: z.array(mentionSchema).optional(),
+});
+
+export type ChatMessage = z.infer<typeof chatMessageSchema>;
+
+export interface ChatMessageDisplay extends ChatMessage {
+    author: Circle;
+    userReaction?: string;
+    mentionsDisplay?: MentionDisplay[];
+}
 
 export const causeSchema = z.object({
     _id: z.any().optional(),

@@ -9,12 +9,7 @@ export default function Unauthenticated() {
                 <Image src={unauthorized} alt="" width={400} />
                 <h4>Access Denied</h4>
                 You do not have permission to view this page.
-                <RedirectButtons
-                    buttons={[
-                        { text: "Log in", href: "/login?redirectTo={redirectTo}" },
-                        { text: "Sign up", href: "/signup?redirectTo={redirectTo}" },
-                    ]}
-                />
+                <RedirectButtons buttons={[{ text: "Go to Home", href: "{redirectTo}" }]} />
             </div>
         </div>
     );

@@ -1,9 +1,9 @@
 // used by tailwindcss to merge classnames, shadcn/ui CLI assumes the file is here
 
-import { Circle, Content, Feed, Location, Page } from "@/models/models";
+import { ChatRoom, Circle, Content, Feed, Location, Page } from "@/models/models";
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { feedFeaturePrefix, feedFeatures, pageFeaturePrefix } from "./data/constants";
+import { chatFeaturePrefix, chatFeatures, feedFeaturePrefix, feedFeatures, pageFeaturePrefix } from "./data/constants";
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -149,6 +149,77 @@ export function addFeedsAccessRules(
             handle = handle.substring(0, handle.lastIndexOf("_"));
             if (!feeds.find((feed) => feed.handle === handle)) {
                 console.log("can't find feed with handle, deleting access rule", handle, rule);
+                delete existingAccessRules[rule];
+            }
+        }
+    }
+
+    return existingAccessRules;
+}
+
+export function addChatRoomsAccessRules(
+    chatRooms: ChatRoom[],
+    existingAccessRules: Record<string, string[]>,
+): Record<string, string[]> {
+    // add rules for chat room if it doesn't exist
+    for (const chatRoom of chatRooms) {
+        for (const chatFeature of chatFeatures) {
+            let chatFeatureHandle = chatFeaturePrefix + chatRoom.handle + "_" + chatFeature.handle;
+            if (!existingAccessRules[chatFeatureHandle]) {
+                // handle special case for default feeds that have default user groups
+                if (chatRoom.handle === "default") {
+                    switch (chatFeature.handle) {
+                        case "view":
+                            existingAccessRules[chatFeatureHandle] = ["admins", "moderators", "members", "everyone"];
+                            break;
+                        case "moderate":
+                            existingAccessRules[chatFeatureHandle] = ["admins", "moderators"];
+                            break;
+                        default:
+                            existingAccessRules[chatFeatureHandle] = chatFeature.defaultUserGroups ?? [
+                                "admins",
+                                "moderators",
+                                "members",
+                            ];
+                            break;
+                    }
+                } else if (chatRoom.handle === "members") {
+                    switch (chatFeature.handle) {
+                        case "view":
+                            existingAccessRules[chatFeatureHandle] = ["admins", "moderators", "members"];
+                            break;
+                        case "moderate":
+                            existingAccessRules[chatFeatureHandle] = ["admins", "moderators"];
+                            break;
+                        default:
+                            existingAccessRules[chatFeatureHandle] = chatFeature.defaultUserGroups ?? [
+                                "admins",
+                                "moderators",
+                                "members",
+                            ];
+                            break;
+                    }
+                } else {
+                    existingAccessRules[chatFeatureHandle] = chatFeature.defaultUserGroups ?? [
+                        "admins",
+                        "moderators",
+                        "members",
+                    ];
+                }
+            }
+        }
+    }
+
+    console.log("new access rules:", existingAccessRules);
+
+    // remove rules for feeds that don't exist
+    for (const rule in existingAccessRules) {
+        if (rule.startsWith(chatFeaturePrefix)) {
+            let handle = rule.replace(chatFeaturePrefix, "");
+            // remove feed feature postfix from handle
+            handle = handle.substring(0, handle.lastIndexOf("_"));
+            if (!chatRooms.find((chatRoom) => chatRoom.handle === handle)) {
+                console.log("can't find chat room with handle, deleting access rule", handle, rule);
                 delete existingAccessRules[rule];
             }
         }

@@ -35,8 +35,10 @@ import {
     feedFeatures,
     pageFeaturePrefix,
     feedFeaturePrefix,
+    chatFeaturePrefix,
     causes,
     skills,
+    chatFeatures,
 } from "@/lib/data/constants";
 import { CheckCircle2, ChevronDown, ChevronUp, Loader2, Search, XCircle } from "lucide-react";
 import { getMemberAccessLevel, isAuthorized } from "@/lib/auth/client-auth";
@@ -511,6 +513,17 @@ export const DynamicAccessRulesGrid: React.FC<DynamicAccessRulesGridProps> = ({
                 if (featureWithoutPrefix.endsWith(`_${feedFeature.handle}`)) {
                     const feedHandle = removeLast(featureWithoutPrefix, `_${feedFeature.handle}`);
                     return `${feedFeature.name} Feed: ${feedHandle}`;
+                }
+            }
+        } else if (feature.startsWith(chatFeaturePrefix)) {
+            // get chat handle
+            const featureWithoutPrefix = feature.replace(chatFeaturePrefix, "");
+
+            // loop through chat features and see if the feature relates to it
+            for (const chatFeature of chatFeatures) {
+                if (featureWithoutPrefix.endsWith(`_${chatFeature.handle}`)) {
+                    const chatHandle = removeLast(featureWithoutPrefix, `_${chatFeature.handle}`);
+                    return `${chatFeature.name} Chat Room: ${chatHandle}`;
                 }
             }
         } else {
