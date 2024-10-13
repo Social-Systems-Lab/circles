@@ -601,12 +601,12 @@ export const PostItem = ({
                         </Carousel>
                         {post.media.length > 1 && (
                             <div className="relative flex justify-center">
-                                <div className="absolute -bottom-[30px] flex flex-row items-center justify-center">
+                                <div className="absolute bottom-[7px] flex flex-row items-center justify-center">
                                     {post.media.map((_, index) => (
                                         <button
                                             key={index}
                                             onClick={() => carouselApi?.scrollTo(index)}
-                                            className={`mx-1 h-2 w-2 rounded-full ${
+                                            className={`mx-1 h-1.5 w-1.5 rounded-full ${
                                                 index === currentImageIndex ? "bg-blue-500" : "bg-gray-300"
                                             }`}
                                         />

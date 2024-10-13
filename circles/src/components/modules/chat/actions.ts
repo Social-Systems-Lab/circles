@@ -60,7 +60,7 @@ export async function createChatMessageAction(
     formData: FormData,
     page: Page,
     subpage?: string,
-): Promise<{ success: boolean; message?: string; chatMessage?: ChatMessage }> {
+): Promise<{ success: boolean; message?: string; chatMessage?: ChatMessageDisplay }> {
     try {
         const content = formData.get("content") as string;
         const circleId = formData.get("circleId") as string;
@@ -72,7 +72,7 @@ export async function createChatMessageAction(
             return { success: false, message: "Chat room not found" };
         }
 
-        const feature = chatRoom.handle + "_message";
+        const feature = chatFeaturePrefix + chatRoom.handle + "_view";
         const authorized = await isAuthorized(userDid, circleId, feature);
         if (!authorized) {
             return { success: false, message: "You are not authorized to send messages in this chat room" };
@@ -119,7 +119,12 @@ export async function createChatMessageAction(
         let circlePath = await getCirclePath({ _id: circleId } as Circle);
         revalidatePath(`${circlePath}${page?.handle ?? ""}${subpage ? `/${subpage}` : ""}`);
 
-        return { success: true, message: "Message sent successfully", chatMessage: newChatMessage };
+        let chatMessageDisplay: ChatMessageDisplay = {
+            ...newChatMessage,
+            author: await getUserByDid(userDid),
+        };
+
+        return { success: true, message: "Message sent successfully", chatMessage: chatMessageDisplay };
     } catch (error) {
         return { success: false, message: error instanceof Error ? error.message : "Failed to send message." };
     }
@@ -140,7 +145,7 @@ export async function deleteChatMessageAction(
         const chatRoom = await getChatRoom(message.chatRoomId);
         let canModerate = false;
         if (chatRoom) {
-            const feature = chatRoom.handle + "_moderate";
+            const feature = chatFeaturePrefix + chatRoom.handle + "_moderate";
             canModerate = await isAuthorized(userDid, chatRoom.circleId, feature);
         }
 
@@ -176,7 +181,7 @@ export async function likeChatMessageAction(
 
         const chatRoom = await getChatRoom(message.chatRoomId);
         if (chatRoom) {
-            const feature = chatRoom.handle + "_view";
+            const feature = chatFeaturePrefix + chatRoom.handle + "_view";
             let canReact = await isAuthorized(userDid, chatRoom.circleId, feature);
             if (!canReact) {
                 return { success: false, message: "You are not authorized to like messages in this chat room" };

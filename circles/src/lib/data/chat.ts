@@ -145,7 +145,7 @@ export const getChatMessages = async (
         },
 
         // Sorting and pagination
-        { $sort: { createdAt: -1 } },
+        { $sort: { createdAt: 1 } },
         { $skip: safeOffset },
         { $limit: safeLimit },
 

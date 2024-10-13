@@ -190,7 +190,7 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                         <div className="text-sm font-semibold">{user?.name}</div>
                         <div className="flex flex-row items-center justify-center gap-[4px]">
                             <div className="text-xs text-gray-500">Post in</div>
-                            <CirclePicture name={circle?.name} picture={circle?.picture?.url} size="14px" />
+                            <CirclePicture circle={circle} size="14px" />
                             <div className="text-xs text-gray-500">{circle?.name}</div>
                         </div>
                     </div>

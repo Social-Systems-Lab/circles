@@ -1,13 +1,21 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { contentPreviewAtom } from "@/lib/data/atoms";
+import { cn } from "@/lib/utils";
+import { Circle, ContentPreviewData } from "@/models/models";
+import { useAtom } from "jotai";
 
 type CirclePictureProps = {
-    name?: string;
-    picture?: string;
+    circle: Circle;
     size?: string;
+    className?: string;
+    openPreview?: boolean;
 };
 
-export const CirclePicture = ({ name, picture, size }: CirclePictureProps) => {
+export const CirclePicture = ({ circle, size, className, openPreview }: CirclePictureProps) => {
+    const [, setContentPreview] = useAtom(contentPreviewAtom);
+
     var getInitials = () => {
+        let name = circle?.name;
         if (!name) return "";
         var names = name.split(" ");
         var initials = names[0].substring(0, 1).toUpperCase();
@@ -18,10 +26,25 @@ export const CirclePicture = ({ name, picture, size }: CirclePictureProps) => {
         return initials;
     };
 
+    const onOpenPreview = () => {
+        // Open preview
+        let contentPreviewData: ContentPreviewData = {
+            type: "user",
+            content: circle,
+        };
+        setContentPreview((x) => (x?.content === circle ? undefined : contentPreviewData));
+    };
+
     return (
-        <Avatar className="bg-white shadow-lg" style={size ? { width: size, height: size } : {}}>
-            <AvatarImage src={picture} />
-            <AvatarFallback>{getInitials()}</AvatarFallback>
-        </Avatar>
+        <div className={className}>
+            <Avatar
+                className={`bg-white shadow-lg ${openPreview ? "cursor-pointer" : ""}`}
+                onClick={openPreview ? onOpenPreview : undefined}
+                style={size ? { width: size, height: size } : {}}
+            >
+                <AvatarImage src={circle?.picture?.url} />
+                <AvatarFallback>{getInitials()}</AvatarFallback>
+            </Avatar>
+        </div>
     );
 };
