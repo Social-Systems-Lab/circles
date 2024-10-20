@@ -4,7 +4,7 @@ import React, { Suspense, use, useEffect, useState, useTransition } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Button } from "../ui/button";
 import { logOut } from "../auth/actions";
-import { userAtom, authenticatedAtom, userToolboxStateAtom } from "@/lib/data/atoms";
+import { userAtom, authenticatedAtom, userToolboxDataAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import {
     DropdownMenu,
@@ -36,7 +36,7 @@ import {
     Send,
     Minus,
 } from "lucide-react";
-import { UserToolboxState } from "@/models/models";
+import { UserToolboxData, UserToolboxTab } from "@/models/models";
 
 type ChatRoomPreview = {
     id: number;
@@ -51,7 +51,8 @@ const ProfileMenuBar = () => {
     const [authenticated, setAuthenticated] = useAtom(authenticatedAtom);
     const [user, setUser] = useAtom(userAtom);
     const searchParams = useSearchParams();
-    const [userToolboxState, setUserToolboxState] = useAtom(userToolboxStateAtom);
+    const [userToolboxState, setUserToolboxState] = useAtom(userToolboxDataAtom);
+    const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
 
     const onLogInClick = () => {
         let redirectTo = searchParams.get("redirectTo") ?? "/";
@@ -69,12 +70,15 @@ const ProfileMenuBar = () => {
         setIsMounted(true);
     }, []);
 
-    const openUserToolbox = (state: UserToolboxState) => {
-        if (userToolboxState === state || (state === "profile" && userToolboxState)) {
+    const openUserToolbox = (tab: UserToolboxTab) => {
+        if (
+            sidePanelContentVisible === "toolbox" &&
+            (userToolboxState?.tab === tab || (tab === "profile" && userToolboxState))
+        ) {
             setUserToolboxState(undefined);
             return;
         }
-        setUserToolboxState(state);
+        setUserToolboxState({ tab: tab });
     };
 
     if (!isMounted) {

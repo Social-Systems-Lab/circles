@@ -119,11 +119,9 @@ export type ChatMessagesProps = {
     messages: ChatMessageDisplay[];
     chatRoom: ChatRoom;
     circle: Circle;
-    page: Page;
-    subpage?: string;
 };
 
-export const ChatMessages = ({ messages, chatRoom, circle, page, subpage }: ChatMessagesProps) => {
+export const ChatMessages = ({ messages, chatRoom, circle }: ChatMessagesProps) => {
     const isSameDay = (date1: Date, date2: Date) => {
         return (
             date1.getFullYear() === date2.getFullYear() &&
@@ -332,14 +330,7 @@ export const ChatRoomComponent = ({
                 {/* <ListFilter onFilterChange={handleFilterChange} /> */}
 
                 <div className="flex-grow p-4 pb-[144px]">
-                    <ChatMessages
-                        messages={messages}
-                        chatRoom={chatRoom}
-                        circle={circle}
-                        page={page}
-                        subpage={subpage}
-                    />
-                    {/* <ChatMessages messages={messages} chatRoom={chatRoom} circle={circle} page={page} subpage={subpage} /> */}
+                    <ChatMessages messages={messages} chatRoom={chatRoom} circle={circle} />
                 </div>
 
                 <div

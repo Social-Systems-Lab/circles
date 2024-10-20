@@ -5,9 +5,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Bell, MessageCircle, Calendar, Edit, CheckSquare, BarChart2 } from "lucide-react";
-import { userAtom, userToolboxStateAtom } from "@/lib/data/atoms";
+import { userAtom, userToolboxDataAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
-import { UserToolboxState } from "@/models/models";
+import { UserToolboxData, UserToolboxTab } from "@/models/models";
 
 type ChatRoomPreview = {
     id: number;
@@ -19,8 +19,8 @@ type ChatRoomPreview = {
 
 export const UserToolbox = () => {
     const [user] = useAtom(userAtom);
-    const [userToolboxState, setUserToolboxState] = useAtom(userToolboxStateAtom);
-    const [tab, setTab] = useState<UserToolboxState>(undefined);
+    const [userToolboxState, setUserToolboxState] = useAtom(userToolboxDataAtom);
+    const [tab, setTab] = useState<UserToolboxTab>("chat");
 
     // const onLogOutClick = async () => {
     //     startTransition(async () => {
@@ -34,7 +34,11 @@ export const UserToolbox = () => {
     // };
 
     useEffect(() => {
-        setTab(userToolboxState === "profile" ? "chat" : userToolboxState);
+        if (!userToolboxState) {
+            setTab("chat");
+        } else {
+            setTab(userToolboxState.tab === "profile" ? "chat" : userToolboxState.tab);
+        }
     }, [userToolboxState]);
 
     const handleChatClick = (chat: ChatRoomPreview) => {
@@ -91,7 +95,7 @@ export const UserToolbox = () => {
                 </div>
             </CardHeader>
             <CardContent className="p-0">
-                <Tabs value={tab} onValueChange={(v) => setTab(v as UserToolboxState)} className="flex h-full flex-col">
+                <Tabs value={tab} onValueChange={(v) => setTab(v as UserToolboxTab)} className="flex h-full flex-col">
                     <TabsList className="grid h-auto w-full grid-cols-6 rounded-none border-b border-t-0 border-b-slate-200 border-t-slate-200 bg-white p-0 pb-2 pt-0">
                         <TabsTrigger
                             value="chat"

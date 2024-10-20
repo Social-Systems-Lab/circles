@@ -1,14 +1,14 @@
 "use client";
 
 import { useAtom } from "jotai";
-import { contentPreviewAtom, userAtom, userToolboxStateAtom } from "@/lib/data/atoms";
+import { contentPreviewAtom, userAtom, userToolboxDataAtom } from "@/lib/data/atoms";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { useEffect } from "react";
 import { useAnimation, motion } from "framer-motion";
 
 export function ThirdColumn() {
     const [contentPreview] = useAtom(contentPreviewAtom);
-    const [userToolboxState] = useAtom(userToolboxStateAtom);
+    const [userToolboxState] = useAtom(userToolboxDataAtom);
     const sidePanelOpen = contentPreview !== undefined || userToolboxState !== undefined;
     const isCompact = useIsCompact();
     const controls = useAnimation();

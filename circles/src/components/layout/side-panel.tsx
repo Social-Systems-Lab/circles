@@ -6,13 +6,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
-import { contentPreviewAtom, mapOpenAtom, userToolboxStateAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
+import { contentPreviewAtom, mapOpenAtom, userToolboxDataAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
 import ContentPreview from "./content-preview";
 import { UserToolbox } from "./user-toolbox";
 
 export const SidePanel: React.FC = () => {
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
-    const [userToolbox, setUserToolbox] = useAtom(userToolboxStateAtom);
+    const [userToolbox, setUserToolbox] = useAtom(userToolboxDataAtom);
     const [mapOpen] = useAtom(mapOpenAtom);
     const isMobile = useIsMobile();
     const [sidePanelContentVisible, setSidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);

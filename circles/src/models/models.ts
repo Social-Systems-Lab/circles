@@ -647,4 +647,7 @@ export type MissionDisplay = {
     picture: string;
 };
 
-export type UserToolboxState = "chat" | "notifications" | "profile" | undefined;
+export type UserToolboxTab = "chat" | "notifications" | "profile";
+export type UserToolboxData = {
+    tab: UserToolboxTab;
+};
