@@ -1,6 +1,6 @@
 // circle creation and management
 
-import { Circle, ServerSettings, SortingOptions, WithMetric } from "@/models/models";
+import { Circle, PlatformMetrics, ServerSettings, SortingOptions, WithMetric } from "@/models/models";
 import { getServerSettings } from "./server-settings";
 import { Circles } from "./db";
 import { ObjectId } from "mongodb";
@@ -36,6 +36,13 @@ export const getCircles = async (parentCircleId?: string): Promise<Circle[]> => 
     });
     //circles = filterLocations(circles) as any[];
     return circles;
+};
+
+export const countCirclesAndUsers = async (): Promise<PlatformMetrics> => {
+    const circles = await Circles.countDocuments({ circleType: "circle" });
+    const users = await Circles.countDocuments({ circleType: "user" });
+
+    return { circles, users };
 };
 
 export const getCirclesWithMetrics = async (

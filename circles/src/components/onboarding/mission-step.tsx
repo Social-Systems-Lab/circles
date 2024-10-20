@@ -6,16 +6,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { FaQuoteRight } from "react-icons/fa6";
-import { saveMissionAction } from "./actions";
+import { saveMissionAction, fetchMissionStatements } from "./actions";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { OnboardingStepProps } from "./onboarding";
-import { useEffect, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
+import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
+import { MissionDisplay } from "@/models/models";
+import { CirclePicture } from "../modules/circles/circle-picture";
 
 function MissionStep({ userData, setUserData, nextStep, prevStep }: OnboardingStepProps) {
     const [user, setUser] = useAtom(userAtom);
     const [isPending, startTransition] = useTransition();
+    const [missionStatements, setMissionStatements] = useState<MissionDisplay[]>([]);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -37,13 +41,51 @@ function MissionStep({ userData, setUserData, nextStep, prevStep }: OnboardingSt
     };
 
     useEffect(() => {
-        console.log("MissionStep mounted");
-    }, []);
+        if (!user?.handle) return;
 
+        const fetchMissions = async () => {
+            const response = await fetchMissionStatements(user.handle!);
+            if (response.success) {
+                setMissionStatements(response.missions);
+            } else {
+                console.error("Failed to fetch mission statements:", response.message);
+            }
+        };
+        fetchMissions();
+    }, [user?.handle]);
     return (
         <div className="space-y-4">
             <h2 className="mb-0 mt-0 text-2xl  font-semibold text-gray-800">Your Mission</h2>
             <p className="text-gray-600">Define your purpose and the change you want to see in the world.</p>
+            {missionStatements.length > 0 && (
+                <div className="relative mb-4 h-64 w-full rounded-lg pl-4 pr-4">
+                    <Carousel>
+                        <CarouselContent>
+                            {missionStatements.map((missionItem, index) => (
+                                <CarouselItem key={index}>
+                                    <Card className="relative h-full bg-gray-100 p-4">
+                                        <div className="relative mx-auto flex flex-row items-center justify-center gap-2">
+                                            <FaQuoteRight size="28px" className="mb-2 text-blue-500" />
+                                        </div>
+                                        <p className="mb-2 select-none text-sm italic text-gray-800">
+                                            {missionItem.mission}
+                                        </p>
+                                        <div className="absolute bottom-0 right-0 flex flex-row items-center justify-center gap-2 p-2 pr-4">
+                                            <Avatar className="h-[28px] w-[28px]">
+                                                <AvatarImage src={missionItem.picture} alt={missionItem.name} />
+                                                <AvatarFallback>{missionItem.name.slice(0, 2)}</AvatarFallback>
+                                            </Avatar>
+                                            <span className="select-none text-sm font-medium">{missionItem.name}</span>
+                                        </div>
+                                    </Card>
+                                </CarouselItem>
+                            ))}
+                        </CarouselContent>
+                    </Carousel>
+                </div>
+            )}
+
+            {/* 
             <Card className="relative mb-4 bg-gray-100 p-4">
                 <div className="relative mx-auto flex flex-row items-center justify-center gap-2">
                     <FaQuoteRight size="28px" className="mb-2 text-blue-500" />
@@ -62,7 +104,7 @@ function MissionStep({ userData, setUserData, nextStep, prevStep }: OnboardingSt
                     </Avatar>
                     <span className="text-sm font-medium">Alex Lee</span>
                 </div>
-            </Card>
+            </Card> */}
             <div className="space-y-2">
                 <Label htmlFor="mission">What is your mission in this world?</Label>
                 <Textarea

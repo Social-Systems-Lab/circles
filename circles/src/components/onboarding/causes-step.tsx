@@ -45,7 +45,7 @@ function CausesStep({ userData, setUserData, nextStep, prevStep }: OnboardingSte
                 console.error(response.message);
             }
         });
-    }, [userData.mission]);
+    }, [user, userData.mission]);
 
     const handleCauseToggle = (cause: Cause) => {
         setUserData((prev: OnboardingUserData) => {

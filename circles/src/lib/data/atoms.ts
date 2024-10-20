@@ -1,4 +1,13 @@
-import { Circle, MemberDisplay, UserPrivate, Content, Media, ContentPreviewData, PostDisplay } from "@/models/models";
+import {
+    Circle,
+    MemberDisplay,
+    UserPrivate,
+    Content,
+    Media,
+    ContentPreviewData,
+    PostDisplay,
+    SidePanelMode,
+} from "@/models/models";
 import { atom } from "jotai";
 
 export const userAtom = atom<UserPrivate | undefined>(undefined);
@@ -9,5 +18,6 @@ export const mapboxKeyAtom = atom<string>("");
 export const displayedContentAtom = atom<Content[]>([]);
 export const zoomContentAtom = atom<Content | undefined>(undefined);
 export const contentPreviewAtom = atom<ContentPreviewData | undefined>(undefined);
+export const userToolboxAtom = atom<boolean | undefined>(false);
 export const focusPostAtom = atom<PostDisplay | undefined>(undefined);
 export const imageGalleryAtom = atom<{ images: Media[]; initialIndex: number } | null>(null);

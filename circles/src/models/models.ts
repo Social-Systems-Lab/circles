@@ -369,6 +369,7 @@ export const circleSchema = z.object({
     location: locationSchema.optional(),
     causes: z.array(z.string()).optional(),
     skills: z.array(z.string()).optional(),
+    completedOnboardingSteps: z.array(z.string()).optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;
@@ -634,3 +635,16 @@ export type FormTools = {
     searchParams: ReadonlyURLSearchParams;
     toast: ({ ...props }: Toast) => void;
 };
+
+export type PlatformMetrics = {
+    circles: number;
+    users: number;
+};
+
+export type MissionDisplay = {
+    name: string;
+    mission: string;
+    picture: string;
+};
+
+export type SidePanelMode = "userToolbox" | "contentPreview" | undefined;

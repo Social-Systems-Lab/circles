@@ -50,6 +50,14 @@ export default function Onboarding() {
     const [userData, setUserData] = useState<OnboardingUserData | undefined>(undefined);
 
     useEffect(() => {
+        if (!user) return;
+        if (!user.completedOnboardingSteps) {
+            // TODO here we can show steps based on user's progress through onboarding, for now any steps done is considered complete
+            setIsOpen(true);
+        }
+    }, [user]);
+
+    useEffect(() => {
         if (!isOpen) return;
         setUserData({
             name: user?.name || "",

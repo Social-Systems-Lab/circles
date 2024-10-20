@@ -69,11 +69,11 @@ export const upsertWeaviateCollections = async () => {
             references: [
                 {
                     name: "causes",
-                    targetCollection: "Cause",
+                    targetCollection: "Causes",
                 },
                 {
                     name: "skills",
-                    targetCollection: "Skill",
+                    targetCollection: "Skills",
                 },
             ],
         });
@@ -107,9 +107,9 @@ export const upsertWeaviateCollections = async () => {
         });
     }
 
-    if (!(await client.collections.exists("Cause"))) {
+    if (!(await client.collections.exists("Causes"))) {
         await client.collections.create({
-            name: "Cause",
+            name: "Causes",
             properties: [
                 {
                     name: "name",
@@ -127,9 +127,9 @@ export const upsertWeaviateCollections = async () => {
         });
     }
 
-    if (!(await client.collections.exists("Skill"))) {
+    if (!(await client.collections.exists("Skills"))) {
         await client.collections.create({
-            name: "Skill",
+            name: "Skills",
             properties: [
                 {
                     name: "name",
@@ -155,12 +155,12 @@ export const upsertWeaviateCollections = async () => {
             description: cause.description || "",
             handle: cause.handle,
         },
-        id: generateUuid5("Cause", cause.handle), // Deterministic UUID based on handle
+        id: generateUuid5("Causes", cause.handle), // Deterministic UUID based on handle
     }));
 
-    const causeCollection = client.collections.get("Cause");
+    const causeCollection = client.collections.get("Causes");
     await causeCollection.data.insertMany(causeDataObjects);
-    console.log("All Causes upserted into Weaviate.");
+    console.log(`${causeDataObjects.length} causes upserted into Weaviate.`);
 
     // Batch insert Skills
     const skills = await Skills.find().toArray();
@@ -170,12 +170,12 @@ export const upsertWeaviateCollections = async () => {
             description: skill.description || "",
             handle: skill.handle,
         },
-        id: generateUuid5("Skill", skill.handle), // Deterministic UUID based on handle
+        id: generateUuid5("Skills", skill.handle), // Deterministic UUID based on handle
     }));
 
-    const skillCollection = client.collections.get("Skill");
+    const skillCollection = client.collections.get("Skills");
     await skillCollection.data.insertMany(skillDataObjects);
-    console.log("All Skills upserted into Weaviate.");
+    console.log(`${skillDataObjects.length} skills upserted into Weaviate.`);
 
     // Batch insert Circles
     const circles = await Circles.find().toArray();
@@ -192,8 +192,8 @@ export const upsertWeaviateCollections = async () => {
             },
             id: generateUuid5("Circle", circle.handle), // Deterministic UUID based on handle
             references: {
-                causes: circle.causes?.map((causeHandle: string) => generateUuid5("Cause", causeHandle)) ?? [],
-                skills: circle.skills?.map((skillHandle: string) => generateUuid5("Skill", skillHandle)) ?? [],
+                causes: circle.causes?.map((causeHandle: string) => generateUuid5("Causes", causeHandle)) ?? [],
+                skills: circle.skills?.map((skillHandle: string) => generateUuid5("Skills", skillHandle)) ?? [],
             },
         };
         if (circle.location) {
@@ -245,7 +245,7 @@ export const upsertWeaviateCollections = async () => {
 
 export const upsertCauseWeaviate = async (cause: Cause): Promise<void> => {
     const client = await getWeaviateClient();
-    const causeCollection = client.collections.get("Cause");
+    const causeCollection = client.collections.get("Causes");
 
     const properties = {
         name: cause.name,
@@ -253,7 +253,7 @@ export const upsertCauseWeaviate = async (cause: Cause): Promise<void> => {
         handle: cause.handle,
     };
 
-    const id = generateUuid5("Cause", cause.handle);
+    const id = generateUuid5("Causes", cause.handle);
 
     try {
         // Use insert to create or update the Cause in Weaviate
@@ -278,8 +278,8 @@ export const upsertCauseWeaviate = async (cause: Cause): Promise<void> => {
 
 export const deleteCauseWeaviate = async (causeHandle: string): Promise<void> => {
     const client = await getWeaviateClient();
-    const causeCollection = client.collections.get("Cause");
-    const id = generateUuid5("Cause", causeHandle);
+    const causeCollection = client.collections.get("Causes");
+    const id = generateUuid5("Causes", causeHandle);
 
     try {
         await causeCollection.data.deleteById(id);
@@ -291,7 +291,7 @@ export const deleteCauseWeaviate = async (causeHandle: string): Promise<void> =>
 
 export const upsertSkillWeaviate = async (skill: Skill): Promise<void> => {
     const client = await getWeaviateClient();
-    const skillCollection = client.collections.get("Skill");
+    const skillCollection = client.collections.get("Skills");
 
     const properties = {
         name: skill.name,
@@ -299,7 +299,7 @@ export const upsertSkillWeaviate = async (skill: Skill): Promise<void> => {
         handle: skill.handle,
     };
 
-    const id = generateUuid5("Skill", skill.handle);
+    const id = generateUuid5("Skills", skill.handle);
 
     try {
         await skillCollection.data.insert({
@@ -323,8 +323,8 @@ export const upsertSkillWeaviate = async (skill: Skill): Promise<void> => {
 
 export const deleteSkillWeaviate = async (skillHandle: string): Promise<void> => {
     const client = await getWeaviateClient();
-    const skillCollection = client.collections.get("Skill");
-    const id = generateUuid5("Skill", skillHandle);
+    const skillCollection = client.collections.get("Skills");
+    const id = generateUuid5("Skills", skillHandle);
 
     try {
         await skillCollection.data.deleteById(id);
@@ -364,10 +364,10 @@ export const upsertCircleWeaviate = async (circle: Circle): Promise<void> => {
     // Prepare references
     const references: Record<string, string[]> = {};
     if (circle.causes && circle.causes.length > 0) {
-        references["causes"] = circle.causes.map((causeHandle) => generateUuid5("Cause", causeHandle));
+        references["causes"] = circle.causes.map((causeHandle) => generateUuid5("Causes", causeHandle));
     }
     if (circle.skills && circle.skills.length > 0) {
-        references["skills"] = circle.skills.map((skillHandle) => generateUuid5("Skill", skillHandle));
+        references["skills"] = circle.skills.map((skillHandle) => generateUuid5("Skills", skillHandle));
     }
 
     try {
@@ -408,7 +408,7 @@ const updateCircleReferences = async (circle: Circle): Promise<void> => {
     // Prepare references
     if (circle.causes && circle.causes.length > 0) {
         for (const causeHandle of circle.causes) {
-            const causeId = generateUuid5("Cause", causeHandle);
+            const causeId = generateUuid5("Causes", causeHandle);
             await circleCollection.data.referenceAdd({
                 fromUuid: id,
                 fromProperty: "causes",
@@ -419,7 +419,7 @@ const updateCircleReferences = async (circle: Circle): Promise<void> => {
 
     if (circle.skills && circle.skills.length > 0) {
         for (const skillHandle of circle.skills) {
-            const skillId = generateUuid5("Skill", skillHandle);
+            const skillId = generateUuid5("Skills", skillHandle);
             await circleCollection.data.referenceAdd({
                 fromUuid: id,
                 fromProperty: "skills",

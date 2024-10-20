@@ -6,8 +6,20 @@ import Image from "next/image";
 import { PiQuotesFill } from "react-icons/pi";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { OnboardingStepProps } from "./onboarding";
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
+import { getPlatformMetrics } from "./actions";
+import { PlatformMetrics } from "@/models/models";
 
 function FinalStep({ nextStep }: OnboardingStepProps) {
+    const [platformMetrics, setPlatformMetrics] = useState<PlatformMetrics | undefined>(undefined);
+
+    useEffect(() => {
+        getPlatformMetrics().then((metrics) => {
+            setPlatformMetrics(metrics);
+        });
+    }, []);
+
     return (
         <div className="space-y-4">
             <div className="relative">
@@ -40,24 +52,22 @@ function FinalStep({ nextStep }: OnboardingStepProps) {
             <p className="text-gray-600">
                 Your journey in Circles begins now. Here's a glimpse of the world you're about to enter:
             </p>
-            <div className="grid grid-cols-2 gap-4">
-                <Card className="bg-white p-4">
-                    <h3 className="mb-0 mt-0 text-lg font-semibold">5000+</h3>
-                    <p className="text-sm text-gray-500">Fellow changemakers</p>
-                </Card>
-                <Card className="bg-white p-4">
-                    <h3 className="mb-0 mt-0  text-lg font-semibold">50+</h3>
-                    <p className="text-sm text-gray-500">Active quests</p>
-                </Card>
-                <Card className="bg-white p-4">
-                    <h3 className="mb-0 mt-0  text-lg font-semibold">50+</h3>
-                    <p className="text-sm text-gray-500">Countries represented</p>
-                </Card>
-                <Card className="bg-white p-4">
-                    <h3 className="mb-0 mt-0  text-lg font-semibold">100+</h3>
-                    <p className="text-sm text-gray-500">Circles to join</p>
-                </Card>
-            </div>
+            {platformMetrics ? (
+                <div className="grid grid-cols-2 gap-4">
+                    <Card className="bg-white p-4">
+                        <h3 className="mb-0 mt-0 text-lg font-semibold">{platformMetrics.users}</h3>
+                        <p className="text-sm text-gray-500">Fellow changemakers</p>
+                    </Card>
+                    <Card className="bg-white p-4">
+                        <h3 className="mb-0 mt-0  text-lg font-semibold">{platformMetrics.circles}</h3>
+                        <p className="text-sm text-gray-500">Circles to join</p>
+                    </Card>
+                </div>
+            ) : (
+                <div className="flex items-center justify-center">
+                    <Loader2 className="h-8 w-8 text-blue-500" />
+                </div>
+            )}
             <p className="text-gray-600">
                 Get ready to connect with allies, join guilds, and embark on world-changing quests!
             </p>
