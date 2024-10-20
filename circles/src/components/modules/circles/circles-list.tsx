@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import Image from "next/image";
 import { useAtom } from "jotai";
-import { contentPreviewAtom, userAtom } from "@/lib/data/atoms";
+import { contentPreviewAtom, sidePanelContentVisibleAtom, userAtom } from "@/lib/data/atoms";
 import { features } from "@/lib/data/constants";
 import { isAuthorized } from "@/lib/auth/client-auth";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
@@ -77,6 +77,7 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
     const isUser = circle.circleType === "user";
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [searchQuery, setSearchQuery] = useState("");
+    const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const filteredCircles = useMemo(() => {
         if (searchQuery) {
             return circles.filter((circle) => circle?.name?.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -114,7 +115,9 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
             content: circle,
         };
 
-        setContentPreview((x) => (x?.content === circle ? undefined : contentPreviewData));
+        setContentPreview((x) =>
+            x?.content === circle && sidePanelContentVisible === "content" ? undefined : contentPreviewData,
+        );
     };
 
     const handleFilterChange = (filter: string) => {

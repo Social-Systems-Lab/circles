@@ -137,10 +137,6 @@ export const ContentPreview: React.FC = () => {
     const [mapOpen] = useAtom(mapOpenAtom);
     const isMobile = useIsMobile();
 
-    const closePreview = () => {
-        setContentPreview(undefined);
-    };
-
     const getPreviewContent = () => {
         switch (contentPreview?.content?.circleType) {
             default:
@@ -163,44 +159,11 @@ export const ContentPreview: React.FC = () => {
         }
     };
 
-    return (
-        <>
-            <AnimatePresence>
-                {contentPreview && !mapOpen && (
-                    <motion.div
-                        className="relative flex-shrink-0 bg-[#fbfbfb]"
-                        initial={{ width: 0 }}
-                        animate={{ width: 420 }}
-                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                        exit={{ width: 0 }}
-                    ></motion.div>
-                )}
-            </AnimatePresence>
-            <AnimatePresence>
-                {contentPreview && (
-                    <motion.div
-                        initial={{ x: "110%" }}
-                        animate={{ x: 0 }}
-                        exit={{ x: "110%" }}
-                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                        className={`fixed bottom-4 z-40 w-full overflow-hidden bg-white shadow-lg md:w-[400px] md:rounded-[15px] ${
-                            isMobile ? "right-0 top-0" : "right-4 top-[64px]"
-                        }`}
-                    >
-                        {getPreviewContent()}
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className={`absolute ${isMobile ? "right-6 top-[68px]" : "right-2 top-[48px]"} rounded-full bg-gray-100 md:top-2`}
-                            onClick={closePreview}
-                        >
-                            <X className="h-4 w-4" />
-                        </Button>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </>
-    );
+    if (!contentPreview) {
+        return null;
+    }
+
+    return <>{getPreviewContent()}</>;
 };
 
 export default ContentPreview;

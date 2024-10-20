@@ -6,7 +6,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { HoverCard } from "@/components/ui/hover-card";
 import { HoverCardTrigger } from "@radix-ui/react-hover-card";
-import { contentPreviewAtom } from "@/lib/data/atoms";
+import { contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 
 type MentionHoverCardProps = {
@@ -16,6 +16,7 @@ type MentionHoverCardProps = {
 
 export const MentionHoverCard = ({ mention, children }: MentionHoverCardProps) => {
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
+    const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
 
     const openMention = () => {
         // open content preview
@@ -23,7 +24,9 @@ export const MentionHoverCard = ({ mention, children }: MentionHoverCardProps) =
             type: "circle",
             content: mention.circle!,
         };
-        setContentPreview((x) => (x?.content === mention.circle ? undefined : contentPreviewData));
+        setContentPreview((x) =>
+            x?.content === mention.circle && sidePanelContentVisible === "content" ? undefined : contentPreviewData,
+        );
     };
 
     return (

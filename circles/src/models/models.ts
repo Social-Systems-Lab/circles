@@ -647,4 +647,4 @@ export type MissionDisplay = {
     picture: string;
 };
 
-export type SidePanelMode = "userToolbox" | "contentPreview" | undefined;
+export type UserToolboxState = "chat" | "notifications" | "profile" | undefined;

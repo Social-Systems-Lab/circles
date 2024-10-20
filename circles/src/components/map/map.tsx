@@ -17,6 +17,7 @@ import {
     triggerMapOpenAtom,
     zoomContentAtom,
     focusPostAtom,
+    sidePanelContentVisibleAtom,
 } from "@/lib/data/atoms";
 import MapMarker from "./markers";
 import { isEqual } from "lodash"; // You might need to install lodash
@@ -29,6 +30,7 @@ import { TbFocus2 } from "react-icons/tb";
 import Onboarding from "../onboarding/onboarding";
 import { Dialog, DialogContent } from "../ui/dialog";
 import { precisionLevels } from "../forms/location-picker";
+import { SidePanel } from "../layout/side-panel";
 
 const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
     const mapContainer = useRef(null);
@@ -41,6 +43,7 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
     mapboxgl.accessToken = mapboxKey;
     const [, setContentPreview] = useAtom(contentPreviewAtom);
     const [, setFocusPost] = useAtom(focusPostAtom);
+    const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
 
     const markersRef = useRef<Map<string, mapboxgl.Marker>>(new globalThis.Map());
 
@@ -53,7 +56,9 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
                     type: content.circleType,
                     content: content,
                 };
-                setContentPreview((x) => (content === x?.content ? undefined : contentPreviewData));
+                setContentPreview((x) =>
+                    content === x?.content && sidePanelContentVisible === "content" ? undefined : contentPreviewData,
+                );
             }
         },
         [setContentPreview],
@@ -268,7 +273,7 @@ export default function MapAndContentWrapper({
                 </div>
             )}
 
-            <ContentPreview />
+            <SidePanel />
         </div>
     );
 }

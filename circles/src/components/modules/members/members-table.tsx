@@ -28,7 +28,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAtom } from "jotai";
-import { contentPreviewAtom, userAtom } from "@/lib/data/atoms";
+import { contentPreviewAtom, sidePanelContentVisibleAtom, userAtom } from "@/lib/data/atoms";
 import { features } from "@/lib/data/constants";
 import { hasHigherAccess, isAuthorized } from "@/lib/auth/client-auth";
 import {
@@ -110,6 +110,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
     const router = useRouter();
     const isUser = circle.circleType === "user";
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
+    const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
 
     // if user is allowed to edit settings show edit button
     const canEditUserGroups =
@@ -272,7 +273,9 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
             type: "member",
             content: member,
         };
-        setContentPreview((x) => (x?.content === member ? undefined : contentPreviewData));
+        setContentPreview((x) =>
+            x?.content === member && sidePanelContentVisible === "content" ? undefined : contentPreviewData,
+        );
     };
 
     const handleFilterChange = (filter: string) => {

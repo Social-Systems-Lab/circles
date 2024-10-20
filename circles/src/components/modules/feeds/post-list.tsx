@@ -18,7 +18,13 @@ import {
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { getPublishTime } from "@/lib/utils";
-import { contentPreviewAtom, focusPostAtom, imageGalleryAtom, userAtom } from "@/lib/data/atoms";
+import {
+    contentPreviewAtom,
+    focusPostAtom,
+    imageGalleryAtom,
+    sidePanelContentVisibleAtom,
+    userAtom,
+} from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import {
     DropdownMenu,
@@ -201,6 +207,7 @@ export const PostItem = ({
     const { toast } = useToast();
     const [, setImageGallery] = useAtom(imageGalleryAtom);
     const [focusPost, setFocusPost] = useAtom(focusPostAtom);
+    const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
 
     const [openDropdown, setOpenDropdown] = useState(false);
 
@@ -235,7 +242,9 @@ export const PostItem = ({
             content: post,
             props: { post, circle, feed, page, subpage, initialComments: comments, initialShowAllComments: true },
         };
-        setContentPreview((x) => (x?.content === post ? undefined : contentPreviewData));
+        setContentPreview((x) =>
+            x?.content === post && sidePanelContentVisible === "content" ? undefined : contentPreviewData,
+        );
 
         setFocusPost((x) => undefined);
     }, [focusPost, setFocusPost]);
@@ -260,7 +269,9 @@ export const PostItem = ({
             type: "user",
             content: author,
         };
-        setContentPreview((x) => (x?.content === author ? undefined : contentPreviewData));
+        setContentPreview((x) =>
+            x?.content === author && sidePanelContentVisible === "content" ? undefined : contentPreviewData,
+        );
     };
 
     const handleEditSubmit = async (formData: FormData) => {
@@ -413,7 +424,9 @@ export const PostItem = ({
             content: post,
             props: { post, circle, feed, page, subpage, initialComments: comments, initialShowAllComments: true },
         };
-        setContentPreview((x) => (x?.content === post ? undefined : contentPreviewData));
+        setContentPreview((x) =>
+            x?.content === post && sidePanelContentVisible === "content" ? undefined : contentPreviewData,
+        );
     };
 
     const fetchComments = useCallback(async () => {
@@ -815,6 +828,7 @@ const CommentItem = ({
     const [isLikesPopoverOpen, setIsLikesPopoverOpen] = useState(false);
     const [isPending, startTransition] = useTransition();
     const [, setContentPreview] = useAtom(contentPreviewAtom);
+    const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
 
     const isAuthor = user && comment.createdBy === user?.did;
     const canModerateFeature = feedFeaturePrefix + feed.handle + "_moderate";
@@ -836,7 +850,9 @@ const CommentItem = ({
             type: "user",
             content: author,
         };
-        setContentPreview((x) => (x?.content === author ? undefined : contentPreviewData));
+        setContentPreview((x) =>
+            x?.content === author && sidePanelContentVisible === "content" ? undefined : contentPreviewData,
+        );
     };
 
     const handleLikeComment = () => {

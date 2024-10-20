@@ -1,5 +1,5 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { contentPreviewAtom } from "@/lib/data/atoms";
+import { contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
 import { cn } from "@/lib/utils";
 import { Circle, ContentPreviewData } from "@/models/models";
 import { useAtom } from "jotai";
@@ -13,6 +13,7 @@ type CirclePictureProps = {
 
 export const CirclePicture = ({ circle, size, className, openPreview }: CirclePictureProps) => {
     const [, setContentPreview] = useAtom(contentPreviewAtom);
+    const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
 
     var getInitials = () => {
         let name = circle?.name;
@@ -32,7 +33,9 @@ export const CirclePicture = ({ circle, size, className, openPreview }: CirclePi
             type: "user",
             content: circle,
         };
-        setContentPreview((x) => (x?.content === circle ? undefined : contentPreviewData));
+        setContentPreview((x) =>
+            x?.content === circle && sidePanelContentVisible === "content" ? undefined : contentPreviewData,
+        );
     };
 
     return (

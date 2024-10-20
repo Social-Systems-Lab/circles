@@ -22,12 +22,6 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
     const handleClick = () => {
         if (!content) return;
 
-        // console.log("content clicked");
-        // let contentPreviewData: ContentPreviewData = {
-        //     type: content.circleType,
-        //     content: content,
-        // };
-        // setContentPreview(contentPreviewData);
         if (onClick) {
             onClick(content);
         }
