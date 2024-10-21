@@ -10,6 +10,9 @@ import {
     getChatMessages,
     deleteChatMessage,
     getChatMessage,
+    addChatRoomMember,
+    getChatRoomMember,
+    removeChatRoomMember,
 } from "@/lib/data/chat";
 import { saveFile, isFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -21,12 +24,65 @@ import {
     Page,
     ChatMessageDisplay,
     SortingOptions,
+    ChatRoomMember,
 } from "@/models/models";
 import { revalidatePath } from "next/cache";
 import { getCircleById, getCirclePath } from "@/lib/data/circle";
 import { getUserByDid } from "@/lib/data/user";
 import { redirect } from "next/navigation";
 import { chatFeaturePrefix } from "@/lib/data/constants";
+
+export async function joinChatRoomAction(
+    chatRoomId: string,
+): Promise<{ success: boolean; message?: string; chatRoomMember?: ChatRoomMember }> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+
+        const chatRoom = await getChatRoom(chatRoomId);
+        if (!chatRoom) {
+            return { success: false, message: "Chat room not found" };
+        }
+
+        const circleId = chatRoom.circleId;
+        const feature = chatFeaturePrefix + chatRoom.handle + "_view";
+        const authorized = await isAuthorized(userDid, circleId, feature);
+        if (!authorized) {
+            return { success: false, message: "You are not authorized to join this chat room" };
+        }
+
+        const chatRoomMember = await addChatRoomMember(userDid, chatRoomId);
+
+        return { success: true, message: "Joined chat room successfully", chatRoomMember };
+    } catch (error) {
+        console.error("Error in joinChatRoomAction:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to join chat room." };
+    }
+}
+
+export async function leaveChatRoomAction(chatRoomId: string): Promise<{ success: boolean; message?: string }> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+
+        const chatRoom = await getChatRoom(chatRoomId);
+        if (!chatRoom) {
+            return { success: false, message: "Chat room not found" };
+        }
+
+        // Check if the user is a member of the chat room
+        const chatRoomMember = await getChatRoomMember(userDid, chatRoomId);
+        if (!chatRoomMember) {
+            return { success: false, message: "You are not a member of this chat room" };
+        }
+
+        // Remove the user from the chat room
+        await removeChatRoomMember(userDid, chatRoomId);
+
+        return { success: true, message: "Left chat room successfully" };
+    } catch (error) {
+        console.error("Error in leaveChatRoomAction:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to leave chat room." };
+    }
+}
 
 export async function getChatMessagesAction(
     chatRoomId: string,
@@ -58,7 +114,7 @@ export async function getChatMessagesAction(
 
 export async function createChatMessageAction(
     formData: FormData,
-    page: Page,
+    page?: Page,
     subpage?: string,
 ): Promise<{ success: boolean; message?: string; chatMessage?: ChatMessageDisplay }> {
     try {
@@ -76,6 +132,12 @@ export async function createChatMessageAction(
         const authorized = await isAuthorized(userDid, circleId, feature);
         if (!authorized) {
             return { success: false, message: "You are not authorized to send messages in this chat room" };
+        }
+
+        // Check if the user has joined the chat room
+        const chatRoomMember = await getChatRoomMember(userDid, chatRoom._id);
+        if (!chatRoomMember) {
+            return { success: false, message: "You need to join the chat room before sending messages" };
         }
 
         let chatMessage: ChatMessage = {

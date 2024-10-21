@@ -1,7 +1,7 @@
 // user creation and management
 
-import { AccountType, Circle, Membership, RegistryInfo, UserPrivate } from "@/models/models";
-import { Circles, Members } from "./db";
+import { AccountType, ChatRoomMembership, Circle, Membership, RegistryInfo, UserPrivate } from "@/models/models";
+import { ChatRoomMembers, Circles, Members } from "./db";
 import { ObjectId } from "mongodb";
 import { signRegisterUserChallenge } from "../auth/auth";
 import { getUserPendingMembershipRequests } from "./membership-requests";
@@ -121,6 +121,46 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
     // add pending membership requests
     let pendingRequests = await getUserPendingMembershipRequests(userDid);
     user.pendingRequests = pendingRequests;
+
+    // add chat room memberships
+    let chatRoomMemberships = await ChatRoomMembers.aggregate([
+        { $match: { userDid: userDid } },
+        // Convert chatRoomId to ObjectId
+        {
+            $addFields: {
+                chatRoomIdObject: { $toObjectId: "$chatRoomId" },
+            },
+        },
+        {
+            $lookup: {
+                from: "chatRooms",
+                localField: "chatRoomIdObject",
+                foreignField: "_id",
+                as: "chatRoom",
+            },
+        },
+        { $unwind: "$chatRoom" },
+        {
+            $project: {
+                _id: 1,
+                userDid: 1,
+                chatRoomId: 1,
+                circleId: 1,
+                joinedAt: 1,
+                chatRoom: {
+                    _id: { $toString: "$chatRoom._id" },
+                    name: "$chatRoom.name",
+                    handle: "$chatRoom.handle",
+                    circleId: "$chatRoom.circleId",
+                    createdAt: "$chatRoom.createdAt",
+                    userGroups: "$chatRoom.userGroups",
+                },
+            },
+        },
+    ]).toArray();
+
+    user.chatRoomMemberships = chatRoomMemberships as ChatRoomMembership[];
+
     return user as UserPrivate;
 };
 

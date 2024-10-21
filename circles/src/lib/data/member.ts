@@ -1,5 +1,5 @@
 import { Content, Member, MemberDisplay, SortingOptions } from "@/models/models";
-import { Circles, Members } from "./db";
+import { ChatRoomMembers, Circles, Members } from "./db";
 import { ObjectId } from "mongodb";
 import { filterLocations } from "../utils";
 import { getMetrics } from "../utils/metrics";
@@ -118,6 +118,9 @@ export const removeMember = async (userDid: string, circleId: string): Promise<b
 
     // decrease member count in circle
     await Circles.updateOne({ _id: new ObjectId(circleId) }, { $inc: { members: -1 } });
+
+    // remove user from all chat rooms in the circle
+    await ChatRoomMembers.deleteMany({ userDid: userDid, circleId: circleId });
 
     return true;
 };

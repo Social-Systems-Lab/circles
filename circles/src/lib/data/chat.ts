@@ -1,6 +1,14 @@
-import { ChatRooms, ChatMessages, Circles, Reactions } from "./db";
+import { ChatRooms, ChatMessages, Circles, Reactions, ChatRoomMembers } from "./db";
 import { ObjectId } from "mongodb";
-import { ChatRoom, ChatMessage, ChatMessageDisplay, Circle, Mention, SortingOptions } from "@/models/models";
+import {
+    ChatRoom,
+    ChatMessage,
+    ChatMessageDisplay,
+    Circle,
+    Mention,
+    SortingOptions,
+    ChatRoomMember,
+} from "@/models/models";
 import { getCircleById, updateCircle } from "./circle";
 import { addChatRoomsAccessRules } from "../utils";
 
@@ -248,4 +256,37 @@ export const checkIfLikedMessage = async (messageId: string, userDid: string): P
         reactionType: "like",
     });
     return !!reaction;
+};
+
+export const getChatRoomMember = async (userDid: string, chatRoomId: string): Promise<ChatRoomMember | null> => {
+    return await ChatRoomMembers.findOne({ userDid: userDid, chatRoomId: chatRoomId });
+};
+
+export const addChatRoomMember = async (userDid: string, chatRoomId: string): Promise<ChatRoomMember> => {
+    const existingMember = await ChatRoomMembers.findOne({ userDid: userDid, chatRoomId: chatRoomId });
+    if (existingMember) {
+        throw new Error("User is already a member of this chat room");
+    }
+
+    const chatRoom = await getChatRoom(chatRoomId);
+    if (!chatRoom) {
+        throw new Error("Chat room not found");
+    }
+
+    const member: ChatRoomMember = {
+        userDid,
+        chatRoomId,
+        circleId: chatRoom.circleId,
+        joinedAt: new Date(),
+    };
+    const result = await ChatRoomMembers.insertOne(member);
+    return { ...member, _id: result.insertedId.toString() };
+};
+
+export const removeChatRoomMember = async (userDid: string, chatRoomId: string): Promise<void> => {
+    await ChatRoomMembers.deleteOne({ userDid: userDid, chatRoomId: chatRoomId });
+};
+
+export const getChatRoomMembers = async (chatRoomId: string): Promise<ChatRoomMember[]> => {
+    return await ChatRoomMembers.find({ chatRoomId: chatRoomId }).toArray();
 };

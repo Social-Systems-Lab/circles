@@ -3,23 +3,24 @@
 import { useAtom } from "jotai";
 import { contentPreviewAtom, userAtom, userToolboxDataAtom } from "@/lib/data/atoms";
 import { useIsCompact } from "@/components/utils/use-is-compact";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useAnimation, motion } from "framer-motion";
 
 export function ThirdColumn() {
     const [contentPreview] = useAtom(contentPreviewAtom);
-    const [userToolboxState] = useAtom(userToolboxDataAtom);
-    const sidePanelOpen = contentPreview !== undefined || userToolboxState !== undefined;
+    const [userToolboxData] = useAtom(userToolboxDataAtom);
+    const sidePanelOpen = contentPreview !== undefined || userToolboxData !== undefined;
     const isCompact = useIsCompact();
     const controls = useAnimation();
 
     useEffect(() => {
+        console.log("sidePanelOpen", sidePanelOpen);
         if (sidePanelOpen) {
             controls.start({ flexBasis: "calc(100% / 3 - 210px)" });
         } else {
             controls.start({ flexBasis: "calc(100% / 3)" });
         }
-    }, [contentPreview, controls]);
+    }, [controls, sidePanelOpen]);
 
     if (isCompact) {
         return null;

@@ -35,15 +35,16 @@ function FinalStep({ nextStep }: OnboardingStepProps) {
                     <div className="max-w-[350px] rounded-lg bg-white p-4 text-center">
                         <PiQuotesFill className="mx-auto mb-2 text-blue-500" />
                         <p className="mb-2 text-sm italic text-gray-800">
-                            "Circles has helped me level up my impact! I've connected with amazing people and we're
-                            tackling ocean cleanup together."
+                            "We believe in humanity and that if given the chance to fully nurture, explore and express
+                            our true nature as a social and collaborative species we could be a pretty decent curator to
+                            the living system that is our planet."
                         </p>
                         <div className="flex items-center justify-center space-x-2">
-                            <Avatar>
-                                <AvatarImage src="https://i.pravatar.cc/28" alt="Joe Doe" />
+                            {/* <Avatar>
+                                <AvatarImage src="https://i.pravatar.cc/28" alt="Tim Olson" />
                                 <AvatarFallback>JD</AvatarFallback>
-                            </Avatar>
-                            <span className="text-sm font-medium">Joe Doe</span>
+                            </Avatar> */}
+                            <span className="text-sm font-medium">Tim Olsson</span>
                         </div>
                     </div>
                 </div>

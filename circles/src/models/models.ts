@@ -88,10 +88,15 @@ export type Membership = {
     questionnaireAnswers?: Record<string, string>;
 };
 
+export type ChatRoomMembership = ChatRoomMember & {
+    chatRoom: ChatRoom;
+};
+
 export interface UserPrivate extends Circle {
     memberships: Membership[];
     friends: Membership[];
     pendingRequests: MembershipRequest[];
+    chatRoomMemberships: ChatRoomMembership[];
 }
 
 export type Partial<T> = {
@@ -651,3 +656,13 @@ export type UserToolboxTab = "chat" | "notifications" | "profile";
 export type UserToolboxData = {
     tab: UserToolboxTab;
 };
+
+export const chatRoomMemberSchema = z.object({
+    _id: z.any().optional(),
+    userDid: didSchema,
+    chatRoomId: z.string(),
+    circleId: z.string(),
+    joinedAt: z.date(),
+});
+
+export type ChatRoomMember = z.infer<typeof chatRoomMemberSchema>;

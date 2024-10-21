@@ -7,6 +7,8 @@ import { getFullLocationName } from "../utils";
 let client: WeaviateClient | undefined = undefined;
 
 export const getWeaviateClient = async () => {
+    return null;
+
     if (!client) {
         client = await weaviate.connectToLocal({
             port: 8080,
@@ -22,6 +24,7 @@ export const getWeaviateClient = async () => {
 };
 
 export const upsertWeaviateCollections = async () => {
+    return null;
     const client = await getWeaviateClient();
 
     // create collections if they don't exist
@@ -244,6 +247,7 @@ export const upsertWeaviateCollections = async () => {
 };
 
 export const upsertCauseWeaviate = async (cause: Cause): Promise<void> => {
+    return;
     const client = await getWeaviateClient();
     const causeCollection = client.collections.get("Causes");
 
@@ -277,6 +281,7 @@ export const upsertCauseWeaviate = async (cause: Cause): Promise<void> => {
 };
 
 export const deleteCauseWeaviate = async (causeHandle: string): Promise<void> => {
+    return;
     const client = await getWeaviateClient();
     const causeCollection = client.collections.get("Causes");
     const id = generateUuid5("Causes", causeHandle);
@@ -290,6 +295,7 @@ export const deleteCauseWeaviate = async (causeHandle: string): Promise<void> =>
 };
 
 export const upsertSkillWeaviate = async (skill: Skill): Promise<void> => {
+    return;
     const client = await getWeaviateClient();
     const skillCollection = client.collections.get("Skills");
 
@@ -322,6 +328,7 @@ export const upsertSkillWeaviate = async (skill: Skill): Promise<void> => {
 };
 
 export const deleteSkillWeaviate = async (skillHandle: string): Promise<void> => {
+    return;
     const client = await getWeaviateClient();
     const skillCollection = client.collections.get("Skills");
     const id = generateUuid5("Skills", skillHandle);
@@ -335,6 +342,7 @@ export const deleteSkillWeaviate = async (skillHandle: string): Promise<void> =>
 };
 
 export const upsertCircleWeaviate = async (circle: Circle): Promise<void> => {
+    return;
     const client = await getWeaviateClient();
     const circleCollection = client.collections.get("Circle");
 
@@ -397,6 +405,7 @@ export const upsertCircleWeaviate = async (circle: Circle): Promise<void> => {
 
 // Helper function to update cross-references for a Circle
 const updateCircleReferences = async (circle: Circle): Promise<void> => {
+    return;
     const client = await getWeaviateClient();
     const circleCollection = client.collections.get("Circle");
     const id = generateUuid5("Circle", circle.handle ?? "");
@@ -433,6 +442,7 @@ const updateCircleReferences = async (circle: Circle): Promise<void> => {
 
 // Helper function to remove existing references for a Circle
 const removeCircleReferences = async (circleId: string): Promise<void> => {
+    return;
     const client = await getWeaviateClient();
     const circleCollection = client.collections.get("Circle");
 
@@ -476,6 +486,7 @@ const removeCircleReferences = async (circleId: string): Promise<void> => {
 };
 
 export const deleteCircleWeaviate = async (circleHandle: string): Promise<void> => {
+    return;
     const client = await getWeaviateClient();
     const circleCollection = client.collections.get("Circle");
     const id = generateUuid5("Circle", circleHandle);
@@ -489,6 +500,7 @@ export const deleteCircleWeaviate = async (circleHandle: string): Promise<void> 
 };
 
 export const upsertPostWeaviate = async (post: Post): Promise<void> => {
+    return;
     const client = await getWeaviateClient();
     const postCollection = client.collections.get("Post");
 
@@ -530,6 +542,7 @@ export const upsertPostWeaviate = async (post: Post): Promise<void> => {
 };
 
 export const deletePostWeaviate = async (postId: string): Promise<void> => {
+    return;
     const client = await getWeaviateClient();
     const postCollection = client.collections.get("Post");
     const id = generateUuid5("Post", postId);
@@ -545,6 +558,7 @@ export const getDistanceForItemWeaviate = async (
     source: Circle,
     item: PostDisplay | Circle | MemberDisplay,
 ): Promise<number | undefined> => {
+    return undefined;
     if (!source) return undefined;
 
     let isCircle = item?.circleType === "circle" || item?.circleType === "user";

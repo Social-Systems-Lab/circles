@@ -1,8 +1,8 @@
 "use client";
 
-import { KeyboardEvent } from "react";
+import { KeyboardEvent, useTransition } from "react";
 import { useIsCompact } from "@/components/utils/use-is-compact";
-import { Circle, ChatRoom, Page, ChatMessageDisplay } from "@/models/models";
+import { Circle, ChatRoom, Page, ChatMessageDisplay, ChatRoomMembership } from "@/models/models";
 import CircleHeader from "../circles/circle-header";
 import { mapOpenAtom, triggerMapOpenAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
@@ -17,7 +17,16 @@ import { CirclePicture } from "../circles/circle-picture";
 import RichText from "../feeds/RichText";
 import { Mention, MentionsInput } from "react-mentions";
 import { defaultMentionsInputStyle, defaultMentionStyle, handleMentionQuery } from "../feeds/post-list";
-import { createChatMessageAction } from "./actions";
+import { createChatMessageAction, joinChatRoomAction, leaveChatRoomAction } from "./actions";
+import { useToast } from "@/components/ui/use-toast";
+import { Loader2, MoreVertical } from "lucide-react";
+import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import { start } from "repl";
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -40,7 +49,7 @@ type ChatInputProps = {
     setMessages: any;
     circle: Circle;
     chatRoom: ChatRoom;
-    page: Page;
+    page?: Page;
     subpage?: string;
 };
 
@@ -119,9 +128,10 @@ export type ChatMessagesProps = {
     messages: ChatMessageDisplay[];
     chatRoom: ChatRoom;
     circle: Circle;
+    messagesEndRef?: React.RefObject<HTMLDivElement>;
 };
 
-export const ChatMessages = ({ messages, chatRoom, circle }: ChatMessagesProps) => {
+export const ChatMessages = ({ messages, chatRoom, circle, messagesEndRef }: ChatMessagesProps) => {
     const isSameDay = (date1: Date, date2: Date) => {
         return (
             date1.getFullYear() === date2.getFullYear() &&
@@ -189,6 +199,7 @@ export const ChatMessages = ({ messages, chatRoom, circle }: ChatMessagesProps) 
 
                 return acc;
             }, [])}
+            <div ref={messagesEndRef} />
         </div>
     );
 };
@@ -196,10 +207,11 @@ export const ChatMessages = ({ messages, chatRoom, circle }: ChatMessagesProps) 
 export type ChatRoomProps = {
     circle: Circle;
     initialMessages: ChatMessageDisplay[];
-    page: Page;
+    page?: Page;
     chatRoom: ChatRoom;
     subpage?: string;
     isDefaultCircle?: boolean;
+    inToolbox?: boolean;
 };
 
 const generateDummyMessages = (user: Circle, count: number) => {
@@ -264,12 +276,14 @@ export const ChatRoomComponent = ({
     subpage,
     chatRoom,
     isDefaultCircle,
+    inToolbox,
 }: ChatRoomProps) => {
     const isCompact = useIsCompact();
-    const [user] = useAtom(userAtom);
+    const [user, setUser] = useAtom(userAtom);
     const router = useRouter();
 
     const [messages, setMessages] = useState<ChatMessageDisplay[]>(initialMessages);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
     const [newMessage, setNewMessage] = useState("");
     const inputRef = useRef<HTMLDivElement>(null);
     const [inputWidth, setInputWidth] = useState<number | null>(null);
@@ -277,6 +291,10 @@ export const ChatRoomComponent = ({
     const [mapOpen] = useAtom(mapOpenAtom);
     const [triggerMapOpen] = useAtom(triggerMapOpenAtom);
     const [hideInput, setHideInput] = useState(false);
+    const { toast } = useToast();
+    const [isPending, startTransition] = useTransition();
+
+    const hasJoinedChat = user?.chatRoomMemberships?.some((membership) => membership.chatRoom._id === chatRoom._id);
 
     // useEffect(() => {
     //     if (!user) return;
@@ -284,6 +302,12 @@ export const ChatRoomComponent = ({
     //     const dummyMessages = generateDummyMessages(user, 200);
     //     setMessages(dummyMessages);
     // }, [user]);
+
+    useEffect(() => {
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+        }
+    }, [messages]);
 
     useEffect(() => {
         console.log("UseEffect called");
@@ -309,48 +333,183 @@ export const ChatRoomComponent = ({
         router.push("?sort=" + filter);
     };
 
+    const handleJoinChat = async () => {
+        startTransition(async () => {
+            if (!user) return;
+
+            try {
+                const result = await joinChatRoomAction(chatRoom._id);
+                if (result.success) {
+                    // Update the user state to include the new chat room membership
+                    const newMembership: ChatRoomMembership = {
+                        _id: result.chatRoomMember?._id,
+                        userDid: user?.did!,
+                        chatRoomId: chatRoom._id,
+                        joinedAt: new Date(),
+                        chatRoom: chatRoom,
+                    };
+                    const updatedUser = {
+                        ...user,
+                        chatRoomMemberships: [...(user.chatRoomMemberships || []), newMembership],
+                    };
+                    setUser(updatedUser);
+
+                    toast({
+                        title: "Joined chat",
+                        variant: "success",
+                    });
+                } else {
+                    console.error(result.message);
+                    toast({
+                        title: result.message,
+                        variant: "destructive",
+                    });
+                }
+            } catch (error) {
+                console.error("Failed to join chat room:", error);
+            }
+        });
+    };
+
+    const handleLeaveChat = async () => {
+        if (!user) return;
+
+        try {
+            const result = await leaveChatRoomAction(chatRoom._id);
+            if (result.success) {
+                // Update the user state to remove the chat room membership
+                const updatedChatRoomMemberships = user.chatRoomMemberships.filter(
+                    (membership) => membership.chatRoom._id !== chatRoom._id,
+                );
+                const updatedUser = {
+                    ...user,
+                    chatRoomMemberships: updatedChatRoomMemberships,
+                };
+                setUser(updatedUser);
+
+                toast({
+                    title: "Left chat",
+                    variant: "success",
+                });
+            } else {
+                console.error(result.message);
+                toast({
+                    title: result.message,
+                    variant: "destructive",
+                });
+            }
+        } catch (error) {
+            console.error("Failed to leave chat room:", error);
+        }
+    };
+
     return (
         <div
-            className={`flex h-full min-h-screen flex-1 items-start justify-center`}
+            className={`flex h-full flex-1 items-start justify-center ${inToolbox ? "bg-[#fbfbfb]" : "min-h-screen"}`}
             // `flex h-full min-h-screen flex-1 items-start justify-center bg-white ${isCompact ? "" : "mt-3 overflow-hidden rounded-t-[15px]"}`
             style={{
-                flexGrow: isCompact ? "1" : "3",
-                maxWidth: isCompact ? "none" : "700px",
+                flexGrow: isCompact || inToolbox ? "1" : "3",
+                maxWidth: isCompact || inToolbox ? "none" : "700px",
             }}
         >
             <div ref={inputRef} className="relative flex h-full w-full flex-col">
-                <div className="mt-4">
-                    <CircleHeader
-                        circle={circle}
-                        page={page}
-                        subpage={chatRoom.handle && chatRoom.handle !== "default" ? chatRoom.name : undefined}
-                        isDefaultCircle={isDefaultCircle}
-                    />
-                </div>
-                {/* <ListFilter onFilterChange={handleFilterChange} /> */}
-
-                <div className="flex-grow p-4 pb-[144px]">
-                    <ChatMessages messages={messages} chatRoom={chatRoom} circle={circle} />
-                </div>
-
-                <div
-                    className="fixed h-[72px]"
-                    style={{
-                        width: `${inputWidth}px`,
-                        bottom: isMobile ? "72px" : "0px",
-                        opacity: hideInput ? 0 : 1,
-                    }}
-                >
-                    <div className="flex h-[72px] items-end bg-[#fbfbfb] pb-1 pl-2 pr-2">
-                        <ChatInput
-                            setMessages={setMessages}
+                {!inToolbox && (
+                    <div className="mt-4">
+                        <CircleHeader
                             circle={circle}
-                            chatRoom={chatRoom}
                             page={page}
-                            subpage={subpage}
+                            subpage={chatRoom.handle && chatRoom.handle !== "default" ? chatRoom.name : undefined}
+                            isDefaultCircle={isDefaultCircle}
                         />
                     </div>
-                </div>
+                )}
+
+                {/* Dot Menu */}
+                {hasJoinedChat && (
+                    <div className="absolute right-4 top-4">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="h-8 w-8 p-0">
+                                    <MoreVertical className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                                <DropdownMenuItem onClick={handleLeaveChat}>Leave Chat</DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                )}
+
+                {/* <ListFilter onFilterChange={handleFilterChange} /> */}
+
+                {inToolbox ? (
+                    <ScrollArea
+                        className="p-4"
+                        style={{
+                            height: "calc(100vh - 300px)",
+                        }}
+                    >
+                        <ChatMessages
+                            messages={messages}
+                            chatRoom={chatRoom}
+                            circle={circle}
+                            messagesEndRef={messagesEndRef}
+                        />
+                    </ScrollArea>
+                ) : (
+                    <div className="flex-grow p-4 pb-[144px]">
+                        <ChatMessages
+                            messages={messages}
+                            chatRoom={chatRoom}
+                            circle={circle}
+                            messagesEndRef={messagesEndRef}
+                        />
+                    </div>
+                )}
+
+                {!hasJoinedChat ? (
+                    <div
+                        className="fixed flex h-[72px] items-center justify-center bg-[#fbfbfb]"
+                        style={{
+                            width: `${inputWidth}px`,
+                            bottom: isMobile ? "72px" : "0px",
+                        }}
+                    >
+                        <Button
+                            onClick={handleJoinChat}
+                            className="bg-primaryLight rounded-[50px] px-4 py-2 text-white"
+                            disabled={isPending}
+                        >
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Joining...
+                                </>
+                            ) : (
+                                <>Join Chat</>
+                            )}
+                        </Button>
+                    </div>
+                ) : (
+                    <div
+                        className="fixed h-[50px]"
+                        style={{
+                            width: `${inputWidth}px`,
+                            bottom: isMobile ? "72px" : "0px",
+                            opacity: hideInput ? 0 : 1,
+                        }}
+                    >
+                        <div className="flex h-[50px] items-end bg-[#fbfbfb] pb-1 pl-2 pr-2">
+                            <ChatInput
+                                setMessages={setMessages}
+                                circle={circle}
+                                chatRoom={chatRoom}
+                                page={page}
+                                subpage={subpage}
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

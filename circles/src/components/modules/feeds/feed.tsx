@@ -63,7 +63,6 @@ export const FeedComponent = ({ circle, posts, page, subpage, feed, isDefaultCir
                 <ListFilter onFilterChange={handleFilterChange} />
 
                 <PostList posts={posts} feed={feed} circle={circle} page={page} subpage={subpage} />
-                <pre>{JSON.stringify(user, null, 2)}</pre>
             </div>
         </div>
     );

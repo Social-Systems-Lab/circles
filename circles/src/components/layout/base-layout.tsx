@@ -10,6 +10,7 @@ import { ProfileMenu } from "./profile-menu";
 import "mapbox-gl/dist/mapbox-gl.css";
 import ImageGallery from "./image-gallery";
 import Onboarding from "../onboarding/onboarding";
+import Head from "next/head";
 
 const inter = Inter({ subsets: ["latin"] });
 const wix = Wix_Madefor_Display({ subsets: ["latin"], variable: "--font-wix-display" });

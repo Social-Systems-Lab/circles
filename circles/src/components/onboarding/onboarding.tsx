@@ -123,8 +123,8 @@ export default function Onboarding() {
     if (!isOpen || !userData) {
         return (
             <div
-                className="absolute right-0 top-0 z-[600] h-[30px] w-[30px] cursor-pointer"
-                onClick={() => setIsOpen(true)}
+            // className="absolute right-0 top-0 z-[600] h-[30px] w-[30px] cursor-pointer"
+            // onClick={() => setIsOpen(true)}
             ></div>
         );
     }
@@ -139,10 +139,10 @@ export default function Onboarding() {
                 </defs>
             </svg>
 
-            <div
+            {/* <div
                 className="absolute right-0 top-0 z-[600] h-[100px] w-[100px] cursor-pointer"
                 onClick={() => setIsOpen(false)}
-            ></div>
+            ></div> */}
 
             <Card className="w-full max-w-5xl overflow-hidden rounded-2xl border-0 bg-[#f9f9f9] shadow-xl backdrop-blur-sm">
                 <CardContent className="p-6">

@@ -2,78 +2,133 @@
 
 import React, { useEffect, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bell, MessageCircle, Calendar, Edit, CheckSquare, BarChart2 } from "lucide-react";
-import { userAtom, userToolboxDataAtom } from "@/lib/data/atoms";
+import {
+    Bell,
+    MessageCircle,
+    Calendar,
+    Edit,
+    CheckSquare,
+    BarChart2,
+    Users,
+    ArrowLeft,
+    Circle as CircleIcon,
+} from "lucide-react";
+import { contentPreviewAtom, sidePanelContentVisibleAtom, userAtom, userToolboxDataAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
-import { UserToolboxData, UserToolboxTab } from "@/models/models";
+import { useRouter } from "next/navigation";
+import { getChatMessagesAction } from "@/components/modules/chat/actions"; // Adjust the import path
+import {
+    ChatMessageDisplay,
+    ChatRoom,
+    Circle,
+    ContentPreviewData,
+    MemberDisplay,
+    UserToolboxTab,
+} from "@/models/models";
+import { CirclePicture } from "../modules/circles/circle-picture";
+import { ChatRoomComponent } from "../modules/chat/chat-room";
 
 type ChatRoomPreview = {
-    id: number;
+    id: string;
     name: string;
     message: string;
     avatar: string;
     status: string;
+    circle: Circle;
+    chatRoom: ChatRoom;
+};
+
+type Notification = {
+    id: number;
+    message: string;
+    time: string;
 };
 
 export const UserToolbox = () => {
     const [user] = useAtom(userAtom);
-    const [userToolboxState, setUserToolboxState] = useAtom(userToolboxDataAtom);
-    const [tab, setTab] = useState<UserToolboxTab>("chat");
+    const [userToolboxState] = useAtom(userToolboxDataAtom);
+    const [tab, setTab] = useState<UserToolboxTab | undefined>(undefined);
+    const [selectedChat, setSelectedChat] = useState<ChatRoomPreview | undefined>(undefined);
+    const [messages, setMessages] = useState<ChatMessageDisplay[]>([]);
+    const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+    const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
+    const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
 
-    // const onLogOutClick = async () => {
-    //     startTransition(async () => {
-    //         await logOut();
-    //         setAuthenticated(false);
-    //         setUser(undefined);
-
-    //         let redirectTo = pathname ?? "/";
-    //         router.push("/logged-out?redirectTo=" + redirectTo);
-    //     });
-    // };
+    const router = useRouter();
 
     useEffect(() => {
-        if (!userToolboxState) {
+        console.log("UserToolboxState", tab, "->", userToolboxState?.tab);
+        if (!userToolboxState?.tab) {
             setTab("chat");
         } else {
             setTab(userToolboxState.tab === "profile" ? "chat" : userToolboxState.tab);
         }
-    }, [userToolboxState]);
+    }, [userToolboxState?.tab]);
 
-    const handleChatClick = (chat: ChatRoomPreview) => {
-        console.log(chat);
+    const handleChatClick = async (chat: ChatRoomPreview) => {
+        setIsLoadingMessages(true);
+        try {
+            // Fetch messages using the chatRoom and circle IDs
+            const fetchedMessages = await getChatMessagesAction(chat.chatRoom._id, chat.circle._id, 20, 0);
+            setMessages(fetchedMessages);
+            setSelectedChat(chat);
+        } catch (error) {
+            console.error("Failed to fetch chat messages:", error);
+        } finally {
+            setIsLoadingMessages(false);
+        }
     };
 
-    const notifications = [
-        { id: 1, message: "John Doe has requested membership in a circle", time: "2 min ago" },
-        { id: 2, message: "Jane Smith has requested to join as a friend", time: "1 hour ago" },
-        { id: 3, message: "Alex Johnson has liked your post", time: "3 hours ago" },
+    const openCircle = (circle: Circle) => {
+        router.push(`/circles/${circle.handle}`);
+    };
+
+    const circles =
+        user?.memberships?.filter((m) => m.circle.circleType !== "user")?.map((membership) => membership.circle) || [];
+    const contacts =
+        user?.memberships
+            ?.filter((m) => m.circle.circleType === "user" && m.circle._id !== user?._id)
+            ?.map((membership) => membership.circle) || [];
+
+    // Prepare the chats list
+    const chats: ChatRoomPreview[] =
+        user?.chatRoomMemberships?.map((chatRoomMembership) => {
+            const chatRoom = chatRoomMembership.chatRoom;
+            const circleId = chatRoom.circleId;
+
+            // Find the circle from user memberships
+            const circleMembership = user.memberships?.find((membership) => membership.circle._id === circleId);
+            const circle = circleMembership?.circle;
+
+            return {
+                id: chatRoom._id,
+                name: chatRoom.name || circle?.name || "Unknown",
+                message: "", // Placeholder for the last message
+                avatar: circle?.picture?.url || "/placeholder.svg",
+                status: "", // Placeholder for status
+                circle: circle || {}, // Ensure circle is defined
+                chatRoom,
+            };
+        }) || [];
+
+    const notifications: Notification[] = [
+        // { id: 1, message: "John Doe has requested membership in a circle", time: "2 min ago" },
+        // { id: 2, message: "Jane Smith has requested to join as a friend", time: "1 hour ago" },
+        // { id: 3, message: "Alex Johnson has liked your post", time: "3 hours ago" },
     ];
 
-    const chats = [
-        {
-            id: 1,
-            name: "Eva Opacic",
-            message: "Hey there!",
-            avatar: "/placeholder.svg?height=40&width=40",
-            status: "Active 5m ago",
-        },
-        {
-            id: 2,
-            name: "Marie Börjesson",
-            message: "Let's catch up.",
-            avatar: "/placeholder.svg?height=40&width=40",
-            status: "Active 2h ago",
-        },
-        {
-            id: 3,
-            name: "Johan Nordvik",
-            message: "How are you?",
-            avatar: "/placeholder.svg?height=40&width=40",
-            status: "Active 1h ago",
-        },
-    ];
+    const handleCircleClick = (circle: MemberDisplay) => {
+        let contentPreviewData: ContentPreviewData = {
+            type: "member",
+            content: circle,
+        };
+        setContentPreview((x) =>
+            x?.content === circle && sidePanelContentVisible === "content" ? undefined : contentPreviewData,
+        );
+    };
 
     if (userToolboxState === undefined) return null;
 
@@ -95,70 +150,152 @@ export const UserToolbox = () => {
                 </div>
             </CardHeader>
             <CardContent className="p-0">
-                <Tabs value={tab} onValueChange={(v) => setTab(v as UserToolboxTab)} className="flex h-full flex-col">
-                    <TabsList className="grid h-auto w-full grid-cols-6 rounded-none border-b border-t-0 border-b-slate-200 border-t-slate-200 bg-white p-0 pb-2 pt-0">
+                <Tabs value={tab} onValueChange={(v) => setTab(v)} className="flex h-full flex-col">
+                    <TabsList className="grid h-auto w-full grid-cols-7 rounded-none border-b border-t-0 border-b-slate-200 border-t-slate-200 bg-white p-0 pb-2 pt-0">
+                        {/* Existing TabsTriggers */}
                         <TabsTrigger
                             value="chat"
-                            className={`data-[state=active]:bg-primaryLight m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:text-white data-[state=active]:shadow-md`}
+                            className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
                         >
                             <MessageCircle className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger
                             value="notifications"
-                            className={`data-[state=active]:bg-primaryLight m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:text-white data-[state=active]:shadow-md`}
+                            className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
                         >
                             <Bell className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger
-                            value="calendar"
-                            className={`data-[state=active]:bg-primaryLight m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:text-white data-[state=active]:shadow-md`}
+                            value="circles"
+                            className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
                         >
-                            <Calendar className="h-5 w-5" />
+                            <CircleIcon className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger
-                            value="edit"
-                            className={`data-[state=active]:bg-primaryLight m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:text-white data-[state=active]:shadow-md`}
+                            value="contacts"
+                            className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
                         >
-                            <Edit className="h-5 w-5" />
+                            <Users className="h-5 w-5" />
                         </TabsTrigger>
-                        <TabsTrigger
-                            value="tasks"
-                            className={`data-[state=active]:bg-primaryLight m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:text-white data-[state=active]:shadow-md`}
-                        >
-                            <CheckSquare className="h-5 w-5" />
-                        </TabsTrigger>
-                        <TabsTrigger
-                            value="stats"
-                            className={`data-[state=active]:bg-primaryLight m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:text-white data-[state=active]:shadow-md`}
-                        >
-                            <BarChart2 className="h-5 w-5" />
-                        </TabsTrigger>
+                        {/* ... other tabs */}
                     </TabsList>
                     <TabsContent value="chat" className="m-0 flex-grow overflow-auto pt-1">
-                        {chats.map((chat) => (
-                            <div
-                                key={chat.id}
-                                className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
-                                onClick={() => handleChatClick(chat)}
-                            >
-                                <Avatar>
-                                    <AvatarImage src={chat.avatar} alt={chat.name} />
-                                    <AvatarFallback>{chat.name[0]}</AvatarFallback>
-                                </Avatar>
-                                <div>
-                                    <p className="text-sm font-medium">{chat.name}</p>
-                                    <p className="text-xs text-muted-foreground">{chat.message}</p>
+                        {selectedChat ? (
+                            <div className="flex h-full flex-col">
+                                {/* Header with Back Button */}
+                                <div className="flex items-center border-b p-2">
+                                    <Button variant="ghost" size="icon" onClick={() => setSelectedChat(undefined)}>
+                                        <ArrowLeft className="h-5 w-5" />
+                                    </Button>
+                                    <div className="ml-2 flex items-center space-x-2">
+                                        <Avatar>
+                                            <AvatarImage src={selectedChat.avatar} alt={selectedChat.name} />
+                                            <AvatarFallback>{selectedChat.name.charAt(0)}</AvatarFallback>
+                                        </Avatar>
+                                        <div>
+                                            <p className="text-sm font-medium">{selectedChat.name}</p>
+                                            <p className="text-xs text-muted-foreground">{selectedChat.status}</p>
+                                        </div>
+                                    </div>
                                 </div>
+                                {/* Chat Room Component */}
+                                {isLoadingMessages ? (
+                                    <div className="flex h-full items-center justify-center">Loading messages...</div>
+                                ) : (
+                                    <ChatRoomComponent
+                                        circle={selectedChat.circle}
+                                        chatRoom={selectedChat.chatRoom}
+                                        initialMessages={messages}
+                                        inToolbox={true}
+                                    />
+                                )}
                             </div>
-                        ))}
+                        ) : /* Chat List */
+                        chats.length > 0 ? (
+                            chats.map((chat) => (
+                                <div
+                                    key={chat.id}
+                                    className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
+                                    onClick={() => handleChatClick(chat)}
+                                >
+                                    <CirclePicture circle={chat.circle} size="40px" />
+                                    <div>
+                                        <p className="text-sm font-medium">{chat.name}</p>
+                                        <p className="text-xs text-muted-foreground">{chat.message}</p>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
+                                No chat rooms joined
+                            </div>
+                        )}
                     </TabsContent>
-                    <TabsContent value="notifications" className="flex-grow overflow-auto p-4">
-                        {notifications.map((notification) => (
-                            <div key={notification.id} className="mb-4 cursor-pointer rounded-lg p-2 hover:bg-gray-100">
-                                <p className="text-sm">{notification.message}</p>
-                                <p className="text-xs text-muted-foreground">{notification.time}</p>
+                    <TabsContent value="notifications" className="m-0 flex-grow overflow-auto pt-1">
+                        {notifications.length > 0 ? (
+                            notifications.map((notification) => (
+                                <div
+                                    key={notification.id}
+                                    className="m-1 cursor-pointer rounded-lg p-2 hover:bg-gray-100"
+                                >
+                                    <p className="text-sm">{notification.message}</p>
+                                    <p className="text-xs text-muted-foreground">{notification.time}</p>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
+                                No notifications
                             </div>
-                        ))}
+                        )}
+                    </TabsContent>
+                    <TabsContent value="circles" className="m-0 flex-grow overflow-auto pt-1">
+                        {circles.length > 0 ? (
+                            circles.map((circle) => (
+                                <div
+                                    key={circle._id}
+                                    className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
+                                    onClick={() => handleCircleClick(circle)}
+                                >
+                                    <CirclePicture circle={circle} size="40px" />
+                                    <div className="flex-1">
+                                        <p className="text-sm font-medium">{circle.name}</p>
+                                        <p className="text-xs text-muted-foreground">{circle.description}</p>
+                                    </div>
+                                    <Button variant="outline" size="sm" onClick={() => openCircle(circle)}>
+                                        Open
+                                    </Button>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
+                                No circles joined
+                                <pre>{JSON.stringify(user?.memberships, null, 2)}</pre>
+                            </div>
+                        )}
+                    </TabsContent>
+                    <TabsContent value="contacts" className="m-0 flex-grow overflow-auto pt-1">
+                        {contacts.length > 0 ? (
+                            contacts.map((contact) => (
+                                <div
+                                    key={contact._id}
+                                    className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
+                                    onClick={() => handleCircleClick(contact)}
+                                >
+                                    <CirclePicture circle={contact} size="40px" />
+                                    <div className="flex-1">
+                                        <p className="text-sm font-medium">{contact.name}</p>
+                                        <p className="text-xs text-muted-foreground">{contact.description}</p>
+                                    </div>
+                                    <Button variant="outline" size="sm" onClick={() => openCircle(circle)}>
+                                        Open
+                                    </Button>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
+                                No friends
+                            </div>
+                        )}
                     </TabsContent>
                     {/* Other tabs content can be added here */}
                 </Tabs>

@@ -4,6 +4,7 @@ import { ChevronRight } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback } from "react";
+import { CirclePicture } from "./circle-picture";
 
 type CircleHeaderProps = {
     circle: Circle;
@@ -38,13 +39,14 @@ export const CircleHeader: React.FC<CircleHeaderProps> = ({ circle, page, subpag
             <div className="fixed flex items-center justify-center space-x-2 rounded-full bg-white px-4 py-2 shadow-sm">
                 <Link href={getPath()} className="flex flex-row items-center justify-center gap-2">
                     {circle?.picture && (
-                        <Image
-                            src={circle?.picture?.url}
-                            alt="Circle Logo"
-                            width={24}
-                            height={24}
-                            className="rounded-full"
-                        />
+                        <CirclePicture circle={circle} size={"24px"} />
+                        // <Image
+                        //     src={circle?.picture?.url}
+                        //     alt="Circle Logo"
+                        //     width={24}
+                        //     height={24}
+                        //     className="rounded-full"
+                        // />
                     )}
                     <span className="text-sm font-medium text-gray-800">{circle?.name}</span>
                 </Link>
