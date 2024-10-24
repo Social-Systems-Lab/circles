@@ -8,7 +8,7 @@ import {
     upsertCausesAndSkills,
 } from "@/lib/data/server-settings";
 import { revalidatePath } from "next/cache";
-import { upsertWeaviateCollections } from "@/lib/data/weaviate";
+import { upsertVdbCollections } from "@/lib/data/vdb";
 
 export const serverSettingsFormAction: FormAction = {
     id: "server-settings-form",
@@ -68,7 +68,7 @@ export const serverSettingsFormAction: FormAction = {
             console.log("Server version", serverSettings.serverVersion);
             console.log("App version", appVersion);
 
-            // upsert weaviate collections if versions differ
+            // upsert embeddings if versions differ
             if (serverSettings.serverVersion !== appVersion) {
                 console.log("Server version and app version differ, doing intitialization logic");
 
@@ -79,8 +79,8 @@ export const serverSettingsFormAction: FormAction = {
                 console.log("Upserting causes and skills");
                 await upsertCausesAndSkills();
 
-                console.log("Upserting weviate collections");
-                await upsertWeaviateCollections();
+                console.log("Upserting embeddings");
+                await upsertVdbCollections();
             }
 
             // save server settings
@@ -95,6 +95,7 @@ export const serverSettingsFormAction: FormAction = {
                     : "Server settings updated successfully, but failed to register server with registry",
             };
         } catch (error) {
+            console.log("Failed to update server settings", JSON.stringify(error));
             if (error instanceof Error) {
                 return { success: false, message: error.message };
             } else {

@@ -3,9 +3,9 @@ import { ObjectId } from "mongodb";
 import { Feed, Post, PostDisplay, Comment, CommentDisplay, Circle, Mention, SortingOptions } from "@/models/models";
 import { getCircleById, updateCircle } from "./circle";
 import { addFeedsAccessRules } from "../utils";
-import { deletePostWeaviate, upsertPostWeaviate } from "./weaviate";
 import { getUserByDid } from "./user";
 import { getMetrics } from "../utils/metrics";
+import { deleteVbdPost, upsertVbdPosts } from "./vdb";
 
 export function extractMentions(content: string): Mention[] {
     const mentionPattern = /\[([^\]]+)\]\(\/circles\/([^)]+)\)/g;
@@ -110,7 +110,13 @@ export const createPost = async (post: Post): Promise<Post> => {
     let newPost = { ...post, _id: result.insertedId.toString() } as Post;
 
     // upsert post
-    await upsertPostWeaviate(newPost);
+    // get post with author details
+    let author = await getUserByDid(post.createdBy);
+    try {
+        await upsertVbdPosts([{ ...newPost, author, circleType: "post" }]);
+    } catch (e) {
+        console.error("Failed to upsert post embedding", e);
+    }
     return newPost;
 };
 
@@ -118,7 +124,11 @@ export const deletePost = async (postId: string): Promise<void> => {
     await Posts.deleteOne({ _id: new ObjectId(postId) });
 
     // delete post
-    await deletePostWeaviate(postId);
+    try {
+        await deleteVbdPost(postId);
+    } catch (e) {
+        console.error("Failed to delete post embedding", e);
+    }
 
     // delete comments
     await Comments.deleteMany({ postId });
@@ -470,9 +480,16 @@ export const updatePost = async (post: Partial<Post>): Promise<void> => {
     if (result.matchedCount === 0) {
         throw new Error("Post not found");
     }
-    // update weaviate post
+    // update post embedding
     let p = await getPost(_id);
-    await upsertPostWeaviate(p!);
+    if (p) {
+        let author = await getUserByDid(p.createdBy);
+        try {
+            await upsertVbdPosts([{ ...p, author, circleType: "post" }]);
+        } catch (e) {
+            console.error("Failed to upsert post embedding", e);
+        }
+    }
 };
 
 export const getAllComments = async (postId: string, userDid: string | undefined): Promise<CommentDisplay[]> => {
@@ -622,6 +639,39 @@ export const getAllComments = async (postId: string, userDid: string | undefined
     });
 
     return comments;
+};
+
+export const getPostsForEmbedding = async (): Promise<PostDisplay[]> => {
+    const posts = await Posts.aggregate([
+        // Lookup for author details
+        {
+            $lookup: {
+                from: "circles",
+                localField: "createdBy",
+                foreignField: "did",
+                as: "authorDetails",
+            },
+        },
+        { $unwind: "$authorDetails" },
+
+        // Final projection to select only necessary fields for embedding
+        {
+            $project: {
+                _id: { $toString: "$_id" },
+                content: 1,
+                createdAt: 1,
+                createdBy: 1,
+                location: 1,
+                // Include author details
+                author: {
+                    name: "$authorDetails.name",
+                    handle: "$authorDetails.handle",
+                },
+            },
+        },
+    ]).toArray();
+
+    return posts as PostDisplay[];
 };
 
 export const getComment = async (commentId: string): Promise<Comment | null> => {

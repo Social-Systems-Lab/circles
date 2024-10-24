@@ -95,6 +95,22 @@ export default function HomeContent({ circle, isDefaultCircle, authorizedToEdit 
                     </div>
                 </div>
             )}
+
+            {circle.handle === "afrikaburn" && (
+                <div className="flex flex-col items-center justify-center">
+                    <div className="mb-8 flex max-w-[700px] flex-col pl-3 pr-3">
+                        <div className="text-[20px] text-lg font-bold">Welcome</div>
+                        <div className="card pt-2 text-[18px]">
+                            AfrikaBurn is a radically inclusive community that fosters self-expression, creativity, and
+                            collaboration through a culture of gifting and participation. We come together to build a
+                            world rooted in immediacy, self-reliance, and civic responsibility. Our mission is to
+                            transform society by breaking down barriers and embracing the shared creation of art,
+                            experiences, and connection, guided by a commitment to sustainability, non-commercialism,
+                            and the power of collective action.
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

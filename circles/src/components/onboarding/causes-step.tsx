@@ -104,6 +104,7 @@ function CausesStep({ userData, setUserData, nextStep, prevStep }: OnboardingSte
                             item={cause}
                             isSelected={userData.selectedCauses.some((c) => c.handle === cause.handle)}
                             onToggle={handleCauseToggle}
+                            isCause={true}
                         />
                     ))}
                 </div>

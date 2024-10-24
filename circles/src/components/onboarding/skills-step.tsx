@@ -105,6 +105,7 @@ function SkillsStep({ userData, setUserData, nextStep, prevStep }: OnboardingSte
                             item={skill}
                             isSelected={userData.selectedSkills.some((c) => c.handle === skill.handle)}
                             onToggle={handleSkillToggle}
+                            isCause={false}
                         />
                     ))}
                 </div>

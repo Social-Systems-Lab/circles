@@ -5,8 +5,8 @@ import { getServerSettings } from "./server-settings";
 import { Circles } from "./db";
 import { ObjectId } from "mongodb";
 import { getDefaultAccessRules, defaultUserGroups, defaultPages, features } from "./constants";
-import { upsertCircleWeaviate } from "./weaviate";
 import { getMetrics } from "../utils/metrics";
+import { upsertVbdCircles } from "./vdb";
 
 export const getDefaultCircle = async (inServerConfig: ServerSettings | null = null): Promise<Circle> => {
     if (process.env.IS_BUILD === "true") {
@@ -105,8 +105,12 @@ export const createCircle = async (circle: Circle): Promise<Circle> => {
     let result = await Circles.insertOne(circle);
     circle._id = result.insertedId.toString();
 
-    // update weaviate circle
-    await upsertCircleWeaviate(circle);
+    // update circle embedding
+    try {
+        await upsertVbdCircles([circle]);
+    } catch (e) {
+        console.error("Failed to upsert circle embedding", e);
+    }
 
     return circle;
 };
@@ -134,9 +138,13 @@ export const updateCircle = async (circle: Partial<Circle>): Promise<void> => {
         throw new Error("Circle not found");
     }
 
-    // update weaviate circle
+    // update circle embedding
     let c = await getCircleById(_id);
-    await upsertCircleWeaviate(c);
+    try {
+        await upsertVbdCircles([c]);
+    } catch (e) {
+        console.error("Failed to upsert circle embedding", e);
+    }
 };
 
 export const getCirclePath = async (circle: Partial<Circle>): Promise<string> => {

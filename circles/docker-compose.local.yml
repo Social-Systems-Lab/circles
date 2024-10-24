@@ -33,28 +33,52 @@ services:
         networks:
             - webnet
 
-    weaviate:
-        command:
-            - --host
-            - 0.0.0.0
-            - --port
-            - "8080"
-            - --scheme
-            - http
-        image: cr.weaviate.io/semitechnologies/weaviate:1.26.4
-        ports:
-            - 8080:8080
-            - 50051:50051
-        volumes:
-            - weaviate_data:/var/lib/weaviate
-        restart: on-failure:0
+    qdrant:
+        image: qdrant/qdrant
         environment:
-            QUERY_DEFAULTS_LIMIT: 25
-            AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
-            PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
-            DEFAULT_VECTORIZER_MODULE: "text2vec-openai"
-            ENABLE_MODULES: "text2vec-openai,generative-openai"
-            CLUSTER_HOSTNAME: "node1"
+            QDRANT__SERVICE__GRPC_PORT: 6334
+            QDRANT__SERVICE__HTTP_PORT: 6333
+        ports:
+            - "6333:6333"
+            - "6334:6334"
+        volumes:
+            - qdrant_data:/qdrant/storage
+        restart: always
+        networks:
+            - webnet
+
+    postgres:
+        image: postgres:13
+        restart: always
+        environment:
+            POSTGRES_USER: synapse_user
+            POSTGRES_PASSWORD: synapse_password
+            POSTGRES_DB: synapse
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+        networks:
+            - webnet
+
+    synapse:
+        image: matrixdotorg/synapse:latest
+        restart: always
+        depends_on:
+            - postgres
+        environment:
+            - SYNAPSE_SERVER_NAME=${CIRCLES_DOMAIN}
+            - SYNAPSE_REPORT_STATS=yes
+            - SYNAPSE_CONFIG_PATH=/data/homeserver.yaml
+            - SYNAPSE_NO_TLS=1
+            - SYNAPSE_POSTGRES=1
+            - POSTGRES_HOST=postgres
+            - POSTGRES_PORT=5432
+            - POSTGRES_USER=synapse_user
+            - POSTGRES_PASSWORD=synapse_password
+            - POSTGRES_DB=synapse
+        volumes:
+            - synapse_data:/data
+        networks:
+            - webnet
 
     nginx:
         image: nginx:latest
@@ -74,7 +98,9 @@ services:
 volumes:
     db:
     storage:
-    weaviate_data:
+    qdrant_data:
+    postgres_data:
+    synapse_data:
 
 networks:
     webnet:

@@ -13,7 +13,7 @@ interface VibeScoreProps {
 }
 
 export function VibeScore({ score, color, size }: VibeScoreProps) {
-    const formattedScore = (1 + score * 100).toFixed(0);
+    const formattedScore = (101 - score * 100).toFixed(0);
     const defaultColor = "#ac22c3";
     const iconColor = color ?? defaultColor;
     const iconSize = size ?? "0.75rem";

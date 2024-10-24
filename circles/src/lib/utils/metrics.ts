@@ -1,5 +1,5 @@
 import { Circle, LngLat, MemberDisplay, Metrics, Post, PostDisplay, SortingOptions, Weights } from "@/models/models";
-import { getDistanceForItemWeaviate } from "../data/weaviate";
+import { getVbdSimilarity } from "../data/vdb";
 
 const defaultWeights: Weights = {
     vibe: 0.25,
@@ -63,13 +63,18 @@ export const getCreatedAt = (item: PostDisplay | Circle | MemberDisplay): Date |
     }
 };
 
+export const normalizeCosineSimilarity = (cosineSimilarity: number): number => {
+    return (cosineSimilarity + 1) / 2;
+};
+
 export const getRank = (metrics: Metrics, customWeights?: Weights): number => {
     let weights = customWeights ?? defaultWeights;
     return (
-        (metrics.vibe !== undefined ? metrics.vibe : 0.5) * weights.vibe +
-        (metrics.proximity !== undefined ? metrics.proximity : 0.5) * weights.proximity +
-        (metrics.recentness !== undefined ? metrics.recentness : 0) * weights.recentness +
-        (metrics.popularity !== undefined ? metrics.popularity : 0) * weights.popularity
+        1 -
+        ((metrics.vibe !== undefined ? metrics.vibe : 0.5) * weights.vibe +
+            (metrics.proximity !== undefined ? metrics.proximity : 0.5) * weights.proximity +
+            (metrics.recentness !== undefined ? metrics.recentness : 0) * weights.recentness +
+            (metrics.popularity !== undefined ? metrics.popularity : 0) * weights.popularity)
     );
 };
 
@@ -78,8 +83,11 @@ export const getVibe = async (
     item: PostDisplay | Circle | MemberDisplay,
 ): Promise<number | undefined> => {
     if (!user) return undefined;
-    let distance = await getDistanceForItemWeaviate(user, item);
-    return distance ? distance / 2 : distance; // vibe between 0 and 1
+    console.log("getVibe", user.handle, item.circleType, item.handle ?? item._id);
+    let similarity = await getVbdSimilarity(user, item);
+    console.log("similarity", similarity);
+
+    return similarity ? normalizeCosineSimilarity(similarity) : similarity; // vibe between 0 and 1
 };
 
 export const getRecentness = (createdAt: Date | undefined, currentDate: Date): number | undefined => {
@@ -88,7 +96,7 @@ export const getRecentness = (createdAt: Date | undefined, currentDate: Date): n
     }
 
     const daysSinceCreation = (currentDate.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
-    return 1 - 1 / (1 + daysSinceCreation);
+    return 1 / (1 + daysSinceCreation);
 };
 
 export const getProximity = (lngLat1?: LngLat, lngLat2?: LngLat): number | undefined => {
@@ -97,7 +105,7 @@ export const getProximity = (lngLat1?: LngLat, lngLat2?: LngLat): number | undef
         return undefined;
     }
 
-    return distance / 20000; // max distance on earth is about 20000 km
+    return 1 - distance / 20000; // max distance on earth is about 20000 km
 };
 
 export const getPopularity = (item: PostDisplay | Circle | MemberDisplay) => {
