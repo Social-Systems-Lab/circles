@@ -17,7 +17,7 @@ import { CirclePicture } from "../circles/circle-picture";
 import RichText from "../feeds/RichText";
 import { Mention, MentionsInput } from "react-mentions";
 import { defaultMentionsInputStyle, defaultMentionStyle, handleMentionQuery } from "../feeds/post-list";
-import { createChatMessageAction, joinChatRoomAction, leaveChatRoomAction } from "./actions";
+import { createChatMessageAction, joinChatRoomAction, leaveChatRoomAction, testMatrixServerAction } from "./actions";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, MoreVertical } from "lucide-react";
 import {
@@ -403,6 +403,13 @@ export const ChatRoomComponent = ({
         }
     };
 
+    const [testResult, setTestResult] = useState<string | undefined>(undefined);
+
+    const testMatrix = async () => {
+        let result = await testMatrixServerAction();
+        setTestResult(JSON.stringify(result));
+    };
+
     return (
         <div
             className={`flex h-full flex-1 items-start justify-center ${inToolbox ? "bg-[#fbfbfb]" : "min-h-screen"}`}
@@ -467,6 +474,12 @@ export const ChatRoomComponent = ({
                     </div>
                 )}
 
+                {/* Test box */}
+                {/* <div className="t-[200px] absolute flex w-[1000px] flex-col rounded-lg bg-blue-100 pt-8">
+                    <Button onClick={testMatrix}>Test Matrix</Button>
+                    <div>{testResult}</div>
+                </div> */}
+
                 {!hasJoinedChat ? (
                     <div
                         className="fixed flex h-[72px] items-center justify-center bg-[#fbfbfb]"
@@ -477,7 +490,7 @@ export const ChatRoomComponent = ({
                     >
                         <Button
                             onClick={handleJoinChat}
-                            className="bg-primaryLight rounded-[50px] px-4 py-2 text-white"
+                            className="rounded-[50px] bg-primaryLight px-4 py-2 text-white"
                             disabled={isPending}
                         >
                             {isPending ? (

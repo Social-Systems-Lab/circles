@@ -82,6 +82,9 @@ prompt_for_value "MINIO_PORT" "9000" "Enter MinIO port"
 prompt_for_value "MINIO_ROOT_USERNAME" "minioadmin" "Enter MinIO username"
 prompt_for_value "MINIO_ROOT_PASSWORD" "change_me" "Enter MinIO password" true
 
+prompt_for_value "SYNAPSE_POSTGRES_USERNAME" "synapse_username" "Enter synapse postgres username"
+prompt_for_value "SYNAPSE_POSTGRES_PASSWORD" "change_me" "Enter synapse postgres password" true
+
 prompt_for_value "CIRCLES_URL" "https://$CIRCLES_DOMAIN" "Enter the URL to your Circles instance"
 prompt_for_value "CIRCLES_REGISTRY_URL" "http://161.35.244.159:3001" "Enter the URL of a Circles Registry server"
 prompt_for_value "CIRCLES_JWT_SECRET" "change_me" "Enter the secret key for user authentication (used for JWT token generation)" true

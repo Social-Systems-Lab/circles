@@ -1,0 +1,33 @@
+version: "3.8"
+
+services:
+    synapse_setup:
+        image: matrixdotorg/synapse:v1.63.0
+        env_file:
+            - .env
+        environment:
+            - SYNAPSE_SERVER_NAME=${CIRCLES_DOMAIN}
+        volumes:
+            - synapse_data:/data
+        entrypoint:
+            [
+                "python",
+                "-m",
+                "synapse.app.homeserver",
+                "--generate-config",
+                "-c",
+                "/data/homeserver.yaml",
+                "-H",
+                "${CIRCLES_DOMAIN}",
+                "--report-stats=yes",
+            ]
+        networks:
+            - webnet
+        profiles:
+            - setup
+
+networks:
+    webnet:
+
+volumes:
+    synapse_data:

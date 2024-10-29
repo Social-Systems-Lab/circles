@@ -32,6 +32,11 @@ import { getUserByDid } from "@/lib/data/user";
 import { redirect } from "next/navigation";
 import { chatFeaturePrefix } from "@/lib/data/constants";
 
+export async function testMatrixServerAction(): Promise<string> {
+    // Test connection to Matrix server
+    return "Matrix server response";
+}
+
 export async function joinChatRoomAction(
     chatRoomId: string,
 ): Promise<{ success: boolean; message?: string; chatRoomMember?: ChatRoomMember }> {

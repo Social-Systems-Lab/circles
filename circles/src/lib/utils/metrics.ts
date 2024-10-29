@@ -83,10 +83,7 @@ export const getVibe = async (
     item: PostDisplay | Circle | MemberDisplay,
 ): Promise<number | undefined> => {
     if (!user) return undefined;
-    console.log("getVibe", user.handle, item.circleType, item.handle ?? item._id);
     let similarity = await getVbdSimilarity(user, item);
-    console.log("similarity", similarity);
-
     return similarity ? normalizeCosineSimilarity(similarity) : similarity; // vibe between 0 and 1
 };
 
