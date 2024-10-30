@@ -18,16 +18,8 @@ function App() {
             <div className="flex flex-col justify-center items-center w-[700px] gap-2">
                 <div className="text-lg font-bold">Circles Authenticator</div>
                 <div>Authenticate yourself</div>
-                <form
-                    className="row"
-                    onSubmit={(e) => {
-                        e.preventDefault();
-                        greet();
-                    }}
-                >
-                    <Input id="greet-input" onChange={(e) => setName(e.currentTarget.value)} placeholder="Enter a name..." />
-                </form>
-                <Button type="submit">Authenticate</Button>
+                <Input id="greet-input" onChange={(e) => setName(e.currentTarget.value)} placeholder="Enter a name..." />
+                <Button onClick={greet}>Authenticate</Button>
                 <p>{greetMsg}</p>
             </div>
         </div>
