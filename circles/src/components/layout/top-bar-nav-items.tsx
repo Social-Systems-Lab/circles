@@ -9,7 +9,7 @@ import { Circle, Page } from "@/models/models";
 
 export default function TopBarNavItems({ circle, isDefaultCircle }: { circle: Circle; isDefaultCircle: boolean }) {
     const itemContainerRef = useRef<HTMLDivElement | null>(null);
-    const itemRefs = useRef<React.RefObject<HTMLDivElement>[]>(circle?.pages?.map(() => React.createRef()) ?? []);
+    const itemRefs = useRef<React.RefObject<HTMLDivElement | null>[]>(circle?.pages?.map(() => React.createRef()) ?? []);
     const pathname = usePathname();
     const [itemVisibility, setItemVisibility] = useState<boolean[]>([]);
     const [navMenuOpen, setNavMenuOpen] = useState(false);

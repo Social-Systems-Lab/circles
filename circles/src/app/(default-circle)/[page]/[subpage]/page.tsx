@@ -1,11 +1,13 @@
 import DynamicPage from "@/components/modules/dynamic-page";
 
 type PageProps = {
-    params: { page: string; subpage: string };
-    searchParams: { [key: string]: string | string[] | undefined };
+    params: Promise<{ page: string; subpage: string }>;
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
-export default async function Subpage({ params, searchParams }: PageProps) {
+export default async function Subpage(props: PageProps) {
+    const searchParams = await props.searchParams;
+    const params = await props.params;
     return (
         <DynamicPage
             pageHandle={params.page}

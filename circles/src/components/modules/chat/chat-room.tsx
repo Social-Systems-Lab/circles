@@ -128,7 +128,7 @@ export type ChatMessagesProps = {
     messages: ChatMessageDisplay[];
     chatRoom: ChatRoom;
     circle: Circle;
-    messagesEndRef?: React.RefObject<HTMLDivElement>;
+    messagesEndRef?: React.RefObject<HTMLDivElement | null>;
 };
 
 export const ChatMessages = ({ messages, chatRoom, circle, messagesEndRef }: ChatMessagesProps) => {

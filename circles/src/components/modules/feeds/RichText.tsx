@@ -43,7 +43,7 @@ type RichTextProps = {
 
 const RichText = ({ content, mentions }: RichTextProps) => {
     return (
-        <ReactMarkdown
+        (<ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={
                 mentions && mentions.length > 0
@@ -72,7 +72,7 @@ const RichText = ({ content, mentions }: RichTextProps) => {
             }
         >
             {content}
-        </ReactMarkdown>
+        </ReactMarkdown>)
     );
 };
 

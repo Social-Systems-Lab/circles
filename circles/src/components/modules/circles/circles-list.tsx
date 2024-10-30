@@ -68,7 +68,7 @@ interface CirclesListProps {
     isDefaultCircle: boolean;
 }
 
-const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefaultCircle }) => {
+const CirclesList = ({ circle, circles, page, isDefaultCircle }: CirclesListProps) => {
     const [user] = useAtom(userAtom);
     const isCompact = useIsCompact();
     const isMobile = useIsMobile();
@@ -135,7 +135,7 @@ const CirclesList: React.FC<CirclesListProps> = ({ circle, circles, page, isDefa
                     }}
                 >
                     <Input
-                        placeholder="Search circles..."
+                        placeholder="Search circles 3..."
                         value={searchQuery}
                         onChange={(event) => setSearchQuery(event.target.value)}
                         className="flex-1"

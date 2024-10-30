@@ -5,11 +5,17 @@ import BaseLayout from "@/components/layout/base-layout";
 import { redirect } from "next/navigation";
 
 type Props = {
-    params: { handle: string };
+    params: Promise<{ handle: string }>;
     children: React.ReactNode;
 };
 
-export default async function RootLayout({ params, children }: Props) {
+export default async function RootLayout(props: Props) {
+    const params = await props.params;
+
+    const {
+        children
+    } = props;
+
     let serverConfig = await getServerSettings();
     let circle = await getCircleByHandle(params.handle);
 
@@ -25,7 +31,8 @@ export default async function RootLayout({ params, children }: Props) {
     );
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata(props: Props): Promise<Metadata> {
+    const params = await props.params;
     let handle = params.handle;
 
     // get circle from database

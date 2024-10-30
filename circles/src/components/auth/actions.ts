@@ -12,7 +12,7 @@ type CheckAuthResponse = {
 
 export async function checkAuth(): Promise<CheckAuthResponse> {
     try {
-        const token = cookies().get("token")?.value;
+        const token = (await cookies()).get("token")?.value;
         if (!token) {
             return { user: undefined, authenticated: false };
         }
@@ -38,5 +38,5 @@ export async function checkAuth(): Promise<CheckAuthResponse> {
 
 export async function logOut(): Promise<void> {
     // clear session
-    cookies().set("token", "", { maxAge: 0 });
+    (await cookies()).set("token", "", { maxAge: 0 });
 }

@@ -238,7 +238,7 @@ export const hasHigherAccess = async (
 
 // gets authenticated user DID or throws an error if user is not authenticated
 export const getAuthenticatedUserDid = async (): Promise<string> => {
-    const token = cookies().get("token")?.value;
+    const token = (await cookies()).get("token")?.value;
     if (!token) {
         throw new AuthenticationError("Authentication failed");
     }

@@ -142,7 +142,7 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
         { $unwind: "$chatRoom" },
         {
             $project: {
-                _id: 1,
+                _id: { $toString: "$_id" },
                 userDid: 1,
                 chatRoomId: 1,
                 circleId: 1,

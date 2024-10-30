@@ -21,7 +21,8 @@
             "@/*": ["./src/*"],
             "@app/*": ["./src/app/*"],
             "@images/*": ["./public/images/*"]
-        }
+        },
+        "target": "ES2017"
     },
     "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
     "exclude": ["node_modules"]

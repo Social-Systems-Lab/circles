@@ -25,7 +25,7 @@ export const joinCircle = async (circle: Circle, answers?: Record<string, string
     let isUser = circle?.circleType === "user";
 
     try {
-        const token = cookies().get("token")?.value;
+        const token = (await cookies()).get("token")?.value;
         if (!token) {
             return { success: false, message: "You need to be logged in to join a circle" };
         }
@@ -73,7 +73,7 @@ export const leaveCircle = async (circle: Circle): Promise<CircleActionResponse>
     let isUser = circle?.circleType === "user";
 
     try {
-        const token = cookies().get("token")?.value;
+        const token = (await cookies()).get("token")?.value;
         if (!token) {
             return { success: false, message: "You need to be logged in to leave a circle" };
         }
@@ -108,7 +108,7 @@ export const leaveCircle = async (circle: Circle): Promise<CircleActionResponse>
 
 export const cancelJoinRequest = async (circle: Circle): Promise<CircleActionResponse> => {
     try {
-        const token = cookies().get("token")?.value;
+        const token = (await cookies()).get("token")?.value;
         if (!token) {
             return { success: false, message: "You need to be logged in to cancel a join request" };
         }

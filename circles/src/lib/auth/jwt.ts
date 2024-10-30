@@ -10,7 +10,7 @@ export const verifyUserToken = async (token: string): Promise<JWTPayload> => {
 
 export const createSession = async (token: string) => {
     // create a cookie-based session
-    cookies().set("token", token, {
+    (await cookies()).set("token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         maxAge: 60 * 60 * 24 * 7, // One week
