@@ -97,6 +97,12 @@ fn create_identity(name: String, password: String) -> Result<serde_json::Value, 
     let (encrypted_key, salt, iv) = encrypt_private_key(&private_key, &password)
         .map_err(|e| format!("Encryption error: {}", e))?;
 
+    // Log the derived key during creation
+    println!("Identity created with DID: {}", did);
+    println!("Encrypted Key Length: {}", encrypted_key.len());
+    println!("Salt: {}, IV: {}", salt, iv);
+    println!("PIN: {}", password);
+
     // Convert public key to JWK format for Dexie storage
     let public_key_jwk = public_key_to_jwk(&public_key);
 
@@ -113,10 +119,91 @@ fn create_identity(name: String, password: String) -> Result<serde_json::Value, 
     Ok(identity)
 }
 
+#[command]
+fn authenticate_identity(
+    did: String,
+    pin: String,
+    encrypted_key: String,
+    salt: String,
+    iv: String,
+) -> Result<bool, String> {
+    println!("Starting authentication for DID: {}", did);
+
+    // Decode the encrypted key, salt, and iv from base64
+    let encrypted_key_bytes = match general_purpose::STANDARD.decode(&encrypted_key) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            println!(
+                "Failed to decode encrypted key for DID: {}. Error: {}",
+                did, e
+            );
+            return Err(format!("Failed to decode encrypted key: {}", e));
+        }
+    };
+    let salt_bytes = match general_purpose::STANDARD.decode(&salt) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            println!("Failed to decode salt for DID: {}. Error: {}", did, e);
+            return Err(format!("Failed to decode salt: {}", e));
+        }
+    };
+    let iv_bytes = match general_purpose::STANDARD.decode(&iv) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            println!("Failed to decode IV for DID: {}. Error: {}", did, e);
+            return Err(format!("Failed to decode IV: {}", e));
+        }
+    };
+
+    // Log sizes
+    println!(
+        "DID: {} - Encrypted Key Length: {}, Salt Length: {}, IV Length: {}",
+        did,
+        encrypted_key_bytes.len(),
+        salt_bytes.len(),
+        iv_bytes.len()
+    );
+
+    // Derive the key using the provided PIN
+    let mut derived_key = [0u8; 32];
+    if let Err(e) = pbkdf2::<HmacSha256>(pin.as_bytes(), &salt_bytes, 65536, &mut derived_key) {
+        println!("Failed to derive key for DID: {}. Error: {}", did, e);
+        return Err(format!("Failed to derive key: {}", e));
+    }
+
+    // Log the derived key for debugging (use carefully for debugging purposes, sensitive data)
+    println!("DID: {} - Derived Key: {:?}", did, derived_key);
+
+    let iv_ga = GenericArray::from_slice(&iv_bytes);
+    let derived_key_ga = GenericArray::from_slice(&derived_key);
+
+    // Decrypt the private key
+    let cipher = Decryptor::<Aes256>::new(derived_key_ga, iv_ga);
+    let mut decrypted_key = encrypted_key_bytes.to_vec();
+
+    let decrypted_key_result = cipher.decrypt_padded_mut::<Pkcs7>(&mut decrypted_key);
+
+    match decrypted_key_result {
+        Ok(_) => {
+            // If decryption is successful, return true
+            println!("Decryption successful for DID: {}", did);
+            Ok(true)
+        }
+        Err(e) => {
+            // If decryption fails, log the error and return false
+            println!("Decryption failed for DID: {}. Error: {:?}", did, e);
+            Ok(false)
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![create_identity])
+        .invoke_handler(tauri::generate_handler![
+            create_identity,
+            authenticate_identity
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

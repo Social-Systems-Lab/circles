@@ -19,8 +19,7 @@ export const AccountSelect = () => {
     const navigate = useNavigate();
 
     const onClick = () => {
-        // navigate to /matrix
-        navigate("/matrix");
+        // log in with profile
     };
 
     return (
