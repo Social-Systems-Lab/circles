@@ -6,8 +6,9 @@
         "**/CVS": true,
         "**/.DS_Store": true,
         "**/Thumbs.db": true,
-        "**/node_modules": false
+        "**/node_modules": true
     },
     "editor.gotoLocation.multipleDefinitions": "goto",
-    "vscode_custom_css.imports": ["file:///D:/pretty-ts-errors.css"]
+    "vscode_custom_css.imports": ["file:///D:/pretty-ts-errors.css"],
+    "hide-files.files": []
 }
