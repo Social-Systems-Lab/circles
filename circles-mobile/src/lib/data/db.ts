@@ -7,7 +7,7 @@ const db = new Dexie("circles") as Dexie & {
 };
 
 db.version(3).stores({
-    identities: "&did, name, encrypted_key, salt, iv, public_key_jwk",
+    identities: "&did, name, publicKey, encryptedPrivateKey, salt, iv",
 });
 
 export { db };

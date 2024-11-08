@@ -7,6 +7,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { invoke } from "@tauri-apps/api/core";
 import { db } from "../../lib/data/db";
 import { Identity } from "../../lib/data/models";
+import { createIdentity } from "@/lib/auth/auth";
 
 const CreateIdentity: React.FC = () => {
     const [name, setName] = useState("");
@@ -14,27 +15,30 @@ const CreateIdentity: React.FC = () => {
     const [loading, setLoading] = useState<boolean>(false);
     const navigate = useNavigate();
 
-    const createIdentity = async () => {
+    const createNewIdentity = async () => {
         if (!name || !pin) {
             alert("Please provide both a name and a PIN");
             return;
         }
-
         setLoading(true);
         try {
-            // Invoke the backend command to create a new identity
-            console.log("Requesting backend to create new identity with name:", name);
-            const identityData = await invoke<Identity>("create_identity", { name, password: pin });
+            let identity = await createIdentity(name, pin);
 
-            console.log("Received identity data from backend:");
-            console.log("DID:", identityData.did);
-            console.log("Encrypted Key:", identityData.encrypted_key);
-            console.log("Encrypted Key Length:", identityData.encrypted_key.length);
-            console.log("Salt:", identityData.salt);
-            console.log("IV:", identityData.iv);
+            console.log("Identity successfully created:", identity);
+
+            // // Invoke the backend command to create a new identity
+            // console.log("Requesting backend to create new identity with name:", name);
+            // const identityData = await invoke<Identity>("create_identity", { name, password: pin });
+
+            // console.log("Received identity data from backend:");
+            // console.log("DID:", identityData.did);
+            // console.log("Encrypted Key:", identityData.encryptedPrivateKey);
+            // console.log("Encrypted Key Length:", identityData.encryptedPrivateKey.length);
+            // console.log("Salt:", identityData.salt);
+            // console.log("IV:", identityData.iv);
 
             // Add the new identity to Dexie
-            await db.identities.add(identityData);
+            await db.identities.add(identity);
             console.log("Identity successfully saved to Dexie database.");
 
             // Navigate back to the account selection page
@@ -66,7 +70,7 @@ const CreateIdentity: React.FC = () => {
                     </InputOTPGroup>
                 </InputOTP>
             </div>
-            <Button onClick={createIdentity} disabled={loading} className="w-full bg-blue-500 text-white px-4 py-2 rounded">
+            <Button onClick={createNewIdentity} disabled={loading} className="w-full bg-blue-500 text-white px-4 py-2 rounded">
                 {loading ? "Creating..." : "Create Identity"}
             </Button>
         </div>
