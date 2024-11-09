@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, Pencil, Trash, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import OTPLogin from "./otp-login";
+import AuthenticateIdentity from "./authenticate-identity";
 
 interface IdentityManagerProps {}
 
@@ -132,7 +132,7 @@ const IdentityManager: React.FC<IdentityManagerProps> = () => {
                             &#x2715;
                         </button>
                         {selectedIdentity && (
-                            <OTPLogin
+                            <AuthenticateIdentity
                                 identity={selectedIdentity}
                                 isOpen={isOTPModalOpen}
                                 onClose={() => setIsOTPModalOpen(false)}
@@ -143,11 +143,11 @@ const IdentityManager: React.FC<IdentityManagerProps> = () => {
                     </div>
                 </div>
             )}
-            {selectedIdentity && (
+            {/* {selectedIdentity && (
                 <div className="mt-6 p-4 bg-white shadow rounded w-full">
                     <pre className="whitespace-pre-wrap break-all">{JSON.stringify(selectedIdentity, null, 2)}</pre>
                 </div>
-            )}
+            )} */}
         </div>
     );
 };

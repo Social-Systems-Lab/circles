@@ -8,16 +8,18 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { invoke } from "@tauri-apps/api/core";
 import { Lock } from "lucide-react";
+import { authenticateIdentity } from "@/lib/auth/auth";
+import { Identity } from "@/lib/data/models";
 
-interface OTPLoginProps {
-    identity: { name: string; did: string; encrypted_key: string; salt: string; iv: string; image?: string };
+interface AuthenticateIdentityProps {
+    identity: Identity;
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
     onFailure: () => void;
 }
 
-const OTPLogin: React.FC<OTPLoginProps> = ({ identity, isOpen, onClose, onSuccess, onFailure }) => {
+const AuthenticateIdentity: React.FC<AuthenticateIdentityProps> = ({ identity, isOpen, onClose, onSuccess, onFailure }) => {
     const [otp, setOtp] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [authResult, setAuthResult] = useState<"success" | "failure" | null>(null);
@@ -33,26 +35,28 @@ const OTPLogin: React.FC<OTPLoginProps> = ({ identity, isOpen, onClose, onSucces
         setAuthResult(null);
 
         try {
-            console.log(
-                "Authenticating",
-                JSON.stringify({
-                    did: identity.did,
-                    pin: otp,
-                    encryptedKey: identity.encrypted_key,
-                    encryptedKeyLength: identity.encrypted_key.length,
-                    salt: identity.salt,
-                    iv: identity.iv,
-                })
-            );
+            // console.log(
+            //     "Authenticating",
+            //     JSON.stringify({
+            //         did: identity.did,
+            //         pin: otp,
+            //         encryptedKey: identity.encrypted_key,
+            //         encryptedKeyLength: identity.encrypted_key.length,
+            //         salt: identity.salt,
+            //         iv: identity.iv,
+            //     })
+            // );
 
-            // Call the backend to authenticate using the DID, encrypted key, salt, iv, and OTP (PIN)
-            const isAuthenticated = await invoke<boolean>("authenticate_identity", {
-                did: identity.did,
-                pin: otp,
-                encryptedKey: identity.encrypted_key,
-                salt: identity.salt,
-                iv: identity.iv,
-            });
+            // // Call the backend to authenticate using the DID, encrypted key, salt, iv, and OTP (PIN)
+            // const isAuthenticated = await invoke<boolean>("authenticate_identity", {
+            //     did: identity.did,
+            //     pin: otp,
+            //     encryptedKey: identity.encrypted_key,
+            //     salt: identity.salt,
+            //     iv: identity.iv,
+            // });
+
+            const isAuthenticated = await authenticateIdentity(identity, otp);
 
             setAuthResult(isAuthenticated ? "success" : "failure");
             setIsLoading(false);
@@ -83,14 +87,16 @@ const OTPLogin: React.FC<OTPLoginProps> = ({ identity, isOpen, onClose, onSucces
 
     return (
         <div className="flex flex-col items-center justify-center">
-            <div className="flex items-center justify-center mb-4">
+            <div className="flex self-start mb-4">
                 <Avatar className="h-12 w-12 mr-3">
                     <AvatarImage src={identity.image || "/images/default-user-picture.png"} alt={`${identity.name}'s profile picture`} />
                     <AvatarFallback>{identity.name.charAt(0)}</AvatarFallback>
                 </Avatar>
-                <div className="flex items-center">
-                    <Lock className="h-6 w-6 text-gray-500 mr-2" />
-                    <h1 className="text-xl font-bold text-center">Enter profile PIN</h1>
+                <div className="flex flex-col">
+                    <div>{identity.name}</div>
+                    <div className="flex items-center">
+                        <div>Enter PIN</div>
+                    </div>
                 </div>
             </div>
             <div className="h-32 flex items-center justify-center">
@@ -228,4 +234,4 @@ const OTPLogin: React.FC<OTPLoginProps> = ({ identity, isOpen, onClose, onSucces
     );
 };
 
-export default OTPLogin;
+export default AuthenticateIdentity;

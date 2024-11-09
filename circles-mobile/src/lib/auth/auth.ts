@@ -1,66 +1,131 @@
-// auth.ts - self-sovereign digital identity creation and authentication
-import crypto from "crypto";
 import { Identity } from "../data/models";
 
-// const SALT_FILENAME = "salt.bin";
-// const IV_FILENAME = "iv.bin";
-// const PUBLIC_KEY_FILENAME = "publicKey.pem";
-// const PRIVATE_KEY_FILENAME = "privateKey.pem";
-// const ENCRYPTED_PRIVATE_KEY_FILENAME = "privateKey.pem.enc";
-const ENCRYPTION_ALGORITHM = "aes-256-cbc";
-
+// auth.ts - self-sovereign digital identity creation and authentication
 export const createIdentity = async (name: string, password: string): Promise<Identity> => {
     if (!name || !password) {
         throw new Error("Missing required fields");
     }
 
-    // generate RSA keypair
-    const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
+    // Generate RSA key pair
+    const keyPair = await window.crypto.subtle.generateKey(
+        {
+            name: "RSA-OAEP",
+            modulusLength: 2048,
+            publicExponent: new Uint8Array([1, 0, 1]),
+            hash: "SHA-256",
+        },
+        true,
+        ["encrypt", "decrypt"]
+    );
 
-    // did is public key in shorter string format suitable for URLS and directory naming
-    const did = crypto
-        .createHash("sha256")
-        .update(publicKey.export({ type: "pkcs1", format: "pem" }))
-        .digest("hex");
+    // Export public key
+    const publicKeyExported = await window.crypto.subtle.exportKey("spki", keyPair.publicKey);
+    const publicKeyPem = convertArrayBufferToPem(publicKeyExported, "PUBLIC KEY");
 
-    // generate salt, iv, encryption key and encrypt private key
-    const salt = crypto.randomBytes(16);
-    const iv = crypto.randomBytes(16);
-    const encryptionKey = crypto.pbkdf2Sync(password, salt, 100000, 32, "sha512");
-    const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, encryptionKey, iv);
-    let encryptedPrivateKey = cipher.update(privateKey.export({ type: "pkcs1", format: "pem" }) as string, "utf8", "hex");
-    encryptedPrivateKey += cipher.final("hex");
+    // Generate DID
+    const did = await digestMessage(publicKeyPem);
 
-    // save salt, iv and keypair in the user directory
+    // Generate salt and IV
+    const salt = window.crypto.getRandomValues(new Uint8Array(16));
+    const iv = window.crypto.getRandomValues(new Uint8Array(16));
 
-    // add identity to the database
-    let identity: Identity = {
+    // Derive encryption key using PBKDF2
+    const passwordKey = await window.crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"]);
+
+    const encryptionKey = await window.crypto.subtle.deriveKey(
+        {
+            name: "PBKDF2",
+            salt: salt,
+            iterations: 100000,
+            hash: "SHA-512",
+        },
+        passwordKey,
+        { name: "AES-CBC", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+    );
+
+    // Export private key and encrypt it
+    const privateKeyExported = await window.crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
+    const encryptedPrivateKeyBuffer = await window.crypto.subtle.encrypt({ name: "AES-CBC", iv: iv }, encryptionKey, privateKeyExported);
+    const encryptedPrivateKey = bufferToHex(encryptedPrivateKeyBuffer);
+
+    // Create identity object
+    const identity: Identity = {
         did,
         name,
-        publicKey: publicKey.export({ type: "pkcs1", format: "pem" }) as string,
-        encryptedPrivateKey: encryptedPrivateKey,
-        salt: salt.toString("hex"),
-        iv: iv.toString("hex"),
-        //public_key_jwk: publicKey.export({ type: "jwk", format: "pem" }),
+        publicKey: publicKeyPem,
+        encryptedPrivateKey,
+        salt: bufferToHex(salt),
+        iv: bufferToHex(iv),
     };
 
     return identity;
 };
 
-export const authenticateIdentity = (identity: Identity, password: string): boolean => {
-    // decrypt private key
-    const encryptionKey = crypto.pbkdf2Sync(password, identity.salt, 100000, 32, "sha512");
+export const authenticateIdentity = async (identity: Identity, password: string): Promise<boolean> => {
+    const salt = hexToBuffer(identity.salt);
+    const iv = hexToBuffer(identity.iv);
+    const encryptedPrivateKeyBuffer = hexToBuffer(identity.encryptedPrivateKey);
 
-    // decrypt private key to authenticate user
-    const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, encryptionKey, identity.iv);
+    // Derive encryption key using PBKDF2
+    const passwordKey = await window.crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"]);
 
-    let decryptedPrivateKey;
+    const encryptionKey = await window.crypto.subtle.deriveKey(
+        {
+            name: "PBKDF2",
+            salt: salt,
+            iterations: 100000,
+            hash: "SHA-512",
+        },
+        passwordKey,
+        { name: "AES-CBC", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+    );
+
+    // Decrypt private key
     try {
-        decryptedPrivateKey = decipher.update(identity.encryptedPrivateKey, "hex", "utf8");
-        decryptedPrivateKey += decipher.final("utf8");
-    } catch (error) {
-        throw new Error("Incorrect password");
-    }
+        const decryptedPrivateKeyBuffer = await window.crypto.subtle.decrypt({ name: "AES-CBC", iv: iv }, encryptionKey, encryptedPrivateKeyBuffer);
 
-    return true;
+        // Import the decrypted private key to verify it's correct
+        await window.crypto.subtle.importKey(
+            "pkcs8",
+            decryptedPrivateKeyBuffer,
+            {
+                name: "RSA-OAEP",
+                hash: "SHA-256",
+            },
+            true,
+            ["decrypt"]
+        );
+
+        return true;
+    } catch (error) {
+        return false;
+    }
 };
+
+// Helper functions
+function convertArrayBufferToPem(buffer: ArrayBuffer, label: string): string {
+    const base64String = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+    const pemString = `-----BEGIN ${label}-----\n${base64String}\n-----END ${label}-----`;
+    return pemString;
+}
+
+async function digestMessage(message: string): Promise<string> {
+    const msgUint8 = new TextEncoder().encode(message);
+    const hashBuffer = await window.crypto.subtle.digest("SHA-256", msgUint8);
+    return bufferToHex(hashBuffer);
+}
+
+function bufferToHex(buffer: ArrayBuffer): string {
+    return Array.from(new Uint8Array(buffer))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+}
+
+function hexToBuffer(hexString: string): ArrayBuffer {
+    const bytes = new Uint8Array(hexString.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16)));
+    return bytes.buffer;
+}
