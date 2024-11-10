@@ -215,6 +215,16 @@ export default function MapAndContentWrapper({
         }
     };
 
+    // Fixes hydration errors
+    const [isMounted, setIsMounted] = useState(false);
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
+    if (!isMounted) {
+        return null;
+    }
+
     return (
         <div className="relative flex w-full flex-row overflow-hidden bg-[#2e4c6b]">
             <motion.div
