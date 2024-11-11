@@ -8,7 +8,7 @@ import { useAtom } from "jotai";
 
 declare global {
     interface Window {
-        CIRCLES_USER_DATA?: string; // Specify type as string or any appropriate type
+        CIRCLES_USER_DATA?: any; // Specify type as string or any appropriate type
         onUserDataReceived?: (data: string) => void;
     }
 }
@@ -18,7 +18,7 @@ export const Authenticator = () => {
     const [, setUser] = useAtom(userAtom);
     const [isPending, startTransition] = useTransition();
 
-    const [circleAppData, setCircleAppData] = useState("");
+    const [circleAppData, setCircleAppData] = useState<any | undefined>(undefined);
 
     const checkAuthStatus = useCallback(async () => {
         startTransition(async () => {
@@ -59,6 +59,9 @@ export const Authenticator = () => {
         throttledCheckAuth();
     }, [throttledCheckAuth]);
 
-    return <div className="t-0 l-0 absolute h-6 w-screen bg-purple-400">{circleAppData}</div>;
-    //    return null;
+    if (circleAppData) {
+        return <div className="t-0 l-0 absolute h-6 w-screen bg-purple-400">{circleAppData?.name}</div>;
+    }
+
+    return null;
 };
