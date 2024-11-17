@@ -13,16 +13,16 @@ export const createSession = async (token: string) => {
     (await cookies()).set("token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        maxAge: 60 * 60 * 24 * 7, // One week
+        maxAge: 60 * 60 * 24 * 90, // 90 days
         path: "/",
     });
 };
 
-export const generateUserToken = async (did: string, email: string): Promise<string> => {
+export const generateUserToken = async (did: string): Promise<string> => {
     const iat = Math.floor(Date.now() / 1000);
-    const exp = iat + 24 * 60 * 60; // 24 hours
+    const exp = iat + 24 * 60 * 60 * 90; // 90 days
 
-    return new SignJWT({ userDid: did, email: email })
+    return new SignJWT({ userDid: did })
         .setProtectedHeader({ alg: "HS256", typ: "JWT" })
         .setExpirationTime(exp)
         .setIssuedAt(iat)

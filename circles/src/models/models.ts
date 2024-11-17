@@ -4,7 +4,7 @@ import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.share
 import { ReadonlyURLSearchParams } from "next/navigation";
 import { z } from "zod";
 
-export const didSchema = z.string().regex(/^[0-9a-fA-F]{64}$/, "DID must be a 64-character hexadecimal string");
+export const didSchema = z.string(); //.regex(/^[0-9a-fA-F]{64}$/, "DID must be a 64-character hexadecimal string");
 export const passwordSchema = z.string().min(8, { message: "Password must be at least 8 characters long" });
 export const handleSchema = z
     .string()
@@ -351,6 +351,7 @@ export type Question = z.infer<typeof questionSchema>;
 export const circleSchema = z.object({
     _id: z.any().optional(),
     did: didSchema.optional(),
+    publicKey: z.string().optional(),
     name: z.string().default("Circles").optional(),
     type: accountTypeSchema.default("user").optional(),
     email: z.string().email().optional(),
@@ -664,5 +665,14 @@ export const chatRoomMemberSchema = z.object({
     circleId: z.string(),
     joinedAt: z.date(),
 });
+
+export const challengeSchema = z.object({
+    _id: z.any().optional(),
+    publicKey: z.string(),
+    challenge: z.string(),
+    createdAt: z.date(),
+    expiresAt: z.date(),
+});
+export type Challenge = z.infer<typeof challengeSchema>;
 
 export type ChatRoomMember = z.infer<typeof chatRoomMemberSchema>;

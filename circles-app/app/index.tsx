@@ -1,3 +1,4 @@
+// index.tsx
 import React, { useState, useRef } from "react";
 import { Text, View, TextInput, ActivityIndicator, TouchableOpacity, Image, Modal, StyleSheet } from "react-native";
 import { useAuth } from "../components/auth/AuthContext";
@@ -6,7 +7,7 @@ import Checkbox from "expo-checkbox";
 import Constants from "expo-constants";
 
 export default function Index() {
-    const { currentAccount, login, loading, logout } = useAuth();
+    const { currentAccount, accounts, createAccount, signRequest, login, switchAccount, logout, loading } = useAuth();
     const [name, setName] = useState("");
     const [url, setUrl] = useState("http://192.168.10.204:3000");
     const [inputUrl, setInputUrl] = useState(url);
@@ -14,20 +15,25 @@ export default function Index() {
     const [modalVisible, setModalVisible] = useState(false);
     const [permissionsModalVisible, setPermissionsModalVisible] = useState(false);
     const [requestedPermissions, setRequestedPermissions] = useState([]);
-    const [grantedPermissions, setGrantedPermissions] = useState([]);
+    const [grantedPermissions, setGrantedPermissions] = useState<string[]>([]);
+    const [switchAccountModalVisible, setSwitchAccountModalVisible] = useState(false);
+    const [challengeToSign, setChallengeToSign] = useState<string | undefined>(undefined);
     const webViewRef = useRef(null);
 
     const handleCreateAccount = async () => {
-        await login(name);
+        await createAccount(name);
     };
 
-    const handleWebViewMessage = (event) => {
+    const handleWebViewMessage = async (event) => {
         try {
             const data = JSON.parse(event.nativeEvent.data);
             console.log("Message from WebView:", data);
 
-            if (data.type === "RequestAuthentication") {
-                setRequestedPermissions(data.permissions || []);
+            if (data.type === "SignChallenge") {
+                const { challenge, permissions } = data;
+                // Present permissions to the user
+                setRequestedPermissions(permissions || []);
+                setChallengeToSign(challenge);
                 setPermissionsModalVisible(true);
             }
         } catch (error) {
@@ -35,34 +41,45 @@ export default function Index() {
         }
     };
 
-    const handlePermissionsSubmit = () => {
+    const handleSwitchAccount = async (accountId: string) => {
+        await switchAccount(accountId);
+        setSwitchAccountModalVisible(false);
+    };
+
+    const handlePermissionsSubmit = async () => {
         setPermissionsModalVisible(false);
+        if (!currentAccount || !challengeToSign) return;
+
+        const signature = await signRequest(challengeToSign);
 
         const userData = {
-            id: currentAccount.id,
+            id: currentAccount.did,
             name: grantedPermissions.includes("name") ? currentAccount.name : undefined,
             publicKey: currentAccount.publicKey,
         };
 
+        let payload = {
+            signature,
+            userData,
+        };
+
+        // send the signed challenge and user data back to the web app
         const jsCode = `
-        (function() {
-          if (!window.circlesUserDataSent) {
-            window.circlesUserDataSent = true;
-            window.CIRCLES_USER_DATA = ${JSON.stringify(userData)};
-            if (typeof window.onUserDataReceived === 'function') {
-              window.onUserDataReceived(window.CIRCLES_USER_DATA);
-            }
-          }
-        })();
-        true;
-      `;
+            (function() {
+                if (window.onSignedChallengeReceived) {
+                    window.onSignedChallengeReceived(${JSON.stringify(payload)});
+                }
+            })();
+            true;
+        `;
 
         if (webViewRef.current && webViewRef.current.injectJavaScript) {
             webViewRef.current.injectJavaScript(jsCode);
         }
 
-        // Reset granted permissions
+        // Reset state
         setGrantedPermissions([]);
+        setChallengeToSign(undefined);
     };
 
     if (!currentAccount) {
@@ -136,8 +153,8 @@ export default function Index() {
                     <View style={styles.modalContent}>
                         <TouchableOpacity
                             style={styles.modalButton}
-                            onPress={() => {
-                                logout();
+                            onPress={async () => {
+                                await logout();
                                 setModalVisible(false);
                             }}
                         >
@@ -146,7 +163,7 @@ export default function Index() {
                         <TouchableOpacity
                             style={styles.modalButton}
                             onPress={() => {
-                                // Handle switch account (to be implemented)
+                                setSwitchAccountModalVisible(true);
                                 setModalVisible(false);
                             }}
                         >
@@ -199,6 +216,35 @@ export default function Index() {
                     </View>
                 </View>
             </Modal>
+
+            {/* Modal for switching accounts */}
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={switchAccountModalVisible}
+                onRequestClose={() => {
+                    setSwitchAccountModalVisible(false);
+                }}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 10 }}>Switch Account</Text>
+                        {accounts.map((account) => (
+                            <TouchableOpacity key={account.did} style={styles.modalButton} onPress={() => handleSwitchAccount(account.did)}>
+                                <Text style={styles.modalButtonText}>{account.name}</Text>
+                            </TouchableOpacity>
+                        ))}
+                        <TouchableOpacity
+                            style={[styles.modalButton, styles.cancelButton]}
+                            onPress={() => {
+                                setSwitchAccountModalVisible(false);
+                            }}
+                        >
+                            <Text style={styles.modalButtonText}>Cancel</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -208,7 +254,6 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: "center",
         alignItems: "center",
-        paddingTop: Constants.statusBarHeight,
     },
     createAccountText: {
         fontSize: 24,
@@ -247,7 +292,6 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: "row",
         padding: 8,
-        paddingTop: Constants.statusBarHeight + 8,
         alignItems: "center",
         backgroundColor: "#f2f2f2",
     },

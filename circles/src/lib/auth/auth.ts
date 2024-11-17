@@ -3,13 +3,13 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import { Circles, Members } from "../data/db";
-import { AccountType, Circle, Feature } from "@/models/models";
+import { Challenges, Circles, Members } from "../data/db";
+import { AccountType, Challenge, Circle, Feature, UserPrivate } from "@/models/models";
 import { ObjectId } from "mongodb";
 import { maxAccessLevel } from "../data/constants";
 import { cookies } from "next/headers";
 import { verifyUserToken } from "./jwt";
-import { createNewUser, getUserById } from "../data/user";
+import { createNewUser, getUserById, getUserPrivate } from "../data/user";
 import { addMember } from "../data/member";
 import { getCircleById } from "../data/circle";
 
@@ -23,7 +23,7 @@ export const APP_DIR = "/circles";
 export const USERS_DIR = path.join(APP_DIR, "users");
 const SERVER_DIR = path.join(APP_DIR, "server");
 
-export const createUser = async (
+export const createUserOld = async (
     name: string,
     handle: string,
     type: AccountType,
@@ -271,4 +271,53 @@ export const isAuthorized = async (
     let membership = await Members.findOne({ userDid: userDid, circleId: circleId });
     if (!membership) return false;
     return allowedUserGroups.some((group) => membership?.userGroups?.includes(group));
+};
+
+// new auth
+
+export const createUser = async (did: string, publicKey: string): Promise<UserPrivate> => {
+    console.log("Creating user", did, publicKey);
+
+    // add user to the database
+    let user: Circle = createNewUser(did, publicKey);
+    let res = await Circles.insertOne(user);
+    user._id = res.insertedId.toString();
+
+    // add user as member of their own circle
+    await addMember(did, user._id!, ["admins", "moderators", "members"], undefined);
+    let userPrivate = await getUserPrivate(did);
+    return userPrivate;
+};
+
+export const issueChallenge = async (publicKey: string): Promise<Challenge> => {
+    let challengeStr = crypto.randomBytes(32).toString("hex");
+    let createdAt = new Date();
+    let expiresAt = new Date(createdAt.getTime() + 5 * 60 * 1000); // 5 minutes
+
+    // store the challenge
+    let challenge: Challenge = { challenge: challengeStr, createdAt, expiresAt, publicKey };
+    let res = await Challenges.insertOne(challenge);
+    challenge._id = res.insertedId.toString();
+    return challenge;
+};
+
+export const getChallenge = async (publicKey: string): Promise<Challenge> => {
+    // get the most recent challenge
+    let challenge = (await Challenges.findOne({ publicKey }, { sort: { createdAt: -1 } })) as Challenge;
+    return challenge;
+};
+
+export const getDid = (publicKey: string): string => {
+    // hash the public key using SHA-256
+    const hash = crypto.createHash("sha256").update(publicKey).digest();
+
+    // convert hash to Base64 and make it URL-safe
+    const base64Url = hash
+        .toString("base64")
+        .replace(/\+/g, "-") // Replace + with -
+        .replace(/\//g, "_") // Replace / with _
+        .replace(/=+$/, ""); // Remove trailing =
+
+    // prefix the result to form a DID
+    return `did:circles:${base64Url}`;
 };

@@ -1,39 +1,95 @@
+// actions.ts
 "use server";
 
-import { verifyUserToken } from "@/lib/auth/jwt";
+import { createSession, generateUserToken, verifyUserToken } from "@/lib/auth/jwt";
 import { getUserPrivate } from "@/lib/data/user";
-import { UserPrivate } from "@/models/models";
+import { Challenge, Circle, UserPrivate } from "@/models/models";
 import { cookies } from "next/headers";
+import crypto from "crypto";
+import { isValid } from "zod";
+import { getDefaultCircle } from "@/lib/data/circle";
+import { addMember } from "@/lib/data/member";
+import { createUser, createUserOld, getChallenge, getDid, issueChallenge } from "@/lib/auth/auth";
 
 type CheckAuthResponse = {
     user?: UserPrivate;
     authenticated: boolean;
+    challenge?: Challenge;
 };
 
-export async function checkAuth(): Promise<CheckAuthResponse> {
-    try {
-        const token = (await cookies()).get("token")?.value;
-        if (!token) {
-            return { user: undefined, authenticated: false };
-        }
-
-        let payload = await verifyUserToken(token);
-        let userDid = payload.userDid;
-        if (!userDid) {
-            return { user: undefined, authenticated: false };
-        }
-
-        // get user data from database
-        let user = await getUserPrivate(userDid as string);
-        if (!user) {
-            return { user: undefined, authenticated: false };
-        }
-
-        return { user, authenticated: true };
-    } catch (error) {
-        console.error("Error verifying token", error);
+export async function checkAuth(publicKey: string): Promise<CheckAuthResponse> {
+    if (!publicKey) {
         return { user: undefined, authenticated: false };
     }
+
+    try {
+        const token = (await cookies()).get("token")?.value;
+        if (token) {
+            let payload = await verifyUserToken(token);
+            if (payload && payload.userDid === getDid(publicKey)) {
+                console.log("User is authenticated", payload.userDid);
+
+                // user is authenticated
+                let user = await getUserPrivate(payload.userDid as string);
+                return { user, authenticated: true };
+            }
+        }
+    } catch (error) {
+        console.error("Error verifying token", error);
+    }
+
+    // no token, issue a signing challenge
+    console.log("Issuing challenge for public key", publicKey);
+    let challenge = await issueChallenge(publicKey);
+    return { user: undefined, authenticated: false, challenge };
+}
+
+type VerifySignatureResponse = {
+    user?: UserPrivate;
+    authenticated: boolean;
+    message?: string;
+};
+
+export async function verifySignature(
+    publicKey: string,
+    signature: string,
+    userData: Circle | undefined,
+): Promise<VerifySignatureResponse> {
+    // retrieve the challenge from the database
+    let challenge = await getChallenge(publicKey);
+    if (!challenge) {
+        return { user: undefined, authenticated: false, message: "Challenge not found" };
+    }
+
+    // verify the signature
+    const verify = crypto.createVerify("SHA256");
+    verify.update(challenge.challenge);
+    const isValidSignature = verify.verify(publicKey, signature, "base64");
+
+    if (!isValidSignature) {
+        return { user: undefined, authenticated: false, message: "Invalid signature" };
+    }
+
+    // get the DID from the public key and return user data
+    let did = getDid(publicKey);
+    let user = await getUserPrivate(did);
+    if (user) {
+        return { user, authenticated: true };
+    }
+
+    // create a new user
+    let newUser = await createUser(did, publicKey); // TODO include name, picture, etc.
+    let token = await generateUserToken(did);
+    createSession(token);
+
+    // add user to default circle by default
+    let defaultCircle = await getDefaultCircle();
+    if (defaultCircle._id) {
+        await addMember(newUser.did!, defaultCircle._id, ["members"]);
+    }
+
+    let privateUser = await getUserPrivate(did);
+    return { user: privateUser, authenticated: true };
 }
 
 export async function logOut(): Promise<void> {

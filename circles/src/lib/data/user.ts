@@ -1,7 +1,15 @@
 // user creation and management
 
-import { AccountType, ChatRoomMembership, Circle, Membership, RegistryInfo, UserPrivate } from "@/models/models";
-import { ChatRoomMembers, Circles, Members } from "./db";
+import {
+    AccountType,
+    Challenge,
+    ChatRoomMembership,
+    Circle,
+    Membership,
+    RegistryInfo,
+    UserPrivate,
+} from "@/models/models";
+import { Challenges, ChatRoomMembers, Circles, Members } from "./db";
 import { ObjectId } from "mongodb";
 import { signRegisterUserChallenge } from "../auth/auth";
 import { getUserPendingMembershipRequests } from "./membership-requests";
@@ -34,7 +42,13 @@ export const getUserByDid = async (did: string): Promise<Circle> => {
     return user;
 };
 
-export const createNewUser = (did: string, name: string, handle: string, type: AccountType, email: string): Circle => {
+export const createNewUser = (
+    did: string,
+    name?: string,
+    handle?: string,
+    type?: AccountType,
+    email?: string,
+): Circle => {
     let user: Circle = {
         did,
         name,

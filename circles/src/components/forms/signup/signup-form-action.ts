@@ -1,5 +1,5 @@
 import { FormAction, FormSubmitResponse, Page } from "../../../models/models";
-import { AuthenticationError, createUser, getUserPublicKey } from "@/lib/auth/auth";
+import { AuthenticationError, createUserOld, getUserPublicKey } from "@/lib/auth/auth";
 import { createSession, generateUserToken } from "@/lib/auth/jwt";
 import { getDefaultCircle } from "@/lib/data/circle";
 import { addMember } from "@/lib/data/member";
@@ -11,7 +11,7 @@ export const signupFormAction: FormAction = {
     onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
         try {
             //console.log("Signing up user with values", values);
-            let user = await createUser(values.name, values.handle, values.type, values._email, values._password);
+            let user = await createUserOld(values.name, values.handle, values.type, values._email, values._password);
             let token = await generateUserToken(user.did!, user.email!);
             createSession(token);
 
