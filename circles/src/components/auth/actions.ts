@@ -3,13 +3,26 @@
 
 import { createSession, generateUserToken, verifyUserToken } from "@/lib/auth/jwt";
 import { getUserPrivate } from "@/lib/data/user";
-import { Challenge, Circle, UserPrivate } from "@/models/models";
+import { Account, Challenge, Circle, UserPrivate } from "@/models/models";
 import { cookies } from "next/headers";
 import crypto from "crypto";
 import { isValid } from "zod";
 import { getDefaultCircle } from "@/lib/data/circle";
 import { addMember } from "@/lib/data/member";
-import { createUser, createUserOld, getChallenge, getDid, issueChallenge } from "@/lib/auth/auth";
+import { createUser, createUserAccount, createUserOld, getChallenge, getDid, issueChallenge } from "@/lib/auth/auth";
+
+type CreateAccountResponse = {
+    privateKey: string;
+    user: UserPrivate;
+};
+export const createAccount = async (displayName: string): Promise<CreateAccountResponse> => {
+    // create a new account
+    let account = await createUserAccount(displayName);
+
+    // TODO sign the user in with the new account immediatelly?
+
+    return account;
+};
 
 type CheckAuthResponse = {
     user?: UserPrivate;
@@ -17,16 +30,12 @@ type CheckAuthResponse = {
     challenge?: Challenge;
 };
 
-export async function checkAuth(publicKey: string): Promise<CheckAuthResponse> {
-    if (!publicKey) {
-        return { user: undefined, authenticated: false };
-    }
-
+export async function checkAuth(account: Account | undefined): Promise<CheckAuthResponse> {
     try {
         const token = (await cookies()).get("token")?.value;
         if (token) {
             let payload = await verifyUserToken(token);
-            if (payload && payload.userDid === getDid(publicKey)) {
+            if (payload) {
                 console.log("User is authenticated", payload.userDid);
 
                 // user is authenticated
@@ -38,10 +47,16 @@ export async function checkAuth(publicKey: string): Promise<CheckAuthResponse> {
         console.error("Error verifying token", error);
     }
 
-    // no token, issue a signing challenge
-    console.log("Issuing challenge for public key", publicKey);
-    let challenge = await issueChallenge(publicKey);
-    return { user: undefined, authenticated: false, challenge };
+    // no token, issue a signing challenge to get a new token
+    let publicKey = account?.publicKey;
+    if (publicKey) {
+        // issue a challenge for the public key
+        console.log("Issuing challenge for public key", publicKey);
+        let challenge = await issueChallenge(publicKey);
+        return { user: undefined, authenticated: false, challenge };
+    }
+
+    return { user: undefined, authenticated: false };
 }
 
 type VerifySignatureResponse = {

@@ -6,7 +6,6 @@ import * as FileSystem from "expo-file-system";
 import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
-import RSAKey from "react-native-rsa-expo";
 
 // Polyfill Buffer for React Native if necessary
 if (typeof Buffer === "undefined") {
@@ -16,20 +15,25 @@ if (typeof Buffer === "undefined") {
 type Account = {
     did: string;
     publicKey: string;
+    encryptedPrivateKey: string;
     name: string;
+    handle: string;
+    picture: string;
     requireAuthentication: boolean;
 };
+
+type AccountAndPrivateKey = Account & { privateKey: string };
 
 type AuthContextType = {
     currentAccount: Account | null;
     accounts: Account[];
-    createAccount: (name: string) => Promise<void>;
-    login: (accountId: string) => Promise<void>;
-    switchAccount: (accountId: string) => Promise<void>;
+    createAccount: (account: AccountAndPrivateKey) => Promise<void>;
+    login: (accountDid: string) => Promise<void>;
+    switchAccount: (accountDid: string) => Promise<void>;
     logout: () => Promise<void>;
     updateAccount: (updatedAccount: Account) => Promise<void>;
-    signRequest: (challenge: string) => Promise<string | undefined>;
     loading: boolean;
+    initialized: boolean;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -38,17 +42,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [currentAccount, setCurrentAccount] = useState<Account | null>(null);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [loading, setLoading] = useState<boolean>(false);
+    const [initialized, setInitialized] = useState<boolean>(false);
 
     // Storage Keys
     const ACCOUNTS_KEY = "accounts";
     const CURRENT_ACCOUNT_DID_KEY = "currentAccountDid";
 
-    // Store account metadata in AsyncStorage
-    const storeAccountMetadata = async (accounts: Account[]): Promise<void> => {
+    // Store accounts in AsyncStorage
+    const storeAccounts = async (accounts: Account[]): Promise<void> => {
         await AsyncStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
     };
 
-    const loadAccountMetadata = async (): Promise<Account[]> => {
+    const loadAccounts = async (): Promise<Account[]> => {
         const data = await AsyncStorage.getItem(ACCOUNTS_KEY);
         return data ? JSON.parse(data) : [];
     };
@@ -90,51 +95,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return keyBase64 ? Uint8Array.from(Buffer.from(keyBase64, "base64")) : null;
     };
 
-    // Encrypt data using AES (Placeholder)
-    const encryptData = (data: string, keyBytes: Uint8Array): string => {
-        // Implement encryption here if desired
-        return data;
-    };
-
-    // Decrypt data using AES (Placeholder)
-    const decryptData = (encryptedData: string, keyBytes: Uint8Array): string => {
-        // Implement decryption here if desired
-        return encryptedData;
-    };
-
-    // Generate RSA key pair using react-native-rsa-expo
-    const generateRSAKeyPair = async (): Promise<{ privateKey: string; publicKey: string }> => {
-        const bits = 2048;
-        const exponent = "10001"; // must be a string
-        const rsa = new RSAKey();
-        rsa.generate(bits, exponent);
-        const publicKey = rsa.getPublicString(); // returns JSON encoded string
-        const privateKey = rsa.getPrivateString(); // returns JSON encoded string
-        return { privateKey, publicKey };
-    };
-
-    // Derive DID from RSA public key using URL-safe Base64 encoding
-    const deriveDIDFromPublicKey = async (publicKeyJson: string): Promise<string> => {
-        // Parse the public key JSON string
-        const publicKeyObject = JSON.parse(publicKeyJson);
-
-        // Create a canonical JSON string
-        const canonicalPublicKeyJson = JSON.stringify(publicKeyObject, Object.keys(publicKeyObject).sort());
-
-        // Hash the canonical JSON string using SHA-256
-        const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, canonicalPublicKeyJson);
-
-        // Convert hash to Uint8Array
-        const hashBytes = Uint8Array.from(Buffer.from(hash, "hex"));
-
-        // Encode hash using URL-safe Base64 without padding
-        const didSuffix = Buffer.from(hashBytes).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-
-        // Construct the DID
-        const did = `did:circles:${didSuffix}`;
-        return did;
-    };
-
     // Initialize on component mount
     useEffect(() => {
         console.log("Initializing AuthProvider");
@@ -145,7 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log("Clearing accounts...");
             await AsyncStorage.setItem(ACCOUNTS_KEY, "");
 
-            const loadedAccounts = await loadAccountMetadata();
+            const loadedAccounts = await loadAccounts();
             setAccounts(loadedAccounts);
 
             console.log("Loaded accounts:", loadedAccounts);
@@ -165,69 +125,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
             }
             setLoading(false);
+            setInitialized(true);
         };
         initialize();
     }, []);
 
+    // Encrypt data using AES (Placeholder)
+    const encryptData = (data: string, keyBytes: Uint8Array): string => {
+        // TODO implement encryption here
+        return data;
+    };
+
+    // Decrypt data using AES (Placeholder)
+    const decryptData = (encryptedData: string, keyBytes: Uint8Array): string => {
+        // TODO implement decryption here
+        return encryptedData;
+    };
+
     // Create a new account
-    const createAccount = async (name: string): Promise<void> => {
+    const createAccount = async (account: AccountAndPrivateKey): Promise<void> => {
         setLoading(true);
 
-        console.log("Creating new account:", name);
-        console.log("Generating RSA key pair...");
-
-        // Trim leading and trailing whitespace
-        name = name.trim();
-
-        // Generate RSA key pair
-        const keys = await generateRSAKeyPair();
-        const publicKey = keys.publicKey;
-        const privateKey = keys.privateKey;
-        console.log("Public Key:", publicKey);
-        console.log("Private Key:", privateKey);
-
-        // Derive DID
-        console.log("Deriving DID...");
-        const did = await deriveDIDFromPublicKey(publicKey);
-        console.log("DID:", did);
-
-        // Create new account object
-        const newAccount: Account = { did, publicKey, name, requireAuthentication: false };
+        console.log("Creating new account:", account);
+        let did = account.did;
+        let encryptedPrivateKey = account.encryptedPrivateKey;
+        let publicKey = account.publicKey;
 
         // Generate and store encryption key
-        console.log("Generating encryption key...");
-        const encryptionKey = await generateEncryptionKey();
-        await storeEncryptionKey(newAccount, encryptionKey);
-        console.log("Encryption key stored securely");
-
-        // Encrypt private key
-        console.log("Encrypting private key...");
-        const encryptedPrivateKey = encryptData(privateKey, encryptionKey);
-        console.log("Private key encrypted", encryptedPrivateKey);
+        console.log("Storing encryption key...");
+        let encryptionKey = await generateEncryptionKey();
+        await storeEncryptionKey(account, encryptionKey);
 
         // Save encrypted private key to file system
         console.log("Saving encrypted private key to file system...");
         const accountFolder = `${FileSystem.documentDirectory}${did}/`;
         await FileSystem.makeDirectoryAsync(accountFolder, { intermediates: true });
-        await FileSystem.writeAsStringAsync(`${accountFolder}privateKey.enc`, encryptedPrivateKey, { encoding: FileSystem.EncodingType.UTF8 });
+        await FileSystem.writeAsStringAsync(`${accountFolder}privateKey.pem.enc`, encryptedPrivateKey, { encoding: FileSystem.EncodingType.UTF8 });
         console.log("Encrypted private key saved");
 
-        // Optionally save public key (unencrypted)
+        // Save public key to file system
         console.log("Saving public key to file system...");
-        await FileSystem.writeAsStringAsync(`${accountFolder}publicKey.json`, publicKey, { encoding: FileSystem.EncodingType.UTF8 });
+        await FileSystem.writeAsStringAsync(`${accountFolder}publicKey.pem`, publicKey, { encoding: FileSystem.EncodingType.UTF8 });
         console.log("Public key saved");
 
-        // Save account metadata
+        // Save account data
+        let newAccount: Account = {
+            did,
+            publicKey,
+            encryptedPrivateKey,
+            name: account.name,
+            handle: account.handle,
+            picture: account.picture,
+            requireAuthentication: account.requireAuthentication,
+        };
         const updatedAccounts = [...accounts, newAccount];
         setAccounts(updatedAccounts);
 
         console.log("Account created successfully", newAccount);
-        console.log("Saving account metadata...");
-        await storeAccountMetadata(updatedAccounts);
-        console.log("Account metadata saved");
-
-        setCurrentAccount(newAccount);
-        await storeCurrentAccountDid(newAccount.did);
+        console.log("Saving account data...");
+        await storeAccounts(updatedAccounts);
+        setCurrentAccount(account);
+        await storeCurrentAccountDid(account.did);
         setLoading(false);
     };
 
@@ -256,41 +214,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Update the accounts array
         const updatedAccounts = accounts.map((acc) => (acc.did === updatedAccount.did ? updatedAccount : acc));
         setAccounts(updatedAccounts);
-        await storeAccountMetadata(updatedAccounts);
+        await storeAccounts(updatedAccounts);
 
         // If the `requireAuthentication` setting has changed, re-store the encryption key
         const encryptionKey = await retrieveEncryptionKey(updatedAccount);
         if (encryptionKey) {
             await storeEncryptionKey(updatedAccount, encryptionKey);
         }
-    };
-
-    // Sign a challenge using the current account's private key
-    const signRequest = async (challenge: string): Promise<string | undefined> => {
-        if (!currentAccount) return undefined;
-
-        const account = currentAccount;
-        const encryptionKey = await retrieveEncryptionKey(account);
-        if (!encryptionKey) {
-            // Handle error or authentication failure
-            return undefined;
-        }
-
-        // Read encrypted private key
-        const accountFolder = `${FileSystem.documentDirectory}${account.did}/`;
-        const encryptedPrivateKey = await FileSystem.readAsStringAsync(`${accountFolder}privateKey.enc`, { encoding: FileSystem.EncodingType.UTF8 });
-
-        // Decrypt private key
-        const privateKeyJson = decryptData(encryptedPrivateKey, encryptionKey);
-
-        // Create RSAKey instance and set the private key
-        const rsa = new RSAKey();
-        rsa.setPrivateString(privateKeyJson);
-
-        // Sign the challenge
-        const signature = rsa.sign(challenge);
-
-        return signature;
     };
 
     return (
@@ -303,8 +233,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 switchAccount,
                 logout,
                 updateAccount,
-                signRequest,
                 loading,
+                initialized,
             }}
         >
             {children}

@@ -11,7 +11,7 @@ import { cookies } from "next/headers";
 import { verifyUserToken } from "./jwt";
 import { createNewUser, getUserById, getUserPrivate } from "../data/user";
 import { addMember } from "../data/member";
-import { getCircleById } from "../data/circle";
+import { getCircleById, getDefaultCircle } from "../data/circle";
 
 const SALT_FILENAME = "salt.bin";
 const IV_FILENAME = "iv.bin";
@@ -274,6 +274,32 @@ export const isAuthorized = async (
 };
 
 // new auth
+
+export const createUserAccount = async (displayName: string): Promise<{ user: UserPrivate; privateKey: string }> => {
+    // Generate RSA key pair
+    const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", {
+        modulusLength: 2048,
+        publicKeyEncoding: { type: "spki", format: "pem" },
+        privateKeyEncoding: { type: "pkcs8", format: "pem" },
+    });
+
+    // Derive DID from public key
+    const did = getDid(publicKey);
+
+    // Create and save user in the database using DID and public key
+    const user = await createNewUser(did, displayName, publicKey);
+    await Circles.insertOne(user);
+
+    // Add user as a member of the default circle
+    const defaultCircle = await getDefaultCircle();
+    if (defaultCircle._id) {
+        await addMember(did, defaultCircle._id, ["members"]);
+    }
+
+    const userPrivate = await getUserPrivate(did);
+
+    return { user: userPrivate, privateKey }; // Return user and private key for client-side storage
+};
 
 export const createUser = async (did: string, publicKey: string): Promise<UserPrivate> => {
     console.log("Creating user", did, publicKey);

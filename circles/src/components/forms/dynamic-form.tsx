@@ -14,7 +14,7 @@ import { onFormSubmit } from "./actions";
 import { Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { formActionHandlers } from "@/components/forms/form-action-handlers";
-import { authenticatedAtom, userAtom } from "@/lib/data/atoms";
+import { authInfoAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "../utils/use-is-compact";
@@ -41,12 +41,11 @@ const DynamicFormManager: React.FC<DynamicFormProps> = ({
     isUser,
 }) => {
     const [user, setUser] = useAtom(userAtom);
-    const [authenticated, setAuthenticated] = useAtom(authenticatedAtom);
     const { toast } = useToast();
     const searchParams = useSearchParams();
     const formTools = useMemo<FormTools>(() => {
-        return { user, setUser, authenticated, setAuthenticated, searchParams, toast };
-    }, [user, setUser, authenticated, setAuthenticated, searchParams, toast]);
+        return { user, setUser, searchParams, toast };
+    }, [user, setUser, searchParams, toast]);
     const formSchema = formSchemas[formSchemaId];
     if (!formSchema) throw new Error(`Form schema with id ${formSchemaId} not found`);
 

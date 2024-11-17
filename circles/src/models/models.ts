@@ -636,8 +636,6 @@ export type FormActionHandler = {
 export type FormTools = {
     user?: Circle;
     setUser: (user: UserPrivate) => void;
-    authenticated?: boolean;
-    setAuthenticated: (authenticated: boolean) => void;
     searchParams: ReadonlyURLSearchParams;
     toast: ({ ...props }: Toast) => void;
 };
@@ -676,3 +674,20 @@ export const challengeSchema = z.object({
 export type Challenge = z.infer<typeof challengeSchema>;
 
 export type ChatRoomMember = z.infer<typeof chatRoomMemberSchema>;
+
+export type Account = {
+    did: string;
+    publicKey: string;
+    encryptedPrivateKey: string;
+    name: string;
+    handle: string;
+    picture: string;
+    requireAuthentication: boolean;
+};
+
+export type AuthInfo = {
+    authStatus: "loading" | "authenticated" | "unauthenticated" | "createAccount";
+    inSsiApp: boolean;
+    currentAccount?: Account;
+    accounts?: Account[];
+};

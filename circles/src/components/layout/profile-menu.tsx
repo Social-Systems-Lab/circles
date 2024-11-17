@@ -1,42 +1,13 @@
 "use client";
 
-import React, { Suspense, use, useEffect, useState, useTransition } from "react";
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import React, { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "../ui/button";
-import { logOut } from "../auth/actions";
-import { userAtom, authenticatedAtom, userToolboxDataAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
+import { userAtom, userToolboxDataAtom, sidePanelContentVisibleAtom, authInfoAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { UserPicture } from "../modules/members/user-picture";
-import { HiOutlineLogout } from "react-icons/hi";
-import Link from "next/link";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
-import {
-    Bell,
-    MessageCircle,
-    Calendar,
-    Edit,
-    CheckSquare,
-    BarChart2,
-    X,
-    Phone,
-    Video,
-    Paperclip,
-    Smile,
-    Send,
-    Minus,
-} from "lucide-react";
-import { UserToolboxData, UserToolboxTab } from "@/models/models";
+import { Bell, MessageCircle } from "lucide-react";
+import { UserToolboxTab } from "@/models/models";
 
 type ChatRoomPreview = {
     id: number;
@@ -48,7 +19,7 @@ type ChatRoomPreview = {
 
 const ProfileMenuBar = () => {
     const router = useRouter();
-    const [authenticated, setAuthenticated] = useAtom(authenticatedAtom);
+    const [authInfo] = useAtom(authInfoAtom);
     const [user, setUser] = useAtom(userAtom);
     const searchParams = useSearchParams();
     const [userToolboxState, setUserToolboxState] = useAtom(userToolboxDataAtom);
@@ -87,7 +58,7 @@ const ProfileMenuBar = () => {
 
     return (
         <div className="flex items-center justify-center gap-1 overflow-hidden">
-            {authenticated && user && (
+            {authInfo.authStatus === "authenticated" && user && (
                 <>
                     <div className="flex items-center space-x-2">
                         <Button
@@ -119,7 +90,7 @@ const ProfileMenuBar = () => {
                 </>
             )}
 
-            {authenticated === false && (
+            {authInfo.authStatus === "unauthenticated" && (
                 <div className="flex flex-row gap-2">
                     <Button
                         className="h-full w-full bg-[#00000077] text-white"
