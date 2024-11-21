@@ -15,10 +15,9 @@ if (typeof Buffer === "undefined") {
 type Account = {
     did: string;
     publicKey: string;
-    encryptedPrivateKey: string;
     name: string;
-    handle: string;
-    picture: string;
+    handle?: string;
+    picture?: string;
     requireAuthentication: boolean;
 };
 
@@ -28,7 +27,8 @@ type AuthContextType = {
     currentAccount: Account | null;
     accounts: Account[];
     createAccount: (account: AccountAndPrivateKey) => Promise<void>;
-    login: (accountDid: string) => Promise<void>;
+    signChallenge: (challenge: string, permissions: string[]) => Promise<string>;
+    login: (accountDid: string, permissions: string[]) => Promise<void>;
     switchAccount: (accountDid: string) => Promise<void>;
     logout: () => Promise<void>;
     updateAccount: (updatedAccount: Account) => Promise<void>;
@@ -146,9 +146,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const createAccount = async (account: AccountAndPrivateKey): Promise<void> => {
         setLoading(true);
 
-        console.log("Creating new account:", account);
+        console.log("Creating new account");
         let did = account.did;
-        let encryptedPrivateKey = account.encryptedPrivateKey;
+        let privateKey = account.privateKey;
         let publicKey = account.publicKey;
 
         // Generate and store encryption key
@@ -160,7 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log("Saving encrypted private key to file system...");
         const accountFolder = `${FileSystem.documentDirectory}${did}/`;
         await FileSystem.makeDirectoryAsync(accountFolder, { intermediates: true });
-        await FileSystem.writeAsStringAsync(`${accountFolder}privateKey.pem.enc`, encryptedPrivateKey, { encoding: FileSystem.EncodingType.UTF8 });
+        await FileSystem.writeAsStringAsync(`${accountFolder}privateKey.pem.enc`, privateKey, { encoding: FileSystem.EncodingType.UTF8 });
         console.log("Encrypted private key saved");
 
         // Save public key to file system
@@ -172,7 +172,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         let newAccount: Account = {
             did,
             publicKey,
-            encryptedPrivateKey,
             name: account.name,
             handle: account.handle,
             picture: account.picture,
@@ -181,12 +180,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const updatedAccounts = [...accounts, newAccount];
         setAccounts(updatedAccounts);
 
-        console.log("Account created successfully", newAccount);
+        console.log("Account created successfully");
         console.log("Saving account data...");
         await storeAccounts(updatedAccounts);
         setCurrentAccount(account);
+
+        console.log("Saving DID...");
         await storeCurrentAccountDid(account.did);
         setLoading(false);
+        console.log("Done.");
+    };
+
+    const signChallenge = async (challenge: string, permissions: string[]): Promise<string> => {
+        console.log("Signing challenge...");
+        const signedChallenge = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, challenge);
+        console.log("Done.");
+        return signedChallenge;
     };
 
     // Login to an existing account by ID
@@ -235,6 +244,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 updateAccount,
                 loading,
                 initialized,
+                signChallenge,
             }}
         >
             {children}

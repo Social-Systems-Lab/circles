@@ -4,7 +4,7 @@ import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { countCirclesAndUsers, getCirclePath, updateCircle } from "@/lib/data/circle";
 import { causes, skills, features } from "@/lib/data/constants";
 import { getUserByDid, getUserByHandle } from "@/lib/data/user";
-import { getQdrantClient, getVbdCircleByHandle } from "@/lib/data/vdb";
+import { getQdrantClient, getVbdCircleById } from "@/lib/data/vdb";
 import { Cause, Circle, Metrics, MissionDisplay, PlatformMetrics, Skill, WithMetric } from "@/models/models";
 import { revalidatePath } from "next/cache";
 
@@ -149,12 +149,12 @@ type FetchCausesResponse = {
     message?: string;
 };
 
-export const fetchCausesMatchedToCircle = async (circleHandle: string): Promise<FetchCausesResponse> => {
+export const fetchCausesMatchedToCircle = async (circleId: string): Promise<FetchCausesResponse> => {
     try {
         const client = await getQdrantClient();
 
-        // Get the circle by handle (using the `retrieve` method)
-        const circleObject = await getVbdCircleByHandle(circleHandle);
+        // Get the circle by ID (using the `retrieve` method)
+        const circleObject = await getVbdCircleById(circleId);
         if (!circleObject || !circleObject.vector) {
             // Return all causes if no circle vector is found
             return { success: true, causes: causes as WithMetric<Cause>[] };
@@ -193,12 +193,12 @@ type FetchSkillsResponse = {
     skills: WithMetric<Skill>[];
     message?: string;
 };
-export const fetchSkillsMatchedToCircle = async (circleHandle: string): Promise<FetchSkillsResponse> => {
+export const fetchSkillsMatchedToCircle = async (circleId: string): Promise<FetchSkillsResponse> => {
     try {
         const client = await getQdrantClient();
 
-        // Get the circle by handle (using the `retrieve` method)
-        const circleObject = await getVbdCircleByHandle(circleHandle);
+        // Get the circle by ID (using the `retrieve` method)
+        const circleObject = await getVbdCircleById(circleId);
         if (!circleObject || !circleObject.vector) {
             return { success: true, skills: skills as WithMetric<Skill>[] };
         }
@@ -238,12 +238,12 @@ type FetchMissionStatementsResponse = {
     message?: string;
 };
 
-export const fetchMissionStatements = async (circleHandle: string): Promise<FetchMissionStatementsResponse> => {
+export const fetchMissionStatements = async (circleId: string): Promise<FetchMissionStatementsResponse> => {
     try {
         const client = await getQdrantClient();
 
-        // Get the circle by handle (using the `retrieve` method)
-        const circleObject = await getVbdCircleByHandle(circleHandle);
+        // Get the circle by ID (using the `retrieve` method)
+        const circleObject = await getVbdCircleById(circleId);
         if (!circleObject || !circleObject.vector) {
             return { success: true, missions: [] };
         }

@@ -44,6 +44,7 @@ export const getUserByDid = async (did: string): Promise<Circle> => {
 
 export const createNewUser = (
     did: string,
+    publicKey: string,
     name?: string,
     handle?: string,
     type?: AccountType,
@@ -51,6 +52,7 @@ export const createNewUser = (
 ): Circle => {
     let user: Circle = {
         did,
+        publicKey,
         name,
         handle,
         type,

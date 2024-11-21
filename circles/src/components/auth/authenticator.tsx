@@ -60,7 +60,7 @@ export const Authenticator = () => {
             window.ReactNativeWebView?.postMessage(
                 JSON.stringify({
                     type: "SignChallenge",
-                    challenge: response.challenge,
+                    challenge: response.challenge.challenge,
                     permissions: ["name", "profilePicture"], // Specify needed permissions here
                 }),
             );
@@ -71,7 +71,36 @@ export const Authenticator = () => {
     }, [setAuthInfo, setUser]);
 
     useEffect(() => {
+        // Listen for messages from the native app
+        const inSsiApp = window._SSI_ACCOUNTS !== undefined;
+
+        const onMessage = (event: MessageEvent) => {
+            //const message = JSON.parse(event.data);
+            WebviewLog("Received message", event.data);
+            // if (message.type === "ChallengeSigned") {
+            //     const signature = message.signature;
+            //     const publicKey = window._SSI_CURRENT_ACCOUNT?.publicKey;
+            //     if (publicKey && signature) {
+            //         verifySignature(publicKey, signature).then((verified) => {
+            //             if (verified) {
+            //                 checkAuthentication();
+            //             }
+            //         });
+            //     }
+            // }
+        };
+
+        if (inSsiApp) {
+            window.addEventListener("message", onMessage);
+        }
+
         checkAuthentication();
+
+        return () => {
+            if (inSsiApp) {
+                window.removeEventListener("message", onMessage);
+            }
+        };
     }, [checkAuthentication]);
 
     // return <div className="t-0 l-0 absolute h-10 w-screen bg-purple-400">{JSON.stringify(authInfo)}</div>

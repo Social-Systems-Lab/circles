@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent } from "@/components/ui/card";
-import { userAtom } from "@/lib/data/atoms";
+import { authInfoAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import WelcomeStep from "./welcome-step";
 import MissionStep from "./mission-step";
@@ -46,16 +46,18 @@ export default function Onboarding() {
     const [isOpen, setIsOpen] = useState(false);
     const [user, setUser] = useAtom(userAtom);
     const [currentStepIndex, setCurrentStepIndex] = useState(0);
+    const [authInfo] = useAtom(authInfoAtom);
 
     const [userData, setUserData] = useState<OnboardingUserData | undefined>(undefined);
 
     useEffect(() => {
         if (!user) return;
+        if (authInfo.authStatus !== "authenticated") return;
         if (!user.completedOnboardingSteps) {
             // TODO here we can show steps based on user's progress through onboarding, for now any steps done is considered complete
             setIsOpen(true);
         }
-    }, [user]);
+    }, [user, authInfo]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -147,7 +149,9 @@ export default function Onboarding() {
             <Card className="w-full max-w-5xl overflow-hidden rounded-2xl border-0 bg-[#f9f9f9] shadow-xl backdrop-blur-sm">
                 <CardContent className="p-6">
                     <div className="flex gap-6">
-                        <ProfileSummary userData={userData} />
+                        <div className="hidden md:block">
+                            <ProfileSummary userData={userData} />
+                        </div>
                         <div className="flex-1">
                             <Progress value={((currentStepIndex + 1) / totalSteps) * 100} className="mb-6" />
                             <AnimatePresence mode="wait">

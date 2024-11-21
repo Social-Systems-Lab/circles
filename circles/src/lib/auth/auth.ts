@@ -287,8 +287,12 @@ export const createUserAccount = async (displayName: string): Promise<{ user: Us
     const did = getDid(publicKey);
 
     // Create and save user in the database using DID and public key
-    const user = await createNewUser(did, displayName, publicKey);
-    await Circles.insertOne(user);
+    const user = createNewUser(did, publicKey, displayName);
+    let res = await Circles.insertOne(user);
+    user._id = res.insertedId.toString();
+
+    // add user as member of their own circle
+    await addMember(did, user._id!, ["admins", "moderators", "members"], undefined);
 
     // Add user as a member of the default circle
     const defaultCircle = await getDefaultCircle();
@@ -298,6 +302,7 @@ export const createUserAccount = async (displayName: string): Promise<{ user: Us
 
     const userPrivate = await getUserPrivate(did);
 
+    //console.log("Created user", userPrivate);
     return { user: userPrivate, privateKey }; // Return user and private key for client-side storage
 };
 
@@ -321,6 +326,7 @@ export const issueChallenge = async (publicKey: string): Promise<Challenge> => {
     let expiresAt = new Date(createdAt.getTime() + 5 * 60 * 1000); // 5 minutes
 
     // store the challenge
+    console.log("Issuing challenge", challengeStr, "for public key", publicKey);
     let challenge: Challenge = { challenge: challengeStr, createdAt, expiresAt, publicKey };
     let res = await Challenges.insertOne(challenge);
     challenge._id = res.insertedId.toString();
@@ -329,8 +335,8 @@ export const issueChallenge = async (publicKey: string): Promise<Challenge> => {
 
 export const getChallenge = async (publicKey: string): Promise<Challenge> => {
     // get the most recent challenge
-    let challenge = (await Challenges.findOne({ publicKey }, { sort: { createdAt: -1 } })) as Challenge;
-    return challenge;
+    let res = (await Challenges.findOne({ publicKey }, { sort: { createdAt: -1 } })) as Challenge;
+    return res;
 };
 
 export const getDid = (publicKey: string): string => {

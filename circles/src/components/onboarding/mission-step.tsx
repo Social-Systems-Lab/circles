@@ -44,7 +44,7 @@ function MissionStep({ userData, setUserData, nextStep, prevStep }: OnboardingSt
         if (!user?.handle) return;
 
         const fetchMissions = async () => {
-            const response = await fetchMissionStatements(user.handle!);
+            const response = await fetchMissionStatements(user._id!);
             if (response.success) {
                 setMissionStatements(response.missions);
             } else {

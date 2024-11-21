@@ -151,16 +151,13 @@ const skillNs = "e8b887ec-5e3d-5383-9565-7fc72bb0e251";
 export const upsertVbdCircles = async (circles: Circle[]) => {
     const client = await getQdrantClient();
 
-    // Ensure that we are only using valid circle IDs for upserting
-    const validCircles = circles.filter((circle) => circle.handle); // Filter out any circles without a valid `handle`
-
     console.log("Getting embeddings for circles...");
 
-    const embeddings = await getEmbeddings(validCircles.map((circle) => formatCircleForEmbedding(circle)));
+    const embeddings = await getEmbeddings(circles.map((circle) => formatCircleForEmbedding(circle)));
 
-    const qdrantPoints = validCircles.map((circle, i) => ({
-        id: uuidv5(circle.handle!, circleNs), // Ensure handle is always a string (you can cast safely since we filtered out invalid ones)
-        vector: embeddings[i], // Ensure embedding is a valid number[]
+    const qdrantPoints = circles.map((circle, i) => ({
+        id: uuidv5(circle._id!, circleNs),
+        vector: embeddings[i],
         payload: {
             name: circle.name,
             description: circle.description,
@@ -264,17 +261,17 @@ export const upsertVbdSkills = async () => {
 };
 
 // Method to delete circles from Qdrant by ID
-export const deleteVbdCircle = async (circleHandle: string) => {
+export const deleteVbdCircle = async (circleId: string) => {
     const client = await getQdrantClient();
 
-    let uuid = uuidv5(circleHandle, circleNs);
+    let uuid = uuidv5(circleId, circleNs);
 
     // Delete the circle from the 'circles' collection in Qdrant
     await client.delete("circles", {
         points: [uuid],
     });
 
-    console.log(`Circle with ID ${circleHandle} deleted from Qdrant.`);
+    console.log(`Circle with ID ${circleId} deleted from Qdrant.`);
 };
 
 // Method to delete posts from Qdrant by ID
@@ -291,12 +288,12 @@ export const deleteVbdPost = async (postId: string) => {
     console.log(`Post with ID ${postId} deleted from Qdrant.`);
 };
 
-export const getVbdCircleByHandle = async (circleHandle: string) => {
+export const getVbdCircleById = async (circleId: string) => {
     const client = await getQdrantClient();
 
-    let uuid = uuidv5(circleHandle, circleNs);
+    let uuid = uuidv5(circleId, circleNs);
 
-    // Retrieve the circle by handle (which is used as the ID)
+    // Retrieve the circle by ID
     const response = await client.retrieve("circles", {
         ids: [uuid],
         with_vector: true, // If you need the vector as well
@@ -306,7 +303,7 @@ export const getVbdCircleByHandle = async (circleHandle: string) => {
     if (response.length > 0) {
         return response[0]; // Return the first match if available
     } else {
-        console.error(`No circle found with handle: ${circleHandle}`);
+        console.error(`No circle found with ID: ${circleId}`);
         return null;
     }
 };
@@ -342,10 +339,11 @@ export const getVbdSimilarity = async (
     // Determine whether the item is a Circle or a Post, and select the appropriate collection
     const isCircle = item?.circleType === "circle" || item?.circleType === "user";
     const collectionName = isCircle ? "circles" : "posts";
-    const idName = isCircle ? item.handle : item._id?.toString();
+    const idName = item._id?.toString();
+    const sourceIdName = source._id?.toString();
     const targetNs = isCircle ? circleNs : postNs;
 
-    let sourceUuid = uuidv5(source.handle!, circleNs);
+    let sourceUuid = uuidv5(sourceIdName, circleNs);
     let targetUuid = uuidv5(idName, targetNs);
 
     if (!idName) return undefined;

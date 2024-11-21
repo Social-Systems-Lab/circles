@@ -930,7 +930,7 @@ const ItemSelectionField: React.FC<ItemSelectionFieldProps> = ({
     const [searchText, setSearchText] = useState("");
     const [allItems, setAllItems] = useState<any[]>([]);
     const [isPending, startTransition] = useTransition();
-    const circleHandle = useWatch({ control, name: "handle" });
+    const circleId = useWatch({ control, name: "_id" });
 
     const initialItems = itemType === "causes" ? causes : skills;
     const fetchMatchedItems = itemType === "causes" ? fetchCausesMatchedToCircle : fetchSkillsMatchedToCircle;
@@ -949,7 +949,7 @@ const ItemSelectionField: React.FC<ItemSelectionFieldProps> = ({
 
     useEffect(() => {
         startTransition(async () => {
-            const response = await fetchMatchedItems(circleHandle);
+            const response = await fetchMatchedItems(circleId);
             if (response.success) {
                 setAllItems(response[itemType]);
             } else {

@@ -23,7 +23,7 @@ function FinalStep({ nextStep }: OnboardingStepProps) {
     return (
         <div className="space-y-4">
             <div className="relative">
-                <div className="h-[200px] w-full">
+                <div className="hidden h-[200px] w-full md:block">
                     <Image
                         src="/images/cover3.png"
                         alt="Global community"
@@ -31,7 +31,7 @@ function FinalStep({ nextStep }: OnboardingStepProps) {
                         fill
                     />
                 </div>
-                <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black bg-opacity-50">
+                <div className="absolute inset-0 flex hidden items-center justify-center rounded-lg bg-black bg-opacity-50 md:block">
                     <div className="max-w-[350px] rounded-lg bg-white p-4 text-center">
                         <PiQuotesFill className="mx-auto mb-2 text-blue-500" />
                         <p className="mb-2 text-sm italic text-gray-800">

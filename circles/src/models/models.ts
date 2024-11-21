@@ -678,11 +678,14 @@ export type ChatRoomMember = z.infer<typeof chatRoomMemberSchema>;
 export type Account = {
     did: string;
     publicKey: string;
-    encryptedPrivateKey: string;
     name: string;
     handle: string;
     picture: string;
     requireAuthentication: boolean;
+};
+
+export type AccountAndPrivateKey = Partial<Account> & {
+    privateKey: string;
 };
 
 export type AuthInfo = {

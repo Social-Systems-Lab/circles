@@ -74,7 +74,7 @@ function ProfileSummary({ userData }: ProfileSummaryProps) {
                         <div className="mb-0 mt-0 font-semibold">Skills</div>
                         <div className="flex flex-wrap gap-1">
                             {userData.selectedSkills.map((offer) => (
-                                <Badge key={offer.id} variant="secondary">
+                                <Badge key={offer.handle} variant="secondary">
                                     {offer.name}
                                 </Badge>
                             ))}

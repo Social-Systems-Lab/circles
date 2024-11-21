@@ -38,7 +38,7 @@ function SkillsStep({ userData, setUserData, nextStep, prevStep }: OnboardingSte
 
         // Use startTransition to fetch skills based on mission statement
         startTransition(async () => {
-            const response = await fetchSkillsMatchedToCircle(user.handle!);
+            const response = await fetchSkillsMatchedToCircle(user._id!);
             if (response.success) {
                 setAllSkills(response.skills);
             } else {

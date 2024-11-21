@@ -1,13 +1,13 @@
 // index.tsx
 import React, { useState, useRef, useEffect } from "react";
-import { View, TextInput, TouchableOpacity, Image, Modal, StyleSheet } from "react-native";
+import { View, TextInput, TouchableOpacity, Image, Modal, StyleSheet, StatusBar } from "react-native";
 import { useAuth } from "../components/auth/AuthContext";
 import { WebView, WebViewMessageEvent } from "react-native-webview";
 
 const circlesUrl = "http://192.168.10.204:3000";
 
 export default function Index() {
-    const { accounts, currentAccount, createAccount, initialized } = useAuth();
+    const { accounts, currentAccount, createAccount, signChallenge, initialized } = useAuth();
     const webViewRef = useRef<WebView>(null);
     const [jsCode, setJsCode] = useState<string | undefined>(undefined);
 
@@ -36,10 +36,29 @@ export default function Index() {
         try {
             const data = JSON.parse(event.nativeEvent.data);
             if (data.type === "CreateAccount") {
-                console.log("[AddAccount]:", data);
-                // The web app requests to add a new account
+                // console.log("[CreateAccount]:", data);
                 const { account } = data;
                 await createAccount(account);
+
+                // console.log("Sending message to WebView", webViewRef.current);
+                // webViewRef.current?.injectJavaScript(`
+                //     window.dispatchEvent(new MessageEvent('message', {
+                //         data: ${JSON.stringify({ type: "ChallengeSigned", signedChallenge })}
+                //     }));
+                // `);
+                // webViewRef.current?.postMessage(JSON.stringify({ type: "ChallengeSigned", signedChallenge }));
+            } else if (data.type === "SignChallenge") {
+                console.log("TODO [SignChallenge]:", data);
+                let signedChallenge = await signChallenge(data.challenge, []);
+
+                // Send signed challenge back to WebView
+                webViewRef.current?.injectJavaScript(`
+                    window.dispatchEvent(new MessageEvent('message', {
+                        data: ${JSON.stringify({ type: "ChallengeSigned", signedChallenge })}
+                    }));
+                `);
+
+                // webViewRef.current?.postMessage(JSON.stringify({ type: "ChallengeSigned", signedChallenge }));
             } else if (data.type === "Log") {
                 // Log messages from the WebView
                 console.log("[WebView]: " + data.message, data.optionalParams);
@@ -54,6 +73,7 @@ export default function Index() {
 
     return (
         <View style={{ flex: 1 }}>
+            <StatusBar backgroundColor="white" barStyle="dark-content" />
             {jsCode && (
                 <WebView ref={webViewRef} source={{ uri: circlesUrl }} style={{ flex: 1 }} onMessage={handleWebViewMessage} injectedJavaScript={jsCode} />
             )}
