@@ -16,6 +16,7 @@ import {
     ArrowLeft,
     Circle as CircleIcon,
 } from "lucide-react";
+import { MdOutlineLogout } from "react-icons/md";
 import {
     authInfoAtom,
     contentPreviewAtom,
@@ -36,6 +37,7 @@ import {
 } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { ChatRoomComponent } from "../modules/chat/chat-room";
+import { logOut } from "../auth/actions";
 
 type ChatRoomPreview = {
     id: string;
@@ -54,15 +56,15 @@ type Notification = {
 };
 
 export const UserToolbox = () => {
-    const [user] = useAtom(userAtom);
-    const [userToolboxState] = useAtom(userToolboxDataAtom);
+    const [user, setUser] = useAtom(userAtom);
+    const [userToolboxState, setUserToolboxState] = useAtom(userToolboxDataAtom);
     const [tab, setTab] = useState<UserToolboxTab | undefined>(undefined);
     const [selectedChat, setSelectedChat] = useState<ChatRoomPreview | undefined>(undefined);
     const [messages, setMessages] = useState<ChatMessageDisplay[]>([]);
     const [isLoadingMessages, setIsLoadingMessages] = useState(false);
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
-    const [authInfo] = useAtom(authInfoAtom);
+    const [authInfo, setAuthInfo] = useAtom(authInfoAtom);
 
     const router = useRouter();
 
@@ -139,6 +141,13 @@ export const UserToolbox = () => {
 
     const signOut = () => {
         // clear the user data and redirect to the you've been signed out
+        logOut();
+        setUser(undefined);
+        setAuthInfo({ ...authInfo, authStatus: "unauthenticated" });
+        // close the toolbox
+        setUserToolboxState(undefined);
+
+        router.push("/logged-out");
     };
 
     if (userToolboxState === undefined) return null;
@@ -193,7 +202,7 @@ export const UserToolbox = () => {
                                 value="account"
                                 className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
                             >
-                                <Edit className="h-5 w-5" />
+                                <MdOutlineLogout className="h-5 w-5" />
                             </TabsTrigger>
                         )}
 
@@ -289,7 +298,6 @@ export const UserToolbox = () => {
                         ) : (
                             <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
                                 No circles joined
-                                <pre>{JSON.stringify(user?.memberships, null, 2)}</pre>
                             </div>
                         )}
                     </TabsContent>
@@ -319,7 +327,7 @@ export const UserToolbox = () => {
                     </TabsContent>
                     {!authInfo.inSsiApp && (
                         <TabsContent value="account" className="m-0 flex-grow overflow-auto pt-1">
-                            <div className="flex h-full items-center justify-center">
+                            <div className="flex h-full items-center justify-center pt-4">
                                 <Button variant="outline" size="sm" onClick={signOut}>
                                     Sign Out
                                 </Button>

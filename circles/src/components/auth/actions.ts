@@ -7,6 +7,7 @@ import { Account, Challenge, UserPrivate } from "@/models/models";
 import { cookies } from "next/headers";
 import crypto from "crypto";
 import { createUserAccount, getChallenge, getDid, issueChallenge, verifyChallengeSignature } from "@/lib/auth/auth";
+import { revalidatePath } from "next/cache";
 
 type CreateAccountResponse = {
     privateKey: string;
@@ -98,4 +99,20 @@ export async function verifySignatureAction(
 export async function logOut(): Promise<void> {
     // clear session
     (await cookies()).set("token", "", { maxAge: 0 });
+
+    // clear cache
+    revalidatePath(`/`);
+}
+
+export async function createTestAccountAction(): Promise<CreateAccountResponse> {
+    // create a new account
+    let account = await createUserAccount("Test Account");
+    let token = await generateUserToken(account.user.did!);
+    await createSession(token);
+
+    let response: CreateAccountResponse = {
+        privateKey: account.privateKey,
+        user: account.user,
+    };
+    return response;
 }

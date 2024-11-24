@@ -31,7 +31,7 @@ function FinalStep({ nextStep }: OnboardingStepProps) {
                         fill
                     />
                 </div>
-                <div className="absolute inset-0 flex hidden items-center justify-center rounded-lg bg-black bg-opacity-50 md:block">
+                <div className="absolute inset-0 hidden items-center justify-center rounded-lg bg-black bg-opacity-50 md:block md:flex">
                     <div className="max-w-[350px] rounded-lg bg-white p-4 text-center">
                         <PiQuotesFill className="mx-auto mb-2 text-blue-500" />
                         <p className="mb-2 text-sm italic text-gray-800">

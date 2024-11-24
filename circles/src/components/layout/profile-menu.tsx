@@ -12,9 +12,26 @@ import { IoMdQrScanner } from "react-icons/io";
 import { MdQrCodeScanner, MdQrCode } from "react-icons/md";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import QRCode from "react-qr-code";
+import { createTestAccountAction } from "../auth/actions";
 
 const QRCodePopover = () => {
-    const [authInfo] = useAtom(authInfoAtom);
+    const [authInfo, setAuthInfo] = useAtom(authInfoAtom);
+    const [user, setUser] = useAtom(userAtom);
+
+    const onCreateTestAccount = async () => {
+        const response = await createTestAccountAction();
+        if (response) {
+            setAuthInfo({
+                authStatus: "authenticated",
+                inSsiApp: false,
+                accounts: undefined,
+                currentAccount: undefined,
+            });
+            setUser(response.user);
+        }
+    };
+
+    if (authInfo.inSsiApp) return null;
 
     return (
         <div className="flex items-center justify-center">
@@ -25,6 +42,11 @@ const QRCodePopover = () => {
                     Scan this code with your Circles app to authenticate. Download the app if you don’t have it
                     installed.
                 </p>
+                {/* Discrete icon button to log in with test account */}
+
+                <Button variant="ghost" size="sm" className="mt-4" onClick={onCreateTestAccount}>
+                    Log in with test account
+                </Button>
             </div>
         </div>
     );
@@ -138,21 +160,6 @@ const ProfileMenuBar = () => {
                     )}
                 </div>
             </>
-
-            {/* {authInfo.authStatus === "unauthenticated" && (
-                <div className="flex flex-row gap-2">
-                    <Button
-                        className="h-full w-full bg-[#00000077] text-white"
-                        onClick={onLogInClick}
-                        variant="outline"
-                    >
-                        Log in
-                    </Button>
-                    <Button className="h-full w-full" onClick={onSignUpClick} variant="outline">
-                        Sign up
-                    </Button>
-                </div>
-            )} */}
         </div>
     );
 };
