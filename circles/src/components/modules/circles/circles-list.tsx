@@ -135,7 +135,7 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle }: CirclesListProp
                     }}
                 >
                     <Input
-                        placeholder="Search circles 3..."
+                        placeholder="Search circles..."
                         value={searchQuery}
                         onChange={(event) => setSearchQuery(event.target.value)}
                         className="flex-1"

@@ -275,6 +275,19 @@ export const isAuthorized = async (
 
 // new auth
 
+export const getUniqueHandle = async (displayName: string): Promise<string> => {
+    let handle = displayName.toLowerCase().replace(/\s/g, "-");
+
+    // check if handle is already in use
+    let existingUser = await Circles.findOne({ handle: handle });
+    while (existingUser) {
+        // Append a random number to the handle to make it unique
+        handle += Math.floor(Math.random() * 10);
+        existingUser = await Circles.findOne({ handle: handle });
+    }
+    return handle;
+};
+
 export const createUserAccount = async (displayName: string): Promise<{ user: UserPrivate; privateKey: string }> => {
     // Generate RSA key pair
     const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", {
@@ -286,8 +299,12 @@ export const createUserAccount = async (displayName: string): Promise<{ user: Us
     // Derive DID from public key
     const did = getDid(publicKey);
 
+    // Create a handle for the user
+    let handle = await getUniqueHandle(displayName);
+
     // Create and save user in the database using DID and public key
-    const user = createNewUser(did, publicKey, displayName);
+    const user = createNewUser(did, publicKey, displayName, handle);
+
     let res = await Circles.insertOne(user);
     user._id = res.insertedId.toString();
 
@@ -320,23 +337,57 @@ export const createUser = async (did: string, publicKey: string): Promise<UserPr
     return userPrivate;
 };
 
-export const issueChallenge = async (publicKey: string): Promise<Challenge> => {
+export const issueChallenge = async (publicKey?: string): Promise<Challenge> => {
     let challengeStr = crypto.randomBytes(32).toString("hex");
     let createdAt = new Date();
     let expiresAt = new Date(createdAt.getTime() + 5 * 60 * 1000); // 5 minutes
 
     // store the challenge
-    console.log("Issuing challenge", challengeStr, "for public key", publicKey);
+    console.log("Issuing challenge", challengeStr, "public key", publicKey);
     let challenge: Challenge = { challenge: challengeStr, createdAt, expiresAt, publicKey };
     let res = await Challenges.insertOne(challenge);
     challenge._id = res.insertedId.toString();
     return challenge;
 };
 
-export const getChallenge = async (publicKey: string): Promise<Challenge> => {
+export const getChallenge = async (challengeStr: string): Promise<Challenge> => {
     // get the most recent challenge
-    let res = (await Challenges.findOne({ publicKey }, { sort: { createdAt: -1 } })) as Challenge;
+    let res = (await Challenges.findOne({ challenge: challengeStr }, { sort: { createdAt: -1 } })) as Challenge;
     return res;
+};
+
+export const verifyChallengeSignature = async (
+    publicKey: string,
+    signature: string,
+    challengeStr: string,
+): Promise<boolean> => {
+    console.log("********* VERIFYING SIGNATURE **********");
+    console.log("Public key", publicKey);
+    console.log("Signature", signature);
+    console.log("Challenge", challengeStr);
+
+    // get the most recent challenge
+    let res = (await Challenges.findOne({ challenge: challengeStr }, { sort: { createdAt: -1 } })) as Challenge;
+    if (!res) {
+        console.log("Challenge not found");
+        return false;
+    }
+
+    // verify the signature
+    const verify = crypto.createVerify("SHA256");
+    verify.update(challengeStr);
+    const isValidSignature = verify.verify(publicKey, signature, "base64");
+
+    if (!isValidSignature) {
+        console.log("Invalid signature");
+        return false;
+    }
+
+    console.log("Signature valid");
+
+    // challenge is valid, mark it as verified
+    await Challenges.updateOne({ _id: res._id }, { $set: { verified: true, publicKey } });
+    return true;
 };
 
 export const getDid = (publicKey: string): string => {

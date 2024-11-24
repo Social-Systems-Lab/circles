@@ -6,6 +6,7 @@ import * as FileSystem from "expo-file-system";
 import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
+import { useWebView } from "../ui/WebViewContext";
 
 // Polyfill Buffer for React Native if necessary
 if (typeof Buffer === "undefined") {
@@ -27,7 +28,7 @@ type AuthContextType = {
     currentAccount: Account | null;
     accounts: Account[];
     createAccount: (account: AccountAndPrivateKey) => Promise<void>;
-    signChallenge: (challenge: string, permissions: string[]) => Promise<string>;
+    signChallenge: (challenge: string, permissions: string[], isExternal: boolean) => Promise<void>;
     login: (accountDid: string, permissions: string[]) => Promise<void>;
     switchAccount: (accountDid: string) => Promise<void>;
     logout: () => Promise<void>;
@@ -43,6 +44,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [loading, setLoading] = useState<boolean>(false);
     const [initialized, setInitialized] = useState<boolean>(false);
+    const { postMessageToWebView } = useWebView();
 
     // Storage Keys
     const ACCOUNTS_KEY = "accounts";
@@ -103,7 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setLoading(true);
 
             console.log("Clearing accounts...");
-            await AsyncStorage.setItem(ACCOUNTS_KEY, "");
+            //await AsyncStorage.setItem(ACCOUNTS_KEY, "");
 
             const loadedAccounts = await loadAccounts();
             setAccounts(loadedAccounts);
@@ -130,16 +132,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         initialize();
     }, []);
 
-    // Encrypt data using AES (Placeholder)
-    const encryptData = (data: string, keyBytes: Uint8Array): string => {
-        // TODO implement encryption here
-        return data;
+    const encrypt = async (data: string, key: Uint8Array): Promise<string> => {
+        return data; // TODO Implement encryption
     };
 
-    // Decrypt data using AES (Placeholder)
-    const decryptData = (encryptedData: string, keyBytes: Uint8Array): string => {
-        // TODO implement decryption here
-        return encryptedData;
+    const decrypt = async (data: string, key: Uint8Array): Promise<string> => {
+        return data; // TODO Implement decryption
     };
 
     // Create a new account
@@ -156,11 +154,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         let encryptionKey = await generateEncryptionKey();
         await storeEncryptionKey(account, encryptionKey);
 
+        // Encrypt private key
+        console.log("Encrypting private key...");
+        let encryptedPrivateKey = await encrypt(privateKey, encryptionKey);
+
         // Save encrypted private key to file system
         console.log("Saving encrypted private key to file system...");
         const accountFolder = `${FileSystem.documentDirectory}${did}/`;
         await FileSystem.makeDirectoryAsync(accountFolder, { intermediates: true });
-        await FileSystem.writeAsStringAsync(`${accountFolder}privateKey.pem.enc`, privateKey, { encoding: FileSystem.EncodingType.UTF8 });
+        await FileSystem.writeAsStringAsync(`${accountFolder}privateKey.pem.enc`, encryptedPrivateKey, { encoding: FileSystem.EncodingType.UTF8 });
         console.log("Encrypted private key saved");
 
         // Save public key to file system
@@ -191,11 +193,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log("Done.");
     };
 
-    const signChallenge = async (challenge: string, permissions: string[]): Promise<string> => {
+    const signChallenge = async (challenge: string, permissions: string[], isExternal: boolean): Promise<void> => {
         console.log("Signing challenge...");
-        const signedChallenge = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, challenge);
-        console.log("Done.");
-        return signedChallenge;
+
+        if (!currentAccount) {
+            return;
+        }
+
+        // get private key from file system
+        const did = currentAccount?.did;
+        const accountFolder = `${FileSystem.documentDirectory}${did}/`;
+        const encryptedPrivateKey = await FileSystem.readAsStringAsync(`${accountFolder}privateKey.pem.enc`, { encoding: FileSystem.EncodingType.UTF8 });
+
+        // decrypt private key
+        const encryptionKey = await retrieveEncryptionKey(currentAccount);
+        if (!encryptionKey) {
+            console.error("Encryption key not found.");
+            return;
+        }
+        const privateKey = await decrypt(encryptedPrivateKey, encryptionKey);
+
+        // Send to webview for signing
+        postMessageToWebView({
+            type: "SignChallenge",
+            challenge,
+            permissions,
+            isExternal,
+            privateKey,
+            publicKey: currentAccount?.publicKey,
+        });
+
+        // const signedChallenge = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, challenge);
+        // // convert to base64
+        // // const signedChallengeBase64 = Buffer.from(signedChallenge, "hex").toString("base64");
+        // console.log("Done.");
+
+        // if (notifyWebview) {
+        //     // Send signed challenge back to WebView
+        //     postMessageToWebView({
+        //         type: "QRCodeChallengeSigned",
+        //         signature: signedChallenge,
+        //         publicKey: currentAccount?.publicKey,
+        //         challenge: challenge,
+        //         isExternal,
+        //     });
+        // }
+
+        //        return signedChallenge;
     };
 
     // Login to an existing account by ID

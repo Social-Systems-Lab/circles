@@ -16,7 +16,13 @@ import {
     ArrowLeft,
     Circle as CircleIcon,
 } from "lucide-react";
-import { contentPreviewAtom, sidePanelContentVisibleAtom, userAtom, userToolboxDataAtom } from "@/lib/data/atoms";
+import {
+    authInfoAtom,
+    contentPreviewAtom,
+    sidePanelContentVisibleAtom,
+    userAtom,
+    userToolboxDataAtom,
+} from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { useRouter } from "next/navigation";
 import { getChatMessagesAction } from "@/components/modules/chat/actions"; // Adjust the import path
@@ -56,6 +62,7 @@ export const UserToolbox = () => {
     const [isLoadingMessages, setIsLoadingMessages] = useState(false);
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+    const [authInfo] = useAtom(authInfoAtom);
 
     const router = useRouter();
 
@@ -130,6 +137,10 @@ export const UserToolbox = () => {
         );
     };
 
+    const signOut = () => {
+        // clear the user data and redirect to the you've been signed out
+    };
+
     if (userToolboxState === undefined) return null;
 
     return (
@@ -177,6 +188,15 @@ export const UserToolbox = () => {
                         >
                             <Users className="h-5 w-5" />
                         </TabsTrigger>
+                        {!authInfo.inSsiApp && (
+                            <TabsTrigger
+                                value="account"
+                                className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
+                            >
+                                <Edit className="h-5 w-5" />
+                            </TabsTrigger>
+                        )}
+
                         {/* ... other tabs */}
                     </TabsList>
                     <TabsContent value="chat" className="m-0 flex-grow overflow-auto pt-1">
@@ -297,7 +317,15 @@ export const UserToolbox = () => {
                             </div>
                         )}
                     </TabsContent>
-                    {/* Other tabs content can be added here */}
+                    {!authInfo.inSsiApp && (
+                        <TabsContent value="account" className="m-0 flex-grow overflow-auto pt-1">
+                            <div className="flex h-full items-center justify-center">
+                                <Button variant="outline" size="sm" onClick={signOut}>
+                                    Sign Out
+                                </Button>
+                            </div>
+                        </TabsContent>
+                    )}
                 </Tabs>
             </CardContent>
         </Card>

@@ -666,10 +666,11 @@ export const chatRoomMemberSchema = z.object({
 
 export const challengeSchema = z.object({
     _id: z.any().optional(),
-    publicKey: z.string(),
+    publicKey: z.string().optional(),
     challenge: z.string(),
     createdAt: z.date(),
     expiresAt: z.date(),
+    verified: z.boolean().optional(),
 });
 export type Challenge = z.infer<typeof challengeSchema>;
 
@@ -693,4 +694,5 @@ export type AuthInfo = {
     inSsiApp: boolean;
     currentAccount?: Account;
     accounts?: Account[];
+    challenge?: Challenge;
 };

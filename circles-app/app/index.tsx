@@ -3,13 +3,19 @@ import React, { useState, useRef, useEffect } from "react";
 import { View, TextInput, TouchableOpacity, Image, Modal, StyleSheet, StatusBar } from "react-native";
 import { useAuth } from "../components/auth/AuthContext";
 import { WebView, WebViewMessageEvent } from "react-native-webview";
+import { useCameraPermissions } from "expo-camera";
+import { useRouter } from "expo-router";
+import { useWebView } from "@/components/ui/WebViewContext";
 
 const circlesUrl = "http://192.168.10.204:3000";
 
 export default function Index() {
+    const router = useRouter();
     const { accounts, currentAccount, createAccount, signChallenge, initialized } = useAuth();
-    const webViewRef = useRef<WebView>(null);
+    const { webViewRef } = useWebView();
+    // const webViewRef = useRef<WebView>(null);
     const [jsCode, setJsCode] = useState<string | undefined>(undefined);
+    const [permission, requestPermission] = useCameraPermissions();
 
     // Function to inject accounts into the web app
     useEffect(() => {
@@ -39,32 +45,27 @@ export default function Index() {
                 // console.log("[CreateAccount]:", data);
                 const { account } = data;
                 await createAccount(account);
-
-                // console.log("Sending message to WebView", webViewRef.current);
-                // webViewRef.current?.injectJavaScript(`
-                //     window.dispatchEvent(new MessageEvent('message', {
-                //         data: ${JSON.stringify({ type: "ChallengeSigned", signedChallenge })}
-                //     }));
-                // `);
-                // webViewRef.current?.postMessage(JSON.stringify({ type: "ChallengeSigned", signedChallenge }));
             } else if (data.type === "SignChallenge") {
                 console.log("TODO [SignChallenge]:", data);
-                let signedChallenge = await signChallenge(data.challenge, []);
-
-                // Send signed challenge back to WebView
-                webViewRef.current?.injectJavaScript(`
-                    window.dispatchEvent(new MessageEvent('message', {
-                        data: ${JSON.stringify({ type: "ChallengeSigned", signedChallenge })}
-                    }));
-                `);
-
-                // webViewRef.current?.postMessage(JSON.stringify({ type: "ChallengeSigned", signedChallenge }));
+                await signChallenge(data.challenge, [], false);
             } else if (data.type === "Log") {
                 // Log messages from the WebView
                 console.log("[WebView]: " + data.message, data.optionalParams);
             } else if (data.type === "Loaded") {
                 // The web app has loaded
                 console.log("[WebView]: Loaded");
+            } else if (data.type === "ScanQRCode") {
+                console.log("[WebView]: User requests to scan QR code");
+                if (!permission?.granted) {
+                    console.log("Requesting camera permission");
+                    let res = await requestPermission();
+                    if (!res.granted) {
+                        console.log("Camera permission denied");
+                        return;
+                    }
+                }
+                // open QR scanner
+                router.push("/qr-scanner");
             }
         } catch (error) {
             console.error("Error parsing message from WebView:", error);

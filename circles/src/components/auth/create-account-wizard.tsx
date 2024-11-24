@@ -22,30 +22,33 @@ interface WelcomeStepProps {
 const WelcomeStep: React.FC<WelcomeStepProps> = ({ onNext }) => (
     <div className="mx-auto max-w-md space-y-6">
         <h1 className="text-center text-3xl font-bold tracking-tight md:text-4xl">Welcome to Circles</h1>
-        <p className="text-center text-lg text-gray-600 md:text-xl">Your sovereign digital identity starts here</p>
+        <p className="text-center text-lg text-gray-600 md:text-xl">
+            Your journey to a more intentional digital space begins here
+        </p>
         <ul className="space-y-3 text-sm text-gray-600 md:text-base">
             <li className="flex items-start">
                 <Shield className="mr-2 mt-1 h-5 w-5 flex-shrink-0 text-blue-600" />
                 <span>
-                    <strong>Your Data:</strong> You own your data - no third parties, no clouds.
+                    <strong>Your Data:</strong> Take the first step toward owning your digital identity.
                 </span>
             </li>
             <li className="flex items-start">
                 <Key className="mr-2 mt-1 h-5 w-5 flex-shrink-0 text-blue-600" />
                 <span>
-                    <strong>Your Rules:</strong> Set your boundaries, with no hidden algorithms.
+                    <strong>Your Rules:</strong> Set boundaries and choose how you connect.
                 </span>
             </li>
             <li className="flex items-start">
                 <User className="mr-2 mt-1 h-5 w-5 flex-shrink-0 text-blue-600" />
                 <span>
-                    <strong>Your Privacy:</strong> Your data stays encrypted, accessible to no one but you.
+                    <strong>Your Privacy:</strong> Designed with security in mind, starting with your cryptographic
+                    keys.
                 </span>
             </li>
             <li className="flex items-start">
                 <Share2 className="mr-2 mt-1 h-5 w-5 flex-shrink-0 text-blue-600" />
                 <span>
-                    <strong>Free Forever:</strong> No hidden costs or fees.
+                    <strong>Always Free to Use:</strong> No costs unless you choose to monetize your content.
                 </span>
             </li>
         </ul>
@@ -64,22 +67,26 @@ const IdentityStep: React.FC<IdentityStepProps> = ({ onNext }) => (
     <div className="mx-auto max-w-md space-y-6">
         <h2 className="text-center text-2xl font-semibold tracking-tight md:text-3xl">Your Digital Identity</h2>
         <div className="space-y-4 text-sm text-gray-600 md:text-base">
-            <p>In the next steps, you'll create your basic profile. Remember, with Circles:</p>
+            <p>In the next steps, you'll create your basic profile. Circles is designed to provide:</p>
             <ul className="space-y-2">
                 <li className="flex items-start">
                     <Smartphone className="mr-2 mt-1 h-5 w-5 flex-shrink-0 text-blue-600" />
-                    <span>Your data stays on your device, not in the cloud.</span>
+                    <span>A digital identity you control.</span>
                 </li>
                 <li className="flex items-start">
                     <Globe className="mr-2 mt-1 h-5 w-5 flex-shrink-0 text-blue-600" />
-                    <span>Your profile, contacts, and posts go with you across platforms.</span>
+                    <span>Secure and intentional connections.</span>
                 </li>
                 <li className="flex items-start">
                     <Key className="mr-2 mt-1 h-5 w-5 flex-shrink-0 text-blue-600" />
-                    <span>You control what you share and with whom.</span>
+                    <span>Flexibility to grow your presence over time.</span>
                 </li>
             </ul>
-            <p>Let's start building your sovereign digital presence!</p>
+            <p>
+                We're working toward giving you full ownership of your data, with less reliance on centralized systems.
+                For now, your Circles profile lives securely on our platform, but we’re on a path to bring even more
+                control to your fingertips.
+            </p>
         </div>
         <Button onClick={onNext} className="w-full rounded-full bg-blue-600 text-white hover:bg-blue-700">
             Create Profile
@@ -261,9 +268,9 @@ export const CreateAccountWizard = () => {
                 return <IdentityStep onNext={handleNextStep} />;
             case 2:
                 return <DisplayNameStep onNext={handleNextStep} />;
+            // case 3:
+            //     return <ProfilePictureStep onNext={handleNextStep} />;
             case 3:
-                return <ProfilePictureStep onNext={handleNextStep} />;
-            case 4:
                 return <ResponsibilityStep />;
             default:
                 return null;
