@@ -4,7 +4,7 @@ services:
     synapse_setup:
         image: matrixdotorg/synapse:v1.63.0
         env_file:
-            - .env.local
+            - .env
         environment:
             - SYNAPSE_SERVER_NAME=${CIRCLES_DOMAIN}
         volumes:
