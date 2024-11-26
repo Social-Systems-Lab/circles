@@ -15,6 +15,10 @@ type HomeModuleProps = {
 };
 
 export default async function HomeModule({ circle, isDefaultCircle, searchParams }: HomeModuleProps) {
+    if (process.env.IS_BUILD === "true") {
+        return null;
+    }
+
     let authorizedToEdit = false;
     let userDid = undefined;
     try {

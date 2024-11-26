@@ -220,7 +220,7 @@ export interface PostDisplay extends WithMetric<Post> {
 }
 
 export const commentSchema = z.object({
-    _id: z.string().optional(),
+    _id: z.any().optional(),
     postId: z.string(),
     parentCommentId: z.string().nullable(), // Null for root-level comments
     content: z.string(),

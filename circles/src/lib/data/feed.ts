@@ -799,6 +799,6 @@ export const updateHighlightedComment = async (postId: string): Promise<void> =>
         .limit(1)
         .toArray();
 
-    const highlightedCommentId = mostLikedComment.length > 0 ? mostLikedComment[0]._id : undefined;
+    const highlightedCommentId = mostLikedComment.length > 0 ? mostLikedComment[0]._id?.toString() : undefined;
     await Posts.updateOne({ _id: new ObjectId(postId) }, { $set: { highlightedCommentId } });
 };

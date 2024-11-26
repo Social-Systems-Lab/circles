@@ -74,6 +74,39 @@ services:
         networks:
             - webnet
 
+    postgres:
+        image: postgres:13
+        restart: always
+        env_file:
+            - .env
+            - .env.local
+        environment:
+            - POSTGRES_USER=${SYNAPSE_POSTGRES_USERNAME}
+            - POSTGRES_PASSWORD=${SYNAPSE_POSTGRES_PASSWORD}
+            - POSTGRES_DB=synapse
+            - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+        networks:
+            - webnet
+
+    synapse:
+        image: matrixdotorg/synapse:latest
+        env_file:
+            - .env
+            - .env.local
+        restart: always
+        depends_on:
+            - postgres
+        environment:
+            - SYNAPSE_CONFIG_PATH=/data/homeserver.yaml
+        volumes:
+            - synapse_data:/data
+        ports:
+            - "8008:8008"
+        networks:
+            - webnet
+
     nginx:
         image: nginx:latest
         env_file:
@@ -108,6 +141,8 @@ volumes:
     circles:
     storage:
     qdrant_data:
+    postgres_data:
+    synapse_data:
 
 networks:
     webnet:
