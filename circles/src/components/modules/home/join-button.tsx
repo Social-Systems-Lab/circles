@@ -95,7 +95,7 @@ export const CircleMembershipButton = ({ circle, renderCompact }: CircleMembersh
                     ...prevUser!,
                     pendingRequests: [
                         ...(prevUser!.pendingRequests || []),
-                        { circleId: circle._id, status: "pending", userDid: user!.did, requestedAt: new Date() },
+                        { circleId: circle._id, status: "pending", userDid: user!.did!, requestedAt: new Date() },
                     ],
                 }));
             }

@@ -95,6 +95,7 @@ function QuestsStep({ userData, setUserData, nextStep, prevStep }: OnboardingSte
 
     const handleQuestToggle = (quest: Quest) => {
         setUserData((prev) => {
+            if (!prev) return prev;
             const newSelectedQuests = prev.selectedQuests.some((q) => q.id === quest.id)
                 ? prev.selectedQuests.filter((q) => q.id !== quest.id)
                 : [...prev.selectedQuests, quest];
@@ -132,6 +133,7 @@ function QuestsStep({ userData, setUserData, nextStep, prevStep }: OnboardingSte
                             item={quest}
                             isSelected={userData.selectedQuests.some((q) => q.id === quest.id)}
                             onToggle={handleQuestToggle}
+                            isCause={false}
                         />
                     ))}
                 </div>

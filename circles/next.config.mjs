@@ -21,9 +21,6 @@ const nextConfig = {
     env: {
         version,
     },
-    experimental: {
-        instrumentationHook: true,
-    },
 };
 
 export default nextConfig;

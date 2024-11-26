@@ -22,29 +22,13 @@ export const removeMemberAction = async (
         const userDid = await getAuthenticatedUserDid();
 
         // confirm the user is authorized to remove member
-        let authorized = await isAuthorized(
-            userDid,
-            circle._id ?? "",
-            features.remove_lower_members,
-            circle.circleType === "user",
-        );
-        let canRemoveSameLevel = await isAuthorized(
-            userDid,
-            circle._id ?? "",
-            features.edit_same_level_user_groups,
-            circle.circleType === "user",
-        );
+        let authorized = await isAuthorized(userDid, circle._id ?? "", features.remove_lower_members);
+        let canRemoveSameLevel = await isAuthorized(userDid, circle._id ?? "", features.edit_same_level_user_groups);
 
         if (!authorized && !canRemoveSameLevel) {
             return { success: false, message: "You are not authorized to remove this member" };
         }
-        authorized = await hasHigherAccess(
-            userDid,
-            member.userDid,
-            circle._id ?? "",
-            canRemoveSameLevel,
-            circle.circleType === "user",
-        );
+        authorized = await hasHigherAccess(userDid, member.userDid, circle._id ?? "", canRemoveSameLevel);
         if (!authorized) {
             return { success: false, message: "You don't have high enough access to remove this member" };
         }
@@ -59,7 +43,7 @@ export const removeMemberAction = async (
         }
 
         // remove member from circle
-        await removeMember(member.userDid, circle._id ?? "", circle.circleType === "user");
+        await removeMember(member.userDid, circle._id ?? "");
 
         // clear page cache so page update
         let circlePath = await getCirclePath(circle);
@@ -86,36 +70,20 @@ export const updateUserGroupsAction = async (
         const userDid = await getAuthenticatedUserDid();
 
         // confirm the user is authorized to edit user groups
-        let authorized = await isAuthorized(
-            userDid,
-            circle._id ?? "",
-            features.edit_lower_user_groups,
-            circle.circleType === "user",
-        );
-        let canEditSameLevel = await isAuthorized(
-            userDid,
-            circle._id ?? "",
-            features.edit_same_level_user_groups,
-            circle.circleType === "user",
-        );
+        let authorized = await isAuthorized(userDid, circle._id ?? "", features.edit_lower_user_groups);
+        let canEditSameLevel = await isAuthorized(userDid, circle._id ?? "", features.edit_same_level_user_groups);
         if (!authorized && !canEditSameLevel) {
             return { success: false, message: "You are not authorized to edit user groups" };
         }
 
         // confirm the user has higher access than the member
-        authorized = await hasHigherAccess(
-            userDid,
-            member.userDid,
-            circle._id ?? "",
-            canEditSameLevel,
-            circle.circleType === "user",
-        );
+        authorized = await hasHigherAccess(userDid, member.userDid, circle._id ?? "", canEditSameLevel);
         if (!authorized) {
             return { success: false, message: "You don't have high enough access to edit this member's user groups" };
         }
 
         // validate new user groups to ensure they all have lower access level than the current user
-        let userAccessLevel = await getMemberAccessLevel(userDid, circle._id ?? "", circle.circleType === "user");
+        let userAccessLevel = await getMemberAccessLevel(userDid, circle._id ?? "");
 
         // get current user groups of the member
         const existingMember = await getMember(member.userDid, circle._id ?? "");

@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, MotionProps } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Globe, Loader2, Smartphone } from "lucide-react";
 import { ChevronRight, Shield, Key, User, Share2 } from "lucide-react";
@@ -67,7 +67,7 @@ const IdentityStep: React.FC<IdentityStepProps> = ({ onNext }) => (
     <div className="mx-auto max-w-md space-y-6">
         <h2 className="text-center text-2xl font-semibold tracking-tight md:text-3xl">Your Digital Identity</h2>
         <div className="space-y-4 text-sm text-gray-600 md:text-base">
-            <p>In the next steps, you'll create your basic profile. Circles is designed to provide:</p>
+            <p>In the next steps, you&apos;ll create your basic profile. Circles is designed to provide:</p>
             <ul className="space-y-2">
                 <li className="flex items-start">
                     <Smartphone className="mr-2 mt-1 h-5 w-5 flex-shrink-0 text-blue-600" />
@@ -83,9 +83,9 @@ const IdentityStep: React.FC<IdentityStepProps> = ({ onNext }) => (
                 </li>
             </ul>
             <p>
-                We're working toward giving you full ownership of your data, with less reliance on centralized systems.
-                For now, your Circles profile lives securely on our platform, but we’re on a path to bring even more
-                control to your fingertips.
+                We&apos;re working toward giving you full ownership of your data, with less reliance on centralized
+                systems. For now, your Circles profile lives securely on our platform, but we’re on a path to bring even
+                more control to your fingertips.
             </p>
         </div>
         <Button onClick={onNext} className="w-full rounded-full bg-blue-600 text-white hover:bg-blue-700">
@@ -137,7 +137,7 @@ const DisplayNameStep: React.FC<DisplayNameStepProps> = ({ onNext }) => {
     return (
         <div className="mx-auto max-w-md space-y-6">
             <h2 className="text-center text-2xl font-semibold tracking-tight md:text-3xl">Choose your display name</h2>
-            <p className="text-center text-gray-600">This is how you'll appear to others in Circles</p>
+            <p className="text-center text-gray-600">This is how you&apos;ll appear to others in Circles</p>
             <div className="space-y-4">
                 <div className="space-y-2">
                     <Label htmlFor="displayName">Display Name</Label>

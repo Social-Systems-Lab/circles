@@ -18,7 +18,7 @@ export const loginFormAction: FormAction = {
             }
 
             authenticateUser(user.did!, password);
-            let token = await generateUserToken(user.did!, user.email);
+            let token = await generateUserToken(user.did!);
 
             createSession(token);
 

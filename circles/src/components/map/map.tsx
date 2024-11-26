@@ -52,7 +52,7 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
             if (content.circleType === "post") {
                 setFocusPost(content);
             } else {
-                let contentPreviewData: ContentPreviewData = {
+                let contentPreviewData: any = {
                     type: content.circleType,
                     content: content,
                 };

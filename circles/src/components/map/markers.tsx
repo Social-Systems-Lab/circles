@@ -1,7 +1,7 @@
 "use client";
 
 import { contentPreviewAtom, zoomContentAtom } from "@/lib/data/atoms";
-import { Content, ContentPreviewData } from "@/models/models";
+import { Content, ContentPreviewData, WithMetric } from "@/models/models";
 import { useAtom, useSetAtom } from "jotai";
 import React from "react";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "../ui/hover-card";
@@ -41,7 +41,7 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
                         {content?.circleType === "post" ? (
                             <div className="h-9 w-9">
                                 <Image
-                                    className={`h-9 w-9 rounded-full border-2 bg-white ${contentPreview && contentPreview._id === content?._id ? "border-[#f8dd53]" : "border-white"} bg-cover bg-center shadow-md transition-transform duration-300 group-hover:scale-110`}
+                                    className={`h-9 w-9 rounded-full border-2 bg-white ${contentPreview && contentPreview.content?._id === content?._id ? "border-[#f8dd53]" : "border-white"} bg-cover bg-center shadow-md transition-transform duration-300 group-hover:scale-110`}
                                     src="/images/default-post-picture.png"
                                     alt="Post"
                                     width={36}
@@ -50,7 +50,7 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
                             </div>
                         ) : (
                             <div
-                                className={`h-9 w-9 rounded-full border-2 bg-white ${contentPreview && contentPreview.handle === content?.handle ? "border-[#f8dd53]" : "border-white"} bg-cover bg-center shadow-md transition-transform duration-300 group-hover:scale-110`}
+                                className={`h-9 w-9 rounded-full border-2 bg-white ${contentPreview && contentPreview.content?._id === content?._id ? "border-[#f8dd53]" : "border-white"} bg-cover bg-center shadow-md transition-transform duration-300 group-hover:scale-110`}
                                 style={{
                                     backgroundImage: content?.picture?.url ? `url(${content?.picture?.url})` : "none",
                                 }}
@@ -68,7 +68,7 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
                 <div className="flex items-center space-x-2">
                     {content?.circleType === "post" ? (
                         <Image
-                            className={`h-9 w-9 rounded-full border-2 bg-white ${contentPreview && contentPreview._id === content?._id ? "border-[#f8dd53]" : "border-white"} bg-cover bg-center shadow-md transition-transform duration-300 group-hover:scale-110`}
+                            className={`h-9 w-9 rounded-full border-2 bg-white ${contentPreview && contentPreview.content?._id === content?._id ? "border-[#f8dd53]" : "border-white"} bg-cover bg-center shadow-md transition-transform duration-300 group-hover:scale-110`}
                             src="/images/default-post-picture.png"
                             alt="Post"
                             width={36}
@@ -89,9 +89,9 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
                             <p className="text-[14px] font-semibold text-white">{content?.name}</p>
                         )}
                         <div className="flex flex-row">
-                            {content?.metrics && (
+                            {(content as WithMetric<Content>)?.metrics && (
                                 <Indicators
-                                    metrics={content?.metrics}
+                                    metrics={(content as WithMetric<Content>).metrics!}
                                     className="mr-auto bg-transparent pl-0 shadow-none"
                                     color="#ffffff"
                                     content={content}

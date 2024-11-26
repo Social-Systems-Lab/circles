@@ -35,9 +35,9 @@ function FinalStep({ nextStep }: OnboardingStepProps) {
                     <div className="max-w-[350px] rounded-lg bg-white p-4 text-center">
                         <PiQuotesFill className="mx-auto mb-2 text-blue-500" />
                         <p className="mb-2 text-sm italic text-gray-800">
-                            "We believe in humanity and that if given the chance to fully nurture, explore and express
-                            our true nature as a social and collaborative species we could be a pretty decent curator to
-                            the living system that is our planet."
+                            &quot;We believe in humanity and that if given the chance to fully nurture, explore and
+                            express our true nature as a social and collaborative species we could be a pretty decent
+                            curator to the living system that is our planet.&quot;
                         </p>
                         <div className="flex items-center justify-center space-x-2">
                             {/* <Avatar>
@@ -51,7 +51,7 @@ function FinalStep({ nextStep }: OnboardingStepProps) {
             </div>
             <h2 className="mb-0 mt-0 text-2xl  font-semibold text-gray-800">Welcome, Changemaker!</h2>
             <p className="text-gray-600">
-                Your journey in Circles begins now. Here's a glimpse of the world you're about to enter:
+                Your journey in Circles begins now. Here&apos;s a glimpse of the world you&apos;re about to enter:
             </p>
             {platformMetrics ? (
                 <div className="grid grid-cols-2 gap-4">
@@ -73,8 +73,8 @@ function FinalStep({ nextStep }: OnboardingStepProps) {
                 Get ready to connect with allies, join guilds, and embark on world-changing quests!
             </p>
             <p className="text-sm text-gray-600">
-                Remember, you're part of a supportive community. Don't hesitate to reach out, collaborate, and make a
-                difference together!
+                Remember, you&apos;re part of a supportive community. Don&apos;t hesitate to reach out, collaborate, and
+                make a difference together!
             </p>
             <div className="mt-4 flex items-center justify-center">
                 <Button onClick={nextStep} className="mx-auto rounded-full">

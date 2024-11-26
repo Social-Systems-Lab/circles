@@ -12,7 +12,7 @@ import { FaUsers } from "react-icons/fa6";
 import { useRouter } from "next/navigation";
 import InviteButton from "../modules/home/invite-button";
 import JoinButton from "../modules/home/join-button";
-import { Circle, ContentPreviewData, FileInfo, Media, PostDisplay, PostItemProps } from "@/models/models";
+import { Circle, ContentPreviewData, FileInfo, Media, PostDisplay, PostItemProps, WithMetric } from "@/models/models";
 import { PostItem } from "../modules/feeds/post-list";
 import Indicators from "../utils/indicators";
 
@@ -42,7 +42,7 @@ export const PostPreview = ({
 };
 
 type CirclePreviewProps = {
-    circle: Circle;
+    circle: WithMetric<Circle>;
 };
 export const CirclePreview = ({ circle }: CirclePreviewProps) => {
     const router = useRouter();
@@ -138,7 +138,10 @@ export const ContentPreview: React.FC = () => {
     const isMobile = useIsMobile();
 
     const getPreviewContent = () => {
-        switch (contentPreview?.content?.circleType) {
+        let circleType = (contentPreview?.content as any)?.circleType;
+        if (!contentPreview) return null;
+
+        switch (circleType) {
             default:
             case "member":
             case "user":

@@ -49,7 +49,8 @@ function SkillsStep({ userData, setUserData, nextStep, prevStep }: OnboardingSte
     }, [userData.mission]);
 
     const handleSkillToggle = (skill: Skill) => {
-        setUserData((prev: OnboardingUserData) => {
+        setUserData((prev) => {
+            if (!prev) return prev;
             const newSelectedSkills = prev.selectedSkills.some((c) => c.handle === skill.handle)
                 ? prev.selectedSkills.filter((c) => c.handle !== skill.handle)
                 : [...prev.selectedSkills, skill];
@@ -70,7 +71,10 @@ function SkillsStep({ userData, setUserData, nextStep, prevStep }: OnboardingSte
                 console.error(response.message);
             } else {
                 // Update userAtom
-                setUser((prev) => ({ ...prev, skills: selectedSkills }));
+                setUser((prev) => {
+                    if (!prev) return prev;
+                    return { ...prev, skills: selectedSkills, memberships: prev.memberships || [] };
+                });
             }
             nextStep();
         });

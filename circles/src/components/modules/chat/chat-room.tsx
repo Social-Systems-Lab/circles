@@ -345,6 +345,7 @@ export const ChatRoomComponent = ({
                         _id: result.chatRoomMember?._id,
                         userDid: user?.did!,
                         chatRoomId: chatRoom._id,
+                        circleId: circle._id,
                         joinedAt: new Date(),
                         chatRoom: chatRoom,
                     };

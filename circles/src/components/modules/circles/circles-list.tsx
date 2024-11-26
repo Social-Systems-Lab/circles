@@ -166,7 +166,7 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle }: CirclesListProp
                                 animate="visible"
                                 exit="hidden"
                                 layout
-                                className={`flex h-full cursor-pointer flex-col overflow-hidden rounded-[15px] border-0 ${circle.handle === contentPreview?.handle ? "bg-[#f7f7f7]" : "bg-white"} relative shadow-lg transition-shadow duration-200 hover:shadow-md md:min-w-[200px] md:max-w-[420px]`}
+                                className={`flex h-full cursor-pointer flex-col overflow-hidden rounded-[15px] border-0 ${circle._id === contentPreview?.content?._id ? "bg-[#f7f7f7]" : "bg-white"} relative shadow-lg transition-shadow duration-200 hover:shadow-md md:min-w-[200px] md:max-w-[420px]`}
                                 onClick={() => handleCircleClick(circle)}
                             >
                                 <div className="relative h-[150px] w-full overflow-hidden">

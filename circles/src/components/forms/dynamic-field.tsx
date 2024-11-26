@@ -951,7 +951,7 @@ const ItemSelectionField: React.FC<ItemSelectionFieldProps> = ({
         startTransition(async () => {
             const response = await fetchMatchedItems(circleId);
             if (response.success) {
-                setAllItems(response[itemType]);
+                setAllItems((response as any)[itemType]);
             } else {
                 setAllItems(initialItems);
                 console.error(response.message);
@@ -997,6 +997,7 @@ const ItemSelectionField: React.FC<ItemSelectionFieldProps> = ({
                                 item={item}
                                 isSelected={(formField.value || []).includes(item.handle)}
                                 onToggle={() => handleItemToggle(item)}
+                                isCause={itemType === "causes"}
                             />
                         ))}
                     </div>

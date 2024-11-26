@@ -9,7 +9,7 @@ import { FaQuoteRight } from "react-icons/fa6";
 import { saveMissionAction, fetchMissionStatements } from "./actions";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
-import { OnboardingStepProps } from "./onboarding";
+import { OnboardingStepProps, OnboardingUserData } from "./onboarding";
 import { useEffect, useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
@@ -21,9 +21,9 @@ function MissionStep({ userData, setUserData, nextStep, prevStep }: OnboardingSt
     const [isPending, startTransition] = useTransition();
     const [missionStatements, setMissionStatements] = useState<MissionDisplay[]>([]);
 
-    const handleInputChange = (e) => {
+    const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const { name, value } = e.target;
-        setUserData((prev) => ({ ...prev, [name]: value }));
+        setUserData((prev) => ({ ...prev, [name]: value }) as OnboardingUserData);
     };
 
     const handleNext = async () => {
@@ -34,7 +34,7 @@ function MissionStep({ userData, setUserData, nextStep, prevStep }: OnboardingSt
                 console.error(response.message);
             } else {
                 // Update userAtom
-                setUser((prev) => ({ ...prev, mission: userData.mission }));
+                setUser((prev) => (prev ? { ...prev, mission: userData.mission } : prev));
             }
             nextStep();
         });

@@ -7,7 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import Indicators from "../utils/indicators";
 import { causes, skills } from "@/lib/data/constants";
 
-const ItemCard = ({ item, isSelected, onToggle, isCause }) => {
+type ItemCardProps = {
+    item: any;
+    isSelected: boolean;
+    onToggle: (item: any) => void;
+    isCause: boolean;
+};
+const ItemCard = ({ item, isSelected, onToggle, isCause }: ItemCardProps) => {
     let itemc = isCause ? causes.find((x) => x.name === item.name) : skills.find((x) => x.name === item.name);
 
     return (

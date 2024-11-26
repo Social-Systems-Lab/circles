@@ -54,12 +54,7 @@ export const approveMembershipRequestAction = async (
         const userDid = await getAuthenticatedUserDid();
 
         // Check if the user is authorized to approve membership requests
-        const authorized = await isAuthorized(
-            userDid,
-            circle._id ?? "",
-            features.manage_membership_requests,
-            circle.circleType === "user",
-        );
+        const authorized = await isAuthorized(userDid, circle._id ?? "", features.manage_membership_requests);
         if (!authorized) {
             return { success: false, message: "You are not authorized to manage membership requests" };
         }
@@ -68,13 +63,7 @@ export const approveMembershipRequestAction = async (
         const request = await getMembershipRequest(requestId);
 
         // add member
-        await addMember(
-            request.userDid,
-            circle._id ?? "",
-            ["members"],
-            request.questionnaireAnswers,
-            circle.circleType === "user",
-        );
+        await addMember(request.userDid, circle._id ?? "", ["members"], request.questionnaireAnswers);
 
         // clear page cache
         let circlePath = await getCirclePath(circle);
@@ -98,12 +87,7 @@ export const rejectMembershipRequestAction = async (
         const userDid = await getAuthenticatedUserDid();
 
         // Check if the user is authorized to reject membership requests
-        const authorized = await isAuthorized(
-            userDid,
-            circle._id ?? "",
-            features.manage_membership_requests,
-            circle.circleType === "user",
-        );
+        const authorized = await isAuthorized(userDid, circle._id ?? "", features.manage_membership_requests);
         if (!authorized) {
             return { success: false, message: "You are not authorized to manage membership requests" };
         }

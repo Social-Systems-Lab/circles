@@ -14,7 +14,7 @@ export const signupFormActionHandler: FormActionHandler = {
 
         // set logged in user and authenticate status
         tools.setUser(response.data.user);
-        tools.setAuthenticated(true);
+        //tools.setAuthenticated(true);
 
         // redirect to requested page
         let redirectUrl = tools.searchParams?.get("redirectTo") ?? "/";

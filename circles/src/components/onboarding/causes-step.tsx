@@ -48,7 +48,8 @@ function CausesStep({ userData, setUserData, nextStep, prevStep }: OnboardingSte
     }, [user, userData.mission]);
 
     const handleCauseToggle = (cause: Cause) => {
-        setUserData((prev: OnboardingUserData) => {
+        setUserData((prev) => {
+            if (!prev) return prev;
             const newSelectedCauses = prev.selectedCauses.some((c) => c.handle === cause.handle)
                 ? prev.selectedCauses.filter((c) => c.handle !== cause.handle)
                 : [...prev.selectedCauses, cause];
@@ -69,7 +70,10 @@ function CausesStep({ userData, setUserData, nextStep, prevStep }: OnboardingSte
                 console.error(response.message);
             } else {
                 // Update userAtom
-                setUser((prev) => ({ ...prev, causes: selectedCauses }));
+                setUser((prev) => {
+                    if (!prev) return prev;
+                    return { ...prev, causes: selectedCauses };
+                });
             }
             nextStep();
         });

@@ -37,7 +37,7 @@ export type OnboardingUserData = {
 
 export type OnboardingStepProps = {
     userData: OnboardingUserData;
-    setUserData: React.Dispatch<React.SetStateAction<OnboardingUserData>>;
+    setUserData: React.Dispatch<React.SetStateAction<OnboardingUserData | undefined>>;
     nextStep: () => void;
     prevStep: () => void;
 };

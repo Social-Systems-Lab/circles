@@ -348,7 +348,8 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                                         hasHigherAccess(user, member, circle, canEditSameLevelUserGroups);
                                     const canRemoveUserRow =
                                         canRemoveUser && hasHigherAccess(user, member, circle, canRemoveSameLevelUser);
-                                    const isActive = (contentPreview as MemberDisplay)?.userDid === member.userDid;
+                                    const isActive =
+                                        (contentPreview?.content as MemberDisplay)?.userDid === member.userDid;
 
                                     return (
                                         <motion.tr

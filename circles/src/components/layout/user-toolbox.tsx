@@ -130,7 +130,7 @@ export const UserToolbox = () => {
     ];
 
     const handleCircleClick = (circle: MemberDisplay) => {
-        let contentPreviewData: ContentPreviewData = {
+        let contentPreviewData: any = {
             type: "member",
             content: circle,
         };
@@ -170,7 +170,11 @@ export const UserToolbox = () => {
                 </div>
             </CardHeader>
             <CardContent className="p-0">
-                <Tabs value={tab} onValueChange={(v) => setTab(v)} className="flex h-full flex-col">
+                <Tabs
+                    value={tab}
+                    onValueChange={(v) => setTab(v as UserToolboxTab | undefined)}
+                    className="flex h-full flex-col"
+                >
                     <TabsList className="grid h-auto w-full grid-cols-7 rounded-none border-b border-t-0 border-b-slate-200 border-t-slate-200 bg-white p-0 pb-2 pt-0">
                         {/* Existing TabsTriggers */}
                         <TabsTrigger
@@ -283,7 +287,7 @@ export const UserToolbox = () => {
                                 <div
                                     key={circle._id}
                                     className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
-                                    onClick={() => handleCircleClick(circle)}
+                                    onClick={() => handleCircleClick(circle as MemberDisplay)}
                                 >
                                     <CirclePicture circle={circle} size="40px" />
                                     <div className="flex-1">
@@ -307,14 +311,14 @@ export const UserToolbox = () => {
                                 <div
                                     key={contact._id}
                                     className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
-                                    onClick={() => handleCircleClick(contact)}
+                                    onClick={() => handleCircleClick(contact as MemberDisplay)}
                                 >
                                     <CirclePicture circle={contact} size="40px" />
                                     <div className="flex-1">
                                         <p className="text-sm font-medium">{contact.name}</p>
                                         <p className="text-xs text-muted-foreground">{contact.description}</p>
                                     </div>
-                                    <Button variant="outline" size="sm" onClick={() => openCircle(circle)}>
+                                    <Button variant="outline" size="sm" onClick={() => openCircle(contact)}>
                                         Open
                                     </Button>
                                 </div>
