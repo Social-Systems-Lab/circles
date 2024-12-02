@@ -1,3 +1,4 @@
+// jwt.ts
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 import { cookies } from "next/headers";
 

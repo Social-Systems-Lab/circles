@@ -105,7 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setLoading(true);
 
             console.log("Clearing accounts...");
-            //await AsyncStorage.setItem(ACCOUNTS_KEY, "");
+            await AsyncStorage.setItem(ACCOUNTS_KEY, "");
 
             const loadedAccounts = await loadAccounts();
             setAccounts(loadedAccounts);
@@ -221,6 +221,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             isExternal,
             privateKey,
             publicKey: currentAccount?.publicKey,
+            currentAccount: isExternal ? null : currentAccount,
         });
 
         // const signedChallenge = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, challenge);

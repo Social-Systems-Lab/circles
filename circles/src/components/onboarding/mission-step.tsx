@@ -58,7 +58,7 @@ function MissionStep({ userData, setUserData, nextStep, prevStep }: OnboardingSt
             <h2 className="mb-0 mt-0 text-2xl  font-semibold text-gray-800">Your Mission</h2>
             <p className="text-gray-600">Define your purpose and the change you want to see in the world.</p>
             {missionStatements.length > 0 && (
-                <div className="relative mb-4 h-64 w-full rounded-lg pl-4 pr-4">
+                <div className="relative mb-4 hidden h-32 w-full rounded-lg pl-1 pr-1 md:flex md:h-64 md:pl-4 md:pr-4">
                     <Carousel>
                         <CarouselContent>
                             {missionStatements.map((missionItem, index) => (

@@ -4,7 +4,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { Challenges, Circles, Members } from "../data/db";
-import { AccountType, Challenge, Circle, Feature, UserPrivate } from "@/models/models";
+import { Account, AccountType, Challenge, Circle, Feature, UserPrivate } from "@/models/models";
 import { ObjectId } from "mongodb";
 import { maxAccessLevel } from "../data/constants";
 import { cookies } from "next/headers";
@@ -22,79 +22,6 @@ const ENCRYPTION_ALGORITHM = "aes-256-cbc";
 export const APP_DIR = "/circles";
 export const USERS_DIR = path.join(APP_DIR, "users");
 const SERVER_DIR = path.join(APP_DIR, "server");
-
-// export const createUserOld = async (
-//     name: string,
-//     handle: string,
-//     type: AccountType,
-//     email: string,
-//     password: string,
-// ): Promise<Circle> => {
-//     if (!name || !email || !password || !handle) {
-//         throw new Error("Missing required fields");
-//     }
-
-//     // check if email is already in use
-//     let existingUser = await Circles.findOne({ email: email });
-//     if (existingUser) {
-//         throw new Error("Email already in use");
-//     }
-
-//     // check if handle is already in use
-//     existingUser = await Circles.findOne({ handle: handle });
-//     if (existingUser) {
-//         throw new Error("Handle already in use");
-//     }
-
-//     // make sure account directory exists
-//     if (!fs.existsSync(USERS_DIR)) {
-//         fs.mkdirSync(USERS_DIR, { recursive: true });
-//     }
-
-//     // generate cryptographic keypair
-//     const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
-
-//     // did is public key in shorter string format suitable for URLS and directory naming
-//     const did = crypto
-//         .createHash("sha256")
-//         .update(publicKey.export({ type: "pkcs1", format: "pem" }))
-//         .digest("hex");
-
-//     // create a directory for the user using the did as the name
-//     const accountPath = path.join(USERS_DIR, did);
-//     if (fs.existsSync(accountPath)) {
-//         throw new Error("Account already exists");
-//     }
-//     fs.mkdirSync(accountPath, { recursive: true });
-
-//     // generate salt, iv, encryption key and encrypt private key
-//     const salt = crypto.randomBytes(16);
-//     const iv = crypto.randomBytes(16);
-//     const encryptionKey = crypto.pbkdf2Sync(password, salt, 100000, 32, "sha512");
-//     const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, encryptionKey, iv);
-//     let encryptedPrivateKey = cipher.update(
-//         privateKey.export({ type: "pkcs1", format: "pem" }) as string,
-//         "utf8",
-//         "hex",
-//     );
-//     encryptedPrivateKey += cipher.final("hex");
-
-//     // save salt, iv and keypair in the user directory
-//     fs.writeFileSync(path.join(accountPath, SALT_FILENAME), salt);
-//     fs.writeFileSync(path.join(accountPath, IV_FILENAME), iv);
-//     fs.writeFileSync(path.join(accountPath, PUBLIC_KEY_FILENAME), publicKey.export({ type: "pkcs1", format: "pem" }));
-//     fs.writeFileSync(path.join(accountPath, ENCRYPTED_PRIVATE_KEY_FILENAME), encryptedPrivateKey);
-
-//     // add user to the database
-//     let user: Circle = createNewUser(did, name, handle, type, email);
-//     let res = await Circles.insertOne(user);
-//     user._id = res.insertedId.toString();
-
-//     // add user as member of their own circle
-//     await addMember(did, user._id!, ["admins", "moderators", "members"], undefined);
-
-//     return user;
-// };
 
 export type ServerDid = { did: string; publicKey: string };
 export const createServerDid = async (): Promise<ServerDid> => {
@@ -323,6 +250,38 @@ export const createUserAccount = async (displayName: string): Promise<{ user: Us
     return { user: userPrivate, privateKey }; // Return user and private key for client-side storage
 };
 
+export const createUserFromAccount = async (account: Account): Promise<UserPrivate> => {
+    // Derive DID from public key
+    const did = getDid(account.publicKey);
+
+    // make sure user doesn't exist
+    let existingUser = await Circles.findOne({ did: did });
+    if (existingUser) {
+        throw new Error("User already exists");
+    }
+
+    // Create a handle for the user
+    let handle = await getUniqueHandle(account.handle ?? account.name);
+
+    // Create and save user in the database using DID and public key
+    const user = createNewUser(did, account.publicKey, account.name, handle);
+
+    let res = await Circles.insertOne(user);
+    user._id = res.insertedId.toString();
+
+    // add user as member of their own circle
+    await addMember(did, user._id!, ["admins", "moderators", "members"], undefined);
+
+    // Add user as a member of the default circle
+    const defaultCircle = await getDefaultCircle();
+    if (defaultCircle._id) {
+        await addMember(did, defaultCircle._id, ["members"]);
+    }
+
+    const userPrivate = await getUserPrivate(did);
+    return userPrivate;
+};
+
 export const createUser = async (did: string, publicKey: string): Promise<UserPrivate> => {
     console.log("Creating user", did, publicKey);
 
@@ -387,6 +346,7 @@ export const verifyChallengeSignature = async (
 
     // challenge is valid, mark it as verified
     await Challenges.updateOne({ _id: res._id }, { $set: { verified: true, publicKey } });
+
     return true;
 };
 

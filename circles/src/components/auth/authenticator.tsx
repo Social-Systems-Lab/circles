@@ -58,6 +58,11 @@ export const Authenticator = () => {
     }, [authInfo.challenge, setAuthInfo, setUser]);
 
     const checkAuthentication = useCallback(async () => {
+        // if already authenticated, do nothing
+        if (authInfo.authStatus === "authenticated") {
+            return;
+        }
+
         // check if user is authenticated
         const inSsiApp = window._SSI_ACCOUNTS !== undefined;
         const accounts = window._SSI_ACCOUNTS;
@@ -96,7 +101,7 @@ export const Authenticator = () => {
             // TODO prompt user to sign in with QR code
             setAuthInfo({ authStatus: "unauthenticated", inSsiApp, accounts, currentAccount });
         }
-    }, [setAuthInfo, setUser]);
+    }, [authInfo.authStatus, setAuthInfo, setUser]);
 
     useEffect(() => {
         // Listen for messages from the native app
@@ -115,17 +120,27 @@ export const Authenticator = () => {
                     const signedChallengeBase64 = Buffer.from(signedChallenge, "hex").toString("base64");
 
                     // authenticate signature for external app
-                    verifySignatureAction(message.publicKey, signedChallengeBase64, message.challenge).then(
-                        (response) => {
-                            WebviewLog("QRCodeChallengeSigned.verifySignatureAction returned", response);
+                    verifySignatureAction(
+                        message.publicKey,
+                        signedChallengeBase64,
+                        message.challenge,
+                        message.currentAccount,
+                    ).then((response) => {
+                        WebviewLog("QRCodeChallengeSigned.verifySignatureAction returned", response);
 
-                            if (message.isExternal) {
-                                // Job done.
-                            } else {
-                                // TODO User is authenticated, sign in
+                        if (message.isExternal) {
+                            // verified external sign in. job done.
+                        } else {
+                            // verified sign in on this device
+                            if (!response.verified) {
+                                return;
                             }
-                        },
-                    );
+                            const accounts = window._SSI_ACCOUNTS;
+                            const currentAccount = window._SSI_CURRENT_ACCOUNT;
+                            setAuthInfo({ authStatus: "authenticated", inSsiApp, accounts, currentAccount });
+                            setUser(response.user);
+                        }
+                    });
                 }
             } catch (e) {
                 WebviewLog("Error parsing message", e);
@@ -143,7 +158,7 @@ export const Authenticator = () => {
                 window.removeEventListener("message", onMessage);
             }
         };
-    }, [authInfo.authStatus, checkAuthentication]);
+    }, [authInfo.authStatus, checkAuthentication, setAuthInfo, setUser]);
 
     useEffect(() => {
         if (authInfo.authStatus !== "unauthenticated" || authInfo.inSsiApp || !authInfo.challenge) {

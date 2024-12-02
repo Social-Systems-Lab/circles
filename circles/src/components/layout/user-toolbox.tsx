@@ -1,3 +1,4 @@
+//user-toolbox.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -38,6 +39,7 @@ import {
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { ChatRoomComponent } from "../modules/chat/chat-room";
 import { logOut } from "../auth/actions";
+import { fetchJoinedRooms, fetchRoomDetails, fetchRoomMessages } from "@/lib/data/client-matrix";
 
 type ChatRoomPreview = {
     id: string;
@@ -80,9 +82,24 @@ export const UserToolbox = () => {
     const handleChatClick = async (chat: ChatRoomPreview) => {
         setIsLoadingMessages(true);
         try {
-            // Fetch messages using the chatRoom and circle IDs
-            const fetchedMessages = await getChatMessagesAction(chat.chatRoom._id, chat.circle._id, 20, 0);
-            setMessages(fetchedMessages);
+            const { messages } = await fetchRoomMessages(user?.matrixAccessToken!, chat.id, 20);
+
+            const formattedMessages = messages.map((msg: any) => ({
+                _id: msg.event_id,
+                chatRoomId: chat.id,
+                createdBy: msg.sender,
+                createdAt: new Date(msg.origin_server_ts),
+                content: msg.content.body,
+                reactions: {}, // Placeholder for reactions
+                mentions: [], // Placeholder for mentions
+                author: {
+                    _id: msg.sender,
+                    name: msg.sender, // Replace with a function to fetch user details if needed
+                    picture: { url: "/placeholder.svg" }, // Placeholder avatar
+                },
+            }));
+
+            setMessages(formattedMessages);
             setSelectedChat(chat);
         } catch (error) {
             console.error("Failed to fetch chat messages:", error);
@@ -102,26 +119,62 @@ export const UserToolbox = () => {
             ?.filter((m) => m.circle.circleType === "user" && m.circle._id !== user?._id)
             ?.map((membership) => membership.circle) || [];
 
-    // Prepare the chats list
-    const chats: ChatRoomPreview[] =
-        user?.chatRoomMemberships?.map((chatRoomMembership) => {
-            const chatRoom = chatRoomMembership.chatRoom;
-            const circleId = chatRoom.circleId;
+    const [chats, setChats] = useState<ChatRoomPreview[]>([]);
 
-            // Find the circle from user memberships
-            const circleMembership = user.memberships?.find((membership) => membership.circle._id === circleId);
-            const circle = circleMembership?.circle;
+    // // Prepare the chats list
+    // const chats: ChatRoomPreview[] =
+    //     user?.chatRoomMemberships?.map((chatRoomMembership) => {
+    //         const chatRoom = chatRoomMembership.chatRoom;
+    //         const circleId = chatRoom.circleId;
 
-            return {
-                id: chatRoom._id,
-                name: chatRoom.name || circle?.name || "Unknown",
-                message: "", // Placeholder for the last message
-                avatar: circle?.picture?.url || "/placeholder.svg",
-                status: "", // Placeholder for status
-                circle: circle || {}, // Ensure circle is defined
-                chatRoom,
-            };
-        }) || [];
+    //         // Find the circle from user memberships
+    //         const circleMembership = user.memberships?.find((membership) => membership.circle._id === circleId);
+    //         const circle = circleMembership?.circle;
+
+    //         return {
+    //             id: chatRoom._id,
+    //             name: chatRoom.name || circle?.name || "Unknown",
+    //             message: "", // Placeholder for the last message
+    //             avatar: circle?.picture?.url || "/placeholder.svg",
+    //             status: "", // Placeholder for status
+    //             circle: circle || {}, // Ensure circle is defined
+    //             chatRoom,
+    //         };
+    //     }) || [];
+
+    useEffect(() => {
+        if (!user?.matrixAccessToken) return;
+
+        const fetchAndSubscribe = async () => {
+            try {
+                const rooms = await fetchJoinedRooms(user.matrixAccessToken!);
+
+                // Fetch metadata for each room
+                const roomDetails = await Promise.all(
+                    rooms.map(async (roomId: string) => {
+                        const details = await fetchRoomDetails(user.matrixAccessToken!, roomId);
+                        return {
+                            id: roomId,
+                            name: details.name,
+                            avatar: details.avatar,
+                            message: "", // Placeholder for last message (optional)
+                        };
+                    }),
+                );
+
+                setChats(roomDetails);
+
+                // Enable real-time updates
+                // await startSync(user.matrixAccessToken, (syncData) => {
+                //     console.log("Real-time event:", syncData);
+                // });
+            } catch (error) {
+                console.error("Failed to initialize chat room fetching:", error);
+            }
+        };
+
+        fetchAndSubscribe();
+    }, [user?.matrixAccessToken]);
 
     const notifications: Notification[] = [
         // { id: 1, message: "John Doe has requested membership in a circle", time: "2 min ago" },
@@ -140,14 +193,15 @@ export const UserToolbox = () => {
     };
 
     const signOut = () => {
-        // clear the user data and redirect to the you've been signed out
-        logOut();
-        setUser(undefined);
         setAuthInfo({ ...authInfo, authStatus: "unauthenticated" });
+        setUser(undefined);
         // close the toolbox
         setUserToolboxState(undefined);
 
-        router.push("/logged-out");
+        // clear the user data and redirect to the you've been signed out
+        logOut();
+
+        router.push("/");
     };
 
     if (userToolboxState === undefined) return null;
@@ -237,7 +291,7 @@ export const UserToolbox = () => {
                                 ) : (
                                     <ChatRoomComponent
                                         circle={selectedChat.circle}
-                                        chatRoom={selectedChat.chatRoom}
+                                        chatRoom={selectedChat}
                                         initialMessages={messages}
                                         inToolbox={true}
                                     />

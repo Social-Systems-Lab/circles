@@ -79,7 +79,6 @@ services:
         restart: always
         env_file:
             - .env
-            - .env.local
         environment:
             - POSTGRES_USER=${SYNAPSE_POSTGRES_USERNAME}
             - POSTGRES_PASSWORD=${SYNAPSE_POSTGRES_PASSWORD}
@@ -94,7 +93,6 @@ services:
         image: matrixdotorg/synapse:latest
         env_file:
             - .env
-            - .env.local
         restart: always
         depends_on:
             - postgres

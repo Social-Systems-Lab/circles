@@ -1,3 +1,4 @@
+//chat-room.tsx
 "use client";
 
 import { KeyboardEvent, useTransition } from "react";
@@ -27,6 +28,7 @@ import {
     DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { start } from "repl";
+import { sendRoomMessage } from "@/lib/data/client-matrix";
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -61,23 +63,26 @@ const ChatInput = ({ setMessages, circle, chatRoom, page, subpage }: ChatInputPr
     const handleSendMessage = async () => {
         if (!user) return;
         if (newMessage.trim() !== "") {
-            const now = new Date();
+            try {
+                await sendRoomMessage(user.matrixAccessToken!, chatRoom.id, newMessage);
+                const now = new Date();
 
-            // Create form data to send to the backend
-            const formData = new FormData();
-            formData.append("content", newMessage);
-            formData.append("circleId", circle._id);
-            formData.append("chatRoomId", chatRoom._id);
+                // Add the new message locally
+                const newChatMessage = {
+                    _id: `${now.getTime()}`,
+                    chatRoomId: chatRoom.id,
+                    createdBy: user.did,
+                    createdAt: now,
+                    content: newMessage,
+                    reactions: {},
+                    mentions: [],
+                    author: user,
+                };
 
-            // Send the message to the backend
-            const result = await createChatMessageAction(formData, page, subpage);
-
-            if (result.success && result.chatMessage) {
-                // Update the messages state with the new message
-                setMessages((prevMessages: any) => [...prevMessages, result.chatMessage]);
+                setMessages((prevMessages: ChatMessageDisplay[]) => [...prevMessages, newChatMessage]);
                 setNewMessage("");
-            } else {
-                console.error("Failed to send message: ", result.message);
+            } catch (error) {
+                console.error("Failed to send message:", error);
             }
         }
     };
@@ -294,7 +299,7 @@ export const ChatRoomComponent = ({
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
 
-    const hasJoinedChat = user?.chatRoomMemberships?.some((membership) => membership.chatRoom._id === chatRoom._id);
+    const hasJoinedChat = true; // user?.chatRoomMemberships?.some((membership) => membership.chatRoom._id === chatRoom._id);
 
     // useEffect(() => {
     //     if (!user) return;

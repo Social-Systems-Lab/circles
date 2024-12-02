@@ -264,7 +264,7 @@ export const chatRoomSchema = z.object({
 export type ChatRoom = z.infer<typeof chatRoomSchema>;
 
 export const chatMessageSchema = z.object({
-    _id: z.any().optional(),
+    id: z.string(),
     chatRoomId: z.string(),
     createdBy: didSchema,
     createdAt: z.date(),
@@ -376,6 +376,9 @@ export const circleSchema = z.object({
     causes: z.array(z.string()).optional(),
     skills: z.array(z.string()).optional(),
     completedOnboardingSteps: z.array(z.string()).optional(),
+    matrixAccessToken: z.string().optional(),
+    matrixUsername: z.string().optional(),
+    matrixPassword: z.string().optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;
@@ -395,6 +398,7 @@ export const serverSettingsSchema = z.object({
     serverInfo: registryInfoSchema.optional(),
     questionnaire: z.string().optional(),
     serverVersion: z.string().optional(),
+    matrixAdminAccessToken: z.string().optional(),
 });
 
 export type ServerSettings = z.infer<typeof serverSettingsSchema>;

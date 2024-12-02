@@ -2,12 +2,21 @@
 "use server";
 
 import { createSession, generateUserToken, verifyUserToken } from "@/lib/auth/jwt";
-import { getUserPrivate } from "@/lib/data/user";
+import { getUserPrivate, updateUser } from "@/lib/data/user";
 import { Account, Challenge, UserPrivate } from "@/models/models";
 import { cookies } from "next/headers";
 import crypto from "crypto";
-import { createUserAccount, getChallenge, getDid, issueChallenge, verifyChallengeSignature } from "@/lib/auth/auth";
+import {
+    createUserAccount,
+    createUserFromAccount,
+    getChallenge,
+    getDid,
+    issueChallenge,
+    verifyChallengeSignature,
+} from "@/lib/auth/auth";
 import { revalidatePath } from "next/cache";
+import { registerOrLoginMatrixUser } from "@/lib/data/matrix";
+import { updateCircle } from "@/lib/data/circle";
 
 type CreateAccountResponse = {
     privateKey: string;
@@ -16,15 +25,14 @@ type CreateAccountResponse = {
 export const createAccountAction = async (displayName: string): Promise<CreateAccountResponse> => {
     // create a new account
     let account = await createUserAccount(displayName);
+
+    // create token and session for user
+    await createUserSession(account.user);
+
     let response: CreateAccountResponse = {
         privateKey: account.privateKey,
         user: account.user,
     };
-
-    // create token and session for user
-    let token = await generateUserToken(account.user.did!);
-    await createSession(token);
-
     return response;
 };
 
@@ -49,9 +57,7 @@ export async function checkExternalAuth(challenge: Challenge): Promise<CheckAuth
     if (!user) return { authenticated: false };
 
     // create token and session for user
-    let token = await generateUserToken(user.did!);
-    await createSession(token);
-
+    await createUserSession(user);
     return { user, authenticated: true };
 }
 
@@ -87,13 +93,41 @@ export async function checkAuth(account: Account | undefined): Promise<CheckAuth
     }
 }
 
+type VerifySignatureResponse = {
+    verified: boolean;
+    user?: UserPrivate;
+};
 export async function verifySignatureAction(
     publicKey: string,
     signature: string,
     challengeStr: string,
-): Promise<boolean> {
+    currentAccount: Account | undefined,
+): Promise<VerifySignatureResponse> {
     console.log("Trying to verify signature, pk: ", publicKey, ", signature: ", signature);
-    return await verifyChallengeSignature(publicKey, signature, challengeStr);
+    let res = await verifyChallengeSignature(publicKey, signature, challengeStr);
+    if (!res) return { verified: false };
+
+    // create account if it doesn't exist
+    if (!currentAccount) {
+        // verifying an external sign in attempt, meaning we don't want to sign in the user here
+        return { verified: res };
+    }
+
+    // current account specified meaning we are verifying the current account and want to sign in
+    try {
+        let did = getDid(publicKey);
+        let user = await getUserPrivate(did);
+        if (!user) {
+            user = await createUserFromAccount(currentAccount);
+        }
+
+        // create token and session for user
+        await createUserSession(user);
+        return { verified: res, user };
+    } catch (error) {
+        console.error("Error creating account", error);
+    }
+    return { verified: res };
 }
 
 export async function logOut(): Promise<void> {
@@ -107,12 +141,25 @@ export async function logOut(): Promise<void> {
 export async function createTestAccountAction(): Promise<CreateAccountResponse> {
     // create a new account
     let account = await createUserAccount("Test Account");
-    let token = await generateUserToken(account.user.did!);
-    await createSession(token);
+    await createUserSession(account.user);
 
     let response: CreateAccountResponse = {
         privateKey: account.privateKey,
         user: account.user,
     };
     return response;
+}
+
+async function createUserSession(user: UserPrivate): Promise<string> {
+    let token = await generateUserToken(user.did!);
+    await createSession(token);
+
+    try {
+        // check if user has a matrix account
+        await registerOrLoginMatrixUser(user);
+    } catch (error) {
+        console.error("Error creating matrix session", error);
+    }
+
+    return token;
 }
