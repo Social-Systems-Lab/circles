@@ -250,3 +250,31 @@ export const registerUser = async (
     };
     return registryInfo;
 };
+
+export const getUsersByMatrixUsernames = async (usernames: string[]): Promise<Circle[]> => {
+    if (usernames.length === 0) {
+        return [];
+    }
+
+    // Query the database for matching users
+    const users = await Circles.find(
+        { matrixUsername: { $in: usernames } },
+        {
+            projection: {
+                _id: 1,
+                did: 1,
+                name: 1,
+                picture: 1,
+                handle: 1,
+                description: 1,
+                matrixUsername: 1,
+            },
+        },
+    ).toArray();
+
+    // Convert ObjectId to string for `_id`
+    return users.map((user) => ({
+        ...user,
+        _id: user._id?.toString(),
+    })) as Circle[];
+};

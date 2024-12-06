@@ -1,34 +1,23 @@
-//chat-room.tsx
 "use client";
 
 import { KeyboardEvent, useTransition } from "react";
-import { useIsCompact } from "@/components/utils/use-is-compact";
-import { Circle, ChatRoom, Page, ChatMessageDisplay, ChatRoomMembership } from "@/models/models";
+import { Circle, ChatRoom, ChatMessage, Page, ChatRoomMembership } from "@/models/models";
 import CircleHeader from "../circles/circle-header";
 import { mapOpenAtom, triggerMapOpenAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
-import { useRouter } from "next/navigation";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
-import { getDateLong } from "@/lib/utils";
 import { CirclePicture } from "../circles/circle-picture";
 import RichText from "../feeds/RichText";
 import { Mention, MentionsInput } from "react-mentions";
 import { defaultMentionsInputStyle, defaultMentionStyle, handleMentionQuery } from "../feeds/post-list";
-import { createChatMessageAction, joinChatRoomAction, leaveChatRoomAction, testMatrixServerAction } from "./actions";
-import { useToast } from "@/components/ui/use-toast";
-import { Loader2, MoreVertical } from "lucide-react";
-import {
-    DropdownMenu,
-    DropdownMenuTrigger,
-    DropdownMenuContent,
-    DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
-import { start } from "repl";
 import { sendRoomMessage } from "@/lib/data/client-matrix";
+import { useIsCompact } from "@/components/utils/use-is-compact";
+import { Loader2 } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+import { joinChatRoomAction } from "./actions";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -38,6 +27,7 @@ export const renderCircleSuggestion = (
     focused: boolean,
 ) => (
     <div className="flex items-center p-2">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
             src={suggestion.picture || "/default-profile.png"}
             alt={suggestion.display}
@@ -46,6 +36,259 @@ export const renderCircleSuggestion = (
         <span>{highlightedDisplay}</span>
     </div>
 );
+
+// Utility for same-day message grouping
+const isSameDay = (date1: Date, date2: Date) => {
+    return (
+        date1.getFullYear() === date2.getFullYear() &&
+        date1.getMonth() === date2.getMonth() &&
+        date1.getDate() === date2.getDate()
+    );
+};
+
+// Renderer for different message types
+const MessageRenderer: React.FC<{ message: ChatMessage }> = ({ message }) => {
+    const displayName = message.author?.name || message.createdBy;
+    switch (message.type) {
+        case "m.room.message":
+            return renderChatMessage(message);
+
+        case "m.room.member": {
+            const membership = (message.content as { membership: string }).membership;
+            const action = membership === "join" ? "has joined" : membership === "leave" ? "has left" : membership;
+            return renderSystemMessage(`${displayName} ${action} the room.`);
+        }
+
+        case "m.room.name": {
+            const name = (message.content as { name: string }).name;
+            return renderSystemMessage(`Room name changed to "${name}" by ${displayName}.`);
+        }
+
+        case "m.room.topic": {
+            const topic = (message.content as { topic: string }).topic;
+            return renderSystemMessage(`Room topic updated to "${topic}" by ${displayName}.`);
+        }
+
+        case "m.room.history_visibility": {
+            const visibility = (message.content as { history_visibility: string }).history_visibility;
+            return renderSystemMessage(`Room history visibility set to "${visibility}".`);
+        }
+
+        case "m.room.join_rules": {
+            const joinRule = (message.content as { join_rule: string }).join_rule;
+            return renderSystemMessage(`Room join rule updated to "${joinRule}".`);
+        }
+
+        case "m.room.canonical_alias": {
+            const alias = (message.content as { alias: string }).alias;
+            return renderSystemMessage(`Room alias set to "${alias}".`);
+        }
+
+        case "m.room.power_levels": {
+            const powerLevels = message.content as {
+                users_default?: number;
+                events_default?: number;
+                state_default?: number;
+            };
+            return renderSystemMessage(
+                `Room power levels updated. Default user level: ${powerLevels.users_default || 0}.`,
+            );
+        }
+
+        case "m.room.create": {
+            const creator = (message.content as { creator: string }).creator;
+            return renderSystemMessage(`Room created by ${displayName}.`);
+        }
+
+        default:
+            return renderSystemMessage(`Unknown event: ${message.type}`);
+    }
+};
+
+const renderChatMessage = (message: ChatMessage) => <RichText content={message.content.body} />;
+
+const renderSystemMessage = (content: string) => content;
+
+type ChatMessagesProps = {
+    messages: ChatMessage[];
+    messagesEndRef?: React.RefObject<HTMLDivElement | null>;
+};
+
+const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
+    if (!message1?.author || !message2?.author) return false;
+    if (message1.type !== "m.room.message" || message2.type !== "m.room.message") return false;
+    return message1.author._id === message2.author._id;
+};
+
+const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef }) => {
+    const isSameDay = (date1: Date, date2: Date) => {
+        return (
+            date1.getFullYear() === date2.getFullYear() &&
+            date1.getMonth() === date2.getMonth() &&
+            date1.getDate() === date2.getDate()
+        );
+    };
+
+    const formatChatDate = (chatDate: Date) => {
+        const now = new Date();
+
+        if (isSameDay(chatDate, now)) {
+            return chatDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        } else {
+            return (
+                chatDate.toLocaleDateString() +
+                " " +
+                chatDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            );
+        }
+    };
+
+    const orderedMessages = [...messages].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+
+    return (
+        <div>
+            {orderedMessages.reduce<React.ReactNode[]>((acc, message, index) => {
+                const isSystemMessage = message.type !== "m.room.message";
+                const isNewDate =
+                    index === 0 ||
+                    !isSameDay(new Date(message.createdAt), new Date(orderedMessages[index - 1].createdAt));
+                const isNewAuthor = index === 0 || !sameAuthor(orderedMessages[index - 1], message.author?._id);
+                const isFirstInChain = isNewDate || isNewAuthor;
+                const isLastInChain =
+                    index === orderedMessages.length - 1 ||
+                    !sameAuthor(orderedMessages[index + 1], message.author?._id) ||
+                    !isSameDay(new Date(orderedMessages[index + 1].createdAt), new Date(message.createdAt));
+
+                if (isNewDate) {
+                    acc.push(
+                        <div key={`date-${message.createdAt}`} className="my-2 text-center text-sm text-gray-500">
+                            <span className="rounded-full bg-gray-200 px-2 py-1 shadow-md">
+                                {new Date(message.createdAt).toDateString()}
+                            </span>
+                        </div>,
+                    );
+                }
+                const borderRadiusClass = `${isFirstInChain ? "rounded-t-lg" : ""} ${
+                    isLastInChain ? "rounded-b-lg" : ""
+                } ${!isFirstInChain && !isLastInChain ? "rounded-none" : ""}`;
+
+                if (isSystemMessage) {
+                    acc.push(
+                        <div key={message.id} className="my-2 mt-4 text-center text-sm text-gray-500">
+                            <span className="rounded-full bg-gray-200 px-2 py-1 shadow-md">
+                                <MessageRenderer message={message} />
+                            </span>
+                        </div>,
+                    );
+                } else {
+                    acc.push(
+                        <div key={message.id} className={`mb-1 flex gap-4 ${isFirstInChain ? "mt-4" : "mt-1"}`}>
+                            {isFirstInChain ? (
+                                <CirclePicture
+                                    circle={message.author!}
+                                    size="40px"
+                                    className="pt-2"
+                                    openPreview={true}
+                                />
+                            ) : (
+                                <div className="h-10 w-10 flex-shrink-0"></div>
+                            )}
+
+                            <div className={`flex flex-col`}>
+                                <div className={`bg-white p-2 pr-4 shadow-md ${borderRadiusClass}`}>
+                                    <MessageRenderer message={message} />
+                                </div>
+                                {isLastInChain && (
+                                    <span className="mt-1 text-xs text-gray-500">
+                                        {formatChatDate(new Date(message.createdAt))}
+                                    </span>
+                                )}
+                            </div>
+                        </div>,
+                    );
+                }
+
+                return acc;
+            }, [])}
+            <div ref={messagesEndRef} />
+        </div>
+    );
+};
+
+// export const ChatMessages = ({ messages, chatRoom, circle, messagesEndRef }: ChatMessagesProps) => {
+//     const isSameDay = (date1: Date, date2: Date) => {
+//         return (
+//             date1.getFullYear() === date2.getFullYear() &&
+//             date1.getMonth() === date2.getMonth() &&
+//             date1.getDate() === date2.getDate()
+//         );
+//     };
+
+//     const formatChatDate = (chatDate: Date) => {
+//         const now = new Date();
+
+//         if (isSameDay(chatDate, now)) {
+//             // If the date is today, print only the time in HH:MM format
+//             return chatDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+//         } else {
+//             // Otherwise, print date and time in MM/DD/YYYY HH:MM format
+//             return (
+//                 chatDate.toLocaleDateString() +
+//                 " " +
+//                 chatDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+//             );
+//         }
+//     };
+
+//     return (
+//         <div>
+//             {messages.reduce((acc: React.ReactNode[], message, index) => {
+//                 const isNewDate = index === 0 || !isSameDay(message.createdAt, messages[index - 1].createdAt);
+//                 const isNewAuthor = index === 0 || message.author.did !== messages[index - 1].author.did;
+//                 const isFirstInChain = isNewDate || isNewAuthor;
+//                 const isLastInChain =
+//                     index === messages.length - 1 ||
+//                     message.author.did !== messages[index + 1].author.did ||
+//                     !isSameDay(messages[index + 1].createdAt, message.createdAt);
+
+//                 if (isNewDate) {
+//                     acc.push(
+//                         <div key={`date-${message.createdAt}`} className="my-2 text-center text-sm text-gray-500">
+//                             <span className="rounded-full bg-gray-200 px-2 py-1 shadow-md">
+//                                 {getDateLong(message.createdAt)}
+//                             </span>
+//                         </div>,
+//                     );
+//                 }
+
+//                 const borderRadiusClass = `${isFirstInChain ? "rounded-t-lg" : ""} ${isLastInChain ? "rounded-b-lg" : ""} ${!isFirstInChain && !isLastInChain ? "rounded-none" : ""}`;
+
+//                 acc.push(
+//                     <div key={message._id} className={`mb-1 flex gap-4 ${isFirstInChain ? "mt-4" : "mt-1"}`}>
+//                         {isFirstInChain ? (
+//                             <CirclePicture circle={message.author} size="40px" className="pt-2" openPreview={true} />
+//                         ) : (
+//                             <div className="h-10 w-10 flex-shrink-0"></div>
+//                         )}
+//                         <div className={`flex flex-col`}>
+//                             <div className={`bg-white p-2 pr-4 shadow-md ${borderRadiusClass}`}>
+//                                 <RichText content={message.content} mentions={message.mentionsDisplay} />
+//                             </div>
+//                             {isLastInChain && (
+//                                 <span className="mt-1 text-xs text-gray-500">{formatChatDate(message.createdAt)}</span>
+//                             )}
+//                         </div>
+//                     </div>,
+//                 );
+
+//                 return acc;
+//             }, [])}
+//             <div ref={messagesEndRef} />
+//         </div>
+//     );
+// };
 
 type ChatInputProps = {
     setMessages: any;
@@ -64,22 +307,23 @@ const ChatInput = ({ setMessages, circle, chatRoom, page, subpage }: ChatInputPr
         if (!user) return;
         if (newMessage.trim() !== "") {
             try {
-                await sendRoomMessage(user.matrixAccessToken!, chatRoom.id, newMessage);
+                console.log("Sending message:", chatRoom.matrixRoomId, newMessage);
+
+                await sendRoomMessage(user.matrixAccessToken!, chatRoom._id, newMessage);
                 const now = new Date();
 
                 // Add the new message locally
-                const newChatMessage = {
-                    _id: `${now.getTime()}`,
-                    chatRoomId: chatRoom.id,
-                    createdBy: user.did,
+                const newChatMessage: ChatMessage = {
+                    id: `${now.getTime()}`,
+                    chatRoomId: chatRoom.matrixRoomId,
+                    createdBy: user.did!,
                     createdAt: now,
-                    content: newMessage,
-                    reactions: {},
-                    mentions: [],
-                    author: user,
+                    content: { body: newMessage, msgtype: "m.text" },
+                    type: "m.room.message",
+                    author: { ...user },
                 };
 
-                setMessages((prevMessages: ChatMessageDisplay[]) => [...prevMessages, newChatMessage]);
+                setMessages((prevMessages: ChatMessage[]) => [...prevMessages, newChatMessage]);
                 setNewMessage("");
             } catch (error) {
                 console.error("Failed to send message:", error);
@@ -129,184 +373,28 @@ const ChatInput = ({ setMessages, circle, chatRoom, page, subpage }: ChatInputPr
     );
 };
 
-export type ChatMessagesProps = {
-    messages: ChatMessageDisplay[];
+export const ChatRoomComponent: React.FC<{
     chatRoom: ChatRoom;
     circle: Circle;
-    messagesEndRef?: React.RefObject<HTMLDivElement | null>;
-};
-
-export const ChatMessages = ({ messages, chatRoom, circle, messagesEndRef }: ChatMessagesProps) => {
-    const isSameDay = (date1: Date, date2: Date) => {
-        return (
-            date1.getFullYear() === date2.getFullYear() &&
-            date1.getMonth() === date2.getMonth() &&
-            date1.getDate() === date2.getDate()
-        );
-    };
-
-    const formatChatDate = (chatDate: Date) => {
-        const now = new Date();
-
-        if (isSameDay(chatDate, now)) {
-            // If the date is today, print only the time in HH:MM format
-            return chatDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        } else {
-            // Otherwise, print date and time in MM/DD/YYYY HH:MM format
-            return (
-                chatDate.toLocaleDateString() +
-                " " +
-                chatDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-            );
-        }
-    };
-
-    return (
-        <div>
-            {messages.reduce((acc: React.ReactNode[], message, index) => {
-                const isNewDate = index === 0 || !isSameDay(message.createdAt, messages[index - 1].createdAt);
-                const isNewAuthor = index === 0 || message.author.did !== messages[index - 1].author.did;
-                const isFirstInChain = isNewDate || isNewAuthor;
-                const isLastInChain =
-                    index === messages.length - 1 ||
-                    message.author.did !== messages[index + 1].author.did ||
-                    !isSameDay(messages[index + 1].createdAt, message.createdAt);
-
-                if (isNewDate) {
-                    acc.push(
-                        <div key={`date-${message.createdAt}`} className="my-2 text-center text-sm text-gray-500">
-                            <span className="rounded-full bg-gray-200 px-2 py-1 shadow-md">
-                                {getDateLong(message.createdAt)}
-                            </span>
-                        </div>,
-                    );
-                }
-
-                const borderRadiusClass = `${isFirstInChain ? "rounded-t-lg" : ""} ${isLastInChain ? "rounded-b-lg" : ""} ${!isFirstInChain && !isLastInChain ? "rounded-none" : ""}`;
-
-                acc.push(
-                    <div key={message._id} className={`mb-1 flex gap-4 ${isFirstInChain ? "mt-4" : "mt-1"}`}>
-                        {isFirstInChain ? (
-                            <CirclePicture circle={message.author} size="40px" className="pt-2" openPreview={true} />
-                        ) : (
-                            <div className="h-10 w-10 flex-shrink-0"></div>
-                        )}
-                        <div className={`flex flex-col`}>
-                            <div className={`bg-white p-2 pr-4 shadow-md ${borderRadiusClass}`}>
-                                <RichText content={message.content} mentions={message.mentionsDisplay} />
-                            </div>
-                            {isLastInChain && (
-                                <span className="mt-1 text-xs text-gray-500">{formatChatDate(message.createdAt)}</span>
-                            )}
-                        </div>
-                    </div>,
-                );
-
-                return acc;
-            }, [])}
-            <div ref={messagesEndRef} />
-        </div>
-    );
-};
-
-export type ChatRoomProps = {
-    circle: Circle;
-    initialMessages: ChatMessageDisplay[];
-    page?: Page;
-    chatRoom: ChatRoom;
-    subpage?: string;
-    isDefaultCircle?: boolean;
+    initialMessages: ChatMessage[];
     inToolbox?: boolean;
-};
-
-const generateDummyMessages = (user: Circle, count: number) => {
-    const messages: ChatMessageDisplay[] = [];
-    let user2 = { ...user, _id: "2", name: "User 2", picture: { url: "/images/default-picture.png" } };
-
-    // Shorter messages
-    const shortMessages = [
-        "Hello there!",
-        "How's it going?",
-        "This is a random message.",
-        "Here's something interesting.",
-        "What are your thoughts on this?",
-        "Just checking in!",
-        "Hope you're having a great day.",
-        "Let's catch up soon.",
-        "Any updates on the project?",
-        "Have a wonderful day ahead!",
-    ];
-
-    // Longer messages (1-2 paragraphs)
-    const longMessages = [
-        "In today's fast-paced world, it's important to take time to slow down and reflect on the things that truly matter. We often get caught up in the hustle, but moments of stillness are where we find clarity and peace.",
-        "I wanted to share a few thoughts on the latest project. While we're making great progress, there are a few areas where we could improve. For example, the design team has been doing excellent work, but we need to ensure that our timelines are aligned with the development team. Additionally, it might be worth considering a few adjustments to the overall strategy to make sure we're meeting our long-term goals effectively. Let's discuss this further in our next meeting.",
-        "Life is full of unexpected twists and turns. We can plan as much as we want, but in the end, it's our ability to adapt that determines our success. I've learned that embracing uncertainty and remaining flexible are some of the most valuable skills we can develop.",
-        "One of the most profound realizations I've come to over the years is that true happiness comes from within. We often search for validation, success, or happiness in external things, but it's the inner work that truly transforms our lives. The more we learn to be content with who we are, the more we can spread joy and kindness to those around us.",
-        "The latest report on climate change was both alarming and motivating. It reminds us that while the challenges we face are immense, there are still actions we can take as individuals and as a society. Together, we must work toward a more sustainable future, finding creative solutions to protect our planet and ensure a safe future for generations to come.",
-    ];
-
-    for (let i = 0; i < count; i++) {
-        // Randomly select the author (50% chance for user1 or user2)
-        const author = Math.random() < 0.5 ? user : user2;
-
-        // Select either a short or long message, ensuring about half are long
-        const content =
-            Math.random() < 0.5
-                ? longMessages[Math.floor(Math.random() * longMessages.length)]
-                : shortMessages[Math.floor(Math.random() * shortMessages.length)];
-
-        messages.push({
-            _id: i,
-            chatRoomId: "1",
-            createdBy: "did:example:123",
-            createdAt: new Date(),
-            content: content,
-            media: [],
-            repliesToMessageId: null,
-            reactions: { likes: 0 },
-            mentions: [],
-            author: author,
-            userReaction: undefined,
-            mentionsDisplay: [],
-        });
-    }
-    return messages;
-};
-
-export const ChatRoomComponent = ({
-    circle,
-    initialMessages,
-    page,
-    subpage,
-    chatRoom,
-    isDefaultCircle,
-    inToolbox,
-}: ChatRoomProps) => {
-    const isCompact = useIsCompact();
-    const [user, setUser] = useAtom(userAtom);
-    const router = useRouter();
-
-    const [messages, setMessages] = useState<ChatMessageDisplay[]>(initialMessages);
+    isDefaultCircle?: boolean;
+    page: Page;
+    subpage?: string;
+}> = ({ chatRoom, circle, initialMessages, inToolbox, page, subpage, isDefaultCircle }) => {
+    const [messages, setMessages] = useState(initialMessages);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const [newMessage, setNewMessage] = useState("");
-    const inputRef = useRef<HTMLDivElement>(null);
+    const isCompact = useIsCompact();
+    const [hideInput, setHideInput] = useState(false);
     const [inputWidth, setInputWidth] = useState<number | null>(null);
     const isMobile = useIsMobile();
+    const hasJoinedChat = true;
+    const [isPending, startTransition] = useTransition();
+    const inputRef = useRef<HTMLDivElement>(null);
     const [mapOpen] = useAtom(mapOpenAtom);
     const [triggerMapOpen] = useAtom(triggerMapOpenAtom);
-    const [hideInput, setHideInput] = useState(false);
     const { toast } = useToast();
-    const [isPending, startTransition] = useTransition();
-
-    const hasJoinedChat = true; // user?.chatRoomMemberships?.some((membership) => membership.chatRoom._id === chatRoom._id);
-
-    // useEffect(() => {
-    //     if (!user) return;
-
-    //     const dummyMessages = generateDummyMessages(user, 200);
-    //     setMessages(dummyMessages);
-    // }, [user]);
+    const [user, setUser] = useAtom(userAtom);
 
     useEffect(() => {
         if (messagesEndRef.current) {
@@ -327,16 +415,6 @@ export const ChatRoomComponent = ({
         window.addEventListener("resize", updateInputWidth);
         return () => window.removeEventListener("resize", updateInputWidth);
     }, [mapOpen]);
-
-    useEffect(() => {
-        if (triggerMapOpen) {
-            setHideInput(true);
-        }
-    }, [triggerMapOpen]);
-
-    const handleFilterChange = (filter: string) => {
-        router.push("?sort=" + filter);
-    };
 
     const handleJoinChat = async () => {
         startTransition(async () => {
@@ -377,45 +455,6 @@ export const ChatRoomComponent = ({
         });
     };
 
-    const handleLeaveChat = async () => {
-        if (!user) return;
-
-        try {
-            const result = await leaveChatRoomAction(chatRoom._id);
-            if (result.success) {
-                // Update the user state to remove the chat room membership
-                const updatedChatRoomMemberships = user.chatRoomMemberships.filter(
-                    (membership) => membership.chatRoom._id !== chatRoom._id,
-                );
-                const updatedUser = {
-                    ...user,
-                    chatRoomMemberships: updatedChatRoomMemberships,
-                };
-                setUser(updatedUser);
-
-                toast({
-                    title: "Left chat",
-                    variant: "success",
-                });
-            } else {
-                console.error(result.message);
-                toast({
-                    title: result.message,
-                    variant: "destructive",
-                });
-            }
-        } catch (error) {
-            console.error("Failed to leave chat room:", error);
-        }
-    };
-
-    const [testResult, setTestResult] = useState<string | undefined>(undefined);
-
-    const testMatrix = async () => {
-        let result = await testMatrixServerAction();
-        setTestResult(JSON.stringify(result));
-    };
-
     return (
         <div
             className={`flex h-full flex-1 items-start justify-center ${inToolbox ? "bg-[#fbfbfb]" : "min-h-screen"}`}
@@ -438,7 +477,7 @@ export const ChatRoomComponent = ({
                 )}
 
                 {/* Dot Menu */}
-                {hasJoinedChat && (
+                {/* {hasJoinedChat && (
                     <div className="absolute right-4 top-4">
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -451,9 +490,9 @@ export const ChatRoomComponent = ({
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
-                )}
+                )} */}
 
-                {/* <ListFilter onFilterChange={handleFilterChange} /> */}
+                {/* <CircleHeader circle={circle} subpage={chatRoom.name} /> */}
 
                 {inToolbox ? (
                     <ScrollArea
@@ -462,29 +501,13 @@ export const ChatRoomComponent = ({
                             height: "calc(100vh - 300px)",
                         }}
                     >
-                        <ChatMessages
-                            messages={messages}
-                            chatRoom={chatRoom}
-                            circle={circle}
-                            messagesEndRef={messagesEndRef}
-                        />
+                        <ChatMessages messages={messages} messagesEndRef={messagesEndRef} />
                     </ScrollArea>
                 ) : (
                     <div className="flex-grow p-4 pb-[144px]">
-                        <ChatMessages
-                            messages={messages}
-                            chatRoom={chatRoom}
-                            circle={circle}
-                            messagesEndRef={messagesEndRef}
-                        />
+                        <ChatMessages messages={messages} messagesEndRef={messagesEndRef} />
                     </div>
                 )}
-
-                {/* Test box */}
-                {/* <div className="t-[200px] absolute flex w-[1000px] flex-col rounded-lg bg-blue-100 pt-8">
-                    <Button onClick={testMatrix}>Test Matrix</Button>
-                    <div>{testResult}</div>
-                </div> */}
 
                 {!hasJoinedChat ? (
                     <div

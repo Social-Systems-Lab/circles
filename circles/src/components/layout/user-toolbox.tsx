@@ -1,7 +1,7 @@
 //user-toolbox.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { Dispatch, useEffect, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -24,16 +24,19 @@ import {
     sidePanelContentVisibleAtom,
     userAtom,
     userToolboxDataAtom,
+    matrixUserCacheAtom,
 } from "@/lib/data/atoms";
-import { useAtom } from "jotai";
+import { SetStateAction, useAtom } from "jotai";
 import { useRouter } from "next/navigation";
-import { getChatMessagesAction } from "@/components/modules/chat/actions"; // Adjust the import path
+import { fetchMatrixUsers, getChatMessagesAction } from "@/components/modules/chat/actions"; // Adjust the import path
 import {
-    ChatMessageDisplay,
+    ChatMessage,
     ChatRoom,
     Circle,
     ContentPreviewData,
+    MatrixUserCache,
     MemberDisplay,
+    UserPrivate,
     UserToolboxTab,
 } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
@@ -41,8 +44,46 @@ import { ChatRoomComponent } from "../modules/chat/chat-room";
 import { logOut } from "../auth/actions";
 import { fetchJoinedRooms, fetchRoomDetails, fetchRoomMessages } from "@/lib/data/client-matrix";
 
+const fetchAndCacheMatrixUsers = async (
+    matrixUsernames: string[],
+    matrixUserCache: MatrixUserCache,
+    setMatrixUserCache: Dispatch<SetStateAction<MatrixUserCache>>,
+) => {
+    // Remove duplicates
+    const uniqueUsernames = Array.from(new Set(matrixUsernames));
+    const uncachedUsernames = uniqueUsernames.filter((username) => !matrixUserCache[username]);
+    if (uncachedUsernames.length <= 0) {
+        return matrixUserCache;
+    }
+
+    const userData: (Circle | null)[] = await fetchMatrixUsers(uncachedUsernames);
+    let newUserCache: MatrixUserCache = {
+        ...matrixUserCache,
+        ...userData.reduce((acc, user, index) => {
+            const matrixUsername = uncachedUsernames[index];
+            if (user) {
+                // Only add valid users to the cache
+                acc[matrixUsername] = user;
+            }
+            return acc;
+        }, {} as MatrixUserCache),
+        ...userData.reduce((acc, user) => {
+            if (user)
+                acc[user.matrixUsername!] = {
+                    ...user,
+                    matrixUsername: user.matrixUsername,
+                };
+            return acc;
+        }, {} as MatrixUserCache),
+    };
+
+    setMatrixUserCache(newUserCache);
+    return newUserCache ?? {};
+};
+
 type ChatRoomPreview = {
-    id: string;
+    _id: string;
+    matrixRoomId: string;
     name: string;
     message: string;
     avatar: string;
@@ -62,16 +103,16 @@ export const UserToolbox = () => {
     const [userToolboxState, setUserToolboxState] = useAtom(userToolboxDataAtom);
     const [tab, setTab] = useState<UserToolboxTab | undefined>(undefined);
     const [selectedChat, setSelectedChat] = useState<ChatRoomPreview | undefined>(undefined);
-    const [messages, setMessages] = useState<ChatMessageDisplay[]>([]);
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isLoadingMessages, setIsLoadingMessages] = useState(false);
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [authInfo, setAuthInfo] = useAtom(authInfoAtom);
+    const [matrixUserCache, setMatrixUserCache] = useAtom(matrixUserCacheAtom);
 
     const router = useRouter();
 
     useEffect(() => {
-        console.log("UserToolboxState", tab, "->", userToolboxState?.tab);
         if (!userToolboxState?.tab) {
             setTab("chat");
         } else {
@@ -82,22 +123,30 @@ export const UserToolbox = () => {
     const handleChatClick = async (chat: ChatRoomPreview) => {
         setIsLoadingMessages(true);
         try {
-            const { messages } = await fetchRoomMessages(user?.matrixAccessToken!, chat.id, 20);
+            const { messages } = await fetchRoomMessages(user?.matrixAccessToken!, chat.matrixRoomId, 20);
 
-            const formattedMessages = messages.map((msg: any) => ({
-                _id: msg.event_id,
-                chatRoomId: chat.id,
-                createdBy: msg.sender,
-                createdAt: new Date(msg.origin_server_ts),
-                content: msg.content.body,
-                reactions: {}, // Placeholder for reactions
-                mentions: [], // Placeholder for mentions
-                author: {
+            // Fetch and cache user details
+            const matrixUsernames = messages.map((msg) => msg.sender);
+            let userCache = await fetchAndCacheMatrixUsers(matrixUsernames, matrixUserCache, setMatrixUserCache);
+
+            const formattedMessages = messages.map((msg: any, index: number) => {
+                const author = userCache[msg.sender] || {
                     _id: msg.sender,
-                    name: msg.sender, // Replace with a function to fetch user details if needed
-                    picture: { url: "/placeholder.svg" }, // Placeholder avatar
-                },
-            }));
+                    name: msg.sender,
+                    picture: { url: "/placeholder.svg" },
+                };
+                return {
+                    id: msg.event_id,
+                    chatRoomId: msg.room_id,
+                    createdBy: msg.sender,
+                    createdAt: new Date(msg.origin_server_ts),
+                    content: msg.content,
+                    type: msg.type,
+                    stateKey: msg.state_key,
+                    unsigned: msg.unsigned,
+                    author, // Your database user data
+                } as ChatMessage;
+            });
 
             setMessages(formattedMessages);
             setSelectedChat(chat);
@@ -121,27 +170,6 @@ export const UserToolbox = () => {
 
     const [chats, setChats] = useState<ChatRoomPreview[]>([]);
 
-    // // Prepare the chats list
-    // const chats: ChatRoomPreview[] =
-    //     user?.chatRoomMemberships?.map((chatRoomMembership) => {
-    //         const chatRoom = chatRoomMembership.chatRoom;
-    //         const circleId = chatRoom.circleId;
-
-    //         // Find the circle from user memberships
-    //         const circleMembership = user.memberships?.find((membership) => membership.circle._id === circleId);
-    //         const circle = circleMembership?.circle;
-
-    //         return {
-    //             id: chatRoom._id,
-    //             name: chatRoom.name || circle?.name || "Unknown",
-    //             message: "", // Placeholder for the last message
-    //             avatar: circle?.picture?.url || "/placeholder.svg",
-    //             status: "", // Placeholder for status
-    //             circle: circle || {}, // Ensure circle is defined
-    //             chatRoom,
-    //         };
-    //     }) || [];
-
     useEffect(() => {
         if (!user?.matrixAccessToken) return;
 
@@ -150,14 +178,15 @@ export const UserToolbox = () => {
                 const rooms = await fetchJoinedRooms(user.matrixAccessToken!);
 
                 // Fetch metadata for each room
-                const roomDetails = await Promise.all(
+                const roomDetails: ChatRoomPreview[] = await Promise.all(
                     rooms.map(async (roomId: string) => {
                         const details = await fetchRoomDetails(user.matrixAccessToken!, roomId);
                         return {
-                            id: roomId,
+                            _id: roomId, // TODO get from database
+                            matrixRoomId: roomId,
                             name: details.name,
                             avatar: details.avatar,
-                            message: "", // Placeholder for last message (optional)
+                            message: "",
                         };
                     }),
                 );
@@ -301,7 +330,7 @@ export const UserToolbox = () => {
                         chats.length > 0 ? (
                             chats.map((chat) => (
                                 <div
-                                    key={chat.id}
+                                    key={chat.matrixRoomId}
                                     className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
                                     onClick={() => handleChatClick(chat)}
                                 >

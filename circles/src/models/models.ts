@@ -254,6 +254,7 @@ export type Reaction = z.infer<typeof reactionSchema>;
 
 export const chatRoomSchema = z.object({
     _id: z.any().optional(),
+    matrixRoomId: z.string(),
     name: z.string(),
     handle: handleSchema,
     circleId: z.string(),
@@ -262,25 +263,37 @@ export const chatRoomSchema = z.object({
 });
 
 export type ChatRoom = z.infer<typeof chatRoomSchema>;
+export type MatrixMessageContent =
+    | {
+          msgtype: "m.text";
+          body: string;
+          format?: string;
+          formatted_body?: string;
+      }
+    | {
+          msgtype: "m.image" | "m.file" | "m.audio" | "m.video";
+          body: string;
+          url: string;
+          info?: Record<string, any>;
+      }
+    | {
+          msgtype: "m.notice" | "m.emote";
+          body: string;
+          format?: string;
+          formatted_body?: string;
+      }
+    | Record<string, unknown>; // Catch-all for other message types.
 
-export const chatMessageSchema = z.object({
-    id: z.string(),
-    chatRoomId: z.string(),
-    createdBy: didSchema,
-    createdAt: z.date(),
-    content: z.string(),
-    media: z.array(mediaSchema).optional(),
-    repliesToMessageId: z.string().nullable(),
-    reactions: z.record(z.string(), z.number()).default({}),
-    mentions: z.array(mentionSchema).optional(),
-});
-
-export type ChatMessage = z.infer<typeof chatMessageSchema>;
-
-export interface ChatMessageDisplay extends ChatMessage {
-    author: Circle;
-    userReaction?: string;
-    mentionsDisplay?: MentionDisplay[];
+export interface ChatMessage {
+    id: string; // Matrix event_id
+    chatRoomId: string; // Matrix room_id
+    createdBy: string; // Matrix sender
+    createdAt: Date; // Timestamp (Matrix origin_server_ts)
+    content: MatrixMessageContent; // Matrix event content
+    type: string; // Matrix event type
+    stateKey?: string; // Optional for state events
+    unsigned?: Record<string, unknown>; // Unsigned fields from Matrix
+    author: Circle; // User data from your database
 }
 
 export const causeSchema = z.object({
@@ -699,4 +712,8 @@ export type AuthInfo = {
     currentAccount?: Account;
     accounts?: Account[];
     challenge?: Challenge;
+};
+
+export type MatrixUserCache = {
+    [username: string]: Circle;
 };
