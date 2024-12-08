@@ -1,5 +1,5 @@
 // matrix.ts
-import { UserPrivate } from "@/models/models";
+import { ChatRoom, Circle, UserPrivate } from "@/models/models";
 import crypto from "crypto";
 import { updateCircle } from "./circle";
 import { getServerSettings, updateServerSettings } from "./server-settings";
@@ -161,36 +161,6 @@ export async function registerOrLoginMatrixUser(user: UserPrivate): Promise<stri
 
     console.log("Matrix user created successfully");
 
-    // Generate nonce & MAC
-    // const nonce = await generateNonce();
-    // const mac = generateMac(nonce, username, password, false);
-
-    // // User does not exist, create them
-    // console.log("Matrix user does not exist, creating");
-    // const registerResponse = await fetch(`${MATRIX_URL}/_synapse/admin/v1/register`, {
-    //     method: "POST",
-    //     headers: { "Content-Type": "application/json", Authorization: `Bearer ${MATRIX_SHARED_SECRET}` },
-    //     body: JSON.stringify({
-    //         username,
-    //         password,
-    //         admin: false,
-    //         nonce,
-    //         mac,
-    //     }),
-    // });
-
-    // // if err-code is "M_USER_IN_USE" then the user already exists, try with a different username
-    // let json = registerResponse.json() as any;
-    // if (json.errcode === "M_USER_IN_USE") {
-    //     console.log("Matrix user already exists, logging in");
-    //     return loginMatrixUser(username, password);
-    // }
-
-    // if (!registerResponse.ok) {
-    //     console.error("Matrix registration failed", await registerResponse.text());
-    //     throw new Error("Matrix registration failed");
-    // }
-
     // Add user to global chat room
     const accessToken = await loginMatrixUser(username, password!);
     await addUserToGlobalRoom(accessToken);
@@ -228,10 +198,8 @@ export async function loginMatrixUser(username: string, password: string): Promi
     return access_token;
 }
 
-export async function registerMatrixUser(username: string, password: string, isAdmin: boolean): Promise<void> {}
-
 // Helper to add a user to a room
-async function addUserToRoom(accessToken: string, roomId: string): Promise<void> {
+export async function addUserToRoom(accessToken: string, roomId: string): Promise<void> {
     const response = await fetch(`${MATRIX_URL}/_matrix/client/v3/join/${encodeURIComponent(roomId)}`, {
         method: "POST",
         headers: {
@@ -312,6 +280,37 @@ async function getGlobalChatRoom(): Promise<string> {
 export async function addUserToGlobalRoom(accessToken: string): Promise<void> {
     const roomId = await getGlobalChatRoom();
     await addUserToRoom(accessToken, roomId);
+}
+
+export async function createMatrixRoom(
+    alias: string,
+    name: string,
+    topic: string,
+): Promise<{ roomId: string | undefined }> {
+    let adminAccessToken = await getAdminAccessToken();
+
+    const response = await fetch(`${MATRIX_URL}/_matrix/client/v3/createRoom`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${adminAccessToken}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            name: name,
+            room_alias_name: alias,
+            topic,
+            visibility: "public",
+            preset: "public_chat",
+        }),
+    });
+
+    if (!response.ok) {
+        console.error("Failed to create Matrix room", await response.text());
+        return { roomId: undefined };
+    }
+
+    const data = await response.json();
+    return { roomId: data.room_id };
 }
 
 async function generateNonce(): Promise<string> {

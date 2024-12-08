@@ -3,12 +3,21 @@ import { ObjectId } from "mongodb";
 import { ChatRoom, ChatMessage, Circle, Mention, SortingOptions, ChatRoomMember } from "@/models/models";
 import { getCircleById, updateCircle } from "./circle";
 import { addChatRoomsAccessRules } from "../utils";
+import { createMatrixRoom } from "./matrix";
 
 // Chat Room Functions
 
 export const createChatRoom = async (chatRoom: ChatRoom): Promise<ChatRoom> => {
     const result = await ChatRooms.insertOne(chatRoom);
     return { ...chatRoom, _id: result.insertedId.toString() };
+};
+
+export const updateChatRoom = async (chatRoom: Partial<ChatRoom>): Promise<void> => {
+    let { _id, ...chatRoomWithoutId } = chatRoom;
+    let result = await ChatRooms.updateOne({ _id: new ObjectId(_id) }, { $set: chatRoomWithoutId });
+    if (result.matchedCount === 0) {
+        throw new Error("ChatRoom not found");
+    }
 };
 
 export const getChatRoom = async (chatRoomId: string): Promise<ChatRoom | null> => {
@@ -66,6 +75,16 @@ export const createDefaultChatRooms = async (circleId: string): Promise<ChatRoom
         };
         defaultChatRoom = await createChatRoom(defaultChatRoom);
     }
+
+    if (!defaultChatRoom.matrixRoomId) {
+        // create matrix room
+        let matrixRoom = await createMatrixRoom(defaultChatRoom._id, defaultChatRoom.name, defaultChatRoom.name);
+        if (matrixRoom) {
+            defaultChatRoom.matrixRoomId = matrixRoom.roomId;
+            await updateChatRoom(defaultChatRoom);
+        }
+    }
+
     chatRooms.push(defaultChatRoom);
 
     let membersChat = await getChatRoomByHandle(circleId, "members");
@@ -79,6 +98,16 @@ export const createDefaultChatRooms = async (circleId: string): Promise<ChatRoom
         };
         membersChat = await createChatRoom(membersChat);
     }
+
+    if (!membersChat.matrixRoomId) {
+        // create matrix room
+        let matrixRoom = await createMatrixRoom(membersChat._id, membersChat.name, membersChat.name);
+        if (matrixRoom) {
+            membersChat.matrixRoomId = matrixRoom.roomId;
+            await updateChatRoom(membersChat);
+        }
+    }
+
     chatRooms.push(membersChat);
 
     let existingChatRooms = await getChatRooms(circleId);

@@ -254,7 +254,7 @@ export type Reaction = z.infer<typeof reactionSchema>;
 
 export const chatRoomSchema = z.object({
     _id: z.any().optional(),
-    matrixRoomId: z.string(),
+    matrixRoomId: z.string().optional(),
     name: z.string(),
     handle: handleSchema,
     circleId: z.string(),

@@ -42,7 +42,10 @@ export async function fetchRoomDetails(accessToken: string, roomId: string) {
 }
 
 export async function startSync(accessToken: string, callback: (event: any) => void) {
-    let since: any = null; // Track the sync token for pagination
+    let since = localStorage.getItem("syncToken"); // Retrieve the persisted sync token
+    let retryCount = 0;
+    const maxRetries = 5;
+
     const sync = async () => {
         const url = new URL(`${MATRIX_URL}/client/v3/sync`);
         if (since) {
@@ -50,19 +53,33 @@ export async function startSync(accessToken: string, callback: (event: any) => v
         }
         url.searchParams.append("timeout", "30000"); // Long-polling timeout
 
-        const response = await fetch(url.toString(), {
-            method: "GET",
-            headers: { Authorization: `Bearer ${accessToken}` },
-        });
+        try {
+            const response = await fetch(url.toString(), {
+                method: "GET",
+                headers: { Authorization: `Bearer ${accessToken}` },
+            });
 
-        if (response.ok) {
-            const data = await response.json();
-            since = data.next_batch; // Update the sync token
-            callback(data); // Process incoming events
-            await sync(); // Continue syncing
-        } else {
-            console.error("Sync failed, retrying...");
-            setTimeout(sync, 5000); // Retry after a delay
+            if (response.ok) {
+                const data = await response.json();
+                since = data.next_batch; // Update the sync token
+                if (since) {
+                    localStorage.setItem("syncToken", since); // Persist the sync token
+                }
+                callback(data); // Process incoming events
+                retryCount = 0; // Reset retry count on success
+                await sync(); // Continue syncing
+            } else {
+                throw new Error(`Sync failed with status: ${response.status}`);
+            }
+        } catch (error) {
+            console.error("Sync failed, retrying...", error);
+            retryCount++;
+            if (retryCount <= maxRetries) {
+                const backoffTime = Math.min(5000 * Math.pow(2, retryCount), 60000); // Exponential backoff
+                setTimeout(sync, backoffTime);
+            } else {
+                console.error("Max retries reached. Sync stopped.");
+            }
         }
     };
 

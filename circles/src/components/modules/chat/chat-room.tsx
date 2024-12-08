@@ -1,9 +1,10 @@
+//chat-room.tsx
 "use client";
 
-import { KeyboardEvent, useTransition } from "react";
-import { Circle, ChatRoom, ChatMessage, Page, ChatRoomMembership } from "@/models/models";
+import { Dispatch, KeyboardEvent, SetStateAction, useCallback, useMemo, useTransition } from "react";
+import { Circle, ChatRoom, ChatMessage, Page, ChatRoomMembership, MatrixUserCache } from "@/models/models";
 import CircleHeader from "../circles/circle-header";
-import { mapOpenAtom, triggerMapOpenAtom, userAtom } from "@/lib/data/atoms";
+import { mapOpenAtom, matrixUserCacheAtom, triggerMapOpenAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
@@ -12,11 +13,11 @@ import { CirclePicture } from "../circles/circle-picture";
 import RichText from "../feeds/RichText";
 import { Mention, MentionsInput } from "react-mentions";
 import { defaultMentionsInputStyle, defaultMentionStyle, handleMentionQuery } from "../feeds/post-list";
-import { sendRoomMessage } from "@/lib/data/client-matrix";
+import { fetchRoomMessages, sendRoomMessage, startSync } from "@/lib/data/client-matrix";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { joinChatRoomAction } from "./actions";
+import { fetchMatrixUsers, joinChatRoomAction } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 export const renderCircleSuggestion = (
@@ -154,11 +155,11 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef })
                 const isNewDate =
                     index === 0 ||
                     !isSameDay(new Date(message.createdAt), new Date(orderedMessages[index - 1].createdAt));
-                const isNewAuthor = index === 0 || !sameAuthor(orderedMessages[index - 1], message.author?._id);
+                const isNewAuthor = index === 0 || !sameAuthor(orderedMessages[index - 1], message);
                 const isFirstInChain = isNewDate || isNewAuthor;
                 const isLastInChain =
                     index === orderedMessages.length - 1 ||
-                    !sameAuthor(orderedMessages[index + 1], message.author?._id) ||
+                    !sameAuthor(orderedMessages[index + 1], message) ||
                     !isSameDay(new Date(orderedMessages[index + 1].createdAt), new Date(message.createdAt));
 
                 if (isNewDate) {
@@ -217,79 +218,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef })
     );
 };
 
-// export const ChatMessages = ({ messages, chatRoom, circle, messagesEndRef }: ChatMessagesProps) => {
-//     const isSameDay = (date1: Date, date2: Date) => {
-//         return (
-//             date1.getFullYear() === date2.getFullYear() &&
-//             date1.getMonth() === date2.getMonth() &&
-//             date1.getDate() === date2.getDate()
-//         );
-//     };
-
-//     const formatChatDate = (chatDate: Date) => {
-//         const now = new Date();
-
-//         if (isSameDay(chatDate, now)) {
-//             // If the date is today, print only the time in HH:MM format
-//             return chatDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-//         } else {
-//             // Otherwise, print date and time in MM/DD/YYYY HH:MM format
-//             return (
-//                 chatDate.toLocaleDateString() +
-//                 " " +
-//                 chatDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-//             );
-//         }
-//     };
-
-//     return (
-//         <div>
-//             {messages.reduce((acc: React.ReactNode[], message, index) => {
-//                 const isNewDate = index === 0 || !isSameDay(message.createdAt, messages[index - 1].createdAt);
-//                 const isNewAuthor = index === 0 || message.author.did !== messages[index - 1].author.did;
-//                 const isFirstInChain = isNewDate || isNewAuthor;
-//                 const isLastInChain =
-//                     index === messages.length - 1 ||
-//                     message.author.did !== messages[index + 1].author.did ||
-//                     !isSameDay(messages[index + 1].createdAt, message.createdAt);
-
-//                 if (isNewDate) {
-//                     acc.push(
-//                         <div key={`date-${message.createdAt}`} className="my-2 text-center text-sm text-gray-500">
-//                             <span className="rounded-full bg-gray-200 px-2 py-1 shadow-md">
-//                                 {getDateLong(message.createdAt)}
-//                             </span>
-//                         </div>,
-//                     );
-//                 }
-
-//                 const borderRadiusClass = `${isFirstInChain ? "rounded-t-lg" : ""} ${isLastInChain ? "rounded-b-lg" : ""} ${!isFirstInChain && !isLastInChain ? "rounded-none" : ""}`;
-
-//                 acc.push(
-//                     <div key={message._id} className={`mb-1 flex gap-4 ${isFirstInChain ? "mt-4" : "mt-1"}`}>
-//                         {isFirstInChain ? (
-//                             <CirclePicture circle={message.author} size="40px" className="pt-2" openPreview={true} />
-//                         ) : (
-//                             <div className="h-10 w-10 flex-shrink-0"></div>
-//                         )}
-//                         <div className={`flex flex-col`}>
-//                             <div className={`bg-white p-2 pr-4 shadow-md ${borderRadiusClass}`}>
-//                                 <RichText content={message.content} mentions={message.mentionsDisplay} />
-//                             </div>
-//                             {isLastInChain && (
-//                                 <span className="mt-1 text-xs text-gray-500">{formatChatDate(message.createdAt)}</span>
-//                             )}
-//                         </div>
-//                     </div>,
-//                 );
-
-//                 return acc;
-//             }, [])}
-//             <div ref={messagesEndRef} />
-//         </div>
-//     );
-// };
-
 type ChatInputProps = {
     setMessages: any;
     circle: Circle;
@@ -308,22 +236,7 @@ const ChatInput = ({ setMessages, circle, chatRoom, page, subpage }: ChatInputPr
         if (newMessage.trim() !== "") {
             try {
                 console.log("Sending message:", chatRoom.matrixRoomId, newMessage);
-
-                await sendRoomMessage(user.matrixAccessToken!, chatRoom._id, newMessage);
-                const now = new Date();
-
-                // Add the new message locally
-                const newChatMessage: ChatMessage = {
-                    id: `${now.getTime()}`,
-                    chatRoomId: chatRoom.matrixRoomId,
-                    createdBy: user.did!,
-                    createdAt: now,
-                    content: { body: newMessage, msgtype: "m.text" },
-                    type: "m.room.message",
-                    author: { ...user },
-                };
-
-                setMessages((prevMessages: ChatMessage[]) => [...prevMessages, newChatMessage]);
+                await sendRoomMessage(user.matrixAccessToken!, chatRoom.matrixRoomId!, newMessage);
                 setNewMessage("");
             } catch (error) {
                 console.error("Failed to send message:", error);
@@ -373,34 +286,161 @@ const ChatInput = ({ setMessages, circle, chatRoom, page, subpage }: ChatInputPr
     );
 };
 
+const fetchAndCacheMatrixUsers = async (
+    matrixUsernames: string[],
+    matrixUserCache: MatrixUserCache,
+    setMatrixUserCache: Dispatch<SetStateAction<MatrixUserCache>>,
+) => {
+    // Remove duplicates
+    const uniqueUsernames = Array.from(new Set(matrixUsernames));
+    const uncachedUsernames = uniqueUsernames.filter((username) => !matrixUserCache[username]);
+    if (uncachedUsernames.length <= 0) {
+        return matrixUserCache;
+    }
+
+    const userData: (Circle | null)[] = await fetchMatrixUsers(uncachedUsernames);
+    let newUserCache: MatrixUserCache = {
+        ...matrixUserCache,
+        ...userData.reduce((acc, user, index) => {
+            const matrixUsername = uncachedUsernames[index];
+            if (user) {
+                // Only add valid users to the cache
+                acc[matrixUsername] = user;
+            }
+            return acc;
+        }, {} as MatrixUserCache),
+        ...userData.reduce((acc, user) => {
+            if (user)
+                acc[user.matrixUsername!] = {
+                    ...user,
+                    matrixUsername: user.matrixUsername,
+                };
+            return acc;
+        }, {} as MatrixUserCache),
+    };
+
+    setMatrixUserCache(newUserCache);
+    return newUserCache ?? {};
+};
+
 export const ChatRoomComponent: React.FC<{
     chatRoom: ChatRoom;
     circle: Circle;
-    initialMessages: ChatMessage[];
     inToolbox?: boolean;
     isDefaultCircle?: boolean;
     page: Page;
     subpage?: string;
-}> = ({ chatRoom, circle, initialMessages, inToolbox, page, subpage, isDefaultCircle }) => {
-    const [messages, setMessages] = useState(initialMessages);
+}> = ({ chatRoom, circle, inToolbox, page, subpage, isDefaultCircle }) => {
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const isCompact = useIsCompact();
     const [hideInput, setHideInput] = useState(false);
     const [inputWidth, setInputWidth] = useState<number | null>(null);
     const isMobile = useIsMobile();
-    const hasJoinedChat = true;
     const [isPending, startTransition] = useTransition();
+    const [isLoadingMessages, startLoadingMessagesTransition] = useTransition();
     const inputRef = useRef<HTMLDivElement>(null);
     const [mapOpen] = useAtom(mapOpenAtom);
     const [triggerMapOpen] = useAtom(triggerMapOpenAtom);
     const { toast } = useToast();
     const [user, setUser] = useAtom(userAtom);
+    const [matrixUserCache, setMatrixUserCache] = useAtom(matrixUserCacheAtom);
+    const hasJoinedChat = useMemo(() => {
+        return user?.chatRoomMemberships?.some((membership) => membership.chatRoomId === chatRoom._id);
+    }, [user?.chatRoomMemberships, chatRoom._id]);
+    const initialMessagesLoaded = useRef(false);
 
     useEffect(() => {
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
         }
     }, [messages]);
+
+    const loadInitialMessages = useCallback(async () => {
+        if (!chatRoom?.matrixRoomId || initialMessagesLoaded.current) return;
+        initialMessagesLoaded.current = true; // Mark as loaded
+
+        startLoadingMessagesTransition(async () => {
+            try {
+                const { messages } = await fetchRoomMessages(user?.matrixAccessToken!, chatRoom.matrixRoomId!, 20);
+
+                // Fetch and cache user details
+                const matrixUsernames = messages.map((msg) => msg.sender);
+                let userCache = await fetchAndCacheMatrixUsers(matrixUsernames, matrixUserCache, setMatrixUserCache);
+
+                const formattedMessages = messages.map((msg: any, index: number) => {
+                    const author = userCache[msg.sender] || {
+                        _id: msg.sender,
+                        name: msg.sender,
+                        picture: { url: "/placeholder.svg" },
+                    };
+                    return {
+                        id: msg.event_id,
+                        chatRoomId: msg.room_id,
+                        createdBy: msg.sender,
+                        createdAt: new Date(msg.origin_server_ts),
+                        content: msg.content,
+                        type: msg.type,
+                        stateKey: msg.state_key,
+                        unsigned: msg.unsigned,
+                        author, // Your database user data
+                    } as ChatMessage;
+                });
+
+                setMessages(formattedMessages);
+            } catch (error) {
+                console.error("Failed to fetch chat messages:", error);
+            }
+        });
+    }, [chatRoom.matrixRoomId, matrixUserCache, setMatrixUserCache, user?.matrixAccessToken]);
+
+    const messagesRef = useRef<ChatMessage[]>([]);
+    useEffect(() => {
+        messagesRef.current = messages;
+    }, [messages]);
+
+    useEffect(() => {
+        if (!chatRoom?.matrixRoomId || !user?.matrixAccessToken) return;
+
+        const handleNewEvents = async (data: any) => {
+            const roomEvents = data.rooms?.join?.[chatRoom.matrixRoomId!]?.timeline?.events || [];
+            const newMessages = roomEvents
+                .filter(
+                    (event: any) =>
+                        event.type === "m.room.message" &&
+                        !messagesRef.current.some((msg) => msg.id === event.event_id), // Deduplicate using latest state
+                )
+                .map((msg: any) => ({
+                    id: msg.event_id,
+                    chatRoomId: chatRoom.matrixRoomId,
+                    createdBy: msg.sender,
+                    createdAt: new Date(msg.origin_server_ts),
+                    content: msg.content,
+                    type: msg.type,
+                    stateKey: msg.state_key,
+                    unsigned: msg.unsigned,
+                    author: matrixUserCache[msg.sender] || { name: msg.sender },
+                }));
+
+            console.log("Handling new events", JSON.stringify(matrixUserCache));
+            const matrixUsernames = roomEvents.map((msg: any) => msg.sender);
+            console.log("New messages from", JSON.stringify(matrixUsernames));
+
+            setMessages((prevMessages) => [...prevMessages, ...newMessages]);
+        };
+
+        startSync(user.matrixAccessToken, handleNewEvents);
+
+        return () => {
+            // Cleanup if necessary
+        };
+    }, [chatRoom.matrixRoomId, user?.matrixAccessToken, matrixUserCache, setMatrixUserCache]);
+
+    useEffect(() => {
+        // if user isn't in the chat room don't load messages
+        if (!hasJoinedChat) return;
+        loadInitialMessages();
+    }, [circle._id, hasJoinedChat, loadInitialMessages]);
 
     useEffect(() => {
         console.log("UseEffect called");
@@ -458,7 +498,6 @@ export const ChatRoomComponent: React.FC<{
     return (
         <div
             className={`flex h-full flex-1 items-start justify-center ${inToolbox ? "bg-[#fbfbfb]" : "min-h-screen"}`}
-            // `flex h-full min-h-screen flex-1 items-start justify-center bg-white ${isCompact ? "" : "mt-3 overflow-hidden rounded-t-[15px]"}`
             style={{
                 flexGrow: isCompact || inToolbox ? "1" : "3",
                 maxWidth: isCompact || inToolbox ? "none" : "700px",
@@ -492,8 +531,6 @@ export const ChatRoomComponent: React.FC<{
                     </div>
                 )} */}
 
-                {/* <CircleHeader circle={circle} subpage={chatRoom.name} /> */}
-
                 {inToolbox ? (
                     <ScrollArea
                         className="p-4"
@@ -501,11 +538,13 @@ export const ChatRoomComponent: React.FC<{
                             height: "calc(100vh - 300px)",
                         }}
                     >
-                        <ChatMessages messages={messages} messagesEndRef={messagesEndRef} />
+                        {isLoadingMessages && <div className="text-center text-gray-500">Loading messages...</div>}
+                        {!isLoadingMessages && <ChatMessages messages={messages} messagesEndRef={messagesEndRef} />}
                     </ScrollArea>
                 ) : (
                     <div className="flex-grow p-4 pb-[144px]">
-                        <ChatMessages messages={messages} messagesEndRef={messagesEndRef} />
+                        {isLoadingMessages && <div className="text-center text-gray-500">Loading messages...</div>}
+                        {!isLoadingMessages && <ChatMessages messages={messages} messagesEndRef={messagesEndRef} />}
                     </div>
                 )}
 

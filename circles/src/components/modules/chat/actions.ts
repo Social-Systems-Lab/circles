@@ -2,9 +2,10 @@
 
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { Circle, ChatRoomMember } from "@/models/models";
-import { getUsersByMatrixUsernames } from "@/lib/data/user";
+import { getUserByDid, getUsersByMatrixUsernames } from "@/lib/data/user";
 import { chatFeaturePrefix } from "@/lib/data/constants";
 import { addChatRoomMember, getChatRoom, getChatRoomMember, removeChatRoomMember } from "@/lib/data/chat";
+import { addUserToRoom } from "@/lib/data/matrix";
 
 export async function joinChatRoomAction(
     chatRoomId: string,
@@ -24,6 +25,13 @@ export async function joinChatRoomAction(
             return { success: false, message: "You are not authorized to join this chat room" };
         }
 
+        // add user to matrix chat room
+        let user = await getUserByDid(userDid);
+        if (!user?.matrixAccessToken) {
+            return { success: false, message: "User does not have a valid Matrix access token" };
+        }
+
+        await addUserToRoom(user.matrixAccessToken, chatRoom.matrixRoomId!);
         const chatRoomMember = await addChatRoomMember(userDid, chatRoomId);
 
         return { success: true, message: "Joined chat room successfully", chatRoomMember };
@@ -64,7 +72,9 @@ export const fetchMatrixUsers = async (usernames: string[]): Promise<(Circle | n
     }
 
     // Extract local parts of the usernames
-    const extractedUsernames = usernames.map((username) => username.split(":")[0].replace("@", ""));
+    const extractedUsernames = usernames
+        .filter((username) => username)
+        .map((username) => username.split(":")[0].replace("@", ""));
 
     // Fetch users from the database
     const users = await getUsersByMatrixUsernames(extractedUsernames);

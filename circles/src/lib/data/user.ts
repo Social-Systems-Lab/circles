@@ -137,45 +137,45 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
     let pendingRequests = await getUserPendingMembershipRequests(userDid);
     user.pendingRequests = pendingRequests;
 
-    // TODO removed because handled by the client and matrix
-    // // add chat room memberships
-    // let chatRoomMemberships = await ChatRoomMembers.aggregate([
-    //     { $match: { userDid: userDid } },
-    //     // Convert chatRoomId to ObjectId
-    //     {
-    //         $addFields: {
-    //             chatRoomIdObject: { $toObjectId: "$chatRoomId" },
-    //         },
-    //     },
-    //     {
-    //         $lookup: {
-    //             from: "chatRooms",
-    //             localField: "chatRoomIdObject",
-    //             foreignField: "_id",
-    //             as: "chatRoom",
-    //         },
-    //     },
-    //     { $unwind: "$chatRoom" },
-    //     {
-    //         $project: {
-    //             _id: { $toString: "$_id" },
-    //             userDid: 1,
-    //             chatRoomId: 1,
-    //             circleId: 1,
-    //             joinedAt: 1,
-    //             chatRoom: {
-    //                 _id: { $toString: "$chatRoom._id" },
-    //                 name: "$chatRoom.name",
-    //                 handle: "$chatRoom.handle",
-    //                 circleId: "$chatRoom.circleId",
-    //                 createdAt: "$chatRoom.createdAt",
-    //                 userGroups: "$chatRoom.userGroups",
-    //             },
-    //         },
-    //     },
-    // ]).toArray();
+    // add chat room memberships
+    let chatRoomMemberships = await ChatRoomMembers.aggregate([
+        { $match: { userDid: userDid } },
+        // Convert chatRoomId to ObjectId
+        {
+            $addFields: {
+                chatRoomIdObject: { $toObjectId: "$chatRoomId" },
+            },
+        },
+        {
+            $lookup: {
+                from: "chatRooms",
+                localField: "chatRoomIdObject",
+                foreignField: "_id",
+                as: "chatRoom",
+            },
+        },
+        { $unwind: "$chatRoom" },
+        {
+            $project: {
+                _id: { $toString: "$_id" },
+                userDid: 1,
+                chatRoomId: 1,
+                circleId: 1,
+                joinedAt: 1,
+                chatRoom: {
+                    _id: { $toString: "$chatRoom._id" },
+                    name: "$chatRoom.name",
+                    handle: "$chatRoom.handle",
+                    circleId: "$chatRoom.circleId",
+                    createdAt: "$chatRoom.createdAt",
+                    userGroups: "$chatRoom.userGroups",
+                    matrixRoomId: "$chatRoom.matrixRoomId",
+                },
+            },
+        },
+    ]).toArray();
 
-    // user.chatRoomMemberships = chatRoomMemberships as ChatRoomMembership[];
+    user.chatRoomMemberships = chatRoomMemberships as ChatRoomMembership[];
 
     return user as UserPrivate;
 };

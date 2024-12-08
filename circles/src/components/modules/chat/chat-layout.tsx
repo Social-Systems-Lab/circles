@@ -12,7 +12,7 @@ export default async function ChatLayout({ children, circle, page, isDefaultCirc
     if (!chatRooms || chatRooms.length === 0) {
         console.log("Creating chat rooms");
 
-        // create default feeds
+        // create default chat rooms
         chatRooms = (await createDefaultChatRooms(circle?._id)) as ChatRoom[];
         if (!chatRooms) {
             // redirect to error

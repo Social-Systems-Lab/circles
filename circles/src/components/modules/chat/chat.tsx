@@ -1,9 +1,8 @@
 "use server";
 
 import { ModulePageProps } from "../dynamic-page";
-import { getChatRoomByHandle, getChatMessages } from "@/lib/data/chat";
+import { getChatRoomByHandle } from "@/lib/data/chat";
 import { ChatRoomComponent } from "./chat-room";
-import { getChatMessagesAction } from "./actions";
 import { SortingOptions } from "@/models/models";
 import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 import { ThirdColumn } from "../feeds/third-column";
@@ -13,12 +12,10 @@ export default async function ChatModule({ circle, page, subpage, isDefaultCircl
     if (!chatRoom) {
         return <div></div>;
     }
-    const messages = await getChatMessagesAction(chatRoom._id, circle._id, 20, 0, searchParams?.sort as SortingOptions);
 
     return (
-        <ContentDisplayWrapper content={messages}>
+        <ContentDisplayWrapper content={[]}>
             <ChatRoomComponent
-                initialMessages={messages}
                 chatRoom={chatRoom}
                 circle={circle}
                 page={page}
