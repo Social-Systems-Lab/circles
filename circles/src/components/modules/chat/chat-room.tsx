@@ -113,6 +113,7 @@ const renderSystemMessage = (content: string) => content;
 type ChatMessagesProps = {
     messages: ChatMessage[];
     messagesEndRef?: React.RefObject<HTMLDivElement | null>;
+    onMessagesRendered?: () => void;
 };
 
 const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
@@ -121,7 +122,7 @@ const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
     return message1.author._id === message2.author._id;
 };
 
-const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef }) => {
+const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, onMessagesRendered }) => {
     const isSameDay = (date1: Date, date2: Date) => {
         return (
             date1.getFullYear() === date2.getFullYear() &&
@@ -129,6 +130,13 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef })
             date1.getDate() === date2.getDate()
         );
     };
+
+    useEffect(() => {
+        // Notify the parent once messages are rendered
+        if (onMessagesRendered) {
+            onMessagesRendered();
+        }
+    }, [messages, onMessagesRendered]);
 
     const formatChatDate = (chatDate: Date) => {
         const now = new Date();
@@ -349,10 +357,15 @@ export const ChatRoomComponent: React.FC<{
     }, [user?.chatRoomMemberships, chatRoom._id]);
     const initialMessagesLoaded = useRef(false);
 
-    useEffect(() => {
+    const scrollToBottom = () => {
+        console.log("Scrolling to bottom");
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
         }
+    };
+
+    useEffect(() => {
+        scrollToBottom();
     }, [messages]);
 
     const loadInitialMessages = useCallback(async () => {
@@ -464,6 +477,10 @@ export const ChatRoomComponent: React.FC<{
         return () => window.removeEventListener("resize", updateInputWidth);
     }, [mapOpen]);
 
+    const handleMessagesRendered = () => {
+        scrollToBottom();
+    };
+
     const handleJoinChat = async () => {
         startTransition(async () => {
             if (!user) return;
@@ -547,12 +564,24 @@ export const ChatRoomComponent: React.FC<{
                         }}
                     >
                         {isLoadingMessages && <div className="text-center text-gray-500">Loading messages...</div>}
-                        {!isLoadingMessages && <ChatMessages messages={messages} messagesEndRef={messagesEndRef} />}
+                        {!isLoadingMessages && (
+                            <ChatMessages
+                                messages={messages}
+                                messagesEndRef={messagesEndRef}
+                                onMessagesRendered={handleMessagesRendered}
+                            />
+                        )}
                     </ScrollArea>
                 ) : (
                     <div className="flex-grow p-4 pb-[144px]">
                         {isLoadingMessages && <div className="text-center text-gray-500">Loading messages...</div>}
-                        {!isLoadingMessages && <ChatMessages messages={messages} messagesEndRef={messagesEndRef} />}
+                        {!isLoadingMessages && (
+                            <ChatMessages
+                                messages={messages}
+                                messagesEndRef={messagesEndRef}
+                                onMessagesRendered={handleMessagesRendered}
+                            />
+                        )}
                     </div>
                 )}
 
