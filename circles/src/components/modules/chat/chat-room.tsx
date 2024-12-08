@@ -335,7 +335,7 @@ export const ChatRoomComponent: React.FC<{
     circle: Circle;
     inToolbox?: boolean;
     isDefaultCircle?: boolean;
-    page: Page;
+    page?: Page;
     subpage?: string;
 }> = ({ chatRoom, circle, inToolbox, page, subpage, isDefaultCircle }) => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);

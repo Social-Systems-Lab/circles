@@ -44,17 +44,6 @@ import { ChatRoomComponent } from "../modules/chat/chat-room";
 import { logOut } from "../auth/actions";
 import { fetchJoinedRooms, fetchRoomDetails, fetchRoomMessages } from "@/lib/data/client-matrix";
 
-type ChatRoomPreview = {
-    _id: string;
-    matrixRoomId: string;
-    name: string;
-    message: string;
-    avatar: string;
-    status: string;
-    circle: Circle;
-    chatRoom: ChatRoom;
-};
-
 type Notification = {
     id: number;
     message: string;
@@ -65,7 +54,7 @@ export const UserToolbox = () => {
     const [user, setUser] = useAtom(userAtom);
     const [userToolboxState, setUserToolboxState] = useAtom(userToolboxDataAtom);
     const [tab, setTab] = useState<UserToolboxTab | undefined>(undefined);
-    const [selectedChat, setSelectedChat] = useState<ChatRoomPreview | undefined>(undefined);
+    const [selectedChat, setSelectedChat] = useState<ChatRoom | undefined>(undefined);
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [authInfo, setAuthInfo] = useAtom(authInfoAtom);
@@ -80,7 +69,7 @@ export const UserToolbox = () => {
         }
     }, [userToolboxState?.tab]);
 
-    const handleChatClick = async (chat: ChatRoomPreview) => {
+    const handleChatClick = async (chat: ChatRoom) => {
         setSelectedChat(chat);
     };
 
@@ -95,42 +84,47 @@ export const UserToolbox = () => {
             ?.filter((m) => m.circle.circleType === "user" && m.circle._id !== user?._id)
             ?.map((membership) => membership.circle) || [];
 
-    const [chats, setChats] = useState<ChatRoomPreview[]>([]);
+    const [chats, setChats] = useState<ChatRoom[]>([]);
 
     useEffect(() => {
         if (!user?.matrixAccessToken) return;
 
-        const fetchAndSubscribe = async () => {
-            try {
-                const rooms = await fetchJoinedRooms(user.matrixAccessToken!);
+        console.log("User chat memberships", user?.chatRoomMemberships);
+        setChats(user.chatRoomMemberships.map((m) => m.chatRoom));
 
-                // Fetch metadata for each room
-                const roomDetails: ChatRoomPreview[] = await Promise.all(
-                    rooms.map(async (roomId: string) => {
-                        const details = await fetchRoomDetails(user.matrixAccessToken!, roomId);
-                        return {
-                            _id: roomId, // TODO get from database
-                            matrixRoomId: roomId,
-                            name: details.name,
-                            avatar: details.avatar,
-                            message: "",
-                        };
-                    }),
-                );
+        // const fetchAndSubscribe = async () => {
+        //     try {
+        //         const rooms = await fetchJoinedRooms(user.matrixAccessToken!);
 
-                setChats(roomDetails);
+        //         // get room details from server
 
-                // Enable real-time updates
-                // await startSync(user.matrixAccessToken, (syncData) => {
-                //     console.log("Real-time event:", syncData);
-                // });
-            } catch (error) {
-                console.error("Failed to initialize chat room fetching:", error);
-            }
-        };
+        //         // Fetch metadata for each room
+        //         const roomDetails: ChatRoom[] = await Promise.all(
+        //             rooms.map(async (roomId: string) => {
+        //                 const details = await fetchRoomDetails(user.matrixAccessToken!, roomId);
+        //                 return {
+        //                     _id: roomId, // TODO get from database
+        //                     matrixRoomId: roomId,
+        //                     name: details.name,
+        //                     avatar: details.avatar,
+        //                     message: "",
+        //                 } as ChatRoomPreview;
+        //             }),
+        //         );
 
-        fetchAndSubscribe();
-    }, [user?.matrixAccessToken]);
+        //         setChats(roomDetails);
+
+        //         // Enable real-time updates
+        //         // await startSync(user.matrixAccessToken, (syncData) => {
+        //         //     console.log("Real-time event:", syncData);
+        //         // });
+        //     } catch (error) {
+        //         console.error("Failed to initialize chat room fetching:", error);
+        //     }
+        // };
+
+        // fetchAndSubscribe();
+    }, [user?.chatRoomMemberships, user?.matrixAccessToken]);
 
     const notifications: Notification[] = [
         // { id: 1, message: "John Doe has requested membership in a circle", time: "2 min ago" },
@@ -232,7 +226,7 @@ export const UserToolbox = () => {
                                     </Button>
                                     <div className="ml-2 flex items-center space-x-2">
                                         <Avatar>
-                                            <AvatarImage src={selectedChat.avatar} alt={selectedChat.name} />
+                                            <AvatarImage src={selectedChat.picture} alt={selectedChat.name} />
                                             <AvatarFallback>{selectedChat.name.charAt(0)}</AvatarFallback>
                                         </Avatar>
                                         <div>
@@ -243,7 +237,7 @@ export const UserToolbox = () => {
                                 </div>
                                 {/* Chat Room Component */}
                                 <ChatRoomComponent
-                                    circle={selectedChat.circle}
+                                    circle={{ _id: selectedChat.circleId }}
                                     chatRoom={selectedChat}
                                     inToolbox={true}
                                 />
