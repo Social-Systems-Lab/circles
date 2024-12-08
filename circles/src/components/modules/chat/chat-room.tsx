@@ -290,37 +290,36 @@ const fetchAndCacheMatrixUsers = async (
     matrixUsernames: string[],
     matrixUserCache: MatrixUserCache,
     setMatrixUserCache: Dispatch<SetStateAction<MatrixUserCache>>,
-) => {
-    // Remove duplicates
+): Promise<MatrixUserCache> => {
+    // Deduplicate usernames
     const uniqueUsernames = Array.from(new Set(matrixUsernames));
     const uncachedUsernames = uniqueUsernames.filter((username) => !matrixUserCache[username]);
-    if (uncachedUsernames.length <= 0) {
-        return matrixUserCache;
+
+    if (uncachedUsernames.length === 0) {
+        return matrixUserCache; // Nothing to fetch
     }
 
-    const userData: (Circle | null)[] = await fetchMatrixUsers(uncachedUsernames);
-    let newUserCache: MatrixUserCache = {
-        ...matrixUserCache,
-        ...userData.reduce((acc, user, index) => {
-            const matrixUsername = uncachedUsernames[index];
-            if (user) {
-                // Only add valid users to the cache
-                acc[matrixUsername] = user;
-            }
-            return acc;
-        }, {} as MatrixUserCache),
-        ...userData.reduce((acc, user) => {
-            if (user)
-                acc[user.matrixUsername!] = {
-                    ...user,
-                    matrixUsername: user.matrixUsername,
-                };
-            return acc;
-        }, {} as MatrixUserCache),
-    };
+    try {
+        const userData: (Circle | null)[] = await fetchMatrixUsers(uncachedUsernames);
 
-    setMatrixUserCache(newUserCache);
-    return newUserCache ?? {};
+        // Update cache with fetched users
+        const updatedCache = {
+            ...matrixUserCache,
+            ...userData.reduce((acc, user, index) => {
+                const matrixUsername = uncachedUsernames[index];
+                if (user) {
+                    acc[matrixUsername] = user;
+                }
+                return acc;
+            }, {} as MatrixUserCache),
+        };
+
+        setMatrixUserCache(updatedCache);
+        return updatedCache;
+    } catch (error) {
+        console.error("Failed to fetch Matrix users:", error);
+        return matrixUserCache; // Return the current cache even on failure
+    }
 };
 
 export const ChatRoomComponent: React.FC<{
@@ -404,6 +403,15 @@ export const ChatRoomComponent: React.FC<{
 
         const handleNewEvents = async (data: any) => {
             const roomEvents = data.rooms?.join?.[chatRoom.matrixRoomId!]?.timeline?.events || [];
+
+            const newUsernames = roomEvents
+                .filter((event: any) => event.type === "m.room.message")
+                .map((event: any) => event.sender)
+                .filter((username: string) => !matrixUserCache[username]); // Only fetch uncached users
+
+            // Fetch and update the cache for any new usernames
+            const updatedCache = await fetchAndCacheMatrixUsers(newUsernames, matrixUserCache, setMatrixUserCache);
+
             const newMessages = roomEvents
                 .filter(
                     (event: any) =>
@@ -419,7 +427,7 @@ export const ChatRoomComponent: React.FC<{
                     type: msg.type,
                     stateKey: msg.state_key,
                     unsigned: msg.unsigned,
-                    author: matrixUserCache[msg.sender] || { name: msg.sender },
+                    author: updatedCache[msg.sender] || { name: msg.sender },
                 }));
 
             console.log("Handling new events", JSON.stringify(matrixUserCache));
