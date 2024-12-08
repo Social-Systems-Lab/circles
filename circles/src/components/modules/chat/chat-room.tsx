@@ -106,7 +106,7 @@ const MessageRenderer: React.FC<{ message: ChatMessage }> = ({ message }) => {
     }
 };
 
-const renderChatMessage = (message: ChatMessage) => <RichText content={message.content.body} />;
+const renderChatMessage = (message: ChatMessage) => <RichText content={message?.content?.body as string} />;
 
 const renderSystemMessage = (content: string) => content;
 

@@ -226,12 +226,12 @@ export const UserToolbox = () => {
                                     </Button>
                                     <div className="ml-2 flex items-center space-x-2">
                                         <Avatar>
-                                            <AvatarImage src={selectedChat.picture} alt={selectedChat.name} />
+                                            <AvatarImage src={selectedChat.picture?.url} alt={selectedChat.name} />
                                             <AvatarFallback>{selectedChat.name.charAt(0)}</AvatarFallback>
                                         </Avatar>
                                         <div>
                                             <p className="text-sm font-medium">{selectedChat.name}</p>
-                                            <p className="text-xs text-muted-foreground">{selectedChat.status}</p>
+                                            {/* <p className="text-xs text-muted-foreground">{selectedChat.status}</p> */}
                                         </div>
                                     </div>
                                 </div>
@@ -246,14 +246,14 @@ export const UserToolbox = () => {
                         chats.length > 0 ? (
                             chats.map((chat) => (
                                 <div
-                                    key={chat.matrixRoomId}
+                                    key={chat._id}
                                     className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
                                     onClick={() => handleChatClick(chat)}
                                 >
-                                    <CirclePicture circle={chat.circle} size="40px" />
+                                    <CirclePicture circle={{ name: chat.name, picture: chat.picture }} size="40px" />
                                     <div>
                                         <p className="text-sm font-medium">{chat.name}</p>
-                                        <p className="text-xs text-muted-foreground">{chat.message}</p>
+                                        {/* <p className="text-xs text-muted-foreground">{chat.message}</p> */}
                                     </div>
                                 </div>
                             ))

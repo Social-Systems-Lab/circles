@@ -260,6 +260,7 @@ export const chatRoomSchema = z.object({
     circleId: z.string(),
     createdAt: z.date(),
     userGroups: z.array(z.string()).default([]),
+    picture: fileInfoSchema.optional(),
 });
 
 export type ChatRoom = z.infer<typeof chatRoomSchema>;
