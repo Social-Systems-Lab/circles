@@ -9,21 +9,24 @@ import { updateUser } from "@/lib/data/user";
 export const circleAboutFormAction: FormAction = {
     id: "circle-about-form",
     onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
+        // console.log("Saving circle settings with values", values);
+        let circle: Partial<Circle> = {
+            _id: values._id,
+            name: values.name,
+            handle: values.handle,
+            description: values.description,
+            isPublic: values.isPublic,
+            location: values.location,
+            mission: values.mission,
+        };
+
+        // check if user is authorized to edit circle settings
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "You need to be logged in to edit circle settings" };
+        }
+
         try {
-            // console.log("Saving circle settings with values", values);
-
-            let circle: Partial<Circle> = {
-                _id: values._id,
-                name: values.name,
-                handle: values.handle,
-                description: values.description,
-                isPublic: values.isPublic,
-                location: values.location,
-                mission: values.mission,
-            };
-
-            // check if user is authorized to edit circle settings
-            const userDid = await getAuthenticatedUserDid();
             let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
             if (!authorized) {
                 return { success: false, message: "You are not authorized to edit circle settings" };

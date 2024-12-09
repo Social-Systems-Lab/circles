@@ -23,9 +23,9 @@ type CircleActionResponse = {
 
 export const joinCircle = async (circle: Circle, answers?: Record<string, string>): Promise<CircleActionResponse> => {
     let isUser = circle?.circleType === "user";
+    const token = (await cookies()).get("token")?.value;
 
     try {
-        const token = (await cookies()).get("token")?.value;
         if (!token) {
             return { success: false, message: "You need to be logged in to join a circle" };
         }
@@ -71,9 +71,9 @@ export const joinCircle = async (circle: Circle, answers?: Record<string, string
 
 export const leaveCircle = async (circle: Circle): Promise<CircleActionResponse> => {
     let isUser = circle?.circleType === "user";
+    const token = (await cookies()).get("token")?.value;
 
     try {
-        const token = (await cookies()).get("token")?.value;
         if (!token) {
             return { success: false, message: "You need to be logged in to leave a circle" };
         }
@@ -107,8 +107,9 @@ export const leaveCircle = async (circle: Circle): Promise<CircleActionResponse>
 };
 
 export const cancelJoinRequest = async (circle: Circle): Promise<CircleActionResponse> => {
+    const token = (await cookies()).get("token")?.value;
+
     try {
-        const token = (await cookies()).get("token")?.value;
         if (!token) {
             return { success: false, message: "You need to be logged in to cancel a join request" };
         }
@@ -127,8 +128,12 @@ export const cancelJoinRequest = async (circle: Circle): Promise<CircleActionRes
 };
 
 export const updateCircleField = async (circleId: string, formData: FormData): Promise<CircleActionResponse> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to edit circle settings" };
+    }
+
     try {
-        const userDid = await getAuthenticatedUserDid();
         let authorized = await isAuthorized(userDid, circleId, features.settings_edit);
         if (!authorized) {
             return { success: false, message: "You are not authorized to edit circle settings" };

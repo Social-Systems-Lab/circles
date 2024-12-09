@@ -20,11 +20,8 @@ export default async function HomeModule({ circle, isDefaultCircle, searchParams
     }
 
     let authorizedToEdit = false;
-    let userDid = undefined;
-    try {
-        userDid = await getAuthenticatedUserDid();
-        authorizedToEdit = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
-    } catch (error) {}
+    let userDid = await getAuthenticatedUserDid();
+    authorizedToEdit = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
 
     // get all circles and members
     let circles = await getCirclesWithMetrics(userDid, circle?._id, searchParams?.sort as SortingOptions);

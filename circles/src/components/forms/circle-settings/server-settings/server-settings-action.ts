@@ -13,13 +13,17 @@ import { upsertVdbCollections } from "@/lib/data/vdb";
 export const serverSettingsFormAction: FormAction = {
     id: "server-settings-form",
     onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
-        try {
-            //console.log("Saving server settings with values", values);
-            let registrySuccess = true;
-            let circleId = values.defaultCircleId;
+        //console.log("Saving server settings with values", values);
+        let registrySuccess = true;
+        let circleId = values.defaultCircleId;
 
-            // check if user is authorized to edit server settings, we use the same permission as for default circle settings
-            const userDid = await getAuthenticatedUserDid();
+        // check if user is authorized to edit server settings, we use the same permission as for default circle settings
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "You need to be logged in to edit server settings" };
+        }
+
+        try {
             let authorized = await isAuthorized(userDid, circleId ?? "", features.settings_edit);
             if (!authorized) {
                 return { success: false, message: "You are not authorized to edit server settings" };
@@ -79,8 +83,12 @@ export const serverSettingsFormAction: FormAction = {
                 console.log("Upserting causes and skills");
                 await upsertCausesAndSkills();
 
-                console.log("Upserting embeddings");
-                await upsertVdbCollections();
+                try {
+                    console.log("Upserting embeddings");
+                    await upsertVdbCollections();
+                } catch (error) {
+                    console.log("Failed to upsert embeddings", error);
+                }
             }
 
             // save server settings

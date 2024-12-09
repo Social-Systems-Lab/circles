@@ -7,8 +7,12 @@ import { revalidatePath } from "next/cache";
 export const circleQuestionnaireFormAction: FormAction = {
     id: "circle-questionnaire-form",
     onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "You need to be logged in to edit circle settings" };
+        }
+
         try {
-            const userDid = await getAuthenticatedUserDid();
             let circle = await getCircleById(values._id);
 
             let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);

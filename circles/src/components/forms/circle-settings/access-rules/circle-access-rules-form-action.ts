@@ -9,13 +9,17 @@ import { getUserById, updateUser } from "@/lib/data/user";
 export const circleAccessRulesFormAction: FormAction = {
     id: "circle-access-rules-form",
     onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
-        try {
-            let circle: Partial<Circle> = {
-                _id: values._id,
-            };
+        let circle: Partial<Circle> = {
+            _id: values._id,
+        };
 
-            // check if user is authorized to edit circle settings
-            const userDid = await getAuthenticatedUserDid();
+        // check if user is authorized to edit circle settings
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "You need to be logged in to edit circle settings" };
+        }
+
+        try {
             let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
             if (!authorized) {
                 return { success: false, message: "You are not authorized to edit circle settings" };

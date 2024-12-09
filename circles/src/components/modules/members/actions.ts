@@ -18,9 +18,12 @@ export const removeMemberAction = async (
     circle: Circle,
     page: Page,
 ): Promise<RemoveMemberResponse> => {
-    try {
-        const userDid = await getAuthenticatedUserDid();
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to remove a member" };
+    }
 
+    try {
         // confirm the user is authorized to remove member
         let authorized = await isAuthorized(userDid, circle._id ?? "", features.remove_lower_members);
         let canRemoveSameLevel = await isAuthorized(userDid, circle._id ?? "", features.edit_same_level_user_groups);
@@ -66,9 +69,12 @@ export const updateUserGroupsAction = async (
     newGroups: string[],
     page: Page,
 ): Promise<UpdateUserGroupsResponse> => {
-    try {
-        const userDid = await getAuthenticatedUserDid();
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to update user groups" };
+    }
 
+    try {
         // confirm the user is authorized to edit user groups
         let authorized = await isAuthorized(userDid, circle._id ?? "", features.edit_lower_user_groups);
         let canEditSameLevel = await isAuthorized(userDid, circle._id ?? "", features.edit_same_level_user_groups);

@@ -10,9 +10,12 @@ import { addUserToRoom } from "@/lib/data/matrix";
 export async function joinChatRoomAction(
     chatRoomId: string,
 ): Promise<{ success: boolean; message?: string; chatRoomMember?: ChatRoomMember }> {
-    try {
-        const userDid = await getAuthenticatedUserDid();
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to join a chat room" };
+    }
 
+    try {
         const chatRoom = await getChatRoom(chatRoomId);
         if (!chatRoom) {
             return { success: false, message: "Chat room not found" };
@@ -42,9 +45,12 @@ export async function joinChatRoomAction(
 }
 
 export async function leaveChatRoomAction(chatRoomId: string): Promise<{ success: boolean; message?: string }> {
-    try {
-        const userDid = await getAuthenticatedUserDid();
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to leave a chat room" };
+    }
 
+    try {
         const chatRoom = await getChatRoom(chatRoomId);
         if (!chatRoom) {
             return { success: false, message: "Chat room not found" };
