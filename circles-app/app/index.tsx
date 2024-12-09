@@ -59,7 +59,7 @@ import { useRouter } from "expo-router";
 import { useWebView } from "@/components/ui/WebViewContext";
 
 //const circlesUrl = "http://192.168.10.204:3000"; // circles running locally
-const circlesUrl = "https://makecircles.org"; // circles prod server
+const circlesUrl = "https://makecircles.org/feeds"; // circles prod server
 
 export default function Index() {
     const router = useRouter();

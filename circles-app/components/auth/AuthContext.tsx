@@ -105,7 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setLoading(true);
 
             console.log("Clearing accounts...");
-            await AsyncStorage.setItem(ACCOUNTS_KEY, "");
+            //await AsyncStorage.setItem(ACCOUNTS_KEY, "");
 
             const loadedAccounts = await loadAccounts();
             setAccounts(loadedAccounts);
