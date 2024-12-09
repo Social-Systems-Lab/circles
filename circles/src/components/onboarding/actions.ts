@@ -14,6 +14,11 @@ type SaveMissionActionResponse = {
 };
 
 export const saveMissionAction = async (mission: string, circleId: string): Promise<SaveMissionActionResponse> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to edit circle settings" };
+    }
+
     try {
         let circle: Partial<Circle> = {
             _id: circleId,
@@ -21,7 +26,6 @@ export const saveMissionAction = async (mission: string, circleId: string): Prom
         };
 
         // check if user is authorized to edit circle settings
-        const userDid = await getAuthenticatedUserDid();
         let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
         if (!authorized) {
             return { success: false, message: "You are not authorized to edit circle settings" };
@@ -65,6 +69,11 @@ export const saveCausesAction = async (
     causes: string[] | undefined,
     circleId: string,
 ): Promise<SaveCausesActionResponse> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to edit circle settings" };
+    }
+
     try {
         let circle: Partial<Circle> = {
             _id: circleId,
@@ -72,7 +81,6 @@ export const saveCausesAction = async (
         };
 
         // check if user is authorized to edit circle settings
-        const userDid = await getAuthenticatedUserDid();
         let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
         if (!authorized) {
             return { success: false, message: "You are not authorized to edit circle settings" };
@@ -106,6 +114,11 @@ export const saveSkillsAction = async (
     skills: string[] | undefined,
     circleId: string,
 ): Promise<SaveCausesActionResponse> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to edit circle settings" };
+    }
+
     try {
         let circle: Partial<Circle> = {
             _id: circleId,
@@ -113,7 +126,6 @@ export const saveSkillsAction = async (
         };
 
         // check if user is authorized to edit circle settings
-        const userDid = await getAuthenticatedUserDid();
         let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
         if (!authorized) {
             return { success: false, message: "You are not authorized to edit circle settings" };

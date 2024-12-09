@@ -9,17 +9,21 @@ import { updateUser } from "@/lib/data/user";
 export const createCircleFormAction: FormAction = {
     id: "create-circle-form",
     onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
-        try {
-            let circle: Circle = {
-                name: values.name,
-                handle: values.handle,
-                description: values.description,
-                isPublic: values.isPublic,
-                parentCircleId: values.parentCircleId,
-            };
+        let circle: Circle = {
+            name: values.name,
+            handle: values.handle,
+            description: values.description,
+            isPublic: values.isPublic,
+            parentCircleId: values.parentCircleId,
+        };
 
-            // check if user is authorized to edit circle settings
-            const userDid = await getAuthenticatedUserDid();
+        // check if user is authorized to edit circle settings
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "You need to be logged in to create a circle" };
+        }
+
+        try {
             let authorized = await isAuthorized(userDid, circle.parentCircleId ?? "", features.create_subcircle);
             if (!authorized) {
                 return { success: false, message: "You are not authorized to create new circles" };

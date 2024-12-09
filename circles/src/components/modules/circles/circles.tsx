@@ -9,10 +9,7 @@ import { SortingOptions } from "@/models/models";
 
 export default async function CirclesModule({ circle, page, subpage, isDefaultCircle, searchParams }: ModulePageProps) {
     // get user handle
-    let userDid = undefined;
-    try {
-        userDid = await getAuthenticatedUserDid();
-    } catch (error) {}
+    let userDid = await getAuthenticatedUserDid();
 
     // get all circles
     let circles = await getCirclesWithMetrics(userDid, circle?._id, searchParams?.sort as SortingOptions);

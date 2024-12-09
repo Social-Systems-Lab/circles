@@ -8,8 +8,12 @@ import { getUserById, updateUser } from "@/lib/data/user";
 export const circleMatchmakingFormAction: FormAction = {
     id: "circle-matchmaking-form",
     onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "You need to be logged in to edit circle settings" };
+        }
+
         try {
-            const userDid = await getAuthenticatedUserDid();
             let circle = null;
             circle = await getCircleById(values._id);
 

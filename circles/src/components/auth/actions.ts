@@ -62,8 +62,9 @@ export async function checkExternalAuth(challenge: Challenge): Promise<CheckAuth
 }
 
 export async function checkAuth(account: Account | undefined): Promise<CheckAuthResponse> {
+    const token = (await cookies()).get("token")?.value;
+
     try {
-        const token = (await cookies()).get("token")?.value;
         if (token) {
             let payload = await verifyUserToken(token);
             if (payload) {

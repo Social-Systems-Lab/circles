@@ -20,12 +20,15 @@ type MembershipRequestsResponse = {
 };
 
 export const getAllMembershipRequestsAction = async (circleId: string): Promise<MembershipRequestsResponse> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to view membership requests" };
+    }
+
     try {
         if (!circleId) {
             return { success: false, message: "Invalid circle ID" };
         }
-
-        const userDid = await getAuthenticatedUserDid();
 
         // check if the user is authorized to view membership requests
         const authorized = await isAuthorized(userDid, circleId, features.manage_membership_requests);
@@ -50,9 +53,12 @@ export const approveMembershipRequestAction = async (
     circle: Circle,
     page: Page,
 ): Promise<UpdateMembershipRequestResponse> => {
-    try {
-        const userDid = await getAuthenticatedUserDid();
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to approve membership requests" };
+    }
 
+    try {
         // Check if the user is authorized to approve membership requests
         const authorized = await isAuthorized(userDid, circle._id ?? "", features.manage_membership_requests);
         if (!authorized) {
@@ -83,9 +89,12 @@ export const rejectMembershipRequestAction = async (
     circle: Circle,
     page: Page,
 ): Promise<UpdateMembershipRequestResponse> => {
-    try {
-        const userDid = await getAuthenticatedUserDid();
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to reject membership requests" };
+    }
 
+    try {
         // Check if the user is authorized to reject membership requests
         const authorized = await isAuthorized(userDid, circle._id ?? "", features.manage_membership_requests);
         if (!authorized) {

@@ -46,10 +46,7 @@ export async function getPostsAction(
     skip: number,
     sortingOptions?: SortingOptions,
 ): Promise<PostDisplay[]> {
-    let userDid = undefined;
-    try {
-        userDid = await getAuthenticatedUserDid();
-    } catch (error) {}
+    let userDid = await getAuthenticatedUserDid();
 
     const feed = await getFeed(feedId);
     if (!feed) {
@@ -72,6 +69,11 @@ export async function createPostAction(
     page: Page,
     subpage?: string,
 ): Promise<{ success: boolean; message?: string; post?: Post }> {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to create a post" };
+    }
+
     try {
         const content = formData.get("content") as string;
         const circleId = formData.get("circleId") as string;
@@ -79,7 +81,6 @@ export async function createPostAction(
         const locationStr = formData.get("location") as string;
         const location = locationStr ? JSON.parse(locationStr) : undefined;
 
-        const userDid = await getAuthenticatedUserDid();
         const feed = await getFeed(feedId);
         if (!feed) {
             return { success: false, message: "Feed not found" };
@@ -150,6 +151,11 @@ export async function updatePostAction(
     page: Page,
     subpage?: string,
 ): Promise<{ success: boolean; message?: string; post?: Post }> {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to edit a post" };
+    }
+
     try {
         const postId = formData.get("postId") as string;
         const content = formData.get("content") as string;
@@ -157,7 +163,6 @@ export async function updatePostAction(
         const locationStr = formData.get("location") as string;
         const location = locationStr ? JSON.parse(locationStr) : undefined;
 
-        const userDid = await getAuthenticatedUserDid();
         const post = await getPost(postId);
         if (!post) {
             return { success: false, message: "Post not found" };
@@ -219,8 +224,12 @@ export async function deletePostAction(
     page: Page,
     subpage?: string,
 ): Promise<{ success: boolean; message?: string }> {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to delete a post" };
+    }
+
     try {
-        const userDid = await getAuthenticatedUserDid();
         const post = await getPost(postId);
         if (!post) {
             return { success: false, message: "Post not found" };
@@ -256,8 +265,12 @@ export async function createCommentAction(
     parentCommentId: string | null,
     content: string,
 ): Promise<{ success: boolean; message?: string; comment?: CommentDisplay }> {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to create a comment" };
+    }
+
     try {
-        const userDid = await getAuthenticatedUserDid();
         const post = await getPost(postId);
         if (!post) {
             return { success: false, message: "Post not found" };
@@ -308,16 +321,16 @@ export async function createCommentAction(
 export async function getAllCommentsAction(
     postId: string,
 ): Promise<{ success: boolean; comments?: CommentDisplay[]; message?: string }> {
+    let userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to view comments" };
+    }
+
     try {
         let post = await getPost(postId);
         if (!post) {
             return { success: false, message: "Post not found" };
         }
-
-        let userDid = undefined;
-        try {
-            userDid = await getAuthenticatedUserDid();
-        } catch (error) {}
 
         const feed = await getFeed(post.feedId);
         if (!feed) {
@@ -341,8 +354,12 @@ export async function editCommentAction(
     commentId: string,
     updatedContent: string,
 ): Promise<{ success: boolean; message?: string }> {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to edit a comment" };
+    }
+
     try {
-        const userDid = await getAuthenticatedUserDid();
         const comment = await getComment(commentId);
 
         if (!comment) {
@@ -365,8 +382,12 @@ export async function editCommentAction(
 }
 
 export async function deleteCommentAction(commentId: string): Promise<{ success: boolean; message?: string }> {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to delete a comment" };
+    }
+
     try {
-        const userDid = await getAuthenticatedUserDid();
         const comment = await getComment(commentId);
 
         if (!comment) {
@@ -402,9 +423,12 @@ export async function likeContentAction(
     contentType: "post" | "comment",
     reactionType: string = "like",
 ): Promise<{ success: boolean; message?: string }> {
-    try {
-        const userDid = await getAuthenticatedUserDid();
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to like content" };
+    }
 
+    try {
         let postId: string | undefined = contentId;
         if (contentType === "comment") {
             let comment = await getComment(contentId);
@@ -441,9 +465,12 @@ export async function unlikeContentAction(
     contentType: "post" | "comment",
     reactionType: string = "like",
 ): Promise<{ success: boolean; message?: string }> {
-    try {
-        const userDid = await getAuthenticatedUserDid();
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to unlike content" };
+    }
 
+    try {
         await unlikeContent(contentId, contentType, userDid, reactionType);
 
         return { success: true, message: "Content unliked successfully" };
@@ -469,9 +496,12 @@ export async function checkIfLikedAction(
     contentId: string,
     contentType: "post" | "comment",
 ): Promise<{ success: boolean; isLiked?: boolean; message?: string }> {
-    try {
-        const userDid = await getAuthenticatedUserDid();
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to check if liked" };
+    }
 
+    try {
         const isLiked = await checkIfLiked(contentId, contentType, userDid);
 
         return { success: true, isLiked };

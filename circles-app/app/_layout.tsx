@@ -10,14 +10,20 @@ import { JsrsaWebViewProvider } from "@/components/ui/JsrsaWebViewContext";
 
 export default function RootLayout() {
     return (
-        <JsrsaWebViewProvider>
-            {/* <WebViewProvider>
-                <AuthProvider> */}
-            <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="index" />
-            </Stack>
-            {/* </AuthProvider>
-            </WebViewProvider> */}
-        </JsrsaWebViewProvider>
+        <WebViewProvider>
+            <AuthProvider>
+                <Stack screenOptions={{ headerShown: false }}>
+                    <Stack.Screen name="index" />
+                </Stack>
+            </AuthProvider>
+        </WebViewProvider>
     );
+}
+
+{
+    /* <JsrsaWebViewProvider>
+<Stack screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="index" />
+</Stack>
+</JsrsaWebViewProvider> */
 }
