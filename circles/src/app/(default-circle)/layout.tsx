@@ -31,3 +31,5 @@ export async function generateMetadata(): Promise<Metadata> {
         icons: [icon],
     };
 }
+
+export const dynamic = "force-dynamic";
