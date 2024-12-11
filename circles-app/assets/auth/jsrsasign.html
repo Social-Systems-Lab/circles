@@ -252,21 +252,13 @@ if(typeof KJUR=="undefined"||!KJUR){KJUR={}}if(typeof KJUR.jws=="undefined"||!KJ
                 JSON.stringify({ response: "Initializing jsrsasign"})
             );
 
+
             // Encrypt data using AES-256-CBC
             function encryptData(data, encryptionKey) {
+                const dataHex = stohex(data);
                 const keyHex = b64tohex(encryptionKey); // Convert Base64 key to Hex
                 const ivHex = KJUR.crypto.Util.getRandomHexOfNbytes(16); // Generate a random IV (16 bytes for CBC)
-                const encryptedHex = KJUR.crypto.Cipher.encrypt(data, keyHex, "aes256-CBC", { iv: ivHex });
-
-                window.ReactNativeWebView.postMessage(
-                    JSON.stringify({ response: "encryptData IV: " + ivHex.length})
-                );
-                window.ReactNativeWebView.postMessage(
-                    JSON.stringify({ response: "encryptData cipherHex: " + encryptedHex.length})
-                );
-                window.ReactNativeWebView.postMessage(
-                    JSON.stringify({ response: "encryptData keyHex: " + keyHex.length})
-                );
+                const encryptedHex = KJUR.crypto.Cipher.encrypt(dataHex, keyHex, "aes256-CBC", { iv: ivHex });
 
                 // Return IV + CipherText as Base64 for transport
                 return hextob64(ivHex + encryptedHex);
@@ -277,31 +269,11 @@ if(typeof KJUR=="undefined"||!KJUR){KJUR={}}if(typeof KJUR.jws=="undefined"||!KJ
                 const encryptedHex = b64tohex(encryptedData); // Convert Base64 to Hex
                 const ivHex = encryptedHex.slice(0, 32); // Extract IV (first 16 bytes in Hex)
                 const cipherTextHex = encryptedHex.slice(32); // Extract CipherText (remaining bytes)
-
                 const keyHex = b64tohex(encryptionKey); // Convert Base64 key to Hex
-
-                window.ReactNativeWebView.postMessage(
-                    JSON.stringify({ response: "decryptData IV: " + ivHex.length})
-                );
-                window.ReactNativeWebView.postMessage(
-                    JSON.stringify({ response: "decryptData cipherHex: " + cipherTextHex.length})
-                );
-                window.ReactNativeWebView.postMessage(
-                    JSON.stringify({ response: "decryptData keyHex: " + keyHex.length})
-                );
-
                 const decryptedHex = KJUR.crypto.Cipher.decrypt(cipherTextHex, keyHex, "aes256-CBC", { iv: ivHex });
-
-                window.ReactNativeWebView.postMessage(
-                    JSON.stringify({ response: "decryptData decryptedHex: " + decryptedHex})
-                );
-                window.ReactNativeWebView.postMessage(
-                    JSON.stringify({ response: "decryptData decryptedHex length: " + decryptedHex.length})
-                );
 
                 // Convert decrypted hex to string
                 const plaintext = hextorstr(decryptedHex);
-
                 return plaintext;
             }
 

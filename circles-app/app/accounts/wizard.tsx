@@ -1,3 +1,4 @@
+// wizard.tsx - Account creation wizard
 import React from "react";
 import { useState } from "react";
 import { View, Button, Text } from "react-native";
