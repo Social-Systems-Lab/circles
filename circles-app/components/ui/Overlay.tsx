@@ -1,3 +1,4 @@
+// overlay.tsx - Overlay effect for QR scanner
 import React from "react";
 import { Canvas, DiffRect, rect, rrect } from "@shopify/react-native-skia";
 import { Dimensions, Platform, StyleSheet } from "react-native";

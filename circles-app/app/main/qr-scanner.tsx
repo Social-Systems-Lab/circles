@@ -1,7 +1,7 @@
 //qr-scanner.tsx
-import { useAuth } from "@/components/auth/AuthContext";
-import { Overlay } from "@/components/ui/Overlay";
-import { useWebView } from "@/components/ui/WebViewContext";
+import { useAuth } from "@/components/auth/auth-context";
+import { Overlay } from "@/components/ui/overlay";
+import { useWebView } from "@/components/ui/web-view-context";
 import { CameraView } from "expo-camera";
 import { useRouter } from "expo-router";
 import React, { useState, useEffect } from "react";
