@@ -98,6 +98,6 @@ function redirectToErrorPage(request: NextRequest) {
 
 export const config = {
     matcher: [
-        "/((?!api|logged-out|login|unauthorized|unauthenticated|error|not-found|signup|public/images|_next/static|robots.txt|sitemap.xml|favicon.ico|_next/image|.*\\.png$).*)",
+        "/((?!api|logged-out|login|unauthorized|unauthenticated|error|not-found|signup|demo/moviedb|demo/tech|demo/ratings|public/images|_next/static|robots.txt|sitemap.xml|favicon.ico|_next/image|.*\\.svg|.*\\.jpg|.*\\.png$).*)",
     ],
 };

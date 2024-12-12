@@ -33,6 +33,7 @@ export type Account = {
     did: string;
     publicKey: string;
     name: string;
+    pictureUrl?: string;
     requireAuthentication: AuthType;
 };
 
@@ -41,7 +42,7 @@ type AuthContextType = {
     generateRSAKeys: () => Promise<RsaKeys>;
     signChallenge: (privateKey: string, challenge: string) => Promise<string>;
     accounts: Account[];
-    currentAccount: Account | null;
+    currentAccount: AccountWithEncryptionKey | null;
     createAccount: (accountName: string, authType: AuthType, pin?: string) => Promise<void>;
     encryptData: (data: string) => Promise<string>;
     decryptData: (encryptedData: string) => Promise<string>;

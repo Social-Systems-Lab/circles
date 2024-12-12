@@ -1,8 +1,4 @@
-/**
- * Learn more about light and dark modes:
- * https://docs.expo.dev/guides/color-schemes/
- */
-
+// useThemeColor.ts
 import { useColorScheme } from "react-native";
 
 import { Colors } from "@/constants/colors";

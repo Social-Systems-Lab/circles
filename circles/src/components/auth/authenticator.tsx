@@ -13,11 +13,11 @@ const { KEYUTIL, KJUR } = require("jsrsasign");
 
 declare global {
     interface Window {
-        _SSI_ACCOUNTS?: Account[];
-        _SSI_CURRENT_ACCOUNT?: Account;
+        _SSI_ACCOUNT?: Account;
         ReactNativeWebView?: {
             postMessage: (message: string) => void;
         };
+        requestAccess: (manifest: any) => void;
     }
 }
 
@@ -50,7 +50,6 @@ export const Authenticator = () => {
             setAuthInfo({
                 authStatus: "authenticated",
                 inSsiApp: false,
-                accounts: undefined,
                 currentAccount: undefined,
             });
             setUser(response.user);
@@ -64,19 +63,18 @@ export const Authenticator = () => {
         }
 
         // check if user is authenticated
-        const inSsiApp = window._SSI_ACCOUNTS !== undefined;
-        const accounts = window._SSI_ACCOUNTS;
-        const currentAccount = window._SSI_CURRENT_ACCOUNT;
+        const currentAccount = window._SSI_ACCOUNT;
+        const inSsiApp = currentAccount !== undefined;
 
         if (inSsiApp && !currentAccount) {
             // prompt user to create an account
-            setAuthInfo({ authStatus: "createAccount", inSsiApp, accounts, currentAccount });
+            setAuthInfo({ authStatus: "createAccount", inSsiApp, currentAccount });
             return;
         }
 
         const response = await checkAuth(currentAccount);
         if (response.authenticated) {
-            setAuthInfo({ authStatus: "authenticated", inSsiApp, accounts, currentAccount });
+            setAuthInfo({ authStatus: "authenticated", inSsiApp, currentAccount });
             setUser(response.user);
         } else if (response.challenge) {
             // Send challenge to native app for signing
@@ -92,20 +90,19 @@ export const Authenticator = () => {
                 setAuthInfo({
                     authStatus: "unauthenticated",
                     inSsiApp,
-                    accounts,
                     currentAccount,
                     challenge: response.challenge,
                 });
             }
         } else {
             // TODO prompt user to sign in with QR code
-            setAuthInfo({ authStatus: "unauthenticated", inSsiApp, accounts, currentAccount });
+            setAuthInfo({ authStatus: "unauthenticated", inSsiApp, currentAccount });
         }
     }, [authInfo.authStatus, setAuthInfo, setUser]);
 
     useEffect(() => {
         // Listen for messages from the native app
-        const inSsiApp = window._SSI_ACCOUNTS !== undefined;
+        const inSsiApp = window._SSI_ACCOUNT !== undefined;
 
         const onMessage = (event: MessageEvent) => {
             WebviewLog("Received message", event.data);
@@ -135,9 +132,8 @@ export const Authenticator = () => {
                             if (!response.verified) {
                                 return;
                             }
-                            const accounts = window._SSI_ACCOUNTS;
-                            const currentAccount = window._SSI_CURRENT_ACCOUNT;
-                            setAuthInfo({ authStatus: "authenticated", inSsiApp, accounts, currentAccount });
+                            const currentAccount = window._SSI_ACCOUNT;
+                            setAuthInfo({ authStatus: "authenticated", inSsiApp, currentAccount });
                             setUser(response.user);
                         }
                     });

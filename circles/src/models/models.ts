@@ -711,7 +711,6 @@ export type AuthInfo = {
     authStatus: "loading" | "authenticated" | "unauthenticated" | "createAccount";
     inSsiApp: boolean;
     currentAccount?: Account;
-    accounts?: Account[];
     challenge?: Challenge;
 };
 

@@ -22,13 +22,13 @@ export default function Index() {
         if (isReady) {
             if (accounts.length === 0) {
                 // Show account creation wizard
-                router.replace("/accounts/wizard");
+                router.replace("/accounts/create-account-wizard");
             } else if (accounts.length === 1) {
                 // Log into the only account
                 router.replace("/main");
             } else {
                 // Show account selection screen
-                router.replace("/accounts/select");
+                router.replace("/accounts/account-select");
             }
         }
     }, [accounts, isReady]);

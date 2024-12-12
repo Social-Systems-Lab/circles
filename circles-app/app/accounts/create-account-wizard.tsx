@@ -1,10 +1,10 @@
-// wizard.tsx - Account creation wizard
+// create-account-wizard.tsx - Account creation wizard
 import React from "react";
 import { useState } from "react";
 import { View, Button, Text } from "react-native";
 import { useRouter } from "expo-router";
 
-export default function Wizard() {
+export default function CreateAccountWizard() {
     const router = useRouter();
     const [step, setStep] = useState(0);
 
