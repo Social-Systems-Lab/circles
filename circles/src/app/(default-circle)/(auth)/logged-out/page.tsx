@@ -11,7 +11,7 @@ export default function LoggedOut() {
                 We hope to see you again soon!
                 <RedirectButtons
                     buttons={[
-                        // { text: "Log in", href: "/login?redirectTo={redirectTo}" },
+                        { text: "Log in", href: "/login?redirectTo={redirectTo}" },
                         { text: "Return to page", href: "{redirectTo}" },
                     ]}
                 />

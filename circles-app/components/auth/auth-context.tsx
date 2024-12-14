@@ -120,16 +120,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return Buffer.from(keyBytes).toString("base64");
     };
 
-    const printKeyAsCharacters = (base64Key: string) => {
-        // Decode Base64 to raw bytes
-        const buffer = Buffer.from(base64Key, "base64");
-
-        // Convert bytes to characters
-        const keyAsChars = String.fromCharCode(...buffer);
-
-        console.log("Key as characters (32 bytes):", keyAsChars);
-    };
-
     const storeEncryptionKey = async (account: Account, encryptionKey: string, pin?: string): Promise<void> => {
         const secureStoreKey = account.did.replace(/[^a-zA-Z0-9._-]/g, "");
         if (account.requireAuthentication === "PIN" && pin) {

@@ -9,12 +9,12 @@ export default function Unauthenticated() {
                 <Image src={unauthenticated} alt="" width={400} />
                 <h4>Oops! You&apos;re not logged in</h4>
                 Please log in to access this page.
-                {/* <RedirectButtons
+                <RedirectButtons
                     buttons={[
                         { text: "Log in", href: "/login?redirectTo={redirectTo}" },
                         { text: "Sign up", href: "/signup?redirectTo={redirectTo}" },
                     ]}
-                /> */}
+                />
             </div>
         </div>
     );

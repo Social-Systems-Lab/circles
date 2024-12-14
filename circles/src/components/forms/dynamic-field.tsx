@@ -73,6 +73,7 @@ export const DynamicTextField: React.FC<RenderFieldProps> = ({ field, formField,
                 autoComplete={field.autoComplete}
                 readOnly={readOnly}
                 {...formField}
+                value={formField.value || ""}
             />
         </FormControl>
         {field.description && <FormDescription>{getUserOrCircleInfo(field.description, isUser)}</FormDescription>}

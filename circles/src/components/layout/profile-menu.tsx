@@ -85,6 +85,16 @@ const ProfileMenuBar = () => {
         );
     };
 
+    const onLogInClick = () => {
+        let redirectTo = searchParams.get("redirectTo") ?? "/";
+        router.push("/login?redirectTo=" + redirectTo);
+    };
+
+    const onSignUpClick = () => {
+        let redirectTo = searchParams.get("redirectTo");
+        router.push("/signup?redirectTo=" + redirectTo);
+    };
+
     const toggleQRCode = () => {
         window.ReactNativeWebView?.postMessage(
             JSON.stringify({
@@ -127,6 +137,21 @@ const ProfileMenuBar = () => {
                         >
                             <MdQrCodeScanner size="20px" />
                         </Button>
+                    )}
+
+                    {authInfo.authStatus === "unauthenticated" && (
+                        <div className="flex flex-row gap-2">
+                            <Button
+                                className="h-full w-full bg-[#00000077] text-white"
+                                onClick={onLogInClick}
+                                variant="outline"
+                            >
+                                Log in
+                            </Button>
+                            <Button className="h-full w-full" onClick={onSignUpClick} variant="outline">
+                                Sign up
+                            </Button>
+                        </div>
                     )}
 
                     {authInfo.authStatus === "authenticated" && user && (

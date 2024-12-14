@@ -7,6 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useCameraPermissions } from "expo-camera";
 import { useAuth } from "@/components/auth/auth-context";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { MessageType } from "@/sdk";
 
 const defaultUrl = "http://192.168.10.204:3000/demo/moviedb"; // circles running locally
 //const defaultUrl = "https://makecircles.org/feeds"; // circles prod server
@@ -38,56 +39,86 @@ export default function MainApp() {
     useEffect(() => {
         if (!initialized) return;
 
-        let ssiAccountData = { did: currentAccount?.did, name: currentAccount?.name, publicKey: currentAccount?.publicKey };
-        console.log("Injecting accounts data", ssiAccountData);
+        // let ssiAccountData = { did: currentAccount?.did, name: currentAccount?.name, publicKey: currentAccount?.publicKey };
+        //console.log("Injecting accounts data", ssiAccountData);
 
         const jsCode = `
         (function() {
-            window._SSI_ACCOUNT = ${JSON.stringify(ssiAccountData)};
-            window.requestAccess = function(manifest) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ManifestRequest', manifest }));
-            };            
+            window._VIBE_ENABLED = true;
+            window.addEventListener('message', (event) => {
+                if (window.vibe) {
+                    window.vibe.handleNativeResponse(event.data);
+                }
+            });
         })();
         `;
         setJsCode(jsCode);
     }, [initialized]);
 
-    const handleWebViewMessage = async (event: WebViewMessageEvent) => {
+    const handleWebViewMessage = (event: WebViewMessageEvent) => {
         try {
+            console.log("WebView message:", event.nativeEvent);
+            if (!event.nativeEvent.data) {
+                console.error("No data in WebView message");
+                return;
+            }
+
             const data = JSON.parse(event.nativeEvent.data);
-            if (data.type === "Log") {
-                console.log("[WebView]:", data.message);
-            } else if (data.type === "ManifestRequest") {
-                const appId = data.manifest.id;
-                const existingApp = acceptedApps.find((app) => app.appId === appId);
+            const { type, requestId } = data;
 
-                if (existingApp) {
-                    console.log(`App ${existingApp.name} already accepted with permissions:`, existingApp.permissions);
-                    setPermissionsIndicator(false);
-                } else {
-                    const permissionsState = Object.fromEntries(
-                        data.manifest.permissions.map((perm: string) => [perm, perm.startsWith("Read") ? "always" : "ask"])
-                    );
-
-                    setActiveManifest({
-                        ...data.manifest,
-                        permissionsState,
-                    });
-                    setPermissionsIndicator(true);
-                }
-            } else if (data.type === "WriteRequest") {
-                console.log("Write request received:", data.data);
-                const permission = activeManifest?.permissionsState["Write Ratings"];
-                // if (permission === "ask") {
-                setWriteRequest(data.data);
-                setWriteModalVisible(true);
-                // } else if (permission === "always") {
-                //     console.log("Permission already granted, writing data:", data.data);
-                //     // Logic to write data can go here
-                // }
+            if (type === MessageType.INIT_REQUEST) {
+                handleInitRequest(data, requestId);
+            } else if (type === MessageType.WRITE_REQUEST) {
+                handleWriteRequest(data, requestId);
+            } else if (type === MessageType.LOG_REQUEST) {
+                console.log("WebView Log:", data.message);
             }
         } catch (error) {
-            console.error("Error parsing message from WebView:", error);
+            console.error("Error parsing WebView message:", error);
+        }
+    };
+
+    const handleInitRequest = (data: any, requestId: string) => {
+        const { manifest } = data;
+        const existingApp = acceptedApps.find((app) => app.appId === manifest.id);
+
+        if (existingApp) {
+            // TODO here we should check if requested permissions differ from existing permissions and prompt user to re-accept if needed
+            sendNativeResponse({ requestId, result: { account: currentAccount, permissions: existingApp.permissions } });
+            setPermissionsIndicator(false);
+        } else {
+            const permissionsState = Object.fromEntries(manifest.permissions.map((perm: string) => [perm, perm.startsWith("Read") ? "always" : "ask"]));
+
+            console.log("handleInitRequest", requestId);
+            setActiveManifest({ ...manifest, permissionsState });
+            setPermissionsIndicator(true);
+        }
+    };
+
+    const handleWriteRequest = (data: any, requestId: string) => {
+        const { object } = data.data;
+
+        const writePermission = activeManifest?.permissionsState[object.type];
+        if (writePermission === "always") {
+            console.log("Writing data automatically:", object);
+            sendNativeResponse({ requestId, result: "Data written successfully" });
+        } else if (writePermission === "ask") {
+            setWriteRequest({ ...data, requestId });
+            setWriteModalVisible(true);
+        } else {
+            sendNativeResponse({ requestId, error: "Permission denied" });
+        }
+    };
+
+    const sendNativeResponse = (response: any) => {
+        if (webViewRef.current) {
+            console.log("Sending response to WebView:", response);
+
+            webViewRef.current.injectJavaScript(`
+                window.dispatchEvent(new MessageEvent('message', {
+                    data: ${JSON.stringify(response)}
+                }));
+            `);
         }
     };
 
@@ -117,6 +148,7 @@ export default function MainApp() {
         ]);
         setModalVisible(false);
         setPermissionsIndicator(false);
+        sendNativeResponse({ stateUpdate: { account: currentAccount, permissions } });
     };
 
     const handleReject = () => {
@@ -124,6 +156,8 @@ export default function MainApp() {
         setModalVisible(false);
         setPermissionsIndicator(false);
         setActiveManifest(null);
+
+        sendNativeResponse({ error: "Manifest request denied" });
     };
 
     const handlePermissionChange = (permission: string, level: "always" | "ask" | "never") => {
@@ -140,6 +174,23 @@ export default function MainApp() {
                 permissionsState: updatedPermissionsState,
             };
         });
+    };
+
+    const handleWriteAccept = () => {
+        if (!writeRequest) return;
+
+        const { requestId, data } = writeRequest;
+        console.log("Writing data:", data);
+        sendNativeResponse({ requestId, result: "Data written successfully" });
+        setWriteModalVisible(false);
+    };
+
+    const handleWriteReject = () => {
+        if (!writeRequest) return;
+
+        const { requestId } = writeRequest;
+        sendNativeResponse({ requestId, error: "Permission denied" });
+        setWriteModalVisible(false);
     };
 
     return (
@@ -267,16 +318,10 @@ export default function MainApp() {
                         </TouchableOpacity>
                         {showJson && <Text style={styles.jsonText}>{JSON.stringify(writeRequest?.object, null, 2)}</Text>}
                         <View style={styles.actionButtons}>
-                            <TouchableOpacity style={[styles.actionButton, styles.cancelButton]} onPress={() => setWriteModalVisible(false)}>
+                            <TouchableOpacity style={[styles.actionButton, styles.cancelButton]} onPress={handleWriteReject}>
                                 <Text style={styles.actionButtonText}>Reject</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.actionButton, styles.allowButton]}
-                                onPress={() => {
-                                    console.log("Write request accepted:", writeRequest);
-                                    setWriteModalVisible(false);
-                                }}
-                            >
+                            <TouchableOpacity style={[styles.actionButton, styles.allowButton]} onPress={handleWriteAccept}>
                                 <Text style={styles.actionButtonText}>Accept</Text>
                             </TouchableOpacity>
                         </View>

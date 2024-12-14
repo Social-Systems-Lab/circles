@@ -656,6 +656,7 @@ export type FormTools = {
     setUser: (user: UserPrivate) => void;
     searchParams: ReadonlyURLSearchParams;
     toast: ({ ...props }: Toast) => void;
+    setAuthenticated: (authenticated: boolean) => void;
 };
 
 export type PlatformMetrics = {

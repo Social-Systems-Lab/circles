@@ -23,6 +23,87 @@ export const APP_DIR = "/circles";
 export const USERS_DIR = path.join(APP_DIR, "users");
 const SERVER_DIR = path.join(APP_DIR, "server");
 
+export const createUserTrad = async (
+    name: string,
+    handle: string,
+    type: AccountType,
+    email: string,
+    password: string,
+): Promise<Circle> => {
+    if (!name || !email || !password || !handle) {
+        throw new Error("Missing required fields");
+    }
+
+    // check if email is already in use
+    let existingUser = await Circles.findOne({ email: email });
+    if (existingUser) {
+        throw new Error("Email already in use");
+    }
+
+    // check if handle is already in use
+    existingUser = await Circles.findOne({ handle: handle });
+    if (existingUser) {
+        throw new Error("Handle already in use");
+    }
+
+    // make sure account directory exists
+    if (!fs.existsSync(USERS_DIR)) {
+        fs.mkdirSync(USERS_DIR, { recursive: true });
+    }
+
+    // generate cryptographic keypair
+    const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
+
+    // did is public key in shorter string format suitable for URLS and directory naming
+    const did = crypto
+        .createHash("sha256")
+        .update(publicKey.export({ type: "pkcs1", format: "pem" }))
+        .digest("hex");
+
+    // create a directory for the user using the did as the name
+    const accountPath = path.join(USERS_DIR, did);
+    if (fs.existsSync(accountPath)) {
+        throw new Error("Account already exists");
+    }
+    fs.mkdirSync(accountPath, { recursive: true });
+
+    // generate salt, iv, encryption key and encrypt private key
+    const salt = crypto.randomBytes(16);
+    const iv = crypto.randomBytes(16);
+    const encryptionKey = crypto.pbkdf2Sync(password, salt, 100000, 32, "sha512");
+    const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, encryptionKey, iv);
+    let encryptedPrivateKey = cipher.update(
+        privateKey.export({ type: "pkcs1", format: "pem" }) as string,
+        "utf8",
+        "hex",
+    );
+    encryptedPrivateKey += cipher.final("hex");
+
+    let publicKeyPem = publicKey.export({ type: "pkcs1", format: "pem" });
+
+    // save salt, iv and keypair in the user directory
+    fs.writeFileSync(path.join(accountPath, SALT_FILENAME), salt);
+    fs.writeFileSync(path.join(accountPath, IV_FILENAME), iv);
+    fs.writeFileSync(path.join(accountPath, PUBLIC_KEY_FILENAME), publicKey.export({ type: "pkcs1", format: "pem" }));
+    fs.writeFileSync(path.join(accountPath, ENCRYPTED_PRIVATE_KEY_FILENAME), encryptedPrivateKey);
+
+    // add user to the database
+    let user: Circle = createNewUser(did, publicKeyPem as string, name, handle, type, email);
+    let res = await Circles.insertOne(user);
+    user._id = res.insertedId.toString();
+
+    // add user as member of their own circle
+    await addMember(did, user._id!, ["admins", "moderators", "members"], undefined);
+
+    // add user to default circle by default
+    let defaultCircle = await getDefaultCircle();
+    if (defaultCircle._id) {
+        await addMember(user.did!, defaultCircle._id, ["members"]);
+    }
+
+    return user;
+};
+
 export type ServerDid = { did: string; publicKey: string };
 export const createServerDid = async (): Promise<ServerDid> => {
     // make sure account directory exists

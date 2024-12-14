@@ -8,7 +8,7 @@ import Link from "next/link";
 import { DynamicField } from "@/components/forms/dynamic-field";
 import { generateZodSchema, getUserOrCircleInfo } from "@/lib/utils/form";
 import { FormTools, Page } from "@/models/models";
-import { Suspense, useEffect, useMemo, useState, useTransition } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { formSchemas } from "@/components/forms/form-schemas";
 import { onFormSubmit } from "./actions";
 import { Loader2 } from "lucide-react";
@@ -43,9 +43,21 @@ const DynamicFormManager: React.FC<DynamicFormProps> = ({
     const [user, setUser] = useAtom(userAtom);
     const { toast } = useToast();
     const searchParams = useSearchParams();
+    const [authStatus, setAuthStatus] = useAtom(authInfoAtom);
+
+    const setAuthenticated = useCallback(
+        (authenticated: boolean) => {
+            //setUser((prev) => ({ ...prev, authenticated }));
+            if (authenticated) {
+                setAuthStatus((prev) => ({ ...prev, authStatus: "authenticated" }));
+            }
+        },
+        [setAuthStatus],
+    );
+
     const formTools = useMemo<FormTools>(() => {
-        return { user, setUser, searchParams, toast };
-    }, [user, setUser, searchParams, toast]);
+        return { user, setUser, searchParams, toast, setAuthenticated };
+    }, [user, setUser, searchParams, toast, setAuthenticated]);
     const formSchema = formSchemas[formSchemaId];
     if (!formSchema) throw new Error(`Form schema with id ${formSchemaId} not found`);
 

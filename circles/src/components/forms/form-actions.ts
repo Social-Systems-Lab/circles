@@ -7,8 +7,12 @@ import { serverSettingsFormAction } from "./circle-settings/server-settings/serv
 import { circleQuestionnaireFormAction } from "./circle-settings/questionnaire/circle-questionnaire-form-action";
 import { createCircleFormAction } from "./create-circle/create-circle-form-action";
 import { circleMatchmakingFormAction } from "./circle-settings/matchmaking/circle-matchmaking-form-action";
+import { signupFormAction } from "./signup/signup-form-action";
+import { loginFormAction } from "./login/login-form-action";
 
 export const formActions: Record<string, FormAction> = {
+    "signup-form": signupFormAction,
+    "login-form": loginFormAction,
     "circle-about-form": circleAboutFormAction,
     "circle-user-groups-form": circleUserGroupsFormAction,
     "circle-access-rules-form": circleAccessRulesFormAction,

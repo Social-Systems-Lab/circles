@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { Star } from "lucide-react";
+import { AppManifest, vibe } from "../sdk";
 
 interface MovieType {
     id: number;
@@ -176,22 +177,40 @@ function MovieGrid({ movies }: { movies: MovieType[] }) {
     );
 }
 
+const appManifest: AppManifest = {
+    id: "movie-db",
+    name: "Movie Database",
+    description: "Access to user profile and write access to ratings",
+    permissions: ["Read Name", "Read Ratings", "Write Ratings"],
+    pictureUrl: "http://192.168.10.204:3000/images/demo/moviedblogo.jpg",
+};
+
 export default function Home() {
+    const [response, setResponse] = useState<string>("");
+
     useEffect(() => {
-        if (window._SSI_ACCOUNT) {
-            // request access to the user's name and write access to ratings
-            window.requestAccess({
-                id: "movie-db",
-                name: "Movie Database",
-                description: "Access to user profile and write access to ratings",
-                permissions: ["Read Name", "Read Ratings", "Write Ratings"],
-                pictureUrl: "http://192.168.10.204:3000/images/demo/moviedblogo.jpg",
-            });
-        }
+        setResponse("vibe enabled: " + vibe.enabled());
+        if (!vibe.enabled()) return;
+
+        setResponse("Initializing app...");
+
+        let unsubscribe = vibe.init(appManifest, (state) => {
+            console.log("App state", state);
+            setResponse(JSON.stringify(state));
+        });
+
+        return () => {
+            if (unsubscribe) {
+                unsubscribe();
+            }
+        };
     }, []);
 
     return (
         <div className="min-h-screen bg-black text-white">
+            {/* <div className="absolute top-0 z-[100] w-full text-white">
+                <pre>{response}</pre>
+            </div> */}
             <main className="container mx-auto px-4 py-8">
                 <FeaturedMovie movie={movies[0]} />
                 <MovieGrid movies={movies.slice(1)} />
