@@ -76,7 +76,7 @@ export async function startSync(
         latestMessages: Record<string, any>;
     }) => void,
 ) {
-    let since: any = null; // localStorage.getItem("syncToken"); // Retrieve the persisted sync token
+    let since: any = localStorage.getItem("syncToken"); // Retrieve the persisted sync token
     let retryCount = 0;
     const maxRetries = 5;
 
@@ -104,6 +104,7 @@ export async function startSync(
                 const unreadCounts: Record<string, number> = {};
                 const latestMessages: Record<string, any> = {};
 
+                console.log("Sync data", data);
                 for (const [roomId, roomData] of Object.entries(data.rooms?.join || {})) {
                     console.log("Room data", roomData);
 
@@ -246,3 +247,58 @@ export async function sendRoomMessage(accessToken: string, roomId: string, conte
 
     return await response.json();
 }
+
+export const markMessagesAsRead = async (accessToken: string, roomId: string, eventId: string) => {
+    const url = `${MATRIX_URL}/client/v3/rooms/${encodeURIComponent(roomId)}/read_markers`;
+
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                "m.fully_read": eventId, // Sets the read marker
+                "m.read": eventId, // Sets the read receipt
+            }),
+        });
+
+        if (!response.ok) {
+            console.error("Failed to mark messages as read:", response.statusText);
+        } else {
+            console.log(`Marked as read: ${eventId} in room ${roomId}`);
+            console.log("Response:", response);
+        }
+    } catch (error) {
+        console.error("Error marking messages as read:", error);
+    }
+};
+
+export const sendReadReceipt = async (accessToken: string, roomId: string, eventId: string) => {
+    const encodedRoomId = encodeURIComponent(roomId);
+    const encodedEventId = encodeURIComponent(eventId);
+
+    const url = `${MATRIX_URL}/client/v3/rooms/${encodedRoomId}/receipt/m.read/${encodedEventId}`;
+
+    console.log(`Sending read receipt for event: ${encodedEventId} in room: ${encodedRoomId}`);
+
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({}),
+        });
+
+        if (!response.ok) {
+            console.error("Failed to send read receipt:", response.statusText);
+        } else {
+            console.log(`Read receipt sent for event: ${eventId} in room: ${roomId}`);
+        }
+    } catch (error) {
+        console.error("Error sending read receipt:", error);
+    }
+};

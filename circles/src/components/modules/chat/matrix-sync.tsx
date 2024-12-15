@@ -35,7 +35,6 @@ export const MatrixSync = () => {
             unreadCounts: Record<string, number>;
             latestMessages: Record<string, any>;
         }) => {
-            console.log("Sync data", data);
             setUnreadCounts((prevUnreadCounts) => ({
                 ...prevUnreadCounts,
                 ...data.unreadCounts,

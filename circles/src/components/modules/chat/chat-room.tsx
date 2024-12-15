@@ -13,11 +13,17 @@ import { CirclePicture } from "../circles/circle-picture";
 import RichText from "../feeds/RichText";
 import { Mention, MentionsInput } from "react-mentions";
 import { defaultMentionsInputStyle, defaultMentionStyle, handleMentionQuery } from "../feeds/post-list";
-import { fetchRoomMessages, sendRoomMessage, startSync } from "@/lib/data/client-matrix";
+import {
+    markMessagesAsRead,
+    fetchRoomMessages,
+    sendRoomMessage,
+    startSync,
+    sendReadReceipt,
+} from "@/lib/data/client-matrix";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { fetchMatrixUsers, joinChatRoomAction } from "./actions";
+import { fetchMatrixUsers, joinChatRoomAction, sendReadReceiptAction } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 export const renderCircleSuggestion = (
@@ -413,6 +419,18 @@ export const ChatRoomComponent: React.FC<{
     }, [user?.chatRoomMemberships, chatRoom._id]);
     const initialMessagesLoaded = useRef(false);
 
+    const markLatestMessageAsRead = useCallback(async () => {
+        if (messages.length > 0 && user?.matrixAccessToken) {
+            const latestMessage = messages[messages.length - 1];
+            await markMessagesAsRead(user.matrixAccessToken, chatRoom.matrixRoomId!, latestMessage.id);
+
+            console.log("Sending read receipt for", latestMessage);
+            console.log("Access token: ", user.matrixAccessToken);
+            await sendReadReceipt(user.matrixAccessToken, latestMessage.chatRoomId, latestMessage.id);
+            //await sendReadReceiptAction(latestMessage.chatRoomId, latestMessage.id);
+        }
+    }, [messages, user?.matrixAccessToken, chatRoom.matrixRoomId]);
+
     const scrollToBottom = () => {
         console.log("Scrolling to bottom");
         if (messagesEndRef.current) {
@@ -456,6 +474,13 @@ export const ChatRoomComponent: React.FC<{
                 });
 
                 setMessages(formattedMessages);
+
+                // mark the latest message as read
+                markMessagesAsRead(
+                    user?.matrixAccessToken!,
+                    chatRoom.matrixRoomId!,
+                    formattedMessages[formattedMessages.length - 1]?.id,
+                );
             } catch (error) {
                 console.error("Failed to fetch chat messages:", error);
             }
@@ -466,6 +491,10 @@ export const ChatRoomComponent: React.FC<{
     useEffect(() => {
         messagesRef.current = messages;
     }, [messages]);
+
+    useEffect(() => {
+        markLatestMessageAsRead(); // Mark the latest message as read when messages update
+    }, [messages, markLatestMessageAsRead]);
 
     useEffect(() => {
         if (!chatRoom?.matrixRoomId || !user?.matrixAccessToken) return;

@@ -1,7 +1,7 @@
 //user-toolbox.tsx
 "use client";
 
-import React, { Dispatch, useEffect, useState } from "react";
+import React, { Dispatch, useEffect, useMemo, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -124,6 +124,23 @@ export const UserToolbox = () => {
         );
     };
 
+    // Sort chat rooms by latest message timestamp
+    const sortedChats = useMemo(() => {
+        if (!user?.chatRoomMemberships) return;
+
+        const chats = user.chatRoomMemberships.map((m) => m.chatRoom);
+        const sorted = chats.sort((a, b) => {
+            const messageA = Object.entries(latestMessages).find(([key]) => key.startsWith(a.matrixRoomId!))?.[1];
+            const messageB = Object.entries(latestMessages).find(([key]) => key.startsWith(b.matrixRoomId!))?.[1];
+
+            const latestA = messageA?.origin_server_ts || 0;
+            const latestB = messageB?.origin_server_ts || 0;
+            return latestB - latestA; // Sort descending by timestamp
+        });
+
+        return sorted;
+    }, [user?.chatRoomMemberships, latestMessages]);
+
     const signOut = () => {
         setAuthInfo({ ...authInfo, authStatus: "unauthenticated" });
         setUser(undefined);
@@ -134,38 +151,6 @@ export const UserToolbox = () => {
         logOut();
 
         router.push("/");
-    };
-
-    const findLatestMessageByRoomId = (roomId: string, messages: Record<string, any>) => {
-        const matchingEntry = Object.entries(messages).find(([key]) => key.startsWith(roomId));
-        return matchingEntry ? matchingEntry[1] : null;
-    };
-
-    const findLatestMessageWithAuthor = async (
-        roomId: string,
-        messages: Record<string, any>,
-        matrixUserCache: MatrixUserCache,
-        setMatrixUserCache: Dispatch<SetStateAction<MatrixUserCache>>,
-    ): Promise<ChatMessage | null> => {
-        const matchingEntry = Object.entries(messages).find(([key]) => key.startsWith(roomId));
-        if (!matchingEntry) return null;
-
-        const latestMessage = matchingEntry[1];
-        const sender = latestMessage.sender;
-
-        if (!matrixUserCache[sender]) {
-            // Fetch and cache the author details if not already cached
-            await fetchAndCacheMatrixUsers([sender], matrixUserCache, setMatrixUserCache);
-        }
-
-        return {
-            ...latestMessage,
-            author: matrixUserCache[sender] || {
-                _id: sender,
-                name: sender,
-                picture: { url: "/placeholder.svg" },
-            },
-        } as ChatMessage;
     };
 
     if (userToolboxState === undefined) return null;
@@ -231,20 +216,29 @@ export const UserToolbox = () => {
                         {/* ... other tabs */}
                     </TabsList>
                     <TabsContent value="chat" className="m-0 flex-grow overflow-auto pt-1">
-                        {chats.length > 0 ? (
-                            chats.map((chat) => {
-                                const latestMessage = findLatestMessageByRoomId(chat.matrixRoomId!, latestMessages);
-
+                        {sortedChats && sortedChats.length > 0 ? (
+                            sortedChats.map((chat) => {
+                                const unreadCountInRoom = Object.entries(unreadCounts).find(([key]) =>
+                                    key.startsWith(chat.matrixRoomId!),
+                                )?.[1];
+                                const unreadCount = unreadCountInRoom || 0;
                                 return (
                                     <div
                                         key={chat._id}
                                         className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
                                         onClick={() => handleChatClick(chat)}
                                     >
-                                        <CirclePicture
-                                            circle={{ name: chat.name, picture: chat.picture }}
-                                            size="40px"
-                                        />
+                                        <div className="relative">
+                                            <CirclePicture
+                                                circle={{ name: chat.name, picture: chat.picture }}
+                                                size="40px"
+                                            />
+                                            {unreadCount > 0 && (
+                                                <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+                                                    {unreadCount}
+                                                </span>
+                                            )}
+                                        </div>
                                         <div>
                                             <p className="text-sm font-medium">{chat.name}</p>
                                             <p className="text-xs text-muted-foreground">
@@ -262,7 +256,7 @@ export const UserToolbox = () => {
                                 No chat rooms joined
                             </div>
                         )}
-                        {/* <pre>
+                        <pre>
                             {JSON.stringify(
                                 {
                                     latestMessages,
@@ -271,7 +265,7 @@ export const UserToolbox = () => {
                                 null,
                                 2,
                             )}
-                        </pre> */}
+                        </pre>
                     </TabsContent>
                     <TabsContent value="notifications" className="m-0 flex-grow overflow-auto pt-1">
                         {notifications.length > 0 ? (
