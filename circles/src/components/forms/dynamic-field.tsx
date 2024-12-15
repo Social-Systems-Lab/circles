@@ -100,6 +100,7 @@ export const DynamicTextareaField: React.FC<RenderFieldProps> = ({ field, formFi
                     autoComplete={field.autoComplete}
                     readOnly={readOnly}
                     {...formField}
+                    value={formField.value || ""}
                 />
             </FormControl>
             {field.description && <FormDescription>{getUserOrCircleInfo(field.description, isUser)}</FormDescription>}
@@ -147,6 +148,7 @@ export const DynamicPasswordField: React.FC<RenderFieldProps> = ({ field, formFi
                         autoComplete={field.autoComplete}
                         readOnly={readOnly}
                         {...formField}
+                        value={formField.value || ""}
                     />
                     <div className="absolute right-[2px] top-0 flex h-[40px] flex-row items-center justify-center">
                         <Button

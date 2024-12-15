@@ -8,10 +8,11 @@ import { Account, AccountType, Challenge, Circle, Feature, UserPrivate } from "@
 import { ObjectId } from "mongodb";
 import { maxAccessLevel } from "../data/constants";
 import { cookies } from "next/headers";
-import { verifyUserToken } from "./jwt";
+import { createSession, generateUserToken, verifyUserToken } from "./jwt";
 import { createNewUser, getUserById, getUserPrivate } from "../data/user";
 import { addMember } from "../data/member";
 import { getCircleById, getDefaultCircle } from "../data/circle";
+import { registerOrLoginMatrixUser } from "../data/matrix";
 
 const SALT_FILENAME = "salt.bin";
 const IV_FILENAME = "iv.bin";
@@ -445,3 +446,17 @@ export const getDid = (publicKey: string): string => {
     // prefix the result to form a DID
     return `did:circles:${base64Url}`;
 };
+
+export async function createUserSession(user: UserPrivate): Promise<string> {
+    let token = await generateUserToken(user.did!);
+    await createSession(token);
+
+    try {
+        // check if user has a matrix account
+        await registerOrLoginMatrixUser(user);
+    } catch (error) {
+        console.error("Error creating matrix session", error);
+    }
+
+    return token;
+}

@@ -11,6 +11,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import ImageGallery from "./image-gallery";
 import Onboarding from "../onboarding/onboarding";
 import Head from "next/head";
+import { MatrixSync } from "../modules/chat/matrix-sync";
 
 const inter = Inter({ subsets: ["latin"] });
 const wix = Wix_Madefor_Display({ subsets: ["latin"], variable: "--font-wix-display" });
@@ -38,6 +39,7 @@ const BaseLayout = ({ children, circle, serverConfig, isDefaultCircle }: BaseLay
                     <Authenticator />
                     <ImageGallery />
                     <Onboarding />
+                    <MatrixSync />
                 </main>
             </body>
         </html>

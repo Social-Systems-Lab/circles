@@ -48,11 +48,11 @@ const isSameDay = (date1: Date, date2: Date) => {
 };
 
 // Renderer for different message types
-const MessageRenderer: React.FC<{ message: ChatMessage }> = ({ message }) => {
+export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean }> = ({ message, preview }) => {
     const displayName = message.author?.name || message.createdBy;
     switch (message.type) {
         case "m.room.message":
-            return renderChatMessage(message);
+            return renderChatMessage(message, preview);
 
         case "m.room.member": {
             const membership = (message.content as { membership: string }).membership;
@@ -106,7 +106,18 @@ const MessageRenderer: React.FC<{ message: ChatMessage }> = ({ message }) => {
     }
 };
 
-const renderChatMessage = (message: ChatMessage) => <RichText content={message?.content?.body as string} />;
+const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
+    if (preview) {
+        return (
+            <span>
+                <b>{message.author.name}: </b>
+                {message?.content?.body as string}
+            </span>
+        );
+    } else {
+        return <RichText content={message?.content?.body as string} />;
+    }
+};
 
 const renderSystemMessage = (content: string) => content;
 
@@ -226,6 +237,51 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
     );
 };
 
+interface LatestMessageProps {
+    roomId: string;
+    latestMessages: Record<string, any>;
+}
+
+export const LatestMessage: React.FC<LatestMessageProps> = ({ roomId, latestMessages }) => {
+    const [formattedMessage, setFormattedMessage] = useState<ChatMessage | null>(null);
+    const [matrixUserCache, setMatrixUserCache] = useAtom(matrixUserCacheAtom);
+
+    useEffect(() => {
+        const fetchLatestMessage = async () => {
+            const matchingEntry = Object.entries(latestMessages).find(([key]) => key.startsWith(roomId));
+            if (!matchingEntry) {
+                setFormattedMessage(null);
+                return;
+            }
+
+            const latestMessage = matchingEntry[1];
+            const sender = latestMessage.sender;
+
+            // Fetch and cache the author details if not already cached
+            if (!matrixUserCache[sender]) {
+                await fetchAndCacheMatrixUsers([sender], matrixUserCache, setMatrixUserCache);
+            }
+
+            setFormattedMessage({
+                ...latestMessage,
+                author: matrixUserCache[sender] || {
+                    _id: sender,
+                    name: sender,
+                    picture: { url: "/placeholder.svg" },
+                },
+            } as ChatMessage);
+        };
+
+        fetchLatestMessage();
+    }, [roomId, latestMessages, matrixUserCache, setMatrixUserCache]);
+
+    if (!formattedMessage) {
+        return <span>No messages yet</span>;
+    }
+
+    return <MessageRenderer message={formattedMessage} preview={true} />;
+};
+
 type ChatInputProps = {
     setMessages: any;
     circle: Circle;
@@ -294,7 +350,7 @@ const ChatInput = ({ setMessages, circle, chatRoom, page, subpage }: ChatInputPr
     );
 };
 
-const fetchAndCacheMatrixUsers = async (
+export const fetchAndCacheMatrixUsers = async (
     matrixUsernames: string[],
     matrixUserCache: MatrixUserCache,
     setMatrixUserCache: Dispatch<SetStateAction<MatrixUserCache>>,

@@ -25,6 +25,8 @@ import {
     userAtom,
     userToolboxDataAtom,
     matrixUserCacheAtom,
+    latestMessagesAtom,
+    unreadCountsAtom,
 } from "@/lib/data/atoms";
 import { SetStateAction, useAtom } from "jotai";
 import { useRouter } from "next/navigation";
@@ -40,9 +42,10 @@ import {
     UserToolboxTab,
 } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
-import { ChatRoomComponent } from "../modules/chat/chat-room";
+import { ChatRoomComponent, fetchAndCacheMatrixUsers, LatestMessage, MessageRenderer } from "../modules/chat/chat-room";
 import { logOut } from "../auth/actions";
 import { fetchJoinedRooms, fetchRoomDetails, fetchRoomMessages } from "@/lib/data/client-matrix";
+import { getCircleAction } from "./actions";
 
 type Notification = {
     id: number;
@@ -58,6 +61,8 @@ export const UserToolbox = () => {
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [authInfo, setAuthInfo] = useAtom(authInfoAtom);
+    const [latestMessages, setLatestMessages] = useAtom(latestMessagesAtom);
+    const [unreadCounts, setUnreadCounts] = useAtom(unreadCountsAtom);
 
     const router = useRouter();
 
@@ -70,7 +75,17 @@ export const UserToolbox = () => {
     }, [userToolboxState?.tab]);
 
     const handleChatClick = async (chat: ChatRoom) => {
-        setSelectedChat(chat);
+        const response = await getCircleAction(chat.circleId);
+        let circle = response.circle;
+        let path = "";
+        if (circle.handle === "default") {
+            path = `/chat${chat.handle && chat.handle !== "default" ? `/${chat.handle}` : ""}`;
+        } else {
+            path = `/circles/${circle.handle}/chat${chat.handle && chat.handle !== "default" ? `/${chat.handle}` : ""}`;
+        }
+
+        // navigate to chat
+        router.push(path);
     };
 
     const openCircle = (circle: Circle) => {
@@ -91,39 +106,6 @@ export const UserToolbox = () => {
 
         console.log("User chat memberships", user?.chatRoomMemberships);
         setChats(user.chatRoomMemberships.map((m) => m.chatRoom));
-
-        // const fetchAndSubscribe = async () => {
-        //     try {
-        //         const rooms = await fetchJoinedRooms(user.matrixAccessToken!);
-
-        //         // get room details from server
-
-        //         // Fetch metadata for each room
-        //         const roomDetails: ChatRoom[] = await Promise.all(
-        //             rooms.map(async (roomId: string) => {
-        //                 const details = await fetchRoomDetails(user.matrixAccessToken!, roomId);
-        //                 return {
-        //                     _id: roomId, // TODO get from database
-        //                     matrixRoomId: roomId,
-        //                     name: details.name,
-        //                     avatar: details.avatar,
-        //                     message: "",
-        //                 } as ChatRoomPreview;
-        //             }),
-        //         );
-
-        //         setChats(roomDetails);
-
-        //         // Enable real-time updates
-        //         // await startSync(user.matrixAccessToken, (syncData) => {
-        //         //     console.log("Real-time event:", syncData);
-        //         // });
-        //     } catch (error) {
-        //         console.error("Failed to initialize chat room fetching:", error);
-        //     }
-        // };
-
-        // fetchAndSubscribe();
     }, [user?.chatRoomMemberships, user?.matrixAccessToken]);
 
     const notifications: Notification[] = [
@@ -152,6 +134,38 @@ export const UserToolbox = () => {
         logOut();
 
         router.push("/");
+    };
+
+    const findLatestMessageByRoomId = (roomId: string, messages: Record<string, any>) => {
+        const matchingEntry = Object.entries(messages).find(([key]) => key.startsWith(roomId));
+        return matchingEntry ? matchingEntry[1] : null;
+    };
+
+    const findLatestMessageWithAuthor = async (
+        roomId: string,
+        messages: Record<string, any>,
+        matrixUserCache: MatrixUserCache,
+        setMatrixUserCache: Dispatch<SetStateAction<MatrixUserCache>>,
+    ): Promise<ChatMessage | null> => {
+        const matchingEntry = Object.entries(messages).find(([key]) => key.startsWith(roomId));
+        if (!matchingEntry) return null;
+
+        const latestMessage = matchingEntry[1];
+        const sender = latestMessage.sender;
+
+        if (!matrixUserCache[sender]) {
+            // Fetch and cache the author details if not already cached
+            await fetchAndCacheMatrixUsers([sender], matrixUserCache, setMatrixUserCache);
+        }
+
+        return {
+            ...latestMessage,
+            author: matrixUserCache[sender] || {
+                _id: sender,
+                name: sender,
+                picture: { url: "/placeholder.svg" },
+            },
+        } as ChatMessage;
     };
 
     if (userToolboxState === undefined) return null;
@@ -217,51 +231,47 @@ export const UserToolbox = () => {
                         {/* ... other tabs */}
                     </TabsList>
                     <TabsContent value="chat" className="m-0 flex-grow overflow-auto pt-1">
-                        {selectedChat ? (
-                            <div className="flex h-full flex-col">
-                                {/* Header with Back Button */}
-                                <div className="flex items-center border-b p-2">
-                                    <Button variant="ghost" size="icon" onClick={() => setSelectedChat(undefined)}>
-                                        <ArrowLeft className="h-5 w-5" />
-                                    </Button>
-                                    <div className="ml-2 flex items-center space-x-2">
-                                        <Avatar>
-                                            <AvatarImage src={selectedChat.picture?.url} alt={selectedChat.name} />
-                                            <AvatarFallback>{selectedChat.name.charAt(0)}</AvatarFallback>
-                                        </Avatar>
+                        {chats.length > 0 ? (
+                            chats.map((chat) => {
+                                const latestMessage = findLatestMessageByRoomId(chat.matrixRoomId!, latestMessages);
+
+                                return (
+                                    <div
+                                        key={chat._id}
+                                        className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
+                                        onClick={() => handleChatClick(chat)}
+                                    >
+                                        <CirclePicture
+                                            circle={{ name: chat.name, picture: chat.picture }}
+                                            size="40px"
+                                        />
                                         <div>
-                                            <p className="text-sm font-medium">{selectedChat.name}</p>
-                                            {/* <p className="text-xs text-muted-foreground">{selectedChat.status}</p> */}
+                                            <p className="text-sm font-medium">{chat.name}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                <LatestMessage
+                                                    roomId={chat.matrixRoomId!}
+                                                    latestMessages={latestMessages}
+                                                />
+                                            </p>
                                         </div>
                                     </div>
-                                </div>
-                                {/* Chat Room Component */}
-                                <ChatRoomComponent
-                                    circle={{ _id: selectedChat.circleId }}
-                                    chatRoom={selectedChat}
-                                    inToolbox={true}
-                                />
-                            </div>
-                        ) : /* Chat List */
-                        chats.length > 0 ? (
-                            chats.map((chat) => (
-                                <div
-                                    key={chat._id}
-                                    className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
-                                    onClick={() => handleChatClick(chat)}
-                                >
-                                    <CirclePicture circle={{ name: chat.name, picture: chat.picture }} size="40px" />
-                                    <div>
-                                        <p className="text-sm font-medium">{chat.name}</p>
-                                        {/* <p className="text-xs text-muted-foreground">{chat.message}</p> */}
-                                    </div>
-                                </div>
-                            ))
+                                );
+                            })
                         ) : (
                             <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
                                 No chat rooms joined
                             </div>
                         )}
+                        {/* <pre>
+                            {JSON.stringify(
+                                {
+                                    latestMessages,
+                                    unreadCounts,
+                                },
+                                null,
+                                2,
+                            )}
+                        </pre> */}
                     </TabsContent>
                     <TabsContent value="notifications" className="m-0 flex-grow overflow-auto pt-1">
                         {notifications.length > 0 ? (

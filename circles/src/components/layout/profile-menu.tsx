@@ -1,9 +1,16 @@
+// profile-menu.tsx
 "use client";
 
 import React, { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "../ui/button";
-import { userAtom, userToolboxDataAtom, sidePanelContentVisibleAtom, authInfoAtom } from "@/lib/data/atoms";
+import {
+    userAtom,
+    userToolboxDataAtom,
+    sidePanelContentVisibleAtom,
+    authInfoAtom,
+    unreadCountsAtom,
+} from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { UserPicture } from "../modules/members/user-picture";
 import { Bell, MessageCircle } from "lucide-react";
@@ -24,7 +31,6 @@ const QRCodePopover = () => {
             setAuthInfo({
                 authStatus: "authenticated",
                 inSsiApp: false,
-                accounts: undefined,
                 currentAccount: undefined,
             });
             setUser(response.user);
@@ -59,6 +65,11 @@ const ProfileMenuBar = () => {
     const searchParams = useSearchParams();
     const [userToolboxState, setUserToolboxState] = useAtom(userToolboxDataAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+    const [unreadCounts] = useAtom(unreadCountsAtom);
+
+    const totalUnreadMessages = useMemo(() => {
+        return Object.values(unreadCounts).reduce((sum, count) => sum + count, 0);
+    }, [unreadCounts]);
 
     // Fixes hydration errors
     const [isMounted, setIsMounted] = useState(false);
@@ -108,11 +119,11 @@ const ProfileMenuBar = () => {
     }
 
     return (
-        <div className="flex items-center justify-center gap-1 overflow-hidden">
+        <div className="flex items-center justify-center gap-1 overflow-visible">
             <>
                 <div className="flex items-center space-x-2">
                     {/* If outside SSI app and unauthenticated - show QR code to sign in */}
-                    {authInfo.authStatus === "unauthenticated" && !authInfo.inSsiApp && (
+                    {/* {authInfo.authStatus === "unauthenticated" && !authInfo.inSsiApp && (
                         <Popover>
                             <PopoverTrigger>
                                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f1f1f1] hover:bg-[#cecece]">
@@ -123,9 +134,7 @@ const ProfileMenuBar = () => {
                                 <QRCodePopover />
                             </PopoverContent>
                         </Popover>
-                    )}
-
-                    {/* {qrCodePopoverVisible && <QRCodePopover onClose={() => setQRCodePopoverVisible(false)} />} */}
+                    )} */}
 
                     {/* If authenticated and in SSI app - show QR code scanner */}
                     {authInfo.authStatus === "authenticated" && authInfo.inSsiApp && (
@@ -159,10 +168,15 @@ const ProfileMenuBar = () => {
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
+                                className="relative h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
                                 onClick={() => openUserToolbox("chat")}
                             >
                                 <MessageCircle className="h-5 w-5" />
+                                {totalUnreadMessages > 0 && (
+                                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+                                        {totalUnreadMessages}
+                                    </span>
+                                )}
                             </Button>
 
                             <Button

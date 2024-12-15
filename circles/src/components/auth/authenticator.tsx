@@ -156,18 +156,18 @@ export const Authenticator = () => {
         };
     }, [authInfo.authStatus, checkAuthentication, setAuthInfo, setUser]);
 
-    useEffect(() => {
-        if (authInfo.authStatus !== "unauthenticated" || authInfo.inSsiApp || !authInfo.challenge) {
-            return;
-        }
+    // useEffect(() => {
+    //     if (authInfo.authStatus !== "unauthenticated" || authInfo.inSsiApp || !authInfo.challenge) {
+    //         return;
+    //     }
 
-        // poll for authentication status
-        const interval = setInterval(() => {
-            checkQrAuthentication();
-        }, 5000);
+    //     // poll for authentication status
+    //     const interval = setInterval(() => {
+    //         checkQrAuthentication();
+    //     }, 5000);
 
-        return () => clearInterval(interval);
-    });
+    //     return () => clearInterval(interval);
+    // });
 
     // return <div className="t-0 l-0 absolute h-10 w-screen bg-purple-400">{JSON.stringify(authInfo)}</div>
 

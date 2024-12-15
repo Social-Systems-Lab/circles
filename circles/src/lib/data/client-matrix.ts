@@ -1,6 +1,33 @@
 // client-matrix.ts
 const MATRIX_URL = process.env.NEXT_PUBLIC_MATRIX_URL || "http://127.0.0.1/_matrix";
 
+interface MatrixEvent {
+    event_id: string;
+    type: string;
+    sender: string;
+    content: any;
+    origin_server_ts: number;
+    unsigned?: any;
+    state_key?: string;
+}
+
+interface RoomData {
+    timeline: {
+        events: MatrixEvent[];
+    };
+    unread_notifications?: {
+        highlight_count?: number;
+        notification_count?: number;
+    };
+}
+
+interface SyncResponse {
+    rooms?: {
+        join?: Record<string, RoomData>;
+    };
+    next_batch?: string;
+}
+
 export async function fetchJoinedRooms(accessToken: string) {
     console.log(`Fetching joined rooms at ${MATRIX_URL}/client/v3/joined_rooms`);
 
@@ -41,8 +68,15 @@ export async function fetchRoomDetails(accessToken: string, roomId: string) {
     };
 }
 
-export async function startSync(accessToken: string, callback: (event: any) => void) {
-    let since = localStorage.getItem("syncToken"); // Retrieve the persisted sync token
+export async function startSync(
+    accessToken: string,
+    callback: (data: {
+        rooms: Record<string, RoomData>;
+        unreadCounts: Record<string, number>;
+        latestMessages: Record<string, any>;
+    }) => void,
+) {
+    let since: any = null; // localStorage.getItem("syncToken"); // Retrieve the persisted sync token
     let retryCount = 0;
     const maxRetries = 5;
 
@@ -60,12 +94,34 @@ export async function startSync(accessToken: string, callback: (event: any) => v
             });
 
             if (response.ok) {
-                const data = await response.json();
+                const data: SyncResponse = await response.json();
                 since = data.next_batch; // Update the sync token
                 if (since) {
                     localStorage.setItem("syncToken", since); // Persist the sync token
                 }
-                callback(data); // Process incoming events
+
+                // Extract unread counts and latest messages from sync data
+                const unreadCounts: Record<string, number> = {};
+                const latestMessages: Record<string, any> = {};
+
+                for (const [roomId, roomData] of Object.entries(data.rooms?.join || {})) {
+                    console.log("Room data", roomData);
+
+                    unreadCounts[roomId] = roomData.unread_notifications?.notification_count || 0;
+
+                    const timelineEvents = roomData.timeline?.events || [];
+                    if (timelineEvents.length > 0) {
+                        const latestEvent = timelineEvents[timelineEvents.length - 1];
+                        latestMessages[roomId] = latestEvent;
+                    }
+                }
+
+                callback({
+                    rooms: data.rooms?.join || {},
+                    unreadCounts,
+                    latestMessages,
+                });
+
                 retryCount = 0; // Reset retry count on success
                 await sync(); // Continue syncing
             } else {
@@ -85,6 +141,51 @@ export async function startSync(accessToken: string, callback: (event: any) => v
 
     await sync();
 }
+
+// export async function startSync(accessToken: string, callback: (event: any) => void) {
+//     let since = localStorage.getItem("syncToken"); // Retrieve the persisted sync token
+//     let retryCount = 0;
+//     const maxRetries = 5;
+
+//     const sync = async () => {
+//         const url = new URL(`${MATRIX_URL}/client/v3/sync`);
+//         if (since) {
+//             url.searchParams.append("since", since);
+//         }
+//         url.searchParams.append("timeout", "30000"); // Long-polling timeout
+
+//         try {
+//             const response = await fetch(url.toString(), {
+//                 method: "GET",
+//                 headers: { Authorization: `Bearer ${accessToken}` },
+//             });
+
+//             if (response.ok) {
+//                 const data = await response.json();
+//                 since = data.next_batch; // Update the sync token
+//                 if (since) {
+//                     localStorage.setItem("syncToken", since); // Persist the sync token
+//                 }
+//                 callback(data); // Process incoming events
+//                 retryCount = 0; // Reset retry count on success
+//                 await sync(); // Continue syncing
+//             } else {
+//                 throw new Error(`Sync failed with status: ${response.status}`);
+//             }
+//         } catch (error) {
+//             console.error("Sync failed, retrying...", error);
+//             retryCount++;
+//             if (retryCount <= maxRetries) {
+//                 const backoffTime = Math.min(5000 * Math.pow(2, retryCount), 60000); // Exponential backoff
+//                 setTimeout(sync, backoffTime);
+//             } else {
+//                 console.error("Max retries reached. Sync stopped.");
+//             }
+//         }
+//     };
+
+//     await sync();
+// }
 
 export async function fetchRoomMessages(
     accessToken: string,

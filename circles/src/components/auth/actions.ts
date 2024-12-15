@@ -9,6 +9,7 @@ import crypto from "crypto";
 import {
     createUserAccount,
     createUserFromAccount,
+    createUserSession,
     getChallenge,
     getDid,
     issueChallenge,
@@ -149,18 +150,4 @@ export async function createTestAccountAction(): Promise<CreateAccountResponse> 
         user: account.user,
     };
     return response;
-}
-
-async function createUserSession(user: UserPrivate): Promise<string> {
-    let token = await generateUserToken(user.did!);
-    await createSession(token);
-
-    try {
-        // check if user has a matrix account
-        await registerOrLoginMatrixUser(user);
-    } catch (error) {
-        console.error("Error creating matrix session", error);
-    }
-
-    return token;
 }

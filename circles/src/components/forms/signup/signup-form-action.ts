@@ -1,5 +1,5 @@
-import { FormAction, FormSubmitResponse, Page } from "../../../models/models";
-import { AuthenticationError, createUserTrad, getUserPublicKey } from "@/lib/auth/auth";
+import { FormAction, FormSubmitResponse, Page, UserPrivate } from "../../../models/models";
+import { AuthenticationError, createUserSession, createUserTrad, getUserPublicKey } from "@/lib/auth/auth";
 import { createSession, generateUserToken } from "@/lib/auth/jwt";
 import { getDefaultCircle } from "@/lib/data/circle";
 import { addMember } from "@/lib/data/member";
@@ -12,8 +12,7 @@ export const signupFormAction: FormAction = {
         try {
             //console.log("Signing up user with values", values);
             let user = await createUserTrad(values.name, values.handle, values.type, values._email, values._password);
-            let token = await generateUserToken(user.did!);
-            createSession(token);
+            await createUserSession(user as UserPrivate);
 
             // register user in the circles registry
             let currentServerSettings = await getServerSettings();

@@ -5,6 +5,7 @@ declare global {
         ReactNativeWebView?: {
             postMessage: (message: string) => void;
         };
+        vibe?: typeof vibe;
     }
 }
 
@@ -37,14 +38,14 @@ export enum MessageType {
     LOG_REQUEST = "LogRequest",
 }
 
-export const vibe = (() => {
+const vibe = (() => {
     let _state: VibeState = { account: null, permissions: {} }; // Initial state
     let _listeners: Callback[] = []; // State listeners
     const pendingRequests: Record<string, (value: any) => void> = {}; // Tracks requests
 
     const generateRequestId = () => Date.now().toString();
 
-    const enabled = !!window._VIBE_ENABLED;
+    const enabled = () => !!window._VIBE_ENABLED;
     const initialized = false; // TODO true when vibe is enabled and vibe.init is called and app has been granted permissions
 
     const init = (manifest: AppManifest, callback: Callback): Unsubscribe => {
@@ -52,6 +53,12 @@ export const vibe = (() => {
             // TODO perhaps call callback with information that vibe is not enabled
             return () => {};
         }
+
+        sendToNativeApp({
+            type: MessageType.LOG_REQUEST,
+            message: "Initializing vibe with manifest. " + JSON.stringify(manifest),
+        });
+        //console.log("Initializing vibe with manifest", manifest);
 
         _listeners.push(callback);
         sendToNativeApp({
@@ -103,13 +110,15 @@ export const vibe = (() => {
     };
 
     const handleNativeResponse = (response: any) => {
+        sendToNativeApp({
+            type: MessageType.LOG_REQUEST,
+            message: "Got response from native app" + JSON.stringify(response),
+        });
         const { requestId, result, error, stateUpdate } = response;
-
         if (stateUpdate) {
             _state = { ..._state, ...stateUpdate };
             _listeners.forEach((listener) => listener(_state));
         }
-
         if (requestId && pendingRequests[requestId]) {
             if (error) {
                 pendingRequests[requestId](Promise.reject(new Error(error)));
@@ -129,3 +138,9 @@ export const vibe = (() => {
         handleNativeResponse,
     };
 })();
+
+if (typeof window !== "undefined") {
+    (window as any).vibe = vibe;
+}
+
+export { vibe };

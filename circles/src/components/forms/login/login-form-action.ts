@@ -1,5 +1,5 @@
-import { FormAction, FormSubmitResponse, Page } from "../../../models/models";
-import { AuthenticationError, authenticateUser } from "@/lib/auth/auth";
+import { FormAction, FormSubmitResponse, Page, UserPrivate } from "../../../models/models";
+import { AuthenticationError, authenticateUser, createUserSession } from "@/lib/auth/auth";
 import { createSession, generateUserToken } from "@/lib/auth/jwt";
 import { Circles } from "@/lib/data/db";
 import { getUserPrivate } from "@/lib/data/user";
@@ -18,11 +18,10 @@ export const loginFormAction: FormAction = {
             }
 
             authenticateUser(user.did!, password);
-            let token = await generateUserToken(user.did!);
-
-            createSession(token);
 
             let privateUser = await getUserPrivate(user.did!);
+            await createUserSession(privateUser);
+
             return { success: true, message: "User authenticated successfully", data: { user: privateUser } };
         } catch (error) {
             if (error instanceof AuthenticationError) {

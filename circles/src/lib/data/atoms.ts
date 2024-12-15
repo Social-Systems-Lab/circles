@@ -26,3 +26,6 @@ export const sidePanelContentVisibleAtom = atom<"content" | "toolbox" | undefine
 export const focusPostAtom = atom<PostDisplay | undefined>(undefined);
 export const imageGalleryAtom = atom<{ images: Media[]; initialIndex: number } | null>(null);
 export const matrixUserCacheAtom = atom<MatrixUserCache>({});
+
+export const unreadCountsAtom = atom<Record<string, number>>({});
+export const latestMessagesAtom = atom<Record<string, any>>({});
