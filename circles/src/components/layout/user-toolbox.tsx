@@ -256,16 +256,15 @@ export const UserToolbox = () => {
                                 No chat rooms joined
                             </div>
                         )}
-                        <pre>
+                        {/* <pre>
                             {JSON.stringify(
                                 {
-                                    latestMessages,
                                     unreadCounts,
                                 },
                                 null,
                                 2,
                             )}
-                        </pre>
+                        </pre> */}
                     </TabsContent>
                     <TabsContent value="notifications" className="m-0 flex-grow overflow-auto pt-1">
                         {notifications.length > 0 ? (

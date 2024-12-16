@@ -287,7 +287,7 @@ export type MatrixMessageContent =
 
 export interface ChatMessage {
     id: string; // Matrix event_id
-    chatRoomId: string; // Matrix room_id
+    roomId: string; // Matrix room_id
     createdBy: string; // Matrix sender
     createdAt: Date; // Timestamp (Matrix origin_server_ts)
     content: MatrixMessageContent; // Matrix event content

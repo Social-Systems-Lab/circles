@@ -68,8 +68,22 @@ const ProfileMenuBar = () => {
     const [unreadCounts] = useAtom(unreadCountsAtom);
 
     const totalUnreadMessages = useMemo(() => {
-        return Object.values(unreadCounts).reduce((sum, count) => sum + count, 0);
-    }, [unreadCounts]);
+        if (!user?.chatRoomMemberships) {
+            return 0;
+        }
+        // get sum of unread messages in all chat rooms
+        return user?.chatRoomMemberships
+            .map((room) => {
+                const unread = Object.entries(unreadCounts).find(([key]) =>
+                    key.startsWith(room.chatRoom.matrixRoomId!),
+                )?.[1];
+                if (unread) {
+                    return unread;
+                }
+                return 0;
+            })
+            .reduce((acc, val) => acc + val, 0);
+    }, [unreadCounts, user?.chatRoomMemberships]);
 
     // Fixes hydration errors
     const [isMounted, setIsMounted] = useState(false);

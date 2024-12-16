@@ -10,7 +10,7 @@ export const CircleTags: React.FC<CircleTagsProps> = ({ tags, showAll = false, i
     const handleTagClick = (tag: string) => {
         // Add your logic here to navigate or do something when a tag is clicked
         // Example: router.push(`/tags/${tag}`);
-        console.log(`Tag clicked: ${tag}`);
+        // console.log(`Tag clicked: ${tag}`);
     };
 
     if (!tags || tags.length === 0) {

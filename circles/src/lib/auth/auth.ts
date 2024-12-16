@@ -365,7 +365,7 @@ export const createUserFromAccount = async (account: Account): Promise<UserPriva
 };
 
 export const createUser = async (did: string, publicKey: string): Promise<UserPrivate> => {
-    console.log("Creating user", did, publicKey);
+    // console.log("Creating user", did, publicKey);
 
     // add user to the database
     let user: Circle = createNewUser(did, publicKey);
@@ -384,7 +384,7 @@ export const issueChallenge = async (publicKey?: string): Promise<Challenge> => 
     let expiresAt = new Date(createdAt.getTime() + 5 * 60 * 1000); // 5 minutes
 
     // store the challenge
-    console.log("Issuing challenge", challengeStr, "public key", publicKey);
+    // console.log("Issuing challenge", challengeStr, "public key", publicKey);
     let challenge: Challenge = { challenge: challengeStr, createdAt, expiresAt, publicKey };
     let res = await Challenges.insertOne(challenge);
     challenge._id = res.insertedId.toString();
@@ -402,11 +402,6 @@ export const verifyChallengeSignature = async (
     signature: string,
     challengeStr: string,
 ): Promise<boolean> => {
-    console.log("********* VERIFYING SIGNATURE **********");
-    console.log("Public key", publicKey);
-    console.log("Signature", signature);
-    console.log("Challenge", challengeStr);
-
     // get the most recent challenge
     let res = (await Challenges.findOne({ challenge: challengeStr }, { sort: { createdAt: -1 } })) as Challenge;
     if (!res) {

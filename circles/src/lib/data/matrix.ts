@@ -135,7 +135,7 @@ export async function registerOrLoginMatrixUser(user: UserPrivate): Promise<stri
         user.matrixAccessToken = access_token;
 
         // add user to global chat room
-        await addUserToGlobalRoom(access_token);
+        //await addUserToGlobalRoom(access_token);
 
         await updateCircle({ _id: user._id, matrixAccessToken: access_token });
         return access_token;
@@ -163,7 +163,7 @@ export async function registerOrLoginMatrixUser(user: UserPrivate): Promise<stri
 
     // Add user to global chat room
     const accessToken = await loginMatrixUser(username, password!);
-    await addUserToGlobalRoom(accessToken);
+    //await addUserToGlobalRoom(accessToken);
     user.matrixAccessToken = accessToken;
 
     await updateCircle({ _id: user._id, matrixAccessToken: accessToken });

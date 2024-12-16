@@ -4,7 +4,14 @@
 import { Dispatch, KeyboardEvent, SetStateAction, useCallback, useMemo, useTransition } from "react";
 import { Circle, ChatRoom, ChatMessage, Page, ChatRoomMembership, MatrixUserCache } from "@/models/models";
 import CircleHeader from "../circles/circle-header";
-import { mapOpenAtom, matrixUserCacheAtom, triggerMapOpenAtom, userAtom } from "@/lib/data/atoms";
+import {
+    mapOpenAtom,
+    matrixUserCacheAtom,
+    roomDataAtom,
+    roomMessagesAtom,
+    triggerMapOpenAtom,
+    userAtom,
+} from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
@@ -305,7 +312,7 @@ const ChatInput = ({ setMessages, circle, chatRoom, page, subpage }: ChatInputPr
         if (!user) return;
         if (newMessage.trim() !== "") {
             try {
-                console.log("Sending message:", chatRoom.matrixRoomId, newMessage);
+                // console.log("Sending message:", chatRoom.matrixRoomId, newMessage);
                 await sendRoomMessage(user.matrixAccessToken!, chatRoom.matrixRoomId!, newMessage);
                 setNewMessage("");
             } catch (error) {
@@ -418,21 +425,20 @@ export const ChatRoomComponent: React.FC<{
         return user?.chatRoomMemberships?.some((membership) => membership.chatRoomId === chatRoom._id);
     }, [user?.chatRoomMemberships, chatRoom._id]);
     const initialMessagesLoaded = useRef(false);
+    const [roomData] = useAtom(roomDataAtom);
+    const [roomMessages] = useAtom(roomMessagesAtom);
 
     const markLatestMessageAsRead = useCallback(async () => {
         if (messages.length > 0 && user?.matrixAccessToken) {
             const latestMessage = messages[messages.length - 1];
             await markMessagesAsRead(user.matrixAccessToken, chatRoom.matrixRoomId!, latestMessage.id);
-
-            console.log("Sending read receipt for", latestMessage);
-            console.log("Access token: ", user.matrixAccessToken);
-            await sendReadReceipt(user.matrixAccessToken, latestMessage.chatRoomId, latestMessage.id);
+            await sendReadReceipt(user.matrixAccessToken, latestMessage.roomId, latestMessage.id);
             //await sendReadReceiptAction(latestMessage.chatRoomId, latestMessage.id);
         }
     }, [messages, user?.matrixAccessToken, chatRoom.matrixRoomId]);
 
     const scrollToBottom = () => {
-        console.log("Scrolling to bottom");
+        // console.log("Scrolling to bottom");
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
         }
@@ -442,51 +448,55 @@ export const ChatRoomComponent: React.FC<{
         scrollToBottom();
     }, [messages]);
 
-    const loadInitialMessages = useCallback(async () => {
-        if (!chatRoom?.matrixRoomId || initialMessagesLoaded.current) return;
-        initialMessagesLoaded.current = true; // Mark as loaded
+    useEffect(() => {
+        const roomId = chatRoom.matrixRoomId!;
+        const roomMessagesForChat = roomMessages[roomId] || [];
+        setMessages(roomMessagesForChat);
+    }, [chatRoom.matrixRoomId, roomMessages, matrixUserCache]);
 
-        startLoadingMessagesTransition(async () => {
-            try {
-                const { messages } = await fetchRoomMessages(user?.matrixAccessToken!, chatRoom.matrixRoomId!, 20);
+    //     if (!chatRoom?.matrixRoomId || initialMessagesLoaded.current) return;
+    //     initialMessagesLoaded.current = true; // Mark as loaded
 
-                // Fetch and cache user details
-                const matrixUsernames = messages.map((msg) => msg.sender);
-                let userCache = await fetchAndCacheMatrixUsers(matrixUsernames, matrixUserCache, setMatrixUserCache);
+    //     startLoadingMessagesTransition(async () => {
+    //         try {
+    //             const { messages } = await fetchRoomMessages(user?.matrixAccessToken!, chatRoom.matrixRoomId!, 20);
 
-                const formattedMessages = messages.map((msg: any, index: number) => {
-                    const author = userCache[msg.sender] || {
-                        _id: msg.sender,
-                        name: msg.sender,
-                        picture: { url: "/placeholder.svg" },
-                    };
-                    return {
-                        id: msg.event_id,
-                        chatRoomId: msg.room_id,
-                        createdBy: msg.sender,
-                        createdAt: new Date(msg.origin_server_ts),
-                        content: msg.content,
-                        type: msg.type,
-                        stateKey: msg.state_key,
-                        unsigned: msg.unsigned,
-                        author, // Your database user data
-                    } as ChatMessage;
-                });
+    //             // Fetch and cache user details
+    //             const matrixUsernames = messages.map((msg) => msg.sender);
+    //             let userCache = await fetchAndCacheMatrixUsers(matrixUsernames, matrixUserCache, setMatrixUserCache);
 
-                setMessages(formattedMessages);
+    //             const formattedMessages = messages.map((msg: any, index: number) => {
+    //                 const author = userCache[msg.sender] || {
+    //                     _id: msg.sender,
+    //                     name: msg.sender,
+    //                     picture: { url: "/placeholder.svg" },
+    //                 };
+    //                 return {
+    //                     id: msg.event_id,
+    //                     chatRoomId: msg.room_id,
+    //                     createdBy: msg.sender,
+    //                     createdAt: new Date(msg.origin_server_ts),
+    //                     content: msg.content,
+    //                     type: msg.type,
+    //                     stateKey: msg.state_key,
+    //                     unsigned: msg.unsigned,
+    //                     author, // Your database user data
+    //                 } as ChatMessage;
+    //             });
 
-                // mark the latest message as read
-                markMessagesAsRead(
-                    user?.matrixAccessToken!,
-                    chatRoom.matrixRoomId!,
-                    formattedMessages[formattedMessages.length - 1]?.id,
-                );
-            } catch (error) {
-                console.error("Failed to fetch chat messages:", error);
-            }
-        });
-    }, [chatRoom.matrixRoomId, matrixUserCache, setMatrixUserCache, user?.matrixAccessToken]);
+    //             setMessages(formattedMessages);
 
+    //             // mark the latest message as read
+    //             markMessagesAsRead(
+    //                 user?.matrixAccessToken!,
+    //                 chatRoom.matrixRoomId!,
+    //                 formattedMessages[formattedMessages.length - 1]?.id,
+    //             );
+    //         } catch (error) {
+    //             console.error("Failed to fetch chat messages:", error);
+    //         }
+    //     });
+    // }, [chatRoom.matrixRoomId, matrixUserCache, setMatrixUserCache, user?.matrixAccessToken]);
     const messagesRef = useRef<ChatMessage[]>([]);
     useEffect(() => {
         messagesRef.current = messages;
@@ -497,62 +507,8 @@ export const ChatRoomComponent: React.FC<{
     }, [messages, markLatestMessageAsRead]);
 
     useEffect(() => {
-        if (!chatRoom?.matrixRoomId || !user?.matrixAccessToken) return;
-
-        const handleNewEvents = async (data: any) => {
-            const roomEvents = data.rooms?.join?.[chatRoom.matrixRoomId!]?.timeline?.events || [];
-
-            const newUsernames = roomEvents
-                .filter((event: any) => event.type === "m.room.message")
-                .map((event: any) => event.sender)
-                .filter((username: string) => !matrixUserCache[username]); // Only fetch uncached users
-
-            // Fetch and update the cache for any new usernames
-            const updatedCache = await fetchAndCacheMatrixUsers(newUsernames, matrixUserCache, setMatrixUserCache);
-
-            const newMessages = roomEvents
-                .filter(
-                    (event: any) =>
-                        event.type === "m.room.message" &&
-                        !messagesRef.current.some((msg) => msg.id === event.event_id), // Deduplicate using latest state
-                )
-                .map((msg: any) => ({
-                    id: msg.event_id,
-                    chatRoomId: chatRoom.matrixRoomId,
-                    createdBy: msg.sender,
-                    createdAt: new Date(msg.origin_server_ts),
-                    content: msg.content,
-                    type: msg.type,
-                    stateKey: msg.state_key,
-                    unsigned: msg.unsigned,
-                    author: updatedCache[msg.sender] || { name: msg.sender },
-                }));
-
-            console.log("Handling new events", JSON.stringify(matrixUserCache));
-            const matrixUsernames = roomEvents.map((msg: any) => msg.sender);
-            console.log("New messages from", JSON.stringify(matrixUsernames));
-
-            setMessages((prevMessages) => [...prevMessages, ...newMessages]);
-        };
-
-        startSync(user.matrixAccessToken, handleNewEvents);
-
-        return () => {
-            // Cleanup if necessary
-        };
-    }, [chatRoom.matrixRoomId, user?.matrixAccessToken, matrixUserCache, setMatrixUserCache]);
-
-    useEffect(() => {
-        // if user isn't in the chat room don't load messages
-        if (!hasJoinedChat) return;
-        loadInitialMessages();
-    }, [circle._id, hasJoinedChat, loadInitialMessages]);
-
-    useEffect(() => {
-        console.log("UseEffect called");
         const updateInputWidth = () => {
             if (inputRef.current) {
-                console.log("Updating input width" + inputRef.current.clientWidth);
                 setInputWidth(inputRef.current.clientWidth);
             }
         };
