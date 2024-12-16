@@ -151,34 +151,42 @@ const skillNs = "e8b887ec-5e3d-5383-9565-7fc72bb0e251";
 export const upsertVbdCircles = async (circles: Circle[]) => {
     const client = await getQdrantClient();
 
-    console.log("Getting embeddings for circles...");
+    console.log("Getting embeddings for circles. Count:", circles.length);
 
     const embeddings = await getEmbeddings(circles.map((circle) => formatCircleForEmbedding(circle)));
 
-    const qdrantPoints = circles.map((circle, i) => ({
-        id: uuidv5(circle._id!, circleNs),
-        vector: embeddings[i],
-        payload: {
-            name: circle.name,
-            description: circle.description,
-            mission: circle.mission,
-            circleType: circle.circleType,
-            createdAt: circle.createdAt?.toISOString(),
-            isPublic: circle.isPublic,
-            locationName: circle.location ? getFullLocationName(circle.location) : null,
-            location: circle.location?.lngLat
-                ? {
-                      latitude: circle.location.lngLat.lat,
-                      longitude: circle.location.lngLat.lng,
-                  }
-                : null,
-            causes: circle.causes,
-            skills: circle.skills,
-        },
-    }));
+    console.log("Embeddings generated. Count:", embeddings.length);
+
+    const qdrantPoints = circles.map((circle, i) => {
+        console.log("Getting embeddings for circle", circle._id);
+        console.log(`Embedding ${i}.length:`, embeddings[i]?.length);
+        console.log("Getting UUID");
+        console.log("UUID:", uuidv5(circle._id!, circleNs));
+
+        return {
+            id: uuidv5(circle._id!, circleNs),
+            vector: embeddings[i],
+            payload: {
+                name: circle.name,
+                description: circle.description,
+                mission: circle.mission,
+                circleType: circle.circleType,
+                createdAt: circle.createdAt?.toISOString(),
+                isPublic: circle.isPublic,
+                locationName: circle.location ? getFullLocationName(circle.location) : null,
+                location: circle.location?.lngLat
+                    ? {
+                          latitude: circle.location.lngLat.lat,
+                          longitude: circle.location.lngLat.lng,
+                      }
+                    : null,
+                causes: circle.causes,
+                skills: circle.skills,
+            },
+        };
+    });
 
     console.log("Upserting embeddings...");
-    // Ensure that embeddings are in the correct format (e.g., number[])
     await client.upsert("circles", { points: qdrantPoints });
 };
 

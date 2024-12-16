@@ -27,10 +27,6 @@ export const MatrixSync = () => {
     const matrixUserCacheRef = useRef(matrixUserCache);
 
     useEffect(() => {
-        console.log("Last read timestamps", lastReadTimestamps);
-    }, [lastReadTimestamps]);
-
-    useEffect(() => {
         roomMessagesRef.current = roomMessages;
     }, [roomMessages]);
 
