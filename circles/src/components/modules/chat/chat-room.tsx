@@ -432,7 +432,7 @@ export const ChatRoomComponent: React.FC<{
         if (messages.length > 0 && user?.matrixAccessToken) {
             const latestMessage = messages[messages.length - 1];
             // await markMessagesAsRead(user.matrixAccessToken, chatRoom.matrixRoomId!, latestMessage.id);
-            await sendReadReceipt(user.matrixAccessToken, user.matrixUrl, latestMessage.roomId, latestMessage.id);
+            await sendReadReceipt(user.matrixAccessToken, user.matrixUrl!, latestMessage.roomId, latestMessage.id);
             //await sendReadReceiptAction(latestMessage.chatRoomId, latestMessage.id);
         }
     }, [messages, user?.matrixAccessToken, user?.matrixUrl]);
