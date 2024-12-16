@@ -147,7 +147,7 @@ export const MatrixSync = () => {
             setRoomMessages((prev) => ({ ...prev, ...newRoomMessages }));
         };
 
-        startSync(user.matrixAccessToken, user.matrixUsername!, handleSyncData);
+        startSync(user.matrixAccessToken, user.matrixUrl!, user.matrixUsername!, handleSyncData);
     }, [
         setLatestMessages,
         setUnreadCounts,
@@ -157,6 +157,7 @@ export const MatrixSync = () => {
         setMatrixUserCache,
         matrixUserCache,
         user?.matrixUsername,
+        user?.matrixUrl,
         setLastReadTimestamps,
     ]);
 

@@ -158,13 +158,13 @@ export const upsertVbdCircles = async (circles: Circle[]) => {
     console.log("Embeddings generated. Count:", embeddings.length);
 
     const qdrantPoints = circles.map((circle, i) => {
-        console.log("Getting embeddings for circle", circle._id);
+        console.log("Getting embeddings for circle", circle._id.toString());
         console.log(`Embedding ${i}.length:`, embeddings[i]?.length);
         console.log("Getting UUID");
-        console.log("UUID:", uuidv5(circle._id!, circleNs));
+        console.log("UUID:", uuidv5(circle._id.toString()!, circleNs));
 
         return {
-            id: uuidv5(circle._id!, circleNs),
+            id: uuidv5(circle._id.toString(), circleNs),
             vector: embeddings[i],
             payload: {
                 name: circle.name,

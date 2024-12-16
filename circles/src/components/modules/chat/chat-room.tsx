@@ -313,7 +313,7 @@ const ChatInput = ({ setMessages, circle, chatRoom, page, subpage }: ChatInputPr
         if (newMessage.trim() !== "") {
             try {
                 // console.log("Sending message:", chatRoom.matrixRoomId, newMessage);
-                await sendRoomMessage(user.matrixAccessToken!, chatRoom.matrixRoomId!, newMessage);
+                await sendRoomMessage(user.matrixAccessToken!, user.matrixUrl!, chatRoom.matrixRoomId!, newMessage);
                 setNewMessage("");
             } catch (error) {
                 console.error("Failed to send message:", error);
@@ -431,11 +431,11 @@ export const ChatRoomComponent: React.FC<{
     const markLatestMessageAsRead = useCallback(async () => {
         if (messages.length > 0 && user?.matrixAccessToken) {
             const latestMessage = messages[messages.length - 1];
-            await markMessagesAsRead(user.matrixAccessToken, chatRoom.matrixRoomId!, latestMessage.id);
-            await sendReadReceipt(user.matrixAccessToken, latestMessage.roomId, latestMessage.id);
+            // await markMessagesAsRead(user.matrixAccessToken, chatRoom.matrixRoomId!, latestMessage.id);
+            await sendReadReceipt(user.matrixAccessToken, user.matrixUrl, latestMessage.roomId, latestMessage.id);
             //await sendReadReceiptAction(latestMessage.chatRoomId, latestMessage.id);
         }
-    }, [messages, user?.matrixAccessToken, chatRoom.matrixRoomId]);
+    }, [messages, user?.matrixAccessToken, user?.matrixUrl]);
 
     const scrollToBottom = () => {
         // console.log("Scrolling to bottom");
@@ -459,7 +459,7 @@ export const ChatRoomComponent: React.FC<{
 
     //     startLoadingMessagesTransition(async () => {
     //         try {
-    //             const { messages } = await fetchRoomMessages(user?.matrixAccessToken!, chatRoom.matrixRoomId!, 20);
+    //             const { messages } = await fetchRoomMessages(user?.matrixAccessToken!, user?.matrixUrl, chatRoom.matrixRoomId!, 20);
 
     //             // Fetch and cache user details
     //             const matrixUsernames = messages.map((msg) => msg.sender);

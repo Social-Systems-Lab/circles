@@ -1,6 +1,6 @@
-// client-matrix.ts
-const MATRIX_URL = process.env.NEXT_PUBLIC_MATRIX_URL || "http://127.0.0.1/_matrix";
+import { UserPrivate } from "@/models/models";
 
+// client-matrix.ts
 export interface MatrixEvent {
     event_id: string;
     type: string;
@@ -31,10 +31,10 @@ export interface SyncResponse {
     next_batch?: string;
 }
 
-export async function fetchJoinedRooms(accessToken: string) {
+export async function fetchJoinedRooms(accessToken: string, user: UserPrivate) {
     // console.log(`Fetching joined rooms at ${MATRIX_URL}/client/v3/joined_rooms`);
-
-    const response = await fetch(`${MATRIX_URL}/client/v3/joined_rooms`, {
+    const matrixUrl = user.matrixUrl;
+    const response = await fetch(`${matrixUrl}/client/v3/joined_rooms`, {
         method: "GET",
         headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -47,8 +47,9 @@ export async function fetchJoinedRooms(accessToken: string) {
     return data.joined_rooms; // Returns array of room IDs
 }
 
-export async function fetchRoomDetails(accessToken: string, roomId: string) {
-    const response = await fetch(`${MATRIX_URL}/client/v3/rooms/${encodeURIComponent(roomId)}/state`, {
+export async function fetchRoomDetails(accessToken: string, user: UserPrivate, roomId: string) {
+    const matrixUrl = user.matrixUrl;
+    const response = await fetch(`${matrixUrl}/client/v3/rooms/${encodeURIComponent(roomId)}/state`, {
         method: "GET",
         headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -66,13 +67,14 @@ export async function fetchRoomDetails(accessToken: string, roomId: string) {
     return {
         name: nameEvent?.content?.name || "Unnamed Room",
         avatar: avatarEvent?.content?.url
-            ? `${MATRIX_URL}/media/v3/download/${avatarEvent.content.url.replace("mxc://", "")}`
+            ? `${matrixUrl}/media/v3/download/${avatarEvent.content.url.replace("mxc://", "")}`
             : "/placeholder.svg", // Fallback avatar
     };
 }
 
 export async function startSync(
     accessToken: string,
+    matrixUrl: string,
     matrixUsername: string,
     callback: (data: {
         rooms: Record<string, RoomData>;
@@ -86,7 +88,9 @@ export async function startSync(
     let retryCount = 0;
 
     const sync = async () => {
-        const url = new URL(`${MATRIX_URL}/client/v3/sync`);
+        const url = new URL(`${matrixUrl}/client/v3/sync`);
+        console.log("Fetching url", url.toString());
+
         if (since) url.searchParams.append("since", since);
         if (roomId) url.searchParams.append("filter", JSON.stringify({ room: { rooms: [roomId] } }));
         url.searchParams.append("timeout", "30000");
@@ -171,156 +175,9 @@ export async function startSync(
     await sync();
 }
 
-// export async function startSync(
-//     accessToken: string,
-//     matrixUsername: string,
-//     callback: (data: {
-//         rooms: Record<string, RoomData>;
-//         unreadCounts: Record<string, number>;
-//         latestMessages: Record<string, any>;
-//     }) => void,
-//     roomId?: string,
-// ) {
-//     let since: any = localStorage.getItem(roomId ? `syncToken_${roomId}` : "syncToken");
-//     let retryCount = 0;
-//     const maxRetries = 5;
-
-//     const sync = async () => {
-//         const url = new URL(`${MATRIX_URL}/client/v3/sync`);
-//         if (since) url.searchParams.append("since", since);
-//         if (roomId) url.searchParams.append("filter", JSON.stringify({ room: { rooms: [roomId] } }));
-//         url.searchParams.append("timeout", "30000");
-
-//         try {
-//             const response = await fetch(url.toString(), {
-//                 method: "GET",
-//                 headers: { Authorization: `Bearer ${accessToken}` },
-//             });
-
-//             if (response.ok) {
-//                 const data: SyncResponse = await response.json();
-//                 since = data.next_batch;
-//                 if (since) localStorage.setItem(roomId ? `syncToken_${roomId}` : "syncToken", since);
-
-//                 const unreadCounts: Record<string, number> = {};
-//                 const latestMessages: Record<string, any> = {};
-
-//                 const rooms: Record<string, RoomData> = {};
-//                 for (const [syncRoomId, roomData] of Object.entries(data.rooms?.join || {})) {
-//                     const timelineEvents = roomData.timeline?.events || [];
-//                     // const fullyReadEventId = roomData.account_data?.events.find(
-//                     //     (event) => event.type === "m.fully_read",
-//                     // )?.content?.event_id;
-
-//                     // Get read receipts for the current user only
-//                     const readReceipts = roomData.ephemeral?.events.find(
-//                         (event) => event.type === "m.receipt",
-//                     )?.content;
-
-//                     let latestReadReceipt = null; //fullyReadEventId;
-//                     if (readReceipts) {
-//                         // Find read receipts for the current user only
-//                         const userReceipts = Object.entries(readReceipts)
-//                             .filter(([eventId, receiptData]) => {
-//                                 const receiptUser = Object.keys(receiptData["m.read"] || {}).find((id) =>
-//                                     id.startsWith(`@${matrixUsername}:`),
-//                                 );
-//                                 return !!receiptUser; // Only process your user's receipts
-//                             })
-//                             .map(([eventId]) => eventId);
-
-//                         if (userReceipts.length > 0) {
-//                             latestReadReceipt = userReceipts[userReceipts.length - 1];
-//                         }
-//                     }
-
-//                     // Calculate unread messages
-//                     const unreadMessages = timelineEvents.filter(
-//                         (event) =>
-//                             event.type === "m.room.message" &&
-//                             (!latestReadReceipt || event.event_id > latestReadReceipt),
-//                     );
-
-//                     // Only count messages unread by the current user
-//                     unreadCounts[syncRoomId] = unreadMessages.length;
-
-//                     // Update the latest message
-//                     if (timelineEvents.length > 0) {
-//                         latestMessages[syncRoomId] = timelineEvents[timelineEvents.length - 1];
-//                     }
-
-//                     rooms[syncRoomId] = roomData;
-//                 }
-
-//                 callback({ rooms, unreadCounts, latestMessages });
-
-//                 retryCount = 0;
-//                 await sync();
-//             } else {
-//                 throw new Error(`Sync failed with status: ${response.status}`);
-//             }
-//         } catch (error) {
-//             console.error("Sync failed, retrying...", error);
-//             retryCount++;
-//             if (retryCount <= maxRetries) {
-//                 const backoffTime = Math.min(5000 * Math.pow(2, retryCount), 60000);
-//                 setTimeout(sync, backoffTime);
-//             } else {
-//                 console.error("Max retries reached. Sync stopped.");
-//             }
-//         }
-//     };
-
-//     await sync();
-// }
-
-// export async function startSync(accessToken: string, callback: (event: any) => void) {
-//     let since = localStorage.getItem("syncToken"); // Retrieve the persisted sync token
-//     let retryCount = 0;
-//     const maxRetries = 5;
-
-//     const sync = async () => {
-//         const url = new URL(`${MATRIX_URL}/client/v3/sync`);
-//         if (since) {
-//             url.searchParams.append("since", since);
-//         }
-//         url.searchParams.append("timeout", "30000"); // Long-polling timeout
-
-//         try {
-//             const response = await fetch(url.toString(), {
-//                 method: "GET",
-//                 headers: { Authorization: `Bearer ${accessToken}` },
-//             });
-
-//             if (response.ok) {
-//                 const data = await response.json();
-//                 since = data.next_batch; // Update the sync token
-//                 if (since) {
-//                     localStorage.setItem("syncToken", since); // Persist the sync token
-//                 }
-//                 callback(data); // Process incoming events
-//                 retryCount = 0; // Reset retry count on success
-//                 await sync(); // Continue syncing
-//             } else {
-//                 throw new Error(`Sync failed with status: ${response.status}`);
-//             }
-//         } catch (error) {
-//             console.error("Sync failed, retrying...", error);
-//             retryCount++;
-//             if (retryCount <= maxRetries) {
-//                 const backoffTime = Math.min(5000 * Math.pow(2, retryCount), 60000); // Exponential backoff
-//                 setTimeout(sync, backoffTime);
-//             } else {
-//                 console.error("Max retries reached. Sync stopped.");
-//             }
-//         }
-//     };
-
-//     await sync();
-// }
-
 export async function fetchRoomMessages(
     accessToken: string,
+    matrixUrl: string,
     roomId: string,
     limit: number = 20,
     from?: string,
@@ -335,7 +192,7 @@ export async function fetchRoomMessages(
     }
 
     const response = await fetch(
-        `${MATRIX_URL}/client/v3/rooms/${encodeURIComponent(roomId)}/messages?${params.toString()}`,
+        `${matrixUrl}/client/v3/rooms/${encodeURIComponent(roomId)}/messages?${params.toString()}`,
         {
             method: "GET",
             headers: {
@@ -355,10 +212,10 @@ export async function fetchRoomMessages(
     };
 }
 
-export async function sendRoomMessage(accessToken: string, roomId: string, content: string) {
+export async function sendRoomMessage(accessToken: string, matrixUrl: string, roomId: string, content: string) {
     const txnId = Date.now(); // Use a unique transaction ID
     const response = await fetch(
-        `${MATRIX_URL}/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${txnId}`,
+        `${matrixUrl}/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${txnId}`,
         {
             method: "PUT",
             headers: {
@@ -379,8 +236,8 @@ export async function sendRoomMessage(accessToken: string, roomId: string, conte
     return await response.json();
 }
 
-export const markMessagesAsRead = async (accessToken: string, roomId: string, eventId: string) => {
-    const url = `${MATRIX_URL}/client/v3/rooms/${encodeURIComponent(roomId)}/read_markers`;
+export const markMessagesAsRead = async (accessToken: string, matrixUrl: string, roomId: string, eventId: string) => {
+    const url = `${matrixUrl}/client/v3/rooms/${encodeURIComponent(roomId)}/read_markers`;
 
     try {
         const response = await fetch(url, {
@@ -406,11 +263,11 @@ export const markMessagesAsRead = async (accessToken: string, roomId: string, ev
     }
 };
 
-export const sendReadReceipt = async (accessToken: string, roomId: string, eventId: string) => {
+export const sendReadReceipt = async (accessToken: string, matrixUrl: string, roomId: string, eventId: string) => {
     const encodedRoomId = encodeURIComponent(roomId);
     const encodedEventId = encodeURIComponent(eventId);
 
-    const url = `${MATRIX_URL}/client/v3/rooms/${encodedRoomId}/receipt/m.read/${encodedEventId}`;
+    const url = `${matrixUrl}/client/v3/rooms/${encodedRoomId}/receipt/m.read/${encodedEventId}`;
 
     // console.log(`Sending read receipt for event: ${encodedEventId} in room: ${encodedRoomId}`);
 

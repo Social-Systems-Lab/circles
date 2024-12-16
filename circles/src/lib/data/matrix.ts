@@ -116,6 +116,7 @@ export async function registerOrLoginMatrixUser(user: UserPrivate): Promise<stri
             username += Math.floor(Math.random() * 10);
         }
         user.matrixUsername = username;
+        user.fullMatrixName = `@${username}:${MATRIX_DOMAIN}`;
         await updateCircle({ _id: user._id, matrixUsername: username, matrixPassword: password });
     }
 
