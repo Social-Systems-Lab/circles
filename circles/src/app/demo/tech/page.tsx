@@ -76,7 +76,7 @@ const products: ProductType[] = [
     },
 ];
 
-function StarRating({ movieId, initialRating }: { movieId: number; initialRating?: number }) {
+function StarRating({ id, initialRating }: { id: number; initialRating?: number }) {
     const [rating, setRating] = useState<number | undefined>(initialRating);
     const [hover, setHover] = useState<number | undefined>(undefined);
 
@@ -92,7 +92,7 @@ function StarRating({ movieId, initialRating }: { movieId: number; initialRating
                         action: "Write",
                         object: {
                             type: "Rating",
-                            movieId,
+                            movieId: id,
                             rating: star,
                         },
                     },
@@ -259,7 +259,7 @@ function FeaturedProduct({ product }: { product: ProductType }) {
                     </p>
                     <p className="mb-6 text-lg text-gray-700">{product.description}</p>
                     <div className="flex items-center gap-4">
-                        <StarRating productId={product.id} initialRating={product.rating} />
+                        <StarRating id={product.id} initialRating={product.rating} />
                         <Button>
                             <ShoppingCart className="mr-2 h-4 w-4" /> Add to Cart
                         </Button>
@@ -302,7 +302,7 @@ function ProductGrid({ products }: { products: ProductType[] }) {
                             <h3 className="mb-1 text-lg font-semibold text-gray-900">{product.name}</h3>
                             <p className="mb-2 text-sm text-gray-600">{product.brand}</p>
                             <p className="mb-2 text-lg font-bold text-gray-900">${product.price}</p>
-                            <StarRating productId={product.id} initialRating={product.rating} />
+                            <StarRating id={product.id} initialRating={product.rating} />
                             <Button className="mt-4 w-full">
                                 <ShoppingCart className="mr-2 h-4 w-4" /> Add to Cart
                             </Button>
