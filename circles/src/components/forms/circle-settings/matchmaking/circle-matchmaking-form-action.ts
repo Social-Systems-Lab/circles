@@ -24,8 +24,8 @@ export const circleMatchmakingFormAction: FormAction = {
             circle.causes = values.causes;
             circle.skills = values.skills;
 
-            console.log("Causes", values.causes);
-            console.log("Skills", values.skills);
+            // console.log("Causes", values.causes);
+            // console.log("Skills", values.skills);
 
             await updateCircle(circle);
 

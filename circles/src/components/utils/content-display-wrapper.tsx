@@ -15,10 +15,10 @@ const ContentDisplayWrapper: React.FC<ContentDisplayWrapperProps> = ({ content, 
 
     useEffect(() => {
         //setting displayed content
-        console.log(
-            "setting displayed content",
-            content.filter((item) => item?.location?.lngLat),
-        );
+        // console.log(
+        //     "setting displayed content",
+        //     content.filter((item) => item?.location?.lngLat),
+        // );
         setDisplayedContent(content);
     }, [content, setDisplayedContent]);
 

@@ -135,7 +135,7 @@ export async function registerOrLoginMatrixUser(user: UserPrivate): Promise<stri
         user.matrixAccessToken = access_token;
 
         // add user to global chat room
-        await addUserToGlobalRoom(access_token);
+        //await addUserToGlobalRoom(access_token);
 
         await updateCircle({ _id: user._id, matrixAccessToken: access_token });
         return access_token;
@@ -163,7 +163,7 @@ export async function registerOrLoginMatrixUser(user: UserPrivate): Promise<stri
 
     // Add user to global chat room
     const accessToken = await loginMatrixUser(username, password!);
-    await addUserToGlobalRoom(accessToken);
+    //await addUserToGlobalRoom(accessToken);
     user.matrixAccessToken = accessToken;
 
     await updateCircle({ _id: user._id, matrixAccessToken: accessToken });
@@ -332,3 +332,32 @@ function generateMac(nonce: string, username: string, password: string, isAdmin:
     const data = `${nonce}\0${username}\0${password}\0${isAdmin ? "admin" : "notadmin"}`;
     return crypto.createHmac("sha1", MATRIX_SHARED_SECRET).update(data).digest("hex");
 }
+
+export const sendReadReceipt = async (roomId: string, eventId: string) => {
+    let adminAccessToken = await getAdminAccessToken();
+
+    const encodedRoomId = encodeURIComponent(roomId);
+    const encodedEventId = encodeURIComponent(eventId);
+
+    const url = `${MATRIX_URL}/client/v3/rooms/${encodedRoomId}/receipt/m.read/${encodedEventId}`;
+
+    console.log(`Sending read receipt for event: ${eventId} in room: ${roomId}`);
+    console.log(adminAccessToken);
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${adminAccessToken}`,
+                "Content-Type": "application/json",
+            },
+        });
+
+        if (!response.ok) {
+            console.error("Failed to send read receipt:", response.statusText);
+        } else {
+            console.log(`Read receipt sent for event: ${eventId} in room: ${roomId}`);
+        }
+    } catch (error) {
+        console.error("Error sending read receipt:", error);
+    }
+};

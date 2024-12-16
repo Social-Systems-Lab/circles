@@ -14,7 +14,6 @@ export function ThirdColumn() {
     const controls = useAnimation();
 
     useEffect(() => {
-        console.log("sidePanelOpen", sidePanelOpen);
         if (sidePanelOpen) {
             controls.start({ flexBasis: "calc(100% / 3 - 210px)" });
         } else {

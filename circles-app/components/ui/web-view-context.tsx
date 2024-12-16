@@ -1,3 +1,4 @@
+// web-view-context.tsx - Context for the WebView component
 import React, { createContext, useContext, useRef } from "react";
 import WebView from "react-native-webview";
 

@@ -128,7 +128,7 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
     }, [displayedContent, onMarkerClick]);
 
     useEffect(() => {
-        console.log("Zooming to content", zoomContent);
+        // console.log("Zooming to content", zoomContent);
         if (!zoomContent) {
             return;
         }

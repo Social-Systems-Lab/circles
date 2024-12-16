@@ -52,7 +52,7 @@ function MissionStep({ userData, setUserData, nextStep, prevStep }: OnboardingSt
             }
         };
         fetchMissions();
-    }, [user?.handle]);
+    }, [user?._id, user?.handle]);
     return (
         <div className="space-y-4">
             <h2 className="mb-0 mt-0 text-2xl  font-semibold text-gray-800">Your Mission</h2>
