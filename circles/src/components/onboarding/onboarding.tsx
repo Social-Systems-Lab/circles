@@ -123,7 +123,12 @@ export default function Onboarding() {
     const CurrentStepComponent = steps[currentStepIndex].component;
 
     if (!isOpen || !userData) {
-        return null;
+        return (
+            <div
+                className="absolute right-0 top-0 z-[600] h-[30px] w-[30px] cursor-pointer"
+                onDoubleClick={() => setIsOpen(true)}
+            ></div>
+        );
     }
 
     return (

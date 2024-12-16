@@ -174,6 +174,8 @@ export const fetchCausesMatchedToCircle = async (circleId: string): Promise<Fetc
 
         const circleVector = circleObject.vector as number[];
 
+        console.log("Searching for causes near vector:", circleVector);
+
         // Perform the search for causes near the circle's vector
         const response = await client.search("causes", {
             vector: circleVector,
@@ -193,6 +195,11 @@ export const fetchCausesMatchedToCircle = async (circleId: string): Promise<Fetc
                 metrics,
             } as WithMetric<Cause>;
         });
+
+        if (causesMatched.length === 0) {
+            console.log("No causes matched.");
+            return { success: true, causes: causes as WithMetric<Cause>[] };
+        }
 
         return { success: true, causes: causesMatched as WithMetric<Cause>[] };
     } catch (error) {
@@ -236,6 +243,11 @@ export const fetchSkillsMatchedToCircle = async (circleId: string): Promise<Fetc
                 metrics,
             } as WithMetric<Skill>;
         });
+
+        if (skillsMatched.length === 0) {
+            console.log("No skills matched.");
+            return { success: true, skills: skills as WithMetric<Cause>[] };
+        }
 
         return { success: true, skills: skillsMatched as WithMetric<Skill>[] };
     } catch (error) {
