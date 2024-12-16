@@ -177,6 +177,12 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
 
     user.chatRoomMemberships = chatRoomMemberships as ChatRoomMembership[];
 
+    // append matrix username details
+    user.matrixUrl = process.env.NEXT_PUBLIC_MATRIX_URL;
+    if (user.matrixUsername) {
+        user.fullMatrixName = `@${user.matrixUsername}:${process.env.MATRIX_DOMAIN}`;
+    }
+
     return user as UserPrivate;
 };
 

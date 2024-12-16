@@ -97,6 +97,8 @@ export interface UserPrivate extends Circle {
     friends: Membership[];
     pendingRequests: MembershipRequest[];
     chatRoomMemberships: ChatRoomMembership[];
+    matrixUrl?: string;
+    fullMatrixName?: string;
 }
 
 export type Partial<T> = {
