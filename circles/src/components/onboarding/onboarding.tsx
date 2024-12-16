@@ -123,12 +123,7 @@ export default function Onboarding() {
     const CurrentStepComponent = steps[currentStepIndex].component;
 
     if (!isOpen || !userData) {
-        return (
-            <div
-                className="absolute right-0 top-0 z-[600] h-[30px] w-[30px] cursor-pointer"
-                onClick={() => setIsOpen(true)}
-            ></div>
-        );
+        return null;
     }
 
     return (
@@ -150,7 +145,7 @@ export default function Onboarding() {
                 <CardContent className="p-6">
                     <div className="flex gap-6">
                         <div className="hidden md:block">
-                            <ProfileSummary userData={userData} />
+                            <ProfileSummary userData={userData!} />
                         </div>
                         <div className="flex-1">
                             <Progress value={((currentStepIndex + 1) / totalSteps) * 100} className="mb-6" />
