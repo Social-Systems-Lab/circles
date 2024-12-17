@@ -149,6 +149,11 @@ const skillNs = "e8b887ec-5e3d-5383-9565-7fc72bb0e251";
 
 // Upsert function for circles
 export const upsertVbdCircles = async (circles: Circle[]) => {
+    if (circles.length <= 0) {
+        console.log("No circles to upsert.");
+        return;
+    }
+
     const client = await getQdrantClient();
 
     console.log("Getting embeddings for circles. Count:", circles.length);
@@ -196,6 +201,10 @@ export const upsertVbdPosts = async (posts: PostDisplay[]) => {
 
     // Ensure all posts have valid `_id` fields
     const validPosts = posts.filter((post) => post._id);
+    if (validPosts.length <= 0) {
+        console.log("No valid posts to upsert.");
+        return;
+    }
 
     console.log("Getting embeddings for posts...");
 
@@ -222,6 +231,10 @@ export const upsertVbdCauses = async () => {
 
     // Ensure all causes have valid `handle` fields
     const validCauses = causes.filter((cause) => cause.handle);
+    if (validCauses.length <= 0) {
+        console.log("No valid causes to upsert.");
+        return;
+    }
 
     console.log("Getting embeddings for causes...");
 
@@ -248,6 +261,10 @@ export const upsertVbdSkills = async () => {
 
     // Ensure all skills have valid `handle` fields
     const validSkills = skills.filter((skill) => skill.handle);
+    if (validSkills.length <= 0) {
+        console.log("No valid skills to upsert.");
+        return;
+    }
 
     console.log("Getting embeddings for skills...");
 
