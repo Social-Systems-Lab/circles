@@ -1,4 +1,4 @@
-// matrix-sync.tsx
+// matrix-sync.tsx - Syncs the user's room events and messages from the Matrix server and stores them in local storage and global state
 "use client";
 
 import {

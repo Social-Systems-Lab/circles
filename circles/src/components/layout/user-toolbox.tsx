@@ -1,4 +1,4 @@
-//user-toolbox.tsx
+//user-toolbox.tsx - Displays the user toolbox that contains the user's chat rooms, notifications, circles, contacts, and account settings
 "use client";
 
 import React, { Dispatch, useEffect, useMemo, useState } from "react";
@@ -46,6 +46,7 @@ import { ChatRoomComponent, fetchAndCacheMatrixUsers, LatestMessage, MessageRend
 import { logOut } from "../auth/actions";
 import { fetchJoinedRooms, fetchRoomDetails, fetchRoomMessages } from "@/lib/data/client-matrix";
 import { getCircleAction } from "./actions";
+import { Notifications } from "./notifications";
 
 type Notification = {
     id: number;
@@ -142,13 +143,13 @@ export const UserToolbox = () => {
     }, [user?.chatRoomMemberships, latestMessages]);
 
     const signOut = () => {
+        // clear the user data and redirect to the you've been signed out
+        logOut();
+
         setAuthInfo({ ...authInfo, authStatus: "unauthenticated" });
         setUser(undefined);
         // close the toolbox
         setUserToolboxState(undefined);
-
-        // clear the user data and redirect to the you've been signed out
-        logOut();
 
         router.push("/");
     };
@@ -267,21 +268,7 @@ export const UserToolbox = () => {
                         </pre> */}
                     </TabsContent>
                     <TabsContent value="notifications" className="m-0 flex-grow overflow-auto pt-1">
-                        {notifications.length > 0 ? (
-                            notifications.map((notification) => (
-                                <div
-                                    key={notification.id}
-                                    className="m-1 cursor-pointer rounded-lg p-2 hover:bg-gray-100"
-                                >
-                                    <p className="text-sm">{notification.message}</p>
-                                    <p className="text-xs text-muted-foreground">{notification.time}</p>
-                                </div>
-                            ))
-                        ) : (
-                            <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
-                                No notifications
-                            </div>
-                        )}
+                        <Notifications />
                     </TabsContent>
                     <TabsContent value="circles" className="m-0 flex-grow overflow-auto pt-1">
                         {circles.length > 0 ? (

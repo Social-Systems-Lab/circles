@@ -51,9 +51,14 @@ interface CircleSidePanelProps {
 export const CircleSidePanel: React.FC<CircleSidePanelProps> = ({ circle, isCompact, isDefaultCircle }) => {
     if ((!circle.causes || circle.causes.length <= 0) && (!circle.skills || circle.skills.length <= 0)) {
         return (
-            <div
-                className={`${isCompact ? "order-2 flex flex-col gap-3" : "mt-[70px] flex w-[300px] flex-col gap-3"}`}
-            ></div>
+            <div className={`${isCompact ? "order-2 flex flex-col gap-3" : "mt-[70px] flex w-[300px] flex-col gap-3"}`}>
+                {isDefaultCircle && (
+                    <div className="flex flex-col justify-start rounded-lg bg-[#f7f7f7] p-4">
+                        <div className="mb-2 font-semibold">Version</div>
+                        <div>{process.env.version}</div>
+                    </div>
+                )}
+            </div>
         );
     }
 
