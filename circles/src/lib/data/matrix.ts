@@ -105,7 +105,8 @@ export async function registerOrLoginMatrixUser(user: UserPrivate): Promise<stri
     let password = user.matrixPassword;
 
     if (!username) {
-        username = user.handle!;
+        // get username from handle but lowercase
+        username = user.handle!.toLowerCase();
         password = crypto.randomBytes(16).toString("hex");
         user.matrixUsername = username;
         user.matrixPassword = password;
@@ -117,7 +118,11 @@ export async function registerOrLoginMatrixUser(user: UserPrivate): Promise<stri
         }
         user.matrixUsername = username;
         user.fullMatrixName = `@${username}:${MATRIX_DOMAIN}`;
-        await updateCircle({ _id: user._id, matrixUsername: username, matrixPassword: password });
+        await updateCircle({
+            _id: user._id,
+            matrixUsername: username,
+            matrixPassword: password,
+        });
     }
 
     // get admin access token
@@ -135,10 +140,16 @@ export async function registerOrLoginMatrixUser(user: UserPrivate): Promise<stri
         let access_token = await loginMatrixUser(username, password!);
         user.matrixAccessToken = access_token;
 
-        // add user to global chat room
-        //await addUserToGlobalRoom(access_token);
+        // add user notifications room if not available
+        if (!user.matrixNotificationsRoomId) {
+            user.matrixNotificationsRoomId = await addUserNotificationsRoom(user);
+        }
 
-        await updateCircle({ _id: user._id, matrixAccessToken: access_token });
+        await updateCircle({
+            _id: user._id,
+            matrixAccessToken: access_token,
+            matrixNotificationsRoomId: user.matrixNotificationsRoomId,
+        });
         return access_token;
     }
 
@@ -162,12 +173,15 @@ export async function registerOrLoginMatrixUser(user: UserPrivate): Promise<stri
 
     console.log("Matrix user created successfully");
 
-    // Add user to global chat room
     const accessToken = await loginMatrixUser(username, password!);
-    //await addUserToGlobalRoom(accessToken);
-    user.matrixAccessToken = accessToken;
 
-    await updateCircle({ _id: user._id, matrixAccessToken: accessToken });
+    user.matrixAccessToken = accessToken;
+    user.matrixNotificationsRoomId = await addUserNotificationsRoom(user);
+    await updateCircle({
+        _id: user._id,
+        matrixAccessToken: accessToken,
+        matrixNotificationsRoomId: user.matrixNotificationsRoomId,
+    });
 
     return accessToken;
 }
@@ -217,11 +231,10 @@ export async function addUserToRoom(accessToken: string, roomId: string): Promis
     console.log(`User successfully added to room ${roomId}`);
 }
 
-async function getGlobalChatRoom(): Promise<string> {
+async function getUserNotificationsRoom(user: Circle): Promise<string> {
     let adminAccessToken = await getAdminAccessToken();
-
-    const roomAlias = `global:${MATRIX_DOMAIN}`;
-    const aliasWithHash = `#global:${MATRIX_DOMAIN}`;
+    let notificationsRoomId = `${user._id.toString()}-notification`;
+    const aliasWithHash = `#${notificationsRoomId}:${MATRIX_DOMAIN}`;
 
     try {
         // Check if the room already exists
@@ -237,17 +250,13 @@ async function getGlobalChatRoom(): Promise<string> {
 
         if (response.ok) {
             const { room_id } = await response.json();
-            console.log("Global chat room already exists:", room_id);
+            console.log("User notifications chat room already exists:", room_id);
             return room_id; // Return existing room ID
         } else {
-            console.error(
-                "***** Failed to get global chat room",
-                await response.text(),
-                `${MATRIX_URL}/_matrix/client/v3/directory/room/#${GLOBAL_ROOM_ALIAS}:${MATRIX_DOMAIN}`,
-            );
+            console.error("Failed to get user notifications room", await response.text());
         }
     } catch (error) {
-        console.warn("Global chat room does not exist. Creating a new one.");
+        console.warn("User noitfications chat room does not exist. Creating a new one.");
     }
 
     // Create the room if it doesn't exist
@@ -258,29 +267,28 @@ async function getGlobalChatRoom(): Promise<string> {
             "Content-Type": "application/json",
         },
         body: JSON.stringify({
-            name: "Global Chat",
-            room_alias_name: GLOBAL_ROOM_ALIAS,
+            name: "User Notifications",
+            room_alias_name: notificationsRoomId,
             visibility: "public",
             preset: "public_chat",
         }),
     });
 
     if (!createResponse.ok) {
-        console.error("Failed to create global chat room", await createResponse.text());
+        console.error("Failed to create user notifications chat room", await createResponse.text());
 
-        // room already exists return room
-
-        throw new Error("Failed to create global chat room");
+        throw new Error("Failed to create user notifications chat room");
     }
 
     const { room_id } = await createResponse.json();
-    console.log("Global chat room created:", room_id);
+    console.log("User notifications chat room created:", room_id);
     return room_id; // Return newly created room ID
 }
 
-export async function addUserToGlobalRoom(accessToken: string): Promise<void> {
-    const roomId = await getGlobalChatRoom();
-    await addUserToRoom(accessToken, roomId);
+export async function addUserNotificationsRoom(user: Circle): Promise<string> {
+    const roomId = await getUserNotificationsRoom(user);
+    await addUserToRoom(user.matrixAccessToken!, roomId);
+    return roomId;
 }
 
 export async function createMatrixRoom(

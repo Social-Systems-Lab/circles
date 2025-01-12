@@ -395,6 +395,7 @@ export const circleSchema = z.object({
     matrixAccessToken: z.string().optional(),
     matrixUsername: z.string().optional(),
     matrixPassword: z.string().optional(),
+    matrixNotificationsRoomId: z.string().optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;

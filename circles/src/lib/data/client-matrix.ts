@@ -1,6 +1,6 @@
+// client-matrix.ts - helper functions for interacting with the Matrix API
 import { UserPrivate } from "@/models/models";
 
-// client-matrix.ts
 export interface MatrixEvent {
     event_id: string;
     type: string;
