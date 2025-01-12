@@ -73,6 +73,18 @@ export async function checkAuth(account: Account | undefined): Promise<CheckAuth
 
                 // user is authenticated
                 let user = await getUserPrivate(payload.userDid as string);
+
+                console.log("Does user has a matrix username?");
+                if (!user.matrixAccessToken) {
+                    console.log("No registering matrix user");
+                    try {
+                        // check if user has a matrix account
+                        await registerOrLoginMatrixUser(user);
+                    } catch (error) {
+                        console.error("Error creating matrix session", error);
+                    }
+                }
+
                 return { user, authenticated: true };
             }
         }

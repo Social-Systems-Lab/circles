@@ -105,7 +105,8 @@ export async function registerOrLoginMatrixUser(user: UserPrivate): Promise<stri
     let password = user.matrixPassword;
 
     if (!username) {
-        username = user.handle!;
+        // get username from handle but lowercase
+        username = user.handle!.toLowerCase();
         password = crypto.randomBytes(16).toString("hex");
         user.matrixUsername = username;
         user.matrixPassword = password;
