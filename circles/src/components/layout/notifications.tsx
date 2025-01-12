@@ -48,9 +48,9 @@ export const Notifications = () => {
                     No notifications
                 </div>
             )}
-            <pre>
+            {/* <pre>
                 {JSON.stringify({ notifications, matrixNotificationsRoomId: user?.matrixNotificationsRoomId }, null, 2)}
-            </pre>
+            </pre> */}
         </div>
     );
 };
