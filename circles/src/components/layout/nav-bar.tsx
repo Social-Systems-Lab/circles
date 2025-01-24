@@ -1,3 +1,5 @@
+// nav-bar.tsx
+
 import type { Circle } from "../../models/models";
 import NavBarItems from "./nav-bar-items";
 import CircleMenu from "./circle-menu";

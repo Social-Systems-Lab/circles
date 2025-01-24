@@ -55,10 +55,6 @@ export default function HomeCover({ circle, isDefaultCircle, authorizedToEdit }:
                         </>
                     )}
                 </div>
-                <div className="absolute bottom-[-50px] right-2 flex flex-row gap-1">
-                    <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />
-                    <JoinButton circle={circle} />
-                </div>
             </div>
         </>
     );

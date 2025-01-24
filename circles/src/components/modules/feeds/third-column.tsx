@@ -29,7 +29,8 @@ export function ThirdColumn() {
         <motion.div
             className="min-w-[24px]"
             style={{
-                flexBasis: sidePanelOpen ? "calc(100% / 3 - 210px)" : "calc(100% / 3)",
+                flexGrow: sidePanelOpen ? 0 : 1,
+                flexBasis: sidePanelOpen ? "calc(100% / 3 - 210px)" : "0%",
                 transition: "flex-basis 0.3s ease",
             }}
         >
