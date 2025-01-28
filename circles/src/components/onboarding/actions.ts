@@ -185,7 +185,7 @@ export const fetchCausesMatchedToCircle = async (circleId: string): Promise<Fetc
         // Map the response to the Cause type
         const causesMatched: WithMetric<Cause>[] = response.map((item: any) => {
             const matchedCause = causes.find((cause: any) => cause.name === item.payload.name); // TODO fix so we store handle in db
-            const metrics: Metrics = { vibe: item.score ?? 1 }; // Use the score as the "vibe" metric
+            const metrics: Metrics = { similarity: item.score ?? 1 }; // Use the score as the "similarity" metric
 
             return {
                 handle: matchedCause?.handle,
@@ -233,7 +233,7 @@ export const fetchSkillsMatchedToCircle = async (circleId: string): Promise<Fetc
         // Map the response to the Skill type
         const skillsMatched: WithMetric<Skill>[] = response.map((item: any) => {
             const matchedSkill = skills.find((skill: any) => skill.name === item.payload.name); // TODO fix so we store handle in db
-            const metrics: Metrics = { vibe: item.score ?? 1 }; // Use the score as the "vibe" metric
+            const metrics: Metrics = { similarity: item.score ?? 1 }; // Use the score as the "similarity" metric
 
             return {
                 handle: matchedSkill?.handle,
@@ -282,7 +282,7 @@ export const fetchMissionStatements = async (circleId: string): Promise<FetchMis
 
         const missionsMatched: WithMetric<MissionDisplay>[] = [];
         for (const item of response) {
-            const metrics: Metrics = { vibe: item.score ?? 0 };
+            const metrics: Metrics = { similarity: item.score ?? 0 };
             if (!item.payload?.mission || (item.payload.mission as string).length <= 25) {
                 continue;
             }

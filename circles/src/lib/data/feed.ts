@@ -7,6 +7,31 @@ import { getUserByDid } from "./user";
 import { getMetrics } from "../utils/metrics";
 import { deleteVbdPost, upsertVbdPosts } from "./vdb";
 
+export const getFeedsByCircleId = async (circleId: string): Promise<Feed[]> => {
+    const feeds = await Feeds.find({
+        circleId,
+    }).toArray();
+    return feeds;
+};
+
+export const getPublicUserFeed = async (userDid: string): Promise<Feed | null> => {
+    const user = await getUserByDid(userDid);
+    if (!user) {
+        return null;
+    }
+
+    const feed = await Feeds.findOne({
+        circleId: user._id.toString(),
+        handle: "default",
+    });
+
+    if (feed?._id) {
+        feed._id = feed?._id.toString();
+    }
+
+    return feed;
+};
+
 export function extractMentions(content: string): Mention[] {
     const mentionPattern = /\[([^\]]+)\]\(\/circles\/([^)]+)\)/g;
     let match;
@@ -191,6 +216,148 @@ export const deleteComment = async (commentId: string): Promise<void> => {
         await updateHighlightedComment(comment.postId);
     }
 };
+
+// Function to get posts from multiple feeds
+export async function getPostsFromMultipleFeeds(
+    feedIds: string[],
+    userDid: string,
+    limit: number,
+    skip: number,
+    sort?: SortingOptions,
+): Promise<PostDisplay[]> {
+    const posts = (await Posts.aggregate([
+        { $match: { feedId: { $in: feedIds } } },
+
+        // Convert `feedId` to ObjectId for lookup
+        {
+            $addFields: {
+                feedIdObject: { $toObjectId: "$feedId" },
+            },
+        },
+
+        // Lookup author details
+        {
+            $lookup: {
+                from: "circles",
+                localField: "createdBy",
+                foreignField: "did",
+                as: "authorDetails",
+            },
+        },
+        { $unwind: "$authorDetails" },
+
+        // Lookup user reactions
+        {
+            $lookup: {
+                from: "reactions",
+                let: { postId: { $toString: "$_id" } },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: { $and: [{ $eq: ["$contentId", "$$postId"] }, { $eq: ["$userDid", userDid] }] },
+                        },
+                    },
+                ],
+                as: "userReaction",
+            },
+        },
+
+        // Lookup feed
+        {
+            $lookup: {
+                from: "feeds",
+                localField: "feedIdObject",
+                foreignField: "_id",
+                as: "feed",
+            },
+        },
+        {
+            $addFields: {
+                feed: { $arrayElemAt: ["$feed", 0] },
+                circleIdObject: { $toObjectId: { $arrayElemAt: ["$feed.circleId", 0] } },
+            },
+        },
+        {
+            $lookup: {
+                from: "circles",
+                localField: "circleIdObject",
+                foreignField: "_id",
+                as: "circle",
+            },
+        },
+        {
+            $addFields: {
+                circle: { $arrayElemAt: ["$circle", 0] },
+            },
+        },
+
+        // Sorting and pagination
+        { $sort: { createdAt: -1 } },
+        { $skip: skip },
+        { $limit: limit },
+
+        // Final projection
+        {
+            $project: {
+                _id: { $toString: "$_id" },
+                feedId: 1,
+                content: 1,
+                createdAt: 1,
+                reactions: 1,
+                media: 1,
+                createdBy: 1,
+                comments: 1,
+                location: 1,
+                circleType: { $literal: "post" },
+                author: {
+                    did: "$authorDetails.did",
+                    name: "$authorDetails.name",
+                    picture: "$authorDetails.picture",
+                    handle: "$authorDetails.handle",
+                },
+                userReaction: { $arrayElemAt: ["$userReaction.reactionType", 0] },
+                feed: {
+                    _id: { $toString: "$feed._id" },
+                    name: "$feed.name",
+                    handle: "$feed.handle",
+                },
+                circle: {
+                    _id: { $toString: "$circle._id" },
+                    name: "$circle.name",
+                    handle: "$circle.handle",
+                    picture: "$circle.picture",
+                },
+            },
+        },
+    ]).toArray()) as PostDisplay[];
+
+    return posts;
+}
+
+export async function getPostsFromMultipleFeedsWithMetrics(
+    feedIds: string[],
+    userDid: string,
+    limit: number,
+    skip: number,
+    sort?: SortingOptions,
+): Promise<PostDisplay[]> {
+    let posts = await getPostsFromMultipleFeeds(feedIds, userDid, limit, skip, sort);
+
+    let user: Circle | undefined = undefined;
+    if (userDid) {
+        user = await getUserByDid(userDid!);
+    }
+    const currentDate = new Date();
+
+    // get metrics for each post
+    for (const post of posts) {
+        post.metrics = await getMetrics(user, post, currentDate, sort);
+    }
+
+    // sort posts by rank
+    posts.sort((a, b) => (a.metrics?.rank ?? 0) - (b.metrics?.rank ?? 0));
+    return posts;
+}
 
 export const getPostsWithMetrics = async (
     feedId: string,

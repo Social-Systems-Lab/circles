@@ -88,7 +88,7 @@ export default function GlobalNavItems() {
                         </motion.span>
                     </motion.div>
                 </Link>
-
+                {/* 
                 <Link href={"/explore"}>
                     <motion.div
                         className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
@@ -110,7 +110,7 @@ export default function GlobalNavItems() {
                             Explore
                         </motion.span>
                     </motion.div>
-                </Link>
+                </Link> */}
 
                 <Link href={"/chat"}>
                     <motion.div
@@ -157,7 +157,7 @@ export default function GlobalNavItems() {
                         </motion.span>
                     </motion.div>
                 </Link>
-
+                {/* 
                 <Link href={"/settings"}>
                     <motion.div
                         className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
@@ -179,7 +179,7 @@ export default function GlobalNavItems() {
                             Settings
                         </motion.span>
                     </motion.div>
-                </Link>
+                </Link> */}
             </motion.nav>
         </>
     );

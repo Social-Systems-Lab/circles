@@ -166,7 +166,7 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
         <div ref={mapContainer} className="map-container z-10" style={{ width: "100%", height: "100%" }}>
             {/* Add the button for zooming into the user's location */}
             <div
-                className="fixed bottom-[160px] right-6 z-[50] cursor-pointer rounded-full bg-[#242424] p-[2px] hover:bg-[#304678e6] md:bottom-[90px]"
+                className="fixed bottom-[90px] right-6 z-[50] cursor-pointer rounded-full bg-[#242424] p-[2px] hover:bg-[#304678e6] md:bottom-[40px]"
                 onClick={zoomToUserLocation}
             >
                 <TbFocus2 className="m-[4px] text-white group-hover:text-white" size="30px" />

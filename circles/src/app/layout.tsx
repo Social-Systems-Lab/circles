@@ -14,6 +14,8 @@ import { MatrixSync } from "@/components/modules/chat/matrix-sync";
 import MapAndContentWrapper from "@/components/map/map";
 import { getServerSettings } from "@/lib/data/server-settings";
 import { SidePanel } from "@/components/layout/side-panel";
+import { Metadata } from "next";
+import { getDefaultCircle } from "@/lib/data/circle";
 
 const inter = Inter({ subsets: ["latin"] });
 const wix = Wix_Madefor_Display({ subsets: ["latin"], variable: "--font-wix-display" });
@@ -53,5 +55,19 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
         </Provider>
     );
 };
+
+export async function generateMetadata(): Promise<Metadata> {
+    // get circle from database
+    let circle = await getDefaultCircle();
+    let title = circle.name;
+    let description = circle.description;
+    let icon = circle.picture?.url ?? "/images/default-picture.png";
+
+    return {
+        title: title,
+        description: description,
+        icons: [icon],
+    };
+}
 
 export default RootLayout;

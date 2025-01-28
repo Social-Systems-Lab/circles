@@ -8,11 +8,12 @@ import { createPostAction } from "./actions";
 import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { PostForm } from "./post-form";
+import { DialogTitle } from "@radix-ui/react-dialog";
 
 type CreateNewPostProps = {
     circle: Circle;
     feed: Feed;
-    page: Page;
+    page?: Page;
     subpage?: string;
 };
 
@@ -71,6 +72,9 @@ export function CreateNewPost({ circle, feed, page, subpage }: CreateNewPostProp
             </DialogTrigger>
 
             <DialogContent className="rounded-[15px] bg-white p-0 sm:max-w-[425px] sm:rounded-[15px]">
+                <div className="hidden">
+                    <DialogTitle>Create a new post</DialogTitle>
+                </div>
                 <PostForm
                     circle={circle}
                     feed={feed}

@@ -1,3 +1,4 @@
+// post-list.tsx
 "use client";
 
 import { Circle, Feed, PostDisplay, CommentDisplay, Page, PostItemProps, ContentPreviewData } from "@/models/models";
@@ -73,7 +74,7 @@ import RichText from "./RichText";
 import { motion } from "framer-motion";
 import { ListFilter } from "@/components/utils/list-filter";
 import { useRouter } from "next/navigation";
-import Indicators, { ProximityIndicator, VibeScore } from "@/components/utils/indicators";
+import Indicators, { ProximityIndicator, SimilarityScore } from "@/components/utils/indicators";
 
 export const defaultMentionsInputStyle = {
     control: {
@@ -191,6 +192,7 @@ export const PostItem = ({
     inPreview,
     initialComments,
     initialShowAllComments,
+    isAggregateFeed,
 }: PostItemProps) => {
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
     const formattedDate = getPublishTime(post?.createdAt);
@@ -200,8 +202,8 @@ export const PostItem = ({
     const [, setContentPreview] = useAtom(contentPreviewAtom);
     const [user] = useAtom(userAtom);
     const isAuthor = user && post.createdBy === user?.did;
-    const canModerateFeature = feedFeaturePrefix + feed.handle + "_moderate";
-    const canModerate = isAuthorized(user, circle, canModerateFeature);
+    const canModerateFeature = feedFeaturePrefix + feed?.handle + "_moderate";
+    const canModerate = circle && isAuthorized(user, circle, canModerateFeature);
     const [isPending, startTransition] = useTransition();
     const [isFetchingComments, startCommentsTransition] = useTransition();
     const { toast } = useToast();
@@ -276,7 +278,7 @@ export const PostItem = ({
 
     const handleEditSubmit = async (formData: FormData) => {
         startTransition(async () => {
-            const response = await updatePostAction(formData, page, subpage);
+            const response = await updatePostAction(formData, page!, subpage);
 
             if (!response.success) {
                 toast({
@@ -296,7 +298,7 @@ export const PostItem = ({
 
     const handleDeleteConfirm = async () => {
         startTransition(async () => {
-            const response = await deletePostAction(post._id, page, subpage);
+            const response = await deletePostAction(post._id, page!, subpage);
 
             if (!response.success) {
                 toast({
@@ -496,9 +498,18 @@ export const PostItem = ({
                         >
                             {post.author?.name}
                         </div>
-                        <div className="cursor-pointer text-sm text-gray-500">{formattedDate}</div>
+                        <div className="cursor-pointer text-sm text-gray-500">
+                            {formattedDate}
+
+                            {isAggregateFeed && post.circle && post.feed && (
+                                <span>
+                                    &nbsp;• {post.circle.name} • {post.feed.name}
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
+
                 <div className="flex items-center space-x-2">
                     {(isAuthor || canModerate) && (
                         <DropdownMenu modal={false} open={openDropdown} onOpenChange={setOpenDropdown}>
@@ -669,9 +680,9 @@ export const PostItem = ({
 
                 {post.metrics && (
                     <>
-                        {post.metrics.vibe !== undefined && (
+                        {post.metrics.similarity !== undefined && (
                             <div className="text-[16px]">
-                                <VibeScore score={post.metrics.vibe} color={"#6b7280"} size={"1.25rem"} />
+                                <SimilarityScore score={post.metrics.similarity} color={"#6b7280"} size={"1.25rem"} />
                             </div>
                         )}
                         {post.metrics.distance !== undefined && (
@@ -1229,18 +1240,27 @@ const CommentItem = ({
 };
 
 type PostListProps = {
-    feed: Feed;
-    circle: Circle;
+    feed?: Feed;
+    circle?: Circle;
     posts: PostDisplay[];
-    page: Page;
+    page?: Page;
     subpage?: string;
+    isAggregateFeed?: boolean;
 };
 
-const PostList = ({ feed, circle, posts, page, subpage }: PostListProps) => {
+const PostList = ({ feed, circle, posts, page, subpage, isAggregateFeed }: PostListProps) => {
     return (
         <div className={"flex flex-col gap-6"}>
             {posts.map((post) => (
-                <PostItem key={post._id} post={post} circle={circle} feed={feed} page={page} subpage={subpage} />
+                <PostItem
+                    key={post._id}
+                    post={post}
+                    circle={isAggregateFeed ? post.circle : circle}
+                    feed={isAggregateFeed ? post.feed : feed}
+                    page={page}
+                    subpage={subpage}
+                    isAggregateFeed={isAggregateFeed}
+                />
             ))}
             {/* <pre>{JSON.stringify(posts, null, 2)}</pre> */}
         </div>

@@ -18,6 +18,9 @@ import {
     deleteComment,
     extractMentions,
     getPostsWithMetrics,
+    getPostsFromMultipleFeeds,
+    getFeedsByCircleId,
+    getPostsFromMultipleFeedsWithMetrics,
 } from "@/lib/data/feed";
 import { saveFile, isFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -36,8 +39,43 @@ import {
 } from "@/models/models";
 import { revalidatePath } from "next/cache";
 import { getCircleById, getCirclePath, getCirclesBySearchQuery } from "@/lib/data/circle";
-import { getUserByDid, getUserById } from "@/lib/data/user";
+import { getUserByDid, getUserById, getUserPrivate } from "@/lib/data/user";
 import { redirect } from "next/navigation";
+
+export async function getAggregatePostsAction(
+    userDid: string,
+    limit: number,
+    skip: number,
+    sortingOptions?: SortingOptions,
+): Promise<PostDisplay[]> {
+    // Get all circles the user is a member of
+    const user = await getUserPrivate(userDid);
+
+    // Collect all feeds the user has access to
+    const accessibleFeeds: string[] = [];
+
+    for (const membership of user.memberships) {
+        const { circleId, userGroups } = membership;
+
+        // Get all feeds in the circle
+        const feeds = await getFeedsByCircleId(circleId);
+        for (const feed of feeds) {
+            // Check if user has read access to the feed
+            if (feed.userGroups.some((group) => userGroups.includes(group))) {
+                accessibleFeeds.push(feed._id?.toString());
+            }
+        }
+    }
+
+    if (accessibleFeeds.length === 0) {
+        return [];
+    }
+
+    // Get posts from all accessible feeds
+    const posts = await getPostsFromMultipleFeedsWithMetrics(accessibleFeeds, userDid, limit, skip, sortingOptions);
+
+    return posts;
+}
 
 export async function getPostsAction(
     feedId: string,
@@ -66,7 +104,7 @@ export async function getPostsAction(
 
 export async function createPostAction(
     formData: FormData,
-    page: Page,
+    page?: Page,
     subpage?: string,
 ): Promise<{ success: boolean; message?: string; post?: Post }> {
     const userDid = await getAuthenticatedUserDid();

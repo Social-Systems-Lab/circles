@@ -51,13 +51,13 @@ export default function ChatPage() {
         <div className="flex h-screen">
             {/* Chat List Panel */}
             <div
-                className={`${isMobile && selectedChat ? "hidden" : "flex"} border-r border-gray-200 ${
+                className={`${isMobile && selectedChat ? "hidden" : "flex"} border-r border-gray-200 bg-white ${
                     isMobile ? "w-full" : "w-80"
                 }`}
             >
                 <ScrollArea className="flex-1">
-                    <div className="p-4">
-                        <h2 className="mb-4 text-xl font-semibold">Chats</h2>
+                    <div className="p-2">
+                        <h2 className="mb-4 mt-2 pl-2 pt-0 text-xl font-semibold">Chats</h2>
                         {sortedChats.map((chat) => {
                             const unreadCount =
                                 Object.entries(unreadCounts).find(([key]) => key.startsWith(chat.matrixRoomId!))?.[1] ||

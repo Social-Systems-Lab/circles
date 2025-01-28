@@ -219,6 +219,8 @@ export interface PostDisplay extends WithMetric<Post> {
     userReaction?: string;
     mentionsDisplay?: MentionDisplay[];
     handle?: string;
+    circle?: Circle;
+    feed?: Feed;
 }
 
 export const commentSchema = z.object({
@@ -327,7 +329,7 @@ export type WithMetric<T> = T & {
 
 export type Metrics = {
     rank?: number;
-    vibe?: number;
+    similarity?: number;
     distance?: number;
     proximity?: number;
     popularity?: number;
@@ -335,7 +337,7 @@ export type Metrics = {
 };
 
 export type Weights = {
-    vibe: number;
+    similarity: number;
     proximity: number;
     popularity: number;
     recentness: number;
@@ -422,17 +424,18 @@ export type ServerSettings = z.infer<typeof serverSettingsSchema>;
 
 export type Content = Circle | MemberDisplay | PostDisplay;
 
-export type SortingOptions = "vibe" | "near" | "pop" | "new" | "top" | "custom";
+export type SortingOptions = "similarity" | "near" | "pop" | "new" | "top" | "custom";
 
 export type PostItemProps = {
     post: PostDisplay;
-    circle: Circle;
-    feed: Feed;
-    page: Page;
+    circle?: Circle;
+    feed?: Feed;
+    page?: Page;
     subpage?: string;
     inPreview?: boolean;
     initialComments?: CommentDisplay[];
     initialShowAllComments?: boolean;
+    isAggregateFeed?: boolean;
 };
 
 export type ContentPreviewData =

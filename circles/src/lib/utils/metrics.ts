@@ -2,7 +2,7 @@ import { Circle, LngLat, MemberDisplay, Metrics, Post, PostDisplay, SortingOptio
 import { getVbdSimilarity } from "../data/vdb";
 
 const defaultWeights: Weights = {
-    vibe: 0.25,
+    similarity: 0.25,
     proximity: 0.25,
     recentness: 0.25,
     popularity: 0.25,
@@ -10,14 +10,14 @@ const defaultWeights: Weights = {
 
 const getWeightsBySortingOptions = (sortingOptions?: SortingOptions, customWeights?: Weights): Weights => {
     switch (sortingOptions) {
-        case "vibe":
-            return { vibe: 1, proximity: 0, recentness: 0, popularity: 0 };
+        case "similarity":
+            return { similarity: 1, proximity: 0, recentness: 0, popularity: 0 };
         case "near":
-            return { vibe: 0, proximity: 1, recentness: 0, popularity: 0 };
+            return { similarity: 0, proximity: 1, recentness: 0, popularity: 0 };
         case "new":
-            return { vibe: 0, proximity: 0, recentness: 1, popularity: 0 };
+            return { similarity: 0, proximity: 0, recentness: 1, popularity: 0 };
         case "pop":
-            return { vibe: 0, proximity: 0, recentness: 0, popularity: 1 };
+            return { similarity: 0, proximity: 0, recentness: 0, popularity: 1 };
         case "custom":
             return customWeights ?? defaultWeights;
         default:
@@ -44,7 +44,7 @@ export const getMetrics = async (
     let metrics: Metrics = {};
 
     if (user) {
-        metrics.vibe = await getVibe(user, item);
+        metrics.similarity = await getSimilarity(user, item);
         metrics.distance = calculateDistance(user.location?.lngLat, item.location?.lngLat);
         metrics.proximity = getProximity(user.location?.lngLat, item.location?.lngLat);
     }
@@ -71,20 +71,20 @@ export const getRank = (metrics: Metrics, customWeights?: Weights): number => {
     let weights = customWeights ?? defaultWeights;
     return (
         1 -
-        ((metrics.vibe !== undefined ? metrics.vibe : 0.5) * weights.vibe +
+        ((metrics.similarity !== undefined ? metrics.similarity : 0.5) * weights.similarity +
             (metrics.proximity !== undefined ? metrics.proximity : 0.5) * weights.proximity +
             (metrics.recentness !== undefined ? metrics.recentness : 0) * weights.recentness +
             (metrics.popularity !== undefined ? metrics.popularity : 0) * weights.popularity)
     );
 };
 
-export const getVibe = async (
+export const getSimilarity = async (
     user: Circle,
     item: PostDisplay | Circle | MemberDisplay,
 ): Promise<number | undefined> => {
     if (!user) return undefined;
     let similarity = await getVbdSimilarity(user, item);
-    return similarity ? normalizeCosineSimilarity(similarity) : similarity; // vibe between 0 and 1
+    return similarity ? normalizeCosineSimilarity(similarity) : similarity; // similarity between 0 and 1
 };
 
 export const getRecentness = (createdAt: Date | undefined, currentDate: Date): number | undefined => {

@@ -6,13 +6,13 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "../ui/hover-card"
 import { mapOpenAtom, triggerMapOpenAtom, zoomContentAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 
-interface VibeScoreProps {
+interface SimilarityScoreProps {
     score: number;
     color?: string;
     size?: string;
 }
 
-export function VibeScore({ score, color, size }: VibeScoreProps) {
+export function SimilarityScore({ score, color, size }: SimilarityScoreProps) {
     const formattedScore = (101 - score * 100).toFixed(0);
     const defaultColor = "#ac22c3";
     const iconColor = color ?? defaultColor;
@@ -31,7 +31,8 @@ export function VibeScore({ score, color, size }: VibeScoreProps) {
             <HoverCardContent className="z-[500] w-[300px] p-2 pt-[6px] text-[14px]">
                 <p>
                     <AudioLines className={`mr-1 inline-block h-5 w-5`} style={{ color: defaultColor }} />
-                    <b>Vibe:</b> How much your profile resonates with this content (lower number means higher resonance)
+                    <b>Similarity:</b> How similar your profile is to this content (lower number means higher
+                    similarity)
                 </p>
             </HoverCardContent>
         </HoverCard>
@@ -156,8 +157,9 @@ export function Indicators({ metrics, className, color, content, size, onMapPinC
             )}
         >
             {/* rounded-lg bg-white p-4 shadow */}
-            {/* Render VibeScore if 'vibe' is defined */}
-            {metrics.vibe !== undefined && <VibeScore score={metrics.vibe} color={color} size={size} />}
+            {metrics.similarity !== undefined && (
+                <SimilarityScore score={metrics.similarity} color={color} size={size} />
+            )}
 
             {/* Render ProximityIndicator if 'proximity' is defined */}
             {metrics.distance !== undefined && (
