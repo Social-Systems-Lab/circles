@@ -20,10 +20,10 @@ export const getPublicUserFeed = async (userDid: string): Promise<Feed | null> =
         return null;
     }
 
-    const feed = await Feeds.findOne({
+    const feed = (await Feeds.findOne({
         circleId: user._id.toString(),
         handle: "default",
-    });
+    })) as Feed;
 
     if (feed?._id) {
         feed._id = feed?._id.toString();

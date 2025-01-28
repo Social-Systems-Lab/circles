@@ -54,7 +54,7 @@ export const CircleHeader: React.FC<CircleHeaderProps> = ({ circle, page, subpag
                     <>
                         <ChevronRight className="h-4 w-4 text-gray-400" />
                         <span className="text-sm font-medium text-gray-600">
-                            <Link href={getPath(page)}>{page.name}</Link>
+                            <Link href={getPath(page)}>{page?.name}</Link>
                         </span>
                     </>
                 )}

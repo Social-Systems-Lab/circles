@@ -1255,8 +1255,8 @@ const PostList = ({ feed, circle, posts, page, subpage, isAggregateFeed }: PostL
                 <PostItem
                     key={post._id}
                     post={post}
-                    circle={isAggregateFeed ? post.circle : circle}
-                    feed={isAggregateFeed ? post.feed : feed}
+                    circle={isAggregateFeed ? post.circle! : circle!}
+                    feed={isAggregateFeed ? post.feed! : feed!}
                     page={page}
                     subpage={subpage}
                     isAggregateFeed={isAggregateFeed}

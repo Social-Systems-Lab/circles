@@ -428,8 +428,8 @@ export type SortingOptions = "similarity" | "near" | "pop" | "new" | "top" | "cu
 
 export type PostItemProps = {
     post: PostDisplay;
-    circle?: Circle;
-    feed?: Feed;
+    circle: Circle;
+    feed: Feed;
     page?: Page;
     subpage?: string;
     inPreview?: boolean;

@@ -73,8 +73,8 @@ type ImageItem = {
 };
 
 type PostFormProps = {
-    circle?: Circle;
-    feed?: Feed;
+    circle: Circle;
+    feed: Feed;
     user: any;
     initialPost?: PostDisplay;
     onSubmit: (formData: FormData) => Promise<void>;
