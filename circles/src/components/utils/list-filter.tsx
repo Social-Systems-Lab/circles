@@ -59,14 +59,14 @@ export const ListFilter = ({ onFilterChange }: ListFilterProps) => {
                     </Label>
                 </div>
                 <div className="flex-1">
-                    <RadioGroupItem value="vibe" id="vibe" className="peer sr-only" />
+                    <RadioGroupItem value="similarity" id="similarity" className="peer sr-only" />
                     <Label
-                        htmlFor="vibe"
+                        htmlFor="similarity"
                         className="flex h-8 cursor-pointer items-center justify-center border-b-2 border-transparent px-2 peer-data-[state=checked]:border-blue-500 dark:hover:bg-gray-800 dark:peer-data-[state=checked]:border-blue-400 dark:peer-data-[state=checked]:bg-blue-900"
                     >
                         <AudioLines className="mr-1 h-[18px] w-[18px] text-gray-500 peer-data-[state=checked]:text-blue-500 dark:text-gray-400 dark:peer-data-[state=checked]:text-blue-400" />
                         <span className="text-[13px] font-medium text-gray-700 peer-data-[state=checked]:text-blue-500 dark:text-gray-300 dark:peer-data-[state=checked]:text-blue-400">
-                            Vibe
+                            Similar
                         </span>
                     </Label>
                 </div>

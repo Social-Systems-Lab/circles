@@ -29,17 +29,17 @@ export const CircleHeader: React.FC<CircleHeaderProps> = ({ circle, page, subpag
         [isDefaultCircle, circle.handle],
     );
 
-    if (isCompact) {
+    if (true || isCompact) {
         return <div></div>;
     }
 
     return (
-        (<div className="mb-4 flex justify-center">
+        <div className="mb-4 flex justify-center">
             {/* mx-auto max-w-7xl justify-center px-4 sm:px-6 lg:px-8 */}
             <div className="fixed flex items-center justify-center space-x-2 rounded-full bg-white px-4 py-2 shadow-sm">
                 <Link href={getPath()} className="flex flex-row items-center justify-center gap-2">
                     {circle?.picture && (
-                        (<CirclePicture circle={circle} size={"24px"} />)
+                        <CirclePicture circle={circle} size={"24px"} />
                         // <Image
                         //     src={circle?.picture?.url}
                         //     alt="Circle Logo"
@@ -66,7 +66,7 @@ export const CircleHeader: React.FC<CircleHeaderProps> = ({ circle, page, subpag
                 )}
             </div>
             <div className="h-10"></div>
-        </div>)
+        </div>
     );
 };
 

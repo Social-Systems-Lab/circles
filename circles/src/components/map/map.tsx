@@ -166,7 +166,7 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
         <div ref={mapContainer} className="map-container z-10" style={{ width: "100%", height: "100%" }}>
             {/* Add the button for zooming into the user's location */}
             <div
-                className="fixed bottom-[160px] right-6 z-[50] cursor-pointer rounded-full bg-[#242424] p-[2px] hover:bg-[#304678e6] md:bottom-[90px]"
+                className="fixed bottom-[90px] right-6 z-[50] cursor-pointer rounded-full bg-[#242424] p-[2px] hover:bg-[#304678e6] md:bottom-[40px]"
                 onClick={zoomToUserLocation}
             >
                 <TbFocus2 className="m-[4px] text-white group-hover:text-white" size="30px" />
@@ -175,17 +175,8 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
     );
 };
 
-export default function MapAndContentWrapper({
-    mapboxKey,
-    children,
-}: {
-    mapboxKey: string;
-    children: React.ReactNode;
-}) {
-    const [mapOpen, setMapOpen] = useAtom(mapOpenAtom);
-    const [showMap, setShowMap] = useState(false);
+export function MapDisplay({ mapboxKey }: { mapboxKey: string }) {
     const [, setMapboxKey] = useAtom(mapboxKeyAtom);
-    const [triggerOpen, setTriggerOpen] = useAtom(triggerMapOpenAtom);
     const { windowWidth, windowHeight } = useWindowDimensions();
     const isMobile = windowWidth <= 768;
 
@@ -194,26 +185,13 @@ export default function MapAndContentWrapper({
         innerWidth = document.documentElement.offsetWidth;
     }
 
-    const contentWidth = isMobile ? (triggerOpen ? 0 : innerWidth) : triggerOpen ? 420 : innerWidth - 72;
-    const mapWidth = isMobile ? innerWidth : innerWidth - 420 - 72;
+    const mapWidth = isMobile ? innerWidth : innerWidth - 72;
 
     useEffect(() => {
         if (mapboxKey) {
             setMapboxKey(mapboxKey);
         }
     }, [mapboxKey, setMapboxKey]);
-
-    const handleAnimationComplete = () => {
-        // add a slight delay to the mapOpen state change to make the animation smoother
-        setMapOpen(triggerOpen);
-        if (triggerOpen) {
-            setTimeout(() => {
-                setShowMap(true);
-            }, 500);
-        } else {
-            setShowMap(false);
-        }
-    };
 
     // Fixes hydration errors
     const [isMounted, setIsMounted] = useState(false);
@@ -227,38 +205,7 @@ export default function MapAndContentWrapper({
 
     return (
         <div className="relative flex w-full flex-row overflow-hidden bg-[#2e4c6b]">
-            <motion.div
-                className="relative min-h-screen overflow-x-hidden bg-[#fbfbfb]"
-                animate={{ width: contentWidth }}
-                transition={{ duration: 0.5 }}
-                onAnimationComplete={handleAnimationComplete}
-                initial={false}
-            >
-                {children}
-            </motion.div>
-
-            {triggerOpen && (
-                <motion.div
-                    className="pointer-events-none absolute right-0 top-0 z-30 flex h-screen flex-col items-center justify-center"
-                    animate={{ width: mapWidth }}
-                    transition={{ duration: 0.5, delay: 0.3 }}
-                    initial={{ width: 0 }}
-                >
-                    <motion.div
-                        initial={{ opacity: 1 }}
-                        animate={{ opacity: showMap ? 0 : 1 }}
-                        transition={{ duration: 0.8, delay: 0.2 }}
-                        className="flex items-center justify-center"
-                    >
-                        <Image src="/images/earth-placeholder.png" alt="map-background" width={933} height={933} />
-                    </motion.div>
-
-                    {/* <Image src="/images/earth.png" alt="map-background" width={933} height={933} /> */}
-                    {/* <div className="h-[800px] w-[800px] rounded-full bg-[#e0e0e0]"></div> */}
-                </motion.div>
-            )}
-
-            {showMap && mapboxKey && (
+            {mapboxKey && (
                 <>
                     <div className="relative" style={{ width: mapWidth, height: windowHeight + "px" }}></div>
                     <div className={"fixed right-0 z-30"} style={{ width: mapWidth, height: windowHeight + "px" }}>
@@ -266,22 +213,31 @@ export default function MapAndContentWrapper({
                     </div>
                 </>
             )}
+            <SidePanel />
+        </div>
+    );
+}
 
-            {mapboxKey && (
-                <div
-                    className="group fixed bottom-[172px] right-6 z-[50] cursor-pointer rounded-full bg-[#242424] p-[2px] hover:bg-[#304678e6] md:bottom-[30px]"
-                    onClick={() => {
-                        setShowMap(false);
-                        setTriggerOpen(!triggerOpen);
-                    }}
-                >
-                    {mapOpen ? (
-                        <AiOutlineRead className="m-[4px] text-white group-hover:text-white" size="30px" />
-                    ) : (
-                        <LiaGlobeAfricaSolid className="text-white group-hover:text-white" size="38px" />
-                    )}
-                </div>
-            )}
+export default function MapAndContentWrapper({
+    mapboxKey,
+    children,
+}: {
+    mapboxKey: string;
+    children: React.ReactNode;
+}) {
+    // Fixes hydration errors
+    const [isMounted, setIsMounted] = useState(false);
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
+    if (!isMounted) {
+        return null;
+    }
+
+    return (
+        <div className="relative flex w-full flex-row overflow-hidden bg-[#2e4c6b]">
+            <div className="relative min-h-screen overflow-x-hidden bg-[#fbfbfb]">{children}</div>
 
             <SidePanel />
         </div>

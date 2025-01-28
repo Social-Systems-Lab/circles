@@ -9,13 +9,13 @@ import ChatModule from "./chat/chat";
 import ChatModuleLayout from "./chat/chat-layout";
 
 export const modules: Record<string, Module> = {
-    home: {
-        name: "Home",
-        handle: "home",
-        description: "Landing page",
-        excludeFromMenu: true,
-        defaultIcon: "AiOutlineHome",
-    },
+    // home: {
+    //     name: "Home",
+    //     handle: "home",
+    //     description: "Landing page",
+    //     excludeFromMenu: true,
+    //     defaultIcon: "AiOutlineHome",
+    // },
     settings: {
         name: "Settings",
         handle: "settings",

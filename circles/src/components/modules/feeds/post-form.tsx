@@ -73,8 +73,8 @@ type ImageItem = {
 };
 
 type PostFormProps = {
-    circle: Circle;
-    feed: Feed;
+    circle?: Circle;
+    feed?: Feed;
     user: any;
     initialPost?: PostDisplay;
     onSubmit: (formData: FormData) => Promise<void>;
@@ -162,8 +162,12 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
         startTransition(async () => {
             const formData = new FormData();
             formData.append("content", postContent);
-            formData.append("circleId", circle._id);
-            formData.append("feedId", feed._id);
+            if (circle) {
+                formData.append("circleId", circle._id);
+            }
+            if (feed) {
+                formData.append("feedId", feed._id);
+            }
             images.forEach((image, index) => {
                 if (image.file) {
                     formData.append("media", image.file);

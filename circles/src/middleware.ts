@@ -29,6 +29,7 @@ export async function middleware(request: NextRequest) {
     if (urlSegments.length === 0) {
         // route: /
         pageHandle = "";
+        return;
     } else if (urlSegments[0] === "circles") {
         circleHandle = urlSegments[1];
         if (urlSegments.length === 1) {
@@ -44,6 +45,7 @@ export async function middleware(request: NextRequest) {
     } else {
         // route: /<page-handle>
         pageHandle = urlSegments[0];
+        return;
     }
 
     // fetch access rules for specified circle and page
@@ -98,6 +100,6 @@ function redirectToErrorPage(request: NextRequest) {
 
 export const config = {
     matcher: [
-        "/((?!api|logged-out|login|unauthorized|unauthenticated|error|not-found|signup|demo/moviedb|demo/tech|demo/ratings|public/images|_next/static|robots.txt|sitemap.xml|favicon.ico|_next/image|.*\\.svg|.*\\.jpg|.*\\.png$).*)",
+        "/((?!api|explore|map|chat|settings|logged-out|login|unauthorized|unauthenticated|error|not-found|signup|demo/moviedb|demo/tech|demo/ratings|public/images|_next/static|robots.txt|sitemap.xml|favicon.ico|_next/image|.*\\.svg|.*\\.jpg|.*\\.png$).*)",
     ],
 };

@@ -105,19 +105,20 @@ export const defaultUserGroupsForUser: UserGroup[] = [
 
 // default pages every circle will be created with
 export const defaultPagesForUser: Page[] = [
-    {
-        name: "Home",
-        handle: "",
-        description: "Home page",
-        module: "home",
-        readOnly: true,
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
+    // {
+    //     name: "Home",
+    //     handle: "",
+    //     description: "Home page",
+    //     module: "home",
+    //     readOnly: true,
+    //     defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    // },
     {
         name: "Feeds",
         handle: "feeds",
         description: "Feeds page",
         module: "feeds",
+        readOnly: true,
         defaultUserGroups: ["admins", "moderators", "members", "everyone"],
     },
     {
@@ -560,19 +561,20 @@ export const skills: Skill[] = [
 
 // default pages every circle will be created with
 export const defaultPages: Page[] = [
-    {
-        name: "Home",
-        handle: "",
-        description: "Home page",
-        module: "home",
-        readOnly: true,
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
+    // {
+    //     name: "Home",
+    //     handle: "",
+    //     description: "Home page",
+    //     module: "home",
+    //     readOnly: true,
+    //     defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    // },
     {
         name: "Feeds",
         handle: "feeds",
         description: "Feeds page",
         module: "feeds",
+        readOnly: true,
         defaultUserGroups: ["admins", "moderators", "members", "everyone"],
     },
     {

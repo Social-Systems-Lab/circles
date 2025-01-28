@@ -27,12 +27,5 @@ export default async function HomeModule({ circle, isDefaultCircle, searchParams
     let circles = await getCirclesWithMetrics(userDid, circle?._id, searchParams?.sort as SortingOptions);
     let members = await getMembersWithMetrics(userDid, circle?._id, searchParams?.sort as SortingOptions);
 
-    return (
-        <ContentDisplayWrapper content={[...circles, ...members]}>
-            <HomeModuleWrapper circle={circle} isDefaultCircle={isDefaultCircle}>
-                <HomeCover circle={circle} isDefaultCircle={isDefaultCircle} authorizedToEdit={authorizedToEdit} />
-                <HomeContent circle={circle} isDefaultCircle={isDefaultCircle} authorizedToEdit={authorizedToEdit} />
-            </HomeModuleWrapper>
-        </ContentDisplayWrapper>
-    );
+    return <HomeContent circle={circle} isDefaultCircle={isDefaultCircle} authorizedToEdit={authorizedToEdit} />;
 }
