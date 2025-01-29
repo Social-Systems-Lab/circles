@@ -40,9 +40,12 @@ export const getMetrics = async (
     sortingOptions?: SortingOptions,
     customWeights?: Weights,
 ): Promise<Metrics> => {
-    let weights = getWeightsBySortingOptions(sortingOptions);
     let metrics: Metrics = {};
+    if (!item) {
+        return metrics;
+    }
 
+    let weights = getWeightsBySortingOptions(sortingOptions);
     if (user) {
         metrics.similarity = await getSimilarity(user, item);
         metrics.distance = calculateDistance(user.location?.lngLat, item.location?.lngLat);
@@ -106,10 +109,11 @@ export const getProximity = (lngLat1?: LngLat, lngLat2?: LngLat): number | undef
 };
 
 export const getPopularity = (item: PostDisplay | Circle | MemberDisplay) => {
-    let isCircle = item?.circleType === "circle" || item?.circleType === "user";
+    let isCircle = item?.circleType === "circle" || item?.circleType === "user" || item?.circleType === undefined;
     if (isCircle) {
         return getCirclePopularity(item as Circle);
     } else {
+        console.log(JSON.stringify(item));
         return getPostPopularity(item as PostDisplay);
     }
 };

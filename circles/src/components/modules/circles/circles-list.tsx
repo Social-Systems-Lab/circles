@@ -64,7 +64,7 @@ const CreateCircleButton: React.FC<InviteButtonProps> = ({ circle, isDefaultCirc
 interface CirclesListProps {
     circles: WithMetric<Circle>[];
     circle: Circle;
-    page: Page;
+    page?: Page;
     isDefaultCircle: boolean;
 }
 
@@ -127,7 +127,7 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle }: CirclesListProp
     return (
         <div className="flex flex-1 flex-row justify-center overflow-hidden">
             <div className="mb-4 ml-4 mr-4 mt-4 flex max-w-[1100px] flex-1 flex-col">
-                <CircleHeader circle={circle} page={page} isDefaultCircle={isDefaultCircle} />
+                {/* <CircleHeader circle={circle} page={page} isDefaultCircle={isDefaultCircle} /> */}
                 <div
                     className="flex w-full flex-row items-center gap-2"
                     style={{

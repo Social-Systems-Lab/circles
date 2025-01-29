@@ -14,6 +14,7 @@ import { AiOutlineHome, AiOutlineSetting } from "react-icons/ai";
 import { IoChatbubbleOutline } from "react-icons/io5";
 import { MdOutlineExplore } from "react-icons/md";
 import { LiaGlobeAfricaSolid } from "react-icons/lia";
+import { FaRegCircle } from "react-icons/fa6";
 
 function GlobalNavItem({
     item,
@@ -111,6 +112,29 @@ export default function GlobalNavItems() {
                         </motion.span>
                     </motion.div>
                 </Link> */}
+
+                <Link href={"/circles"}>
+                    <motion.div
+                        className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
+                            pathname === "/circles" ? "text-[#495cff]" : "text-[#696969]"
+                        }`}
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.95 }}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: 2 * 0.1 }}
+                    >
+                        <FaRegCircle size={"24px"} />
+                        <motion.span
+                            className="mt-[4px] text-[11px]"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: 0.3, delay: 0.2 + 2 * 0.1 }}
+                        >
+                            Circles
+                        </motion.span>
+                    </motion.div>
+                </Link>
 
                 <Link href={"/chat"}>
                     <motion.div

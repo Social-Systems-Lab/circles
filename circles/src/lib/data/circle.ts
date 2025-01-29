@@ -67,6 +67,23 @@ export const getCirclesWithMetrics = async (
     return circles;
 };
 
+export const getMetricsForCircles = async (circles: WithMetric<Circle>[], userDid: string, sort?: SortingOptions) => {
+    const currentDate = new Date();
+    let user = undefined;
+    if (userDid) {
+        user = (await Circles.findOne({ did: userDid })) ?? undefined;
+    }
+
+    // get metrics for each circle
+    for (const circle of circles) {
+        circle.metrics = await getMetrics(user, circle, currentDate, sort);
+    }
+
+    // sort circles by rank
+    circles.sort((a, b) => (a.metrics?.rank ?? 0) - (b.metrics?.rank ?? 0));
+    return circles;
+};
+
 export const createDefaultCircle = (): Circle => {
     let circle: Circle = {
         name: "Circles",

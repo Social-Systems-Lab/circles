@@ -291,6 +291,116 @@ export async function getPostsFromMultipleFeeds(
             },
         },
 
+        //**********************************************************
+
+        // **Adjusted Lookup for mentions in the post**
+        {
+            $lookup: {
+                from: "circles",
+                let: {
+                    mentionIds: {
+                        $ifNull: [{ $map: { input: "$mentions", as: "m", in: "$$m.id" } }, []],
+                    },
+                },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: { $in: [{ $toString: "$_id" }, "$$mentionIds"] },
+                        },
+                    },
+                    {
+                        $project: {
+                            _id: { $toString: "$_id" },
+                            did: 1,
+                            name: 1,
+                            picture: 1,
+                            location: 1,
+                            description: 1,
+                            cover: 1,
+                            handle: 1,
+                        },
+                    },
+                ],
+                as: "mentionsDetails",
+            },
+        },
+
+        // Lookup for highlighted comment
+        {
+            $lookup: {
+                from: "comments",
+                let: { highlightedCommentId: { $toObjectId: "$highlightedCommentId" } },
+                pipeline: [
+                    { $match: { $expr: { $eq: ["$_id", "$$highlightedCommentId"] } } },
+                    // Lookup for highlighted comment author
+                    {
+                        $lookup: {
+                            from: "circles",
+                            localField: "createdBy",
+                            foreignField: "did",
+                            as: "authorDetails",
+                        },
+                    },
+                    { $unwind: "$authorDetails" },
+                    // Lookup for reactions on highlighted comment
+                    {
+                        $lookup: {
+                            from: "reactions",
+                            let: { commentId: { $toString: "$_id" } },
+                            pipeline: [
+                                {
+                                    $match: {
+                                        $expr: {
+                                            $and: [
+                                                { $eq: ["$contentId", "$$commentId"] },
+                                                { $eq: ["$userDid", userDid] },
+                                            ],
+                                        },
+                                    },
+                                },
+                            ],
+                            as: "userReaction",
+                        },
+                    },
+                    // **Adjusted Lookup for mentions in highlighted comment**
+                    {
+                        $lookup: {
+                            from: "circles",
+                            let: {
+                                mentionIds: {
+                                    $ifNull: [{ $map: { input: "$mentions", as: "m", in: "$$m.id" } }, []],
+                                },
+                            },
+                            pipeline: [
+                                {
+                                    $match: {
+                                        $expr: { $in: [{ $toString: "$_id" }, "$$mentionIds"] },
+                                    },
+                                },
+                                {
+                                    $project: {
+                                        _id: { $toString: "$_id" },
+                                        did: 1,
+                                        name: 1,
+                                        picture: 1,
+                                        location: 1,
+                                        description: 1,
+                                        cover: 1,
+                                        handle: 1,
+                                    },
+                                },
+                            ],
+                            as: "mentionsDetails",
+                        },
+                    },
+                ],
+                as: "highlightedComment",
+            },
+        },
+        { $unwind: { path: "$highlightedComment", preserveNullAndEmptyArrays: true } },
+
+        //**********************************************************
+
         // Sorting and pagination
         { $sort: { createdAt: -1 } },
         { $skip: skip },
@@ -309,13 +419,98 @@ export async function getPostsFromMultipleFeeds(
                 comments: 1,
                 location: 1,
                 circleType: { $literal: "post" },
+
+                highlightedCommentId: { $toString: "$highlightedCommentId" },
+                mentions: 1,
+                // **Adjusted mapping of mentionsDisplay**
+                mentionsDisplay: {
+                    $map: {
+                        input: { $ifNull: ["$mentions", []] },
+                        as: "mention",
+                        in: {
+                            type: "$$mention.type",
+                            id: "$$mention.id",
+                            circle: {
+                                $arrayElemAt: [
+                                    {
+                                        $filter: {
+                                            input: { $ifNull: ["$mentionsDetails", []] },
+                                            as: "circle",
+                                            cond: { $eq: ["$$circle._id", "$$mention.id"] },
+                                        },
+                                    },
+                                    0,
+                                ],
+                            },
+                        },
+                    },
+                },
+
                 author: {
                     did: "$authorDetails.did",
                     name: "$authorDetails.name",
                     picture: "$authorDetails.picture",
+                    location: "$authorDetails.location",
+                    description: "$authorDetails.description",
+                    cover: "$authorDetails.cover",
                     handle: "$authorDetails.handle",
                 },
+
                 userReaction: { $arrayElemAt: ["$userReaction.reactionType", 0] },
+
+                // Project highlightedComment
+                highlightedComment: {
+                    $cond: {
+                        if: { $ifNull: ["$highlightedComment", false] },
+                        then: {
+                            _id: { $toString: "$highlightedComment._id" },
+                            postId: "$highlightedComment.postId",
+                            parentCommentId: { $toString: "$highlightedComment.parentCommentId" },
+                            content: "$highlightedComment.content",
+                            createdBy: "$highlightedComment.createdBy",
+                            createdAt: "$highlightedComment.createdAt",
+                            reactions: "$highlightedComment.reactions",
+                            replies: "$highlightedComment.replies",
+                            isDeleted: "$highlightedComment.isDeleted",
+                            mentions: "$highlightedComment.mentions",
+                            // **Adjusted mapping of mentionsDisplay in highlightedComment**
+                            mentionsDisplay: {
+                                $map: {
+                                    input: { $ifNull: ["$highlightedComment.mentions", []] },
+                                    as: "mention",
+                                    in: {
+                                        type: "$$mention.type",
+                                        id: "$$mention.id",
+                                        circle: {
+                                            $arrayElemAt: [
+                                                {
+                                                    $filter: {
+                                                        input: { $ifNull: ["$highlightedComment.mentionsDetails", []] },
+                                                        as: "circle",
+                                                        cond: { $eq: ["$$circle._id", "$$mention.id"] },
+                                                    },
+                                                },
+                                                0,
+                                            ],
+                                        },
+                                    },
+                                },
+                            },
+                            author: {
+                                did: "$highlightedComment.authorDetails.did",
+                                name: "$highlightedComment.authorDetails.name",
+                                picture: "$highlightedComment.authorDetails.picture",
+                                location: "$highlightedComment.authorDetails.location",
+                                description: "$highlightedComment.authorDetails.description",
+                                cover: "$highlightedComment.authorDetails.cover",
+                                handle: "$highlightedComment.authorDetails.handle",
+                            },
+                            userReaction: { $arrayElemAt: ["$highlightedComment.userReaction.reactionType", 0] },
+                        },
+                        else: null,
+                    },
+                },
+
                 feed: {
                     _id: { $toString: "$feed._id" },
                     name: "$feed.name",
