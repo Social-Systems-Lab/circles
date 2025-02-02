@@ -724,3 +724,10 @@ export type AuthInfo = {
 export type MatrixUserCache = {
     [username: string]: Circle;
 };
+
+export type TabOptions = "following" | "discover";
+
+export type UserSettings = {
+    feedTab: TabOptions;
+    circlesTab: TabOptions;
+};

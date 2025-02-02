@@ -1,3 +1,4 @@
+// feed.ts - Feed data access functions
 import { Feeds, Posts, Comments, Reactions, Circles } from "./db";
 import { ObjectId } from "mongodb";
 import { Feed, Post, PostDisplay, Comment, CommentDisplay, Circle, Mention, SortingOptions } from "@/models/models";
@@ -14,6 +15,11 @@ export const getFeedsByCircleId = async (circleId: string): Promise<Feed[]> => {
     return feeds;
 };
 
+export async function getPublicFeeds(): Promise<Feed[]> {
+    const feeds = await Feeds.find({ userGroups: "everyone" }).toArray();
+    return feeds;
+}
+
 export const getPublicUserFeed = async (userDid: string): Promise<Feed | null> => {
     const user = await getUserByDid(userDid);
     if (!user) {
@@ -23,6 +29,7 @@ export const getPublicUserFeed = async (userDid: string): Promise<Feed | null> =
     const feed = (await Feeds.findOne({
         circleId: user._id.toString(),
         handle: "default",
+        userGroups: "everyone",
     })) as Feed;
 
     if (feed?._id) {

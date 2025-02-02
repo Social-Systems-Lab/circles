@@ -51,7 +51,7 @@ import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { fetchCausesMatchedToCircle, fetchSkillsMatchedToCircle } from "../onboarding/actions";
 import { ScrollArea } from "../ui/scroll-area";
-import ItemCard from "../onboarding/item-card";
+import { ItemGridCard } from "../onboarding/item-card";
 import SelectedItemBadge from "../onboarding/selected-item-badge";
 
 type RenderFieldProps = {
@@ -995,7 +995,7 @@ const ItemSelectionField: React.FC<ItemSelectionFieldProps> = ({
                         )}
 
                         {visibleItems.map((item) => (
-                            <ItemCard
+                            <ItemGridCard
                                 key={item.handle}
                                 item={item}
                                 isSelected={(formField.value || []).includes(item.handle)}

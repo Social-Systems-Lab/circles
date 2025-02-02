@@ -1,11 +1,21 @@
+"use client";
+
 import NavBarItems from "./nav-bar-items";
 import CircleMenu from "./circle-menu";
 import { getDefaultCircle } from "@/lib/data/circle";
 import Image from "next/image";
 import Link from "next/link";
 import GlobalNavItems from "./global-nav-items";
+import { useAtom } from "jotai";
+import { authInfoAtom } from "@/lib/data/atoms";
 
-export default async function GlobalNav() {
+export default function GlobalNav() {
+    // hide nav if not logged in
+    const [authInfo, setAuthInfo] = useAtom(authInfoAtom);
+    if (authInfo.authStatus !== "authenticated") {
+        return null;
+    }
+
     return (
         <>
             <div className={`order-last h-[72px] w-full flex-shrink-0 md:order-first md:h-full md:w-[72px]`}></div>

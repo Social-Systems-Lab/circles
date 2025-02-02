@@ -1,4 +1,4 @@
-// post-list.tsx
+// post-list.tsx - component for displaying a list of posts
 "use client";
 
 import { Circle, Feed, PostDisplay, CommentDisplay, Page, PostItemProps, ContentPreviewData } from "@/models/models";

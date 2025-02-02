@@ -113,7 +113,7 @@ export const getPopularity = (item: PostDisplay | Circle | MemberDisplay) => {
     if (isCircle) {
         return getCirclePopularity(item as Circle);
     } else {
-        console.log(JSON.stringify(item));
+        //console.log(JSON.stringify(item));
         return getPostPopularity(item as PostDisplay);
     }
 };

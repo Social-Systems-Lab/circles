@@ -58,16 +58,17 @@ function MissionStep({ userData, setUserData, nextStep, prevStep }: OnboardingSt
             <h2 className="mb-0 mt-0 text-2xl  font-semibold text-gray-800">Your Mission</h2>
             <p className="text-gray-600">Define your purpose and the change you want to see in the world.</p>
             {missionStatements.length > 0 && (
-                <div className="relative mb-4 hidden h-32 w-full rounded-lg pl-1 pr-1 md:flex md:h-64 md:pl-4 md:pr-4">
-                    <Carousel>
+                <div className="hidden">
+                    {/* hidden for now since it doesn't work well on small screens */}
+                    <Carousel className="w-full overflow-hidden">
                         <CarouselContent>
                             {missionStatements.map((missionItem, index) => (
                                 <CarouselItem key={index}>
-                                    <Card className="relative h-full bg-gray-100 p-4">
+                                    <Card className="relative h-full w-full bg-gray-100 p-4">
                                         <div className="relative mx-auto flex flex-row items-center justify-center gap-2">
                                             <FaQuoteRight size="28px" className="mb-2 text-blue-500" />
                                         </div>
-                                        <p className="mb-2 select-none text-sm italic text-gray-800">
+                                        <p className="mb-2 w-full select-none overflow-hidden text-sm italic text-gray-800">
                                             {missionItem.mission}
                                         </p>
                                         <div className="absolute bottom-0 right-0 flex flex-row items-center justify-center gap-2 p-2 pr-4">
@@ -85,26 +86,6 @@ function MissionStep({ userData, setUserData, nextStep, prevStep }: OnboardingSt
                 </div>
             )}
 
-            {/* 
-            <Card className="relative mb-4 bg-gray-100 p-4">
-                <div className="relative mx-auto flex flex-row items-center justify-center gap-2">
-                    <FaQuoteRight size="28px" className="mb-2 text-blue-500" />
-                </div>
-
-                <p className="mb-2 text-sm italic text-gray-800">
-                    My mission is to create a world where every child has access to quality education, regardless of
-                    their background. I believe that by empowering young minds, we can solve the world's most pressing
-                    challenges and create a brighter future for all.
-                </p>
-
-                <div className="absolute bottom-0 right-0 flex flex-row items-center justify-center gap-2 p-2 pr-4">
-                    <Avatar className="h-[28px] w-[28px]">
-                        <AvatarImage src="https://i.pravatar.cc/28" alt="Alex Lee" />
-                        <AvatarFallback>AL</AvatarFallback>
-                    </Avatar>
-                    <span className="text-sm font-medium">Alex Lee</span>
-                </div>
-            </Card> */}
             <div className="space-y-2">
                 <Label htmlFor="mission">What is your mission in this world?</Label>
                 <Textarea

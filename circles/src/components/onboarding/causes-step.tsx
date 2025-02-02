@@ -1,3 +1,5 @@
+// causes-step.tsx
+
 "use client";
 
 import { useState, useEffect, useTransition, useMemo } from "react";
@@ -5,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Search } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import ItemCard from "./item-card";
 import SelectedItemBadge from "./selected-item-badge";
 import { OnboardingStepProps, OnboardingUserData } from "./onboarding";
 import { causes } from "@/lib/data/constants";
@@ -13,11 +14,14 @@ import { fetchCausesMatchedToCircle, saveCausesAction } from "./actions";
 import { Cause } from "@/models/models";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
+import { useIsMobile } from "../utils/use-is-mobile";
+import { ItemGrid, ItemList } from "./item-card";
 
 function CausesStep({ userData, setUserData, nextStep, prevStep }: OnboardingStepProps) {
     const [causeSearch, setCauseSearch] = useState("");
     const [allCauses, setAllCauses] = useState<Cause[]>([]);
     const [user, setUser] = useAtom(userAtom);
+    const isMobile = useIsMobile();
 
     const visibleCauses = useMemo(() => {
         if (causeSearch) {
@@ -98,13 +102,28 @@ function CausesStep({ userData, setUserData, nextStep, prevStep }: OnboardingSte
                 />
             </div>
             <ScrollArea className="h-[360px] w-full rounded-md border-0">
-                <div className="grid grid-cols-3 gap-4 p-[4px]">
-                    {isPending && (!visibleCauses || visibleCauses.length <= 0) && (
-                        <div className="col-span-3 flex items-center justify-center">
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Loading causes...
-                        </div>
-                    )}
+                {isPending && (!visibleCauses || visibleCauses.length <= 0) && (
+                    <div className="col-span-3 flex items-center justify-center">
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Loading causes...
+                    </div>
+                )}
+
+                {isMobile ? (
+                    <ItemList
+                        items={visibleCauses}
+                        selectedItems={userData.selectedCauses}
+                        onToggle={handleCauseToggle}
+                    />
+                ) : (
+                    <ItemGrid
+                        items={visibleCauses}
+                        selectedItems={userData.selectedCauses}
+                        onToggle={handleCauseToggle}
+                        isCause
+                    />
+                )}
+                {/* 
 
                     {visibleCauses.map((cause) => (
                         <ItemCard
@@ -114,8 +133,7 @@ function CausesStep({ userData, setUserData, nextStep, prevStep }: OnboardingSte
                             onToggle={handleCauseToggle}
                             isCause={true}
                         />
-                    ))}
-                </div>
+                    ))} */}
             </ScrollArea>
             <div className="flex flex-wrap">
                 {userData.selectedCauses.map((cause) => (

@@ -81,7 +81,7 @@ export const ImageGallery: React.FC = () => {
         if (!imageGallery) return;
 
         const updateSize = () => {
-            console.log("updateSize", showFullScreen);
+            // console.log("updateSize", showFullScreen);
             if (galleryRef.current) {
                 let width = window.innerWidth;
                 if (typeof document !== "undefined") {

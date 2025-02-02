@@ -105,7 +105,7 @@ export const UserToolbox = () => {
     useEffect(() => {
         if (!user?.matrixAccessToken) return;
 
-        console.log("User chat memberships", user?.chatRoomMemberships);
+        // console.log("User chat memberships", user?.chatRoomMemberships);
         setChats(user.chatRoomMemberships.map((m) => m.chatRoom));
     }, [user?.chatRoomMemberships, user?.matrixAccessToken]);
 
@@ -142,16 +142,16 @@ export const UserToolbox = () => {
         return sorted;
     }, [user?.chatRoomMemberships, latestMessages]);
 
-    const signOut = () => {
+    const signOut = async () => {
         // clear the user data and redirect to the you've been signed out
-        logOut();
+        await logOut();
 
         setAuthInfo({ ...authInfo, authStatus: "unauthenticated" });
         setUser(undefined);
         // close the toolbox
         setUserToolboxState(undefined);
 
-        router.push("/");
+        router.push("/welcome");
     };
 
     if (userToolboxState === undefined) return null;

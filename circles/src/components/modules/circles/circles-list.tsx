@@ -21,6 +21,7 @@ import CircleTags from "./circle-tags";
 import CircleHeader from "./circle-header";
 import Indicators from "@/components/utils/indicators";
 import { ListFilter } from "@/components/utils/list-filter";
+import emptyFeed from "@images/empty-feed.png";
 
 export const twoLineEllipsisStyle = {
     WebkitLineClamp: 2,
@@ -66,9 +67,10 @@ interface CirclesListProps {
     circle: Circle;
     page?: Page;
     isDefaultCircle: boolean;
+    activeTab?: string;
 }
 
-const CirclesList = ({ circle, circles, page, isDefaultCircle }: CirclesListProps) => {
+const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab }: CirclesListProps) => {
     const [user] = useAtom(userAtom);
     const isCompact = useIsCompact();
     const isMobile = useIsMobile();
@@ -144,6 +146,21 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle }: CirclesListProp
                 </div>
 
                 <ListFilter onFilterChange={handleFilterChange} />
+
+                {filteredCircles.length === 0 && activeTab === "following" && (
+                    <div className="flex h-full flex-col items-center justify-center">
+                        <Image src={emptyFeed} alt="No posts yet" width={400} />
+                        <h4>No circles</h4>
+                        <div className="max-w-[700px] pl-4 pr-4">
+                            You are not following any circles. Try the discover tab to find new circles to follow.
+                        </div>
+                        <div className="mt-4 flex flex-row gap-2">
+                            <Button variant={"outline"} onClick={() => router.push("?tab=discover")}>
+                                Discover
+                            </Button>
+                        </div>
+                    </div>
+                )}
 
                 <motion.div
                     variants={containerVariants}

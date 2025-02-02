@@ -37,7 +37,7 @@ export async function middleware(request: NextRequest) {
             pageHandle = "circles";
         } else if (urlSegments.length === 2) {
             // route: /circles/<circle-handle>
-            pageHandle = "";
+            pageHandle = "feeds";
         } else if (urlSegments.length >= 3) {
             // route: /circles/<circle-handle>/<page-handle>
             pageHandle = urlSegments[2];

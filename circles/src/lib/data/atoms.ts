@@ -9,9 +9,11 @@ import {
     UserToolboxData,
     AuthInfo,
     MatrixUserCache,
+    UserSettings,
 } from "@/models/models";
 import { atom } from "jotai";
 import { RoomData } from "./client-matrix";
+import { atomWithStorage } from "jotai/utils";
 
 export const userAtom = atom<UserPrivate | undefined>(undefined);
 
@@ -33,3 +35,4 @@ export const latestMessagesAtom = atom<Record<string, any>>({});
 export const roomDataAtom = atom<Record<string, RoomData>>({});
 export const roomMessagesAtom = atom<Record<string, any[]>>({});
 export const lastReadTimestampsAtom = atom<Record<string, number>>({});
+export const userSettingsAtom = atomWithStorage<UserSettings>("userSettings", { feedTab: "following" });

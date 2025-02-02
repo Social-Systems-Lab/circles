@@ -28,7 +28,12 @@ export const getDefaultCircle = async (inServerConfig: ServerSettings | null = n
 };
 
 export const getCircles = async (parentCircleId?: string): Promise<Circle[]> => {
-    let circles = await Circles.find({ parentCircleId: parentCircleId, circleType: "circle" }).toArray();
+    let circles: Circle[] = [];
+    if (!parentCircleId) {
+        circles = await Circles.find({ circleType: "circle" }).toArray();
+    } else {
+        circles = await Circles.find({ parentCircleId: parentCircleId, circleType: "circle" }).toArray();
+    }
     circles.forEach((circle: Circle) => {
         if (circle._id) {
             circle._id = circle._id.toString();

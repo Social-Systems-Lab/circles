@@ -17,7 +17,7 @@ export const signupFormActionHandler: FormActionHandler = {
         tools.setAuthenticated(true);
 
         // redirect to requested page
-        let redirectUrl = tools.searchParams?.get("redirectTo") ?? "/";
+        let redirectUrl = tools.searchParams?.get("redirectTo") ?? `/circles/${response.data.user.handle}`;
         router.push(redirectUrl);
         return response;
     },

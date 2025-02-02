@@ -1,4 +1,4 @@
-// feed.tsx
+// feed.tsx - component for displaying feeds
 "use client";
 
 import DynamicForm from "@/components/forms/dynamic-form";
@@ -13,6 +13,9 @@ import { useAtom } from "jotai";
 import { isAuthorized } from "@/lib/auth/client-auth";
 import { useRouter } from "next/navigation";
 import { ListFilter } from "@/components/utils/list-filter";
+import { Button } from "@/components/ui/button";
+import emptyFeed from "@images/empty-feed.png";
+import Image from "next/image";
 
 export type FeedComponentProps = {
     circle: Circle;
@@ -72,9 +75,10 @@ export const FeedComponent = ({ circle, posts, page, subpage, feed, isDefaultCir
 export type AggregateFeedComponentProps = {
     posts: PostDisplay[];
     userFeed: Feed;
+    activeTab: string;
 };
 
-export const AggregateFeedComponent = ({ posts, userFeed }: AggregateFeedComponentProps) => {
+export const AggregateFeedComponent = ({ posts, userFeed, activeTab }: AggregateFeedComponentProps) => {
     const isCompact = useIsCompact();
     const [user] = useAtom(userAtom);
 
@@ -87,10 +91,40 @@ export const AggregateFeedComponent = ({ posts, userFeed }: AggregateFeedCompone
         router.push("?sort=" + filter);
     };
 
+    // If no posts in the "Following" feed, show a placeholder
+    if (posts.length === 0 && activeTab === "following") {
+        return (
+            <div className="flex h-full flex-col items-center justify-center">
+                {canPost && (
+                    <div className="flex w-full pb-4">
+                        {/* className="mt-6" */}
+                        <CreateNewPost circle={user as Circle} feed={userFeed} />
+                    </div>
+                )}
+                <Image src={emptyFeed} alt="No posts yet" width={400} />
+                <h4>No posts</h4>
+                <div className="max-w-[700px] pl-4 pr-4">
+                    We couldn&apos;t find any posts. Try the discover tab to find new content and start following users
+                    and circles.
+                </div>
+                <div className="mt-4 flex flex-row gap-2">
+                    <Button variant={"outline"} onClick={() => router.push("?tab=discover")}>
+                        Discover
+                    </Button>
+                </div>
+                {/* <Button
+                    onClick={() => router.push("?tab=discover")}
+                    className="mt-4 rounded bg-blue-500 px-4 py-2 text-white"
+                >
+                    Discover
+                </Button> */}
+            </div>
+        );
+    }
+
     return (
         <div
             className={`flex h-full min-h-screen flex-1 items-start justify-center`}
-            // `flex h-full min-h-screen flex-1 items-start justify-center bg-white ${isCompact ? "" : "mt-3 overflow-hidden rounded-t-[15px]"}`
             style={{
                 flexGrow: isCompact ? "1" : "3",
                 maxWidth: isCompact ? "none" : "700px",

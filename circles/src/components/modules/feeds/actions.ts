@@ -1,3 +1,4 @@
+// \feeds\actions.ts - server actions for feed related operations
 "use server";
 
 import {
@@ -21,6 +22,7 @@ import {
     getPostsFromMultipleFeeds,
     getFeedsByCircleId,
     getPostsFromMultipleFeedsWithMetrics,
+    getPublicFeeds,
 } from "@/lib/data/feed";
 import { saveFile, isFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -42,6 +44,25 @@ import { getCircleById, getCirclePath, getCirclesBySearchQuery } from "@/lib/dat
 import { getUserByDid, getUserById, getUserPrivate } from "@/lib/data/user";
 import { redirect } from "next/navigation";
 
+// Global posts: posts from all public feeds
+export async function getGlobalPostsAction(
+    userDid: string,
+    limit: number,
+    skip: number,
+    sortingOptions?: SortingOptions,
+): Promise<PostDisplay[]> {
+    // Get all public feeds
+    const publicFeeds = await getPublicFeeds();
+    if (publicFeeds.length === 0) return [];
+
+    // Map the public feeds to their IDs
+    const publicFeedIds = publicFeeds.map((feed) => feed._id.toString());
+
+    // Use your existing function to get posts across multiple feeds with metrics
+    const posts = await getPostsFromMultipleFeedsWithMetrics(publicFeedIds, userDid, limit, skip, sortingOptions);
+    return posts;
+}
+
 export async function getAggregatePostsAction(
     userDid: string,
     limit: number,
@@ -54,7 +75,14 @@ export async function getAggregatePostsAction(
     // Collect all feeds the user has access to
     const accessibleFeeds: string[] = [];
 
+    console.log("Memberships", JSON.stringify(user.memberships, null, 2));
+
     for (const membership of user.memberships) {
+        // ignore the default circle
+        if (membership.circle.handle === "default") {
+            continue;
+        }
+
         const { circleId, userGroups } = membership;
 
         // Get all feeds in the circle

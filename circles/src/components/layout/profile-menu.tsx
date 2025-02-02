@@ -2,7 +2,7 @@
 "use client";
 
 import React, { Suspense, useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "../ui/button";
 import {
     userAtom,
@@ -66,6 +66,7 @@ const ProfileMenuBar = () => {
     const [userToolboxState, setUserToolboxState] = useAtom(userToolboxDataAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [unreadCounts] = useAtom(unreadCountsAtom);
+    const pathname = usePathname();
 
     const totalUnreadMessages = useMemo(() => {
         if (!user?.chatRoomMemberships) {
@@ -127,6 +128,11 @@ const ProfileMenuBar = () => {
             }),
         );
     };
+
+    // hide when in the welcome screen
+    if (pathname === "/welcome" || pathname === "/signup" || pathname === "/login") {
+        return null;
+    }
 
     if (!isMounted) {
         return null;
