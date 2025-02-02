@@ -76,7 +76,6 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab }: Circ
     const isMobile = useIsMobile();
     const canCreateSubcircle = isAuthorized(user, circle, features.create_subcircle);
     const router = useRouter();
-    const isUser = circle.circleType === "user";
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [searchQuery, setSearchQuery] = useState("");
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
@@ -215,10 +214,10 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab }: Circ
                                     <div className="flex flex-row items-center justify-center text-sm text-gray-500">
                                         {circle.members}{" "}
                                         {circle?.members !== 1
-                                            ? isUser
+                                            ? circle?.circleType === "user"
                                                 ? "friends"
                                                 : "members"
-                                            : isUser
+                                            : circle?.circleType === "user"
                                               ? "friend"
                                               : "member"}
                                     </div>

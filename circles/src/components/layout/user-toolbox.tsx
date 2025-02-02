@@ -94,7 +94,9 @@ export const UserToolbox = () => {
     };
 
     const circles =
-        user?.memberships?.filter((m) => m.circle.circleType !== "user")?.map((membership) => membership.circle) || [];
+        user?.memberships
+            ?.filter((m) => m.circle.circleType !== "user" && m.circle.handle !== "default")
+            ?.map((membership) => membership.circle) || [];
     const contacts =
         user?.memberships
             ?.filter((m) => m.circle.circleType === "user" && m.circle._id !== user?._id)
