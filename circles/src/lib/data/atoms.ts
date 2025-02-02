@@ -35,4 +35,7 @@ export const latestMessagesAtom = atom<Record<string, any>>({});
 export const roomDataAtom = atom<Record<string, RoomData>>({});
 export const roomMessagesAtom = atom<Record<string, any[]>>({});
 export const lastReadTimestampsAtom = atom<Record<string, number>>({});
-export const userSettingsAtom = atomWithStorage<UserSettings>("userSettings", { feedTab: "following" });
+export const userSettingsAtom = atomWithStorage<UserSettings>("userSettings", {
+    feedTab: "following",
+    circlesTab: "following",
+});

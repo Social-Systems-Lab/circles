@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import ItemCard from "./item-card";
+import { ItemGridCard } from "./item-card";
 import SelectedItemBadge from "./selected-item-badge";
 import { OnboardingStepProps, Quest } from "./onboarding";
 
@@ -128,7 +128,7 @@ function QuestsStep({ userData, setUserData, nextStep, prevStep }: OnboardingSte
             <ScrollArea className="h-[360px] w-full rounded-md border">
                 <div className="grid grid-cols-3 gap-4 p-4">
                     {visibleQuests.map((quest) => (
-                        <ItemCard
+                        <ItemGridCard
                             key={quest.id}
                             item={quest}
                             isSelected={userData.selectedQuests.some((q) => q.id === quest.id)}
