@@ -89,7 +89,7 @@ export async function startSync(
 
     const sync = async () => {
         const url = new URL(`${matrixUrl}/client/v3/sync`);
-        console.log("Fetching url", url.toString());
+        // console.log("Fetching url", url.toString());
 
         if (since) url.searchParams.append("since", since);
         if (roomId) url.searchParams.append("filter", JSON.stringify({ room: { rooms: [roomId] } }));
@@ -134,7 +134,7 @@ export async function startSync(
                             if (receiptUser) {
                                 const userReceipt = (receiptData as Record<string, any>)["m.read"]?.[receiptUser];
                                 if (userReceipt && userReceipt.ts > latestReadTimestamp) {
-                                    console.log(`New m.read found for user ${receiptUser}`, userReceipt);
+                                    // console.log(`New m.read found for user ${receiptUser}`, userReceipt);
                                     latestReadTimestamp = userReceipt.ts;
                                 }
                             }

@@ -69,14 +69,10 @@ export async function checkAuth(account: Account | undefined): Promise<CheckAuth
         if (token) {
             let payload = await verifyUserToken(token);
             if (payload) {
-                console.log("User is authenticated", payload.userDid);
-
                 // user is authenticated
                 let user = await getUserPrivate(payload.userDid as string);
 
-                console.log("Does user has a matrix username?");
                 if (!user.matrixAccessToken) {
-                    console.log("No registering matrix user");
                     try {
                         // check if user has a matrix account
                         await registerOrLoginMatrixUser(user);

@@ -1,4 +1,4 @@
-// circles/page.tsx - circles list
+// friends/page.tsx - friends list
 import CirclesList from "@/components/modules/circles/circles-list";
 import CirclesTabs from "@/components/modules/circles/circles-tab";
 import { getAggregatePostsAction } from "@/components/modules/feeds/actions";
@@ -6,6 +6,7 @@ import { AggregateFeedComponent, FeedComponent } from "@/components/modules/feed
 import { ThirdColumn } from "@/components/modules/feeds/third-column";
 import HomeContent from "@/components/modules/home/home-content";
 import HomeCover from "@/components/modules/home/home-cover";
+import MembersTable from "@/components/modules/members/members-table";
 import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getCirclesByIds, getCirclesWithMetrics, getDefaultCircle, getMetricsForCircles } from "@/lib/data/circle";
@@ -18,7 +19,7 @@ type CirclesProps = {
     searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
-export default async function Home(props: CirclesProps) {
+export default async function Friends(props: CirclesProps) {
     const searchParams = await props.searchParams;
     let activeTab = searchParams?.tab as string;
 
@@ -33,12 +34,12 @@ export default async function Home(props: CirclesProps) {
     if (activeTab === "following" || !activeTab) {
         const memberIds =
             user?.memberships
-                ?.filter((m) => m.circle.circleType !== "user" && m.circle.handle !== "default")
+                ?.filter((m) => m.circle.circleType === "user" && user.did !== userDid)
                 ?.map((membership) => membership.circle?._id) || [];
         let memberCircles = await getCirclesByIds(memberIds);
         circles = await getMetricsForCircles(memberCircles, userDid, searchParams?.sort as SortingOptions);
     } else {
-        circles = await getCirclesWithMetrics(userDid, undefined, searchParams?.sort as SortingOptions);
+        circles = await getCirclesWithMetrics(userDid, undefined, searchParams?.sort as SortingOptions, "user");
     }
 
     return (
@@ -48,7 +49,17 @@ export default async function Home(props: CirclesProps) {
                     <CirclesTabs currentTab={activeTab} />
                 </div>
             </div>
-            <CirclesList circle={user} circles={circles} isDefaultCircle={false} activeTab={activeTab} />
+
+            <CirclesList
+                circle={user}
+                circles={circles}
+                isDefaultCircle={false}
+                activeTab={activeTab}
+                hideCreateCircle={true}
+            />
+            {/* <MembersTable circle={user} members={circles} isDefaultCircle={false} activeTab={activeTab} /> */}
+
+            {/* <MemberTable circle={user} circles={circles} isDefaultCircle={false} activeTab={activeTab} /> */}
             {/* </div> */}
         </div>
     );

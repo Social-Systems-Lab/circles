@@ -3,6 +3,7 @@ import { ChatRoomMembers, Circles, Members } from "./db";
 import { ObjectId } from "mongodb";
 import { filterLocations } from "../utils";
 import { getMetrics } from "../utils/metrics";
+import { SAFE_CIRCLE_PROJECTION } from "./circle";
 
 export const getMember = async (userDid: string, circleId: string): Promise<Member | null> => {
     return await Members.findOne({ userDid: userDid, circleId: circleId });
@@ -18,7 +19,7 @@ export const getMembersWithMetrics = async (
     const currentDate = new Date();
     let user = undefined;
     if (userDid) {
-        user = (await Circles.findOne({ did: userDid })) ?? undefined;
+        user = (await Circles.findOne({ did: userDid }, { projection: SAFE_CIRCLE_PROJECTION })) ?? undefined;
     }
 
     // get metrics for each member

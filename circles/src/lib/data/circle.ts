@@ -1,6 +1,6 @@
 // circle creation and management
 
-import { Circle, PlatformMetrics, ServerSettings, SortingOptions, WithMetric } from "@/models/models";
+import { Circle, CircleType, PlatformMetrics, ServerSettings, SortingOptions, WithMetric } from "@/models/models";
 import { getServerSettings } from "./server-settings";
 import { Circles } from "./db";
 import { ObjectId } from "mongodb";
@@ -8,13 +8,57 @@ import { getDefaultAccessRules, defaultUserGroups, defaultPages, features } from
 import { getMetrics } from "../utils/metrics";
 import { upsertVbdCircles } from "./vdb";
 
+export const SAFE_CIRCLE_PROJECTION = {
+    _id: 1,
+    did: 1,
+    publicKey: 1,
+    name: 1,
+    type: 1,
+    email: 1,
+    handle: 1,
+    picture: 1,
+    cover: 1,
+    description: 1,
+    mission: 1,
+    isPublic: 1,
+    userGroups: 1,
+    pages: 1,
+    accessRules: 1,
+    members: 1,
+    questionnaire: 1,
+    parentCircleId: 1,
+    createdBy: 1,
+    createdAt: 1,
+    circleType: 1,
+    interests: 1,
+    offers_needs: 1,
+    location: 1,
+    causes: 1,
+    skills: 1,
+    completedOnboardingSteps: 1,
+} as const;
+
+export const getCirclesByIds = async (ids: string[]): Promise<Circle[]> => {
+    let objectIds = ids.map((id) => new ObjectId(id));
+    let circles = await Circles.find({ _id: { $in: objectIds } }, { projection: SAFE_CIRCLE_PROJECTION }).toArray();
+    circles.forEach((circle: Circle) => {
+        if (circle._id) {
+            circle._id = circle._id.toString();
+        }
+    });
+    return circles;
+};
+
 export const getDefaultCircle = async (inServerConfig: ServerSettings | null = null): Promise<Circle> => {
     if (process.env.IS_BUILD === "true") {
         return createDefaultCircle();
     }
 
     let serverConfig = inServerConfig ?? (await getServerSettings());
-    let circle = (await Circles.findOne({ _id: new ObjectId(serverConfig?.defaultCircleId) })) as Circle;
+    let circle = (await Circles.findOne(
+        { _id: new ObjectId(serverConfig?.defaultCircleId) },
+        { projection: SAFE_CIRCLE_PROJECTION },
+    )) as Circle;
 
     if (!circle) {
         return createDefaultCircle();
@@ -27,12 +71,18 @@ export const getDefaultCircle = async (inServerConfig: ServerSettings | null = n
     return circle;
 };
 
-export const getCircles = async (parentCircleId?: string): Promise<Circle[]> => {
+export const getCircles = async (parentCircleId?: string, circleType?: CircleType): Promise<Circle[]> => {
     let circles: Circle[] = [];
     if (!parentCircleId) {
-        circles = await Circles.find({ circleType: "circle" }).toArray();
+        circles = await Circles.find(
+            { circleType: circleType ?? "circle" },
+            { projection: SAFE_CIRCLE_PROJECTION },
+        ).toArray();
     } else {
-        circles = await Circles.find({ parentCircleId: parentCircleId, circleType: "circle" }).toArray();
+        circles = await Circles.find(
+            { parentCircleId: parentCircleId, circleType: "circle" },
+            { projection: SAFE_CIRCLE_PROJECTION },
+        ).toArray();
     }
     circles.forEach((circle: Circle) => {
         if (circle._id) {
@@ -54,12 +104,13 @@ export const getCirclesWithMetrics = async (
     userDid?: string,
     parentCircleId?: string,
     sort?: SortingOptions,
+    circleType?: CircleType,
 ): Promise<WithMetric<Circle>[]> => {
-    let circles = (await getCircles(parentCircleId)) as WithMetric<Circle>[];
+    let circles = (await getCircles(parentCircleId, circleType)) as WithMetric<Circle>[];
     const currentDate = new Date();
     let user = undefined;
     if (userDid) {
-        user = (await Circles.findOne({ did: userDid })) ?? undefined;
+        user = (await Circles.findOne({ did: userDid }, { projection: SAFE_CIRCLE_PROJECTION })) ?? undefined;
     }
 
     // get metrics for each circle
@@ -76,7 +127,7 @@ export const getMetricsForCircles = async (circles: WithMetric<Circle>[], userDi
     const currentDate = new Date();
     let user = undefined;
     if (userDid) {
-        user = (await Circles.findOne({ did: userDid })) ?? undefined;
+        user = (await Circles.findOne({ did: userDid }, { projection: SAFE_CIRCLE_PROJECTION })) ?? undefined;
     }
 
     // get metrics for each circle
@@ -112,7 +163,7 @@ export const createCircle = async (circle: Circle): Promise<Circle> => {
     }
 
     // check if handle is already in use
-    let existingCircle = await Circles.findOne({ handle: circle.handle });
+    let existingCircle = await Circles.findOne({ handle: circle.handle }, { projection: SAFE_CIRCLE_PROJECTION });
     if (existingCircle) {
         throw new Error("Handle already in use");
     }
@@ -138,7 +189,7 @@ export const createCircle = async (circle: Circle): Promise<Circle> => {
 };
 
 export const getCircleByHandle = async (handle: string): Promise<Circle> => {
-    let circle = (await Circles.findOne({ handle: handle })) as Circle;
+    let circle = (await Circles.findOne({ handle: handle }, { projection: SAFE_CIRCLE_PROJECTION })) as Circle;
     if (circle?._id) {
         circle._id = circle._id.toString();
     }
@@ -146,7 +197,7 @@ export const getCircleByHandle = async (handle: string): Promise<Circle> => {
 };
 
 export const getCircleById = async (id: string): Promise<Circle> => {
-    let circle = (await Circles.findOne({ _id: new ObjectId(id) })) as Circle;
+    let circle = (await Circles.findOne({ _id: new ObjectId(id) }, { projection: SAFE_CIRCLE_PROJECTION })) as Circle;
     if (circle?._id) {
         circle._id = circle._id.toString();
     }
@@ -179,7 +230,7 @@ export const getCirclePath = async (circle: Partial<Circle>): Promise<string> =>
 
 export const getCirclesBySearchQuery = async (query: string, limit: number = 10) => {
     const regex = new RegExp(query, "i"); // case-insensitive search
-    const circles = await Circles.find({ name: regex }).limit(limit).toArray();
+    const circles = await Circles.find({ name: regex }, { projection: SAFE_CIRCLE_PROJECTION }).limit(limit).toArray();
     circles.forEach((circle: Circle) => {
         if (circle._id) {
             circle._id = circle._id.toString();

@@ -47,17 +47,18 @@ export default function Onboarding() {
     const [user, setUser] = useAtom(userAtom);
     const [currentStepIndex, setCurrentStepIndex] = useState(0);
     const [authInfo] = useAtom(authInfoAtom);
+    const [hasClosedOnboarding, setHasClosedOnboarding] = useState(false);
 
     const [userData, setUserData] = useState<OnboardingUserData | undefined>(undefined);
 
     useEffect(() => {
         if (!user) return;
         if (authInfo.authStatus !== "authenticated") return;
-        if (!user.completedOnboardingSteps) {
+        if (!user.completedOnboardingSteps && !hasClosedOnboarding) {
             // TODO here we can show steps based on user's progress through onboarding, for now any steps done is considered complete
             setIsOpen(true);
         }
-    }, [user, authInfo]);
+    }, [user, authInfo, hasClosedOnboarding]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -69,7 +70,7 @@ export default function Onboarding() {
             selectedQuests: [],
             picture: user?.picture?.url || "/images/default-user-picture.png",
         });
-    }, [isOpen]);
+    }, [isOpen, user?.causes, user?.mission, user?.name, user?.picture?.url, user?.skills]);
 
     const steps = [
         {
@@ -111,6 +112,7 @@ export default function Onboarding() {
             setCurrentStepIndex(currentStepIndex + 1);
         } else {
             setIsOpen(false);
+            setHasClosedOnboarding(true);
         }
     };
 

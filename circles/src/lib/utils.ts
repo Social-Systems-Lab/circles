@@ -139,8 +139,6 @@ export function addFeedsAccessRules(
         }
     }
 
-    console.log("new access rules:", existingAccessRules);
-
     // remove rules for feeds that don't exist
     for (const rule in existingAccessRules) {
         if (rule.startsWith(feedFeaturePrefix)) {
@@ -148,7 +146,6 @@ export function addFeedsAccessRules(
             // remove feed feature postfix from handle
             handle = handle.substring(0, handle.lastIndexOf("_"));
             if (!feeds.find((feed) => feed.handle === handle)) {
-                console.log("can't find feed with handle, deleting access rule", handle, rule);
                 delete existingAccessRules[rule];
             }
         }

@@ -1,4 +1,3 @@
-// HomeModule.tsx
 "use client";
 
 import React from "react";
@@ -26,10 +25,15 @@ export default function HomeContent({ circle, isDefaultCircle, authorizedToEdit 
     return (
         <div className="flex flex-1 flex-row justify-center">
             <div className="mb-0 ml-4 mr-4 flex max-w-[1100px] flex-1 flex-col">
-                <div className="flex flex-row">
-                    <div className={`relative flex ${isCompact ? "h-[75px] w-[75px]" : "h-[125px] w-[150px]"}`}>
-                        <div className={`absolute ${isCompact ? "top-[10px]" : "top-[-25px]"}`}>
-                            <div className={`relative ${isCompact ? "h-[75px] w-[75px]" : "h-[150px] w-[150px]"}`}>
+                <div className={`relative flex ${isCompact ? "flex-col items-center justify-center" : "flex-row"}`}>
+                    <div className={`relative flex ${isCompact ? "h-[50px] w-[100px]" : "h-[125px] w-[150px]"}`}>
+                        {/* Position the circle picture differently when compact. */}
+                        <div
+                            className={`absolute ${
+                                isCompact ? "left-1/2 top-[-50px] -translate-x-1/2" : "top-[-25px]"
+                            }`}
+                        >
+                            <div className={`relative ${isCompact ? "h-[100px] w-[100px]" : "h-[150px] w-[150px]"}`}>
                                 {authorizedToEdit ? (
                                     <EditableImage
                                         id="picture"
@@ -55,8 +59,19 @@ export default function HomeContent({ circle, isDefaultCircle, authorizedToEdit 
                             </div>
                         </div>
                     </div>
+                    {isCompact && (
+                        <div className={`absolute right-0 top-0 flex flex-row gap-1 pt-2`}>
+                            <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />
+                            <JoinButton circle={circle} />
+                        </div>
+                    )}
 
-                    <div className="flex flex-col items-start justify-start p-4 pl-6">
+                    {/* Center the text in compact mode. */}
+                    <div
+                        className={`flex flex-col justify-start p-4 pl-6 ${
+                            isCompact ? "items-center text-center" : "items-start"
+                        }`}
+                    >
                         <h4 className="m-0 p-0 pb-1 text-4xl font-bold text-gray-800">
                             {authorizedToEdit ? (
                                 <EditableField id="name" value={circle.name ?? ""} circleId={circle._id!} />
@@ -94,11 +109,14 @@ export default function HomeContent({ circle, isDefaultCircle, authorizedToEdit 
                             </div>
                         )}
                     </div>
+
                     <div className="flex-1"></div>
-                    <div className="flex flex-row gap-1 pt-2">
-                        <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />
-                        <JoinButton circle={circle} />
-                    </div>
+                    {!isCompact && (
+                        <div className={`flex flex-row gap-1 pt-2`}>
+                            <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />
+                            <JoinButton circle={circle} />
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

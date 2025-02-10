@@ -22,6 +22,7 @@ import CircleHeader from "./circle-header";
 import Indicators from "@/components/utils/indicators";
 import { ListFilter } from "@/components/utils/list-filter";
 import emptyFeed from "@images/empty-feed.png";
+import { updateQueryParam } from "@/lib/utils/helpers-client";
 
 export const twoLineEllipsisStyle = {
     WebkitLineClamp: 2,
@@ -68,9 +69,10 @@ interface CirclesListProps {
     page?: Page;
     isDefaultCircle: boolean;
     activeTab?: string;
+    hideCreateCircle?: boolean;
 }
 
-const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab }: CirclesListProps) => {
+const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, hideCreateCircle }: CirclesListProps) => {
     const [user] = useAtom(userAtom);
     const isCompact = useIsCompact();
     const isMobile = useIsMobile();
@@ -122,7 +124,7 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab }: Circ
     };
 
     const handleFilterChange = (filter: string) => {
-        router.push("?sort=" + filter);
+        updateQueryParam(router, "sort", filter);
     };
 
     return (
@@ -136,25 +138,28 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab }: Circ
                     }}
                 >
                     <Input
-                        placeholder="Search circles..."
+                        placeholder={`Search ${circle.circleType === "user" ? "friends" : "circles"}...`}
                         value={searchQuery}
                         onChange={(event) => setSearchQuery(event.target.value)}
                         className="flex-1"
                     />
-                    {canCreateSubcircle && <CreateCircleButton circle={circle} isDefaultCircle={isDefaultCircle} />}
+                    {canCreateSubcircle && !hideCreateCircle && (
+                        <CreateCircleButton circle={circle} isDefaultCircle={isDefaultCircle} />
+                    )}
                 </div>
 
                 <ListFilter onFilterChange={handleFilterChange} />
 
                 {filteredCircles.length === 0 && activeTab === "following" && (
                     <div className="flex h-full flex-col items-center justify-center">
-                        <Image src={emptyFeed} alt="No posts yet" width={400} />
-                        <h4>No circles</h4>
+                        <Image src={emptyFeed} alt="No posts yet" width={isMobile ? 230 : 300} />
+                        <h4>No {circle.circleType === "user" ? "friends" : "circles"}</h4>
                         <div className="max-w-[700px] pl-4 pr-4">
-                            You are not following any circles. Try the discover tab to find new circles to follow.
+                            You are not following {circle.circleType === "user" ? "anyone" : "any circles"}. Try the
+                            discover tab to find new {circle.circleType === "user" ? "friends" : "circles"} to follow.
                         </div>
                         <div className="mt-4 flex flex-row gap-2">
-                            <Button variant={"outline"} onClick={() => router.push("?tab=discover")}>
+                            <Button variant={"outline"} onClick={() => updateQueryParam(router, "tab", "discover")}>
                                 Discover
                             </Button>
                         </div>

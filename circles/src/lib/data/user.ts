@@ -13,12 +13,10 @@ import { ObjectId } from "mongodb";
 import { signRegisterUserChallenge } from "../auth/auth";
 import { getUserPendingMembershipRequests } from "./membership-requests";
 import { defaultPagesForUser, defaultUserGroupsForUser, getDefaultAccessRulesForUser } from "./constants";
+import { SAFE_CIRCLE_PROJECTION } from "./circle";
 
 export const getUser = async (userDid: string): Promise<Circle> => {
-    let user = await Circles.findOne(
-        { did: userDid },
-        { projection: { did: 1, type: 1, handle: 1, name: 1, picture: 1, cover: 1, mission: 1, location: 1 } },
-    );
+    let user = await Circles.findOne({ did: userDid }, { projection: SAFE_CIRCLE_PROJECTION });
     if (!user) {
         throw new Error("User not found");
     }
@@ -26,7 +24,7 @@ export const getUser = async (userDid: string): Promise<Circle> => {
 };
 
 export const getUserById = async (id: string): Promise<Circle> => {
-    let user = (await Circles.findOne({ _id: new ObjectId(id) })) as Circle;
+    let user = (await Circles.findOne({ _id: new ObjectId(id) }, { projection: SAFE_CIRCLE_PROJECTION })) as Circle;
     if (user?._id) {
         user._id = user._id.toString();
     }
@@ -34,6 +32,14 @@ export const getUserById = async (id: string): Promise<Circle> => {
 };
 
 export const getUserByDid = async (did: string): Promise<Circle> => {
+    let user = (await Circles.findOne({ did }, { projection: SAFE_CIRCLE_PROJECTION })) as Circle;
+    if (user?._id) {
+        user._id = user._id.toString();
+    }
+    return user;
+};
+
+export const getPrivateUserByDid = async (did: string): Promise<Circle> => {
     let user = (await Circles.findOne({ did })) as Circle;
     if (user?._id) {
         user._id = user._id.toString();
@@ -70,7 +76,7 @@ export const createNewUser = (
 };
 
 export const getUserByHandle = async (handle: string): Promise<Circle> => {
-    let user = (await Circles.findOne({ handle: handle })) as Circle;
+    let user = (await Circles.findOne({ handle: handle }, { projection: SAFE_CIRCLE_PROJECTION })) as Circle;
     if (user?._id) {
         user._id = user._id.toString();
     }

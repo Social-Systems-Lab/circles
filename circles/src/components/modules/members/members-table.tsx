@@ -52,6 +52,7 @@ import CircleHeader from "../circles/circle-header";
 import { ListFilter } from "@/components/utils/list-filter";
 import { useRouter } from "next/navigation";
 import Indicators from "@/components/utils/indicators";
+import { updateQueryParam } from "@/lib/utils/helpers-client";
 
 interface MemberTableProps {
     members: MemberDisplay[];
@@ -279,14 +280,12 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
     };
 
     const handleFilterChange = (filter: string) => {
-        router.push("?sort=" + filter);
+        updateQueryParam(router, "sort", filter);
     };
 
     return (
         <div className="flex flex-1 flex-row justify-center">
             <div className="ml-2 mr-2 mt-4 flex max-w-[1100px] flex-1 flex-col">
-                <CircleHeader circle={circle} page={page} isDefaultCircle={isDefaultCircle} />
-
                 <div className="flex w-full flex-row items-center gap-2">
                     <div className="flex flex-1 flex-col">
                         <Input

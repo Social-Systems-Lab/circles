@@ -41,14 +41,11 @@ function CausesStep({ userData, setUserData, nextStep, prevStep }: OnboardingSte
 
         // Use startTransition to fetch causes based on mission statement
         startTransition(async () => {
-            console.log("Fetching causes matched to circle...");
             const response = await fetchCausesMatchedToCircle(user!._id.toString()!);
 
             if (response.success) {
-                console.log("Success. Found causes:", response.causes);
                 setAllCauses(response.causes);
             } else {
-                console.log("Fail. Setting all causes to default causes.");
                 setAllCauses(causes);
                 console.error(response.message);
             }

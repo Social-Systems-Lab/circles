@@ -2,7 +2,7 @@
 import { Feeds, Posts, Comments, Reactions, Circles } from "./db";
 import { ObjectId } from "mongodb";
 import { Feed, Post, PostDisplay, Comment, CommentDisplay, Circle, Mention, SortingOptions } from "@/models/models";
-import { getCircleById, updateCircle } from "./circle";
+import { getCircleById, SAFE_CIRCLE_PROJECTION, updateCircle } from "./circle";
 import { addFeedsAccessRules } from "../utils";
 import { getUserByDid } from "./user";
 import { getMetrics } from "../utils/metrics";
@@ -1136,7 +1136,7 @@ export const unlikeContent = async (
 export const getReactions = async (contentId: string, contentType: "post" | "comment"): Promise<Circle[]> => {
     const reactions = await Reactions.find({ contentId, contentType }).limit(20).toArray();
     const userDids = reactions.map((r) => r.userDid);
-    const users = await Circles.find({ did: { $in: userDids } }).toArray();
+    const users = await Circles.find({ did: { $in: userDids } }, { projection: SAFE_CIRCLE_PROJECTION }).toArray();
     return users.map((user) => ({
         did: user.did,
         name: user.name,

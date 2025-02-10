@@ -43,22 +43,19 @@ type RichTextProps = {
 
 const RichText = ({ content, mentions }: RichTextProps) => {
     return (
-        (<ReactMarkdown
+        <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={
                 mentions && mentions.length > 0
                     ? {
                           a: ({ node, ...props }) => {
                               const href = props.href || "";
-                              console.log("href", href);
 
                               const mentionMatch = href.match(/^\/circles\/(.+)/);
 
                               if (mentionMatch) {
                                   const mentionId = mentionMatch[1];
                                   const mention = mentions.find((c) => c.id === mentionId);
-
-                                  console.log("found mention", mention);
 
                                   if (mention) {
                                       return <MentionHoverCard mention={mention}>{props.children}</MentionHoverCard>;
@@ -72,7 +69,7 @@ const RichText = ({ content, mentions }: RichTextProps) => {
             }
         >
             {content}
-        </ReactMarkdown>)
+        </ReactMarkdown>
     );
 };
 

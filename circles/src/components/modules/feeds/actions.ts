@@ -75,8 +75,6 @@ export async function getAggregatePostsAction(
     // Collect all feeds the user has access to
     const accessibleFeeds: string[] = [];
 
-    console.log("Memberships", JSON.stringify(user.memberships, null, 2));
-
     for (const membership of user.memberships) {
         // ignore the default circle
         if (membership.circle.handle === "default") {

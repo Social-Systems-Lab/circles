@@ -1,22 +1,12 @@
 //user-toolbox.tsx - Displays the user toolbox that contains the user's chat rooms, notifications, circles, contacts, and account settings
 "use client";
 
-import React, { Dispatch, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-    Bell,
-    MessageCircle,
-    Calendar,
-    Edit,
-    CheckSquare,
-    BarChart2,
-    Users,
-    ArrowLeft,
-    Circle as CircleIcon,
-} from "lucide-react";
+import { Bell, MessageCircle, Users, Circle as CircleIcon } from "lucide-react";
 import { MdOutlineLogout } from "react-icons/md";
 import {
     authInfoAtom,
@@ -24,29 +14,18 @@ import {
     sidePanelContentVisibleAtom,
     userAtom,
     userToolboxDataAtom,
-    matrixUserCacheAtom,
     latestMessagesAtom,
     unreadCountsAtom,
 } from "@/lib/data/atoms";
-import { SetStateAction, useAtom } from "jotai";
+import { useAtom } from "jotai";
 import { useRouter } from "next/navigation";
-import { fetchMatrixUsers } from "@/components/modules/chat/actions"; // Adjust the import path
-import {
-    ChatMessage,
-    ChatRoom,
-    Circle,
-    ContentPreviewData,
-    MatrixUserCache,
-    MemberDisplay,
-    UserPrivate,
-    UserToolboxTab,
-} from "@/models/models";
+import { ChatRoom, Circle, MemberDisplay, UserToolboxTab } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
-import { ChatRoomComponent, fetchAndCacheMatrixUsers, LatestMessage, MessageRenderer } from "../modules/chat/chat-room";
+import { LatestMessage } from "../modules/chat/chat-room";
 import { logOut } from "../auth/actions";
-import { fetchJoinedRooms, fetchRoomDetails, fetchRoomMessages } from "@/lib/data/client-matrix";
 import { getCircleAction } from "./actions";
 import { Notifications } from "./notifications";
+import Link from "next/link";
 
 type Notification = {
     id: number;
@@ -162,17 +141,21 @@ export const UserToolbox = () => {
         <Card className="h-full overflow-auto border-0">
             <CardHeader className="p-4">
                 <div className="flex items-center space-x-4">
-                    <Avatar className="h-12 w-12">
-                        <AvatarImage
-                            src={user?.picture?.url || "/placeholder.svg?height=48&width=48"}
-                            alt={user?.name}
-                        />
-                        <AvatarFallback>{user?.name?.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                        <div className="font-semibold">{user?.name}</div>
-                        <p className="text-sm text-muted-foreground">@{user?.handle}</p>
-                    </div>
+                    <Link href={`/circles/${user?.handle}`}>
+                        <Avatar className="h-12 w-12">
+                            <AvatarImage
+                                src={user?.picture?.url || "/placeholder.svg?height=48&width=48"}
+                                alt={user?.name}
+                            />
+                            <AvatarFallback>{user?.name?.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                    </Link>
+                    <Link href={`/circles/${user?.handle}`}>
+                        <div>
+                            <div className="font-semibold">{user?.name}</div>
+                            <p className="text-sm text-muted-foreground">@{user?.handle}</p>
+                        </div>
+                    </Link>
                 </div>
             </CardHeader>
             <CardContent className="p-0">

@@ -1,14 +1,10 @@
-import { getCircleByHandle, getCircleById } from "@/lib/data/circle";
-import HomeModule from "@/components/modules/home/home";
-import { redirect } from "next/navigation";
-import FeedsModule from "@/components/modules/feeds/feeds";
 import { getServerSettings } from "@/lib/data/server-settings";
 import { MapDisplay } from "@/components/map/map";
 import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
-import { getUserByDid, getUserPrivate } from "@/lib/data/user";
-import { getMembersWithMetrics } from "@/lib/data/member";
-import { Content, SortingOptions } from "@/models/models";
+import { getUserPrivate } from "@/lib/data/user";
+import { Circle, Content, SortingOptions, WithMetric } from "@/models/models";
+import { getCirclesWithMetrics } from "@/lib/data/circle";
 
 type MapProps = {
     params: Promise<{ handle: string }>;
@@ -16,21 +12,33 @@ type MapProps = {
 };
 
 export default async function Map(props: MapProps) {
-    const params = await props.params;
-    const searchParams = await props.searchParams;
     let serverConfig = await getServerSettings();
 
-    // get members of circle
+    // get all circles
+    const searchParams = await props.searchParams;
+    let activeTab = searchParams?.tab as string;
+
+    // get user handle
     let userDid = await getAuthenticatedUserDid();
-    let content: Content[] = [];
-    if (userDid) {
-        let user = await getUserPrivate(userDid);
-        const connections = user?.memberships?.map((membership) => membership.circle) || [];
-        content = connections;
+    if (!userDid) {
+        return null;
     }
 
+    let circles: WithMetric<Circle>[] = [];
+    //let user = await getUserPrivate(userDid);
+    // if (activeTab === "following" || !activeTab) {
+    //     const memberIds =
+    //         user?.memberships
+    //             ?.filter((m) => m.circle.circleType !== "user" && m.circle.handle !== "default")
+    //             ?.map((membership) => membership.circle?._id) || [];
+    //     let memberCircles = await getCirclesByIds(memberIds);
+    //     circles = await getMetricsForCircles(memberCircles, userDid, searchParams?.sort as SortingOptions);
+    // } else {
+    circles = await getCirclesWithMetrics(userDid, undefined, searchParams?.sort as SortingOptions);
+    // }
+
     return (
-        <ContentDisplayWrapper content={content}>
+        <ContentDisplayWrapper content={circles}>
             <MapDisplay mapboxKey={serverConfig?.mapboxKey ?? ""} />
         </ContentDisplayWrapper>
     );

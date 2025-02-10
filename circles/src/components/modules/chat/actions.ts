@@ -2,7 +2,7 @@
 
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { Circle, ChatRoomMember } from "@/models/models";
-import { getUserByDid, getUsersByMatrixUsernames } from "@/lib/data/user";
+import { getPrivateUserByDid, getUserByDid, getUsersByMatrixUsernames } from "@/lib/data/user";
 import { chatFeaturePrefix } from "@/lib/data/constants";
 import { addChatRoomMember, getChatRoom, getChatRoomMember, removeChatRoomMember } from "@/lib/data/chat";
 import { addUserToRoom, sendReadReceipt } from "@/lib/data/matrix";
@@ -29,7 +29,7 @@ export async function joinChatRoomAction(
         }
 
         // add user to matrix chat room
-        let user = await getUserByDid(userDid);
+        let user = await getPrivateUserByDid(userDid);
         if (!user?.matrixAccessToken) {
             return { success: false, message: "User does not have a valid Matrix access token" };
         }

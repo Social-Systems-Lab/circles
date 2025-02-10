@@ -1,6 +1,7 @@
 "use client";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { userSettingsAtom } from "@/lib/data/atoms";
+import { updateQueryParam } from "@/lib/utils/helpers-client";
 import { TabOptions } from "@/models/models";
 import { useAtom } from "jotai";
 import { useRouter } from "next/navigation";
@@ -12,13 +13,13 @@ export default function CirclesTabs({ currentTab }: { currentTab?: string }) {
     const [settings, setSettings] = useAtom(userSettingsAtom);
 
     const switchTab = (tab: TabOptions) => {
-        router.push(`?tab=${tab}`);
+        updateQueryParam(router, "tab", tab);
         setSettings((x) => ({ ...x, circlesTab: tab }));
     };
 
     useEffect(() => {
         if (!currentTab) {
-            router.replace(`?tab=${settings.feedTab}`);
+            updateQueryParam(router, "tab", settings.feedTab);
         }
     }, [currentTab, router, setSettings, settings.feedTab]);
 

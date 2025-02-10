@@ -1,4 +1,3 @@
-// src/app/chat/page.tsx
 "use client";
 
 import { useState, useMemo } from "react";
@@ -12,6 +11,9 @@ import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { latestMessagesAtom, unreadCountsAtom } from "@/lib/data/atoms";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
+import emptyFeed from "@images/empty-feed.png";
+import { Button } from "@/components/ui/button";
 
 export default function ChatPage() {
     const [user] = useAtom(userAtom);
@@ -21,21 +23,21 @@ export default function ChatPage() {
     const isMobile = useIsMobile();
     const router = useRouter();
 
-    // Sort chat rooms by latest message timestamp
+    // Sort chat rooms by their latest message timestamps
     const sortedChats = useMemo(() => {
         if (!user?.chatRoomMemberships) return [];
-
         const chats = user.chatRoomMemberships.map((m) => m.chatRoom);
         return chats.sort((a, b) => {
             const messageA = Object.entries(latestMessages).find(([key]) => key.startsWith(a.matrixRoomId!))?.[1];
             const messageB = Object.entries(latestMessages).find(([key]) => key.startsWith(b.matrixRoomId!))?.[1];
-
             const latestA = messageA?.origin_server_ts || 0;
             const latestB = messageB?.origin_server_ts || 0;
             return latestB - latestA;
         });
     }, [user?.chatRoomMemberships, latestMessages]);
 
+    // Clicking a chat on mobile navigates to its dedicated route;
+    // on desktop, we just set the selected chat in state.
     const handleChatClick = (chat: ChatRoom) => {
         setSelectedChat(chat);
         if (isMobile) {
@@ -45,6 +47,22 @@ export default function ChatPage() {
 
     if (!user) {
         return <div className="p-4">Please log in to access chats</div>;
+    }
+
+    // If there are no joined chat rooms, show a placeholder with a "Discover" button
+    if (sortedChats.length === 0) {
+        return (
+            <div className="flex h-screen flex-col items-center justify-center gap-4 p-4">
+                <Image src={emptyFeed} alt="No chats yet" width={300} />
+                <h4 className="text-lg font-semibold">No Chat Rooms</h4>
+                <p className="max-w-md text-center text-sm text-gray-500">
+                    You haven&apos;t joined any chat rooms yet. Try discover new circles to chat in.
+                </p>
+                <Button variant="outline" onClick={() => router.push("/circles?tab=discover")}>
+                    Discover
+                </Button>
+            </div>
+        );
     }
 
     return (
@@ -98,16 +116,12 @@ export default function ChatPage() {
 
             {/* Chat Window */}
             <div className={`flex-1 ${!selectedChat && !isMobile ? "hidden" : ""}`}>
-                {selectedChat ? (
+                {selectedChat && (
                     <ChatRoomComponent
                         chatRoom={selectedChat}
                         circle={selectedChat.circleId as unknown as Circle}
                         isDefaultCircle={selectedChat.handle === "default"}
                     />
-                ) : (
-                    <div className="flex h-full items-center justify-center text-gray-500">
-                        Select a chat to start messaging
-                    </div>
                 )}
             </div>
         </div>
