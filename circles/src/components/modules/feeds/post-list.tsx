@@ -543,6 +543,10 @@ export const PostItem = ({
                                             </DropdownMenuItem>
                                         </DialogTrigger>
                                         <DialogContent className="overflow-hidden rounded-[15px] p-0 sm:max-w-[425px] sm:rounded-[15px]">
+                                            <div className="hidden">
+                                                <DialogTitle>Edit post</DialogTitle>
+                                            </div>
+
                                             <PostForm
                                                 circle={circle}
                                                 feed={feed}

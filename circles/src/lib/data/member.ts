@@ -1,9 +1,13 @@
+// member.ts - membership management
 import { Content, Member, MemberDisplay, SortingOptions } from "@/models/models";
 import { ChatRoomMembers, Circles, Members } from "./db";
 import { ObjectId } from "mongodb";
 import { filterLocations } from "../utils";
 import { getMetrics } from "../utils/metrics";
 import { SAFE_CIRCLE_PROJECTION } from "./circle";
+import { addChatRoomMember, getChatRoomByHandle, removeChatRoomMember } from "./chat";
+import { getPrivateUserByDid } from "./user";
+import { addUserToRoom, removeUserFromRoom } from "./matrix";
 
 export const getMember = async (userDid: string, circleId: string): Promise<Member | null> => {
     return await Members.findOne({ userDid: userDid, circleId: circleId });
@@ -96,6 +100,9 @@ export const addMember = async (
     };
     await Members.insertOne(member);
 
+    // add member to chat
+    await autoAddToMemberChats(userDid, circleId);
+
     // increase member count in circle
     await Circles.updateOne({ _id: new ObjectId(circleId) }, { $inc: { members: 1 } });
 
@@ -123,6 +130,9 @@ export const removeMember = async (userDid: string, circleId: string): Promise<b
     // remove user from all chat rooms in the circle
     await ChatRoomMembers.deleteMany({ userDid: userDid, circleId: circleId });
 
+    // remove member from members chat
+    await autoRemoveFromMemberChats(userDid, circleId);
+
     return true;
 };
 
@@ -147,3 +157,30 @@ export const updateMemberUserGroups = async (
 export const countAdmins = async (circleId: string): Promise<number> => {
     return await Members.countDocuments({ circleId: circleId, userGroups: "admins" });
 };
+
+async function autoAddToMemberChats(userDid: string, circleId: string) {
+    // Find the “members” chat in that circle
+    const membersChat = await getChatRoomByHandle(circleId, "members");
+    if (!membersChat?.matrixRoomId) return;
+
+    // Add the user to the DB membership for that chat
+    await addChatRoomMember(userDid, membersChat._id);
+
+    // Add them to Matrix
+    const user = await getPrivateUserByDid(userDid);
+    if (!user?.matrixAccessToken) return;
+    await addUserToRoom(user.matrixAccessToken, membersChat.matrixRoomId);
+}
+
+async function autoRemoveFromMemberChats(userDid: string, circleId: string) {
+    const membersChat = await getChatRoomByHandle(circleId, "members");
+    if (!membersChat?.matrixRoomId) return;
+
+    // Remove from DB membership
+    await removeChatRoomMember(userDid, membersChat._id);
+
+    // Remove from Matrix
+    const user = await getPrivateUserByDid(userDid);
+    if (!user?.matrixUsername) return;
+    await removeUserFromRoom(user.matrixUsername, membersChat.matrixRoomId);
+}

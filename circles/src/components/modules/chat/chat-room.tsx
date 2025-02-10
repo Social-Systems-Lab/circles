@@ -32,6 +32,7 @@ import { Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { fetchMatrixUsers, joinChatRoomAction, sendReadReceiptAction } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { IoArrowBack } from "react-icons/io5";
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -401,12 +402,13 @@ export const fetchAndCacheMatrixUsers = async (
 
 export const ChatRoomComponent: React.FC<{
     chatRoom: ChatRoom;
+    setSelectedChat?: Dispatch<SetStateAction<ChatRoom | undefined>>;
     circle: Circle;
     inToolbox?: boolean;
     isDefaultCircle?: boolean;
     page?: Page;
     subpage?: string;
-}> = ({ chatRoom, circle, inToolbox, page, subpage, isDefaultCircle }) => {
+}> = ({ chatRoom, setSelectedChat, circle, inToolbox, page, subpage, isDefaultCircle }) => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const isCompact = useIsCompact();
@@ -454,49 +456,6 @@ export const ChatRoomComponent: React.FC<{
         setMessages(roomMessagesForChat);
     }, [chatRoom.matrixRoomId, roomMessages, matrixUserCache]);
 
-    //     if (!chatRoom?.matrixRoomId || initialMessagesLoaded.current) return;
-    //     initialMessagesLoaded.current = true; // Mark as loaded
-
-    //     startLoadingMessagesTransition(async () => {
-    //         try {
-    //             const { messages } = await fetchRoomMessages(user?.matrixAccessToken!, user?.matrixUrl, chatRoom.matrixRoomId!, 20);
-
-    //             // Fetch and cache user details
-    //             const matrixUsernames = messages.map((msg) => msg.sender);
-    //             let userCache = await fetchAndCacheMatrixUsers(matrixUsernames, matrixUserCache, setMatrixUserCache);
-
-    //             const formattedMessages = messages.map((msg: any, index: number) => {
-    //                 const author = userCache[msg.sender] || {
-    //                     _id: msg.sender,
-    //                     name: msg.sender,
-    //                     picture: { url: "/placeholder.svg" },
-    //                 };
-    //                 return {
-    //                     id: msg.event_id,
-    //                     chatRoomId: msg.room_id,
-    //                     createdBy: msg.sender,
-    //                     createdAt: new Date(msg.origin_server_ts),
-    //                     content: msg.content,
-    //                     type: msg.type,
-    //                     stateKey: msg.state_key,
-    //                     unsigned: msg.unsigned,
-    //                     author, // Your database user data
-    //                 } as ChatMessage;
-    //             });
-
-    //             setMessages(formattedMessages);
-
-    //             // mark the latest message as read
-    //             markMessagesAsRead(
-    //                 user?.matrixAccessToken!,
-    //                 chatRoom.matrixRoomId!,
-    //                 formattedMessages[formattedMessages.length - 1]?.id,
-    //             );
-    //         } catch (error) {
-    //             console.error("Failed to fetch chat messages:", error);
-    //         }
-    //     });
-    // }, [chatRoom.matrixRoomId, matrixUserCache, setMatrixUserCache, user?.matrixAccessToken]);
     const messagesRef = useRef<ChatMessage[]>([]);
     useEffect(() => {
         messagesRef.current = messages;
@@ -562,114 +521,110 @@ export const ChatRoomComponent: React.FC<{
     };
 
     return (
-        <div
-            className={`flex h-full flex-1 items-start justify-center ${inToolbox ? "bg-[#fbfbfb]" : "min-h-screen"}`}
-            style={{
-                flexGrow: isCompact || inToolbox ? "1" : "3",
-                maxWidth: isCompact || inToolbox ? "none" : "700px",
-            }}
-        >
-            <div ref={inputRef} className="relative flex h-full w-full flex-col">
-                {!inToolbox && (
-                    <div className="mt-4">
-                        <CircleHeader
-                            circle={circle}
-                            page={page}
-                            subpage={chatRoom.handle && chatRoom.handle !== "default" ? chatRoom.name : undefined}
-                            isDefaultCircle={isDefaultCircle}
-                        />
-                    </div>
-                )}
-
-                {/* Dot Menu */}
-                {/* {hasJoinedChat && (
-                    <div className="absolute right-4 top-4">
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-8 w-8 p-0">
-                                    <MoreVertical className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent>
-                                <DropdownMenuItem onClick={handleLeaveChat}>Leave Chat</DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
-                )} */}
-
-                {inToolbox ? (
-                    <ScrollArea
-                        className="p-4"
-                        style={{
-                            height: "calc(100vh - 300px)",
-                        }}
-                    >
-                        {isLoadingMessages && <div className="text-center text-gray-500">Loading messages...</div>}
-                        {!isLoadingMessages && (
-                            <ChatMessages
-                                messages={messages}
-                                messagesEndRef={messagesEndRef}
-                                onMessagesRendered={handleMessagesRendered}
-                            />
-                        )}
-                    </ScrollArea>
-                ) : (
-                    <div className="flex-grow p-4 pb-[144px]">
-                        {isLoadingMessages && <div className="text-center text-gray-500">Loading messages...</div>}
-                        {!isLoadingMessages && (
-                            <ChatMessages
-                                messages={messages}
-                                messagesEndRef={messagesEndRef}
-                                onMessagesRendered={handleMessagesRendered}
-                            />
-                        )}
-                    </div>
-                )}
-
-                {!hasJoinedChat ? (
-                    <div
-                        className="fixed flex h-[72px] items-center justify-center bg-[#fbfbfb]"
-                        style={{
-                            width: `${inputWidth}px`,
-                            bottom: isMobile ? "72px" : "0px",
-                        }}
-                    >
-                        <Button
-                            onClick={handleJoinChat}
-                            className="rounded-[50px] bg-primaryLight px-4 py-2 text-white"
-                            disabled={isPending}
-                        >
-                            {isPending ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Joining...
-                                </>
-                            ) : (
-                                <>Join Chat</>
-                            )}
-                        </Button>
-                    </div>
-                ) : (
-                    <div
-                        className="fixed h-[50px]"
-                        style={{
-                            width: `${inputWidth}px`,
-                            bottom: isMobile ? "72px" : "0px",
-                            opacity: hideInput ? 0 : 1,
-                        }}
-                    >
-                        <div className="flex h-[50px] items-end bg-[#fbfbfb] pb-1 pl-2 pr-2">
-                            <ChatInput
-                                setMessages={setMessages}
+        <>
+            <div
+                className={`flex h-full flex-1 items-start justify-center ${inToolbox ? "bg-[#fbfbfb]" : "min-h-screen"}`}
+                style={{
+                    flexGrow: isCompact || inToolbox ? "1" : "3",
+                    maxWidth: isCompact || inToolbox ? "none" : "700px",
+                }}
+            >
+                <div ref={inputRef} className="relative flex h-full w-full flex-col">
+                    {!inToolbox && (
+                        <div className="mt-4">
+                            <CircleHeader
                                 circle={circle}
-                                chatRoom={chatRoom}
                                 page={page}
-                                subpage={subpage}
+                                subpage={chatRoom.handle && chatRoom.handle !== "default" ? chatRoom.name : undefined}
+                                isDefaultCircle={isDefaultCircle}
                             />
                         </div>
-                    </div>
-                )}
+                    )}
+
+                    {inToolbox ? (
+                        <ScrollArea
+                            className="p-4"
+                            style={{
+                                height: "calc(100vh - 300px)",
+                            }}
+                        >
+                            {isLoadingMessages && <div className="text-center text-gray-500">Loading messages...</div>}
+                            {!isLoadingMessages && (
+                                <ChatMessages
+                                    messages={messages}
+                                    messagesEndRef={messagesEndRef}
+                                    onMessagesRendered={handleMessagesRendered}
+                                />
+                            )}
+                        </ScrollArea>
+                    ) : (
+                        <div className="flex-grow p-4 pb-[144px]">
+                            {isLoadingMessages && <div className="text-center text-gray-500">Loading messages...</div>}
+                            {!isLoadingMessages && (
+                                <ChatMessages
+                                    messages={messages}
+                                    messagesEndRef={messagesEndRef}
+                                    onMessagesRendered={handleMessagesRendered}
+                                />
+                            )}
+                        </div>
+                    )}
+
+                    {!hasJoinedChat ? (
+                        <div
+                            className="fixed flex h-[72px] items-center justify-center bg-[#fbfbfb]"
+                            style={{
+                                width: `${inputWidth}px`,
+                                bottom: isMobile ? "72px" : "0px",
+                            }}
+                        >
+                            <Button
+                                onClick={handleJoinChat}
+                                className="rounded-[50px] bg-primaryLight px-4 py-2 text-white"
+                                disabled={isPending}
+                            >
+                                {isPending ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Joining...
+                                    </>
+                                ) : (
+                                    <>Join Chat</>
+                                )}
+                            </Button>
+                        </div>
+                    ) : (
+                        <div
+                            className="fixed h-[50px]"
+                            style={{
+                                width: `${inputWidth}px`,
+                                bottom: isMobile ? "72px" : "0px",
+                                opacity: hideInput ? 0 : 1,
+                            }}
+                        >
+                            <div className="flex h-[50px] items-end bg-[#fbfbfb] pb-1 pl-2 pr-2">
+                                <ChatInput
+                                    setMessages={setMessages}
+                                    circle={circle}
+                                    chatRoom={chatRoom}
+                                    page={page}
+                                    subpage={subpage}
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
-        </div>
+            {isMobile && !inToolbox && (
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="fixed left-4 top-4 h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
+                    onClick={() => setSelectedChat && setSelectedChat(undefined)}
+                >
+                    <IoArrowBack className="h-5 w-5" />
+                </Button>
+            )}
+        </>
     );
 };

@@ -1,4 +1,4 @@
-// circle creation and management
+// circle.ts - circle creation and management
 
 import { Circle, CircleType, PlatformMetrics, ServerSettings, SortingOptions, WithMetric } from "@/models/models";
 import { getServerSettings } from "./server-settings";
@@ -7,6 +7,7 @@ import { ObjectId } from "mongodb";
 import { getDefaultAccessRules, defaultUserGroups, defaultPages, features } from "./constants";
 import { getMetrics } from "../utils/metrics";
 import { upsertVbdCircles } from "./vdb";
+import { createDefaultChatRooms, getChatRoomByHandle, updateChatRoom } from "./chat";
 
 export const SAFE_CIRCLE_PROJECTION = {
     _id: 1,
@@ -185,6 +186,9 @@ export const createCircle = async (circle: Circle): Promise<Circle> => {
         console.error("Failed to upsert circle embedding", e);
     }
 
+    // create circle chat room
+    await createDefaultChatRooms(circle._id);
+
     return circle;
 };
 
@@ -217,6 +221,16 @@ export const updateCircle = async (circle: Partial<Circle>): Promise<void> => {
         await upsertVbdCircles([c]);
     } catch (e) {
         console.error("Failed to upsert circle embedding", e);
+    }
+
+    // update circle chat room
+    const membersChat = await getChatRoomByHandle(_id.toString(), "members");
+    if (membersChat) {
+        await updateChatRoom({
+            _id: membersChat._id,
+            name: circle.name, // keep chat name in sync
+            picture: circle.picture, // keep chat avatar in sync
+        });
     }
 };
 

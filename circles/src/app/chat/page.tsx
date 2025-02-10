@@ -1,3 +1,4 @@
+// chat/page.tsx - shows chat rooms
 "use client";
 
 import { useState, useMemo } from "react";
@@ -41,7 +42,8 @@ export default function ChatPage() {
     const handleChatClick = (chat: ChatRoom) => {
         setSelectedChat(chat);
         if (isMobile) {
-            router.push(`/chat/${chat.handle}`);
+            // TODO add routing to chat rooms
+            //router.push(`/chat/${chat.handle}`);
         }
     };
 
@@ -119,6 +121,7 @@ export default function ChatPage() {
                 {selectedChat && (
                     <ChatRoomComponent
                         chatRoom={selectedChat}
+                        setSelectedChat={setSelectedChat}
                         circle={selectedChat.circleId as unknown as Circle}
                         isDefaultCircle={selectedChat.handle === "default"}
                     />

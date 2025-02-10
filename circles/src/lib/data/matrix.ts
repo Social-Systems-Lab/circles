@@ -1,4 +1,4 @@
-// matrix.ts
+// matrix.ts - Matrix chat functionality
 import { ChatRoom, Circle, UserPrivate } from "@/models/models";
 import crypto from "crypto";
 import { updateCircle } from "./circle";
@@ -370,3 +370,69 @@ export const sendReadReceipt = async (roomId: string, eventId: string) => {
         console.error("Error sending read receipt:", error);
     }
 };
+
+export async function removeUserFromRoom(userId: string, roomId: string): Promise<void> {
+    const adminAccessToken = await getAdminAccessToken();
+    // userId might be "@alice:yourdomain.com" or similar
+    const url = `${MATRIX_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/kick`;
+    const response = await fetch(url, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${adminAccessToken}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            user_id: userId, // The Matrix user to remove
+            reason: "Leaving circle",
+        }),
+    });
+
+    if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Failed removing user: ${error}`);
+    }
+}
+
+export async function updateMatrixRoomNameAndAvatar(roomId: string, newName: string, avatarUrl?: string) {
+    const adminAccessToken = await getAdminAccessToken();
+
+    // Update the room's name
+    {
+        const nameRes = await fetch(
+            `${MATRIX_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/state/m.room.name`,
+            {
+                method: "PUT",
+                headers: {
+                    Authorization: `Bearer ${adminAccessToken}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ name: newName }),
+            },
+        );
+        if (!nameRes.ok) {
+            throw new Error(`Failed updating room name: ${await nameRes.text()}`);
+        }
+    }
+
+    // Optional: set an avatar for the room
+    if (avatarUrl) {
+        const avatarRes = await fetch(
+            `${MATRIX_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/state/m.room.avatar`,
+            {
+                method: "PUT",
+                headers: {
+                    Authorization: `Bearer ${adminAccessToken}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    url: avatarUrl, // Should be a valid mxc:// URL.
+                    // You can also do an upload to the homeserver if needed,
+                    // then pass the returned mxc:// in here.
+                }),
+            },
+        );
+        if (!avatarRes.ok) {
+            throw new Error(`Failed updating room avatar: ${await avatarRes.text()}`);
+        }
+    }
+}

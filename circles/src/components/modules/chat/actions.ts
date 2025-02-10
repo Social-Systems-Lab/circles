@@ -1,3 +1,4 @@
+// chat/actions.ts - server actions for joining chat rooms
 "use server";
 
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";

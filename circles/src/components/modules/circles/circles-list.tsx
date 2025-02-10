@@ -11,7 +11,7 @@ import { useAtom } from "jotai";
 import { contentPreviewAtom, sidePanelContentVisibleAtom, userAtom } from "@/lib/data/atoms";
 import { features } from "@/lib/data/constants";
 import { isAuthorized } from "@/lib/auth/client-auth";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { CirclePicture } from "./circle-picture";
 import DynamicForm from "@/components/forms/dynamic-form";
@@ -53,6 +53,9 @@ const CreateCircleButton: React.FC<InviteButtonProps> = ({ circle, isDefaultCirc
                 </Button>
             </DialogTrigger>
             <DialogContent>
+                <div className="hidden">
+                    <DialogTitle>Create a new circle</DialogTitle>
+                </div>
                 <DynamicForm
                     formSchemaId="create-circle-form"
                     initialFormData={{ parentCircleId: circle._id }}

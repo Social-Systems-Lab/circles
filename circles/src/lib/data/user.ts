@@ -176,6 +176,7 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
                     createdAt: "$chatRoom.createdAt",
                     userGroups: "$chatRoom.userGroups",
                     matrixRoomId: "$chatRoom.matrixRoomId",
+                    picture: "$chatRoom.picture",
                 },
             },
         },

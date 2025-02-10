@@ -1,3 +1,5 @@
+// chat.ts - chat logic
+
 import { ChatRooms, ChatMessages, Circles, Reactions, ChatRoomMembers } from "./db";
 import { ObjectId } from "mongodb";
 import { ChatRoom, ChatMessage, Circle, Mention, SortingOptions, ChatRoomMember } from "@/models/models";
@@ -64,37 +66,38 @@ export const createDefaultChatRooms = async (circleId: string): Promise<ChatRoom
     }
 
     let chatRooms: ChatRoom[] = [];
-    let defaultChatRoom = await getChatRoomByHandle(circleId, "default");
-    if (!defaultChatRoom) {
-        defaultChatRoom = {
-            name: "General Chat",
-            handle: "default",
-            circleId,
-            userGroups: ["admins", "moderators", "members", "everyone"],
-            createdAt: new Date(),
-        };
-        defaultChatRoom = await createChatRoom(defaultChatRoom);
-    }
+    // let defaultChatRoom = await getChatRoomByHandle(circleId, "default");
+    // if (!defaultChatRoom) {
+    //     defaultChatRoom = {
+    //         name: "General Chat",
+    //         handle: "default",
+    //         circleId,
+    //         userGroups: ["admins", "moderators", "members", "everyone"],
+    //         createdAt: new Date(),
+    //     };
+    //     defaultChatRoom = await createChatRoom(defaultChatRoom);
+    // }
 
-    if (!defaultChatRoom.matrixRoomId) {
-        // create matrix room
-        let matrixRoom = await createMatrixRoom(defaultChatRoom._id, defaultChatRoom.name, defaultChatRoom.name);
-        if (matrixRoom) {
-            defaultChatRoom.matrixRoomId = matrixRoom.roomId;
-            await updateChatRoom(defaultChatRoom);
-        }
-    }
+    // if (!defaultChatRoom.matrixRoomId) {
+    //     // create matrix room
+    //     let matrixRoom = await createMatrixRoom(defaultChatRoom._id, defaultChatRoom.name, defaultChatRoom.name);
+    //     if (matrixRoom) {
+    //         defaultChatRoom.matrixRoomId = matrixRoom.roomId;
+    //         await updateChatRoom(defaultChatRoom);
+    //     }
+    // }
 
-    chatRooms.push(defaultChatRoom);
+    // chatRooms.push(defaultChatRoom);
 
     let membersChat = await getChatRoomByHandle(circleId, "members");
     if (!membersChat) {
         membersChat = {
-            name: circle.circleType === "user" ? "Friends Only" : "Members Only",
+            name: circle.name!,
             handle: "members",
             circleId,
             userGroups: ["admins", "moderators", "members"],
             createdAt: new Date(),
+            picture: circle.picture,
         };
         membersChat = await createChatRoom(membersChat);
     }
