@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Circle } from "@/models/models";
 import Image from "next/image";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 export default function CircleMenu({
     circle,
@@ -20,6 +21,12 @@ export default function CircleMenu({
     const [circleMenuOpen, setCircleMenuOpen] = useState(false);
     const [user, setUser] = useAtom(userAtom);
     const router = useRouter();
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.CircleMenu.1");
+        }
+    }, []);
 
     const circles = useMemo(() => {
         if (!user) return [];

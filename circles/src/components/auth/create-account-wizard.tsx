@@ -13,6 +13,7 @@ import { AccountAndPrivateKey } from "@/models/models";
 import { WebviewLog } from "./authenticator";
 import { useAtom } from "jotai";
 import { authInfoAtom, userAtom } from "@/lib/data/atoms";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 // import crypto from "crypto-browserify";
 
 interface WelcomeStepProps {
@@ -255,6 +256,12 @@ const ResponsibilityStep: React.FC = () => {
 
 export const CreateAccountWizard = () => {
     const [step, setStep] = useState(0);
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.CreateAccountWizard.1");
+        }
+    }, []);
 
     const handleNextStep = () => {
         setStep((prevStep) => prevStep + 1);

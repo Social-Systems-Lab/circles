@@ -14,6 +14,7 @@ import { RoomData, startSync } from "@/lib/data/client-matrix";
 import { useAtom } from "jotai";
 import { useEffect, useRef } from "react";
 import { fetchAndCacheMatrixUsers } from "./chat-room";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 export const MatrixSync = () => {
     const [user] = useAtom(userAtom);
@@ -25,6 +26,12 @@ export const MatrixSync = () => {
     const roomMessagesRef = useRef(roomMessages);
     const [matrixUserCache, setMatrixUserCache] = useAtom(matrixUserCacheAtom);
     const matrixUserCacheRef = useRef(matrixUserCache);
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.MatrixSync.1");
+        }
+    }, []);
 
     useEffect(() => {
         roomMessagesRef.current = roomMessages;

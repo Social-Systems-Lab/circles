@@ -34,12 +34,17 @@ export default async function Friends(props: CirclesProps) {
     if (activeTab === "following" || !activeTab) {
         const memberIds =
             user?.memberships
-                ?.filter((m) => m.circle.circleType === "user" && user.did !== userDid)
+                ?.filter((m) => m.circle.circleType === "user" && m.circle._id !== user._id)
                 ?.map((membership) => membership.circle?._id) || [];
         let memberCircles = await getCirclesByIds(memberIds);
+
         circles = await getMetricsForCircles(memberCircles, userDid, searchParams?.sort as SortingOptions);
     } else {
         circles = await getCirclesWithMetrics(userDid, undefined, searchParams?.sort as SortingOptions, "user");
+
+        // remove circles that are in the users memberships
+        const memberIds = user?.memberships?.map((m) => m.circle._id) || [];
+        circles = circles.filter((c) => !memberIds.includes(c._id));
     }
 
     return (
@@ -55,7 +60,7 @@ export default async function Friends(props: CirclesProps) {
                 circles={circles}
                 isDefaultCircle={false}
                 activeTab={activeTab}
-                hideCreateCircle={true}
+                friendsList={true}
             />
             {/* <MembersTable circle={user} members={circles} isDefaultCircle={false} activeTab={activeTab} /> */}
 

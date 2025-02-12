@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import Image from "next/image";
 import { Circle } from "@/models/models";
 import { FaUsers } from "react-icons/fa";
@@ -10,6 +10,7 @@ import InviteButton from "./invite-button";
 import JoinButton from "./join-button";
 import GalleryTrigger from "./gallery-trigger";
 import { useIsCompact } from "@/components/utils/use-is-compact";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 type HomeContentProps = {
     circle: Circle;
@@ -21,6 +22,12 @@ export default function HomeContent({ circle, isDefaultCircle, authorizedToEdit 
     const isUser = circle?.circleType === "user";
     const memberCount = circle?.members ? (isUser ? circle.members - 1 : circle.members) : 0;
     const isCompact = useIsCompact();
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.HomeContent.1");
+        }
+    }, []);
 
     return (
         <div className="flex flex-1 flex-row justify-center">

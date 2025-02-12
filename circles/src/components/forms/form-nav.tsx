@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { buttonVariants } from "../ui/button";
 import { Circle } from "@/models/models";
 import { useIsCompact } from "../utils/use-is-compact";
+import { useEffect } from "react";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 export type NavItem = {
     name: string;
@@ -23,6 +25,12 @@ export const FormNav: React.FC<FormNavProps> = ({ items, circle, isDefaultCircle
     const pathname = usePathname();
     const filteredItems = isDefaultCircle ? items : items.filter((item) => item.handle !== "server-settings");
     const isCompact = useIsCompact();
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.FormNav.1");
+        }
+    }, []);
 
     const getPath = (item: NavItem) => {
         if (isDefaultCircle) {

@@ -18,6 +18,7 @@ import { authInfoAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "../utils/use-is-compact";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 interface DynamicFormProps {
     initialFormData?: Record<string, any>;
@@ -54,6 +55,12 @@ const DynamicFormManager: React.FC<DynamicFormProps> = ({
         },
         [setAuthStatus],
     );
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.DynamicFormManager.1");
+        }
+    }, []);
 
     const formTools = useMemo<FormTools>(() => {
         return { user, setUser, searchParams, toast, setAuthenticated };

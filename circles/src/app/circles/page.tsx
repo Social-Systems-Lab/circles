@@ -39,6 +39,10 @@ export default async function Home(props: CirclesProps) {
         circles = await getMetricsForCircles(memberCircles, userDid, searchParams?.sort as SortingOptions);
     } else {
         circles = await getCirclesWithMetrics(userDid, undefined, searchParams?.sort as SortingOptions);
+
+        // remove circles that are in the users memberships
+        const memberIds = user?.memberships?.map((m) => m.circle._id) || [];
+        circles = circles.filter((c) => !memberIds.includes(c._id));
     }
 
     return (

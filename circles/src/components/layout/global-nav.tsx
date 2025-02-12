@@ -8,10 +8,18 @@ import Link from "next/link";
 import GlobalNavItems from "./global-nav-items";
 import { useAtom } from "jotai";
 import { authInfoAtom } from "@/lib/data/atoms";
+import { useEffect } from "react";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 export default function GlobalNav() {
     // hide nav if not logged in
     const [authInfo, setAuthInfo] = useAtom(authInfoAtom);
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.GlobalNav.1");
+        }
+    }, []);
+
     if (authInfo.authStatus !== "authenticated") {
         return null;
     }

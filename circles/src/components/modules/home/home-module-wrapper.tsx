@@ -1,9 +1,10 @@
 "use client";
 
-import React, { ReactNode } from "react";
+import React, { ReactNode, useEffect } from "react";
 import { Circle } from "@/models/models";
 import CircleSidePanel from "./circle-side-panel";
 import { useIsCompact } from "@/components/utils/use-is-compact";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 type HomeModuleWrapperProps = {
     children: ReactNode[];
@@ -15,6 +16,12 @@ const HomeModuleWrapper: React.FC<HomeModuleWrapperProps> = ({ children, circle,
     const isCompact = useIsCompact();
 
     const [coverComponent, contentComponent] = children;
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.HomeModuleWrapper.1");
+        }
+    }, []);
 
     return (
         <div className="flex flex-1 flex-col">

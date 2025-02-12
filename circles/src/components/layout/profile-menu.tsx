@@ -20,6 +20,7 @@ import { MdQrCodeScanner, MdQrCode } from "react-icons/md";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import QRCode from "react-qr-code";
 import { createTestAccountAction } from "../auth/actions";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 const QRCodePopover = () => {
     const [authInfo, setAuthInfo] = useAtom(authInfoAtom);
@@ -224,6 +225,12 @@ const ProfileMenuBar = () => {
 };
 
 export const ProfileMenu = () => {
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.ProfileMenu.1");
+        }
+    }, []);
+
     return (
         <Suspense>
             <ProfileMenuBar />

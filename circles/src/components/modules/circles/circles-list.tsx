@@ -9,7 +9,7 @@ import { Plus } from "lucide-react";
 import Image from "next/image";
 import { useAtom } from "jotai";
 import { contentPreviewAtom, sidePanelContentVisibleAtom, userAtom } from "@/lib/data/atoms";
-import { features } from "@/lib/data/constants";
+import { features, LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { isAuthorized } from "@/lib/auth/client-auth";
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useIsCompact } from "@/components/utils/use-is-compact";
@@ -72,10 +72,10 @@ interface CirclesListProps {
     page?: Page;
     isDefaultCircle: boolean;
     activeTab?: string;
-    hideCreateCircle?: boolean;
+    friendsList?: boolean;
 }
 
-const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, hideCreateCircle }: CirclesListProps) => {
+const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, friendsList }: CirclesListProps) => {
     const [user] = useAtom(userAtom);
     const isCompact = useIsCompact();
     const isMobile = useIsMobile();
@@ -91,6 +91,12 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, hideCr
             return circles;
         }
     }, [circles, searchQuery]);
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.CirclesList.1");
+        }
+    }, []);
 
     const containerVariants = {
         hidden: {},
@@ -141,12 +147,12 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, hideCr
                     }}
                 >
                     <Input
-                        placeholder={`Search ${circle.circleType === "user" ? "friends" : "circles"}...`}
+                        placeholder={`Search ${friendsList ? "friends" : "circles"}...`}
                         value={searchQuery}
                         onChange={(event) => setSearchQuery(event.target.value)}
                         className="flex-1"
                     />
-                    {canCreateSubcircle && !hideCreateCircle && (
+                    {canCreateSubcircle && !friendsList && (
                         <CreateCircleButton circle={circle} isDefaultCircle={isDefaultCircle} />
                     )}
                 </div>
@@ -156,10 +162,10 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, hideCr
                 {filteredCircles.length === 0 && activeTab === "following" && (
                     <div className="flex h-full flex-col items-center justify-center">
                         <Image src={emptyFeed} alt="No posts yet" width={isMobile ? 230 : 300} />
-                        <h4>No {circle.circleType === "user" ? "friends" : "circles"}</h4>
+                        <h4>No {friendsList ? "friends" : "circles"}</h4>
                         <div className="max-w-[700px] pl-4 pr-4">
-                            You are not following {circle.circleType === "user" ? "anyone" : "any circles"}. Try the
-                            discover tab to find new {circle.circleType === "user" ? "friends" : "circles"} to follow.
+                            You are not following {friendsList ? "anyone" : "any circles"}. Try the discover tab to find
+                            new {friendsList ? "friends" : "circles"} to follow.
                         </div>
                         <div className="mt-4 flex flex-row gap-2">
                             <Button variant={"outline"} onClick={() => updateQueryParam(router, "tab", "discover")}>

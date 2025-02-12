@@ -3,11 +3,12 @@
 import { contentPreviewAtom, zoomContentAtom } from "@/lib/data/atoms";
 import { Content, ContentPreviewData, WithMetric } from "@/models/models";
 import { useAtom, useSetAtom } from "jotai";
-import React from "react";
+import React, { useEffect } from "react";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "../ui/hover-card";
 import { HoverCardArrow } from "@radix-ui/react-hover-card";
 import Indicators from "../utils/indicators";
 import Image from "next/image";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 interface MapMarkerProps {
     content?: Content;
@@ -18,6 +19,12 @@ interface MapMarkerProps {
 const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }) => {
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [zoomContent, setZoomContent] = useAtom(zoomContentAtom);
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.MapMarker.1");
+        }
+    }, []);
 
     const handleClick = () => {
         if (!content) return;

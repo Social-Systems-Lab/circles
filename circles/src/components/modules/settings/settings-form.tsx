@@ -2,7 +2,9 @@
 
 import DynamicForm from "@/components/forms/dynamic-form";
 import { useIsCompact } from "@/components/utils/use-is-compact";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { Circle, Page } from "@/models/models";
+import { useEffect } from "react";
 
 export type SettingsFormProps = {
     page: Page;
@@ -15,6 +17,12 @@ export type SettingsFormProps = {
 export const SettingsForm = ({ formSchemaId, page, subpage, initialFormData, circle }: SettingsFormProps) => {
     const isCompact = useIsCompact();
     const isUser = circle?.circleType === "user";
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.SettingsForm.1");
+        }
+    }, []);
 
     return (
         <div

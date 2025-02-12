@@ -1,7 +1,7 @@
 // chat/page.tsx - shows chat rooms
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { ChatRoom, Circle } from "@/models/models";
@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import emptyFeed from "@images/empty-feed.png";
 import { Button } from "@/components/ui/button";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 export default function ChatPage() {
     const [user] = useAtom(userAtom);
@@ -23,6 +24,12 @@ export default function ChatPage() {
     const [unreadCounts] = useAtom(unreadCountsAtom);
     const isMobile = useIsMobile();
     const router = useRouter();
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.ChatPage.1");
+        }
+    }, []);
 
     // Sort chat rooms by their latest message timestamps
     const sortedChats = useMemo(() => {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { HiChevronDown, HiX } from "react-icons/hi";
 import { Circle, Page } from "@/models/models";
@@ -15,6 +15,7 @@ import { IoChatbubbleOutline } from "react-icons/io5";
 import { MdOutlineExplore } from "react-icons/md";
 import { LiaGlobeAfricaSolid } from "react-icons/lia";
 import { FaRegCircle } from "react-icons/fa6";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 function GlobalNavItem({
     item,
@@ -58,6 +59,12 @@ export default function GlobalNavItems() {
     const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
     const isMobile = useIsMobile();
     const [user] = useAtom(userAtom);
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.GlobalNavItems.1");
+        }
+    }, []);
 
     return (
         <>

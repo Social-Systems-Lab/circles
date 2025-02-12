@@ -18,7 +18,7 @@ import {
     unreadCountsAtom,
 } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { ChatRoom, Circle, MemberDisplay, UserToolboxTab } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { LatestMessage } from "../modules/chat/chat-room";
@@ -26,6 +26,8 @@ import { logOut } from "../auth/actions";
 import { getCircleAction } from "./actions";
 import { Notifications } from "./notifications";
 import Link from "next/link";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import { useIsMobile } from "../utils/use-is-mobile";
 
 type Notification = {
     id: number;
@@ -43,8 +45,26 @@ export const UserToolbox = () => {
     const [authInfo, setAuthInfo] = useAtom(authInfoAtom);
     const [latestMessages, setLatestMessages] = useAtom(latestMessagesAtom);
     const [unreadCounts, setUnreadCounts] = useAtom(unreadCountsAtom);
+    const pathname = usePathname();
+    const [prevPath, setPrevPath] = useState(pathname);
+    const isMobile = useIsMobile();
 
     const router = useRouter();
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.UserToolbox.1");
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!isMobile) return;
+
+        if (prevPath !== pathname) {
+            setUserToolboxState(undefined); // Close the toolbox on navigation
+        }
+        setPrevPath(pathname);
+    }, [pathname, prevPath, setUserToolboxState, isMobile]);
 
     useEffect(() => {
         if (!userToolboxState?.tab) {

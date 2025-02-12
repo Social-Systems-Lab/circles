@@ -3,7 +3,7 @@
 "use client";
 
 import Link from "next/link";
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { HiChevronDown, HiX } from "react-icons/hi";
 import { Circle, Page } from "@/models/models";
@@ -12,6 +12,7 @@ import { useIsMobile } from "../utils/use-is-mobile";
 import { motion, AnimatePresence } from "framer-motion";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 function NavItem({
     item,
@@ -56,6 +57,12 @@ export default function NavBarItems({ circle, isDefaultCircle }: { circle: Circl
     const isMobile = useIsMobile();
     const [user] = useAtom(userAtom);
     const isUser = circle?.circleType === "user";
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.NavBarItems.1");
+        }
+    }, []);
 
     const getPath = useCallback(
         (page: Page) => {

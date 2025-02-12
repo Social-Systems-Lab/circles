@@ -14,7 +14,7 @@ import QuestsStep from "./quests-step";
 import FinalStep from "./final-step";
 import ProfileSummary from "./profile-summary";
 import { Cause, Skill } from "@/models/models";
-import { causes, skills } from "@/lib/data/constants";
+import { causes, LOG_LEVEL_TRACE, logLevel, skills } from "@/lib/data/constants";
 
 export type Quest = {
     id: number;
@@ -50,6 +50,12 @@ export default function Onboarding() {
     const [hasClosedOnboarding, setHasClosedOnboarding] = useState(false);
 
     const [userData, setUserData] = useState<OnboardingUserData | undefined>(undefined);
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.Onboarding.1");
+        }
+    }, []);
 
     useEffect(() => {
         if (!user) return;

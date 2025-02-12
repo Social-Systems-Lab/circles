@@ -31,6 +31,7 @@ import Onboarding from "../onboarding/onboarding";
 import { Dialog, DialogContent } from "../ui/dialog";
 import { precisionLevels } from "../forms/location-picker";
 import { SidePanel } from "../layout/side-panel";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
     const mapContainer = useRef(null);
@@ -46,6 +47,12 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
 
     const markersRef = useRef<Map<string, mapboxgl.Marker>>(new globalThis.Map());
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.MapBox.1");
+        }
+    }, []);
 
     const onMarkerClick = useCallback(
         (content: Content) => {
@@ -227,6 +234,13 @@ export default function MapAndContentWrapper({
 }) {
     // Fixes hydration errors
     const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.MapAndContentWrapper.1");
+        }
+    }, []);
+
     useEffect(() => {
         setIsMounted(true);
     }, []);

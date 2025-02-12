@@ -1,5 +1,8 @@
 import { Page, UserGroup, Module, Feature, Cause, Skill } from "@/models/models";
 
+export const logLevel = 5; // 0: none, 1: error, 2: warn, 3: info, 4: debug, 5: trace
+export const LOG_LEVEL_TRACE = 5;
+
 export const features = {
     settings_edit: {
         name: "Edit Settings",
@@ -577,13 +580,13 @@ export const defaultPages: Page[] = [
         readOnly: true,
         defaultUserGroups: ["admins", "moderators", "members", "everyone"],
     },
-    {
-        name: "Chat",
-        handle: "chat",
-        description: "Chat page",
-        module: "chat",
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
+    // {
+    //     name: "Chat",
+    //     handle: "chat",
+    //     description: "Chat page",
+    //     module: "chat",
+    //     defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    // },
     {
         name: "Members",
         handle: "members",

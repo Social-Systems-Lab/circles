@@ -9,6 +9,7 @@ import { useAtom } from "jotai";
 import { Account } from "@/models/models";
 import { optional } from "zod";
 import { CreateAccountWizard } from "./create-account-wizard";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 const { KEYUTIL, KJUR } = require("jsrsasign");
 
 declare global {
@@ -39,6 +40,12 @@ export const WebviewLog = (message: string, ...optionalParams: any[]) => {
 export const Authenticator = () => {
     const [authInfo, setAuthInfo] = useAtom(authInfoAtom);
     const [, setUser] = useAtom(userAtom);
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.Authenticator.1");
+        }
+    }, []);
 
     const checkQrAuthentication = useCallback(async () => {
         if (!authInfo.challenge) {

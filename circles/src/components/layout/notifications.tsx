@@ -1,11 +1,12 @@
 //notifications.tsx - Displays the user notifications
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import { userAtom, roomMessagesAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { useRouter } from "next/navigation";
 import { timeSince } from "@/lib/utils";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 type Notification = {
     id: number;
@@ -17,6 +18,12 @@ export const Notifications = () => {
     const [user, setUser] = useAtom(userAtom);
     const [roomMessages] = useAtom(roomMessagesAtom);
     const router = useRouter();
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.Notifications.1");
+        }
+    }, []);
 
     const notifications = useMemo(() => {
         if (!user?.matrixNotificationsRoomId) return [];

@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { Circle } from "@/models/models";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { buttonVariants } from "@/components/ui/button";
+import { useEffect } from "react";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 export type NavItem = {
     name: string;
@@ -23,6 +25,12 @@ export const FeedsNav: React.FC<FeedsNavProps> = ({ items, circle, isDefaultCirc
     const pathname = usePathname();
     const filteredItems = items;
     const isCompact = useIsCompact();
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.FeedsNav.1");
+        }
+    }, []);
 
     const getPath = (item: NavItem) => {
         if (isDefaultCircle) {

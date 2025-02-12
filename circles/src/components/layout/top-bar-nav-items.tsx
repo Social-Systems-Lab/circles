@@ -6,13 +6,22 @@ import { usePathname } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { HiChevronDown } from "react-icons/hi";
 import { Circle, Page } from "@/models/models";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 export default function TopBarNavItems({ circle, isDefaultCircle }: { circle: Circle; isDefaultCircle: boolean }) {
     const itemContainerRef = useRef<HTMLDivElement | null>(null);
-    const itemRefs = useRef<React.RefObject<HTMLDivElement | null>[]>(circle?.pages?.map(() => React.createRef()) ?? []);
+    const itemRefs = useRef<React.RefObject<HTMLDivElement | null>[]>(
+        circle?.pages?.map(() => React.createRef()) ?? [],
+    );
     const pathname = usePathname();
     const [itemVisibility, setItemVisibility] = useState<boolean[]>([]);
     const [navMenuOpen, setNavMenuOpen] = useState(false);
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.TopBarNavItems.1");
+        }
+    }, []);
 
     const getPath = useCallback(
         (page: Page) => {

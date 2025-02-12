@@ -7,7 +7,7 @@ import { Circle, Feed, Page, PostDisplay } from "@/models/models";
 import { CreateNewPost } from "./create-new-post";
 import PostList from "./post-list";
 import CircleHeader from "../circles/circle-header";
-import { feedFeaturePrefix } from "@/lib/data/constants";
+import { feedFeaturePrefix, LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { isAuthorized } from "@/lib/auth/client-auth";
@@ -18,6 +18,7 @@ import emptyFeed from "@images/empty-feed.png";
 import Image from "next/image";
 import { updateQueryParam } from "@/lib/utils/helpers-client";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
+import { useEffect } from "react";
 
 export type FeedComponentProps = {
     circle: Circle;
@@ -37,6 +38,12 @@ export const FeedComponent = ({ circle, posts, page, subpage, feed, isDefaultCir
     const canPost = isAuthorized(user, circle, canPostFeature);
 
     const router = useRouter();
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.FeedComponent.1");
+        }
+    }, []);
 
     const handleFilterChange = (filter: string) => {
         updateQueryParam(router, "sort", filter);

@@ -15,6 +15,7 @@ import JoinButton from "../modules/home/join-button";
 import { Circle, ContentPreviewData, FileInfo, Media, PostDisplay, PostItemProps, WithMetric } from "@/models/models";
 import { PostItem } from "../modules/feeds/post-list";
 import Indicators from "../utils/indicators";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 export const PostPreview = ({
     post,
@@ -136,6 +137,12 @@ export const ContentPreview: React.FC = () => {
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [mapOpen] = useAtom(mapOpenAtom);
     const isMobile = useIsMobile();
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.ContentPreview.1");
+        }
+    }, []);
 
     const getPreviewContent = () => {
         let circleType = (contentPreview?.content as any)?.circleType;

@@ -65,7 +65,7 @@ import { AiOutlineHeart, AiFillHeart } from "react-icons/ai";
 import { useToast } from "@/components/ui/use-toast";
 import { PostForm } from "./post-form";
 import { isAuthorized } from "@/lib/auth/client-auth";
-import { feedFeaturePrefix } from "@/lib/data/constants";
+import { feedFeaturePrefix, LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { MentionsInput, Mention, MentionItem, SuggestionDataItem } from "react-mentions";
 import { over, set } from "lodash";
 import ReactMarkdown from "react-markdown";
@@ -1253,6 +1253,12 @@ type PostListProps = {
 };
 
 const PostList = ({ feed, circle, posts, page, subpage, isAggregateFeed }: PostListProps) => {
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.PostList.1");
+        }
+    }, []);
+
     return (
         <div className={"flex flex-col gap-6"}>
             {posts.map((post) => (

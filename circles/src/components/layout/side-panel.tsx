@@ -9,6 +9,7 @@ import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { contentPreviewAtom, mapOpenAtom, userToolboxDataAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
 import ContentPreview from "./content-preview";
 import { UserToolbox } from "./user-toolbox";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 export const SidePanel: React.FC = () => {
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
@@ -16,6 +17,12 @@ export const SidePanel: React.FC = () => {
     const [mapOpen] = useAtom(mapOpenAtom);
     const isMobile = useIsMobile();
     const [sidePanelContentVisible, setSidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.SidePanel.1");
+        }
+    }, []);
 
     const closeContentPreview = () => {
         setContentPreview(undefined);

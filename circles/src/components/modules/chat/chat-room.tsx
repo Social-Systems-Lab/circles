@@ -33,6 +33,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { fetchMatrixUsers, joinChatRoomAction, sendReadReceiptAction } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { IoArrowBack } from "react-icons/io5";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -429,6 +430,12 @@ export const ChatRoomComponent: React.FC<{
     const initialMessagesLoaded = useRef(false);
     const [roomData] = useAtom(roomDataAtom);
     const [roomMessages] = useAtom(roomMessagesAtom);
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.ChatRoomComponent.1");
+        }
+    }, []);
 
     const markLatestMessageAsRead = useCallback(async () => {
         if (messages.length > 0 && user?.matrixAccessToken) {

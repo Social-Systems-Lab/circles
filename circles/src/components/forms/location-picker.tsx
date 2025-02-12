@@ -12,6 +12,7 @@ import { mapboxKeyAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { LngLat, Location } from "@/models/models";
 import { AutoComplete, Option } from "@/components/ui/autocomplete";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 export const precisionLevels = [
     { name: "Country", icon: Globe, zoom: 3 },
@@ -41,6 +42,12 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange }) => {
         label: "",
     });
     const [isLocationConfirmed, setIsLocationConfirmed] = useState(value?.lngLat ? true : false);
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.CreateAccountWizard.1");
+        }
+    }, []);
 
     useEffect(() => {
         if (!mapboxKey || !mapContainer.current) return;

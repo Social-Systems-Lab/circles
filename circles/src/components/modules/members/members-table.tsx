@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useTransition } from "react";
+import React, { useEffect, useState, useTransition } from "react";
 import {
     ColumnDef,
     ColumnFiltersState,
@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAtom } from "jotai";
 import { contentPreviewAtom, sidePanelContentVisibleAtom, userAtom } from "@/lib/data/atoms";
-import { features } from "@/lib/data/constants";
+import { features, LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { hasHigherAccess, isAuthorized } from "@/lib/auth/client-auth";
 import {
     Dialog,
@@ -123,6 +123,12 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
     const canEditSameLevelUserGroups = isAuthorized(user, circle, features.edit_same_level_user_groups);
     const canRemoveSameLevelUser = isAuthorized(user, circle, features.remove_same_level_members);
     const canEdit = canEditUserGroups || canRemoveUser;
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.MemberTable.1");
+        }
+    }, []);
 
     const { toast } = useToast();
 

@@ -6,6 +6,8 @@ import { ArrowRight } from "lucide-react";
 import { useIsMobile } from "../utils/use-is-mobile";
 // Import your carousel components
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
+import { useEffect } from "react";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 type FeatureCardProps = {
     image: string;
@@ -49,6 +51,12 @@ function FeatureCard({ image, title, description }: FeatureCardProps) {
 
 export default function LandingPage() {
     const isMobile = useIsMobile();
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.LandingPage.1");
+        }
+    }, []);
 
     return (
         <div className="flex min-h-screen flex-col items-center bg-gray-50 px-4 text-gray-800">

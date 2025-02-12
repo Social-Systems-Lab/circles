@@ -7,8 +7,9 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useEffect } from "react";
 import type { Circle, Page } from "@/models/models";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 type CircleTabsProps = {
     circle: Circle;
@@ -18,6 +19,12 @@ type CircleTabsProps = {
 export function CircleTabs({ circle, isDefaultCircle }: CircleTabsProps) {
     const pathname = usePathname();
     const [user] = useAtom(userAtom);
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.CircleTab.1");
+        }
+    }, []);
 
     // Determine user's access groups for the current circle
     const userGroups = useMemo(() => {

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { contentPreviewAtom, imageGalleryAtom } from "@/lib/data/atoms";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import useEmblaCarousel from "embla-carousel-react";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 export const ImageGallery: React.FC = () => {
     const [imageGallery, setImageGallery] = useAtom(imageGalleryAtom);
@@ -15,6 +16,12 @@ export const ImageGallery: React.FC = () => {
     const [isFullScreen, setIsFullScreen] = useState<boolean | undefined>(undefined);
     const isMobile = useIsMobile();
     const galleryRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.ImageGallery.1");
+        }
+    }, []);
 
     const [emblaRef, emblaApi] = useEmblaCarousel({
         startIndex: imageGallery?.initialIndex || 0,
