@@ -89,7 +89,7 @@ export type Membership = {
 };
 
 export type ChatRoomMembership = ChatRoomMember & {
-    chatRoom: ChatRoom;
+    chatRoom: ChatRoomDisplay;
 };
 
 export interface UserPrivate extends Circle {
@@ -268,6 +268,11 @@ export const chatRoomSchema = z.object({
 });
 
 export type ChatRoom = z.infer<typeof chatRoomSchema>;
+
+export type ChatRoomDisplay = ChatRoom & {
+    circle: Circle;
+};
+
 export type MatrixMessageContent =
     | {
           msgtype: "m.text";

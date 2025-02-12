@@ -2,7 +2,15 @@
 "use client";
 
 import { Dispatch, KeyboardEvent, SetStateAction, useCallback, useMemo, useTransition } from "react";
-import { Circle, ChatRoom, ChatMessage, Page, ChatRoomMembership, MatrixUserCache } from "@/models/models";
+import {
+    Circle,
+    ChatRoom,
+    ChatMessage,
+    Page,
+    ChatRoomMembership,
+    MatrixUserCache,
+    ChatRoomDisplay,
+} from "@/models/models";
 import CircleHeader from "../circles/circle-header";
 import {
     mapOpenAtom,
@@ -34,6 +42,7 @@ import { fetchMatrixUsers, joinChatRoomAction, sendReadReceiptAction } from "./a
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { IoArrowBack } from "react-icons/io5";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import { useRouter } from "next/navigation";
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -300,7 +309,7 @@ export const LatestMessage: React.FC<LatestMessageProps> = ({ roomId, latestMess
 type ChatInputProps = {
     setMessages: any;
     circle: Circle;
-    chatRoom: ChatRoom;
+    chatRoom: ChatRoomDisplay;
     page?: Page;
     subpage?: string;
 };
@@ -402,8 +411,8 @@ export const fetchAndCacheMatrixUsers = async (
 };
 
 export const ChatRoomComponent: React.FC<{
-    chatRoom: ChatRoom;
-    setSelectedChat?: Dispatch<SetStateAction<ChatRoom | undefined>>;
+    chatRoom: ChatRoomDisplay;
+    setSelectedChat?: Dispatch<SetStateAction<ChatRoomDisplay | undefined>>;
     circle: Circle;
     inToolbox?: boolean;
     isDefaultCircle?: boolean;
@@ -430,6 +439,7 @@ export const ChatRoomComponent: React.FC<{
     const initialMessagesLoaded = useRef(false);
     const [roomData] = useAtom(roomDataAtom);
     const [roomMessages] = useAtom(roomMessagesAtom);
+    const router = useRouter();
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -627,7 +637,7 @@ export const ChatRoomComponent: React.FC<{
                     variant="ghost"
                     size="icon"
                     className="fixed left-4 top-4 h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
-                    onClick={() => setSelectedChat && setSelectedChat(undefined)}
+                    onClick={() => router.push("/chat")}
                 >
                     <IoArrowBack className="h-5 w-5" />
                 </Button>

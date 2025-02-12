@@ -2,7 +2,15 @@
 
 import { ChatRooms, ChatMessages, Circles, Reactions, ChatRoomMembers } from "./db";
 import { ObjectId } from "mongodb";
-import { ChatRoom, ChatMessage, Circle, Mention, SortingOptions, ChatRoomMember } from "@/models/models";
+import {
+    ChatRoom,
+    ChatMessage,
+    Circle,
+    Mention,
+    SortingOptions,
+    ChatRoomMember,
+    ChatRoomDisplay,
+} from "@/models/models";
 import { getCircleById, updateCircle } from "./circle";
 import { addChatRoomsAccessRules } from "../utils";
 import { createMatrixRoom } from "./matrix";
@@ -40,6 +48,24 @@ export const getChatRooms = async (circleId: string): Promise<ChatRoom[]> => {
         }
     });
     return chatRooms;
+};
+
+export const getDefaultChatRoomByCircleHandle = async (circleHandle: string): Promise<ChatRoomDisplay | null> => {
+    let circle = await Circles.findOne({ handle: circleHandle });
+    if (!circle) {
+        return null;
+    }
+
+    let chatRoom = await getChatRoomByHandle(circle._id.toString(), "members");
+    if (!chatRoom) {
+        return null;
+    }
+
+    let chatRoomDisplay: ChatRoomDisplay = {
+        ...chatRoom,
+        circle,
+    };
+    return chatRoomDisplay;
 };
 
 export const getChatRoomByHandle = async (

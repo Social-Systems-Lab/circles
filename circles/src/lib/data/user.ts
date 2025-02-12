@@ -150,6 +150,7 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
         {
             $addFields: {
                 chatRoomIdObject: { $toObjectId: "$chatRoomId" },
+                circleIdObject: { $toObjectId: "$circleId" },
             },
         },
         {
@@ -161,6 +162,15 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
             },
         },
         { $unwind: "$chatRoom" },
+        {
+            $lookup: {
+                from: "circles",
+                localField: "circleIdObject",
+                foreignField: "_id",
+                as: "circle",
+            },
+        },
+        { $unwind: "$circle" },
         {
             $project: {
                 _id: { $toString: "$_id" },
@@ -177,6 +187,17 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
                     userGroups: "$chatRoom.userGroups",
                     matrixRoomId: "$chatRoom.matrixRoomId",
                     picture: "$chatRoom.picture",
+                    circle: {
+                        _id: { $toString: "$circle._id" },
+                        name: "$circle.name",
+                        handle: "$circle.handle",
+                        description: "$circle.description",
+                        picture: "$circle.picture",
+                        cover: "$circle.cover",
+                        mission: "$circle.mission",
+                        location: "$circle.location",
+                        circleType: "$circle.circleType",
+                    },
                 },
             },
         },

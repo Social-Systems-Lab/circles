@@ -1,4 +1,4 @@
-// chat/page.tsx - shows chat rooms
+// chat/layout.tsx - shows chat rooms
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { ChatList } from "@/components/modules/chat/chat-list";
 
-export default function ChatPage() {
+export default function ChatLayoutPage() {
     const [user] = useAtom(userAtom);
     const [latestMessages] = useAtom(latestMessagesAtom);
     const isMobile = useIsMobile();
@@ -26,7 +26,7 @@ export default function ChatPage() {
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
-            console.log("useEffect.ChatPage.1");
+            console.log("useEffect.ChatLayoutPage.1");
         }
     }, []);
 
