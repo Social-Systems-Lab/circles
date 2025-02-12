@@ -551,9 +551,9 @@ export const ChatRoomComponent: React.FC<{
                         <div className="mt-4">
                             <CircleHeader
                                 circle={circle}
-                                page={page}
-                                subpage={chatRoom.handle && chatRoom.handle !== "default" ? chatRoom.name : undefined}
-                                isDefaultCircle={isDefaultCircle}
+                                page={undefined}
+                                subpage={undefined}
+                                isDefaultCircle={false}
                             />
                         </div>
                     )}

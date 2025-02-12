@@ -59,14 +59,14 @@ export const FeedComponent = ({ circle, posts, page, subpage, feed, isDefaultCir
             }}
         >
             <div className="flex w-full flex-col">
-                <div className="mt-4">
+                {/* <div className="mt-4">
                     <CircleHeader
                         circle={circle}
                         page={page}
                         subpage={feed.handle && feed.handle !== "default" ? feed.name : undefined}
                         isDefaultCircle={isDefaultCircle}
                     />
-                </div>
+                </div> */}
                 {canPost && (
                     <div>
                         {/* className="mt-6" */}

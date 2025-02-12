@@ -29,9 +29,9 @@ export const CircleHeader: React.FC<CircleHeaderProps> = ({ circle, page, subpag
         [isDefaultCircle, circle.handle],
     );
 
-    if (true || isCompact) {
-        return <div></div>;
-    }
+    // if (true || isCompact) {
+    //     return <div></div>;
+    // }
 
     return (
         <div className="mb-4 flex justify-center">
