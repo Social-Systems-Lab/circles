@@ -3,12 +3,12 @@
 import { ModulePageProps } from "../dynamic-page";
 import { getChatRoomByHandle } from "@/lib/data/chat";
 import { ChatRoomComponent } from "./chat-room";
-import { SortingOptions } from "@/models/models";
+import { ChatRoomDisplay, SortingOptions } from "@/models/models";
 import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 import { ThirdColumn } from "../feeds/third-column";
 
 export default async function ChatModule({ circle, page, subpage, isDefaultCircle, searchParams }: ModulePageProps) {
-    const chatRoom = await getChatRoomByHandle(circle?._id, subpage);
+    const chatRoom = (await getChatRoomByHandle(circle?._id, subpage)) as ChatRoomDisplay;
     if (!chatRoom) {
         return <div></div>;
     }
