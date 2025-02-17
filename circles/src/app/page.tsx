@@ -42,7 +42,7 @@ export default async function Home(props: HomeProps) {
         <div className="flex flex-1 flex-row justify-center overflow-hidden">
             <div className="mb-4 mt-14 flex max-w-[1100px] flex-1 flex-col items-center justify-center md:ml-4 md:mr-4 md:mt-14">
                 <FeedTabs currentTab={activeTab} />
-                <AggregateFeedComponent posts={posts} userFeed={userFeed!} activeTab={activeTab} />;
+                <AggregateFeedComponent posts={posts} userFeed={userFeed!} activeTab={activeTab} />
             </div>
         </div>
     );

@@ -1272,7 +1272,6 @@ const PostList = ({ feed, circle, posts, page, subpage, isAggregateFeed }: PostL
                     isAggregateFeed={isAggregateFeed}
                 />
             ))}
-            {/* <pre>{JSON.stringify(posts, null, 2)}</pre> */}
         </div>
     );
 };
