@@ -66,7 +66,7 @@ export const ListFilter = ({ onFilterChange }: ListFilterProps) => {
                     >
                         <AudioLines className="mr-1 h-[18px] w-[18px] text-gray-500 peer-data-[state=checked]:text-blue-500 dark:text-gray-400 dark:peer-data-[state=checked]:text-blue-400" />
                         <span className="text-[13px] font-medium text-gray-700 peer-data-[state=checked]:text-blue-500 dark:text-gray-300 dark:peer-data-[state=checked]:text-blue-400">
-                            Similar
+                            Resonates
                         </span>
                     </Label>
                 </div>

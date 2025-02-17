@@ -70,4 +70,6 @@ export async function generateMetadata(): Promise<Metadata> {
     };
 }
 
+export const fetchCache = "force-no-store";
+
 export default RootLayout;

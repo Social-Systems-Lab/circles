@@ -214,6 +214,8 @@ export async function fetchRoomMessages(
 
 export async function sendRoomMessage(accessToken: string, matrixUrl: string, roomId: string, content: string) {
     const txnId = Date.now(); // Use a unique transaction ID
+
+    console.log("Sending message to room:", roomId);
     const response = await fetch(
         `${matrixUrl}/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${txnId}`,
         {

@@ -1,3 +1,4 @@
+// chat/page.tsx - chat page placeholder when no chat room is selected
 "use client";
 
 import { Button } from "@/components/ui/button";

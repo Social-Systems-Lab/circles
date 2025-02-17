@@ -128,7 +128,7 @@ export const AggregateFeedComponent = ({ posts, userFeed, activeTab }: Aggregate
 
     return (
         <div
-            className={`flex h-full min-h-screen flex-1 items-start justify-center`}
+            className={`flex h-full min-h-screen w-full flex-1 items-start justify-center`}
             style={{
                 flexGrow: isCompact ? "1" : "3",
                 maxWidth: isCompact ? "none" : "700px",

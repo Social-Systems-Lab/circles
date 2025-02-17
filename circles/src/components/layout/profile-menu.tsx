@@ -73,6 +73,7 @@ const ProfileMenuBar = () => {
         if (!user?.chatRoomMemberships) {
             return 0;
         }
+
         // get sum of unread messages in all chat rooms
         return user?.chatRoomMemberships
             .map((room) => {

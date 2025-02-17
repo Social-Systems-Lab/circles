@@ -73,7 +73,10 @@ const InviteButton: React.FC<InviteButtonProps> = ({ circle, isDefaultCircle, re
     return (
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-                <Button variant={compact ? "ghost" : "outline"} className={compact ? "h-[32px] w-[32px] p-0" : "gap-2"}>
+                <Button
+                    variant={compact ? "ghost" : "outline"}
+                    className={compact ? "h-[32px] w-[32px] p-0" : "gap-2 rounded-full"}
+                >
                     <UserPlus className="h-4 w-4" />
                     {compact ? "" : "Invite"}
                 </Button>

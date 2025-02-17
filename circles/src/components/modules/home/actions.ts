@@ -4,7 +4,7 @@
 
 import { verifyUserToken } from "@/lib/auth/jwt";
 import { addMember, countAdmins, getMember, removeMember } from "@/lib/data/member";
-import { Circle } from "@/models/models";
+import { Circle, UserPrivate } from "@/models/models";
 import { cookies } from "next/headers";
 import { createPendingMembershipRequest, deletePendingMembershipRequest } from "@/lib/data/membership-requests";
 import { getCircleById, getCirclePath, updateCircle } from "@/lib/data/circle";
@@ -12,13 +12,22 @@ import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { saveFile } from "@/lib/data/storage";
 import { revalidatePath } from "next/cache";
-import { getUserById, updateUser } from "@/lib/data/user";
+import { getUserById, getUserPrivate, updateUser } from "@/lib/data/user";
 
 type CircleActionResponse = {
     success: boolean;
     message?: string;
     pending?: boolean;
     circle?: Circle;
+};
+
+export const getUserPrivateAction = async (): Promise<UserPrivate | undefined> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return undefined;
+    }
+
+    return await getUserPrivate(userDid);
 };
 
 export const joinCircle = async (circle: Circle, answers?: Record<string, string>): Promise<CircleActionResponse> => {

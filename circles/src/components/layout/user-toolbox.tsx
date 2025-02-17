@@ -1,7 +1,7 @@
 //user-toolbox.tsx - Displays the user toolbox that contains the user's chat rooms, notifications, circles, contacts, and account settings
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -14,16 +14,12 @@ import {
     sidePanelContentVisibleAtom,
     userAtom,
     userToolboxDataAtom,
-    latestMessagesAtom,
-    unreadCountsAtom,
 } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { useRouter, usePathname } from "next/navigation";
-import { ChatRoom, ChatRoomDisplay, Circle, MemberDisplay, UserToolboxTab } from "@/models/models";
+import { Circle, MemberDisplay, UserToolboxTab } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
-import { LatestMessage } from "../modules/chat/chat-room";
 import { logOut } from "../auth/actions";
-import { getCircleAction } from "./actions";
 import { Notifications } from "./notifications";
 import Link from "next/link";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";

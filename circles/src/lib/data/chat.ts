@@ -1,19 +1,13 @@
 // chat.ts - chat logic
 
-import { ChatRooms, ChatMessages, Circles, Reactions, ChatRoomMembers } from "./db";
+import { ChatRooms, Circles, ChatRoomMembers } from "./db";
 import { ObjectId } from "mongodb";
-import {
-    ChatRoom,
-    ChatMessage,
-    Circle,
-    Mention,
-    SortingOptions,
-    ChatRoomMember,
-    ChatRoomDisplay,
-} from "@/models/models";
+import { ChatRoom, ChatRoomMember, ChatRoomDisplay, Circle } from "@/models/models";
 import { getCircleById, updateCircle } from "./circle";
 import { addChatRoomsAccessRules } from "../utils";
-import { createMatrixRoom } from "./matrix";
+import { addUserToRoom, createMatrixRoom } from "./matrix";
+import { revalidatePath } from "next/cache";
+import { getPrivateUserByDid } from "./user";
 
 // Chat Room Functions
 
@@ -92,29 +86,6 @@ export const createDefaultChatRooms = async (circleId: string): Promise<ChatRoom
     }
 
     let chatRooms: ChatRoom[] = [];
-    // let defaultChatRoom = await getChatRoomByHandle(circleId, "default");
-    // if (!defaultChatRoom) {
-    //     defaultChatRoom = {
-    //         name: "General Chat",
-    //         handle: "default",
-    //         circleId,
-    //         userGroups: ["admins", "moderators", "members", "everyone"],
-    //         createdAt: new Date(),
-    //     };
-    //     defaultChatRoom = await createChatRoom(defaultChatRoom);
-    // }
-
-    // if (!defaultChatRoom.matrixRoomId) {
-    //     // create matrix room
-    //     let matrixRoom = await createMatrixRoom(defaultChatRoom._id, defaultChatRoom.name, defaultChatRoom.name);
-    //     if (matrixRoom) {
-    //         defaultChatRoom.matrixRoomId = matrixRoom.roomId;
-    //         await updateChatRoom(defaultChatRoom);
-    //     }
-    // }
-
-    // chatRooms.push(defaultChatRoom);
-
     let membersChat = await getChatRoomByHandle(circleId, "members");
     if (!membersChat) {
         membersChat = {
@@ -178,4 +149,66 @@ export const removeChatRoomMember = async (userDid: string, chatRoomId: string):
 
 export const getChatRoomMembers = async (chatRoomId: string): Promise<ChatRoomMember[]> => {
     return await ChatRoomMembers.find({ chatRoomId: chatRoomId }).toArray();
+};
+
+export const findOrCreateDMRoom = async (userA: Circle, userB: Circle): Promise<ChatRoom> => {
+    let dmParticipants = [userA._id as string, userB._id as string];
+
+    // sort participant by ID
+    dmParticipants.sort((a, b) => a.localeCompare(b));
+
+    console.log("Searching for DM room between", dmParticipants);
+
+    // Check if a DM already exists between these users
+    const existingRoom = (await ChatRooms.findOne({
+        isDirect: true,
+        dmParticipants: { $all: dmParticipants },
+    })) as ChatRoom;
+
+    console.log("Found existing room?", JSON.stringify(existingRoom));
+
+    if (existingRoom) {
+        existingRoom._id = existingRoom._id.toString();
+        return existingRoom;
+    }
+
+    // If no existing DM, create a new one
+    let name = `dm-${dmParticipants[0]}-${dmParticipants[1]}`;
+    const newRoom: ChatRoom = {
+        name: name,
+        handle: name,
+        createdAt: new Date(),
+        userGroups: [],
+        isDirect: true,
+        dmParticipants: dmParticipants,
+    };
+
+    // Insert into DB
+    const result = await ChatRooms.insertOne(newRoom);
+    newRoom._id = result.insertedId.toString();
+
+    // add users as members to chat room
+    await addChatRoomMember(userA.did!, newRoom._id);
+    await addChatRoomMember(userB.did!, newRoom._id);
+
+    // Create a corresponding Matrix room
+    const matrixRoom = await createMatrixRoom(newRoom._id, newRoom.name, "Private Conversation");
+    if (matrixRoom.roomId) {
+        newRoom.matrixRoomId = matrixRoom.roomId;
+        await ChatRooms.updateOne({ _id: result.insertedId }, { $set: { matrixRoomId: matrixRoom.roomId } });
+
+        // add users to matrix room
+        try {
+            // get private user
+            let privateA = await getPrivateUserByDid(userA.did!);
+            let privateB = await getPrivateUserByDid(userB.did!);
+
+            await addUserToRoom(privateA.matrixAccessToken!, newRoom.matrixRoomId);
+            await addUserToRoom(privateB.matrixAccessToken!, newRoom.matrixRoomId);
+        } catch (error) {
+            console.error("Error adding users to matrix room", error);
+        }
+    }
+
+    return newRoom;
 };

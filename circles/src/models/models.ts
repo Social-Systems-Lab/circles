@@ -261,10 +261,12 @@ export const chatRoomSchema = z.object({
     matrixRoomId: z.string().optional(),
     name: z.string(),
     handle: handleSchema,
-    circleId: z.string(),
+    circleId: z.string().optional(),
     createdAt: z.date(),
     userGroups: z.array(z.string()).default([]),
     picture: fileInfoSchema.optional(),
+    isDirect: z.boolean().optional(),
+    dmParticipants: z.array(z.string()).optional(),
 });
 
 export type ChatRoom = z.infer<typeof chatRoomSchema>;
@@ -690,7 +692,7 @@ export const chatRoomMemberSchema = z.object({
     _id: z.any().optional(),
     userDid: didSchema,
     chatRoomId: z.string(),
-    circleId: z.string(),
+    circleId: z.string().optional(),
     joinedAt: z.date(),
 });
 

@@ -1,3 +1,4 @@
+// chat/layout.tsx - chat layout component, lists all chat rooms and shows selected chat room
 "use client";
 
 import { PropsWithChildren, useMemo } from "react";
@@ -15,7 +16,7 @@ export default function ChatLayout({ children }: PropsWithChildren) {
 
     // If user not logged in, you could handle this or do a redirect:
     if (!user) {
-        return <div className="p-4">Please log in to access chats</div>;
+        return <div className="p-4"></div>;
     }
 
     // Gather all chat rooms
@@ -23,6 +24,8 @@ export default function ChatLayout({ children }: PropsWithChildren) {
     const segments = pathname.split("/").filter(Boolean); // e.g. ["chat"] or ["chat", "xyz-handle"]
     const isDetailRoute = segments.length > 1; // true if /chat/[handle]
     const showChatList = !isMobile || !isDetailRoute;
+
+    console.log("Rendering ChatLayout, number of chats:", allChats.length);
 
     return (
         <div className="flex h-screen">

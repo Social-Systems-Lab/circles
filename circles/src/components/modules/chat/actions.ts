@@ -2,10 +2,16 @@
 "use server";
 
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
-import { Circle, ChatRoomMember } from "@/models/models";
-import { getPrivateUserByDid, getUserByDid, getUsersByMatrixUsernames } from "@/lib/data/user";
+import { Circle, ChatRoomMember, ChatRoom, ChatRoomDisplay, UserPrivate } from "@/models/models";
+import { getPrivateUserByDid, getUserByDid, getUserPrivate, getUsersByMatrixUsernames } from "@/lib/data/user";
 import { chatFeaturePrefix } from "@/lib/data/constants";
-import { addChatRoomMember, getChatRoom, getChatRoomMember, removeChatRoomMember } from "@/lib/data/chat";
+import {
+    addChatRoomMember,
+    findOrCreateDMRoom,
+    getChatRoom,
+    getChatRoomMember,
+    removeChatRoomMember,
+} from "@/lib/data/chat";
 import { addUserToRoom, sendReadReceipt } from "@/lib/data/matrix";
 
 export async function joinChatRoomAction(
@@ -19,6 +25,10 @@ export async function joinChatRoomAction(
     try {
         const chatRoom = await getChatRoom(chatRoomId);
         if (!chatRoom) {
+            return { success: false, message: "Chat room not found" };
+        }
+
+        if (!chatRoom.circleId) {
             return { success: false, message: "Chat room not found" };
         }
 
@@ -98,4 +108,24 @@ export const fetchMatrixUsers = async (usernames: string[]): Promise<(Circle | n
 
 export const sendReadReceiptAction = async (roomId: string, eventId: string) => {
     await sendReadReceipt(roomId, eventId);
+};
+
+export const findOrCreateDMRoomAction = async (
+    recipient: Circle,
+): Promise<{ success: boolean; message?: string; chatRoom?: ChatRoom; user?: UserPrivate }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to send PM" };
+    }
+
+    const user = await getUserByDid(userDid);
+
+    if (user._id === recipient._id) {
+        return { success: false, message: "You cannot send a message to yourself" };
+    }
+
+    let room = await findOrCreateDMRoom(user, recipient);
+    let userPrivate = await getUserPrivate(userDid);
+
+    return { success: true, message: "DM room created", chatRoom: room, user: userPrivate };
 };

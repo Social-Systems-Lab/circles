@@ -97,10 +97,10 @@ export const createUserTrad = async (
     await addMember(did, user._id!, ["admins", "moderators", "members"], undefined);
 
     // add user to default circle by default
-    let defaultCircle = await getDefaultCircle();
-    if (defaultCircle._id) {
-        await addMember(user.did!, defaultCircle._id, ["members"]);
-    }
+    // let defaultCircle = await getDefaultCircle();
+    // if (defaultCircle._id) {
+    //     await addMember(user.did!, defaultCircle._id, ["members"]);
+    // }
 
     return user;
 };

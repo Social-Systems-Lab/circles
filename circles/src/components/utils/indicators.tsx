@@ -31,8 +31,7 @@ export function SimilarityScore({ score, color, size }: SimilarityScoreProps) {
             <HoverCardContent className="z-[500] w-[300px] p-2 pt-[6px] text-[14px]">
                 <p>
                     <AudioLines className={`mr-1 inline-block h-5 w-5`} style={{ color: defaultColor }} />
-                    <b>Similarity:</b> How similar your profile is to this content (lower number means higher
-                    similarity)
+                    <b>Resonance:</b> How similar your profile is to this content (lower number means higher similarity)
                 </p>
             </HoverCardContent>
         </HoverCard>

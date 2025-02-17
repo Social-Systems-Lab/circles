@@ -15,9 +15,10 @@ import { useAtom } from "jotai";
 import { useEffect, useRef } from "react";
 import { fetchAndCacheMatrixUsers } from "./chat-room";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import { getUserPrivateAction } from "../home/actions";
 
 export const MatrixSync = () => {
-    const [user] = useAtom(userAtom);
+    const [user, setUser] = useAtom(userAtom);
     const [unreadCounts, setUnreadCounts] = useAtom(unreadCountsAtom);
     const [latestMessages, setLatestMessages] = useAtom(latestMessagesAtom);
     const [roomData, setRoomData] = useAtom(roomDataAtom);
@@ -100,7 +101,10 @@ export const MatrixSync = () => {
             const lastReadTimestamp = lastReadTimestamps[roomId] || 0;
 
             updatedUnreadCounts[roomId] = messages.filter(
-                (msg) => msg.createdAt > lastReadTimestamp && msg.createdBy !== `@${user?.matrixUsername}`,
+                (msg) =>
+                    msg.createdAt > lastReadTimestamp &&
+                    msg.createdBy !== `@${user?.matrixUsername}` &&
+                    msg.type === "m.room.message",
             ).length;
         }
 
@@ -116,10 +120,12 @@ export const MatrixSync = () => {
             latestMessages: Record<string, any>;
             lastReadTimestamps: Record<string, number>;
         }) => {
+            console.log("handleSyncData called");
             setLatestMessages((prev) => ({ ...prev, ...data.latestMessages }));
             setRoomData((prev) => ({ ...prev, ...data.rooms }));
             setLastReadTimestamps((prev) => ({ ...prev, ...data.lastReadTimestamps }));
 
+            let newRoomFound = false;
             const newRoomMessages: Record<string, any[]> = {};
             for (const [roomId, roomData] of Object.entries(data.rooms)) {
                 const timelineEvents = roomData.timeline?.events || [];
@@ -150,7 +156,19 @@ export const MatrixSync = () => {
                         (msg) => !(roomMessagesRef.current[roomId] || []).some((existing) => existing.id === msg.id),
                     ),
                 ];
+
+                newRoomFound =
+                    newRoomFound || !user.chatRoomMemberships?.some((m) => m.chatRoom.matrixRoomId === roomId);
             }
+
+            if (newRoomFound) {
+                console.warn("New room detected");
+                let newUser = await getUserPrivateAction();
+                if (newUser) {
+                    setUser(newUser);
+                }
+            }
+
             setRoomMessages((prev) => ({ ...prev, ...newRoomMessages }));
         };
 
@@ -160,7 +178,9 @@ export const MatrixSync = () => {
         setUnreadCounts,
         setRoomData,
         setRoomMessages,
+        setUser,
         user?.matrixAccessToken,
+        user?.chatRoomMemberships,
         setMatrixUserCache,
         matrixUserCache,
         user?.matrixUsername,

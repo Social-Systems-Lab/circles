@@ -2,20 +2,18 @@
 
 import React, { useEffect } from "react";
 import { useAtom } from "jotai";
-import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
-import { useIsMobile } from "@/components/utils/use-is-mobile";
-import { contentPreviewAtom, imageGalleryAtom, mapOpenAtom, triggerMapOpenAtom } from "@/lib/data/atoms";
+import { contentPreviewAtom, imageGalleryAtom, userAtom } from "@/lib/data/atoms";
 import Image from "next/image";
 import { FaUsers } from "react-icons/fa6";
 import { useRouter } from "next/navigation";
 import InviteButton from "../modules/home/invite-button";
 import JoinButton from "../modules/home/join-button";
-import { Circle, ContentPreviewData, FileInfo, Media, PostDisplay, PostItemProps, WithMetric } from "@/models/models";
+import { Circle, FileInfo, Media, PostItemProps, WithMetric } from "@/models/models";
 import { PostItem } from "../modules/feeds/post-list";
 import Indicators from "../utils/indicators";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import { MessageButton } from "../modules/home/message-button";
 
 export const PostPreview = ({
     post,
@@ -44,11 +42,13 @@ export const PostPreview = ({
 
 type CirclePreviewProps = {
     circle: WithMetric<Circle>;
+    circleType: string;
 };
-export const CirclePreview = ({ circle }: CirclePreviewProps) => {
+export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
     const router = useRouter();
-    const memberCount = circle?.members ? (circle.circleType === "user" ? circle.members - 1 : circle.members) : 0;
+    const memberCount = circle?.members ? (circleType === "user" ? circle.members - 1 : circle.members) : 0;
     const [, setImageGallery] = useAtom(imageGalleryAtom);
+    const [user] = useAtom(userAtom);
 
     const handleImageClick = (name: string, image?: FileInfo) => {
         if (!image?.url) return;
@@ -73,8 +73,15 @@ export const CirclePreview = ({ circle }: CirclePreviewProps) => {
                     fill
                     onClick={() => handleImageClick("Cover Image", circle?.cover)}
                 />
+
                 {circle?.metrics && (
                     <Indicators metrics={circle.metrics} className="absolute left-2 top-2" content={circle} />
+                )}
+
+                {circleType === "user" && circle._id !== user?._id && (
+                    <div className="absolute bottom-[10px] left-2 flex flex-row">
+                        <MessageButton circle={circle as Circle} renderCompact={false} />
+                    </div>
                 )}
             </div>
             <div className="flex flex-1 flex-col">
@@ -135,8 +142,6 @@ export const CirclePreview = ({ circle }: CirclePreviewProps) => {
 
 export const ContentPreview: React.FC = () => {
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
-    const [mapOpen] = useAtom(mapOpenAtom);
-    const isMobile = useIsMobile();
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -153,7 +158,7 @@ export const ContentPreview: React.FC = () => {
             case "member":
             case "user":
             case "circle":
-                return <CirclePreview circle={contentPreview!.content as Circle} />;
+                return <CirclePreview circle={contentPreview!.content as Circle} circleType={contentPreview.type} />;
             case "post":
                 return (
                     <PostPreview

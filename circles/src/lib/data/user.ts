@@ -146,13 +146,18 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
     // add chat room memberships
     let chatRoomMemberships = await ChatRoomMembers.aggregate([
         { $match: { userDid: userDid } },
-        // Convert chatRoomId to ObjectId
+
+        // Convert chatRoomId and circleId to ObjectId if present
         {
             $addFields: {
                 chatRoomIdObject: { $toObjectId: "$chatRoomId" },
-                circleIdObject: { $toObjectId: "$circleId" },
+                circleIdObject: {
+                    $cond: { if: { $eq: ["$circleId", null] }, then: null, else: { $toObjectId: "$circleId" } },
+                },
             },
         },
+
+        // Lookup the chat room
         {
             $lookup: {
                 from: "chatRooms",
@@ -162,15 +167,77 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
             },
         },
         { $unwind: "$chatRoom" },
+
+        // Extract the ID of the other participant in a DM
+        {
+            $addFields: {
+                otherParticipantId: {
+                    $cond: {
+                        if: "$chatRoom.isDirect",
+                        then: {
+                            $arrayElemAt: [
+                                {
+                                    $filter: {
+                                        input: "$chatRoom.dmParticipants",
+                                        as: "participant",
+                                        cond: { $ne: ["$$participant", user._id] },
+                                    },
+                                },
+                                0,
+                            ],
+                        },
+                        else: null,
+                    },
+                },
+            },
+        },
+
+        // 🔹 Convert `otherParticipantId` to ObjectId (only if it's not null)
+        {
+            $addFields: {
+                otherParticipantIdObject: {
+                    $cond: {
+                        if: { $eq: ["$otherParticipantId", null] },
+                        then: null,
+                        else: { $toObjectId: "$otherParticipantId" },
+                    },
+                },
+            },
+        },
+
+        // 🔹 Lookup the correct `circle`
         {
             $lookup: {
                 from: "circles",
-                localField: "circleIdObject",
-                foreignField: "_id",
+                let: {
+                    circleId: "$circleIdObject",
+                    otherParticipantId: "$otherParticipantIdObject",
+                    isDirect: "$chatRoom.isDirect",
+                },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: {
+                                $cond: {
+                                    if: "$$isDirect",
+                                    then: { $eq: ["$_id", "$$otherParticipantId"] }, // Lookup participant if DM
+                                    else: { $eq: ["$_id", "$$circleId"] }, // Lookup group if not DM
+                                },
+                            },
+                        },
+                    },
+                ],
                 as: "circle",
             },
         },
-        { $unwind: "$circle" },
+
+        {
+            $addFields: {
+                circle: { $arrayElemAt: ["$circle", 0] }, // Convert from array to object
+            },
+        },
+
+        // Final Projection
         {
             $project: {
                 _id: { $toString: "$_id" },
@@ -180,13 +247,15 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
                 joinedAt: 1,
                 chatRoom: {
                     _id: { $toString: "$chatRoom._id" },
-                    name: "$chatRoom.name",
-                    handle: "$chatRoom.handle",
+                    name: "$circle.name", // Always use `circle.name`, whether user or group
+                    handle: "$circle.handle",
                     circleId: "$chatRoom.circleId",
                     createdAt: "$chatRoom.createdAt",
                     userGroups: "$chatRoom.userGroups",
                     matrixRoomId: "$chatRoom.matrixRoomId",
-                    picture: "$chatRoom.picture",
+                    picture: "$circle.picture", // Always use `circle.picture`, whether user or group
+                    isDirect: "$chatRoom.isDirect",
+                    dmParticipants: "$chatRoom.dmParticipants",
                     circle: {
                         _id: { $toString: "$circle._id" },
                         name: "$circle.name",

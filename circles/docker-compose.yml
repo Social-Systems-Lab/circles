@@ -113,6 +113,7 @@ services:
             - ./nginx.conf.template:/etc/nginx/nginx.conf.template:ro
             - ./docker-entrypoint.sh:/docker-entrypoint.sh:ro
             - /etc/letsencrypt:/etc/letsencrypt:ro # Let's encrypt SSL certificates
+            - /var/www/certbot:/usr/share/nginx/html # Webroot for Certbot validation
         ports:
             - "80:80"
             - "443:443"

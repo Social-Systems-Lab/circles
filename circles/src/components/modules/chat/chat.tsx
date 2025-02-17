@@ -1,3 +1,5 @@
+// chat.tsx
+
 "use server";
 
 import { ModulePageProps } from "../dynamic-page";

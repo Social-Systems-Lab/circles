@@ -123,7 +123,7 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, friend
 
     const handleCircleClick = (circle: Circle) => {
         let contentPreviewData: ContentPreviewData = {
-            type: "circle",
+            type: circle?.circleType === "user" ? "user" : "circle",
             content: circle,
         };
 
@@ -225,16 +225,13 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, friend
                                 </div>
                                 <div className="pt-[32px] text-center">
                                     <h4 className="mb-0 mt-2 cursor-pointer text-lg font-bold">{circle.name}</h4>
-                                    <div className="flex flex-row items-center justify-center text-sm text-gray-500">
-                                        {circle.members}{" "}
-                                        {circle?.members !== 1
-                                            ? circle?.circleType === "user"
-                                                ? "friends"
-                                                : "members"
-                                            : circle?.circleType === "user"
-                                              ? "friend"
-                                              : "member"}
-                                    </div>
+                                    {circle?.circleType !== "user" ? (
+                                        <div className="flex flex-row items-center justify-center text-sm text-gray-500">
+                                            {circle.members} {circle?.members !== 1 ? "members" : "member"}
+                                        </div>
+                                    ) : (
+                                        <div className="bg-blue flex h-5 w-2 flex-row items-center justify-center text-sm text-gray-500"></div>
+                                    )}
 
                                     <div className="flex justify-center pl-2 pr-2">
                                         <CircleTags tags={circle.interests} isCompact={true} />

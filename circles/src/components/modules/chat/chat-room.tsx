@@ -1,25 +1,10 @@
-//chat-room.tsx
+//chat-room.tsx - chat room component, shows chat messages and input
 "use client";
 
-import { Dispatch, KeyboardEvent, SetStateAction, useCallback, useMemo, useTransition } from "react";
-import {
-    Circle,
-    ChatRoom,
-    ChatMessage,
-    Page,
-    ChatRoomMembership,
-    MatrixUserCache,
-    ChatRoomDisplay,
-} from "@/models/models";
+import { Dispatch, KeyboardEvent, SetStateAction, useCallback, useTransition } from "react";
+import { Circle, ChatMessage, Page, MatrixUserCache, ChatRoomDisplay } from "@/models/models";
 import CircleHeader from "../circles/circle-header";
-import {
-    mapOpenAtom,
-    matrixUserCacheAtom,
-    roomDataAtom,
-    roomMessagesAtom,
-    triggerMapOpenAtom,
-    userAtom,
-} from "@/lib/data/atoms";
+import { mapOpenAtom, matrixUserCacheAtom, roomMessagesAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
@@ -28,17 +13,9 @@ import { CirclePicture } from "../circles/circle-picture";
 import RichText from "../feeds/RichText";
 import { Mention, MentionsInput } from "react-mentions";
 import { defaultMentionsInputStyle, defaultMentionStyle, handleMentionQuery } from "../feeds/post-list";
-import {
-    markMessagesAsRead,
-    fetchRoomMessages,
-    sendRoomMessage,
-    startSync,
-    sendReadReceipt,
-} from "@/lib/data/client-matrix";
+import { sendRoomMessage, sendReadReceipt } from "@/lib/data/client-matrix";
 import { useIsCompact } from "@/components/utils/use-is-compact";
-import { Loader2 } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
-import { fetchMatrixUsers, joinChatRoomAction, sendReadReceiptAction } from "./actions";
+import { fetchMatrixUsers } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { IoArrowBack } from "react-icons/io5";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
@@ -61,15 +38,6 @@ export const renderCircleSuggestion = (
         <span>{highlightedDisplay}</span>
     </div>
 );
-
-// Utility for same-day message grouping
-const isSameDay = (date1: Date, date2: Date) => {
-    return (
-        date1.getFullYear() === date2.getFullYear() &&
-        date1.getMonth() === date2.getMonth() &&
-        date1.getDate() === date2.getDate()
-    );
-};
 
 // Renderer for different message types
 export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean }> = ({ message, preview }) => {
@@ -307,14 +275,10 @@ export const LatestMessage: React.FC<LatestMessageProps> = ({ roomId, latestMess
 };
 
 type ChatInputProps = {
-    setMessages: any;
-    circle: Circle;
     chatRoom: ChatRoomDisplay;
-    page?: Page;
-    subpage?: string;
 };
 
-const ChatInput = ({ setMessages, circle, chatRoom, page, subpage }: ChatInputProps) => {
+const ChatInput = ({ chatRoom }: ChatInputProps) => {
     const [user] = useAtom(userAtom);
     const [newMessage, setNewMessage] = useState("");
     const isMobile = useIsMobile();
@@ -425,19 +389,11 @@ export const ChatRoomComponent: React.FC<{
     const [hideInput, setHideInput] = useState(false);
     const [inputWidth, setInputWidth] = useState<number | null>(null);
     const isMobile = useIsMobile();
-    const [isPending, startTransition] = useTransition();
     const [isLoadingMessages, startLoadingMessagesTransition] = useTransition();
     const inputRef = useRef<HTMLDivElement>(null);
     const [mapOpen] = useAtom(mapOpenAtom);
-    const [triggerMapOpen] = useAtom(triggerMapOpenAtom);
-    const { toast } = useToast();
     const [user, setUser] = useAtom(userAtom);
     const [matrixUserCache, setMatrixUserCache] = useAtom(matrixUserCacheAtom);
-    const hasJoinedChat = useMemo(() => {
-        return user?.chatRoomMemberships?.some((membership) => membership.chatRoomId === chatRoom._id);
-    }, [user?.chatRoomMemberships, chatRoom._id]);
-    const initialMessagesLoaded = useRef(false);
-    const [roomData] = useAtom(roomDataAtom);
     const [roomMessages] = useAtom(roomMessagesAtom);
     const router = useRouter();
 
@@ -498,45 +454,6 @@ export const ChatRoomComponent: React.FC<{
         scrollToBottom();
     };
 
-    const handleJoinChat = async () => {
-        startTransition(async () => {
-            if (!user) return;
-
-            try {
-                const result = await joinChatRoomAction(chatRoom._id);
-                if (result.success) {
-                    // Update the user state to include the new chat room membership
-                    const newMembership: ChatRoomMembership = {
-                        _id: result.chatRoomMember?._id,
-                        userDid: user?.did!,
-                        chatRoomId: chatRoom._id,
-                        circleId: circle._id,
-                        joinedAt: new Date(),
-                        chatRoom: chatRoom,
-                    };
-                    const updatedUser = {
-                        ...user,
-                        chatRoomMemberships: [...(user.chatRoomMemberships || []), newMembership],
-                    };
-                    setUser(updatedUser);
-
-                    toast({
-                        title: "Joined chat",
-                        variant: "success",
-                    });
-                } else {
-                    console.error(result.message);
-                    toast({
-                        title: result.message,
-                        variant: "destructive",
-                    });
-                }
-            } catch (error) {
-                console.error("Failed to join chat room:", error);
-            }
-        });
-    };
-
     return (
         <>
             <div
@@ -587,49 +504,18 @@ export const ChatRoomComponent: React.FC<{
                         </div>
                     )}
 
-                    {!hasJoinedChat ? (
-                        <div
-                            className="fixed flex h-[72px] items-center justify-center bg-[#fbfbfb]"
-                            style={{
-                                width: `${inputWidth}px`,
-                                bottom: isMobile ? "72px" : "0px",
-                            }}
-                        >
-                            <Button
-                                onClick={handleJoinChat}
-                                className="rounded-[50px] bg-primaryLight px-4 py-2 text-white"
-                                disabled={isPending}
-                            >
-                                {isPending ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Joining...
-                                    </>
-                                ) : (
-                                    <>Join Chat</>
-                                )}
-                            </Button>
+                    <div
+                        className="fixed h-[50px]"
+                        style={{
+                            width: `${inputWidth}px`,
+                            bottom: isMobile ? "72px" : "0px",
+                            opacity: hideInput ? 0 : 1,
+                        }}
+                    >
+                        <div className="flex h-[50px] items-end bg-[#fbfbfb] pb-1 pl-2 pr-2">
+                            <ChatInput chatRoom={chatRoom} />
                         </div>
-                    ) : (
-                        <div
-                            className="fixed h-[50px]"
-                            style={{
-                                width: `${inputWidth}px`,
-                                bottom: isMobile ? "72px" : "0px",
-                                opacity: hideInput ? 0 : 1,
-                            }}
-                        >
-                            <div className="flex h-[50px] items-end bg-[#fbfbfb] pb-1 pl-2 pr-2">
-                                <ChatInput
-                                    setMessages={setMessages}
-                                    circle={circle}
-                                    chatRoom={chatRoom}
-                                    page={page}
-                                    subpage={subpage}
-                                />
-                            </div>
-                        </div>
-                    )}
+                    </div>
                 </div>
             </div>
             {isMobile && !inToolbox && (

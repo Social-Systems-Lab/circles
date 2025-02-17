@@ -11,6 +11,9 @@ import JoinButton from "./join-button";
 import GalleryTrigger from "./gallery-trigger";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import { MessageButton } from "./message-button";
+import { userAtom } from "@/lib/data/atoms";
+import { useAtom } from "jotai";
 
 type HomeContentProps = {
     circle: Circle;
@@ -22,6 +25,7 @@ export default function HomeContent({ circle, isDefaultCircle, authorizedToEdit 
     const isUser = circle?.circleType === "user";
     const memberCount = circle?.members ? (isUser ? circle.members - 1 : circle.members) : 0;
     const isCompact = useIsCompact();
+    const [user] = useAtom(userAtom);
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -33,7 +37,9 @@ export default function HomeContent({ circle, isDefaultCircle, authorizedToEdit 
         <div className="flex flex-1 flex-row justify-center">
             <div className="mb-0 ml-4 mr-4 flex max-w-[1100px] flex-1 flex-col">
                 <div className={`relative flex ${isCompact ? "flex-col items-center justify-center" : "flex-row"}`}>
-                    <div className={`relative flex ${isCompact ? "h-[50px] w-[100px]" : "h-[125px] w-[150px]"}`}>
+                    <div
+                        className={`relative flex ${isCompact ? "h-[50px] w-[100px]" : "h-[125px] w-[150px] min-w-[150px]"}`}
+                    >
                         {/* Position the circle picture differently when compact. */}
                         <div
                             className={`absolute ${
@@ -67,10 +73,17 @@ export default function HomeContent({ circle, isDefaultCircle, authorizedToEdit 
                         </div>
                     </div>
                     {isCompact && (
-                        <div className={`absolute right-0 top-0 flex flex-row gap-1 pt-2`}>
-                            <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />
-                            <JoinButton circle={circle} />
-                        </div>
+                        <>
+                            {isUser && circle._id !== user?._id && (
+                                <div className={`absolute left-0 top-0 flex flex-row gap-1 pt-2`}>
+                                    <MessageButton circle={circle} renderCompact={false} />
+                                </div>
+                            )}
+                            <div className={`absolute right-0 top-0 flex flex-row gap-1 pt-2`}>
+                                <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />
+                                <JoinButton circle={circle} />
+                            </div>
+                        </>
                     )}
 
                     {/* Center the text in compact mode. */}
@@ -120,6 +133,9 @@ export default function HomeContent({ circle, isDefaultCircle, authorizedToEdit 
                     <div className="flex-1"></div>
                     {!isCompact && (
                         <div className={`flex flex-row gap-1 pt-2`}>
+                            {isUser && circle._id !== user?._id && (
+                                <MessageButton circle={circle} renderCompact={false} />
+                            )}
                             <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />
                             <JoinButton circle={circle} />
                         </div>
