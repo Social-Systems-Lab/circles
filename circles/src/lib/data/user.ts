@@ -15,6 +15,27 @@ import { getUserPendingMembershipRequests } from "./membership-requests";
 import { defaultPagesForUser, defaultUserGroupsForUser, getDefaultAccessRulesForUser } from "./constants";
 import { SAFE_CIRCLE_PROJECTION } from "./circle";
 
+export const getAllUsers = async (): Promise<Circle[]> => {
+    let circles: Circle[] = await Circles.find(
+        { circleType: "user" },
+        {
+            projection: {
+                _id: 1,
+                name: 1,
+                handle: 1,
+                picture: 1,
+            },
+        },
+    ).toArray();
+
+    circles.forEach((circle: Circle) => {
+        if (circle._id) {
+            circle._id = circle._id.toString();
+        }
+    });
+    return circles;
+};
+
 export const getUser = async (userDid: string): Promise<Circle> => {
     let user = await Circles.findOne({ did: userDid }, { projection: SAFE_CIRCLE_PROJECTION });
     if (!user) {

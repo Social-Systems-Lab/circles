@@ -36,8 +36,6 @@ export const UserToolbox = () => {
     const [user, setUser] = useAtom(userAtom);
     const [userToolboxState, setUserToolboxState] = useAtom(userToolboxDataAtom);
     const [tab, setTab] = useState<UserToolboxTab | undefined>(undefined);
-    const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
-    const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [authInfo, setAuthInfo] = useAtom(authInfoAtom);
     const pathname = usePathname();
     const [prevPath, setPrevPath] = useState(pathname);
@@ -80,22 +78,6 @@ export const UserToolbox = () => {
         user?.memberships
             ?.filter((m) => m.circle.circleType === "user" && m.circle._id !== user?._id)
             ?.map((membership) => membership.circle) || [];
-
-    const notifications: Notification[] = [
-        // { id: 1, message: "John Doe has requested membership in a circle", time: "2 min ago" },
-        // { id: 2, message: "Jane Smith has requested to join as a friend", time: "1 hour ago" },
-        // { id: 3, message: "Alex Johnson has liked your post", time: "3 hours ago" },
-    ];
-
-    const handleCircleClick = (circle: MemberDisplay) => {
-        let contentPreviewData: any = {
-            type: "member",
-            content: circle,
-        };
-        setContentPreview((x) =>
-            x?.content === circle && sidePanelContentVisible === "content" ? undefined : contentPreviewData,
-        );
-    };
 
     const signOut = async () => {
         // clear the user data and redirect to the you've been signed out
@@ -187,16 +169,13 @@ export const UserToolbox = () => {
                                 <div
                                     key={circle._id}
                                     className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
-                                    onClick={() => handleCircleClick(circle as MemberDisplay)}
+                                    onClick={() => openCircle(circle)}
                                 >
                                     <CirclePicture circle={circle} size="40px" />
                                     <div className="flex-1">
                                         <p className="text-sm font-medium">{circle.name}</p>
                                         <p className="text-xs text-muted-foreground">{circle.description}</p>
                                     </div>
-                                    <Button variant="outline" size="sm" onClick={() => openCircle(circle)}>
-                                        Open
-                                    </Button>
                                 </div>
                             ))
                         ) : (
@@ -211,16 +190,13 @@ export const UserToolbox = () => {
                                 <div
                                     key={contact._id}
                                     className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
-                                    onClick={() => handleCircleClick(contact as MemberDisplay)}
+                                    onClick={() => openCircle(contact)}
                                 >
                                     <CirclePicture circle={contact} size="40px" />
                                     <div className="flex-1">
                                         <p className="text-sm font-medium">{contact.name}</p>
                                         <p className="text-xs text-muted-foreground">{contact.description}</p>
                                     </div>
-                                    <Button variant="outline" size="sm" onClick={() => openCircle(contact)}>
-                                        Open
-                                    </Button>
                                 </div>
                             ))
                         ) : (

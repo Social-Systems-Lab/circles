@@ -32,6 +32,7 @@ import { Dialog, DialogContent } from "../ui/dialog";
 import { precisionLevels } from "../forms/location-picker";
 import { SidePanel } from "../layout/side-panel";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import { useIsMobile } from "../utils/use-is-mobile";
 
 const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
     const mapContainer = useRef(null);
@@ -45,6 +46,7 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
     const [, setContentPreview] = useAtom(contentPreviewAtom);
     const [, setFocusPost] = useAtom(focusPostAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+    const isMobile = useIsMobile();
 
     const markersRef = useRef<Map<string, mapboxgl.Marker>>(new globalThis.Map());
 

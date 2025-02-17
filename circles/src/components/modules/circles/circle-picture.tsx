@@ -1,8 +1,10 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
 import { cn } from "@/lib/utils";
 import { Circle, ContentPreviewData } from "@/models/models";
 import { useAtom } from "jotai";
+import { useRouter } from "next/navigation";
 
 type CirclePictureProps = {
     circle: Circle;
@@ -14,6 +16,8 @@ type CirclePictureProps = {
 export const CirclePicture = ({ circle, size, className, openPreview }: CirclePictureProps) => {
     const [, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+    const isMobile = useIsMobile();
+    const router = useRouter();
 
     var getInitials = () => {
         let name = circle?.name;
@@ -28,6 +32,10 @@ export const CirclePicture = ({ circle, size, className, openPreview }: CirclePi
     };
 
     const onOpenPreview = () => {
+        // if (isMobile) {
+        //     router.push(`/circles/${circle.handle}`);
+        // }
+
         // Open preview
         let contentPreviewData: ContentPreviewData = {
             type: "user",

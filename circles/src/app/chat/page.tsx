@@ -15,8 +15,12 @@ export default function ChatPage() {
     const allChats = user?.chatRoomMemberships?.map((m) => m.chatRoom) || [];
     const router = useRouter();
 
+    if (isMobile) {
+        return null;
+    }
+
     // If no chats => Show full screen "No chats" message
-    if (!allChats.length) {
+    if (allChats.length <= 0) {
         return (
             <div className="flex h-screen flex-col items-center justify-center gap-4 p-4">
                 <Image src={emptyFeed} alt="No chats yet" width={300} />

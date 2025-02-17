@@ -3,7 +3,13 @@
 
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { Circle, ChatRoomMember, ChatRoom, ChatRoomDisplay, UserPrivate } from "@/models/models";
-import { getPrivateUserByDid, getUserByDid, getUserPrivate, getUsersByMatrixUsernames } from "@/lib/data/user";
+import {
+    getAllUsers,
+    getPrivateUserByDid,
+    getUserByDid,
+    getUserPrivate,
+    getUsersByMatrixUsernames,
+} from "@/lib/data/user";
 import { chatFeaturePrefix } from "@/lib/data/constants";
 import {
     addChatRoomMember,
@@ -128,4 +134,8 @@ export const findOrCreateDMRoomAction = async (
     let userPrivate = await getUserPrivate(userDid);
 
     return { success: true, message: "DM room created", chatRoom: room, user: userPrivate };
+};
+
+export const getAllUsersAction = async (): Promise<Circle[]> => {
+    return await getAllUsers();
 };

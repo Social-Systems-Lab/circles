@@ -7,6 +7,10 @@ import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import { LatestMessage } from "@/components/modules/chat/chat-room";
 import { latestMessagesAtom, unreadCountsAtom } from "@/lib/data/atoms";
 import { useRouter } from "next/navigation";
+import { useIsMobile } from "@/components/utils/use-is-mobile";
+import Image from "next/image";
+import { Button } from "@/components/ui/button";
+import emptyFeed from "@images/empty-feed.png";
 
 interface ChatListProps {
     chats: ChatRoomDisplay[];
@@ -16,6 +20,7 @@ interface ChatListProps {
 export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
     const [latestMessages] = useAtom(latestMessagesAtom);
     const [unreadCounts] = useAtom(unreadCountsAtom);
+    const isMobile = useIsMobile();
     const router = useRouter();
 
     const sortedChats = useMemo(() => {
@@ -69,7 +74,20 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
                 })
             ) : (
                 <div className="flex h-full items-center justify-center pt-4 text-sm text-gray-500">
-                    No chat rooms joined
+                    {isMobile ? (
+                        <div className="flex flex-col items-center justify-center gap-4 p-4">
+                            <Image src={emptyFeed} alt="No chats yet" width={230} />
+                            <h4 className="text-lg font-semibold">No Chat Rooms</h4>
+                            <p className="max-w-md text-center text-sm text-gray-500">
+                                You haven&apos;t joined any chat rooms yet. Try discover new circles to chat in.
+                            </p>
+                            <Button variant="outline" onClick={() => router.push("/circles?tab=discover")}>
+                                Discover
+                            </Button>
+                        </div>
+                    ) : (
+                        "No chat rooms joined"
+                    )}
                 </div>
             )}
         </div>

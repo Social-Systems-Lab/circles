@@ -8,6 +8,7 @@ import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { ChatList } from "@/components/modules/chat/chat-list";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useRouter, usePathname } from "next/navigation";
+import { ChatSearch } from "@/components/modules/chat/chat-search";
 
 export default function ChatLayout({ children }: PropsWithChildren) {
     const [user] = useAtom(userAtom);
@@ -25,13 +26,12 @@ export default function ChatLayout({ children }: PropsWithChildren) {
     const isDetailRoute = segments.length > 1; // true if /chat/[handle]
     const showChatList = !isMobile || !isDetailRoute;
 
-    console.log("Rendering ChatLayout, number of chats:", allChats.length);
-
     return (
         <div className="flex h-screen">
             {showChatList && (
-                <aside className="w-80 border-r border-gray-200 bg-white p-2">
+                <aside className={`${isMobile ? "w-full" : "w-80 border-r border-gray-200"}  bg-white p-2`}>
                     <h2 className="mb-4 mt-2 pl-2 pt-0 text-xl font-semibold">Chats</h2>
+                    <ChatSearch />
                     <ScrollArea>
                         <ChatList chats={allChats} />
                     </ScrollArea>

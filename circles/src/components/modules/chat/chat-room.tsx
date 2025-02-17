@@ -17,7 +17,7 @@ import { sendRoomMessage, sendReadReceipt } from "@/lib/data/client-matrix";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { fetchMatrixUsers } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { IoArrowBack } from "react-icons/io5";
+import { IoArrowBack, IoSend } from "react-icons/io5";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { useRouter } from "next/navigation";
 
@@ -330,9 +330,9 @@ const ChatInput = ({ chatRoom }: ChatInputProps) => {
                 />
             </MentionsInput>
             {isMobile && (
-                <button onClick={handleSendMessage} className="mt-1 text-blue-500">
-                    Send
-                </button>
+                <Button onClick={handleSendMessage} className="ml-2 rounded-full text-white">
+                    <IoSend />
+                </Button>
             )}
         </>
     );

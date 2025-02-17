@@ -12,7 +12,8 @@ export async function POST(req: Request) {
         if (circleHandle) {
             circle = await getCircleByHandle(circleHandle);
         } else {
-            circle = await getDefaultCircle();
+            // user is authorized
+            return NextResponse.json({ authenticated: true, authorized: true });
         }
 
         if (!circle) {
