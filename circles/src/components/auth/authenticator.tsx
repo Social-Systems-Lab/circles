@@ -45,6 +45,13 @@ export const Authenticator = () => {
         if (logLevel >= LOG_LEVEL_TRACE) {
             console.log("useEffect.Authenticator.1");
         }
+
+        // print current app version
+        console.log(
+            "%c🔵 Circles Version " + process.env.version + " 🔵%c",
+            "background: #4A90E2; color: white; padding: 2px 4px; border-radius: 3px;",
+            "background: none; color: #4A90E2; font-weight: bold;",
+        );
     }, []);
 
     const checkQrAuthentication = useCallback(async () => {

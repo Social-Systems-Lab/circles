@@ -24,19 +24,20 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
     const isMobile = useIsMobile();
     const router = useRouter();
 
-    const sortedChats = useMemo(() => {
-        const chatsCopy = [...chats];
+    const sortedChats = chats; // disable sorting and see if it fixes performance issues
+    // const sortedChats = useMemo(() => {
+    //     const chatsCopy = [...chats];
 
-        chatsCopy.sort((a, b) => {
-            const messageA = Object.entries(latestMessages).find(([key]) => key.startsWith(a.matrixRoomId!))?.[1];
-            const messageB = Object.entries(latestMessages).find(([key]) => key.startsWith(b.matrixRoomId!))?.[1];
+    //     chatsCopy.sort((a, b) => {
+    //         const messageA = Object.entries(latestMessages).find(([key]) => key.startsWith(a.matrixRoomId!))?.[1];
+    //         const messageB = Object.entries(latestMessages).find(([key]) => key.startsWith(b.matrixRoomId!))?.[1];
 
-            const latestA = messageA?.origin_server_ts || 0;
-            const latestB = messageB?.origin_server_ts || 0;
-            return latestB - latestA; // Sort descending by timestamp
-        });
-        return chatsCopy;
-    }, [chats, latestMessages]);
+    //         const latestA = messageA?.origin_server_ts || 0;
+    //         const latestB = messageB?.origin_server_ts || 0;
+    //         return latestB - latestA; // Sort descending by timestamp
+    //     });
+    //     return chatsCopy;
+    // }, [chats, latestMessages]);
 
     const handleChatClick = (chat: ChatRoomDisplay) => {
         const path = `/chat/${chat.circle.handle}`;
