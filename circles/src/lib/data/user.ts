@@ -24,6 +24,7 @@ export const getAllUsers = async (): Promise<Circle[]> => {
                 name: 1,
                 handle: 1,
                 picture: 1,
+                did: 1,
             },
         },
     ).toArray();

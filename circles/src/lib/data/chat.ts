@@ -170,13 +170,17 @@ export const findOrCreateDMRoom = async (userA: Circle, userB: Circle): Promise<
     if (existingRoom) {
         existingRoom._id = existingRoom._id.toString();
 
-        // add user to matrix chat room again to make sure
+        // add user to matrix chat room again to make sure in case process failed before
         if (existingRoom.matrixRoomId) {
             // add users to matrix room
             try {
                 // get private user
                 let privateA = await getPrivateUserByDid(userA.did!);
                 let privateB = await getPrivateUserByDid(userB.did!);
+
+                // add users as members to chat room
+                await addChatRoomMember(userA.did!, existingRoom._id);
+                await addChatRoomMember(userB.did!, existingRoom._id);
 
                 await addUserToRoom(privateA.matrixAccessToken!, existingRoom.matrixRoomId);
                 await addUserToRoom(privateB.matrixAccessToken!, existingRoom.matrixRoomId);
