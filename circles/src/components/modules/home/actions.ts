@@ -45,6 +45,8 @@ export const joinCircle = async (circle: Circle, answers?: Record<string, string
             return { success: false, message: "Authentication failed" };
         }
 
+        console.log(circle._id);
+
         // Fetch the latest circle data
         let updatedCircle = null;
         updatedCircle = await getCircleById(circle._id ?? "");

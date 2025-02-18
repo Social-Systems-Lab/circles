@@ -47,12 +47,12 @@ export const modules: Record<string, Module> = {
         layoutComponent: FeedsModuleLayout,
         defaultIcon: "AiOutlineWifi",
     },
-    chat: {
-        name: "Chat",
-        handle: "chat",
-        description: "Chat page",
-        component: ChatModule,
-        layoutComponent: ChatModuleLayout,
-        defaultIcon: "IoChatbubbleOutline",
-    },
+    // chat: {
+    //     name: "Chat",
+    //     handle: "chat",
+    //     description: "Chat page",
+    //     component: ChatModule,
+    //     layoutComponent: ChatModuleLayout,
+    //     defaultIcon: "IoChatbubbleOutline",
+    // },
 };

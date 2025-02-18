@@ -124,13 +124,13 @@ export const defaultPagesForUser: Page[] = [
         readOnly: true,
         defaultUserGroups: ["admins", "moderators", "members", "everyone"],
     },
-    {
-        name: "Chat",
-        handle: "chat",
-        description: "Chat page",
-        module: "chat",
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
+    // {
+    //     name: "Chat",
+    //     handle: "chat",
+    //     description: "Chat page",
+    //     module: "chat",
+    //     defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    // },
     {
         name: "Friends",
         handle: "friends",

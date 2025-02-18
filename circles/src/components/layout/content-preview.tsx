@@ -9,7 +9,7 @@ import { FaUsers } from "react-icons/fa6";
 import { useRouter } from "next/navigation";
 import InviteButton from "../modules/home/invite-button";
 import JoinButton from "../modules/home/join-button";
-import { Circle, FileInfo, Media, PostItemProps, WithMetric } from "@/models/models";
+import { Circle, FileInfo, Media, MemberDisplay, PostItemProps, WithMetric } from "@/models/models";
 import { PostItem } from "../modules/feeds/post-list";
 import Indicators from "../utils/indicators";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
@@ -135,6 +135,9 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                         </div>
                     )}
                 </div>
+                {/* <div>
+                    <pre>{JSON.stringify(circle, null, 2)}</pre>
+                </div> */}
             </div>
         </>
     );
@@ -150,12 +153,14 @@ export const ContentPreview: React.FC = () => {
     }, []);
 
     const getPreviewContent = () => {
-        let circleType = (contentPreview?.content as any)?.circleType;
         if (!contentPreview) return null;
 
-        switch (circleType) {
+        switch (contentPreview.type) {
             default:
             case "member":
+                let circle = { ...contentPreview!.content } as Circle;
+                circle._id = (contentPreview!.content as MemberDisplay).circleId;
+                return <CirclePreview circle={circle} circleType={"user"} />;
             case "user":
             case "circle":
                 return <CirclePreview circle={contentPreview!.content as Circle} circleType={contentPreview.type} />;

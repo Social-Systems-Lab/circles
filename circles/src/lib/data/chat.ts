@@ -125,7 +125,7 @@ export const getChatRoomMember = async (userDid: string, chatRoomId: string): Pr
 export const addChatRoomMember = async (userDid: string, chatRoomId: string): Promise<ChatRoomMember> => {
     const existingMember = await ChatRoomMembers.findOne({ userDid: userDid, chatRoomId: chatRoomId });
     if (existingMember) {
-        throw new Error("User is already a member of this chat room");
+        return existingMember;
     }
 
     const chatRoom = await getChatRoom(chatRoomId);
@@ -169,6 +169,22 @@ export const findOrCreateDMRoom = async (userA: Circle, userB: Circle): Promise<
 
     if (existingRoom) {
         existingRoom._id = existingRoom._id.toString();
+
+        // add user to matrix chat room again to make sure
+        if (existingRoom.matrixRoomId) {
+            // add users to matrix room
+            try {
+                // get private user
+                let privateA = await getPrivateUserByDid(userA.did!);
+                let privateB = await getPrivateUserByDid(userB.did!);
+
+                await addUserToRoom(privateA.matrixAccessToken!, existingRoom.matrixRoomId);
+                await addUserToRoom(privateB.matrixAccessToken!, existingRoom.matrixRoomId);
+            } catch (error) {
+                console.error("Error adding users to matrix room", error);
+            }
+        }
+
         return existingRoom;
     }
 

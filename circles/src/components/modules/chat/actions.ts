@@ -117,15 +117,19 @@ export const sendReadReceiptAction = async (roomId: string, eventId: string) => 
 };
 
 export const findOrCreateDMRoomAction = async (
-    recipient: Circle,
+    inRecipient: Circle,
 ): Promise<{ success: boolean; message?: string; chatRoom?: ChatRoom; user?: UserPrivate }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to send PM" };
     }
 
-    const user = await getUserByDid(userDid);
+    let recipient = inRecipient?.did ? await getUserByDid(inRecipient?.did) : undefined;
+    if (!recipient) {
+        return { success: false, message: "Could not find recipient" };
+    }
 
+    const user = await getUserByDid(userDid);
     if (user._id === recipient._id) {
         return { success: false, message: "You cannot send a message to yourself" };
     }

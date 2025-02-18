@@ -124,6 +124,7 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
                     {
                         $project: {
                             name: 1,
+                            did: 1,
                             handle: 1,
                             description: 1,
                             picture: 1,
@@ -147,6 +148,7 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
                 circle: {
                     _id: { $toString: "$circle._id" },
                     name: "$circle.name",
+                    did: "$circle.did",
                     handle: "$circle.handle",
                     description: "$circle.description",
                     picture: "$circle.picture",
@@ -281,6 +283,7 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
                         _id: { $toString: "$circle._id" },
                         name: "$circle.name",
                         handle: "$circle.handle",
+                        did: "$circle.did",
                         description: "$circle.description",
                         picture: "$circle.picture",
                         cover: "$circle.cover",

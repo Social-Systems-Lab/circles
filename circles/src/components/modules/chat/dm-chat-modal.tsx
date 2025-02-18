@@ -37,7 +37,7 @@ export const DmChatModal: React.FC<DMModalProps> = ({ recipient, onClose }) => {
             if (!result.success) {
                 toast({
                     title: "Send Error",
-                    description: "Failed to send chat message",
+                    description: "Failed to send chat message: " + result.message,
                     variant: "destructive",
                     icon: "error",
                 });

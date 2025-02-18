@@ -65,6 +65,7 @@ export const getMembers = async (circleId?: string): Promise<MemberDisplay[]> =>
                 members: "$userDetails.members",
                 circleType: "$userDetails.circleType",
                 handle: "$userDetails.handle",
+                did: "$userDetails.did",
             },
         },
     ]).toArray();
