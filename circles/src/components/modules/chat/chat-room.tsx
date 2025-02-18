@@ -1,7 +1,7 @@
 //chat-room.tsx - chat room component, shows chat messages and input
 "use client";
 
-import { Dispatch, KeyboardEvent, SetStateAction, useCallback, useTransition } from "react";
+import { Dispatch, KeyboardEvent, SetStateAction, useCallback, useMemo, useTransition } from "react";
 import { Circle, ChatMessage, Page, MatrixUserCache, ChatRoomDisplay } from "@/models/models";
 import CircleHeader from "../circles/circle-header";
 import { mapOpenAtom, matrixUserCacheAtom, roomMessagesAtom, userAtom } from "@/lib/data/atoms";
@@ -235,43 +235,49 @@ interface LatestMessageProps {
 }
 
 export const LatestMessage: React.FC<LatestMessageProps> = ({ roomId, latestMessages }) => {
-    const [formattedMessage, setFormattedMessage] = useState<ChatMessage | null>(null);
     const [matrixUserCache, setMatrixUserCache] = useAtom(matrixUserCacheAtom);
+    const latestMessage = useMemo(() => {
+        const matchingEntry = Object.entries(latestMessages).find(([key]) => key.startsWith(roomId));
+        if (!matchingEntry) {
+            return null;
+        }
+        // console.log(JSON.stringify(matchingEntry[1], null, 2));
+        return matchingEntry[1];
+    }, [latestMessages, roomId]);
 
-    useEffect(() => {
-        const fetchLatestMessage = async () => {
-            const matchingEntry = Object.entries(latestMessages).find(([key]) => key.startsWith(roomId));
-            if (!matchingEntry) {
-                setFormattedMessage(null);
-                return;
+    const latestSender = useMemo(async () => {
+        let sender = latestMessage?.sender;
+        if (!sender) return null;
+
+        if (!matrixUserCache[sender]) {
+            console.log("Fetching matrix users");
+            // console.log(JSON.stringify(matrixUserCache, null, 2));
+            //await fetchAndCacheMatrixUsers([sender], matrixUserCache, setMatrixUserCache);
+        }
+
+        return (
+            matrixUserCache[sender] || {
+                _id: sender,
+                name: sender,
+                picture: { url: "/placeholder.svg" },
             }
+        );
+    }, [latestMessage?.sender, matrixUserCache, setMatrixUserCache]);
 
-            const latestMessage = matchingEntry[1];
-            const sender = latestMessage.sender;
-
-            // Fetch and cache the author details if not already cached
-            if (!matrixUserCache[sender]) {
-                await fetchAndCacheMatrixUsers([sender], matrixUserCache, setMatrixUserCache);
-            }
-
-            setFormattedMessage({
-                ...latestMessage,
-                author: matrixUserCache[sender] || {
-                    _id: sender,
-                    name: sender,
-                    picture: { url: "/placeholder.svg" },
-                },
-            } as ChatMessage);
-        };
-
-        fetchLatestMessage();
-    }, [roomId, latestMessages, matrixUserCache, setMatrixUserCache]);
+    const formattedMessage = useMemo(() => {
+        return {
+            ...latestMessage,
+            author: latestSender,
+        } as ChatMessage;
+    }, [latestMessage, latestSender]);
 
     if (!formattedMessage) {
         return <span>No messages yet</span>;
     }
 
-    return <MessageRenderer message={formattedMessage} preview={true} />;
+    return <span>{formattedMessage?.content?.body as string}</span>;
+
+    // <MessageRenderer message={formattedMessage} preview={true} />;
 };
 
 type ChatInputProps = {
