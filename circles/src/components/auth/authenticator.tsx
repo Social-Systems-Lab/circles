@@ -73,6 +73,7 @@ export const Authenticator = () => {
     const checkAuthentication = useCallback(async () => {
         // if already authenticated, do nothing
         if (authInfo.authStatus === "authenticated") {
+            console.log("checkAuthentication: already authenticated");
             return;
         }
 
@@ -86,8 +87,10 @@ export const Authenticator = () => {
             return;
         }
 
+        console.log("checkAuthentication: checkAuth");
         const response = await checkAuth(currentAccount);
         if (response.authenticated) {
+            console.log("checkAuthentication: checkAuth responded authenticated");
             setAuthInfo({ authStatus: "authenticated", inSsiApp, currentAccount });
             setUser(response.user);
         } else if (response.challenge) {
@@ -110,6 +113,7 @@ export const Authenticator = () => {
             }
         } else {
             // TODO prompt user to sign in with QR code
+            console.log("checkAuthentication: checkAuth responded unauthenticated");
             setAuthInfo({ authStatus: "unauthenticated", inSsiApp, currentAccount });
         }
     }, [authInfo.authStatus, setAuthInfo, setUser]);
