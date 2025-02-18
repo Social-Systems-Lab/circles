@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useAtom } from "jotai";
 import { ChatRoom, ChatRoomDisplay } from "@/models/models";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
@@ -11,6 +11,7 @@ import { useIsMobile } from "@/components/utils/use-is-mobile";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import emptyFeed from "@images/empty-feed.png";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 interface ChatListProps {
     chats: ChatRoomDisplay[];
@@ -24,7 +25,9 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
     const router = useRouter();
 
     const sortedChats = useMemo(() => {
-        return chats.sort((a, b) => {
+        const chatsCopy = [...chats];
+
+        chatsCopy.sort((a, b) => {
             const messageA = Object.entries(latestMessages).find(([key]) => key.startsWith(a.matrixRoomId!))?.[1];
             const messageB = Object.entries(latestMessages).find(([key]) => key.startsWith(b.matrixRoomId!))?.[1];
 
@@ -32,6 +35,7 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
             const latestB = messageB?.origin_server_ts || 0;
             return latestB - latestA; // Sort descending by timestamp
         });
+        return chatsCopy;
     }, [chats, latestMessages]);
 
     const handleChatClick = (chat: ChatRoomDisplay) => {
@@ -41,6 +45,12 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
             onChatClick(chat);
         }
     };
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.ChatList.1");
+        }
+    }, []);
 
     return (
         <div>

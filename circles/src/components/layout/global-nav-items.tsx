@@ -8,7 +8,7 @@ import { Circle, Page } from "@/models/models";
 import PageIcon from "../modules/page-icon";
 import { useIsMobile } from "../utils/use-is-mobile";
 import { motion, AnimatePresence } from "framer-motion";
-import { userAtom } from "@/lib/data/atoms";
+import { userAtom, userSettingsAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { AiOutlineContacts, AiOutlineHome, AiOutlineSetting } from "react-icons/ai";
 import { IoChatbubbleOutline } from "react-icons/io5";
@@ -59,6 +59,7 @@ export default function GlobalNavItems() {
     const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
     const isMobile = useIsMobile();
     const [user] = useAtom(userAtom);
+    const [settings, setSettings] = useAtom(userSettingsAtom);
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -120,7 +121,7 @@ export default function GlobalNavItems() {
                     </motion.div>
                 </Link> */}
 
-                <Link href={"/circles"}>
+                <Link href={`/circles?tab=${settings?.circlesTab ?? "following"}`}>
                     <motion.div
                         className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
                             pathname === "/circles" ? "text-[#495cff]" : "text-[#696969]"
@@ -166,7 +167,7 @@ export default function GlobalNavItems() {
                     </motion.div>
                 </Link>
 
-                <Link href={"/friends"}>
+                <Link href={`/friends?tab=${settings?.circlesTab ?? "following"}`}>
                     <motion.div
                         className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
                             pathname === "/friends" ? "text-[#495cff]" : "text-[#696969]"

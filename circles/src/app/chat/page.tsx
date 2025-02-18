@@ -8,12 +8,20 @@ import { useAtom } from "jotai";
 import Image from "next/image";
 import emptyFeed from "@images/empty-feed.png";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 export default function ChatPage() {
     const isMobile = useIsMobile();
     const [user] = useAtom(userAtom);
     const allChats = user?.chatRoomMemberships?.map((m) => m.chatRoom) || [];
     const router = useRouter();
+
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.ChatPage.1");
+        }
+    }, []);
 
     if (isMobile) {
         return null;

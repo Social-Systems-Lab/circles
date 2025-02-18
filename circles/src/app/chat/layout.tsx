@@ -1,7 +1,7 @@
 // chat/layout.tsx - chat layout component, lists all chat rooms and shows selected chat room
 "use client";
 
-import { PropsWithChildren, useMemo } from "react";
+import { PropsWithChildren, useEffect, useMemo } from "react";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
@@ -9,19 +9,28 @@ import { ChatList } from "@/components/modules/chat/chat-list";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useRouter, usePathname } from "next/navigation";
 import { ChatSearch } from "@/components/modules/chat/chat-search";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 export default function ChatLayout({ children }: PropsWithChildren) {
     const [user] = useAtom(userAtom);
     const isMobile = useIsMobile();
     const pathname = usePathname();
+    const allChats = useMemo(
+        () => user?.chatRoomMemberships?.map((m) => m.chatRoom) || [],
+        [user?.chatRoomMemberships],
+    );
 
-    // If user not logged in, you could handle this or do a redirect:
+    useEffect(() => {
+        if (logLevel >= LOG_LEVEL_TRACE) {
+            console.log("useEffect.ChatLayout.1");
+        }
+    }, []);
+
     if (!user) {
         return <div className="p-4"></div>;
     }
 
     // Gather all chat rooms
-    const allChats = user.chatRoomMemberships?.map((m) => m.chatRoom) || [];
     const segments = pathname.split("/").filter(Boolean); // e.g. ["chat"] or ["chat", "xyz-handle"]
     const isDetailRoute = segments.length > 1; // true if /chat/[handle]
     const showChatList = !isMobile || !isDetailRoute;
