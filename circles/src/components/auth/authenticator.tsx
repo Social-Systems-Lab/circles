@@ -94,6 +94,8 @@ export const Authenticator = () => {
             setAuthInfo({ authStatus: "authenticated", inSsiApp, currentAccount });
             setUser(response.user);
         } else if (response.challenge) {
+            console.log("checkAuthentication: checkAuth responded with challenge");
+
             // Send challenge to native app for signing
             if (inSsiApp) {
                 window.ReactNativeWebView?.postMessage(
