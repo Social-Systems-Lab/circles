@@ -3,6 +3,7 @@
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getCirclePath } from "@/lib/data/circle";
 import { features } from "@/lib/data/constants";
+import { notifyNewMember } from "@/lib/data/matrix";
 import { addMember } from "@/lib/data/member";
 import {
     getAllMembershipRequests,
@@ -70,6 +71,9 @@ export const approveMembershipRequestAction = async (
 
         // add member
         await addMember(request.userDid, circle._id ?? "", ["members"], request.questionnaireAnswers);
+
+        // notify members
+        await notifyNewMember(request.userDid, circle);
 
         // clear page cache
         let circlePath = await getCirclePath(circle);

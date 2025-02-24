@@ -1,9 +1,10 @@
 // matrix.ts - Matrix chat functionality
 import { ChatRoom, Circle, NotificationType, UserPrivate } from "@/models/models";
 import crypto from "crypto";
-import { updateCircle } from "./circle";
+import { getCirclesByDids, updateCircle } from "./circle";
 import { getServerSettings, updateServerSettings } from "./server-settings";
-import { getPrivateUserByDid } from "./user";
+import { getPrivateUserByDid, getUser } from "./user";
+import { getMembers } from "./member";
 
 const MATRIX_HOST = process.env.MATRIX_HOST || "127.0.0.1";
 const MATRIX_PORT = parseInt(process.env.MATRIX_PORT || "8008");
@@ -438,6 +439,18 @@ export async function updateMatrixRoomNameAndAvatar(roomId: string, newName: str
     }
 }
 
+export async function notifyNewMember(userDid: string, circle: Circle) {
+    const newMemberUser = await getUser(userDid);
+    const members = await getMembers(circle._id!);
+    const otherMembersIds = members.filter((member) => member.userDid !== userDid).map((x) => x.userDid);
+    let recipients = await getCirclesByDids(otherMembersIds);
+
+    // Send "new_member" notification to all existing members
+    await sendNotifications("new_member", recipients, { circle, user: newMemberUser });
+    // Send "join_accepted" notification to the new member
+    await sendNotifications("join_accepted", [newMemberUser], { circle, user: newMemberUser });
+}
+
 export async function sendNotifications(
     notificationType: NotificationType,
     recipients: Circle[],
@@ -480,8 +493,6 @@ export async function sendNotifications(
             content,
         );
 
-        // Finally, call your sendRoomMessage
-        // (This is your existing function from client-matrix.ts)
         await sendMessage(r.matrixAccessToken, r.matrixNotificationsRoomId, content);
     }
 }

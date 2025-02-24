@@ -75,8 +75,18 @@ export const Notifications = () => {
     }, [notifications, markLatestNotificationAsRead]);
 
     const handleNotificationClick = (notification: Notification) => {
-        if (notification.message.includes("requested to join")) {
-            router.push(`/circles/${notification.circle?.handle}/settings/membership-requests`);
+        switch (notification.notificationType) {
+            case "join_request":
+                router.push(`/circles/${notification.circle?.handle}/settings/membership-requests`);
+                break;
+            case "new_member":
+                router.push(`/circles/${notification.user?.handle}`);
+                break;
+            case "join_accepted":
+                router.push(`/circles/${notification.circle?.handle}`);
+                break;
+            default:
+                break;
         }
     };
 

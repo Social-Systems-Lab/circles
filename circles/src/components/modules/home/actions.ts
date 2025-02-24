@@ -3,17 +3,17 @@
 "use server";
 
 import { verifyUserToken } from "@/lib/auth/jwt";
-import { addMember, countAdmins, getMember, removeMember } from "@/lib/data/member";
+import { addMember, countAdmins, getMember, getMembers, removeMember } from "@/lib/data/member";
 import { Circle, UserPrivate } from "@/models/models";
 import { cookies } from "next/headers";
 import { createPendingMembershipRequest, deletePendingMembershipRequest } from "@/lib/data/membership-requests";
-import { getCircleById, getCirclePath, updateCircle } from "@/lib/data/circle";
+import { getCircleById, getCirclePath, getCirclesByDids, updateCircle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, getAuthorizedMembers, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { saveFile } from "@/lib/data/storage";
 import { revalidatePath } from "next/cache";
 import { getUser, getUserById, getUserPrivate, updateUser } from "@/lib/data/user";
-import { sendNotifications } from "@/lib/data/matrix";
+import { notifyNewMember, sendNotifications } from "@/lib/data/matrix";
 
 type CircleActionResponse = {
     success: boolean;
@@ -59,6 +59,10 @@ export const joinCircle = async (circle: Circle, answers?: Record<string, string
         if (updatedCircle.isPublic) {
             // For public circles, add member directly
             await addMember(userDid, updatedCircle._id ?? "", ["members"], answers);
+
+            // Notify members that user has joined
+            await notifyNewMember(userDid, updatedCircle);
+
             return {
                 success: true,
                 message: isUser ? "You have added user as friend" : "You have joined the circle",
