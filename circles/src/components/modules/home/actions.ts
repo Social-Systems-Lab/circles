@@ -82,6 +82,7 @@ export const joinCircle = async (circle: Circle, answers?: Record<string, string
             };
         }
     } catch (error) {
+        console.error("Failed to join circle", error);
         return {
             success: false,
             message: (isUser ? "Failed to add friend" : "Failed to join circle. ") + error?.toString(),

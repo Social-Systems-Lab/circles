@@ -51,7 +51,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange }) => {
 
     useEffect(() => {
         if (!mapboxKey || !mapContainer.current) return;
-        if (map.current) return; // only initialize mapbox once
+        if (map?.current) return; // only initialize mapbox once
 
         mapboxgl.accessToken = mapboxKey;
         map.current = new mapboxgl.Map({

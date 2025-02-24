@@ -11,7 +11,7 @@ import { cookies } from "next/headers";
 import { createSession, generateUserToken, verifyUserToken } from "./jwt";
 import { createNewUser, getUserById, getUserPrivate } from "../data/user";
 import { addMember, getMembers } from "../data/member";
-import { getCircleById, getCirclesByIds, getDefaultCircle } from "../data/circle";
+import { getCircleById, getCirclesByDids, getCirclesByIds, getDefaultCircle } from "../data/circle";
 import { registerOrLoginMatrixUser } from "../data/matrix";
 
 const SALT_FILENAME = "salt.bin";
@@ -288,6 +288,7 @@ export const getAuthorizedMembers = async (circle: string | Circle, feature: Fea
     }
     let featureHandle = typeof feature === "string" ? feature : feature.handle;
     let allowedUserGroups = circle?.accessRules?.[featureHandle];
+
     if (!allowedUserGroups) return [];
 
     // get authenticated user IDs
@@ -299,8 +300,8 @@ export const getAuthorizedMembers = async (circle: string | Circle, feature: Fea
         members = members.filter((member) => allowedUserGroups.some((group) => member.userGroups?.includes(group)));
     }
 
-    const memberIds = members.map((member) => member.userDid);
-    return await getCirclesByIds(memberIds);
+    const memberDids = members.map((member) => member.userDid);
+    return await getCirclesByDids(memberDids);
 };
 
 // new auth

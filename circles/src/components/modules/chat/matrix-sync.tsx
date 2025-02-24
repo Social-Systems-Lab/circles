@@ -100,16 +100,21 @@ export const MatrixSync = () => {
             const messages = roomMessages[roomId] || [];
             const lastReadTimestamp = lastReadTimestamps[roomId] || 0;
 
-            updatedUnreadCounts[roomId] = messages.filter(
-                (msg) =>
-                    msg.createdAt > lastReadTimestamp &&
-                    msg.createdBy !== `@${user?.matrixUsername}` &&
-                    msg.type === "m.room.message",
-            ).length;
+            updatedUnreadCounts[roomId] = messages.filter((msg) => {
+                const isUnread = msg.createdAt > lastReadTimestamp;
+                const isSelfMessage = msg.createdBy !== `@${user?.matrixUsername}`;
+                const isNotificationsRoom = roomId === user?.matrixNotificationsRoomId;
+
+                if (isUnread) {
+                    console.log("Found ");
+                }
+
+                return isUnread && (isNotificationsRoom || !isSelfMessage);
+            }).length;
         }
 
         setUnreadCounts(updatedUnreadCounts);
-    }, [roomMessages, lastReadTimestamps, user?.matrixUsername, setUnreadCounts]);
+    }, [roomMessages, lastReadTimestamps, user?.matrixUsername, user?.matrixNotificationsRoomId, setUnreadCounts]);
 
     // Start the sync process
     useEffect(() => {
@@ -158,7 +163,9 @@ export const MatrixSync = () => {
                 ];
 
                 newRoomFound =
-                    newRoomFound || !user.chatRoomMemberships?.some((m) => m.chatRoom.matrixRoomId === roomId);
+                    newRoomFound ||
+                    (!user.chatRoomMemberships?.some((m) => m.chatRoom.matrixRoomId === roomId) &&
+                        roomId !== user.matrixNotificationsRoomId);
             }
 
             if (newRoomFound) {
@@ -181,6 +188,7 @@ export const MatrixSync = () => {
         setUser,
         user?.matrixAccessToken,
         user?.chatRoomMemberships,
+        user?.matrixNotificationsRoomId,
         setMatrixUserCache,
         matrixUserCache,
         user?.matrixUsername,

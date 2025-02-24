@@ -1,3 +1,4 @@
+// chat-list.tsx - Displays chat rooms in a list
 "use client";
 
 import { useEffect, useMemo } from "react";

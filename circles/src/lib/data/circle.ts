@@ -50,6 +50,16 @@ export const getCirclesByIds = async (ids: string[]): Promise<Circle[]> => {
     return circles;
 };
 
+export const getCirclesByDids = async (dids: string[]): Promise<Circle[]> => {
+    let circles = await Circles.find({ did: { $in: dids } }, { projection: SAFE_CIRCLE_PROJECTION }).toArray();
+    circles.forEach((circle: Circle) => {
+        if (circle._id) {
+            circle._id = circle._id.toString();
+        }
+    });
+    return circles;
+};
+
 export const getDefaultCircle = async (inServerConfig: ServerSettings | null = null): Promise<Circle> => {
     if (process.env.IS_BUILD === "true") {
         return createDefaultCircle();
@@ -190,7 +200,7 @@ export const createCircle = async (circle: Circle): Promise<Circle> => {
     try {
         await createDefaultChatRooms(circle._id);
     } catch (e) {
-        console.error("Failed to create chat rooms", e)
+        console.error("Failed to create chat rooms", e);
     }
 
     return circle;

@@ -4,7 +4,6 @@ import crypto from "crypto";
 import { updateCircle } from "./circle";
 import { getServerSettings, updateServerSettings } from "./server-settings";
 import { getPrivateUserByDid } from "./user";
-import { sendRoomMessage } from "./client-matrix";
 
 const MATRIX_HOST = process.env.MATRIX_HOST || "127.0.0.1";
 const MATRIX_PORT = parseInt(process.env.MATRIX_PORT || "8008");
@@ -447,12 +446,11 @@ export async function sendNotifications(
         user?: Circle;
     },
 ): Promise<void> {
+    console.log(
+        "Attempting to send message to recipients",
+        recipients?.map((x) => x.name),
+    );
     for (const recipient of recipients) {
-        // Make sure we have a circle that is a "user circle"
-        if (!recipient?.circleType || recipient.circleType !== "user") {
-            continue;
-        }
-
         let r = recipient;
         if (!r.matrixAccessToken || !r.matrixNotificationsRoomId) {
             const userDoc = await getPrivateUserByDid(recipient.did!);
@@ -475,9 +473,16 @@ export async function sendNotifications(
             user: payload.user,
         };
 
+        console.log(
+            "Sending message to",
+            recipients?.map((x) => x.name),
+            "content:",
+            content,
+        );
+
         // Finally, call your sendRoomMessage
         // (This is your existing function from client-matrix.ts)
-        await sendRoomMessage(r.matrixAccessToken, r.matrixUrl, r.matrixNotificationsRoomId, content);
+        await sendMessage(r.matrixAccessToken, r.matrixNotificationsRoomId, content);
     }
 }
 

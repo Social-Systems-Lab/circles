@@ -88,6 +88,13 @@ const ProfileMenuBar = () => {
             .reduce((acc, val) => acc + val, 0);
     }, [unreadCounts, user?.chatRoomMemberships]);
 
+    const unreadNotifications = useMemo(() => {
+        if (!user?.matrixNotificationsRoomId) {
+            return 0;
+        }
+        return unreadCounts[user.matrixNotificationsRoomId] || 0;
+    }, [unreadCounts, user?.matrixNotificationsRoomId]);
+
     // Fixes hydration errors
     const [isMounted, setIsMounted] = useState(false);
     useEffect(() => {
@@ -204,10 +211,15 @@ const ProfileMenuBar = () => {
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
+                                className="relative h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
                                 onClick={() => openUserToolbox("notifications")}
                             >
                                 <Bell className="h-5 w-5" />
+                                {unreadNotifications > 0 && (
+                                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+                                        {unreadNotifications}
+                                    </span>
+                                )}
                             </Button>
 
                             <Button

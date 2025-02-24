@@ -15,33 +15,33 @@ export const signupFormAction: FormAction = {
             await createUserSession(user as UserPrivate);
 
             // register user in the circles registry
-            let currentServerSettings = await getServerSettings();
+            //let currentServerSettings = await getServerSettings();
 
-            if (currentServerSettings.registryUrl) {
-                // register user
-                try {
-                    // get public key for user
-                    let publicKey = getUserPublicKey(user.did!);
+            // if (currentServerSettings.registryUrl) {
+            //     // register user
+            //     try {
+            //         // get public key for user
+            //         let publicKey = getUserPublicKey(user.did!);
 
-                    let registryInfo = await registerUser(
-                        user.did!,
-                        user.name!,
-                        user.email!,
-                        values._password,
-                        user.handle!,
-                        user.type!,
-                        currentServerSettings.did!,
-                        currentServerSettings.registryUrl,
-                        publicKey,
-                        user.picture?.url,
-                    );
+            //         let registryInfo = await registerUser(
+            //             user.did!,
+            //             user.name!,
+            //             user.email!,
+            //             values._password,
+            //             user.handle!,
+            //             user.type!,
+            //             currentServerSettings.did!,
+            //             currentServerSettings.registryUrl,
+            //             publicKey,
+            //             user.picture?.url,
+            //         );
 
-                    // update user with registry info
-                    //await updateUser({ _id: user._id, activeRegistryInfo: registryInfo });
-                } catch (error) {
-                    console.log("Failed to register user with registry", error);
-                }
-            }
+            //         // update user with registry info
+            //         //await updateUser({ _id: user._id, activeRegistryInfo: registryInfo });
+            //     } catch (error) {
+            //         console.log("Failed to register user with registry", error);
+            //     }
+            // }
 
             let privateUser = await getUserPrivate(user.did!);
             return { success: true, message: "User signed up successfully", data: { user: privateUser } };
