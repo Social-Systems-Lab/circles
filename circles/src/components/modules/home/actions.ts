@@ -8,11 +8,12 @@ import { Circle, UserPrivate } from "@/models/models";
 import { cookies } from "next/headers";
 import { createPendingMembershipRequest, deletePendingMembershipRequest } from "@/lib/data/membership-requests";
 import { getCircleById, getCirclePath, updateCircle } from "@/lib/data/circle";
-import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
+import { getAuthenticatedUserDid, getAuthorizedMembers, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { saveFile } from "@/lib/data/storage";
 import { revalidatePath } from "next/cache";
-import { getUserById, getUserPrivate, updateUser } from "@/lib/data/user";
+import { getUser, getUserById, getUserPrivate, updateUser } from "@/lib/data/user";
+import { sendNotifications } from "@/lib/data/matrix";
 
 type CircleActionResponse = {
     success: boolean;
@@ -66,6 +67,14 @@ export const joinCircle = async (circle: Circle, answers?: Record<string, string
         } else {
             // For private circles, create a membership request
             await createPendingMembershipRequest(userDid, updatedCircle._id ?? "", answers);
+
+            // get access rules for circle feature
+            let members = await getAuthorizedMembers(updatedCircle, features.manage_membership_requests);
+
+            // send a notification to all users that have permission to accept requests
+            let user = await getUser(userDid);
+            await sendNotifications("join_request", members, { circle: updatedCircle, user });
+
             return {
                 success: true,
                 message: isUser ? "Your friendship request has been sent" : "Your request to join has been sent",

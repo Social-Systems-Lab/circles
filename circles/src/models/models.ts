@@ -405,6 +405,7 @@ export const circleSchema = z.object({
     matrixUsername: z.string().optional(),
     matrixPassword: z.string().optional(),
     matrixNotificationsRoomId: z.string().optional(),
+    isAdmin: z.boolean().optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;
@@ -738,3 +739,5 @@ export type UserSettings = {
     feedTab: TabOptions;
     circlesTab: TabOptions;
 };
+
+export type NotificationType = "join_request" | "new_member" | "join_accepted";

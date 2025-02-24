@@ -23,6 +23,7 @@ import Indicators from "@/components/utils/indicators";
 import { ListFilter } from "@/components/utils/list-filter";
 import emptyFeed from "@images/empty-feed.png";
 import { updateQueryParam } from "@/lib/utils/helpers-client";
+import Link from "next/link";
 
 export const twoLineEllipsisStyle = {
     WebkitLineClamp: 2,
@@ -32,39 +33,28 @@ export const twoLineEllipsisStyle = {
     overflow: "hidden",
 };
 
-interface InviteButtonProps {
+type CreateCircleButtonProps = {
     circle: Circle;
     isDefaultCircle: boolean;
 }
 
-const CreateCircleButton: React.FC<InviteButtonProps> = ({ circle, isDefaultCircle }) => {
-    const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const isCompact = useIsCompact();
 
+export const CreateCircleButton: React.FC<CreateCircleButtonProps> = ({ circle }) => {
+    const isCompact = useIsCompact();
+    const parentId = circle?._id;
+  
     return (
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-                <Button
-                    variant={isCompact ? "ghost" : "outline"}
-                    className={isCompact ? "h-[32px] w-[32px] p-0" : "gap-2"}
-                >
-                    <Plus className="h-4 w-4" />
-                    {isCompact ? "" : "Create Circle"}
-                </Button>
-            </DialogTrigger>
-            <DialogContent>
-                <div className="hidden">
-                    <DialogTitle>Create a new circle</DialogTitle>
-                </div>
-                <DynamicForm
-                    formSchemaId="create-circle-form"
-                    initialFormData={{ parentCircleId: circle._id }}
-                    maxWidth="100%"
-                />
-            </DialogContent>
-        </Dialog>
+      <Link href={`/circles/new?parentCircleId=${parentId}`}>
+        <Button
+          variant={isCompact ? "ghost" : "outline"}
+          className={isCompact ? "h-[32px] w-[32px] p-0" : "gap-2"}
+        >
+          <Plus className="h-4 w-4" />
+          {isCompact ? "" : "Create Circle"}
+        </Button>
+      </Link>
     );
-};
+  };
 
 interface CirclesListProps {
     circles: WithMetric<Circle>[];

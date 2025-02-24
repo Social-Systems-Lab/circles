@@ -1,5 +1,5 @@
 import { getAuthenticatedUserDid, getServerPublicKey, isAuthorized } from "@/lib/auth/auth";
-import { FormAction, FormSubmitResponse, Page, ServerSettings } from "../../../../models/models";
+import { Circle, FormAction, FormSubmitResponse, Page, ServerSettings } from "../../../../models/models";
 import { features } from "@/lib/data/constants";
 import {
     getServerSettings,
@@ -9,6 +9,7 @@ import {
 } from "@/lib/data/server-settings";
 import { revalidatePath } from "next/cache";
 import { upsertVdbCollections } from "@/lib/data/vdb";
+import { Circles } from "@/lib/data/db";
 
 export const serverSettingsFormAction: FormAction = {
     id: "server-settings-form",
@@ -24,9 +25,14 @@ export const serverSettingsFormAction: FormAction = {
         }
 
         try {
-            let authorized = await isAuthorized(userDid, circleId ?? "", features.settings_edit);
-            if (!authorized) {
-                return { success: false, message: "You are not authorized to edit server settings" };
+            let user = await Circles.findOne({ did: userDid });
+
+            console.log("Editing server settings, got User", JSON.stringify(user, null, 2), "userDid", userDid);
+            if (!user?.isAdmin) {
+                let authorized = await isAuthorized(userDid, circleId ?? "", features.settings_edit);
+                if (!authorized) {
+                    return { success: false, message: "You are not authorized to edit server settings" };
+                }
             }
 
             // update server settings
@@ -44,29 +50,29 @@ export const serverSettingsFormAction: FormAction = {
             let currentServerSettings = await getServerSettings();
 
             // if we have no registry information or if current registry URL differs from the specified one, we need to register the server
-            if (
-                serverSettings.registryUrl &&
-                (!currentServerSettings.activeRegistryInfo ||
-                    currentServerSettings.activeRegistryInfo.registryUrl !== serverSettings.registryUrl)
-            ) {
-                // get public key for server
-                let publicKey = getServerPublicKey();
+            // if (
+            //     serverSettings.registryUrl &&
+            //     (!currentServerSettings.activeRegistryInfo ||
+            //         currentServerSettings.activeRegistryInfo.registryUrl !== serverSettings.registryUrl)
+            // ) {
+            //     // get public key for server
+            //     let publicKey = getServerPublicKey();
 
-                // register server
-                try {
-                    let registryInfo = await registerServer(
-                        currentServerSettings.did!,
-                        serverSettings.name!,
-                        serverSettings.url!,
-                        serverSettings.registryUrl,
-                        publicKey,
-                    );
-                    serverSettings.activeRegistryInfo = registryInfo;
-                } catch (error) {
-                    console.log("Failed to register server with registry", error);
-                    registrySuccess = false;
-                }
-            }
+            //     // register server
+            //     try {
+            //         let registryInfo = await registerServer(
+            //             currentServerSettings.did!,
+            //             serverSettings.name!,
+            //             serverSettings.url!,
+            //             serverSettings.registryUrl,
+            //             publicKey,
+            //         );
+            //         serverSettings.activeRegistryInfo = registryInfo;
+            //     } catch (error) {
+            //         console.log("Failed to register server with registry", error);
+            //         registrySuccess = false;
+            //     }
+            // }
 
             let appVersion = process.env.version;
             console.log("Server version", serverSettings.serverVersion);

@@ -1,3 +1,4 @@
+// members/actions.ts - Server actions around memberships
 "use server";
 
 import { getAuthenticatedUserDid, getMemberAccessLevel, hasHigherAccess, isAuthorized } from "@/lib/auth/auth";

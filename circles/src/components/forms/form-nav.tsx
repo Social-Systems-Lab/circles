@@ -45,7 +45,7 @@ export const FormNav: React.FC<FormNavProps> = ({ items, circle, isDefaultCircle
             <nav
                 className={cn("flex", className)}
                 style={{
-                    position: isCompact ? "relative" : "fixed",
+                    position: isCompact ? "relative" : "relative",
                     marginLeft: isCompact ? "10px" : "20px",
                     marginRight: isCompact ? "10px" : "20px",
                     flexDirection: isCompact ? "row" : "column",

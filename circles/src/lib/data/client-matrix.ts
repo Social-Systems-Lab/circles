@@ -86,6 +86,7 @@ export async function startSync(
     let since: any = localStorage.getItem(roomId ? `syncToken_${roomId}` : "syncToken");
     const maxRetries = 5;
     let retryCount = 0;
+    console.log("Matrix URL:", `${matrixUrl}/client/v3/sync`);
 
     const sync = async () => {
         const url = new URL(`${matrixUrl}/client/v3/sync`);

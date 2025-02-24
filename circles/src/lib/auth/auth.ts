@@ -4,14 +4,14 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { Challenges, Circles, Members } from "../data/db";
-import { Account, AccountType, Challenge, Circle, Feature, UserPrivate } from "@/models/models";
+import { Account, AccountType, Challenge, Circle, Feature, Member, UserPrivate } from "@/models/models";
 import { ObjectId } from "mongodb";
 import { maxAccessLevel } from "../data/constants";
 import { cookies } from "next/headers";
 import { createSession, generateUserToken, verifyUserToken } from "./jwt";
 import { createNewUser, getUserById, getUserPrivate } from "../data/user";
-import { addMember } from "../data/member";
-import { getCircleById, getDefaultCircle } from "../data/circle";
+import { addMember, getMembers } from "../data/member";
+import { getCircleById, getCirclesByIds, getDefaultCircle } from "../data/circle";
 import { registerOrLoginMatrixUser } from "../data/matrix";
 
 const SALT_FILENAME = "salt.bin";
@@ -280,6 +280,27 @@ export const isAuthorized = async (
     let membership = await Members.findOne({ userDid: userDid, circleId: circleId });
     if (!membership) return false;
     return allowedUserGroups.some((group) => membership?.userGroups?.includes(group));
+};
+
+export const getAuthorizedMembers = async (circle: string | Circle, feature: Feature | string): Promise<Circle[]> => {
+    if (typeof circle === "string") {
+        circle = await getCircleById(circle);
+    }
+    let featureHandle = typeof feature === "string" ? feature : feature.handle;
+    let allowedUserGroups = circle?.accessRules?.[featureHandle];
+    if (!allowedUserGroups) return [];
+
+    // get authenticated user IDs
+    let members: Member[] = [];
+    if (allowedUserGroups.includes("everyone")) {
+        members = await getMembers(circle._id!);
+    } else {
+        members = await getMembers(circle._id!);
+        members = members.filter((member) => allowedUserGroups.some((group) => member.userGroups?.includes(group)));
+    }
+
+    const memberIds = members.map((member) => member.userDid);
+    return await getCirclesByIds(memberIds);
 };
 
 // new auth

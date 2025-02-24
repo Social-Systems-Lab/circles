@@ -187,7 +187,11 @@ export const createCircle = async (circle: Circle): Promise<Circle> => {
     }
 
     // create circle chat room
-    await createDefaultChatRooms(circle._id);
+    try {
+        await createDefaultChatRooms(circle._id);
+    } catch (e) {
+        console.error("Failed to create chat rooms", e)
+    }
 
     return circle;
 };

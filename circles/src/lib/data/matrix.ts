@@ -1,8 +1,10 @@
 // matrix.ts - Matrix chat functionality
-import { ChatRoom, Circle, UserPrivate } from "@/models/models";
+import { ChatRoom, Circle, NotificationType, UserPrivate } from "@/models/models";
 import crypto from "crypto";
 import { updateCircle } from "./circle";
 import { getServerSettings, updateServerSettings } from "./server-settings";
+import { getPrivateUserByDid } from "./user";
+import { sendRoomMessage } from "./client-matrix";
 
 const MATRIX_HOST = process.env.MATRIX_HOST || "127.0.0.1";
 const MATRIX_PORT = parseInt(process.env.MATRIX_PORT || "8008");
@@ -435,4 +437,95 @@ export async function updateMatrixRoomNameAndAvatar(roomId: string, newName: str
             throw new Error(`Failed updating room avatar: ${await avatarRes.text()}`);
         }
     }
+}
+
+export async function sendNotifications(
+    notificationType: NotificationType,
+    recipients: Circle[],
+    payload: {
+        circle?: Circle;
+        user?: Circle;
+    },
+): Promise<void> {
+    for (const recipient of recipients) {
+        // Make sure we have a circle that is a "user circle"
+        if (!recipient?.circleType || recipient.circleType !== "user") {
+            continue;
+        }
+
+        let r = recipient;
+        if (!r.matrixAccessToken || !r.matrixNotificationsRoomId) {
+            const userDoc = await getPrivateUserByDid(recipient.did!);
+            if (!userDoc) continue;
+            r = userDoc;
+        }
+
+        // If still no matrix credentials or no notifications room, skip.
+        if (!r.matrixAccessToken || !r.matrixNotificationsRoomId) {
+            continue;
+        }
+
+        // Build some text fallback and extra custom fields
+        const body = deriveBody(notificationType, payload);
+        const content = {
+            msgtype: "m.text", // required for m.room.message
+            body, // fallback text
+            notificationType, // e.g. "join_request"
+            circle: payload.circle,
+            user: payload.user,
+        };
+
+        // Finally, call your sendRoomMessage
+        // (This is your existing function from client-matrix.ts)
+        await sendRoomMessage(r.matrixAccessToken, r.matrixUrl, r.matrixNotificationsRoomId, content);
+    }
+}
+
+function deriveBody(notificationType: NotificationType, payload: { circle?: Circle; user?: Circle }) {
+    switch (notificationType) {
+        case "join_request":
+            return `${payload.user?.name} has requested to join circle ${payload?.circle?.name}`;
+        case "new_member":
+            return `${payload.user?.name} has joined circle ${payload?.circle?.name}`;
+        case "join_accepted":
+            return `You have been accepted into circle ${payload?.circle?.name}`;
+        default:
+            return "New notification";
+    }
+}
+
+export async function sendMessage(
+    accessToken: string,
+    roomId: string,
+    content: {
+        msgtype: string; // typically "m.text"
+        body: string; // the fallback text
+        [key: string]: any; // any other custom fields (e.g., notificationType)
+    },
+): Promise<any> {
+    // Use a timestamp or any unique ID for the transaction
+    const txnId = `${Date.now()}`;
+
+    // Construct the request URL
+    const url = `${MATRIX_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${txnId}`;
+
+    console.log("Sending server-side Matrix message to room:", roomId);
+    console.log("Message content:", content);
+
+    // Fire off the request
+    const response = await fetch(url, {
+        method: "PUT",
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(content),
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to send message: ${errorText}`);
+    }
+
+    return await response.json();
 }

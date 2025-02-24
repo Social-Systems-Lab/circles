@@ -17,6 +17,8 @@ export const createCircleFormAction: FormAction = {
             parentCircleId: values.parentCircleId,
         };
 
+        console.log("Test1");
+
         // check if user is authorized to edit circle settings
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) {
