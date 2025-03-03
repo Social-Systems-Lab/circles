@@ -1,13 +1,10 @@
 "use client";
 
-import NavBarItems from "./nav-bar-items";
-import CircleMenu from "./circle-menu";
-import { getDefaultCircle } from "@/lib/data/circle";
 import Image from "next/image";
 import Link from "next/link";
 import GlobalNavItems from "./global-nav-items";
 import { useAtom } from "jotai";
-import { authInfoAtom, userAtom } from "@/lib/data/atoms";
+import { userAtom } from "@/lib/data/atoms";
 import { useEffect } from "react";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
