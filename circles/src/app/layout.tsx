@@ -17,6 +17,11 @@ import { SidePanel } from "@/components/layout/side-panel";
 import { Metadata } from "next";
 import { getDefaultCircle } from "@/lib/data/circle";
 
+// Disable caching for this layout to prevent the "hard refresh bug"
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
+
 const inter = Inter({ subsets: ["latin"] });
 const wix = Wix_Madefor_Display({ subsets: ["latin"], variable: "--font-wix-display" });
 const libre = Libre_Franklin({ subsets: ["latin"], variable: "--font-libre-franklin" });

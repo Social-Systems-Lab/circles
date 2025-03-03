@@ -40,6 +40,8 @@ export const WebviewLog = (message: string, ...optionalParams: any[]) => {
 export const Authenticator = () => {
     const [authInfo, setAuthInfo] = useAtom(authInfoAtom);
     const [, setUser] = useAtom(userAtom);
+    // Add a state to track initialization status
+    const [isInitialized, setIsInitialized] = useState(false);
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -52,7 +54,14 @@ export const Authenticator = () => {
             "background: #4A90E2; color: white; padding: 2px 4px; border-radius: 3px;",
             "background: none; color: #4A90E2; font-weight: bold;",
         );
-    }, []);
+        
+        // Add this to ensure initialization on first load
+        if (!isInitialized) {
+            setIsInitialized(true);
+            // Add a cache buster parameter to prevent stale data
+            localStorage.setItem('cache_buster', Date.now().toString());
+        }
+    }, [isInitialized]);
 
     const checkQrAuthentication = useCallback(async () => {
         if (!authInfo.challenge) {
@@ -167,7 +176,10 @@ export const Authenticator = () => {
             window.addEventListener("message", onMessage);
         }
 
-        checkAuthentication();
+        // Run checkAuthentication with a slight delay to ensure components have initialized
+        setTimeout(() => {
+            checkAuthentication();
+        }, 50);
 
         return () => {
             if (inSsiApp) {

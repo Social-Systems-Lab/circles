@@ -46,7 +46,7 @@ const QRCodePopover = () => {
                 <div className="mb-4 text-xl font-semibold">Sign in with the Circles App</div>
                 <QRCode value={JSON.stringify(authInfo.challenge)} size={200} />
                 <p className="mt-4 text-sm text-gray-600">
-                    Scan this code with your Circles app to authenticate. Download the app if you don’t have it
+                    Scan this code with your Circles app to authenticate. Download the app if you don&apos;t have it
                     installed.
                 </p>
                 {/* Discrete icon button to log in with test account */}
@@ -238,15 +238,24 @@ const ProfileMenuBar = () => {
 };
 
 export const ProfileMenu = () => {
+    const [loadStateKey, setLoadStateKey] = useState(Date.now().toString());
+
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
             console.log("useEffect.ProfileMenu.1");
         }
+
+        // Force re-render after component mount to ensure proper hydration
+        const timer = setTimeout(() => {
+            setLoadStateKey(Date.now().toString());
+        }, 100);
+
+        return () => clearTimeout(timer);
     }, []);
 
     return (
-        <Suspense>
-            <ProfileMenuBar />
+        <Suspense fallback={<div className="h-10 w-10"></div>}>
+            <ProfileMenuBar key={loadStateKey} />
         </Suspense>
     );
 };
