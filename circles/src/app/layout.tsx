@@ -9,7 +9,7 @@ import { ProfileMenu } from "@/components/layout/profile-menu";
 import "mapbox-gl/dist/mapbox-gl.css";
 import ImageGallery from "@/components/layout/image-gallery";
 import Onboarding from "@/components/onboarding/onboarding";
-import Head from "next/head";
+import Script from "next/script";
 import { MatrixSync } from "@/components/modules/chat/matrix-sync";
 import MapAndContentWrapper from "@/components/map/map";
 import { getServerSettings } from "@/lib/data/server-settings";
@@ -36,6 +36,9 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
     return (
         <Provider>
             <html lang="en" className={`${wix.variable} ${libre.variable}`}>
+                <head>
+                    <meta name="app-version" content={process.env.version} />
+                </head>
                 <body className={inter.className}>
                     <main className="relative flex flex-col md:flex-row">
                         <GlobalNav />
@@ -55,6 +58,31 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
                         <Onboarding />
                         <MatrixSync />
                     </main>
+                    <Script id="version-check">
+                        {`
+                        (function() {
+                            try {
+                                const currentVersion = "${process.env.version}";
+                                const storedVersion = localStorage.getItem('app_version');
+                                
+                                if (storedVersion && storedVersion !== currentVersion) {
+                                    // Version changed - clear caches
+                                    localStorage.setItem('app_version', currentVersion);
+                                    
+                                    // Only reload if not a fresh page load (prevents infinite reloads)
+                                    if (performance.navigation && performance.navigation.type !== 1) {
+                                        window.location.reload(true);
+                                    }
+                                } else if (!storedVersion) {
+                                    // First time - set version
+                                    localStorage.setItem('app_version', currentVersion);
+                                }
+                            } catch (e) {
+                                console.error('Version check error:', e);
+                            }
+                        })();
+                        `}
+                    </Script>
                 </body>
             </html>
         </Provider>
