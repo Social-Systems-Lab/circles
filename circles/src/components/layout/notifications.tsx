@@ -54,7 +54,15 @@ export const Notifications = () => {
 
     const markLatestNotificationAsRead = useCallback(async () => {
         if (notifications.length > 0 && user?.matrixAccessToken) {
-            const latestNotification = notifications[notifications.length - 1];
+            // Use index 0 since array is reversed
+            const latestNotification = notifications[0];
+            
+            console.log(`📩 [Notifications] Marking latest notification as read:`);
+            console.log(`📩 [Notifications] - ID: ${latestNotification.id}`);
+            console.log(`📩 [Notifications] - Message: ${latestNotification.message}`);
+            console.log(`📩 [Notifications] - Type: ${latestNotification.notificationType}`);
+            console.log(`📩 [Notifications] - Room ID: ${user.matrixNotificationsRoomId}`);
+            
             await sendReadReceipt(
                 user.matrixAccessToken,
                 user.matrixUrl!,
@@ -62,11 +70,21 @@ export const Notifications = () => {
                 latestNotification.id,
             );
 
+            console.log(`📩 [Notifications] Read receipt sent successfully`);
+
             // Reset unread count for notifications
-            setUnreadCounts((counts) => ({
-                ...counts,
-                [user.matrixNotificationsRoomId!]: 0,
-            }));
+            setUnreadCounts((counts) => {
+                console.log(`📩 [Notifications] Resetting unread count from ${counts[user.matrixNotificationsRoomId!] || 0} to 0`);
+                return {
+                    ...counts,
+                    [user.matrixNotificationsRoomId!]: 0,
+                };
+            });
+        } else {
+            console.log(`📩 [Notifications] No notifications to mark as read`);
+            if (!user?.matrixAccessToken) {
+                console.log(`📩 [Notifications] Missing Matrix access token`);
+            }
         }
     }, [notifications, user?.matrixAccessToken, user?.matrixUrl, user?.matrixNotificationsRoomId, setUnreadCounts]);
 

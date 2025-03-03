@@ -412,11 +412,27 @@ export const ChatRoomComponent: React.FC<{
     const markLatestMessageAsRead = useCallback(async () => {
         if (messages.length > 0 && user?.matrixAccessToken) {
             const latestMessage = messages[messages.length - 1];
-            // await markMessagesAsRead(user.matrixAccessToken, chatRoom.matrixRoomId!, latestMessage.id);
+
+            console.log(`💬 [Chat] Marking latest message as read in room ${chatRoom.name}:`);
+            console.log(`💬 [Chat] - Room ID: ${latestMessage.roomId}`);
+            console.log(`💬 [Chat] - Message ID: ${latestMessage.id}`);
+            console.log(`💬 [Chat] - Time: ${new Date(latestMessage.createdAt).toISOString()}`);
+            console.log(`💬 [Chat] - From: ${latestMessage.createdBy}`);
+
+            if (latestMessage.type === "m.room.message") {
+                const contentPreview =
+                    typeof latestMessage.content?.body === "string"
+                        ? JSON.stringify(latestMessage.content?.body).substring(0, 50)
+                        : "N/A";
+                console.log(`💬 [Chat] - Content: ${contentPreview}...`);
+            }
+
             await sendReadReceipt(user.matrixAccessToken, user.matrixUrl!, latestMessage.roomId, latestMessage.id);
-            //await sendReadReceiptAction(latestMessage.chatRoomId, latestMessage.id);
+            console.log(`💬 [Chat] Read receipt sent successfully`);
+        } else {
+            console.log(`💬 [Chat] No messages to mark as read for room ${chatRoom.name || chatRoom.matrixRoomId}`);
         }
-    }, [messages, user?.matrixAccessToken, user?.matrixUrl]);
+    }, [chatRoom?.matrixRoomId, chatRoom?.name, messages, user?.matrixAccessToken, user?.matrixUrl]);
 
     const scrollToBottom = () => {
         // console.log("Scrolling to bottom");
