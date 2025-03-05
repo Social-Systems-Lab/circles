@@ -175,18 +175,29 @@ export const getPost = async (postId: string): Promise<Post | null> => {
 };
 
 export const createComment = async (comment: Comment): Promise<Comment> => {
-    const result = await Comments.insertOne(comment);
-    const insertedComment = { ...comment, _id: result.insertedId.toString() };
-    await Posts.updateOne({ _id: new ObjectId(comment.postId) }, { $inc: { comments: 1 } });
+    try {
+        const result = await Comments.insertOne(comment);
+        const insertedComment = { ...comment, _id: result.insertedId.toString() };
+        
+        await Posts.updateOne({ _id: new ObjectId(comment.postId) }, { $inc: { comments: 1 } });
 
-    if (!comment.parentCommentId) {
-        await updateHighlightedComment(comment.postId);
-    } else {
-        // update replies
-        await Comments.updateOne({ _id: new ObjectId(comment.parentCommentId) }, { $inc: { replies: 1 } });
+        if (!comment.parentCommentId) {
+            await updateHighlightedComment(comment.postId);
+        } else {
+            // update replies
+            await Comments.updateOne({ _id: new ObjectId(comment.parentCommentId) }, { $inc: { replies: 1 } });
+        }
+
+        console.log("💾 [DB] Comment created successfully:", {
+            commentId: insertedComment._id,
+            postId: comment.postId
+        });
+        
+        return insertedComment;
+    } catch (error) {
+        console.error("💾 [DB] Error creating comment:", error);
+        throw error; // Important to propagate the error
     }
-
-    return insertedComment;
 };
 
 export const deleteComment = async (commentId: string): Promise<void> => {

@@ -204,6 +204,8 @@ export const PostItem = ({
     const isAuthor = user && post.createdBy === user?.did;
     const canModerateFeature = feedFeaturePrefix + feed?.handle + "_moderate";
     const canModerate = circle && isAuthorized(user, circle, canModerateFeature);
+    const canCommentFeature = feedFeaturePrefix + feed?.handle + "_comment";
+    const canComment = circle && isAuthorized(user, circle, canCommentFeature);
     const [isPending, startTransition] = useTransition();
     const [isFetchingComments, startCommentsTransition] = useTransition();
     const { toast } = useToast();
@@ -359,12 +361,19 @@ export const PostItem = ({
         });
     };
 
-    const handleAddComment = () => {
-        if (!newCommentContent.trim()) return;
+    const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
+    const handleAddComment = () => {
+        if (!newCommentContent.trim() || isSubmittingComment) return;
+
+        const commentContent = newCommentContent.trim();
+        // Clear the input immediately to improve user experience
+        setNewCommentContent("");
+        setIsSubmittingComment(true);
+        
         const tempComment: CommentDisplay = {
             _id: "temp-comment", // Temporary ID to distinguish it
-            content: newCommentContent,
+            content: commentContent,
             createdAt: new Date(),
             author: user as Circle,
             createdBy: user!.did!,
@@ -378,18 +387,37 @@ export const PostItem = ({
 
         startTransition(async () => {
             try {
-                const result = await createCommentAction(post._id, null, newCommentContent);
+                console.log("Submitting comment:", commentContent.substring(0, 50));
+                const result = await createCommentAction(post._id, null, commentContent);
+                
                 if (result.success && result.comment) {
                     const newComment = result.comment as CommentDisplay;
                     newComment.author = user as Circle;
 
                     setComments((prev) => prev.map((c) => (c._id === "temp-comment" ? newComment : c)));
-                    setNewCommentContent("");
                     setShowAllComments(true);
+                    console.log("Comment created successfully:", newComment._id);
+                } else {
+                    console.error("Failed to add comment. Server response:", result);
+                    setComments((prev) => prev.filter((comment) => comment._id !== "temp-comment"));
+                    // Show error to user
+                    toast({
+                        title: "Comment Failed",
+                        description: result.message || "Failed to create comment. Please try again.",
+                        variant: "destructive",
+                    });
                 }
             } catch (error) {
-                console.error("Failed to add comment", error);
+                console.error("Exception adding comment:", error);
                 setComments((prev) => prev.filter((comment) => comment._id !== "temp-comment"));
+                // Show error to user
+                toast({
+                    title: "Comment Failed",
+                    description: "An error occurred while creating your comment.",
+                    variant: "destructive",
+                });
+            } finally {
+                setIsSubmittingComment(false);
             }
         });
     };
@@ -767,7 +795,7 @@ export const PostItem = ({
                       )}
 
                 {/* Comment input box */}
-                {user && (
+                {user && canComment && (
                     <div className="mt-2 flex items-start gap-2">
                         <MentionsInput
                             value={newCommentContent}

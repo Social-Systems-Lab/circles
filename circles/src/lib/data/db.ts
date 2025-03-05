@@ -45,6 +45,12 @@ let Challenges: Collection<Challenge>;
 // Only initialize the database connection if not in build mode
 if (process.env.IS_BUILD !== "true") {
     client = new MongoClient(MONGO_CONNECTION_STRING, options);
+    
+    // Connect the client - this establishes the connection more reliably
+    client.connect().catch(err => {
+        console.error("MongoDB connection error:", err);
+    });
+    
     db = client.db("circles");
 
     Circles = db.collection<Circle>("circles");

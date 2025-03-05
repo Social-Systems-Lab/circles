@@ -389,24 +389,36 @@ export async function createCommentAction(
     }
 
     try {
+        console.log("🐞 [ACTION] Creating comment action start:", { 
+            postId,
+            contentPreview: content.substring(0, 30)
+        });
+        
         const post = await getPost(postId);
         if (!post) {
+            console.log("🐞 [ACTION] Post not found:", postId);
             return { success: false, message: "Post not found" };
         }
 
         // check if user is authorized to comment
         const feed = await getFeed(post.feedId);
         if (!feed) {
+            console.log("🐞 [ACTION] Feed not found:", post.feedId);
             return { success: false, message: "Feed not found" };
         }
 
         const feature = feedFeaturePrefix + feed.handle + "_comment";
         const authorized = await isAuthorized(userDid, feed.circleId, feature);
         if (!authorized) {
+            console.log("🐞 [ACTION] User not authorized:", { userDid, feature });
             return { success: false, message: "You are not authorized to comment in this feed" };
         }
 
         const user = await getUserByDid(userDid);
+        if (!user) {
+            console.log("🐞 [ACTION] User not found:", userDid);
+            return { success: false, message: "User not found" };
+        }
 
         let comment: CommentDisplay = {
             postId: postId,
@@ -419,7 +431,7 @@ export async function createCommentAction(
             author: user,
         };
 
-        console.log("🐞 [DEBUG] Creating comment:", {
+        console.log("🐞 [ACTION] Creating comment:", {
             postId,
             parentCommentId,
             contentPreview: content.substring(0, 50) + (content.length > 50 ? "..." : ""),
@@ -434,51 +446,69 @@ export async function createCommentAction(
         const mentions = extractMentions(comment.content);
         comment.mentions = mentions;
 
-        await commentSchema.parseAsync(comment);
-
-        let newComment = await createComment(comment);
-        comment._id = newComment._id;
-
-        // Send notifications
         try {
-            // 1. If it's a direct comment on a post, notify the post author
-            if (!parentCommentId) {
-                await notifyPostComment(post, newComment, user);
-            }
-
-            // 2. If it's a reply to another comment, notify the parent comment author
-            else {
-                const parentComment = await getComment(parentCommentId);
-                if (parentComment) {
-                    await notifyCommentReply(post, parentComment, newComment, user);
-                }
-            }
-
-            // 3. If the comment has mentions, notify mentioned users
-            if (mentions && mentions.length > 0) {
-                // Get the Circle objects for all mentioned circles
-
-                const mentionedCircles = await Promise.all(
-                    mentions.map(async (mention) => {
-                        return await getCircleById(mention.id);
-                    }),
-                );
-
-                // Filter out any null results
-                const validMentionedCircles = mentionedCircles.filter((circle) => circle !== null);
-
-                if (validMentionedCircles.length > 0) {
-                    await notifyCommentMentions(newComment, post, user, validMentionedCircles);
-                }
-            }
-        } catch (notificationError) {
-            // Log but don't fail the comment creation if notifications fail
-
-            console.error("Failed to send notifications:", notificationError);
+            await commentSchema.parseAsync(comment);
+        } catch (validationError) {
+            console.error("🐞 [ACTION] Comment validation failed:", validationError);
+            return { success: false, message: "Invalid comment data" };
         }
+
+        // Create the comment in the database
+        let newComment;
+        try {
+            newComment = await createComment(comment);
+            comment._id = newComment._id;
+            console.log("🐞 [ACTION] Comment created successfully:", newComment._id);
+        } catch (dbError) {
+            console.error("🐞 [ACTION] Database error creating comment:", dbError);
+            return { success: false, message: "Database error creating comment" };
+        }
+
+        // Send notifications - do this in background, don't wait for it to complete
+        setTimeout(async () => {
+            try {
+                console.log("🐞 [ACTION] Sending notifications for comment:", newComment._id);
+                
+                // 1. If it's a direct comment on a post, notify the post author
+                if (!parentCommentId) {
+                    await notifyPostComment(post, newComment, user);
+                }
+    
+                // 2. If it's a reply to another comment, notify the parent comment author
+                else {
+                    const parentComment = await getComment(parentCommentId);
+                    if (parentComment) {
+                        await notifyCommentReply(post, parentComment, newComment, user);
+                    }
+                }
+    
+                // 3. If the comment has mentions, notify mentioned users
+                if (mentions && mentions.length > 0) {
+                    // Get the Circle objects for all mentioned circles
+                    const mentionedCircles = await Promise.all(
+                        mentions.map(async (mention) => {
+                            return await getCircleById(mention.id);
+                        }),
+                    );
+    
+                    // Filter out any null results
+                    const validMentionedCircles = mentionedCircles.filter((circle) => circle !== null);
+    
+                    if (validMentionedCircles.length > 0) {
+                        await notifyCommentMentions(newComment, post, user, validMentionedCircles);
+                    }
+                }
+                
+                console.log("🐞 [ACTION] Notifications sent successfully for comment:", newComment._id);
+            } catch (notificationError) {
+                // Log but don't fail the comment creation if notifications fail
+                console.error("🐞 [ACTION] Failed to send notifications:", notificationError);
+            }
+        }, 0);
 
         return { success: true, message: "Comment created successfully", comment };
     } catch (error) {
+        console.error("🐞 [ACTION] Unhandled error in createCommentAction:", error);
         return { success: false, message: error instanceof Error ? error.message : "Failed to create comment." };
     }
 }
