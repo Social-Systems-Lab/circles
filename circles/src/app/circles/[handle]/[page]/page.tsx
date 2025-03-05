@@ -8,6 +8,7 @@ type PageProps = {
 export default async function Page(props: PageProps) {
     const searchParams = await props.searchParams;
     const params = await props.params;
+
     return (
         <DynamicPage
             circleHandle={params.handle}
