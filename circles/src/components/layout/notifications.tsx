@@ -11,6 +11,7 @@ import { Circle, NotificationType, Post, Comment } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { sendReadReceipt } from "@/lib/data/client-matrix";
 import { MdOutlineArticle } from "react-icons/md";
+import { AiFillHeart } from "react-icons/ai";
 
 type Notification = {
     id: string;
@@ -254,7 +255,7 @@ export const Notifications = () => {
 
         let userList = "";
         if (userNames.length === 1) {
-            userList = userNames[0];
+            userList = userNames[0] ?? "";
         } else if (userNames.length === 2) {
             userList = `${userNames[0]} and ${userNames[1]}`;
         } else {
@@ -299,22 +300,40 @@ export const Notifications = () => {
                         onClick={() => handleNotificationClick(groupedNotification)}
                     >
                         <div className="relative h-[40px] w-[40px]">
-                            {/* For post-related notifications, show post icon in top-left */}
-                            {["post_comment", "post_like", "post_mention", "comment_reply", "comment_like", "comment_mention"].includes(
+                            {/* Different layouts based on notification type */}
+                            {["post_comment", "comment_reply", "post_mention", "comment_mention"].includes(
                                 groupedNotification.latestNotification.notificationType
                             ) ? (
                                 <>
-                                    {/* Post icon in top-left position */}
-                                    <MdOutlineArticle size="30px" />
-                                    
-                                    {/* Show user picture in bottom-right position */}
+                                    {/* Show user picture in the center */}
                                     {groupedNotification.latestNotification.user && (
                                         <CirclePicture
                                             circle={groupedNotification.latestNotification.user}
-                                            size="30px"
-                                            className="absolute bottom-0 right-0"
+                                            size="34px"
                                         />
                                     )}
+                                    
+                                    {/* Post icon in bottom-right position in a small circle */}
+                                    <div className="absolute bottom-0 right-0 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-gray-100">
+                                        <MdOutlineArticle size="14px" />
+                                    </div>
+                                </>
+                            ) : ["post_like", "comment_like"].includes(
+                                groupedNotification.latestNotification.notificationType
+                            ) ? (
+                                <>
+                                    {/* Show user picture in the center */}
+                                    {groupedNotification.latestNotification.user && (
+                                        <CirclePicture
+                                            circle={groupedNotification.latestNotification.user}
+                                            size="34px"
+                                        />
+                                    )}
+                                    
+                                    {/* Heart icon in bottom-right position in a small circle */}
+                                    <div className="absolute bottom-0 right-0 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-gray-100">
+                                        <AiFillHeart className="fill-[#ff4772] stroke-[#ff4772]" size="14px" />
+                                    </div>
                                 </>
                             ) : (
                                 <>
