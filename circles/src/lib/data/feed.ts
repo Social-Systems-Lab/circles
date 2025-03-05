@@ -539,6 +539,7 @@ export async function getPostsFromMultipleFeeds(
                     name: "$circle.name",
                     handle: "$circle.handle",
                     picture: "$circle.picture",
+                    accessRules: "$circle.accessRules",
                 },
             },
         },
