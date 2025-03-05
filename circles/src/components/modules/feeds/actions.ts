@@ -43,6 +43,14 @@ import { revalidatePath } from "next/cache";
 import { getCircleById, getCirclePath, getCirclesBySearchQuery } from "@/lib/data/circle";
 import { getUserByDid, getUserById, getUserPrivate } from "@/lib/data/user";
 import { redirect } from "next/navigation";
+import {
+    notifyPostComment,
+    notifyCommentReply,
+    notifyCommentLike,
+    notifyPostLike,
+    notifyPostMentions,
+    notifyCommentMentions,
+} from "@/lib/data/notifications";
 
 // Global posts: posts from all public feeds
 export async function getGlobalPostsAction(
@@ -99,7 +107,6 @@ export async function getAggregatePostsAction(
 
     // Get posts from all accessible feeds
     const posts = await getPostsFromMultipleFeedsWithMetrics(accessibleFeeds, userDid, limit, skip, sortingOptions);
-
     return posts;
 }
 
@@ -111,7 +118,6 @@ export async function getPostsAction(
     sortingOptions?: SortingOptions,
 ): Promise<PostDisplay[]> {
     let userDid = await getAuthenticatedUserDid();
-
     const feed = await getFeed(feedId);
     if (!feed) {
         redirect("/not-found");
@@ -144,7 +150,6 @@ export async function createPostAction(
         const feedId = formData.get("feedId") as string;
         const locationStr = formData.get("location") as string;
         const location = locationStr ? JSON.parse(locationStr) : undefined;
-
         const feed = await getFeed(feedId);
         if (!feed) {
             return { success: false, message: "Feed not found" };
@@ -167,13 +172,11 @@ export async function createPostAction(
         };
 
         console.log("creating post", JSON.stringify(post.location));
-
         await postSchema.parseAsync(post);
 
         // parse mentions in the comment content
         const mentions = extractMentions(post.content);
         post.mentions = mentions;
-
         let newPost = await createPost(post);
 
         try {
@@ -201,6 +204,28 @@ export async function createPostAction(
             console.log("Failed to save post media", error);
         }
 
+        // Send notifications for mentions
+        try {
+            if (mentions && mentions.length > 0) {
+                const user = await getUserByDid(userDid);
+
+                // Get the Circle objects for all mentioned circles
+                const mentionedCircles = await Promise.all(
+                    mentions.map(async (mention) => {
+                        return await getCircleById(mention.id);
+                    }),
+                );
+
+                // Filter out any null results
+                const validMentionedCircles = mentionedCircles.filter((circle) => circle !== null);
+                if (validMentionedCircles.length > 0) {
+                    await notifyPostMentions(newPost, user, validMentionedCircles);
+                }
+            }
+        } catch (notificationError) {
+            console.error("Failed to send mention notifications:", notificationError);
+        }
+
         let circlePath = await getCirclePath({ _id: circleId } as Circle);
         revalidatePath(`${circlePath}${page?.handle ?? ""}${subpage ? `/${subpage}` : ""}`);
 
@@ -216,6 +241,7 @@ export async function updatePostAction(
     subpage?: string,
 ): Promise<{ success: boolean; message?: string; post?: Post }> {
     const userDid = await getAuthenticatedUserDid();
+
     if (!userDid) {
         return { success: false, message: "You need to be logged in to edit a post" };
     }
@@ -226,7 +252,6 @@ export async function updatePostAction(
         const circleId = formData.get("circleId") as string;
         const locationStr = formData.get("location") as string;
         const location = locationStr ? JSON.parse(locationStr) : undefined;
-
         const post = await getPost(postId);
         if (!post) {
             return { success: false, message: "Post not found" };
@@ -244,9 +269,7 @@ export async function updatePostAction(
         };
 
         console.log("Updating post", JSON.stringify(updatedPost.location));
-
         updatedPost.mentions = extractMentions(content);
-
         let existingMedia: Media[] = [];
         let mediaStr = formData.getAll("existingMedia") as string[];
         if (mediaStr) {
@@ -271,8 +294,39 @@ export async function updatePostAction(
         }
 
         updatedPost.media = [...existingMedia, ...newMedia];
-
         await updatePost(updatedPost);
+
+        // Send notifications for new mentions
+        try {
+            if (updatedPost.mentions && updatedPost.mentions.length > 0) {
+                const user = await getUserByDid(userDid);
+
+                // Get previous mentions to avoid duplicate notifications
+                const previousMentions = post.mentions?.map((m) => m.id) || [];
+
+                // Filter to only new mentions
+                const newMentions = updatedPost.mentions.filter((mention) => !previousMentions.includes(mention.id));
+                if (newMentions.length > 0) {
+                    // Get the Circle objects for all newly mentioned circles
+                    const mentionedCircles = await Promise.all(
+                        newMentions.map(async (mention) => {
+                            return await getCircleById(mention.id);
+                        }),
+                    );
+
+                    // Filter out any null results
+                    const validMentionedCircles = mentionedCircles.filter((circle) => circle !== null);
+
+                    if (validMentionedCircles.length > 0) {
+                        // Use the existing post with updated mentions
+                        const mergedPost = { ...post, ...updatedPost };
+                        await notifyPostMentions(mergedPost, user, validMentionedCircles);
+                    }
+                }
+            }
+        } catch (notificationError) {
+            console.error("Failed to send mention notifications:", notificationError);
+        }
 
         let circlePath = await getCirclePath({ _id: circleId } as Circle);
         revalidatePath(`${circlePath}${page.handle ?? ""}${subpage ? `/${subpage}` : ""}`);
@@ -365,7 +419,16 @@ export async function createCommentAction(
             author: user,
         };
 
-        console.log("Creating comment", comment.content);
+        console.log("🐞 [DEBUG] Creating comment:", {
+            postId,
+            parentCommentId,
+            contentPreview: content.substring(0, 50) + (content.length > 50 ? "..." : ""),
+            authorDid: userDid,
+            authorName: user?.name,
+            feedId: post.feedId,
+            feedHandle: feed.handle,
+            postAuthorDid: post.createdBy,
+        });
 
         // parse mentions in the comment content
         const mentions = extractMentions(comment.content);
@@ -375,6 +438,44 @@ export async function createCommentAction(
 
         let newComment = await createComment(comment);
         comment._id = newComment._id;
+
+        // Send notifications
+        try {
+            // 1. If it's a direct comment on a post, notify the post author
+            if (!parentCommentId) {
+                await notifyPostComment(post, newComment, user);
+            }
+
+            // 2. If it's a reply to another comment, notify the parent comment author
+            else {
+                const parentComment = await getComment(parentCommentId);
+                if (parentComment) {
+                    await notifyCommentReply(post, parentComment, newComment, user);
+                }
+            }
+
+            // 3. If the comment has mentions, notify mentioned users
+            if (mentions && mentions.length > 0) {
+                // Get the Circle objects for all mentioned circles
+
+                const mentionedCircles = await Promise.all(
+                    mentions.map(async (mention) => {
+                        return await getCircleById(mention.id);
+                    }),
+                );
+
+                // Filter out any null results
+                const validMentionedCircles = mentionedCircles.filter((circle) => circle !== null);
+
+                if (validMentionedCircles.length > 0) {
+                    await notifyCommentMentions(newComment, post, user, validMentionedCircles);
+                }
+            }
+        } catch (notificationError) {
+            // Log but don't fail the comment creation if notifications fail
+
+            console.error("Failed to send notifications:", notificationError);
+        }
 
         return { success: true, message: "Comment created successfully", comment };
     } catch (error) {
@@ -434,10 +535,45 @@ export async function editCommentAction(
             return { success: false, message: "You are not authorized to edit this comment" };
         }
 
-        let updatedMentions = extractMentions(updatedContent);
+        const updatedMentions = extractMentions(updatedContent);
         await updateComment(commentId, updatedContent, updatedMentions);
 
-        // TODO get updated comment with mentions and update it in UI
+        // Send notifications for new mentions
+
+        try {
+            const post = await getPost(comment.postId);
+            if (post && updatedMentions && updatedMentions.length > 0) {
+                const user = await getUserByDid(userDid);
+                // Get previous mentions to avoid duplicate notifications
+                const previousMentions = comment.mentions?.map((m) => m.id) || [];
+                // Filter to only new mentions
+                const newMentions = updatedMentions.filter((mention) => !previousMentions.includes(mention.id));
+
+                if (newMentions.length > 0) {
+                    // Get the Circle objects for all newly mentioned circles
+                    const mentionedCircles = await Promise.all(
+                        newMentions.map(async (mention) => {
+                            return await getCircleById(mention.id);
+                        }),
+                    );
+
+                    // Filter out any null results
+                    const validMentionedCircles = mentionedCircles.filter((circle) => circle !== null);
+                    if (validMentionedCircles.length > 0) {
+                        // Use the updated comment
+                        const updatedCommentObj = {
+                            ...comment,
+                            content: updatedContent,
+                            mentions: updatedMentions,
+                        };
+
+                        await notifyCommentMentions(updatedCommentObj, post, user, validMentionedCircles);
+                    }
+                }
+            }
+        } catch (notificationError) {
+            console.error("Failed to send mention notifications:", notificationError);
+        }
 
         return { success: true, message: "Comment edited successfully" };
     } catch (error) {
@@ -494,8 +630,9 @@ export async function likeContentAction(
 
     try {
         let postId: string | undefined = contentId;
+        let comment: Comment | null = null;
         if (contentType === "comment") {
-            let comment = await getComment(contentId);
+            comment = await getComment(contentId);
             if (!comment) {
                 return { success: false, message: "Comment not found" };
             }
@@ -518,6 +655,19 @@ export async function likeContentAction(
 
         await likeContent(contentId, contentType, userDid, reactionType);
 
+        // Send notification
+        try {
+            const reactor = await getUserByDid(userDid);
+
+            if (contentType === "post") {
+                await notifyPostLike(contentId, reactor, reactionType);
+            } else if (comment) {
+                await notifyCommentLike(comment, post, reactor, reactionType);
+            }
+        } catch (notificationError) {
+            console.error("Failed to send like notification:", notificationError);
+        }
+
         return { success: true, message: "Content liked successfully" };
     } catch (error) {
         return { success: false, message: error instanceof Error ? error.message : "Failed to like content." };
@@ -536,7 +686,6 @@ export async function unlikeContentAction(
 
     try {
         await unlikeContent(contentId, contentType, userDid, reactionType);
-
         return { success: true, message: "Content unliked successfully" };
     } catch (error) {
         return { success: false, message: error instanceof Error ? error.message : "Failed to unlike content." };

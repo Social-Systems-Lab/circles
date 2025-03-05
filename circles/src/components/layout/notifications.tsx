@@ -7,7 +7,7 @@ import { useAtom } from "jotai";
 import { useRouter } from "next/navigation";
 import { timeSince } from "@/lib/utils";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
-import { Circle, NotificationType } from "@/models/models";
+import { Circle, NotificationType, Post, Comment } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { sendReadReceipt } from "@/lib/data/client-matrix";
 
@@ -15,9 +15,29 @@ type Notification = {
     id: string;
     message: string;
     time: string;
+    createdAt: Date;
     notificationType: NotificationType;
     circle?: Circle;
     user?: Circle;
+    post?: Post;
+    comment?: Comment;
+    postId?: string;
+    commentId?: string;
+    reaction?: string;
+    // For grouping purposes
+    key?: string;
+};
+
+type GroupedNotification = {
+    key: string;
+    count: number;
+    notificationType: NotificationType;
+    latestNotification: Notification;
+    relatedUsers: Circle[];
+    postId?: string;
+    commentId?: string;
+    post?: Post;
+    comment?: Comment;
 };
 
 export const Notifications = () => {
@@ -32,6 +52,7 @@ export const Notifications = () => {
         }
     }, []);
 
+    // Get raw notifications
     const notifications = useMemo(() => {
         if (!user?.matrixNotificationsRoomId) return [];
 
@@ -39,30 +60,110 @@ export const Notifications = () => {
         return notificationMsgs
             .filter((msg) => msg.type === "m.room.message") // consider only message events
             .map((msg) => {
+                // Generate grouping key based on notification type
+                let groupKey = "";
+                const createdAt = msg.createdAt instanceof Date ? msg.createdAt : new Date(msg.createdAt);
+
+                switch (msg.content?.notificationType) {
+                    case "post_like":
+                        groupKey = `post_like_${msg.content?.postId}`;
+                        break;
+                    case "comment_like":
+                        groupKey = `comment_like_${msg.content?.commentId}`;
+                        break;
+                    case "post_comment":
+                        groupKey = `post_comment_${msg.content?.postId}`;
+                        break;
+                    case "comment_reply":
+                        groupKey = `comment_reply_${msg.content?.commentId}`;
+                        break;
+                    case "post_mention":
+                        groupKey = `post_mention_${msg.content?.postId}`;
+                        break;
+                    case "comment_mention":
+                        groupKey = `comment_mention_${msg.content?.commentId}`;
+                        break;
+                    default:
+                        // For non-groupable notifications, use unique ID
+                        groupKey = msg.id;
+                }
+
                 let notification: Notification = {
                     id: msg.id,
                     message: msg.content?.body || "New notification",
-                    time: timeSince(msg.createdAt, false),
+                    time: timeSince(createdAt, false),
+                    createdAt: createdAt,
                     notificationType: msg.content?.notificationType,
                     circle: msg.content?.circle,
                     user: msg.content?.user,
+                    post: msg.content?.post,
+                    comment: msg.content?.comment,
+                    postId: msg.content?.postId,
+                    commentId: msg.content?.commentId,
+                    reaction: msg.content?.reaction,
+                    key: groupKey,
                 };
                 return notification;
             })
-            .reverse(); // reverse to show the newest on top if you like
+            .sort((a, b) => b?.createdAt?.getTime() - a?.createdAt?.getTime()); // Sort by newest first
     }, [user?.matrixNotificationsRoomId, roomMessages]);
+
+    // Group similar notifications
+    const groupedNotifications = useMemo(() => {
+        const groupMap = new Map<string, GroupedNotification>();
+
+        // Group notifications by key
+        for (const notification of notifications) {
+            // Skip notifications without grouping key
+            if (!notification.key) continue;
+
+            if (groupMap.has(notification.key)) {
+                // Update existing group
+                const group = groupMap.get(notification.key)!;
+                group.count++;
+
+                // Use more recent notification if needed
+                if (notification.createdAt > group.latestNotification.createdAt) {
+                    group.latestNotification = notification;
+                }
+
+                // Add user to related users list if not already there
+                if (notification.user && !group.relatedUsers.some((u) => u.did === notification.user?.did)) {
+                    group.relatedUsers.push(notification.user);
+                }
+            } else {
+                // Create new group
+                groupMap.set(notification.key, {
+                    key: notification.key,
+                    count: 1,
+                    notificationType: notification.notificationType,
+                    latestNotification: notification,
+                    relatedUsers: notification.user ? [notification.user] : [],
+                    postId: notification.postId,
+                    commentId: notification.commentId,
+                    post: notification.post,
+                    comment: notification.comment,
+                });
+            }
+        }
+
+        // Convert map to array and sort by latest notification time
+        return Array.from(groupMap.values()).sort(
+            (a, b) => b.latestNotification.createdAt.getTime() - a.latestNotification.createdAt.getTime(),
+        );
+    }, [notifications]);
 
     const markLatestNotificationAsRead = useCallback(async () => {
         if (notifications.length > 0 && user?.matrixAccessToken) {
-            // Use index 0 since array is reversed
+            // Use index 0 since array is sorted by newest first
             const latestNotification = notifications[0];
-            
+
             console.log(`📩 [Notifications] Marking latest notification as read:`);
             console.log(`📩 [Notifications] - ID: ${latestNotification.id}`);
             console.log(`📩 [Notifications] - Message: ${latestNotification.message}`);
             console.log(`📩 [Notifications] - Type: ${latestNotification.notificationType}`);
             console.log(`📩 [Notifications] - Room ID: ${user.matrixNotificationsRoomId}`);
-            
+
             await sendReadReceipt(
                 user.matrixAccessToken,
                 user.matrixUrl!,
@@ -74,7 +175,9 @@ export const Notifications = () => {
 
             // Reset unread count for notifications
             setUnreadCounts((counts) => {
-                console.log(`📩 [Notifications] Resetting unread count from ${counts[user.matrixNotificationsRoomId!] || 0} to 0`);
+                console.log(
+                    `📩 [Notifications] Resetting unread count from ${counts[user.matrixNotificationsRoomId!] || 0} to 0`,
+                );
                 return {
                     ...counts,
                     [user.matrixNotificationsRoomId!]: 0,
@@ -92,8 +195,12 @@ export const Notifications = () => {
         markLatestNotificationAsRead();
     }, [notifications, markLatestNotificationAsRead]);
 
-    const handleNotificationClick = (notification: Notification) => {
+    const handleNotificationClick = (groupedNotification: GroupedNotification) => {
+        const notification = groupedNotification.latestNotification;
+        const circleHandle = notification.circle?.handle || notification.post?.feedId;
+
         switch (notification.notificationType) {
+            // Original notification types
             case "join_request":
                 router.push(`/circles/${notification.circle?.handle}/settings/membership-requests`);
                 break;
@@ -103,35 +210,132 @@ export const Notifications = () => {
             case "join_accepted":
                 router.push(`/circles/${notification.circle?.handle}`);
                 break;
-            default:
+
+            // Post-related notifications
+            case "post_comment":
+            case "post_like":
+            case "post_mention":
+                if (notification.post?.feedId && notification.postId) {
+                    // Navigate to the post
+                    // Find circle info from the feed
+                    const circle = notification.circle?.handle || "default";
+                    router.push(`/circles/${circle}/feeds?post=${notification.postId}`);
+                }
                 break;
+
+            // Comment-related notifications
+            case "comment_reply":
+            case "comment_like":
+            case "comment_mention":
+                if (notification.commentId && notification.postId) {
+                    // Navigate to the post with highlighted comment
+                    const circle = notification.circle?.handle || "default";
+                    router.push(
+                        `/circles/${circle}/feeds?post=${notification.postId}&comment=${notification.commentId}`,
+                    );
+                }
+                break;
+
+            default:
+                console.log("Unknown notification type:", notification.notificationType);
+                break;
+        }
+    };
+
+    // Helper function to create a grouped notification message
+    const createGroupedMessage = (groupedNotification: GroupedNotification) => {
+        const { notificationType, count, relatedUsers } = groupedNotification;
+
+        if (count === 1) {
+            // For single notifications, use the original message
+            return groupedNotification.latestNotification.message;
+        }
+
+        // Create a list of user names (limited to 3)
+        const userNames = relatedUsers.slice(0, 3).map((user) => user.name);
+        const remainingUsers = relatedUsers.length - 3;
+
+        let userList = "";
+        if (userNames.length === 1) {
+            userList = userNames[0];
+        } else if (userNames.length === 2) {
+            userList = `${userNames[0]} and ${userNames[1]}`;
+        } else {
+            userList = `${userNames[0]}, ${userNames[1]}, and ${userNames[2]}`;
+            if (remainingUsers > 0) {
+                userList += ` and ${remainingUsers} other${remainingUsers > 1 ? "s" : ""}`;
+            }
+        }
+
+        // Create appropriate message based on notification type
+        switch (notificationType) {
+            case "post_like":
+                return `${userList} liked your post`;
+
+            case "comment_like":
+                return `${userList} liked your comment`;
+
+            case "post_comment":
+                return `${userList} commented on your post`;
+
+            case "comment_reply":
+                return `${userList} replied to your comment`;
+
+            case "post_mention":
+                return `${userList} mentioned you in a post`;
+
+            case "comment_mention":
+                return `${userList} mentioned you in a comment`;
+
+            default:
+                return groupedNotification.latestNotification.message;
         }
     };
 
     return (
         <div>
-            {notifications.length > 0 ? (
-                notifications.map((notification) => (
+            {groupedNotifications.length > 0 ? (
+                groupedNotifications.map((groupedNotification) => (
                     <div
-                        key={notification.id}
+                        key={groupedNotification.key}
                         className={`m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100`}
-                        onClick={() => handleNotificationClick(notification)}
+                        onClick={() => handleNotificationClick(groupedNotification)}
                     >
                         <div className="relative h-[40px] w-[40px]">
-                            <CirclePicture
-                                circle={notification.circle!}
-                                size="30px"
-                                className="absolute left-0 top-0"
-                            />
-                            <CirclePicture
-                                circle={notification.user!}
-                                size="30px"
-                                className="absolute bottom-0 right-0"
-                            />
+                            {/* Show circle picture when relevant */}
+                            {groupedNotification.latestNotification.circle && (
+                                <CirclePicture
+                                    circle={groupedNotification.latestNotification.circle}
+                                    size="30px"
+                                    className="absolute left-0 top-0"
+                                />
+                            )}
+
+                            {/* Show user picture if available */}
+                            {groupedNotification.latestNotification.user && (
+                                <CirclePicture
+                                    circle={groupedNotification.latestNotification.user}
+                                    size="30px"
+                                    className={
+                                        groupedNotification.latestNotification.circle
+                                            ? "absolute bottom-0 right-0"
+                                            : "absolute left-0 top-0"
+                                    }
+                                />
+                            )}
+
+                            {/* Show count badge for grouped notifications */}
+                            {groupedNotification.count > 1 && (
+                                <div className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-white">
+                                    {groupedNotification.count}
+                                </div>
+                            )}
                         </div>
                         <div className="flex-1">
-                            <p className="text-sm">{notification.message}</p>
-                            <p className="text-xs text-muted-foreground">{notification.time}</p>
+                            <p className="text-sm">{createGroupedMessage(groupedNotification)}</p>
+                            <p className="text-xs text-muted-foreground">
+                                {timeSince(groupedNotification.latestNotification.createdAt, false)}
+                            </p>
                         </div>
                     </div>
                 ))
@@ -140,9 +344,6 @@ export const Notifications = () => {
                     No notifications
                 </div>
             )}
-            {/* <pre>
-                {JSON.stringify({ notifications, matrixNotificationsRoomId: user?.matrixNotificationsRoomId }, null, 2)}
-            </pre> */}
         </div>
     );
 };

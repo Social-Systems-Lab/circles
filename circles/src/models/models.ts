@@ -740,4 +740,13 @@ export type UserSettings = {
     circlesTab: TabOptions;
 };
 
-export type NotificationType = "join_request" | "new_member" | "join_accepted";
+export type NotificationType =
+    | "join_request"
+    | "new_member"
+    | "join_accepted"
+    | "post_comment" // Someone commented on your post
+    | "comment_reply" // Someone replied to your comment
+    | "post_like" // Someone liked your post
+    | "comment_like" // Someone liked your comment
+    | "post_mention" // Someone mentioned you in a post
+    | "comment_mention"; // Someone mentioned you in a comment

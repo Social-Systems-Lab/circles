@@ -1,5 +1,5 @@
 // matrix.ts - Matrix chat functionality
-import { ChatRoom, Circle, NotificationType, UserPrivate } from "@/models/models";
+import { ChatRoom, Circle, NotificationType, UserPrivate, Post, Comment } from "@/models/models";
 import crypto from "crypto";
 import { getCirclesByDids, updateCircle } from "./circle";
 import { getServerSettings, updateServerSettings } from "./server-settings";
@@ -457,6 +457,11 @@ export async function sendNotifications(
     payload: {
         circle?: Circle;
         user?: Circle;
+        post?: Post;
+        comment?: Comment;
+        reaction?: string;
+        postId?: string;
+        commentId?: string;
     },
 ): Promise<void> {
     console.log(
@@ -484,6 +489,11 @@ export async function sendNotifications(
             notificationType, // e.g. "join_request"
             circle: payload.circle,
             user: payload.user,
+            post: payload.post,
+            comment: payload.comment,
+            reaction: payload.reaction,
+            postId: payload.postId,
+            commentId: payload.commentId,
         };
 
         console.log(
@@ -497,7 +507,16 @@ export async function sendNotifications(
     }
 }
 
-function deriveBody(notificationType: NotificationType, payload: { circle?: Circle; user?: Circle }) {
+function deriveBody(
+    notificationType: NotificationType,
+    payload: {
+        circle?: Circle;
+        user?: Circle;
+        post?: Post;
+        comment?: Comment;
+        reaction?: string;
+    },
+) {
     switch (notificationType) {
         case "join_request":
             return `${payload.user?.name} has requested to join circle ${payload?.circle?.name}`;
@@ -505,6 +524,18 @@ function deriveBody(notificationType: NotificationType, payload: { circle?: Circ
             return `${payload.user?.name} has joined circle ${payload?.circle?.name}`;
         case "join_accepted":
             return `You have been accepted into circle ${payload?.circle?.name}`;
+        case "post_comment":
+            return `${payload.user?.name} commented on your post`;
+        case "comment_reply":
+            return `${payload.user?.name} replied to your comment`;
+        case "post_like":
+            return `${payload.user?.name} liked your post`;
+        case "comment_like":
+            return `${payload.user?.name} liked your comment`;
+        case "post_mention":
+            return `${payload.user?.name} mentioned you in a post`;
+        case "comment_mention":
+            return `${payload.user?.name} mentioned you in a comment`;
         default:
             return "New notification";
     }
