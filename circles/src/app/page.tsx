@@ -27,12 +27,14 @@ export default async function Home(props: HomeProps) {
     }
 
     let posts: PostDisplay[] = [];
-    let userFeed: Feed | null = null;
+    
+    // Get user feed regardless of active tab, so it's available for posting in any tab
+    let userFeed = await getPublicUserFeed(userDid);
+    console.log("Getting user public feed for", userDid, userFeed?.handle);
 
     if (activeTab === "following" || !activeTab) {
         console.log("Getting aggregate posts for user", userDid);
         posts = await getAggregatePostsAction(userDid, 20, 0, searchParams?.sort as SortingOptions);
-        userFeed = await getPublicUserFeed(userDid);
     } else {
         // For the "For You" tab, use a new function that fetches global posts
         posts = await getGlobalPostsAction(userDid, 20, 0, searchParams?.sort as SortingOptions);

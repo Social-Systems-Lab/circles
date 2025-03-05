@@ -464,47 +464,49 @@ export async function createCommentAction(
             return { success: false, message: "Database error creating comment" };
         }
 
-        // Send notifications - do this in background, don't wait for it to complete
-        setTimeout(async () => {
-            try {
-                console.log("🐞 [ACTION] Sending notifications for comment:", newComment._id);
-                
-                // 1. If it's a direct comment on a post, notify the post author
-                if (!parentCommentId) {
-                    await notifyPostComment(post, newComment, user);
-                }
-    
-                // 2. If it's a reply to another comment, notify the parent comment author
-                else {
-                    const parentComment = await getComment(parentCommentId);
-                    if (parentComment) {
-                        await notifyCommentReply(post, parentComment, newComment, user);
-                    }
-                }
-    
-                // 3. If the comment has mentions, notify mentioned users
-                if (mentions && mentions.length > 0) {
-                    // Get the Circle objects for all mentioned circles
-                    const mentionedCircles = await Promise.all(
-                        mentions.map(async (mention) => {
-                            return await getCircleById(mention.id);
-                        }),
-                    );
-    
-                    // Filter out any null results
-                    const validMentionedCircles = mentionedCircles.filter((circle) => circle !== null);
-    
-                    if (validMentionedCircles.length > 0) {
-                        await notifyCommentMentions(newComment, post, user, validMentionedCircles);
-                    }
-                }
-                
-                console.log("🐞 [ACTION] Notifications sent successfully for comment:", newComment._id);
-            } catch (notificationError) {
-                // Log but don't fail the comment creation if notifications fail
-                console.error("🐞 [ACTION] Failed to send notifications:", notificationError);
+        // Send notifications directly without setTimeout, but still don't block on them
+        try {
+            console.log("🐞 [ACTION] Sending notifications for comment:", newComment._id);
+            
+            // 1. If it's a direct comment on a post, notify the post author
+            if (!parentCommentId) {
+                // Use Promise.resolve to avoid blocking, but still within current process
+                await Promise.resolve(notifyPostComment(post, newComment, user));
+                console.log("🐞 [ACTION] Post comment notification sent to author:", post.createdBy);
             }
-        }, 0);
+
+            // 2. If it's a reply to another comment, notify the parent comment author
+            else {
+                const parentComment = await getComment(parentCommentId);
+                if (parentComment) {
+                    await Promise.resolve(notifyCommentReply(post, parentComment, newComment, user));
+                    console.log("🐞 [ACTION] Comment reply notification sent to:", parentComment.createdBy);
+                }
+            }
+
+            // 3. If the comment has mentions, notify mentioned users
+            if (mentions && mentions.length > 0) {
+                // Get the Circle objects for all mentioned circles
+                const mentionedCircles = await Promise.all(
+                    mentions.map(async (mention) => {
+                        return await getCircleById(mention.id);
+                    }),
+                );
+
+                // Filter out any null results
+                const validMentionedCircles = mentionedCircles.filter((circle) => circle !== null);
+
+                if (validMentionedCircles.length > 0) {
+                    await Promise.resolve(notifyCommentMentions(newComment, post, user, validMentionedCircles));
+                    console.log("🐞 [ACTION] Mention notifications sent to:", validMentionedCircles.map(c => c.name).join(', '));
+                }
+            }
+            
+            console.log("🐞 [ACTION] Notifications sent successfully for comment:", newComment._id);
+        } catch (notificationError) {
+            // Log but don't fail the comment creation if notifications fail
+            console.error("🐞 [ACTION] Failed to send notifications:", notificationError);
+        }
 
         return { success: true, message: "Comment created successfully", comment };
     } catch (error) {

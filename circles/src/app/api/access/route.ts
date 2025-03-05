@@ -23,6 +23,12 @@ export async function POST(req: Request) {
         const accessRules = circle.accessRules || {};
         const allowedUserGroups = accessRules["__page_" + pageHandle];
 
+        // Special case for accessing posts - if it's a public circle, allow access to posts
+        // This allows viewing individual posts in public circles regardless of membership
+        if (pageHandle === "feeds" && circle.userGroups?.includes("everyone")) {
+            return NextResponse.json({ authenticated: true, authorized: true });
+        }
+        
         // if the page allows access to "everyone", consider it authorized
         if (allowedUserGroups?.includes("everyone")) {
             return NextResponse.json({ authenticated: true, authorized: true });

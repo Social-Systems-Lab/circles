@@ -44,6 +44,13 @@ export async function middleware(request: NextRequest) {
         } else if (urlSegments.length >= 3) {
             // route: /circles/<circle-handle>/<page-handle>
             pageHandle = urlSegments[2];
+            
+            // Special case for post view routes
+            if (pageHandle === "post" && urlSegments.length >= 4) {
+                // For post routes, use 'feeds' as the page handle for permission checking
+                // This ensures post viewing uses the same permissions as feed viewing
+                pageHandle = "feeds";
+            }
         }
     } else {
         // route: /<page-handle>
