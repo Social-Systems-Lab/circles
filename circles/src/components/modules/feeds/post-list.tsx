@@ -1,7 +1,16 @@
 // post-list.tsx - component for displaying a list of posts
 "use client";
 
-import { Circle, Feed, PostDisplay, CommentDisplay, Page, PostItemProps, ContentPreviewData } from "@/models/models";
+import {
+    Circle,
+    Feed,
+    PostDisplay,
+    CommentDisplay,
+    Page,
+    PostItemProps,
+    ContentPreviewData,
+    MentionDisplay,
+} from "@/models/models";
 import { UserPicture } from "../members/user-picture";
 import { Button } from "@/components/ui/button";
 import { Edit, Heart, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Trash2 } from "lucide-react";
