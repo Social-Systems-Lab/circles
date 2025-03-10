@@ -481,19 +481,24 @@ export async function sendNotifications(
             continue;
         }
 
+        // Sanitize payload to convert any ObjectId or Date to string
+        const sanitizedPayload = {
+            circle: payload.circle ? sanitizeCircle(payload.circle) : undefined,
+            user: payload.user ? sanitizeCircle(payload.user) : undefined,
+            post: payload.post ? sanitizeContent(payload.post) : undefined,
+            comment: payload.comment ? sanitizeContent(payload.comment) : undefined,
+            reaction: payload.reaction,
+            postId: payload.postId?.toString(),
+            commentId: payload.commentId?.toString(),
+        };
+
         // Build some text fallback and extra custom fields
         const body = deriveBody(notificationType, payload);
         const content = {
             msgtype: "m.text", // required for m.room.message
             body, // fallback text
             notificationType, // e.g. "join_request"
-            circle: payload.circle,
-            user: payload.user,
-            post: payload.post,
-            comment: payload.comment,
-            reaction: payload.reaction,
-            postId: payload.postId,
-            commentId: payload.commentId,
+            ...sanitizedPayload,
         };
 
         console.log(
@@ -505,6 +510,32 @@ export async function sendNotifications(
 
         await sendMessage(r.matrixAccessToken, r.matrixNotificationsRoomId, content);
     }
+}
+
+// Helper functions to sanitize data
+function sanitizeContent(obj: any): any {
+    if (!obj) return obj;
+
+    const sanitized = { ...obj };
+    if (sanitized._id) sanitized._id = sanitized._id.toString();
+    if (sanitized.createdAt) sanitized.createdAt = sanitized.createdAt.toISOString();
+    if (sanitized.editedAt) sanitized.editedAt = sanitized.editedAt.toISOString();
+
+    return sanitized;
+}
+
+function sanitizeCircle(circle: Circle): Partial<Circle> & { createdAt?: string } {
+    if (!circle) return circle;
+
+    const sanitized = { ...circle };
+    if (sanitized._id) sanitized._id = sanitized._id.toString();
+    if (sanitized.createdAt) {
+        const createdAtString = sanitized.createdAt.toISOString();
+        delete sanitized.createdAt;
+        return { ...sanitized, createdAt: createdAtString } as Partial<Circle> & { createdAt?: string };
+    }
+
+    return sanitized as Partial<Circle> & { createdAt?: string };
 }
 
 function deriveBody(
