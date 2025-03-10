@@ -9,6 +9,7 @@ import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "@/componen
 import {
     Dispatch,
     KeyboardEvent,
+    memo,
     SetStateAction,
     useCallback,
     useEffect,
@@ -182,6 +183,24 @@ export const LikeButton = ({ isLiked, onClick }: LikeButtonProps) => {
         </button>
     );
 };
+
+const MemoizedPostContent = memo(({ content, mentions }: { content: string; mentions?: MentionDisplay[] }) => (
+    <div className="pl-4 pr-4 text-lg">
+        <RichText content={content} mentions={mentions} />
+    </div>
+));
+
+MemoizedPostContent.displayName = "MemoizedPostContent";
+
+// In post-list.tsx, add this near the other memoized components at the top
+
+const MemoizedCommentContent = memo(({ content, mentions }: { content: string; mentions?: MentionDisplay[] }) => (
+    <div className="text-sm">
+        <RichText content={content} mentions={mentions} />
+    </div>
+));
+
+MemoizedCommentContent.displayName = "MemoizedCommentContent";
 
 export const PostItem = ({
     post,
@@ -370,7 +389,7 @@ export const PostItem = ({
         // Clear the input immediately to improve user experience
         setNewCommentContent("");
         setIsSubmittingComment(true);
-        
+
         const tempComment: CommentDisplay = {
             _id: "temp-comment", // Temporary ID to distinguish it
             content: commentContent,
@@ -389,7 +408,7 @@ export const PostItem = ({
             try {
                 console.log("Submitting comment:", commentContent.substring(0, 50));
                 const result = await createCommentAction(post._id, null, commentContent);
-                
+
                 if (result.success && result.comment) {
                     const newComment = result.comment as CommentDisplay;
                     newComment.author = user as Circle;
@@ -633,9 +652,7 @@ export const PostItem = ({
             </div>
 
             {/* Post content */}
-            <div className="pl-4 pr-4 text-lg">
-                <RichText content={post.content} mentions={post.mentionsDisplay} />
-            </div>
+            <MemoizedPostContent content={post.content} mentions={post.mentionsDisplay} />
 
             {/* Media carousel (if exists) */}
             {post.media && post.media.length > 0 && (
@@ -1115,9 +1132,10 @@ const CommentItem = ({
                                         </MentionsInput>
                                     </>
                                 ) : (
-                                    <div className="text-sm">
-                                        <RichText content={comment.content} mentions={comment.mentionsDisplay} />
-                                    </div>
+                                    <MemoizedCommentContent
+                                        content={comment.content}
+                                        mentions={comment.mentionsDisplay}
+                                    />
                                 )}
                             </>
                         )}
@@ -1267,7 +1285,6 @@ const CommentItem = ({
                     )}
                 </div>
             )}
-
         </div>
     );
 };

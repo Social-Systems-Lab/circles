@@ -1,6 +1,6 @@
 {
     "name": "circles",
-    "version": "0.3.28",
+    "version": "0.3.29",
     "private": true,
     "scripts": {
         "dev": "next dev --turbopack",
@@ -64,6 +64,7 @@
         "react-markdown": "^9.0.1",
         "react-mentions": "^4.4.10",
         "react-qr-code": "^2.0.15",
+        "react-scan": "^0.2.14",
         "react-tag-input": "^6.10.3",
         "react-textarea-autosize": "^8.5.3",
         "react-wrap-balancer": "^1.1.0",

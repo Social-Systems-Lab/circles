@@ -1,4 +1,5 @@
-// global app layout with the main navigation bar
+// layout.tsx - global app layout with the main navigation bar
+import { ReactScan } from "../components/utils/react-scan";
 import { Wix_Madefor_Display, Libre_Franklin, Inter } from "next/font/google";
 import "@app/globals.css";
 import { Toaster } from "@/components/ui/toaster";
@@ -18,8 +19,8 @@ import { Metadata } from "next";
 import { getDefaultCircle } from "@/lib/data/circle";
 
 // Disable caching for this layout to prevent the "hard refresh bug"
-export const dynamic = 'force-dynamic';
-export const fetchCache = 'force-no-store';
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 export const revalidate = 0;
 
 const inter = Inter({ subsets: ["latin"] });
@@ -36,6 +37,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
     return (
         <Provider>
             <html lang="en" className={`${wix.variable} ${libre.variable}`}>
+                <ReactScan />
                 <head>
                     <meta name="app-version" content={process.env.version} />
                 </head>
