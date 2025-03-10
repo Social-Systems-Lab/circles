@@ -389,11 +389,11 @@ export async function createCommentAction(
     }
 
     try {
-        console.log("🐞 [ACTION] Creating comment action start:", { 
+        console.log("🐞 [ACTION] Creating comment action start:", {
             postId,
-            contentPreview: content.substring(0, 30)
+            contentPreview: content.substring(0, 30),
         });
-        
+
         const post = await getPost(postId);
         if (!post) {
             console.log("🐞 [ACTION] Post not found:", postId);
@@ -467,11 +467,11 @@ export async function createCommentAction(
         // Send notifications directly without setTimeout, but still don't block on them
         try {
             console.log("🐞 [ACTION] Sending notifications for comment:", newComment._id);
-            
+
             // 1. If it's a direct comment on a post, notify the post author
             if (!parentCommentId) {
                 // Use Promise.resolve to avoid blocking, but still within current process
-                await Promise.resolve(notifyPostComment(post, newComment, user));
+                await notifyPostComment(post, newComment, user);
                 console.log("🐞 [ACTION] Post comment notification sent to author:", post.createdBy);
             }
 
@@ -479,7 +479,7 @@ export async function createCommentAction(
             else {
                 const parentComment = await getComment(parentCommentId);
                 if (parentComment) {
-                    await Promise.resolve(notifyCommentReply(post, parentComment, newComment, user));
+                    await notifyCommentReply(post, parentComment, newComment, user);
                     console.log("🐞 [ACTION] Comment reply notification sent to:", parentComment.createdBy);
                 }
             }
@@ -497,11 +497,14 @@ export async function createCommentAction(
                 const validMentionedCircles = mentionedCircles.filter((circle) => circle !== null);
 
                 if (validMentionedCircles.length > 0) {
-                    await Promise.resolve(notifyCommentMentions(newComment, post, user, validMentionedCircles));
-                    console.log("🐞 [ACTION] Mention notifications sent to:", validMentionedCircles.map(c => c.name).join(', '));
+                    await notifyCommentMentions(newComment, post, user, validMentionedCircles);
+                    console.log(
+                        "🐞 [ACTION] Mention notifications sent to:",
+                        validMentionedCircles.map((c) => c.name).join(", "),
+                    );
                 }
             }
-            
+
             console.log("🐞 [ACTION] Notifications sent successfully for comment:", newComment._id);
         } catch (notificationError) {
             // Log but don't fail the comment creation if notifications fail
