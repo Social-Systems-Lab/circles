@@ -93,7 +93,8 @@ export function addFeedsAccessRules(
                             existingAccessRules[feedFeatureHandle] = ["admins", "moderators"];
                             break;
                         case "comment":
-                            existingAccessRules[feedFeatureHandle] = ["admins", "moderators", "members"];
+                            // Allow everyone to comment on the default feed
+                            existingAccessRules[feedFeatureHandle] = ["admins", "moderators", "members", "everyone"];
                             break;
                         case "moderate":
                             existingAccessRules[feedFeatureHandle] = ["admins", "moderators"];
@@ -133,7 +134,7 @@ export function addFeedsAccessRules(
                         "admins",
                         "moderators",
                         "members",
-                    ];
+                    ];                    
                 }
             }
         }

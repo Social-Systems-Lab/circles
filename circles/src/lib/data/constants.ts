@@ -638,7 +638,7 @@ export const feedFeatures: Feature[] = [
         name: "Comment",
         handle: "comment",
         description: "Comment on posts in the feed",
-        defaultUserGroups: ["admins", "moderators", "members"],
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
     },
     {
         name: "Moderate",

@@ -10,6 +10,8 @@ import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { Circle, NotificationType, Post, Comment } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { sendReadReceipt } from "@/lib/data/client-matrix";
+import { MdOutlineArticle } from "react-icons/md";
+import { AiFillHeart } from "react-icons/ai";
 
 type Notification = {
     id: string;
@@ -197,7 +199,7 @@ export const Notifications = () => {
 
     const handleNotificationClick = (groupedNotification: GroupedNotification) => {
         const notification = groupedNotification.latestNotification;
-        const circleHandle = notification.circle?.handle || notification.post?.feedId;
+        const circleHandle = notification.circle?.handle || "default";
 
         switch (notification.notificationType) {
             // Original notification types
@@ -215,11 +217,9 @@ export const Notifications = () => {
             case "post_comment":
             case "post_like":
             case "post_mention":
-                if (notification.post?.feedId && notification.postId) {
-                    // Navigate to the post
-                    // Find circle info from the feed
-                    const circle = notification.circle?.handle || "default";
-                    router.push(`/circles/${circle}/feeds?post=${notification.postId}`);
+                if (notification.postId) {
+                    // Navigate to the dedicated post page
+                    router.push(`/circles/${circleHandle}/post/${notification.postId}`);
                 }
                 break;
 
@@ -227,12 +227,10 @@ export const Notifications = () => {
             case "comment_reply":
             case "comment_like":
             case "comment_mention":
-                if (notification.commentId && notification.postId) {
-                    // Navigate to the post with highlighted comment
-                    const circle = notification.circle?.handle || "default";
-                    router.push(
-                        `/circles/${circle}/feeds?post=${notification.postId}&comment=${notification.commentId}`,
-                    );
+                if (notification.postId) {
+                    // Navigate to the dedicated post page with comment id
+                    // This will need to be enhanced to scroll to the specific comment
+                    router.push(`/circles/${circleHandle}/post/${notification.postId}`);
                 }
                 break;
 
@@ -257,7 +255,7 @@ export const Notifications = () => {
 
         let userList = "";
         if (userNames.length === 1) {
-            userList = userNames[0];
+            userList = userNames[0] ?? "";
         } else if (userNames.length === 2) {
             userList = `${userNames[0]} and ${userNames[1]}`;
         } else {
@@ -302,26 +300,65 @@ export const Notifications = () => {
                         onClick={() => handleNotificationClick(groupedNotification)}
                     >
                         <div className="relative h-[40px] w-[40px]">
-                            {/* Show circle picture when relevant */}
-                            {groupedNotification.latestNotification.circle && (
-                                <CirclePicture
-                                    circle={groupedNotification.latestNotification.circle}
-                                    size="30px"
-                                    className="absolute left-0 top-0"
-                                />
-                            )}
+                            {/* Different layouts based on notification type */}
+                            {["post_comment", "comment_reply", "post_mention", "comment_mention"].includes(
+                                groupedNotification.latestNotification.notificationType
+                            ) ? (
+                                <>
+                                    {/* Show user picture in the center */}
+                                    {groupedNotification.latestNotification.user && (
+                                        <CirclePicture
+                                            circle={groupedNotification.latestNotification.user}
+                                            size="34px"
+                                        />
+                                    )}
+                                    
+                                    {/* Post icon in bottom-right position in a small circle */}
+                                    <div className="absolute bottom-0 right-0 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-gray-100">
+                                        <MdOutlineArticle size="14px" />
+                                    </div>
+                                </>
+                            ) : ["post_like", "comment_like"].includes(
+                                groupedNotification.latestNotification.notificationType
+                            ) ? (
+                                <>
+                                    {/* Show user picture in the center */}
+                                    {groupedNotification.latestNotification.user && (
+                                        <CirclePicture
+                                            circle={groupedNotification.latestNotification.user}
+                                            size="34px"
+                                        />
+                                    )}
+                                    
+                                    {/* Heart icon in bottom-right position in a small circle */}
+                                    <div className="absolute bottom-0 right-0 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-gray-100">
+                                        <AiFillHeart className="fill-[#ff4772] stroke-[#ff4772]" size="14px" />
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    {/* Show circle picture when relevant for non-post notifications */}
+                                    {groupedNotification.latestNotification.circle && (
+                                        <CirclePicture
+                                            circle={groupedNotification.latestNotification.circle}
+                                            size="30px"
+                                            className="absolute left-0 top-0"
+                                        />
+                                    )}
 
-                            {/* Show user picture if available */}
-                            {groupedNotification.latestNotification.user && (
-                                <CirclePicture
-                                    circle={groupedNotification.latestNotification.user}
-                                    size="30px"
-                                    className={
-                                        groupedNotification.latestNotification.circle
-                                            ? "absolute bottom-0 right-0"
-                                            : "absolute left-0 top-0"
-                                    }
-                                />
+                                    {/* Show user picture if available */}
+                                    {groupedNotification.latestNotification.user && (
+                                        <CirclePicture
+                                            circle={groupedNotification.latestNotification.user}
+                                            size="30px"
+                                            className={
+                                                groupedNotification.latestNotification.circle
+                                                    ? "absolute bottom-0 right-0"
+                                                    : "absolute left-0 top-0"
+                                            }
+                                        />
+                                    )}
+                                </>
                             )}
 
                             {/* Show count badge for grouped notifications */}

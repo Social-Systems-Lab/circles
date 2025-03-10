@@ -24,7 +24,7 @@ export async function notifyPostComment(post: Post, comment: Comment, commenter:
     }
 
     try {
-        // Get post author
+        // Get post author with more detailed error handling
         console.log("🔔 [NOTIFY] Getting post author:", post.createdBy);
         const postAuthor = await getUser(post.createdBy);
         
@@ -34,6 +34,7 @@ export async function notifyPostComment(post: Post, comment: Comment, commenter:
         }
         console.log("🔔 [NOTIFY] Post author found:", { 
             name: postAuthor.name, 
+            did: postAuthor.did,
             notificationsRoomId: postAuthor.matrixNotificationsRoomId ? 'exists' : 'missing' 
         });
 
@@ -52,6 +53,12 @@ export async function notifyPostComment(post: Post, comment: Comment, commenter:
             circle = { name: "Unknown Circle" } as Circle;
         }
 
+        // Check if author has Matrix notifications room
+        if (!postAuthor.matrixNotificationsRoomId) {
+            console.log("🔔 [NOTIFY] Post author has no notifications room, skipping notification");
+            return;
+        }
+
         // Send notification
         console.log("🔔 [NOTIFY] Sending post_comment notification to:", postAuthor.name);
         await sendNotifications("post_comment", [postAuthor], {
@@ -64,6 +71,7 @@ export async function notifyPostComment(post: Post, comment: Comment, commenter:
         console.log("🔔 [NOTIFY] Notification sent successfully");
     } catch (error) {
         console.error("🔔 [NOTIFY] Error sending post comment notification:", error);
+        // We don't re-throw the error because notification failures shouldn't break comment creation
     }
 }
 
