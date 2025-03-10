@@ -1,7 +1,7 @@
 // src/lib/data/notifications.ts - Functions to send and group notifications
 import { Circle, Comment, Post, NotificationType } from "@/models/models";
 import { sendNotifications } from "./matrix";
-import { getUser } from "./user";
+import { getUser, getUserPrivate } from "./user";
 import { getFeed, getPost } from "./feed";
 import { getCircleById } from "./circle";
 
@@ -14,7 +14,7 @@ export async function notifyPostComment(post: Post, comment: Comment, commenter:
         commentId: comment._id,
         postAuthorDid: post.createdBy,
         commenterDid: comment.createdBy,
-        commenterName: commenter?.name
+        commenterName: commenter?.name,
     });
 
     // Don't notify if commenter is the post author
@@ -27,15 +27,16 @@ export async function notifyPostComment(post: Post, comment: Comment, commenter:
         // Get post author with more detailed error handling
         console.log("🔔 [NOTIFY] Getting post author:", post.createdBy);
         const postAuthor = await getUser(post.createdBy);
-        
         if (!postAuthor) {
             console.log("🔔 [NOTIFY] Post author not found, skipping notification");
             return;
         }
-        console.log("🔔 [NOTIFY] Post author found:", { 
-            name: postAuthor.name, 
+
+        const postAuthorPrivate = await getUserPrivate(postAuthor.did!);
+        console.log("🔔 [NOTIFY] Post author found:", {
+            name: postAuthor.name,
             did: postAuthor.did,
-            notificationsRoomId: postAuthor.matrixNotificationsRoomId ? 'exists' : 'missing' 
+            notificationsRoomId: postAuthorPrivate.matrixNotificationsRoomId ? "exists" : "missing",
         });
 
         // Get post circle
@@ -45,7 +46,7 @@ export async function notifyPostComment(post: Post, comment: Comment, commenter:
             console.log("🔔 [NOTIFY] Feed not found, skipping notification");
             return;
         }
-        
+
         console.log("🔔 [NOTIFY] Getting circle:", feed.circleId);
         let circle = await getCircleById(feed.circleId!);
         if (!circle) {
@@ -53,15 +54,9 @@ export async function notifyPostComment(post: Post, comment: Comment, commenter:
             circle = { name: "Unknown Circle" } as Circle;
         }
 
-        // Check if author has Matrix notifications room
-        if (!postAuthor.matrixNotificationsRoomId) {
-            console.log("🔔 [NOTIFY] Post author has no notifications room, skipping notification");
-            return;
-        }
-
         // Send notification
         console.log("🔔 [NOTIFY] Sending post_comment notification to:", postAuthor.name);
-        await sendNotifications("post_comment", [postAuthor], {
+        await sendNotifications("post_comment", [postAuthorPrivate], {
             circle,
             user: commenter,
             post,
@@ -89,13 +84,14 @@ export async function notifyCommentReply(
 
     // Get parent comment author
     const commentAuthor = await getUser(parentComment.createdBy);
+    const commentAuthorPrivate = await getUserPrivate(commentAuthor.did!);
 
     // Get post circle
     let feed = await getFeed(post.feedId);
     let circle = await getCircleById(feed?.circleId!);
 
     // Send notification
-    await sendNotifications("comment_reply", [commentAuthor], {
+    await sendNotifications("comment_reply", [commentAuthorPrivate], {
         circle,
         user: replier,
         post,
@@ -118,13 +114,14 @@ export async function notifyPostLike(postId: string, reactor: Circle, reactionTy
 
     // Get post author
     const postAuthor = await getUser(post.createdBy);
+    const postAuthorPrivate = await getUserPrivate(postAuthor.did!);
 
     // Get post circle
     let feed = await getFeed(post.feedId);
     let circle = await getCircleById(feed?.circleId!);
 
     // Send notification
-    await sendNotifications("post_like", [postAuthor], {
+    await sendNotifications("post_like", [postAuthorPrivate], {
         circle,
         user: reactor,
         post,
@@ -147,13 +144,14 @@ export async function notifyCommentLike(
 
     // Get comment author
     const commentAuthor = await getUser(comment.createdBy);
+    const commentAuthorPrivate = await getUserPrivate(commentAuthor.did!);
 
     // Get post circle
     let feed = await getFeed(post.feedId);
     let circle = await getCircleById(feed?.circleId!);
 
     // Send notification
-    await sendNotifications("comment_like", [commentAuthor], {
+    await sendNotifications("comment_like", [commentAuthorPrivate], {
         circle,
         user: reactor,
         post,
