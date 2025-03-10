@@ -527,7 +527,16 @@ function sanitizeContent(obj: any): any {
 function sanitizeCircle(circle: Circle): Partial<Circle> & { createdAt?: string } {
     if (!circle) return circle;
 
-    const sanitized = { ...circle };
+    const sanitized = { ...circle } as any;
+
+    // If there's a location field, convert any numeric lat/lng to strings
+    if (sanitized.location?.lngLat) {
+        const { lng, lat } = sanitized.location.lngLat;
+        // Only do this if they're finite; or default to empty string
+        sanitized.location.lngLat.lng = Number.isFinite(lng) ? String(lng) : "";
+        sanitized.location.lngLat.lat = Number.isFinite(lat) ? String(lat) : "";
+    }
+
     if (sanitized._id) sanitized._id = sanitized._id.toString();
     if (sanitized.createdAt) {
         const createdAtString = sanitized.createdAt.toISOString();
