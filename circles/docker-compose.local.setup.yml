@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
     synapse_setup:
         image: matrixdotorg/synapse:v1.63.0
