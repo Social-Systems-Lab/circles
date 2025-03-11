@@ -15,6 +15,7 @@ import { AiFillHeart } from "react-icons/ai";
 
 type Notification = {
     id: string;
+    type: string;
     message: string;
     time: string;
     createdAt: Date;
@@ -55,12 +56,11 @@ export const Notifications = () => {
     }, []);
 
     // Get raw notifications
-    const notifications = useMemo(() => {
+    const allNotifications = useMemo(() => {
         if (!user?.matrixNotificationsRoomId) return [];
 
         const notificationMsgs = roomMessages[user.matrixNotificationsRoomId] || [];
         return notificationMsgs
-            .filter((msg) => msg.type === "m.room.message") // consider only message events
             .map((msg) => {
                 // Generate grouping key based on notification type
                 let groupKey = "";
@@ -92,6 +92,7 @@ export const Notifications = () => {
 
                 let notification: Notification = {
                     id: msg.id,
+                    type: msg.type,
                     message: msg.content?.body || "New notification",
                     time: timeSince(createdAt, false),
                     createdAt: createdAt,
@@ -109,6 +110,11 @@ export const Notifications = () => {
             })
             .sort((a, b) => b?.createdAt?.getTime() - a?.createdAt?.getTime()); // Sort by newest first
     }, [user?.matrixNotificationsRoomId, roomMessages]);
+
+    const notifications = useMemo(
+        () => allNotifications.filter((msg) => msg.type === "m.room.message"),
+        [allNotifications],
+    );
 
     // Group similar notifications
     const groupedNotifications = useMemo(() => {
@@ -302,7 +308,7 @@ export const Notifications = () => {
                         <div className="relative h-[40px] w-[40px]">
                             {/* Different layouts based on notification type */}
                             {["post_comment", "comment_reply", "post_mention", "comment_mention"].includes(
-                                groupedNotification.latestNotification.notificationType
+                                groupedNotification.latestNotification.notificationType,
                             ) ? (
                                 <>
                                     {/* Show user picture in the center */}
@@ -312,15 +318,15 @@ export const Notifications = () => {
                                             size="34px"
                                         />
                                     )}
-                                    
+
                                     {/* Post icon in bottom-right position in a small circle */}
                                     <div className="absolute bottom-0 right-0 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-gray-100">
                                         <MdOutlineArticle size="14px" />
                                     </div>
                                 </>
                             ) : ["post_like", "comment_like"].includes(
-                                groupedNotification.latestNotification.notificationType
-                            ) ? (
+                                  groupedNotification.latestNotification.notificationType,
+                              ) ? (
                                 <>
                                     {/* Show user picture in the center */}
                                     {groupedNotification.latestNotification.user && (
@@ -329,7 +335,7 @@ export const Notifications = () => {
                                             size="34px"
                                         />
                                     )}
-                                    
+
                                     {/* Heart icon in bottom-right position in a small circle */}
                                     <div className="absolute bottom-0 right-0 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-gray-100">
                                         <AiFillHeart className="fill-[#ff4772] stroke-[#ff4772]" size="14px" />

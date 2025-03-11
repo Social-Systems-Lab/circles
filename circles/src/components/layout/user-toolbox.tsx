@@ -26,12 +26,6 @@ import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { useIsMobile } from "../utils/use-is-mobile";
 import { ChatList } from "../modules/chat/chat-list";
 
-type Notification = {
-    id: number;
-    message: string;
-    time: string;
-};
-
 export const UserToolbox = () => {
     const [user, setUser] = useAtom(userAtom);
     const [userToolboxState, setUserToolboxState] = useAtom(userToolboxDataAtom);

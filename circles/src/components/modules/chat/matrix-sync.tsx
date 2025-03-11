@@ -97,47 +97,48 @@ export const MatrixSync = () => {
 
         console.log("🔄 [Unread] Recalculating unread counts...");
         console.log("🔄 [Unread] lastReadTimestamps:", lastReadTimestamps);
-        
+
         const updatedUnreadCounts: Record<string, number> = {};
 
         for (const roomId of Object.keys(roomMessages)) {
             const messages = roomMessages[roomId] || [];
             const lastReadTimestamp = lastReadTimestamps[roomId] || 0;
             const isNotificationsRoom = roomId === user?.matrixNotificationsRoomId;
-            
-            console.log(`🔄 [Unread] Checking room: ${roomId} (${isNotificationsRoom ? 'Notifications' : 'Chat'})`);
+
+            console.log(`🔄 [Unread] Checking room: ${roomId} (${isNotificationsRoom ? "Notifications" : "Chat"})`);
             console.log(`🔄 [Unread] - Last read timestamp: ${new Date(lastReadTimestamp).toISOString()}`);
             console.log(`🔄 [Unread] - Total messages: ${messages.length}`);
-            
+
             const unreadMessages = messages.filter((msg) => {
                 // Get message timestamp in a consistent way
-                const msgTimestamp = msg.createdAt instanceof Date ? 
-                    msg.createdAt.getTime() : 
-                    new Date(msg.createdAt).getTime();
-                
+                const msgTimestamp =
+                    msg.createdAt instanceof Date ? msg.createdAt.getTime() : new Date(msg.createdAt).getTime();
+
                 const isUnread = msgTimestamp > lastReadTimestamp;
                 const expectedSelfIdentifier = `@${user?.matrixUsername}:${process.env.NEXT_PUBLIC_MATRIX_DOMAIN}`;
                 const isSelfMessage = msg.createdBy === expectedSelfIdentifier;
-                
+
                 if (isUnread) {
                     const timeAgo = Math.round((Date.now() - msgTimestamp) / 1000 / 60);
                     console.log(`🔄 [Unread] - Message ${msg.id.substring(0, 8)}...`);
                     console.log(`🔄 [Unread]   - Time: ${new Date(msgTimestamp).toISOString()} (${timeAgo} min ago)`);
                     console.log(`🔄 [Unread]   - From: ${msg.createdBy} (self: ${isSelfMessage})`);
-                    
-                    if (msg.type === 'm.room.message') {
-                        const contentPreview = typeof msg.content?.body === 'string' ? 
-                            JSON.stringify(msg.content?.body).substring(0, 50) : 'N/A';
+
+                    if (msg.type === "m.room.message") {
+                        const contentPreview =
+                            typeof msg.content?.body === "string"
+                                ? JSON.stringify(msg.content?.body).substring(0, 50)
+                                : "N/A";
                         console.log(`🔄 [Unread]   - Content: ${contentPreview}...`);
+
+                        const shouldCount = isNotificationsRoom || !isSelfMessage;
+                        console.log(`🔄 [Unread]   - Count as unread: ${shouldCount}`);
+                        return shouldCount;
                     }
-                    
-                    const shouldCount = isNotificationsRoom || !isSelfMessage;
-                    console.log(`🔄 [Unread]   - Count as unread: ${shouldCount}`);
-                    return shouldCount;
                 }
                 return false;
             });
-            
+
             updatedUnreadCounts[roomId] = unreadMessages.length;
             console.log(`🔄 [Unread] - Unread count for ${roomId}: ${unreadMessages.length} messages`);
         }
