@@ -439,7 +439,7 @@ export async function updateMatrixRoomNameAndAvatar(roomId: string, newName: str
     }
 }
 
-export async function notifyNewMember(userDid: string, circle: Circle) {
+export async function notifyNewMember(userDid: string, circle: Circle, omitFollowAccepted?: boolean) {
     const newMemberUser = await getUser(userDid);
     const members = await getMembers(circle._id!);
     const otherMembersIds = members.filter((member) => member.userDid !== userDid).map((x) => x.userDid);
@@ -448,7 +448,9 @@ export async function notifyNewMember(userDid: string, circle: Circle) {
     // Send new follower notification to all existing followers
     await sendNotifications("new_follower", recipients, { circle, user: newMemberUser });
     // Send "follow_accepted" notification to the new follower
-    await sendNotifications("follow_accepted", [newMemberUser], { circle, user: newMemberUser });
+    if (!omitFollowAccepted) {
+        await sendNotifications("follow_accepted", [newMemberUser], { circle, user: newMemberUser });
+    }
 }
 
 export async function sendNotifications(

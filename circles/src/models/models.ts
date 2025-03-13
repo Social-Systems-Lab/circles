@@ -99,6 +99,7 @@ export interface UserPrivate extends Circle {
     chatRoomMemberships: ChatRoomMembership[];
     matrixUrl?: string;
     fullMatrixName?: string;
+    ignoredCircles?: string[]; // IDs of circles the user has chosen to ignore
 }
 
 export type Partial<T> = {
@@ -406,6 +407,7 @@ export const circleSchema = z.object({
     matrixPassword: z.string().optional(),
     matrixNotificationsRoomId: z.string().optional(),
     isAdmin: z.boolean().optional(),
+    ignoredCircles: z.array(z.string()).optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;

@@ -1,11 +1,11 @@
-// \app\page.tsx - default app route showing home aggregate feed
-import { getAggregatePostsAction, getGlobalPostsAction } from "@/components/modules/feeds/actions";
-import { AggregateFeedComponent } from "@/components/modules/feeds/feed";
-import FeedTabs from "@/components/modules/feeds/feeds-tab";
+// \app\page.tsx - default app route showing hybrid map and card swipe interface
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
-import { getPublicUserFeed } from "@/lib/data/feed";
-import { PostDisplay, SortingOptions } from "@/models/models";
+import { getCirclesWithMetrics } from "@/lib/data/circle";
+import { getServerSettings } from "@/lib/data/server-settings";
+import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
+import MapSwipeContainer from "@/components/modules/circles/map-swipe-container";
 import { redirect } from "next/navigation";
+import { SortingOptions } from "@/models/models";
 
 type HomeProps = {
     params: Promise<{ handle: string }>;
@@ -14,33 +14,22 @@ type HomeProps = {
 
 export default async function Home(props: HomeProps) {
     const searchParams = await props.searchParams;
-    let activeTab = searchParams?.tab as string;
+    let sort = searchParams?.sort as string;
 
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         redirect("/welcome");
     }
 
-    let posts: PostDisplay[] = [];
+    // Get server settings for Mapbox key
+    const serverConfig = await getServerSettings();
 
-    // Get user feed regardless of active tab, so it's available for posting in any tab
-    let userFeed = await getPublicUserFeed(userDid);
-    console.log("Getting user public feed for", userDid, userFeed?.handle);
-
-    if (activeTab === "following" || !activeTab) {
-        console.log("Getting aggregate posts for user", userDid);
-        posts = await getAggregatePostsAction(userDid, 20, 0, searchParams?.sort as SortingOptions);
-    } else {
-        // For the "For You" tab, use a new function that fetches global posts
-        posts = await getGlobalPostsAction(userDid, 20, 0, searchParams?.sort as SortingOptions);
-    }
+    // Get circles with location data for the map and cards
+    const circles = await getCirclesWithMetrics(userDid, undefined, sort as SortingOptions);
 
     return (
-        <div className="flex flex-1 flex-row justify-center overflow-hidden">
-            <div className="mb-4 mt-14 flex max-w-[1100px] flex-1 flex-col items-center justify-center md:ml-4 md:mr-4 md:mt-14">
-                <FeedTabs currentTab={activeTab} />
-                <AggregateFeedComponent posts={posts} userFeed={userFeed!} activeTab={activeTab} />
-            </div>
-        </div>
+        <ContentDisplayWrapper content={circles}>
+            <MapSwipeContainer circles={circles} mapboxKey={serverConfig?.mapboxKey ?? ""} />
+        </ContentDisplayWrapper>
     );
 }

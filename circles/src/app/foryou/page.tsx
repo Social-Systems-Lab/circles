@@ -1,4 +1,4 @@
-// \app\page.tsx - default app route showing home aggregate feed
+// \app\foryou\page.tsx - feed page showing aggregate feed
 import { getAggregatePostsAction, getGlobalPostsAction } from "@/components/modules/feeds/actions";
 import { AggregateFeedComponent } from "@/components/modules/feeds/feed";
 import FeedTabs from "@/components/modules/feeds/feeds-tab";

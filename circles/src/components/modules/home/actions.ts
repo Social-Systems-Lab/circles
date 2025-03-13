@@ -61,7 +61,7 @@ export const followCircle = async (circle: Circle, answers?: Record<string, stri
             await addMember(userDid, updatedCircle._id ?? "", ["members"], answers);
 
             // Notify members that user has followed
-            await notifyNewMember(userDid, updatedCircle);
+            await notifyNewMember(userDid, updatedCircle, true);
 
             return {
                 success: true,
