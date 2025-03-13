@@ -44,7 +44,7 @@ export async function middleware(request: NextRequest) {
         } else if (urlSegments.length >= 3) {
             // route: /circles/<circle-handle>/<page-handle>
             pageHandle = urlSegments[2];
-            
+
             // Special case for post view routes
             if (pageHandle === "post" && urlSegments.length >= 4) {
                 // For post routes, use 'feeds' as the page handle for permission checking
@@ -110,6 +110,6 @@ function redirectToErrorPage(request: NextRequest) {
 
 export const config = {
     matcher: [
-        "/((?!api|explore|map|chat|settings|logged-out|login|unauthorized|unauthenticated|error|not-found|signup|demo/moviedb|demo/tech|demo/ratings|public/images|_next/static|robots.txt|sitemap.xml|favicon.ico|_next/image|.*\\.svg|.*\\.jpg|.*\\.png$).*)",
+        "/((?!api|explore|map|chat|settings|logged-out|foryou|login|unauthorized|unauthenticated|error|not-found|signup|demo/moviedb|demo/tech|demo/ratings|public/images|_next/static|robots.txt|sitemap.xml|favicon.ico|_next/image|.*\\.svg|.*\\.jpg|.*\\.png$).*)",
     ],
 };

@@ -1,21 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import React, { useState, useMemo, useCallback, useEffect } from "react";
+import React, { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { HiChevronDown, HiX } from "react-icons/hi";
-import { Circle, Page } from "@/models/models";
+import { Page } from "@/models/models";
 import PageIcon from "../modules/page-icon";
-import { useIsMobile } from "../utils/use-is-mobile";
-import { motion, AnimatePresence } from "framer-motion";
-import { userAtom, userSettingsAtom } from "@/lib/data/atoms";
+import { motion } from "framer-motion";
+import { userSettingsAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
-import { AiOutlineContacts, AiOutlineHome, AiOutlineSetting } from "react-icons/ai";
 import { IoChatbubbleOutline } from "react-icons/io5";
-import { MdOutlineExplore } from "react-icons/md";
 import { LiaGlobeAfricaSolid } from "react-icons/lia";
 import { FaRegCircle } from "react-icons/fa6";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import { CgFeed } from "react-icons/cg";
+import { MdRssFeed } from "react-icons/md";
+import { AiOutlineHome } from "react-icons/ai";
 
 function GlobalNavItem({
     item,
@@ -56,9 +55,6 @@ function GlobalNavItem({
 
 export default function GlobalNavItems() {
     const pathname = usePathname();
-    const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
-    const isMobile = useIsMobile();
-    const [user] = useAtom(userAtom);
     const [settings, setSettings] = useAtom(userSettingsAtom);
 
     useEffect(() => {
@@ -75,7 +71,7 @@ export default function GlobalNavItems() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, ease: "easeOut" }}
             >
-                <Link href={"/"}>
+                <Link href={"/foryou"}>
                     <motion.div
                         className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
                             pathname === "/" ? "text-[#495cff]" : "text-[#696969]"
@@ -93,33 +89,10 @@ export default function GlobalNavItems() {
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.3, delay: 0.2 + 0 * 0.1 }}
                         >
-                            Home
+                            For You
                         </motion.span>
                     </motion.div>
                 </Link>
-                {/* 
-                <Link href={"/explore"}>
-                    <motion.div
-                        className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
-                            pathname === "/explore" ? "text-[#495cff]" : "text-[#696969]"
-                        }`}
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.95 }}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5, delay: 1 * 0.1 }}
-                    >
-                        <MdOutlineExplore size={"24px"} />
-                        <motion.span
-                            className="mt-[4px] text-[11px]"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ duration: 0.3, delay: 0.2 + 1 * 0.1 }}
-                        >
-                            Explore
-                        </motion.span>
-                    </motion.div>
-                </Link> */}
 
                 <Link href={`/circles?tab=${settings?.circlesTab ?? "following"}`}>
                     <motion.div
@@ -167,30 +140,7 @@ export default function GlobalNavItems() {
                     </motion.div>
                 </Link>
 
-                <Link href={`/friends?tab=${settings?.circlesTab ?? "following"}`}>
-                    <motion.div
-                        className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
-                            pathname === "/friends" ? "text-[#495cff]" : "text-[#696969]"
-                        }`}
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.95 }}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5, delay: 2 * 0.1 }}
-                    >
-                        <AiOutlineContacts size={"24px"} />
-                        <motion.span
-                            className="mt-[4px] text-[11px]"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ duration: 0.3, delay: 0.2 + 2 * 0.1 }}
-                        >
-                            Friends
-                        </motion.span>
-                    </motion.div>
-                </Link>
-
-                <Link href={"/map"}>
+                {/* <Link href={"/map"}>
                     <motion.div
                         className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
                             pathname === "/map" ? "text-[#495cff]" : "text-[#696969]"
@@ -211,7 +161,7 @@ export default function GlobalNavItems() {
                             Map
                         </motion.span>
                     </motion.div>
-                </Link>
+                </Link> */}
                 {/* 
                 <Link href={"/settings"}>
                     <motion.div

@@ -7,12 +7,12 @@ import { getPublicUserFeed } from "@/lib/data/feed";
 import { PostDisplay, SortingOptions } from "@/models/models";
 import { redirect } from "next/navigation";
 
-type HomeProps = {
+type ForYouProps = {
     params: Promise<{ handle: string }>;
     searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
-export default async function Home(props: HomeProps) {
+export default async function ForYou(props: ForYouProps) {
     const searchParams = await props.searchParams;
     let activeTab = searchParams?.tab as string;
 

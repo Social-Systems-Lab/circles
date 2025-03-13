@@ -50,9 +50,20 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange }) => {
     }, []);
 
     useEffect(() => {
+        if (!mapboxKey) {
+            console.error("************* Mapbox key not set");
+        }
+        if (!mapContainer.current) {
+            console.error("************* Map container not set");
+        }
+        if (map?.current) {
+            console.error("************* Map already initialized");
+        }
+
         if (!mapboxKey || !mapContainer.current) return;
         if (map?.current) return; // only initialize mapbox once
 
+        console.log("************* Creating mapbox map *********");
         mapboxgl.accessToken = mapboxKey;
         map.current = new mapboxgl.Map({
             container: mapContainer.current,
@@ -72,7 +83,20 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange }) => {
             updateLocation({ lng: e.lngLat.lng, lat: e.lngLat.lat }, false);
             setIsLocationConfirmed(true);
         });
-    }, [mapboxKey, precision]);
+
+        return () => {
+            mapMarker.current?.remove();
+            map.current?.remove();
+            map.current = null;
+        };
+    }, [mapboxKey]);
+
+    useEffect(() => {
+        // change mapbox zoom based on precision
+        if (map.current) {
+            map.current.setZoom(precisionLevels[precision].zoom);
+        }
+    }, [precision]);
 
     const updateLocation = async (lngLat: LngLat, flyTo: boolean) => {
         if (!map.current || !mapMarker.current) return;
@@ -127,6 +151,12 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange }) => {
                     `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxKey}&autocomplete=true&types=${types.join(",")}`,
                 );
                 const data = await response.json();
+                // validate response
+                if (!data.features) {
+                    console.error("Invalid response from mapbox:", data);
+                    return;
+                }
+
                 const options: Option[] = data.features.map((feature: any) => ({
                     value: `${feature.center[1]},${feature.center[0]}`,
                     label: feature.place_name,
@@ -201,7 +231,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange }) => {
                 <MapPin className="mr-2 h-4 w-4" />
                 Use Current Location
             </Button>
-            <div className="h-[300px] w-full">
+            <div className="relative h-[300px] w-full">
                 <div ref={mapContainer} style={{ width: "100%", height: "100%" }}></div>
             </div>
             <div className="w-full max-w-sm space-y-4">

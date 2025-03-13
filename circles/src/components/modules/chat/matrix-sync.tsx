@@ -91,12 +91,12 @@ export const MatrixSync = () => {
     // Recalculate unreadCounts whenever roomMessages or lastReadTimestamps change
     useEffect(() => {
         if (!Object.keys(roomMessages).length || !Object.keys(lastReadTimestamps).length) {
-            console.log("🔄 [Unread] Waiting for hydration...");
+            // console.log("🔄 [Unread] Waiting for hydration...");
             return; // Wait for hydration
         }
 
-        console.log("🔄 [Unread] Recalculating unread counts...");
-        console.log("🔄 [Unread] lastReadTimestamps:", lastReadTimestamps);
+        // console.log("🔄 [Unread] Recalculating unread counts...");
+        // console.log("🔄 [Unread] lastReadTimestamps:", lastReadTimestamps);
 
         const updatedUnreadCounts: Record<string, number> = {};
 
@@ -105,9 +105,9 @@ export const MatrixSync = () => {
             const lastReadTimestamp = lastReadTimestamps[roomId] || 0;
             const isNotificationsRoom = roomId === user?.matrixNotificationsRoomId;
 
-            console.log(`🔄 [Unread] Checking room: ${roomId} (${isNotificationsRoom ? "Notifications" : "Chat"})`);
-            console.log(`🔄 [Unread] - Last read timestamp: ${new Date(lastReadTimestamp).toISOString()}`);
-            console.log(`🔄 [Unread] - Total messages: ${messages.length}`);
+            // console.log(`🔄 [Unread] Checking room: ${roomId} (${isNotificationsRoom ? "Notifications" : "Chat"})`);
+            // console.log(`🔄 [Unread] - Last read timestamp: ${new Date(lastReadTimestamp).toISOString()}`);
+            // console.log(`🔄 [Unread] - Total messages: ${messages.length}`);
 
             const unreadMessages = messages.filter((msg) => {
                 // Get message timestamp in a consistent way
@@ -120,19 +120,19 @@ export const MatrixSync = () => {
 
                 if (isUnread) {
                     const timeAgo = Math.round((Date.now() - msgTimestamp) / 1000 / 60);
-                    console.log(`🔄 [Unread] - Message ${msg.id.substring(0, 8)}...`);
-                    console.log(`🔄 [Unread]   - Time: ${new Date(msgTimestamp).toISOString()} (${timeAgo} min ago)`);
-                    console.log(`🔄 [Unread]   - From: ${msg.createdBy} (self: ${isSelfMessage})`);
+                    // console.log(`🔄 [Unread] - Message ${msg.id.substring(0, 8)}...`);
+                    // console.log(`🔄 [Unread]   - Time: ${new Date(msgTimestamp).toISOString()} (${timeAgo} min ago)`);
+                    // console.log(`🔄 [Unread]   - From: ${msg.createdBy} (self: ${isSelfMessage})`);
 
                     if (msg.type === "m.room.message") {
                         const contentPreview =
                             typeof msg.content?.body === "string"
                                 ? JSON.stringify(msg.content?.body).substring(0, 50)
                                 : "N/A";
-                        console.log(`🔄 [Unread]   - Content: ${contentPreview}...`);
+                        // console.log(`🔄 [Unread]   - Content: ${contentPreview}...`);
 
                         const shouldCount = isNotificationsRoom || !isSelfMessage;
-                        console.log(`🔄 [Unread]   - Count as unread: ${shouldCount}`);
+                        // console.log(`🔄 [Unread]   - Count as unread: ${shouldCount}`);
                         return shouldCount;
                     }
                 }
@@ -140,10 +140,10 @@ export const MatrixSync = () => {
             });
 
             updatedUnreadCounts[roomId] = unreadMessages.length;
-            console.log(`🔄 [Unread] - Unread count for ${roomId}: ${unreadMessages.length} messages`);
+            // console.log(`🔄 [Unread] - Unread count for ${roomId}: ${unreadMessages.length} messages`);
         }
 
-        console.log("🔄 [Unread] Final unread counts:", updatedUnreadCounts);
+        // console.log("🔄 [Unread] Final unread counts:", updatedUnreadCounts);
         setUnreadCounts(updatedUnreadCounts);
     }, [roomMessages, lastReadTimestamps, user?.matrixUsername, user?.matrixNotificationsRoomId, setUnreadCounts]);
 
@@ -156,7 +156,7 @@ export const MatrixSync = () => {
             latestMessages: Record<string, any>;
             lastReadTimestamps: Record<string, number>;
         }) => {
-            console.log("handleSyncData called");
+            // console.log("handleSyncData called");
             setLatestMessages((prev) => ({ ...prev, ...data.latestMessages }));
             setRoomData((prev) => ({ ...prev, ...data.rooms }));
             setLastReadTimestamps((prev) => ({ ...prev, ...data.lastReadTimestamps }));
