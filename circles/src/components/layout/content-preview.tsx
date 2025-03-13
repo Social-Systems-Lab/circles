@@ -123,14 +123,7 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                         <div className="flex flex-row items-center justify-center pt-4">
                             <FaUsers />
                             <p className="m-0 ml-2">
-                                {memberCount}{" "}
-                                {memberCount !== 1
-                                    ? circle.circleType === "user"
-                                        ? "Friends"
-                                        : "Members"
-                                    : circle.circleType === "user"
-                                      ? "Friend"
-                                      : "Member"}
+                                {memberCount} {memberCount !== 1 ? "Followers" : "Follower"}
                             </p>
                         </div>
                     )}

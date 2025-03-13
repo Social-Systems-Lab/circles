@@ -26,9 +26,9 @@ export const modules: Record<string, Module> = {
         defaultIcon: "AiOutlineSetting",
     },
     members: {
-        name: "Members",
+        name: "Followers",
         handle: "members",
-        description: "Members page",
+        description: "Followers page",
         component: MembersModule,
         defaultIcon: "AiOutlineContacts",
     },

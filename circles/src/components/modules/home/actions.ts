@@ -122,11 +122,11 @@ export const leaveCircle = async (circle: Circle): Promise<CircleActionResponse>
             }
         }
         await removeMember(userDid, circle._id ?? "");
-        return { success: true, message: isUser ? "You have unfriended the user" : "You have left the circle" };
+        return { success: true, message: isUser ? "You have unfollowed the user" : "You have unfollowed the circle" };
     } catch (error) {
         return {
             success: false,
-            message: (isUser ? "Failed to unfriend user" : "Failed to leave circle. ") + error?.toString(),
+            message: (isUser ? "Failed to unfollow user" : "Failed to unfollow circle. ") + error?.toString(),
         };
     }
 };

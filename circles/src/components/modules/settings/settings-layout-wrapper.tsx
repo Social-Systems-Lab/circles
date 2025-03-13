@@ -28,7 +28,7 @@ const settingsForms: SettingsForm[] = [
         handle: "access-rules",
     },
     {
-        name: "Membership Requests",
+        name: "Follow Requests",
         handle: "membership-requests",
     },
     {

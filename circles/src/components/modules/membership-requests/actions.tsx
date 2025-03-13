@@ -23,7 +23,7 @@ type MembershipRequestsResponse = {
 export const getAllMembershipRequestsAction = async (circleId: string): Promise<MembershipRequestsResponse> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
-        return { success: false, message: "You need to be logged in to view membership requests" };
+        return { success: false, message: "You need to be logged in to view follow requests" };
     }
 
     try {
@@ -34,13 +34,13 @@ export const getAllMembershipRequestsAction = async (circleId: string): Promise<
         // check if the user is authorized to view membership requests
         const authorized = await isAuthorized(userDid, circleId, features.manage_membership_requests);
         if (!authorized) {
-            return { success: false, message: "You are not authorized to view membership requests" };
+            return { success: false, message: "You are not authorized to view follow requests" };
         }
 
         const { pendingRequests, rejectedRequests } = await getAllMembershipRequests(circleId);
         return { success: true, pendingRequests, rejectedRequests };
     } catch (error) {
-        return { success: false, message: "Failed to fetch membership requests. " + error?.toString() };
+        return { success: false, message: "Failed to fetch follow requests. " + error?.toString() };
     }
 };
 

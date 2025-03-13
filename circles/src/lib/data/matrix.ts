@@ -445,9 +445,9 @@ export async function notifyNewMember(userDid: string, circle: Circle) {
     const otherMembersIds = members.filter((member) => member.userDid !== userDid).map((x) => x.userDid);
     let recipients = await getCirclesByDids(otherMembersIds);
 
-    // Send "new_member" notification to all existing members
-    await sendNotifications("new_member", recipients, { circle, user: newMemberUser });
-    // Send "follow_accepted" notification to the new member
+    // Send new follower notification to all existing followers
+    await sendNotifications("new_follower", recipients, { circle, user: newMemberUser });
+    // Send "follow_accepted" notification to the new follower
     await sendNotifications("follow_accepted", [newMemberUser], { circle, user: newMemberUser });
 }
 
@@ -560,7 +560,7 @@ function deriveBody(
     switch (notificationType) {
         case "follow_request":
             return `${payload.user?.name} has requested to follow circle ${payload?.circle?.name}`;
-        case "new_member":
+        case "new_follower":
             return `${payload.user?.name} has followed circle ${payload?.circle?.name}`;
         case "follow_accepted":
             return `You have been accepted into circle ${payload?.circle?.name}`;

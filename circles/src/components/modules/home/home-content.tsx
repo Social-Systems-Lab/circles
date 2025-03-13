@@ -117,14 +117,7 @@ export default function HomeContent({ circle, isDefaultCircle, authorizedToEdit 
                             <div className="flex flex-row items-center justify-center text-gray-600">
                                 <FaUsers />
                                 <p className="m-0 ml-2">
-                                    {memberCount}{" "}
-                                    {memberCount !== 1
-                                        ? isUser
-                                            ? "Friends"
-                                            : "Members"
-                                        : isUser
-                                          ? "Friend"
-                                          : "Member"}
+                                    {memberCount} {memberCount !== 1 ? "Followers" : "Follower"}
                                 </p>
                             </div>
                         )}

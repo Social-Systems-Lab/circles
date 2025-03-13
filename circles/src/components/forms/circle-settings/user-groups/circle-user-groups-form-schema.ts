@@ -3,7 +3,7 @@ import { FormSchema } from "../../../../models/models";
 export const userGroupFormSchema: FormSchema = {
     id: "user-group-form",
     title: "User Group",
-    description: "Create a user group to organize circle members and manage access and permissions effectively.",
+    description: "Create a user group to organize circle followers and manage access and permissions effectively.",
     button: {
         text: "Save",
     },
@@ -50,7 +50,7 @@ export const circleUserGroupsFormSchema: FormSchema = {
     id: "circle-user-groups-form",
     title: "User Groups",
     description:
-        "Organize circle members into specific user groups to manage access and permissions effectively. Assign members to groups to control their roles and privileges within the circle.",
+        "Organize circle followers into specific user groups to manage access and permissions effectively. Assign members to groups to control their roles and privileges within the circle.",
     button: {
         text: "Save",
     },

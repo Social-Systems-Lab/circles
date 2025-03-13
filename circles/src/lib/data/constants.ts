@@ -35,9 +35,9 @@ export const features = {
         defaultUserGroups: ["admins", "moderators"],
     },
     manage_membership_requests: {
-        name: "Manage Membership Requests",
+        name: "Manage Follow Requests",
         handle: "manage_membership_requests",
-        description: "Manage membership requests to follow the circle",
+        description: "Manage requests to follow the circle",
         defaultUserGroups: ["admins", "moderators"],
     },
     create_subcircle: {
@@ -97,10 +97,10 @@ export const defaultUserGroupsForUser: UserGroup[] = [
         readOnly: true,
     },
     {
-        name: "Friends",
+        name: "Followers",
         handle: "members",
-        title: "Friend",
-        description: "Friends",
+        title: "Followers",
+        description: "Followers",
         accessLevel: 300,
         readOnly: true,
     },
@@ -132,9 +132,9 @@ export const defaultPagesForUser: Page[] = [
     //     defaultUserGroups: ["admins", "moderators", "members", "everyone"],
     // },
     {
-        name: "Friends",
-        handle: "friends",
-        description: "Friends page",
+        name: "Followers",
+        handle: "folloewrs",
+        description: "Followers page",
         module: "members",
         defaultUserGroups: ["admins", "moderators", "members"],
     },

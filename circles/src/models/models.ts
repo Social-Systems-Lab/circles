@@ -94,7 +94,7 @@ export type ChatRoomMembership = ChatRoomMember & {
 
 export interface UserPrivate extends Circle {
     memberships: Membership[];
-    friends: Membership[];
+    friends: Membership[]; // followers
     pendingRequests: MembershipRequest[];
     chatRoomMemberships: ChatRoomMembership[];
     matrixUrl?: string;
@@ -742,7 +742,7 @@ export type UserSettings = {
 
 export type NotificationType =
     | "follow_request"
-    | "new_member"
+    | "new_follower"
     | "follow_accepted"
     | "post_comment" // Someone commented on your post
     | "comment_reply" // Someone replied to your comment

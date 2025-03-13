@@ -212,7 +212,7 @@ export const Notifications = () => {
             case "follow_request":
                 router.push(`/circles/${notification.circle?.handle}/settings/membership-requests`);
                 break;
-            case "new_member":
+            case "new_follower":
                 router.push(`/circles/${notification.user?.handle}`);
                 break;
             case "follow_accepted":

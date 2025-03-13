@@ -136,7 +136,7 @@ const MembershipRequestsTable: React.FC<MembershipRequestsTableProps> = ({ circl
                                         </DialogTrigger>
                                         <DialogContent>
                                             <DialogHeader>
-                                                <DialogTitle>Membership Request Details</DialogTitle>
+                                                <DialogTitle>Follow Request Details</DialogTitle>
                                             </DialogHeader>
                                             <div className="py-4">
                                                 <h3 className="font-semibold">Applicant Information</h3>

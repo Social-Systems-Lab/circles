@@ -124,10 +124,10 @@ export const FollowButton = ({ circle, renderCompact }: CircleMembershipButtonPr
         if (result.success) {
             toast({
                 icon: "success",
-                title: "Left Circle",
+                title: "Stopped Following",
                 description: isUserCircle
-                    ? `You've left ${circle.name} as friend`
-                    : `You've left the circle ${circle.name}`,
+                    ? `You've stopped following ${circle.name}`
+                    : `You've stopped following ${circle.name}`,
             });
             // Update user state to remove the membership
             setUser((prevUser) => ({
@@ -185,32 +185,32 @@ export const FollowButton = ({ circle, renderCompact }: CircleMembershipButtonPr
                                     <MoreVertical className="h-4 w-4" />
                                 ) : (
                                     <>
-                                        {isUserCircle ? "Friend" : "Member"} <ChevronDown className="ml-2 h-4 w-4" />
+                                        Follower <ChevronDown className="ml-2 h-4 w-4" />
                                     </>
                                 )}
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>
                             <DropdownMenuItem onClick={handleLeaveCircleClick}>
-                                {isUserCircle ? "Leave as Friend" : "Leave Circle"}
+                                {isUserCircle ? "Unfollow User" : "Unfollow Circle"}
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
                     <Dialog open={isLeaveDialogOpen} onOpenChange={setIsLeaveDialogOpen}>
                         <DialogContent>
                             <DialogHeader>
-                                <DialogTitle>{isUserCircle ? "Leave as Friend" : "Leave Circle"}</DialogTitle>
+                                <DialogTitle>{isUserCircle ? "Unfollow User" : "Unfollow Circle"}</DialogTitle>
                                 <DialogDescription>
                                     {isUserCircle && (
                                         <>
-                                            Are you sure you want to leave {circle.name} as friend? This action cannot
-                                            be undone.
+                                            Are you sure you want to unfollow {circle.name}? This action cannot be
+                                            undone.
                                         </>
                                     )}
                                     {!isUserCircle && (
                                         <>
-                                            `Are you sure you want to leave the circle {circle.name}? This action cannot
-                                            be undone.
+                                            `Are you sure you want to unfollow the circle {circle.name}? This action
+                                            cannot be undone.
                                         </>
                                     )}
                                 </DialogDescription>
@@ -220,7 +220,7 @@ export const FollowButton = ({ circle, renderCompact }: CircleMembershipButtonPr
                                     Cancel
                                 </Button>
                                 <Button variant="destructive" onClick={handleConfirmLeave}>
-                                    {isUserCircle ? "Leave as Friend" : "Leave Circle"}
+                                    {isUserCircle ? "Unfollow User" : "Unfollow Circle"}
                                 </Button>
                             </DialogFooter>
                         </DialogContent>

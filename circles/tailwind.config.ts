@@ -76,12 +76,50 @@ const config = {
                     "0%": { transform: "translateY(0)" },
                     "100%": { transform: "translateY(-36px)" },
                 },
+                wiggle: {
+                    "0%, 100%": { transform: "rotate(-8deg)" },
+                    "50%": { transform: "rotate(8deg)" },
+                },
+                float: {
+                    "0%, 100%": { transform: "translateY(0)" },
+                    "50%": { transform: "translateY(-4px)" },
+                },
+                pulse: {
+                    "0%": {
+                        transform: "scale(0.85)",
+                        boxShadow: "0 0 0 0 rgba(178, 27, 186, 0.7)",
+                    },
+                    "96%": {
+                        transform: "scale(0.9)",
+                        boxShadow: "0 0 0 10px rgba(0, 0, 0, 0)",
+                    },
+                    "100%": {
+                        transform: "scale(0.85)",
+                        boxShadow: "0 0 0 0 rgba(0, 0, 0, 0)",
+                    },
+                },
+                ripple: {
+                    "0%": {
+                        opacity: "1",
+                        transform: "scale3d(0.75, 0.75, 1)",
+                    },
+                    "100%": {
+                        opacity: "0",
+                        transform: "scale3d(1.35, 1.35, 1)",
+                    },
+                },
             },
             animation: {
                 "accordion-down": "accordion-down 0.2s ease-out",
                 "accordion-up": "accordion-up 0.2s ease-out",
                 "slide-in": "slide-in 0.5s ease-in-out",
                 "slide-up": "slide-up 0.5s ease-in-out",
+                wiggle: "wiggle 4s ease-in-out infinite",
+                float: "float 3s ease-in-out infinite",
+                "pulse-slow": "pulse 3s ease-in-out infinite",
+                ripple: "ripple 4s cubic-bezier(0.65, 0, 0.34, 1) infinite",
+                "ripple-delay": "ripple 4s cubic-bezier(0.65, 0, 0.34, 1) infinite 1.5s",
+                "ripple-delay-2": "ripple 4s cubic-bezier(0.65, 0, 0.34, 1) infinite 3s",
             },
         },
     },

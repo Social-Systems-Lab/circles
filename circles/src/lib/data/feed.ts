@@ -115,7 +115,7 @@ export const createDefaultFeeds = async (circleId: string): Promise<Feed[] | nul
     let membersFeed = await getFeedByHandle(circleId, "members");
     if (!membersFeed) {
         membersFeed = {
-            name: circle.circleType === "user" ? "Friends Only" : "Members Only",
+            name: "Followers Only",
             handle: "members",
             circleId,
             userGroups: ["admins", "moderators", "members"],
@@ -178,7 +178,7 @@ export const createComment = async (comment: Comment): Promise<Comment> => {
     try {
         const result = await Comments.insertOne(comment);
         const insertedComment = { ...comment, _id: result.insertedId.toString() };
-        
+
         await Posts.updateOne({ _id: new ObjectId(comment.postId) }, { $inc: { comments: 1 } });
 
         if (!comment.parentCommentId) {
@@ -190,9 +190,9 @@ export const createComment = async (comment: Comment): Promise<Comment> => {
 
         console.log("💾 [DB] Comment created successfully:", {
             commentId: insertedComment._id,
-            postId: comment.postId
+            postId: comment.postId,
         });
-        
+
         return insertedComment;
     } catch (error) {
         console.error("💾 [DB] Error creating comment:", error);

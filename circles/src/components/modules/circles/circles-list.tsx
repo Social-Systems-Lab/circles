@@ -36,25 +36,21 @@ export const twoLineEllipsisStyle = {
 type CreateCircleButtonProps = {
     circle: Circle;
     isDefaultCircle: boolean;
-}
-
+};
 
 export const CreateCircleButton: React.FC<CreateCircleButtonProps> = ({ circle }) => {
     const isCompact = useIsCompact();
     const parentId = circle?._id;
-  
+
     return (
-      <Link href={`/circles/new?parentCircleId=${parentId}`}>
-        <Button
-          variant={isCompact ? "ghost" : "outline"}
-          className={isCompact ? "h-[32px] w-[32px] p-0" : "gap-2"}
-        >
-          <Plus className="h-4 w-4" />
-          {isCompact ? "" : "Create Circle"}
-        </Button>
-      </Link>
+        <Link href={`/circles/new?parentCircleId=${parentId}`}>
+            <Button variant={isCompact ? "ghost" : "outline"} className={isCompact ? "h-[32px] w-[32px] p-0" : "gap-2"}>
+                <Plus className="h-4 w-4" />
+                {isCompact ? "" : "Create Circle"}
+            </Button>
+        </Link>
     );
-  };
+};
 
 interface CirclesListProps {
     circles: WithMetric<Circle>[];
@@ -62,10 +58,10 @@ interface CirclesListProps {
     page?: Page;
     isDefaultCircle: boolean;
     activeTab?: string;
-    friendsList?: boolean;
+    inUser?: boolean;
 }
 
-const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, friendsList }: CirclesListProps) => {
+const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, inUser }: CirclesListProps) => {
     const [user] = useAtom(userAtom);
     const isCompact = useIsCompact();
     const isMobile = useIsMobile();
@@ -137,12 +133,12 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, friend
                     }}
                 >
                     <Input
-                        placeholder={`Search ${friendsList ? "friends" : "circles"}...`}
+                        placeholder={`Search followers...`}
                         value={searchQuery}
                         onChange={(event) => setSearchQuery(event.target.value)}
                         className="flex-1"
                     />
-                    {canCreateSubcircle && !friendsList && (
+                    {canCreateSubcircle && !inUser && (
                         <CreateCircleButton circle={circle} isDefaultCircle={isDefaultCircle} />
                     )}
                 </div>
@@ -152,10 +148,10 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, friend
                 {filteredCircles.length === 0 && activeTab === "following" && (
                     <div className="flex h-full flex-col items-center justify-center">
                         <Image src={emptyFeed} alt="No posts yet" width={isMobile ? 230 : 300} />
-                        <h4>No {friendsList ? "friends" : "circles"}</h4>
+                        <h4>No {inUser ? "users" : "circles"}</h4>
                         <div className="max-w-[700px] pl-4 pr-4">
-                            You are not following {friendsList ? "anyone" : "any circles"}. Try the discover tab to find
-                            new {friendsList ? "friends" : "circles"} to follow.
+                            You are not following {inUser ? "anyone" : "any circles"}. Try the discover tab to find new{" "}
+                            {inUser ? "users" : "circles"} to follow.
                         </div>
                         <div className="mt-4 flex flex-row gap-2">
                             <Button variant={"outline"} onClick={() => updateQueryParam(router, "tab", "discover")}>
@@ -217,7 +213,7 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, friend
                                     <h4 className="mb-0 mt-2 cursor-pointer text-lg font-bold">{circle.name}</h4>
                                     {circle?.circleType !== "user" ? (
                                         <div className="flex flex-row items-center justify-center text-sm text-gray-500">
-                                            {circle.members} {circle?.members !== 1 ? "members" : "member"}
+                                            {circle.members} {circle?.members !== 1 ? "followers" : "follower"}
                                         </div>
                                     ) : (
                                         <div className="bg-blue flex h-5 w-2 flex-row items-center justify-center text-sm text-gray-500"></div>

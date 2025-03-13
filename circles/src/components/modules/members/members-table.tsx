@@ -145,7 +145,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                 header: ({ column }) => {
                     return (
                         <Button variant="ghost" onClick={() => column.toggleSorting()}>
-                            {isUser ? "Friend" : "Member"}
+                            Follower
                             <SortIcon sortDir={column.getIsSorted()} />
                         </Button>
                     );
@@ -295,7 +295,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                 <div className="flex w-full flex-row items-center gap-2">
                     <div className="flex flex-1 flex-col">
                         <Input
-                            placeholder="Search member..."
+                            placeholder="Search follower..."
                             value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
                             onChange={(event) => table.getColumn("name")?.setFilterValue(event.target.value)}
                         />
@@ -418,7 +418,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                                         colSpan={columns.length + (canEdit ? 1 : 0)}
                                         className="h-24 text-center"
                                     >
-                                        {isUser ? "No friends." : "No members."}
+                                        No followers.
                                     </TableCell>
                                 </TableRow>
                             )}
