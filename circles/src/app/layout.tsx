@@ -97,7 +97,7 @@ export async function generateMetadata(): Promise<Metadata> {
     // get circle from database
     let circle = await getDefaultCircle();
     let title = circle.name;
-    let description = circle.description;
+    let description = circle.description ?? "Connect. Collaborate. Create Change.";
     let icon = circle.picture?.url ?? "/images/circles-picture.svg";
 
     return {

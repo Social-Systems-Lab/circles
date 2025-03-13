@@ -69,10 +69,10 @@ export const defaultUserGroups: UserGroup[] = [
         readOnly: true,
     },
     {
-        name: "Members",
+        name: "Followers",
         handle: "members",
-        title: "Member",
-        description: "Members of the circle",
+        title: "Follower",
+        description: "Follower of the circle",
         accessLevel: 300,
         readOnly: true,
     },
@@ -133,7 +133,7 @@ export const defaultPagesForUser: Page[] = [
     // },
     {
         name: "Followers",
-        handle: "folloewrs",
+        handle: "friends",
         description: "Followers page",
         module: "members",
         defaultUserGroups: ["admins", "moderators", "members"],
