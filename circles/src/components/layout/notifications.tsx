@@ -209,13 +209,13 @@ export const Notifications = () => {
 
         switch (notification.notificationType) {
             // Original notification types
-            case "join_request":
+            case "follow_request":
                 router.push(`/circles/${notification.circle?.handle}/settings/membership-requests`);
                 break;
             case "new_member":
                 router.push(`/circles/${notification.user?.handle}`);
                 break;
-            case "join_accepted":
+            case "follow_accepted":
                 router.push(`/circles/${notification.circle?.handle}`);
                 break;
 

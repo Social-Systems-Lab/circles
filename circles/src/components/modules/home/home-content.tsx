@@ -7,7 +7,7 @@ import { FaUsers } from "react-icons/fa";
 import EditableImage from "./editable-image";
 import EditableField from "./editable-field";
 import InviteButton from "./invite-button";
-import JoinButton from "./join-button";
+import FollowButton from "./follow-button";
 import GalleryTrigger from "./gallery-trigger";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
@@ -81,7 +81,7 @@ export default function HomeContent({ circle, isDefaultCircle, authorizedToEdit 
                             )}
                             <div className={`absolute right-0 top-0 flex flex-row gap-1 pt-2`}>
                                 <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />
-                                <JoinButton circle={circle} />
+                                <FollowButton circle={circle} />
                             </div>
                         </>
                     )}
@@ -137,7 +137,7 @@ export default function HomeContent({ circle, isDefaultCircle, authorizedToEdit 
                                 <MessageButton circle={circle} renderCompact={false} />
                             )}
                             <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />
-                            <JoinButton circle={circle} />
+                            <FollowButton circle={circle} />
                         </div>
                     )}
                 </div>

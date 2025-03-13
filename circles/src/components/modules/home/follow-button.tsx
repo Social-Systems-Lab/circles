@@ -6,7 +6,7 @@ import { userAtom } from "@/lib/data/atoms";
 import { Circle } from "@/models/models";
 import { useAtom } from "jotai";
 import { usePathname, useRouter } from "next/navigation";
-import { joinCircle, leaveCircle, cancelJoinRequest } from "./actions";
+import { followCircle, leaveCircle, cancelFollowRequest } from "./actions";
 import { useToast } from "@/components/ui/use-toast";
 import {
     DropdownMenu,
@@ -31,7 +31,7 @@ type CircleMembershipButtonProps = {
     renderCompact?: boolean;
 };
 
-export const CircleMembershipButton = ({ circle, renderCompact }: CircleMembershipButtonProps) => {
+export const FollowButton = ({ circle, renderCompact }: CircleMembershipButtonProps) => {
     const [user, setUser] = useAtom(userAtom);
     const router = useRouter();
     const pathname = usePathname();
@@ -51,7 +51,7 @@ export const CircleMembershipButton = ({ circle, renderCompact }: CircleMembersh
         return "not-member";
     }, [circle._id, user]);
 
-    const onJoinCircleClick = async () => {
+    const onFollowCircleClick = async () => {
         if (!user) {
             router.push(`/login?redirect=${pathname}`);
             return;
@@ -60,20 +60,20 @@ export const CircleMembershipButton = ({ circle, renderCompact }: CircleMembersh
         if (circle.questionnaire && circle.questionnaire.length > 0) {
             setIsQuestionnaireOpen(true);
         } else {
-            await processJoinRequest();
+            await processFollowRequest();
         }
     };
 
-    const processJoinRequest = async (answers?: Record<string, string>) => {
-        let result = await joinCircle(circle, answers);
+    const processFollowRequest = async (answers?: Record<string, string>) => {
+        let result = await followCircle(circle, answers);
         if (result.success) {
             if (!result.pending) {
                 toast({
                     icon: "success",
                     title: "Request Sent",
                     description: isUserCircle
-                        ? `You have joined ${circle.name} as friend.`
-                        : `You've joined ${circle.name}.`,
+                        ? `You are now following ${circle.name}.`
+                        : `You are now following ${circle.name}.`,
                 });
                 setUser((prevUser) => ({
                     ...prevUser!,
@@ -87,8 +87,8 @@ export const CircleMembershipButton = ({ circle, renderCompact }: CircleMembersh
                     icon: "success",
                     title: "Request Sent",
                     description: isUserCircle
-                        ? `Your request to ${circle.name} as friend has been sent.`
-                        : `Your request to join ${circle.name} has been sent.`,
+                        ? `Your request to follow ${circle.name} has been sent.`
+                        : `Your request to follow ${circle.name} has been sent.`,
                 });
                 // Update user state to include the new pending request
                 setUser((prevUser) => ({
@@ -111,7 +111,7 @@ export const CircleMembershipButton = ({ circle, renderCompact }: CircleMembersh
 
     const onQuestionnaireSubmit = (answers: Record<string, string>) => {
         setIsQuestionnaireOpen(false);
-        processJoinRequest(answers);
+        processFollowRequest(answers);
     };
 
     const handleLeaveCircleClick = () => {
@@ -145,12 +145,12 @@ export const CircleMembershipButton = ({ circle, renderCompact }: CircleMembersh
     };
 
     const onCancelRequestClick = async () => {
-        let result = await cancelJoinRequest(circle);
+        let result = await cancelFollowRequest(circle);
         if (result.success) {
             toast({
                 icon: "success",
                 title: "Request Cancelled",
-                description: `Your request to join ${circle.name} has been cancelled.`,
+                description: `Your request to follow ${circle.name} has been cancelled.`,
             });
             // Update user state to remove the pending request
             setUser((prevUser) => ({
@@ -249,9 +249,9 @@ export const CircleMembershipButton = ({ circle, renderCompact }: CircleMembersh
                     <Button
                         className={compact ? "w-[75px] rounded-full" : "w-[75px] rounded-full md:w-[150px]"}
                         size={compact ? "sm" : "default"}
-                        onClick={onJoinCircleClick}
+                        onClick={onFollowCircleClick}
                     >
-                        {compact ? (isUserCircle ? "Add" : "Join") : isUserCircle ? "Join as Friend" : "Join Circle"}
+                        Follow
                     </Button>
                     <CircleQuestionnaireDialog
                         isOpen={isQuestionnaireOpen}
@@ -264,4 +264,4 @@ export const CircleMembershipButton = ({ circle, renderCompact }: CircleMembersh
     }
 };
 
-export default CircleMembershipButton;
+export default FollowButton;

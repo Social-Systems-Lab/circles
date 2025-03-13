@@ -37,7 +37,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
     return (
         <Provider>
             <html lang="en" className={`${wix.variable} ${libre.variable}`}>
-                <ReactScan />
+                {process.env.NODE_ENV === "development" && <ReactScan />}
                 <head>
                     <meta name="app-version" content={process.env.version} />
                 </head>

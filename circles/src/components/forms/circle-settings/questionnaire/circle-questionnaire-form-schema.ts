@@ -33,7 +33,7 @@ export const circleQuestionnaireFormSchema: FormSchema = {
     id: "circle-questionnaire-form",
     title: "Questionnaire",
     description:
-        "Create and manage the questionnaire for your circle. These questions are asked to new members when they request to join the circle.",
+        "Create and manage the questionnaire for your circle. These questions are asked to new members when they request to follow the circle.",
     button: {
         text: "Save",
     },

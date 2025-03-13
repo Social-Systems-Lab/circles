@@ -37,7 +37,7 @@ export const features = {
     manage_membership_requests: {
         name: "Manage Membership Requests",
         handle: "manage_membership_requests",
-        description: "Manage membership requests to join the circle",
+        description: "Manage membership requests to follow the circle",
         defaultUserGroups: ["admins", "moderators"],
     },
     create_subcircle: {

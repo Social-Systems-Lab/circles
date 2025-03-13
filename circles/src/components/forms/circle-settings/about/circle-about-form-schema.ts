@@ -69,8 +69,8 @@ export const circleAboutFormSchema: FormSchema = {
             label: "Public",
             type: "switch",
             description: {
-                circle: "When set to public, users can join the circle without requiring approval from admins.",
-                user: "When set to public people can join your circle as a friend without requiring your approval.",
+                circle: "When set to public, users can follow the circle without requiring approval from admins.",
+                user: "When set to public people can follow you without requiring your approval.",
             },
         },
         {

@@ -58,7 +58,7 @@ export const createUserTrad = async (
     // did is public key in shorter string format suitable for URLS and directory naming
     const did = crypto
         .createHash("sha256")
-        .update(publicKey.export({ type: "pkcs1", format: "pem" }))
+        .update(publicKey.export({ type: "pkcs1", format: "pem" }) as string)
         .digest("hex");
 
     // create a directory for the user using the did as the name

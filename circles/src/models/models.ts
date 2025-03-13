@@ -741,9 +741,9 @@ export type UserSettings = {
 };
 
 export type NotificationType =
-    | "join_request"
+    | "follow_request"
     | "new_member"
-    | "join_accepted"
+    | "follow_accepted"
     | "post_comment" // Someone commented on your post
     | "comment_reply" // Someone replied to your comment
     | "post_like" // Someone liked your post

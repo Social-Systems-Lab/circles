@@ -3,10 +3,7 @@
 import React from "react";
 import Image from "next/image";
 import { Circle } from "@/models/models";
-import JoinButton from "./join-button";
-import InviteButton from "./invite-button";
 import EditableImage from "./editable-image";
-import { useIsCompact } from "@/components/utils/use-is-compact";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import GalleryTrigger from "./gallery-trigger";
 

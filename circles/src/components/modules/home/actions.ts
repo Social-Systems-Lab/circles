@@ -31,13 +31,13 @@ export const getUserPrivateAction = async (): Promise<UserPrivate | undefined> =
     return await getUserPrivate(userDid);
 };
 
-export const joinCircle = async (circle: Circle, answers?: Record<string, string>): Promise<CircleActionResponse> => {
+export const followCircle = async (circle: Circle, answers?: Record<string, string>): Promise<CircleActionResponse> => {
     let isUser = circle?.circleType === "user";
     const token = (await cookies()).get("token")?.value;
 
     try {
         if (!token) {
-            return { success: false, message: "You need to be logged in to join a circle" };
+            return { success: false, message: "You need to be logged in to follow a circle" };
         }
 
         let payload = await verifyUserToken(token);
@@ -60,12 +60,12 @@ export const joinCircle = async (circle: Circle, answers?: Record<string, string
             // For public circles, add member directly
             await addMember(userDid, updatedCircle._id ?? "", ["members"], answers);
 
-            // Notify members that user has joined
+            // Notify members that user has followed
             await notifyNewMember(userDid, updatedCircle);
 
             return {
                 success: true,
-                message: isUser ? "You have added user as friend" : "You have joined the circle",
+                message: isUser ? "You are now following user" : "You are now following circle",
                 pending: false,
             };
         } else {
@@ -77,19 +77,19 @@ export const joinCircle = async (circle: Circle, answers?: Record<string, string
 
             // send a notification to all users that have permission to accept requests
             let user = await getUser(userDid);
-            await sendNotifications("join_request", members, { circle: updatedCircle, user });
+            await sendNotifications("follow_request", members, { circle: updatedCircle, user });
 
             return {
                 success: true,
-                message: isUser ? "Your friendship request has been sent" : "Your request to join has been sent",
+                message: isUser ? "Your follow request has been sent" : "Your request to follow has been sent",
                 pending: true,
             };
         }
     } catch (error) {
-        console.error("Failed to join circle", error);
+        console.error("Failed to follow circle", error);
         return {
             success: false,
-            message: (isUser ? "Failed to add friend" : "Failed to join circle. ") + error?.toString(),
+            message: (isUser ? "Failed to follow user" : "Failed to follow circle. ") + error?.toString(),
         };
     }
 };
@@ -131,12 +131,12 @@ export const leaveCircle = async (circle: Circle): Promise<CircleActionResponse>
     }
 };
 
-export const cancelJoinRequest = async (circle: Circle): Promise<CircleActionResponse> => {
+export const cancelFollowRequest = async (circle: Circle): Promise<CircleActionResponse> => {
     const token = (await cookies()).get("token")?.value;
 
     try {
         if (!token) {
-            return { success: false, message: "You need to be logged in to cancel a join request" };
+            return { success: false, message: "You need to be logged in to cancel a follow request" };
         }
 
         let payload = await verifyUserToken(token);
@@ -146,9 +146,9 @@ export const cancelJoinRequest = async (circle: Circle): Promise<CircleActionRes
         }
 
         await deletePendingMembershipRequest(userDid, circle._id ?? "");
-        return { success: true, message: "Your join request has been canceled" };
+        return { success: true, message: "Your follow request has been canceled" };
     } catch (error) {
-        return { success: false, message: "Failed to cancel join request. " + error?.toString() };
+        return { success: false, message: "Failed to cancel follow request. " + error?.toString() };
     }
 };
 

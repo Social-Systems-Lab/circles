@@ -6,7 +6,7 @@ import { userAtom } from "@/lib/data/atoms";
 import { Circle } from "@/models/models";
 import { useAtom } from "jotai";
 import { usePathname, useRouter } from "next/navigation";
-import { joinCircle, leaveCircle, cancelJoinRequest } from "./actions";
+import { followCircle, leaveCircle, cancelFollowRequest } from "./actions";
 import { useToast } from "@/components/ui/use-toast";
 import {
     DropdownMenu,

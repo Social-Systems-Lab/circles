@@ -86,8 +86,8 @@ const InviteButton: React.FC<InviteButtonProps> = ({ circle, isDefaultCircle, re
                     <DialogTitle>{isUser ? "Invite people to the user" : "Invite people to the circle"}</DialogTitle>
                     <DialogDescription>
                         {isUser
-                            ? "Anyone with this link can request to join the user as friend."
-                            : "Anyone with this link can request to join the circle."}
+                            ? "Anyone with this link can request to follow the user."
+                            : "Anyone with this link can request to follow the circle."}
                     </DialogDescription>
                 </DialogHeader>
                 <div className="flex items-center space-x-2">

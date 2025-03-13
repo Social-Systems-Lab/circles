@@ -46,7 +46,7 @@ export const createCircleFormSchema: FormSchema = {
             name: "isPublic",
             label: "Public",
             type: "switch",
-            description: "Indicates if the Circle is Public. A public circle doesn't require approval to join.",
+            description: "Indicates if the Circle is Public. A public circle doesn't require approval to follow.",
         },
         {
             name: "parentCircleId",

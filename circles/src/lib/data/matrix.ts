@@ -447,8 +447,8 @@ export async function notifyNewMember(userDid: string, circle: Circle) {
 
     // Send "new_member" notification to all existing members
     await sendNotifications("new_member", recipients, { circle, user: newMemberUser });
-    // Send "join_accepted" notification to the new member
-    await sendNotifications("join_accepted", [newMemberUser], { circle, user: newMemberUser });
+    // Send "follow_accepted" notification to the new member
+    await sendNotifications("follow_accepted", [newMemberUser], { circle, user: newMemberUser });
 }
 
 export async function sendNotifications(
@@ -497,7 +497,7 @@ export async function sendNotifications(
         const content = {
             msgtype: "m.text", // required for m.room.message
             body, // fallback text
-            notificationType, // e.g. "join_request"
+            notificationType, // e.g. "follow_request"
             ...sanitizedPayload,
         };
 
@@ -558,11 +558,11 @@ function deriveBody(
     },
 ) {
     switch (notificationType) {
-        case "join_request":
-            return `${payload.user?.name} has requested to join circle ${payload?.circle?.name}`;
+        case "follow_request":
+            return `${payload.user?.name} has requested to follow circle ${payload?.circle?.name}`;
         case "new_member":
-            return `${payload.user?.name} has joined circle ${payload?.circle?.name}`;
-        case "join_accepted":
+            return `${payload.user?.name} has followed circle ${payload?.circle?.name}`;
+        case "follow_accepted":
             return `You have been accepted into circle ${payload?.circle?.name}`;
         case "post_comment":
             return `${payload.user?.name} commented on your post`;

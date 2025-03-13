@@ -8,7 +8,7 @@ import Image from "next/image";
 import { FaUsers } from "react-icons/fa6";
 import { useRouter } from "next/navigation";
 import InviteButton from "../modules/home/invite-button";
-import JoinButton from "../modules/home/join-button";
+import FollowButton from "../modules/home/follow-button";
 import { Circle, FileInfo, Media, MemberDisplay, PostItemProps, WithMetric } from "@/models/models";
 import { PostItem } from "../modules/feeds/post-list";
 import Indicators from "../utils/indicators";
@@ -100,7 +100,7 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                     </div>
                     <div className="absolute bottom-[-45px] right-2 flex flex-row gap-1">
                         <InviteButton circle={circle as Circle} isDefaultCircle={false} renderCompact={true} />
-                        <JoinButton circle={circle as Circle} renderCompact={true} />
+                        <FollowButton circle={circle as Circle} renderCompact={true} />
                     </div>
 
                     <div className="absolute top-[-60px]">

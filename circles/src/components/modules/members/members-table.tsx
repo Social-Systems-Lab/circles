@@ -170,7 +170,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                 header: ({ column }) => {
                     return (
                         <Button variant="ghost" onClick={() => column.toggleSorting()}>
-                            Joined At
+                            Followed At
                             <SortIcon sortDir={column.getIsSorted()} />
                         </Button>
                     );
