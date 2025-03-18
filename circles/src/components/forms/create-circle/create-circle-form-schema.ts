@@ -9,6 +9,17 @@ export const createCircleFormSchema: FormSchema = {
     },
     fields: [
         {
+            name: "circleType",
+            label: "Type",
+            type: "select",
+            required: true,
+            options: [
+                { value: "circle", label: "Circle" },
+                { value: "project", label: "Project" }
+            ],
+            description: "Choose the type of content you want to create."
+        },
+        {
             name: "name",
             label: "Name",
             type: "text",
@@ -29,6 +40,13 @@ export const createCircleFormSchema: FormSchema = {
             label: "Description",
             type: "textarea",
             required: false,
+        },
+        {
+            name: "content",
+            label: "Detailed Content",
+            type: "textarea",
+            required: false,
+            description: "For projects, enter detailed information here."
         },
         {
             name: "picture",

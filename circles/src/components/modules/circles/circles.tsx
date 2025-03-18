@@ -11,8 +11,11 @@ export default async function CirclesModule({ circle, page, subpage, isDefaultCi
     // get user handle
     let userDid = await getAuthenticatedUserDid();
 
-    // get all circles
-    let circles = await getCirclesWithMetrics(userDid, circle?._id, searchParams?.sort as SortingOptions);
+    // get appropriate circle type based on page name
+    const circleType = page?.name === "Projects" ? "project" : undefined;
+    
+    // get all circles or projects based on the page
+    let circles = await getCirclesWithMetrics(userDid, circle?._id, searchParams?.sort as SortingOptions, circleType);
 
     return (
         <ContentDisplayWrapper content={circles}>

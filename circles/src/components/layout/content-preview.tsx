@@ -119,6 +119,14 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                 <div className="mb-8 mt-[44px] flex flex-col items-center justify-center overflow-y-auto">
                     <h4>{circle.name}</h4>
                     {circle.description && <div className="pl-4 pr-4">{circle.description}</div>}
+                    
+                    {circle.circleType === "project" && circle.content && (
+                        <div className="mt-4 border-t border-gray-100 pt-4 px-4">
+                            <h5 className="font-medium mb-2">Project Details</h5>
+                            <div className="text-gray-600">{circle.content}</div>
+                        </div>
+                    )}
+                    
                     {memberCount > 0 && (
                         <div className="flex flex-row items-center justify-center pt-4">
                             <FaUsers />
@@ -156,6 +164,7 @@ export const ContentPreview: React.FC = () => {
                 return <CirclePreview circle={circle} circleType={"user"} />;
             case "user":
             case "circle":
+            case "project":
                 return <CirclePreview circle={contentPreview!.content as Circle} circleType={contentPreview.type} />;
             case "post":
                 return (

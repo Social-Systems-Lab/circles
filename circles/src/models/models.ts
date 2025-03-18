@@ -12,7 +12,7 @@ export const handleSchema = z
     .regex(/^[a-zA-Z0-9\-]*$/, { message: "Handle can only contain letters, numbers and hyphens (-)." });
 
 export const accountTypeSchema = z.enum(["user", "organization"]);
-export const circleTypeSchema = z.enum(["user", "circle"]);
+export const circleTypeSchema = z.enum(["user", "circle", "project"]);
 export const emailSchema = z.string().email({ message: "Enter valid email" });
 
 const DEFAULT_MAX_IMAGE_FILE_SIZE = 5000000; // 5MB
@@ -385,6 +385,7 @@ export const circleSchema = z.object({
     picture: fileInfoSchema.optional(),
     cover: fileInfoSchema.optional(),
     description: z.string().optional(),
+    content: z.string().optional(),
     mission: z.string().optional(),
     isPublic: z.boolean().optional(),
     userGroups: z.array(userGroupSchema).default([]).optional(),
@@ -453,6 +454,7 @@ export type ContentPreviewData =
     | { type: "member"; content: MemberDisplay; props?: never }
     | { type: "user"; content: Circle; props?: never }
     | { type: "circle"; content: Circle; props?: never }
+    | { type: "project"; content: Circle; props?: never }
     | { type: "default"; content: Content; props?: Record<string, unknown> };
 
 // server setup form wizard

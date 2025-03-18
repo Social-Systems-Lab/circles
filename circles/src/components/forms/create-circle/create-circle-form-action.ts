@@ -15,6 +15,8 @@ export const createCircleFormAction: FormAction = {
             description: values.description,
             isPublic: values.isPublic,
             parentCircleId: values.parentCircleId,
+            circleType: values.circleType || "circle",
+            content: values.content,
         };
 
         console.log("Test1");

@@ -41,12 +41,13 @@ type CreateCircleButtonProps = {
 export const CreateCircleButton: React.FC<CreateCircleButtonProps> = ({ circle }) => {
     const isCompact = useIsCompact();
     const parentId = circle?._id;
+    const isProjectsPage = window.location.pathname.includes('/projects');
 
     return (
-        <Link href={`/circles/new?parentCircleId=${parentId}`}>
+        <Link href={`/circles/new?parentCircleId=${parentId}${isProjectsPage ? '&circleType=project' : ''}`}>
             <Button variant={isCompact ? "ghost" : "outline"} className={isCompact ? "h-[32px] w-[32px] p-0" : "gap-2"}>
                 <Plus className="h-4 w-4" />
-                {isCompact ? "" : "Create Circle"}
+                {isCompact ? "" : `Create ${isProjectsPage ? "Project" : "Circle"}`}
             </Button>
         </Link>
     );
@@ -109,7 +110,8 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, inUser
 
     const handleCircleClick = (circle: Circle) => {
         let contentPreviewData: ContentPreviewData = {
-            type: circle?.circleType === "user" ? "user" : "circle",
+            type: circle?.circleType === "user" ? "user" : 
+                  circle?.circleType === "project" ? "project" : "circle",
             content: circle,
         };
 
@@ -133,7 +135,7 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, inUser
                     }}
                 >
                     <Input
-                        placeholder={`Search followers...`}
+                        placeholder={`Search ${page?.name === "Projects" ? "projects" : "circles"}...`}
                         value={searchQuery}
                         onChange={(event) => setSearchQuery(event.target.value)}
                         className="flex-1"
@@ -225,6 +227,12 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, inUser
 
                                     {circle.description && (
                                         <p className="line-clamp-2 pl-1 pr-1 pt-2 text-[15px]">{circle.description}</p>
+                                    )}
+                                    
+                                    {circle.circleType === "project" && circle.content && (
+                                        <div className="mt-2 border-t border-gray-100 pt-2">
+                                            <p className="line-clamp-2 pl-2 pr-2 text-[13px] text-gray-600">{circle.content}</p>
+                                        </div>
                                     )}
                                 </div>
                                 <div className="mt-auto flex">

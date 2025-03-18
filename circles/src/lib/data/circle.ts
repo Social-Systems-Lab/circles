@@ -91,7 +91,7 @@ export const getCircles = async (parentCircleId?: string, circleType?: CircleTyp
         ).toArray();
     } else {
         circles = await Circles.find(
-            { parentCircleId: parentCircleId, circleType: "circle" },
+            { parentCircleId: parentCircleId, circleType: circleType ?? { $in: ["circle", "project"] } },
             { projection: SAFE_CIRCLE_PROJECTION },
         ).toArray();
     }
@@ -184,7 +184,7 @@ export const createCircle = async (circle: Circle): Promise<Circle> => {
     circle.accessRules = getDefaultAccessRules();
     circle.pages = defaultPages;
     circle.questionnaire = [];
-    circle.circleType = "circle";
+    circle.circleType = circle.circleType || "circle";
 
     let result = await Circles.insertOne(circle);
     circle._id = result.insertedId.toString();
