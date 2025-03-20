@@ -60,9 +60,10 @@ interface CirclesListProps {
     isDefaultCircle: boolean;
     activeTab?: string;
     inUser?: boolean;
+    isProjectsList?: boolean;
 }
 
-const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, inUser }: CirclesListProps) => {
+const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, inUser, isProjectsList }: CirclesListProps) => {
     const [user] = useAtom(userAtom);
     const isCompact = useIsCompact();
     const isMobile = useIsMobile();
@@ -135,13 +136,19 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, inUser
                     }}
                 >
                     <Input
-                        placeholder={`Search ${page?.name === "Projects" ? "projects" : "circles"}...`}
+                        placeholder={`Search ${isProjectsList ? "projects" : inUser ? "users" : "circles"}...`}
                         value={searchQuery}
                         onChange={(event) => setSearchQuery(event.target.value)}
                         className="flex-1"
                     />
                     {canCreateSubcircle && !inUser && (
-                        <CreateCircleButton circle={circle} isDefaultCircle={isDefaultCircle} />
+                        isProjectsList ? (
+                            <div className="flex h-9 items-center">
+                                {React.createElement(require('../projects/create-project-dialog').CreateProjectDialog, { parentCircle: circle })}
+                            </div>
+                        ) : (
+                            <CreateCircleButton circle={circle} isDefaultCircle={isDefaultCircle} />
+                        )
                     )}
                 </div>
 
@@ -150,10 +157,11 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, inUser
                 {filteredCircles.length === 0 && activeTab === "following" && (
                     <div className="flex h-full flex-col items-center justify-center">
                         <Image src={emptyFeed} alt="No posts yet" width={isMobile ? 230 : 300} />
-                        <h4>No {inUser ? "users" : "circles"}</h4>
+                        <h4>No {isProjectsList ? "projects" : inUser ? "users" : "circles"}</h4>
                         <div className="max-w-[700px] pl-4 pr-4">
-                            You are not following {inUser ? "anyone" : "any circles"}. Try the discover tab to find new{" "}
-                            {inUser ? "users" : "circles"} to follow.
+                            {isProjectsList 
+                                ? "There are no projects yet. Create a new project to get started." 
+                                : `You are not following ${inUser ? "anyone" : "any circles"}. Try the discover tab to find new ${inUser ? "users" : "circles"} to follow.`}
                         </div>
                         <div className="mt-4 flex flex-row gap-2">
                             <Button variant={"outline"} onClick={() => updateQueryParam(router, "tab", "discover")}>

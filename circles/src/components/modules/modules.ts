@@ -3,6 +3,7 @@ import SettingsModule from "@/components/modules/settings/settings";
 import SettingsModuleLayout from "./settings/settings-layout";
 import MembersModule from "./members/members";
 import CirclesModule from "./circles/circles";
+import ProjectsModule from "./projects/projects";
 import FeedsModule from "./feeds/feeds";
 import FeedsModuleLayout from "./feeds/feeds-layout";
 import ChatModule from "./chat/chat";
@@ -16,6 +17,13 @@ export const modules: Record<string, Module> = {
     //     excludeFromMenu: true,
     //     defaultIcon: "AiOutlineHome",
     // },
+    projects: {
+        name: "Projects",
+        handle: "projects",
+        description: "Projects page",
+        component: ProjectsModule,
+        defaultIcon: "BsKanban",
+    },
     settings: {
         name: "Settings",
         handle: "settings",
