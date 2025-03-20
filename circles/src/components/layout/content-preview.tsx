@@ -98,17 +98,21 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                                 if (circleType === "project" && circle.parentCircleId) {
                                     // If a parent circle exists and this is a project, route to project view in parent
                                     import("@/components/modules/circles/actions").then(({ getCircleByIdAction }) => {
-                                        getCircleByIdAction(circle.parentCircleId).then(parentCircle => {
-                                            if (parentCircle?.handle) {
-                                                router.push(`/circles/${parentCircle.handle}/project/${circle._id}`);
-                                            } else {
-                                                // Fallback to direct circle route if we can't get parent
+                                        getCircleByIdAction(circle.parentCircleId!)
+                                            .then((parentCircle) => {
+                                                if (parentCircle?.handle) {
+                                                    router.push(
+                                                        `/circles/${parentCircle.handle}/project/${circle._id}`,
+                                                    );
+                                                } else {
+                                                    // Fallback to direct circle route if we can't get parent
+                                                    router.push(`/circles/${circle.handle}`);
+                                                }
+                                            })
+                                            .catch((error) => {
+                                                console.error("Error fetching parent circle:", error);
                                                 router.push(`/circles/${circle.handle}`);
-                                            }
-                                        }).catch(error => {
-                                            console.error("Error fetching parent circle:", error);
-                                            router.push(`/circles/${circle.handle}`);
-                                        });
+                                            });
                                     });
                                 } else {
                                     // Standard route for non-projects
@@ -142,16 +146,16 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                 <div className="mb-8 mt-[44px] flex flex-col items-center justify-center overflow-y-auto">
                     <h4>{circle.name}</h4>
                     {circle.description && <div className="pl-4 pr-4">{circle.description}</div>}
-                    
+
                     {circle.circleType === "project" && circle.content && (
-                        <div className="mt-4 border-t border-gray-100 pt-4 px-4">
-                            <h5 className="font-medium mb-2">Project Details</h5>
+                        <div className="mt-4 border-t border-gray-100 px-4 pt-4">
+                            <h5 className="mb-2 font-medium">Project Details</h5>
                             <div className="text-gray-600">
                                 <RichText content={circle.content} />
                             </div>
                         </div>
                     )}
-                    
+
                     {memberCount > 0 && (
                         <div className="flex flex-row items-center justify-center pt-4">
                             <FaUsers />

@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Bell, MessageCircle, Users, Circle as CircleIcon } from "lucide-react";
 import { MdOutlineLogout } from "react-icons/md";
+import { RxDashboard } from "react-icons/rx";
 import {
     authInfoAtom,
     contentPreviewAtom,
@@ -29,7 +30,7 @@ import { ChatList } from "../modules/chat/chat-list";
 export const UserToolbox = () => {
     const [user, setUser] = useAtom(userAtom);
     const [userToolboxState, setUserToolboxState] = useAtom(userToolboxDataAtom);
-    const [tab, setTab] = useState<UserToolboxTab | undefined>(undefined);
+    const [tab, setTab] = useState<"chat" | "notifications" | "circles" | "projects" | "contacts" | "account" | undefined>(undefined);
     const [authInfo, setAuthInfo] = useAtom(authInfoAtom);
     const pathname = usePathname();
     const [prevPath, setPrevPath] = useState(pathname);
@@ -66,7 +67,12 @@ export const UserToolbox = () => {
 
     const circles =
         user?.memberships
-            ?.filter((m) => m.circle.circleType !== "user" && m.circle.handle !== "default")
+            ?.filter((m) => m.circle.circleType === "circle" && m.circle.handle !== "default")
+            ?.map((membership) => membership.circle) || [];
+            
+    const projects =
+        user?.memberships
+            ?.filter((m) => m.circle.circleType === "project")
             ?.map((membership) => membership.circle) || [];
     const contacts =
         user?.memberships
@@ -114,7 +120,7 @@ export const UserToolbox = () => {
                     onValueChange={(v) => setTab(v as UserToolboxTab | undefined)}
                     className="flex h-full flex-col"
                 >
-                    <TabsList className="grid h-auto w-full grid-cols-7 rounded-none border-b border-t-0 border-b-slate-200 border-t-slate-200 bg-white p-0 pb-2 pt-0">
+                    <TabsList className="grid h-auto w-full grid-cols-8 rounded-none border-b border-t-0 border-b-slate-200 border-t-slate-200 bg-white p-0 pb-2 pt-0">
                         {/* Existing TabsTriggers */}
                         <TabsTrigger
                             value="chat"
@@ -133,6 +139,12 @@ export const UserToolbox = () => {
                             className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
                         >
                             <CircleIcon className="h-5 w-5" />
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="projects"
+                            className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
+                        >
+                            <RxDashboard className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger
                             value="contacts"
@@ -175,6 +187,33 @@ export const UserToolbox = () => {
                         ) : (
                             <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
                                 No circles followed
+                            </div>
+                        )}
+                    </TabsContent>
+                    <TabsContent value="projects" className="m-0 flex-grow overflow-auto pt-1">
+                        {projects.length > 0 ? (
+                            projects.map((project) => (
+                                <div
+                                    key={project._id}
+                                    className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
+                                    onClick={() => openCircle(project)}
+                                >
+                                    <div className="h-[40px] w-[40px] rounded-md overflow-hidden">
+                                        <img 
+                                            src={project?.cover?.url ?? "/images/default-cover.png"} 
+                                            alt={project.name}
+                                            className="h-full w-full object-cover"
+                                        />
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="text-sm font-medium">{project.name}</p>
+                                        <p className="text-xs text-muted-foreground">{project.description}</p>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
+                                No projects followed
                             </div>
                         )}
                     </TabsContent>

@@ -44,10 +44,10 @@ type CreateCircleButtonProps = {
 export const CreateCircleButton: React.FC<CreateCircleButtonProps> = ({ circle }) => {
     const isCompact = useIsCompact();
     const parentId = circle?._id;
-    const isProjectsPage = window.location.pathname.includes('/projects');
+    const isProjectsPage = window.location.pathname.includes("/projects");
 
     return (
-        <Link href={`/circles/new?parentCircleId=${parentId}${isProjectsPage ? '&circleType=project' : ''}`}>
+        <Link href={`/circles/new?parentCircleId=${parentId}${isProjectsPage ? "&circleType=project" : ""}`}>
             <Button variant={isCompact ? "ghost" : "outline"} className={isCompact ? "h-[32px] w-[32px] p-0" : "gap-2"}>
                 <Plus className="h-4 w-4" />
                 {isCompact ? "" : `Create ${isProjectsPage ? "Project" : "Circle"}`}
@@ -66,7 +66,15 @@ interface CirclesListProps {
     isProjectsList?: boolean;
 }
 
-const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, inUser, isProjectsList }: CirclesListProps) => {
+const CirclesList = ({
+    circle,
+    circles,
+    page,
+    isDefaultCircle,
+    activeTab,
+    inUser,
+    isProjectsList,
+}: CirclesListProps) => {
     const [user] = useAtom(userAtom);
     const isCompact = useIsCompact();
     const isMobile = useIsMobile();
@@ -114,8 +122,7 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, inUser
 
     const handleCircleClick = (circle: Circle) => {
         let contentPreviewData: ContentPreviewData = {
-            type: circle?.circleType === "user" ? "user" : 
-                  circle?.circleType === "project" ? "project" : "circle",
+            type: circle?.circleType === "user" ? "user" : circle?.circleType === "project" ? "project" : "circle",
             content: circle,
         };
 
@@ -144,15 +151,17 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, inUser
                         onChange={(event) => setSearchQuery(event.target.value)}
                         className="flex-1"
                     />
-                    {canCreateSubcircle && !inUser && (
-                        isProjectsList ? (
+                    {canCreateSubcircle &&
+                        !inUser &&
+                        (isProjectsList ? (
                             <div className="flex h-9 items-center">
-                                {React.createElement(require('../projects/create-project-dialog').CreateProjectDialog, { parentCircle: circle })}
+                                {React.createElement(require("../projects/create-project-dialog").CreateProjectDialog, {
+                                    parentCircle: circle,
+                                })}
                             </div>
                         ) : (
                             <CreateCircleButton circle={circle} isDefaultCircle={isDefaultCircle} />
-                        )
-                    )}
+                        ))}
                 </div>
 
                 <ListFilter onFilterChange={handleFilterChange} />
@@ -162,8 +171,8 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, inUser
                         <Image src={emptyFeed} alt="No posts yet" width={isMobile ? 230 : 300} />
                         <h4>No {isProjectsList ? "projects" : inUser ? "users" : "circles"}</h4>
                         <div className="max-w-[700px] pl-4 pr-4">
-                            {isProjectsList 
-                                ? "There are no projects yet. Create a new project to get started." 
+                            {isProjectsList
+                                ? "There are no projects yet. Create a new project to get started."
                                 : `You are not following ${inUser ? "anyone" : "any circles"}. Try the discover tab to find new ${inUser ? "users" : "circles"} to follow.`}
                         </div>
                         <div className="mt-4 flex flex-row gap-2">
@@ -239,7 +248,7 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, inUser
                                     {circle.description && (
                                         <p className="line-clamp-2 pl-1 pr-1 pt-2 text-[15px]">{circle.description}</p>
                                     )}
-                                    
+
                                     {circle.circleType === "project" && circle.content && (
                                         <div className="mt-2 border-t border-gray-100 pt-2">
                                             <div className="line-clamp-2 pl-2 pr-2 text-[13px] text-gray-600">
@@ -255,23 +264,22 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, inUser
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             if (circle.circleType === "project" && circle.parentCircleId) {
-                                                if (props.circle?._id) {
-                                                    // If it's a project and we're in a parent circle context, use the new project route
-                                                    router.push(`/circles/${props.circle.handle}/project/${circle._id}`);
-                                                } else {
-                                                    // If we're not in a parent circle context but the project has a parent, need to fetch parent first
-                                                    import("./actions").then(({ getCircleByIdAction }) => {
-                                                        getCircleByIdAction(circle.parentCircleId).then(parentCircle => {
+                                                // If we're not in a parent circle context but the project has a parent, need to fetch parent first
+                                                import("./actions").then(({ getCircleByIdAction }) => {
+                                                    getCircleByIdAction(circle.parentCircleId!)
+                                                        .then((parentCircle) => {
                                                             if (parentCircle?.handle) {
-                                                                router.push(`/circles/${parentCircle.handle}/project/${circle._id}`);
+                                                                router.push(
+                                                                    `/circles/${parentCircle.handle}/project/${circle._id}`,
+                                                                );
                                                             } else {
                                                                 router.push(`/circles/${circle.handle}`);
                                                             }
-                                                        }).catch(() => {
+                                                        })
+                                                        .catch(() => {
                                                             router.push(`/circles/${circle.handle}`);
                                                         });
-                                                    });
-                                                }
+                                                });
                                             } else {
                                                 // Otherwise use the standard route
                                                 router.push(`/circles/${circle.handle}`);

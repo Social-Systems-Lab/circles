@@ -15,6 +15,7 @@ import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { CgFeed } from "react-icons/cg";
 import { MdRssFeed } from "react-icons/md";
 import { AiOutlineHome } from "react-icons/ai";
+import { RxDashboard } from "react-icons/rx";
 
 function GlobalNavItem({
     item,
@@ -113,6 +114,29 @@ export default function GlobalNavItems() {
                             transition={{ duration: 0.3, delay: 0.2 + 2 * 0.1 }}
                         >
                             Circles
+                        </motion.span>
+                    </motion.div>
+                </Link>
+                
+                <Link href={`/circles?circleType=project&tab=${settings?.circlesTab ?? "following"}`}>
+                    <motion.div
+                        className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
+                            pathname === "/circles" && pathname.includes("circleType=project") ? "text-[#495cff]" : "text-[#696969]"
+                        }`}
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.95 }}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: 2.5 * 0.1 }}
+                    >
+                        <RxDashboard size={"24px"} />
+                        <motion.span
+                            className="mt-[4px] text-[11px]"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: 0.3, delay: 0.2 + 2.5 * 0.1 }}
+                        >
+                            Projects
                         </motion.span>
                     </motion.div>
                 </Link>
