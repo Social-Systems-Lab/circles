@@ -92,7 +92,25 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                             className="m-2 w-full"
                             onClick={(e) => {
                                 e.stopPropagation();
-                                router.push(`/circles/${circle.handle}`);
+                                if (circleType === "project" && circle.parentCircleId) {
+                                    // If a parent circle exists and this is a project, route to project view in parent
+                                    import("@/components/modules/circles/actions").then(({ getCircleByIdAction }) => {
+                                        getCircleByIdAction(circle.parentCircleId).then(parentCircle => {
+                                            if (parentCircle?.handle) {
+                                                router.push(`/circles/${parentCircle.handle}/project/${circle._id}`);
+                                            } else {
+                                                // Fallback to direct circle route if we can't get parent
+                                                router.push(`/circles/${circle.handle}`);
+                                            }
+                                        }).catch(error => {
+                                            console.error("Error fetching parent circle:", error);
+                                            router.push(`/circles/${circle.handle}`);
+                                        });
+                                    });
+                                } else {
+                                    // Standard route for non-projects
+                                    router.push(`/circles/${circle.handle}`);
+                                }
                             }}
                         >
                             Open
@@ -103,17 +121,19 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                         <FollowButton circle={circle as Circle} renderCompact={true} />
                     </div>
 
-                    <div className="absolute top-[-60px]">
-                        <div className="h-[124px] w-[124px]">
-                            <Image
-                                className="rounded-full border-2 border-white bg-white object-cover shadow-lg"
-                                src={circle?.picture?.url ?? "/images/default-picture.png"}
-                                alt="Picture"
-                                fill
-                                onClick={() => handleImageClick("Profile Picture", circle?.picture)}
-                            />
+                    {circleType !== "project" && (
+                        <div className="absolute top-[-60px]">
+                            <div className="h-[124px] w-[124px]">
+                                <Image
+                                    className="rounded-full border-2 border-white bg-white object-cover shadow-lg"
+                                    src={circle?.picture?.url ?? "/images/default-picture.png"}
+                                    alt="Picture"
+                                    fill
+                                    onClick={() => handleImageClick("Profile Picture", circle?.picture)}
+                                />
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
 
                 <div className="mb-8 mt-[44px] flex flex-col items-center justify-center overflow-y-auto">
@@ -123,7 +143,11 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                     {circle.circleType === "project" && circle.content && (
                         <div className="mt-4 border-t border-gray-100 pt-4 px-4">
                             <h5 className="font-medium mb-2">Project Details</h5>
-                            <div className="text-gray-600">{circle.content}</div>
+                            <div className="text-gray-600">
+                                {React.lazy(() => import('@/components/modules/feeds/RichText'))({
+                                    content: circle.content
+                                })}
+                            </div>
                         </div>
                     )}
                     

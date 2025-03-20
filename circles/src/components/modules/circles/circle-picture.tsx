@@ -19,6 +19,11 @@ export const CirclePicture = ({ circle, size, className, openPreview }: CirclePi
     const isMobile = useIsMobile();
     const router = useRouter();
 
+    // Don't render anything for projects - they should only show cover images
+    if (circle?.circleType === "project") {
+        return null;
+    }
+
     var getInitials = () => {
         let name = circle?.name;
         if (!name) return "";

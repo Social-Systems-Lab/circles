@@ -249,7 +249,28 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, inUser
                                         className="m-2 mt-4 w-full"
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            router.push(`/circles/${circle.handle}`);
+                                            if (circle.circleType === "project" && circle.parentCircleId) {
+                                                if (props.circle?._id) {
+                                                    // If it's a project and we're in a parent circle context, use the new project route
+                                                    router.push(`/circles/${props.circle.handle}/project/${circle._id}`);
+                                                } else {
+                                                    // If we're not in a parent circle context but the project has a parent, need to fetch parent first
+                                                    import("./actions").then(({ getCircleByIdAction }) => {
+                                                        getCircleByIdAction(circle.parentCircleId).then(parentCircle => {
+                                                            if (parentCircle?.handle) {
+                                                                router.push(`/circles/${parentCircle.handle}/project/${circle._id}`);
+                                                            } else {
+                                                                router.push(`/circles/${circle.handle}`);
+                                                            }
+                                                        }).catch(() => {
+                                                            router.push(`/circles/${circle.handle}`);
+                                                        });
+                                                    });
+                                                }
+                                            } else {
+                                                // Otherwise use the standard route
+                                                router.push(`/circles/${circle.handle}`);
+                                            }
                                         }}
                                     >
                                         Open

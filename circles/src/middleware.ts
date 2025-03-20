@@ -51,6 +51,13 @@ export async function middleware(request: NextRequest) {
                 // This ensures post viewing uses the same permissions as feed viewing
                 pageHandle = "feeds";
             }
+
+            // Special case for project view routes
+            if (pageHandle === "project" && urlSegments.length >= 4) {
+                // For project routes, use 'projects' as the page handle for permission checking
+                // This ensures project viewing uses the same permissions as project viewing
+                pageHandle = "projects";
+            }
         }
     } else {
         // route: /<page-handle>
