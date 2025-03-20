@@ -60,7 +60,7 @@ function FinalStep({ nextStep }: OnboardingStepProps) {
                         <p className="text-sm text-gray-500">Fellow changemakers</p>
                     </Card>
                     <Card className="bg-white p-4">
-                        <h3 className="mb-0 mt-0  text-lg font-semibold">{platformMetrics.circles}</h3>
+                        <h3 className="mb-0 mt-0 text-lg font-semibold">{platformMetrics.circles}</h3>
                         <p className="text-sm text-gray-500">Circles to follow</p>
                     </Card>
                 </div>

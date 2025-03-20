@@ -125,7 +125,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
                                     animate={{ opacity: 1 }}
                                     className="flex flex-col items-center gap-4 rounded-xl border bg-white p-8 shadow-lg"
                                 >
-                                    <h3 className="text-xl font-semibold">You&apos;ve seen all circles!</h3>
+                                    <div className="text-xl font-semibold">You&apos;ve seen all circles!</div>
                                     <p className="text-center text-gray-600">
                                         Check back later for more recommendations
                                     </p>
@@ -138,8 +138,10 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
                         </div>
                     ) : (
                         <div className="flex flex-col items-center gap-4 rounded-xl border bg-white p-8 shadow-lg">
-                            <h3 className="text-xl font-semibold">No circles to discover</h3>
-                            <p className="text-center text-gray-600">You&apos;ve already explored all available circles</p>
+                            <div className="text-xl font-semibold">No circles to discover</div>
+                            <p className="text-center text-gray-600">
+                                You&apos;ve already explored all available circles
+                            </p>
                         </div>
                     )}
                 </div>

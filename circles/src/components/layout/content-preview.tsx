@@ -14,6 +14,9 @@ import { PostItem } from "../modules/feeds/post-list";
 import Indicators from "../utils/indicators";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { MessageButton } from "../modules/home/message-button";
+import dynamic from "next/dynamic";
+
+const RichText = dynamic(() => import("@/components/modules/feeds/RichText"), { ssr: false });
 
 export const PostPreview = ({
     post,
@@ -144,9 +147,7 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                         <div className="mt-4 border-t border-gray-100 pt-4 px-4">
                             <h5 className="font-medium mb-2">Project Details</h5>
                             <div className="text-gray-600">
-                                {React.lazy(() => import('@/components/modules/feeds/RichText'))({
-                                    content: circle.content
-                                })}
+                                <RichText content={circle.content} />
                             </div>
                         </div>
                     )}

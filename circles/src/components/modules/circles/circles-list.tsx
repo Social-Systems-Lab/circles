@@ -24,6 +24,9 @@ import { ListFilter } from "@/components/utils/list-filter";
 import emptyFeed from "@images/empty-feed.png";
 import { updateQueryParam } from "@/lib/utils/helpers-client";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+
+const RichText = dynamic(() => import("@/components/modules/feeds/RichText"), { ssr: false });
 
 export const twoLineEllipsisStyle = {
     WebkitLineClamp: 2,
@@ -239,7 +242,9 @@ const CirclesList = ({ circle, circles, page, isDefaultCircle, activeTab, inUser
                                     
                                     {circle.circleType === "project" && circle.content && (
                                         <div className="mt-2 border-t border-gray-100 pt-2">
-                                            <p className="line-clamp-2 pl-2 pr-2 text-[13px] text-gray-600">{circle.content}</p>
+                                            <div className="line-clamp-2 pl-2 pr-2 text-[13px] text-gray-600">
+                                                <RichText content={circle.content} />
+                                            </div>
                                         </div>
                                     )}
                                 </div>

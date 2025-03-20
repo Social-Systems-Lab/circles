@@ -20,6 +20,7 @@ export const SAFE_CIRCLE_PROJECTION = {
     picture: 1,
     cover: 1,
     description: 1,
+    content: 1,
     mission: 1,
     isPublic: 1,
     userGroups: 1,
