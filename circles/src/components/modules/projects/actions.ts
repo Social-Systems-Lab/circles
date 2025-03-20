@@ -1,27 +1,8 @@
-// create-circle-form-action.tsx
-import { Circle, FormAction, FormSubmitResponse, Page } from "@/models/models";
-import { createCircle, updateCircle } from "@/lib/data/circle";
-import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
-import { features } from "@/lib/data/constants";
-import { isFile, saveFile } from "@/lib/data/storage";
-import { addMember } from "@/lib/data/member";
-import { updateUser } from "@/lib/data/user";
+"use server";
 
-export const createCircleFormAction: FormAction = {
-    id: "create-circle-form",
-    onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
-        let circle: Circle = {
-            name: values.name,
-            handle: values.handle,
-            description: values.description,
-            isPublic: values.isPublic,
-            parentCircleId: values.parentCircleId,
-            circleType: values.circleType || "circle",
-            content: values.content,
-        };
+import { Circle } from "@/models/models";
 
-        console.log("Test1");
-
+export const createProjectAction = async (circle: Circle): Promise<CircleActionResponse> => {
         // check if user is authorized to edit circle settings
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) {

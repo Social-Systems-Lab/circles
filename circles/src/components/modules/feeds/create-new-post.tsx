@@ -1,3 +1,4 @@
+// create-new-post.tsx
 import { useState, useTransition } from "react";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { useAtom } from "jotai";

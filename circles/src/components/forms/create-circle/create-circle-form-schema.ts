@@ -1,3 +1,4 @@
+// create-circle-form-schema.ts
 import { FormSchema } from "@/models/models";
 
 export const createCircleFormSchema: FormSchema = {
@@ -15,9 +16,9 @@ export const createCircleFormSchema: FormSchema = {
             required: true,
             options: [
                 { value: "circle", label: "Circle" },
-                { value: "project", label: "Project" }
+                { value: "project", label: "Project" },
             ],
-            description: "Choose the type of content you want to create."
+            description: "Choose the type of content you want to create.",
         },
         {
             name: "name",
@@ -46,7 +47,7 @@ export const createCircleFormSchema: FormSchema = {
             label: "Detailed Content",
             type: "textarea",
             required: false,
-            description: "For projects, enter detailed information here."
+            description: "For projects, enter detailed information here.",
         },
         {
             name: "picture",

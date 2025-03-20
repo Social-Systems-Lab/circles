@@ -109,7 +109,11 @@ export const getProximity = (lngLat1?: LngLat, lngLat2?: LngLat): number | undef
 };
 
 export const getPopularity = (item: PostDisplay | Circle | MemberDisplay) => {
-    let isCircle = item?.circleType === "circle" || item?.circleType === "user" || item?.circleType === undefined;
+    let isCircle =
+        item?.circleType === "circle" ||
+        item?.circleType === "user" ||
+        item?.circleType === "project" ||
+        item?.circleType === undefined;
     if (isCircle) {
         return getCirclePopularity(item as Circle);
     } else {

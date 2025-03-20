@@ -362,7 +362,7 @@ export const getVbdSimilarity = async (
     const client = await getQdrantClient();
 
     // Determine whether the item is a Circle or a Post, and select the appropriate collection
-    const isCircle = item?.circleType === "circle" || item?.circleType === "user";
+    const isCircle = item?.circleType === "circle" || item?.circleType === "user" || item?.circleType === "project";
     const collectionName = isCircle ? "circles" : "posts";
     const idName = item._id?.toString();
     const sourceIdName = source._id?.toString();

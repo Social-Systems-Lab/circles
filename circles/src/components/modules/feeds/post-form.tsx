@@ -1,3 +1,4 @@
+// post-form.tsx
 import React, { useState, useCallback, useEffect, useTransition } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageIcon, MapPinIcon, BarChartIcon, Trash2, Loader2, MapPin } from "lucide-react";
