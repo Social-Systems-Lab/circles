@@ -768,3 +768,57 @@ export async function searchCirclesAction(
         return { success: false, message: error instanceof Error ? error.message : "Failed to search circles." };
     }
 }
+
+/**
+ * Get a post by ID
+ */
+export async function getPostAction(
+    postId: string,
+): Promise<Post | null> {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return null;
+
+    try {
+        const post = await getPost(postId);
+        if (!post) return null;
+
+        const feed = await getFeed(post.feedId);
+        if (!feed) return null;
+
+        // Check if user has permission to view the feed
+        const feature = feedFeaturePrefix + feed.handle + "_view";
+        const authorized = await isAuthorized(userDid, feed.circleId, feature);
+        if (!authorized) return null;
+
+        return post;
+    } catch (error) {
+        console.error("Error getting post:", error);
+        return null;
+    }
+}
+
+/**
+ * Get a feed by handle and circle ID
+ */
+export async function getFeedByHandleAction(
+    circleId: string,
+    feedHandle: string,
+): Promise<Feed | null> {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return null;
+
+    try {
+        const feed = await getFeed(feedHandle);
+        if (!feed) return null;
+
+        // Check if user has permission to view the feed
+        const feature = feedFeaturePrefix + feed.handle + "_view";
+        const authorized = await isAuthorized(userDid, circleId, feature);
+        if (!authorized) return null;
+
+        return feed;
+    } catch (error) {
+        console.error("Error getting feed by handle:", error);
+        return null;
+    }
+}

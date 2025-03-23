@@ -5,9 +5,11 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
-import { Circle } from "@/models/models";
+import { Circle, CommentDisplay, Feed } from "@/models/models";
 import Image from "next/image";
 import RichText from "@/components/modules/feeds/RichText";
+import { ProjectCommentsSection } from "@/components/modules/projects/project-comments";
+import { getFeedByHandle, getAllComments, getPost } from "@/lib/data/feed";
 
 type SingleProjectPageProps = {
     params: Promise<{ handle: string; projectId: string }>;
@@ -33,6 +35,26 @@ export default async function SingleProjectPage(props: SingleProjectPageProps) {
     const project = await getCircleById(projectId);
     if (!project || project.circleType !== "project") {
         redirect("/not-found");
+    }
+    
+    // Get the default feed for the circle to use for permissions
+    const feed = await getFeedByHandle(parentCircle._id!, "default");
+    if (!feed) {
+        console.error(`Default feed not found for circle: ${parentCircle._id}`);
+    }
+    
+    // Get the shadow post ID from project metadata
+    const commentPostId = project.metadata?.commentPostId as string;
+    
+    // Get the post and comments (if the post exists)
+    let comments: CommentDisplay[] = [];
+    let post = null;
+    
+    if (commentPostId) {
+        post = await getPost(commentPostId);
+        if (post) {
+            comments = (await getAllComments(commentPostId, userDid)) as CommentDisplay[];
+        }
     }
 
     return (
@@ -73,6 +95,19 @@ export default async function SingleProjectPage(props: SingleProjectPageProps) {
                                 </div>
                             </div>
                         )}
+                        
+                        {/* Embedded Comments Section */}
+                        <div className="border-t border-gray-100 px-6 py-4">
+                            <ProjectCommentsSection 
+                                project={project}
+                                circle={parentCircle}
+                                feed={feed as Feed}
+                                initialComments={comments}
+                                commentPostId={commentPostId}
+                                post={post}
+                                embedded={true}
+                            />
+                        </div>
                     </div>
                 </div>
             </div>

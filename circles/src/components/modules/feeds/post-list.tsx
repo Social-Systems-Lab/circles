@@ -15,7 +15,7 @@ import { UserPicture } from "../members/user-picture";
 import { Button } from "@/components/ui/button";
 import { Edit, Heart, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Trash2 } from "lucide-react";
 import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel";
-import {
+import React, {
     Dispatch,
     KeyboardEvent,
     memo,
@@ -221,6 +221,8 @@ export const PostItem = ({
     initialComments,
     initialShowAllComments,
     isAggregateFeed,
+    hideContent,
+    embedded,
 }: PostItemProps) => {
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
     const formattedDate = getPublishTime(post?.createdAt);
@@ -525,67 +527,98 @@ export const PostItem = ({
 
     return (
         <div
-            className={`flex flex-col gap-4 ${isCompact || inPreview ? "" : "rounded-[15px] border-0 shadow-lg"} bg-white`}
+            className={`flex flex-col gap-4 ${
+                isCompact || inPreview || embedded ? "" : "rounded-[15px] border-0 shadow-lg"
+            } ${embedded ? "" : "bg-white"}`}
         >
             {/* Header with user information */}
-            <div
-                className="flex cursor-pointer items-center justify-between pl-4 pr-4 pt-4"
-                onClick={(e) => {
-                    e.stopPropagation();
-                    handlePostClick();
-                }}
-            >
-                <div className="flex items-center gap-4">
-                    <UserPicture
-                        name={post.author?.name}
-                        picture={post.author?.picture?.url}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            handleAuthorClick(post.author);
-                        }}
-                    />
-                    <div className="flex flex-col">
-                        <div
-                            className="cursor-pointer font-semibold"
+            {!hideContent && (
+                <div
+                    className="flex cursor-pointer items-center justify-between pl-4 pr-4 pt-4"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        handlePostClick();
+                    }}
+                >
+                    <div className="flex items-center gap-4">
+                        <UserPicture
+                            name={post.author?.name}
+                            picture={post.author?.picture?.url}
                             onClick={(e) => {
                                 e.stopPropagation();
                                 handleAuthorClick(post.author);
                             }}
-                        >
-                            {post.author?.name}
-                        </div>
-                        <div className="cursor-pointer text-sm text-gray-500">
-                            {formattedDate}
+                        />
+                        <div className="flex flex-col">
+                            <div
+                                className="cursor-pointer font-semibold"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAuthorClick(post.author);
+                                }}
+                            >
+                                {post.author?.name}
+                            </div>
+                            <div className="cursor-pointer text-sm text-gray-500">
+                                {formattedDate}
 
-                            {isAggregateFeed && post.circle && post.feed && (
-                                <span>
-                                    &nbsp;• {post.circle.name} • {post.feed.name}
-                                </span>
-                            )}
+                                {isAggregateFeed && post.circle && post.feed && (
+                                    <span>
+                                        &nbsp;• {post.circle.name} • {post.feed.name}
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <div className="flex items-center space-x-2">
-                    {(isAuthor || canModerate) && (
-                        <DropdownMenu modal={false} open={openDropdown} onOpenChange={setOpenDropdown}>
-                            <DropdownMenuTrigger asChild onClick={(event) => event.stopPropagation()}>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className={
-                                        inPreview && !isMobile
-                                            ? "absolute right-[55px] top-[8px] rounded-full"
-                                            : "rounded-full"
-                                    }
-                                >
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                {isAuthor && (
+                    <div className="flex items-center space-x-2">
+                        {(isAuthor || canModerate) && (
+                            <DropdownMenu modal={false} open={openDropdown} onOpenChange={setOpenDropdown}>
+                                <DropdownMenuTrigger asChild onClick={(event) => event.stopPropagation()}>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className={
+                                            inPreview && !isMobile
+                                                ? "absolute right-[55px] top-[8px] rounded-full"
+                                                : "rounded-full"
+                                        }
+                                    >
+                                        <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    {isAuthor && (
+                                        <Dialog onOpenChange={(open) => setOpenDropdown(open)}>
+                                            <DialogTrigger asChild>
+                                                <DropdownMenuItem
+                                                    onSelect={(e) => {
+                                                        e.stopPropagation();
+                                                        e.preventDefault();
+                                                    }}
+                                                >
+                                                    <Edit className="mr-2 h-4 w-4" />
+                                                    <div>Edit</div>
+                                                </DropdownMenuItem>
+                                            </DialogTrigger>
+                                            <DialogContent className="overflow-hidden rounded-[15px] p-0 sm:max-w-[425px] sm:rounded-[15px]">
+                                                <div className="hidden">
+                                                    <DialogTitle>Edit post</DialogTitle>
+                                                </div>
+
+                                                <PostForm
+                                                    circle={circle}
+                                                    feed={feed}
+                                                    user={user}
+                                                    initialPost={post}
+                                                    onSubmit={handleEditSubmit}
+                                                    onCancel={() => setOpenDropdown(false)}
+                                                />
+                                            </DialogContent>
+                                        </Dialog>
+                                    )}
                                     <Dialog onOpenChange={(open) => setOpenDropdown(open)}>
                                         <DialogTrigger asChild>
                                             <DropdownMenuItem
@@ -594,77 +627,51 @@ export const PostItem = ({
                                                     e.preventDefault();
                                                 }}
                                             >
-                                                <Edit className="mr-2 h-4 w-4" />
-                                                <div>Edit</div>
+                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                <div>Delete</div>
                                             </DropdownMenuItem>
                                         </DialogTrigger>
-                                        <DialogContent className="overflow-hidden rounded-[15px] p-0 sm:max-w-[425px] sm:rounded-[15px]">
-                                            <div className="hidden">
-                                                <DialogTitle>Edit post</DialogTitle>
-                                            </div>
-
-                                            <PostForm
-                                                circle={circle}
-                                                feed={feed}
-                                                user={user}
-                                                initialPost={post}
-                                                onSubmit={handleEditSubmit}
-                                                onCancel={() => setOpenDropdown(false)}
-                                            />
+                                        <DialogContent>
+                                            <DialogHeader>
+                                                <DialogTitle>Delete Post</DialogTitle>
+                                                <DialogDescription>
+                                                    Are you sure you want to delete this post? This action cannot be
+                                                    undone.
+                                                </DialogDescription>
+                                            </DialogHeader>
+                                            <DialogFooter>
+                                                <DialogClose asChild>
+                                                    <Button variant="outline">Cancel</Button>
+                                                </DialogClose>
+                                                <Button
+                                                    variant="destructive"
+                                                    onClick={handleDeleteConfirm}
+                                                    disabled={isPending}
+                                                >
+                                                    {isPending ? (
+                                                        <>
+                                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                            Deleting...
+                                                        </>
+                                                    ) : (
+                                                        <>Delete</>
+                                                    )}
+                                                </Button>
+                                            </DialogFooter>
                                         </DialogContent>
                                     </Dialog>
-                                )}
-                                <Dialog onOpenChange={(open) => setOpenDropdown(open)}>
-                                    <DialogTrigger asChild>
-                                        <DropdownMenuItem
-                                            onSelect={(e) => {
-                                                e.stopPropagation();
-                                                e.preventDefault();
-                                            }}
-                                        >
-                                            <Trash2 className="mr-2 h-4 w-4" />
-                                            <div>Delete</div>
-                                        </DropdownMenuItem>
-                                    </DialogTrigger>
-                                    <DialogContent>
-                                        <DialogHeader>
-                                            <DialogTitle>Delete Post</DialogTitle>
-                                            <DialogDescription>
-                                                Are you sure you want to delete this post? This action cannot be undone.
-                                            </DialogDescription>
-                                        </DialogHeader>
-                                        <DialogFooter>
-                                            <DialogClose asChild>
-                                                <Button variant="outline">Cancel</Button>
-                                            </DialogClose>
-                                            <Button
-                                                variant="destructive"
-                                                onClick={handleDeleteConfirm}
-                                                disabled={isPending}
-                                            >
-                                                {isPending ? (
-                                                    <>
-                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                        Deleting...
-                                                    </>
-                                                ) : (
-                                                    <>Delete</>
-                                                )}
-                                            </Button>
-                                        </DialogFooter>
-                                    </DialogContent>
-                                </Dialog>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    )}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        )}
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Post content */}
-            <MemoizedPostContent content={post.content} mentions={post.mentionsDisplay} />
+            {!hideContent && <MemoizedPostContent content={post.content} mentions={post.mentionsDisplay} />}
 
             {/* Media carousel (if exists) */}
-            {post.media && post.media.length > 0 && (
+            {!hideContent && post.media && post.media.length > 0 && (
                 <>
                     <div className="relative h-64 w-full rounded-lg pl-4 pr-4">
                         <Carousel setApi={setCarouselApi}>
@@ -766,7 +773,7 @@ export const PostItem = ({
             </div>
 
             {/* Comments Section */}
-            <div className="flex flex-col gap-2 pb-4 pl-4 pr-4">
+            <div className={`flex flex-col gap-2 ${embedded ? "pb-2" : "pb-4"} pl-4 pr-4`}>
                 {isFetchingComments ? (
                     <div className="flex items-center justify-center">
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -849,7 +856,6 @@ export const PostItem = ({
                         )}
                     </div>
                 )}
-                {/* <pre>{JSON.stringify(comments, null, 2)}</pre> */}
             </div>
         </div>
     );

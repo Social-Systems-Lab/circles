@@ -409,6 +409,7 @@ export const circleSchema = z.object({
     matrixNotificationsRoomId: z.string().optional(),
     isAdmin: z.boolean().optional(),
     ignoredCircles: z.array(z.string()).optional(),
+    metadata: z.record(z.string(), z.any()).optional(), // For storing additional data like commentPostId
 });
 
 export type Circle = z.infer<typeof circleSchema>;
@@ -447,6 +448,8 @@ export type PostItemProps = {
     initialComments?: CommentDisplay[];
     initialShowAllComments?: boolean;
     isAggregateFeed?: boolean;
+    hideContent?: boolean;
+    embedded?: boolean;
 };
 
 export type ContentPreviewData =
