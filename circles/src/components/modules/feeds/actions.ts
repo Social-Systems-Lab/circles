@@ -471,8 +471,8 @@ export async function createCommentAction(
             // 1. If it's a direct comment on a post, notify the post author
             if (!parentCommentId) {
                 // Use Promise.resolve to avoid blocking, but still within current process
-                await notifyPostComment(post, newComment, user);
                 console.log("🐞 [ACTION] Post comment notification sent to author:", post.createdBy);
+                await notifyPostComment(post, newComment, user);
             }
 
             // 2. If it's a reply to another comment, notify the parent comment author
@@ -772,9 +772,7 @@ export async function searchCirclesAction(
 /**
  * Get a post by ID
  */
-export async function getPostAction(
-    postId: string,
-): Promise<Post | null> {
+export async function getPostAction(postId: string): Promise<Post | null> {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) return null;
 
@@ -800,10 +798,7 @@ export async function getPostAction(
 /**
  * Get a feed by handle and circle ID
  */
-export async function getFeedByHandleAction(
-    circleId: string,
-    feedHandle: string,
-): Promise<Feed | null> {
+export async function getFeedByHandleAction(circleId: string, feedHandle: string): Promise<Feed | null> {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) return null;
 

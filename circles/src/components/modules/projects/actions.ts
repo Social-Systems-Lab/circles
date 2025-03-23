@@ -69,7 +69,10 @@ export const createProjectAction = async (formData: FormData): Promise<CircleAct
                 // Get the default feed of the parent circle
                 const parentCircle = await getCircleById(parentCircleId);
                 if (parentCircle) {
+                    console.log("Creating shadow post for new project. Parent circle:", parentCircle.name);
+                    // Pass "default" as the feed handle to get the default feed
                     const feed = await getFeedByHandle(parentCircleId, "default");
+                    console.log("Feed found:", feed ? "yes" : "no", feed?._id);
                     if (feed) {
                         // Create a post to store comments
                         const post: Post = {
@@ -80,15 +83,18 @@ export const createProjectAction = async (formData: FormData): Promise<CircleAct
                             reactions: {},
                             comments: 0,
                             media: [],
+                            postType: "project", // Mark as project shadow post
                         };
 
                         const newPost = await createPost(post);
+                        console.log("Created shadow post:", newPost._id);
 
                         // Store the post ID in the project metadata
                         newCircle.metadata = {
                             ...newCircle.metadata,
                             commentPostId: newPost._id,
                         };
+                        console.log("Updated circle metadata:", newCircle.metadata);
 
                         needUpdate = true;
                     }

@@ -10,7 +10,7 @@ import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { Circle, NotificationType, Post, Comment } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { sendReadReceipt } from "@/lib/data/client-matrix";
-import { MdOutlineArticle } from "react-icons/md";
+import { MdOutlineArticle, MdWorkOutline } from "react-icons/md";
 import { AiFillHeart } from "react-icons/ai";
 
 type Notification = {
@@ -27,6 +27,8 @@ type Notification = {
     postId?: string;
     commentId?: string;
     reaction?: string;
+    project?: Circle;
+    projectId?: string;
     // For grouping purposes
     key?: string;
 };
@@ -41,6 +43,8 @@ type GroupedNotification = {
     commentId?: string;
     post?: Post;
     comment?: Comment;
+    project?: Circle;
+    projectId?: string;
 };
 
 export const Notifications = () => {
@@ -85,6 +89,15 @@ export const Notifications = () => {
                     case "comment_mention":
                         groupKey = `comment_mention_${msg.content?.commentId}`;
                         break;
+                    case "project_comment":
+                        groupKey = `project_comment_${msg.content?.projectId}`;
+                        break;
+                    case "project_comment_reply":
+                        groupKey = `project_comment_reply_${msg.content?.commentId}`;
+                        break;
+                    case "project_mention":
+                        groupKey = `project_mention_${msg.content?.projectId}`;
+                        break;
                     default:
                         // For non-groupable notifications, use unique ID
                         groupKey = msg.id;
@@ -104,6 +117,8 @@ export const Notifications = () => {
                     postId: msg.content?.postId,
                     commentId: msg.content?.commentId,
                     reaction: msg.content?.reaction,
+                    project: msg.content?.project,
+                    projectId: msg.content?.projectId,
                     key: groupKey,
                 };
                 return notification;
@@ -151,6 +166,8 @@ export const Notifications = () => {
                     commentId: notification.commentId,
                     post: notification.post,
                     comment: notification.comment,
+                    project: notification.project,
+                    projectId: notification.projectId,
                 });
             }
         }
@@ -239,6 +256,20 @@ export const Notifications = () => {
                     router.push(`/circles/${circleHandle}/post/${notification.postId}`);
                 }
                 break;
+                
+            // Project-related notifications
+            case "project_comment":
+            case "project_comment_reply":
+            case "project_mention":
+                if (notification.projectId) {
+                    // Navigate to the dedicated project page
+                    router.push(`/circles/${circleHandle}/project/${notification.projectId}`);
+                } else if (notification.postId) {
+                    // Fallback to post if projectId is not available
+                    console.log("Project notification missing projectId, falling back to postId");
+                    router.push(`/circles/${circleHandle}/post/${notification.postId}`);
+                }
+                break;
 
             default:
                 console.log("Unknown notification type:", notification.notificationType);
@@ -290,6 +321,15 @@ export const Notifications = () => {
 
             case "comment_mention":
                 return `${userList} mentioned you in a comment`;
+                
+            case "project_comment":
+                return `${userList} commented on your project "${groupedNotification.latestNotification.project?.name || ''}"`;
+
+            case "project_comment_reply":
+                return `${userList} replied to your comment on project "${groupedNotification.latestNotification.project?.name || ''}"`;
+
+            case "project_mention":
+                return `${userList} mentioned you in a comment on project "${groupedNotification.latestNotification.project?.name || ''}"`;
 
             default:
                 return groupedNotification.latestNotification.message;
@@ -322,6 +362,23 @@ export const Notifications = () => {
                                     {/* Post icon in bottom-right position in a small circle */}
                                     <div className="absolute bottom-0 right-0 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-gray-100">
                                         <MdOutlineArticle size="14px" />
+                                    </div>
+                                </>
+                            ) : ["project_comment", "project_comment_reply", "project_mention"].includes(
+                                groupedNotification.latestNotification.notificationType,
+                            ) ? (
+                                <>
+                                    {/* Show user picture in the center */}
+                                    {groupedNotification.latestNotification.user && (
+                                        <CirclePicture
+                                            circle={groupedNotification.latestNotification.user}
+                                            size="34px"
+                                        />
+                                    )}
+
+                                    {/* Project icon in bottom-right position in a small circle */}
+                                    <div className="absolute bottom-0 right-0 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-gray-100">
+                                        <MdWorkOutline size="14px" />
                                     </div>
                                 </>
                             ) : ["post_like", "comment_like"].includes(

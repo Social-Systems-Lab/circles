@@ -464,6 +464,8 @@ export async function sendNotifications(
         reaction?: string;
         postId?: string;
         commentId?: string;
+        project?: Circle;
+        projectId?: string;
     },
 ): Promise<void> {
     console.log(
@@ -492,6 +494,8 @@ export async function sendNotifications(
             reaction: payload.reaction,
             postId: payload.postId?.toString(),
             commentId: payload.commentId?.toString(),
+            project: payload.project ? sanitizeCircle(payload.project) : undefined,
+            projectId: payload.projectId?.toString(),
         };
 
         // Build some text fallback and extra custom fields
@@ -557,6 +561,7 @@ function deriveBody(
         post?: Post;
         comment?: Comment;
         reaction?: string;
+        project?: Circle;
     },
 ) {
     switch (notificationType) {
@@ -578,6 +583,12 @@ function deriveBody(
             return `${payload.user?.name} mentioned you in a post`;
         case "comment_mention":
             return `${payload.user?.name} mentioned you in a comment`;
+        case "project_comment":
+            return `${payload.user?.name} commented on your project "${payload.project?.name}"`;
+        case "project_comment_reply":
+            return `${payload.user?.name} replied to your comment on project "${payload.project?.name}"`;
+        case "project_mention":
+            return `${payload.user?.name} mentioned you in a comment on project "${payload.project?.name}"`;
         default:
             return "New notification";
     }

@@ -209,6 +209,7 @@ export const postSchema = z.object({
     highlightedCommentId: z.string().optional(),
     comments: z.number().default(0),
     mentions: z.array(mentionSchema).optional(),
+    postType: z.enum(["post", "project"]).optional(), // To identify shadow posts for projects
 });
 
 export type Post = z.infer<typeof postSchema>;
@@ -450,6 +451,7 @@ export type PostItemProps = {
     isAggregateFeed?: boolean;
     hideContent?: boolean;
     embedded?: boolean;
+    disableComments?: boolean;
 };
 
 export type ContentPreviewData =
@@ -756,4 +758,7 @@ export type NotificationType =
     | "post_like" // Someone liked your post
     | "comment_like" // Someone liked your comment
     | "post_mention" // Someone mentioned you in a post
-    | "comment_mention"; // Someone mentioned you in a comment
+    | "comment_mention" // Someone mentioned you in a comment
+    | "project_comment" // Someone commented on your project
+    | "project_comment_reply" // Someone replied to your comment on a project
+    | "project_mention"; // Someone mentioned you in a project comment

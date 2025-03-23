@@ -216,8 +216,19 @@ export const getCircleByHandle = async (handle: string): Promise<Circle> => {
     return circle;
 };
 
-export const getCircleById = async (id: string): Promise<Circle> => {
-    let circle = (await Circles.findOne({ _id: new ObjectId(id) }, { projection: SAFE_CIRCLE_PROJECTION })) as Circle;
+export const getCircleById = async (id: string | null, criteria?: any): Promise<Circle> => {
+    let query = id ? { _id: new ObjectId(id) } : criteria;
+    console.log("🔍 [DB] getCircleById query:", JSON.stringify(query));
+    
+    let circle = (await Circles.findOne(query, { projection: SAFE_CIRCLE_PROJECTION })) as Circle;
+    
+    console.log("🔍 [DB] getCircleById result:", {
+        found: circle ? "Yes" : "No",
+        id: circle?._id?.toString(),
+        type: circle?.circleType,
+        name: circle?.name
+    });
+    
     if (circle?._id) {
         circle._id = circle._id.toString();
     }
@@ -267,4 +278,32 @@ export const getCirclesBySearchQuery = async (query: string, limit: number = 10)
         }
     });
     return circles as Circle[];
+};
+
+/**
+ * Find a project by its shadow post ID (used for project comment notifications)
+ */
+export const findProjectByShadowPostId = async (postId: string): Promise<Circle | null> => {
+    console.log("🔍 [DB] findProjectByShadowPostId query:", { postId });
+    
+    // Direct query for the project
+    let query = { 
+        "metadata.commentPostId": postId,
+        "circleType": "project"
+    };
+    
+    let project = await Circles.findOne(query, { projection: SAFE_CIRCLE_PROJECTION });
+    
+    if (project?._id) {
+        project._id = project._id.toString();
+        console.log("🔍 [DB] Found project for shadow post:", {
+            postId,
+            projectId: project._id,
+            projectName: project.name
+        });
+    } else {
+        console.log("🔍 [DB] No project found for shadow post:", { postId });
+    }
+    
+    return project || null;
 };

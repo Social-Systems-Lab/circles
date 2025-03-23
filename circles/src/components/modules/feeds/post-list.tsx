@@ -223,6 +223,7 @@ export const PostItem = ({
     isAggregateFeed,
     hideContent,
     embedded,
+    disableComments,
 }: PostItemProps) => {
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
     const formattedDate = getPublishTime(post?.createdAt);
@@ -828,7 +829,7 @@ export const PostItem = ({
                       )}
 
                 {/* Comment input box */}
-                {user && canComment && (
+                {user && canComment && !disableComments && (
                     <div className="mt-2 flex items-start gap-2">
                         <MentionsInput
                             value={newCommentContent}

@@ -40,6 +40,7 @@ export const FollowButton = ({ circle, renderCompact }: CircleMembershipButtonPr
     const [isQuestionnaireOpen, setIsQuestionnaireOpen] = useState(false);
     const isCompact = useIsCompact();
     const isUserCircle = circle.circleType === "user";
+    const isProjectCircle = circle.circleType === "project";
     const compact = isCompact || renderCompact;
 
     const membershipStatus = useMemo(() => {
@@ -192,14 +193,24 @@ export const FollowButton = ({ circle, renderCompact }: CircleMembershipButtonPr
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>
                             <DropdownMenuItem onClick={handleLeaveCircleClick}>
-                                {isUserCircle ? "Unfollow User" : "Unfollow Circle"}
+                                {isUserCircle 
+                                  ? "Unfollow User" 
+                                  : isProjectCircle 
+                                    ? "Unfollow Project" 
+                                    : "Unfollow Circle"}
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
                     <Dialog open={isLeaveDialogOpen} onOpenChange={setIsLeaveDialogOpen}>
                         <DialogContent>
                             <DialogHeader>
-                                <DialogTitle>{isUserCircle ? "Unfollow User" : "Unfollow Circle"}</DialogTitle>
+                                <DialogTitle>
+                                    {isUserCircle 
+                                     ? "Unfollow User" 
+                                     : isProjectCircle 
+                                       ? "Unfollow Project" 
+                                       : "Unfollow Circle"}
+                                </DialogTitle>
                                 <DialogDescription>
                                     {isUserCircle && (
                                         <>
@@ -207,9 +218,15 @@ export const FollowButton = ({ circle, renderCompact }: CircleMembershipButtonPr
                                             undone.
                                         </>
                                     )}
-                                    {!isUserCircle && (
+                                    {isProjectCircle && (
                                         <>
-                                            `Are you sure you want to unfollow the circle {circle.name}? This action
+                                            Are you sure you want to unfollow the project {circle.name}? This action
+                                            cannot be undone.
+                                        </>
+                                    )}
+                                    {!isUserCircle && !isProjectCircle && (
+                                        <>
+                                            Are you sure you want to unfollow the circle {circle.name}? This action
                                             cannot be undone.
                                         </>
                                     )}
@@ -220,7 +237,11 @@ export const FollowButton = ({ circle, renderCompact }: CircleMembershipButtonPr
                                     Cancel
                                 </Button>
                                 <Button variant="destructive" onClick={handleConfirmLeave}>
-                                    {isUserCircle ? "Unfollow User" : "Unfollow Circle"}
+                                    {isUserCircle 
+                                     ? "Unfollow User" 
+                                     : isProjectCircle 
+                                       ? "Unfollow Project" 
+                                       : "Unfollow Circle"}
                                 </Button>
                             </DialogFooter>
                         </DialogContent>

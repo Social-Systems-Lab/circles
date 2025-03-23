@@ -1,15 +1,62 @@
 // /src/app/circles/[handle]/project/[projectId]/page.tsx
-import { getCircleByHandle, getCircleById } from "@/lib/data/circle";
+import { getCircleByHandle, getCircleById, updateCircle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
-import { Circle, CommentDisplay, Feed } from "@/models/models";
+import { Circle, CommentDisplay, Feed, Post } from "@/models/models";
 import Image from "next/image";
 import RichText from "@/components/modules/feeds/RichText";
 import { ProjectCommentsSection } from "@/components/modules/projects/project-comments";
-import { getFeedByHandle, getAllComments, getPost } from "@/lib/data/feed";
+import { FollowButton } from "@/components/modules/home/follow-button";
+import { getFeedByHandle, getAllComments, getPost, createPost } from "@/lib/data/feed";
+
+// Helper function to create a shadow post for a project if it doesn't exist
+async function ensureShadowPost(project: Circle, feed: Feed, userDid: string): Promise<{ commentPostId: string, post: Post | null }> {
+    // Check if shadow post already exists
+    if (project.metadata?.commentPostId) {
+        const post = await getPost(project.metadata.commentPostId);
+        if (post) {
+            return { commentPostId: project.metadata.commentPostId, post };
+        }
+    }
+    
+    // Create a new shadow post
+    console.log("Creating shadow post for project:", project.name);
+    const post: Post = {
+        feedId: feed._id!,
+        createdBy: userDid,
+        createdAt: new Date(),
+        content: "", // Empty content for shadow post
+        reactions: {},
+        comments: 0,
+        media: [],
+        postType: "project" // Mark as project shadow post
+    };
+    
+    try {
+        const newPost = await createPost(post);
+        console.log("Created shadow post:", newPost._id);
+        
+        // Update project metadata
+        const updatedProject: Partial<Circle> = {
+            _id: project._id,
+            metadata: {
+                ...project.metadata,
+                commentPostId: newPost._id
+            }
+        };
+        
+        await updateCircle(updatedProject);
+        console.log("Updated project metadata with comment post ID");
+        
+        return { commentPostId: newPost._id, post: newPost };
+    } catch (error) {
+        console.error("Failed to create shadow post:", error);
+        return { commentPostId: "", post: null };
+    }
+}
 
 type SingleProjectPageProps = {
     params: Promise<{ handle: string; projectId: string }>;
@@ -39,22 +86,22 @@ export default async function SingleProjectPage(props: SingleProjectPageProps) {
     
     // Get the default feed for the circle to use for permissions
     const feed = await getFeedByHandle(parentCircle._id!, "default");
+    
+    // Ensure we have a feed for permissions
     if (!feed) {
         console.error(`Default feed not found for circle: ${parentCircle._id}`);
+        redirect("/not-found");
     }
     
-    // Get the shadow post ID from project metadata
-    const commentPostId = project.metadata?.commentPostId as string;
+    // Ensure we have a shadow post for comments
+    const { commentPostId, post } = await ensureShadowPost(project, feed, userDid);
+    console.log("Shadow post status:", commentPostId ? "exists" : "missing");
     
-    // Get the post and comments (if the post exists)
+    // Get comments if we have a post
     let comments: CommentDisplay[] = [];
-    let post = null;
-    
-    if (commentPostId) {
-        post = await getPost(commentPostId);
-        if (post) {
-            comments = (await getAllComments(commentPostId, userDid)) as CommentDisplay[];
-        }
+    if (commentPostId && post) {
+        comments = (await getAllComments(commentPostId, userDid)) as CommentDisplay[];
+        console.log("Loaded comments count:", comments.length);
     }
 
     return (
@@ -70,7 +117,15 @@ export default async function SingleProjectPage(props: SingleProjectPageProps) {
 
                     <div className="w-full overflow-hidden rounded-lg bg-white shadow">
                         <div className="p-6 pb-3">
-                            <h1 className="text-2xl font-bold">{project.name}</h1>
+                            <div className="flex items-center justify-between">
+                                <h1 className="text-2xl font-bold">{project.name}</h1>
+                                {/* @ts-expect-error Server Component */}
+                                <div className="flex-shrink-0">
+                                    <div className="ml-4">
+                                        <FollowButton circle={project} />
+                                    </div>
+                                </div>
+                            </div>
                             {project.description && <p className="mt-2 text-gray-700">{project.description}</p>}
                         </div>
 

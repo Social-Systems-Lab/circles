@@ -244,7 +244,16 @@ export async function getPostsFromMultipleFeeds(
     sort?: SortingOptions,
 ): Promise<PostDisplay[]> {
     const posts = (await Posts.aggregate([
-        { $match: { feedId: { $in: feedIds } } },
+        {
+            $match: {
+                feedId: { $in: feedIds },
+                // Filter out project shadow posts from regular feeds
+                $or: [
+                    { postType: { $ne: "project" } },
+                    { postType: { $exists: false } }
+                ]
+            },
+        },
 
         // Convert `feedId` to ObjectId for lookup
         {
@@ -607,7 +616,16 @@ export const getPosts = async (
     const safeOffset = Math.max(0, offset);
 
     const posts = (await Posts.aggregate([
-        { $match: { feedId: feedId } },
+        {
+            $match: {
+                feedId: feedId,
+                // Filter out project shadow posts from regular feeds
+                $or: [
+                    { postType: { $ne: "project" } },
+                    { postType: { $exists: false } }
+                ]
+            },
+        },
 
         // Lookup for author details
         {
@@ -1182,4 +1200,23 @@ export const updateHighlightedComment = async (postId: string): Promise<void> =>
 
     const highlightedCommentId = mostLikedComment.length > 0 ? mostLikedComment[0]._id?.toString() : undefined;
     await Posts.updateOne({ _id: new ObjectId(postId) }, { $set: { highlightedCommentId } });
+};
+
+/**
+ * Check if a post ID belongs to a project shadow post
+ * @param postId The post ID to check
+ * @returns Promise<boolean> True if it's a project shadow post, false otherwise
+ */
+export const isShadowPost = async (postId: string): Promise<boolean> => {
+    try {
+        const post = await Posts.findOne(
+            { _id: new ObjectId(postId) },
+            { projection: { postType: 1 } }
+        );
+        
+        return post?.postType === "project";
+    } catch (error) {
+        console.error(`Error checking if post ${postId} is a shadow post:`, error);
+        return false;
+    }
 };

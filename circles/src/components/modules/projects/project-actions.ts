@@ -67,7 +67,8 @@ export async function createShadowPostForProjectAction(projectId: string, feedId
             content: "", // Empty content since we're displaying the project content separately
             reactions: {},
             comments: 0,
-            media: []
+            media: [],
+            postType: "project" // Mark as project shadow post
         };
         
         const newPost = await createPost(post);

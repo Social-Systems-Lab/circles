@@ -1,17 +1,19 @@
 "use client";
 
 import { Circle, CommentDisplay, Feed, Post, PostDisplay } from "@/models/models";
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useMemo } from "react";
 import { createCommentAction, getAllCommentsAction } from "../feeds/actions";
 import { PostItem } from "../feeds/post-list";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { isAuthorized } from "@/lib/auth/client-auth";
 import { feedFeaturePrefix } from "@/lib/data/constants";
-import { Loader2, MessageCircle } from "lucide-react";
+import { Loader2, MessageCircle, AlertCircle } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { createShadowPostForProjectAction } from "./project-actions";
+import { FollowButton } from "../home/follow-button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 type ProjectCommentsSectionProps = {
     project: Circle;
@@ -39,6 +41,12 @@ export const ProjectCommentsSection = ({
     const [localComments, setLocalComments] = useState(initialComments);
     const [user] = useAtom(userAtom);
     const { toast } = useToast();
+    
+    // Check if user is following the project
+    const isFollowing = useMemo(() => {
+        if (!user || !project._id) return false;
+        return user.memberships?.some(m => m.circleId === project._id);
+    }, [user, project._id]);
     
     const createShadowPost = async () => {
         if (!project._id || !feed) return;
@@ -76,29 +84,13 @@ export const ProjectCommentsSection = ({
         }
     };
     
-    // If no shadow post exists yet, show message or minimal interface for embedded mode
+    // If no shadow post exists yet, show a simple message
     if (!localCommentPostId || !localPost) {
         if (embedded) {
             return (
                 <div className="mt-2 flex items-center text-gray-500">
                     <MessageCircle className="mr-2 h-4 w-4" />
-                    <span className="text-sm">Comments not available</span>
-                    
-                    {isAuthorized(user, circle, "admin") && (
-                        <Button 
-                            onClick={createShadowPost} 
-                            disabled={isCreatingShadowPost}
-                            variant="ghost"
-                            size="sm"
-                            className="ml-2"
-                        >
-                            {isCreatingShadowPost ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                                "Enable"
-                            )}
-                        </Button>
-                    )}
+                    <span className="text-sm">Comments available in full view</span>
                 </div>
             );
         }
@@ -107,25 +99,8 @@ export const ProjectCommentsSection = ({
             <div className={embedded ? "mt-2" : "flex flex-col gap-4 rounded-lg bg-white p-4 shadow"}>
                 {!embedded && <h2 className="text-xl font-semibold">Comments</h2>}
                 <div className="py-2 text-center text-gray-500">
-                    <p className="mb-2 text-sm">Comments are not available for this project yet.</p>
-                    
-                    {isAuthorized(user, circle, "admin") && (
-                        <Button 
-                            onClick={createShadowPost} 
-                            disabled={isCreatingShadowPost}
-                            variant="outline"
-                            size="sm"
-                        >
-                            {isCreatingShadowPost ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Enabling comments...
-                                </>
-                            ) : (
-                                "Enable Comments for This Project"
-                            )}
-                        </Button>
-                    )}
+                    <p className="mb-2 text-sm">Loading comments...</p>
+                    <Loader2 className="mx-auto h-5 w-5 animate-spin" />
                 </div>
             </div>
         );
@@ -140,6 +115,9 @@ export const ProjectCommentsSection = ({
         mentionsDisplay: []
     };
     
+    // Check if user should be allowed to comment
+    const canComment = isFollowing || project.createdBy === user?.did;
+    
     return (
         <div className={embedded ? "" : "flex flex-col gap-4 rounded-lg bg-white p-4 shadow"}>
             {!embedded && <h2 className="text-xl font-semibold">Comments</h2>}
@@ -150,16 +128,30 @@ export const ProjectCommentsSection = ({
                     <span>Loading comments...</span>
                 </div>
             ) : (
-                <PostItem
-                    post={postDisplay}
-                    circle={circle}
-                    feed={feed}
-                    initialComments={localComments}
-                    initialShowAllComments={true}
-                    isAggregateFeed={false}
-                    hideContent={true}
-                    embedded={embedded}
-                />
+                <>
+                    {!canComment && (
+                        <Alert variant="warning" className="mb-4">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertTitle>Follow to comment</AlertTitle>
+                            <AlertDescription className="flex items-center justify-between">
+                                <span>You need to follow this project to comment</span>
+                                <FollowButton circle={project} />
+                            </AlertDescription>
+                        </Alert>
+                    )}
+                
+                    <PostItem
+                        post={postDisplay}
+                        circle={circle}
+                        feed={feed}
+                        initialComments={localComments}
+                        initialShowAllComments={true}
+                        isAggregateFeed={false}
+                        hideContent={true}
+                        embedded={embedded}
+                        disableComments={!canComment}
+                    />
+                </>
             )}
         </div>
     );
