@@ -13,7 +13,11 @@ import { FollowButton } from "@/components/modules/home/follow-button";
 import { getFeedByHandle, getAllComments, getPost, createPost } from "@/lib/data/feed";
 
 // Helper function to create a shadow post for a project if it doesn't exist
-async function ensureShadowPost(project: Circle, feed: Feed, userDid: string): Promise<{ commentPostId: string, post: Post | null }> {
+async function ensureShadowPost(
+    project: Circle,
+    feed: Feed,
+    userDid: string,
+): Promise<{ commentPostId: string; post: Post | null }> {
     // Check if shadow post already exists
     if (project.metadata?.commentPostId) {
         const post = await getPost(project.metadata.commentPostId);
@@ -21,7 +25,7 @@ async function ensureShadowPost(project: Circle, feed: Feed, userDid: string): P
             return { commentPostId: project.metadata.commentPostId, post };
         }
     }
-    
+
     // Create a new shadow post
     console.log("Creating shadow post for project:", project.name);
     const post: Post = {
@@ -32,25 +36,25 @@ async function ensureShadowPost(project: Circle, feed: Feed, userDid: string): P
         reactions: {},
         comments: 0,
         media: [],
-        postType: "project" // Mark as project shadow post
+        postType: "project", // Mark as project shadow post
     };
-    
+
     try {
         const newPost = await createPost(post);
         console.log("Created shadow post:", newPost._id);
-        
+
         // Update project metadata
         const updatedProject: Partial<Circle> = {
             _id: project._id,
             metadata: {
                 ...project.metadata,
-                commentPostId: newPost._id
-            }
+                commentPostId: newPost._id,
+            },
         };
-        
+
         await updateCircle(updatedProject);
         console.log("Updated project metadata with comment post ID");
-        
+
         return { commentPostId: newPost._id, post: newPost };
     } catch (error) {
         console.error("Failed to create shadow post:", error);
@@ -83,20 +87,20 @@ export default async function SingleProjectPage(props: SingleProjectPageProps) {
     if (!project || project.circleType !== "project") {
         redirect("/not-found");
     }
-    
+
     // Get the default feed for the circle to use for permissions
     const feed = await getFeedByHandle(parentCircle._id!, "default");
-    
+
     // Ensure we have a feed for permissions
     if (!feed) {
         console.error(`Default feed not found for circle: ${parentCircle._id}`);
         redirect("/not-found");
     }
-    
+
     // Ensure we have a shadow post for comments
     const { commentPostId, post } = await ensureShadowPost(project, feed, userDid);
     console.log("Shadow post status:", commentPostId ? "exists" : "missing");
-    
+
     // Get comments if we have a post
     let comments: CommentDisplay[] = [];
     if (commentPostId && post) {
@@ -119,7 +123,6 @@ export default async function SingleProjectPage(props: SingleProjectPageProps) {
                         <div className="p-6 pb-3">
                             <div className="flex items-center justify-between">
                                 <h1 className="text-2xl font-bold">{project.name}</h1>
-                                {/* @ts-expect-error Server Component */}
                                 <div className="flex-shrink-0">
                                     <div className="ml-4">
                                         <FollowButton circle={project} />
@@ -150,10 +153,10 @@ export default async function SingleProjectPage(props: SingleProjectPageProps) {
                                 </div>
                             </div>
                         )}
-                        
+
                         {/* Embedded Comments Section */}
                         <div className="border-t border-gray-100 px-6 py-4">
-                            <ProjectCommentsSection 
+                            <ProjectCommentsSection
                                 project={project}
                                 circle={parentCircle}
                                 feed={feed as Feed}

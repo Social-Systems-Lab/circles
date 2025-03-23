@@ -38,6 +38,7 @@ import {
     PostDisplay,
     CommentDisplay,
     SortingOptions,
+    Feed,
 } from "@/models/models";
 import { revalidatePath } from "next/cache";
 import { getCircleById, getCirclePath, getCirclesBySearchQuery } from "@/lib/data/circle";

@@ -118,10 +118,10 @@ export default function GlobalNavItems() {
                     </motion.div>
                 </Link>
                 
-                <Link href={`/circles?circleType=project&tab=${settings?.circlesTab ?? "following"}`}>
+                <Link href={`/projects?tab=${settings?.circlesTab ?? "following"}`}>
                     <motion.div
                         className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
-                            pathname === "/circles" && pathname.includes("circleType=project") ? "text-[#495cff]" : "text-[#696969]"
+                            pathname === "/projects" ? "text-[#495cff]" : "text-[#696969]"
                         }`}
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.95 }}

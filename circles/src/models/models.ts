@@ -693,7 +693,15 @@ export type MissionDisplay = {
     picture: string;
 };
 
-export type UserToolboxTab = "chat" | "notifications" | "profile";
+export type UserToolboxTab =
+    | "chat"
+    | "notifications"
+    | "profile"
+    | "circles"
+    | "projects"
+    | "contacts"
+    | "account"
+    | undefined;
 export type UserToolboxData = {
     tab: UserToolboxTab;
 };

@@ -30,7 +30,7 @@ import { ChatList } from "../modules/chat/chat-list";
 export const UserToolbox = () => {
     const [user, setUser] = useAtom(userAtom);
     const [userToolboxState, setUserToolboxState] = useAtom(userToolboxDataAtom);
-    const [tab, setTab] = useState<"chat" | "notifications" | "circles" | "projects" | "contacts" | "account" | undefined>(undefined);
+    const [tab, setTab] = useState<UserToolboxTab>(undefined);
     const [authInfo, setAuthInfo] = useAtom(authInfoAtom);
     const pathname = usePathname();
     const [prevPath, setPrevPath] = useState(pathname);
@@ -69,11 +69,10 @@ export const UserToolbox = () => {
         user?.memberships
             ?.filter((m) => m.circle.circleType === "circle" && m.circle.handle !== "default")
             ?.map((membership) => membership.circle) || [];
-            
+
     const projects =
-        user?.memberships
-            ?.filter((m) => m.circle.circleType === "project")
-            ?.map((membership) => membership.circle) || [];
+        user?.memberships?.filter((m) => m.circle.circleType === "project")?.map((membership) => membership.circle) ||
+        [];
     const contacts =
         user?.memberships
             ?.filter((m) => m.circle.circleType === "user" && m.circle._id !== user?._id)
@@ -198,9 +197,9 @@ export const UserToolbox = () => {
                                     className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
                                     onClick={() => openCircle(project)}
                                 >
-                                    <div className="h-[40px] w-[40px] rounded-md overflow-hidden">
-                                        <img 
-                                            src={project?.cover?.url ?? "/images/default-cover.png"} 
+                                    <div className="h-[40px] w-[40px] overflow-hidden rounded-md">
+                                        <img
+                                            src={project?.cover?.url ?? "/images/default-cover.png"}
                                             alt={project.name}
                                             className="h-full w-full object-cover"
                                         />

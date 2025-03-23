@@ -25,14 +25,14 @@ type ProjectCommentsSectionProps = {
     embedded?: boolean;
 };
 
-export const ProjectCommentsSection = ({ 
-    project, 
-    circle, 
-    feed, 
+export const ProjectCommentsSection = ({
+    project,
+    circle,
+    feed,
     initialComments = [],
     commentPostId,
     post,
-    embedded = false
+    embedded = false,
 }: ProjectCommentsSectionProps) => {
     const [isPending, startTransition] = useTransition();
     const [isCreatingShadowPost, setIsCreatingShadowPost] = useState(false);
@@ -41,25 +41,25 @@ export const ProjectCommentsSection = ({
     const [localComments, setLocalComments] = useState(initialComments);
     const [user] = useAtom(userAtom);
     const { toast } = useToast();
-    
+
     // Check if user is following the project
     const isFollowing = useMemo(() => {
         if (!user || !project._id) return false;
-        return user.memberships?.some(m => m.circleId === project._id);
+        return user.memberships?.some((m) => m.circleId === project._id);
     }, [user, project._id]);
-    
+
     const createShadowPost = async () => {
         if (!project._id || !feed) return;
-        
+
         setIsCreatingShadowPost(true);
         try {
             const result = await createShadowPostForProjectAction(project._id, feed._id);
-            
+
             if (result.success && result.data) {
                 setLocalPost(result.data.post);
-                setLocalCommentPostId(result.data.post._id);
+                setLocalCommentPostId(result?.data?.post?._id);
                 setLocalComments([]);
-                
+
                 toast({
                     title: "Success",
                     description: "Comments are now enabled for this project",
@@ -83,7 +83,7 @@ export const ProjectCommentsSection = ({
             setIsCreatingShadowPost(false);
         }
     };
-    
+
     // If no shadow post exists yet, show a simple message
     if (!localCommentPostId || !localPost) {
         if (embedded) {
@@ -94,7 +94,7 @@ export const ProjectCommentsSection = ({
                 </div>
             );
         }
-        
+
         return (
             <div className={embedded ? "mt-2" : "flex flex-col gap-4 rounded-lg bg-white p-4 shadow"}>
                 {!embedded && <h2 className="text-xl font-semibold">Comments</h2>}
@@ -105,23 +105,24 @@ export const ProjectCommentsSection = ({
             </div>
         );
     }
-    
+
     // Create a PostDisplay from the shadow post
     const postDisplay: PostDisplay = {
         ...localPost,
         _id: localCommentPostId,
         author: circle,
         comments: localComments.length,
-        mentionsDisplay: []
+        mentionsDisplay: [],
+        circleType: "post",
     };
-    
+
     // Check if user should be allowed to comment
     const canComment = isFollowing || project.createdBy === user?.did;
-    
+
     return (
         <div className={embedded ? "" : "flex flex-col gap-4 rounded-lg bg-white p-4 shadow"}>
             {!embedded && <h2 className="text-xl font-semibold">Comments</h2>}
-            
+
             {isPending ? (
                 <div className="flex items-center justify-center py-4">
                     <Loader2 className="mr-2 h-6 w-6 animate-spin" />
@@ -129,17 +130,6 @@ export const ProjectCommentsSection = ({
                 </div>
             ) : (
                 <>
-                    {!canComment && (
-                        <Alert variant="warning" className="mb-4">
-                            <AlertCircle className="h-4 w-4" />
-                            <AlertTitle>Follow to comment</AlertTitle>
-                            <AlertDescription className="flex items-center justify-between">
-                                <span>You need to follow this project to comment</span>
-                                <FollowButton circle={project} />
-                            </AlertDescription>
-                        </Alert>
-                    )}
-                
                     <PostItem
                         post={postDisplay}
                         circle={circle}
