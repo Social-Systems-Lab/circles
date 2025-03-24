@@ -47,33 +47,45 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
     const handleSwiped = useCallback(
         (circle: Circle, direction: "left" | "right") => {
             // Move to the next card
-            setCurrentIndex((prev) => prev + 1);
-
-            // Focus on the location of the new top card
-            if (currentIndex + 1 < displayedCircles.length) {
-                const nextCircle = displayedCircles[currentIndex + 1];
-                if (nextCircle.location?.lngLat) {
-                    setZoomContent(nextCircle);
-                }
-            }
+            setCurrentIndex((prev) => {
+                const newIndex = prev + 1;
+                return newIndex;
+            });
         },
-        [currentIndex, displayedCircles, setZoomContent],
+        [displayedCircles],
     );
+    
+    // Update map zoom whenever currentIndex changes
+    useEffect(() => {
+        if (currentIndex < displayedCircles.length) {
+            const currentCircle = displayedCircles[currentIndex];
+            if (currentCircle?.location?.lngLat) {
+                // Slight delay to ensure the map component has processed any previous zoom commands
+                setTimeout(() => {
+                    setZoomContent(currentCircle);
+                }, 100);
+            }
+        }
+    }, [currentIndex, displayedCircles, setZoomContent]);
 
     const handleRefresh = () => {
         // Reset to the first card
         setCurrentIndex(0);
-        if (displayedCircles.length > 0 && displayedCircles[0].location?.lngLat) {
-            setZoomContent(displayedCircles[0]);
-        }
+        // The useEffect hooked to currentIndex will handle the map zoom
     };
 
-    // Focus on first circle when loaded
+    // Initial focus on first circle when loaded
     useEffect(() => {
-        if (displayedCircles.length > 0 && displayedCircles[0].location?.lngLat) {
-            setZoomContent(displayedCircles[0]);
+        if (displayedCircles.length > 0 && currentIndex === 0) {
+            const firstCircle = displayedCircles[0];
+            if (firstCircle?.location?.lngLat) {
+                // Allow a short delay for map initialization
+                setTimeout(() => {
+                    setZoomContent(firstCircle);
+                }, 300);
+            }
         }
-    }, [displayedCircles, setZoomContent]);
+    }, [displayedCircles, currentIndex, setZoomContent]);
 
     // Fixes hydration errors
     const [isMounted, setIsMounted] = useState(false);
