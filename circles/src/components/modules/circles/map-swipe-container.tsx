@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { useAtom } from "jotai";
 import { userAtom, zoomContentAtom } from "@/lib/data/atoms";
+import Image from "next/image";
 
 interface MapSwipeContainerProps {
     circles: WithMetric<Circle>[];
@@ -108,15 +109,42 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
 
                     {displayedCircles.length > 0 ? (
                         <div className="relative flex h-[500px] w-full max-w-[400px] items-center justify-center">
-                            {/* Display top 3 cards with stacking effect */}
-                            {displayedCircles.slice(currentIndex, currentIndex + 3).map((circle, index) => (
-                                <CircleSwipeCard
-                                    key={circle._id}
-                                    circle={circle}
-                                    onSwiped={handleSwiped}
-                                    zIndex={30 - index}
-                                />
-                            ))}
+                            {/* Display current card with stack effect for upcoming cards */}
+                            {currentIndex < displayedCircles.length && (
+                                <>
+                                    {/* Current card (interactive) */}
+                                    <CircleSwipeCard
+                                        key={displayedCircles[currentIndex]._id}
+                                        circle={displayedCircles[currentIndex]}
+                                        onSwiped={handleSwiped}
+                                        zIndex={30}
+                                    />
+
+                                    {/* Stacked cards (next up to 4 cards) */}
+                                    {displayedCircles.slice(currentIndex + 1, currentIndex + 5).map((circle, index) => (
+                                        <div
+                                            key={circle._id}
+                                            className="absolute h-[500px] w-full max-w-[400px] overflow-hidden rounded-xl border bg-white shadow-lg"
+                                            style={{
+                                                zIndex: 29 - index,
+                                                transform: `translateX(${(index + 1) * 3}px) translateY(${(index + 1) * -2}px)`,
+                                                opacity: 0.9 - index * 0.15,
+                                                pointerEvents: "none",
+                                            }}
+                                        >
+                                            {/* Simplified preview of card content */}
+                                            <div className="relative h-3/5 w-full overflow-hidden">
+                                                <Image
+                                                    src={circle.cover?.url ?? "/images/default-cover.png"}
+                                                    alt=""
+                                                    className="object-cover pointer-events-none"
+                                                    fill
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </>
+                            )}
 
                             {/* Show refresh button if we've gone through all cards */}
                             {(currentIndex >= displayedCircles.length || displayedCircles.length === 0) && (
