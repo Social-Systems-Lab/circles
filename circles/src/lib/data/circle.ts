@@ -84,6 +84,20 @@ export const getDefaultCircle = async (inServerConfig: ServerSettings | null = n
     return circle;
 };
 
+export const getSwipeCircles = async (): Promise<Circle[]> => {
+    let circles: Circle[] = [];
+
+    circles = await Circles.find({}, { projection: SAFE_CIRCLE_PROJECTION }).toArray();
+
+    circles.forEach((circle: Circle) => {
+        if (circle._id) {
+            circle._id = circle._id.toString();
+        }
+    });
+    //circles = filterLocations(circles) as any[];
+    return circles;
+};
+
 export const getCircles = async (parentCircleId?: string, circleType?: CircleType): Promise<Circle[]> => {
     let circles: Circle[] = [];
     if (!parentCircleId) {

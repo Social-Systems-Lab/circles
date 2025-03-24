@@ -1,6 +1,6 @@
 // \app\page.tsx - default app route showing hybrid map and card swipe interface
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
-import { getCirclesWithMetrics } from "@/lib/data/circle";
+import { getCirclesWithMetrics, getMetricsForCircles, getSwipeCircles } from "@/lib/data/circle";
 import { getServerSettings } from "@/lib/data/server-settings";
 import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 import MapSwipeContainer from "@/components/modules/circles/map-swipe-container";
@@ -25,11 +25,12 @@ export default async function Home(props: HomeProps) {
     const serverConfig = await getServerSettings();
 
     // Get circles with location data for the map and cards
-    const circles = await getCirclesWithMetrics(userDid, undefined, sort as SortingOptions);
+    const circles = await getSwipeCircles();
+    const circlesWithMetrics = await getMetricsForCircles(circles, userDid, sort as SortingOptions);
 
     return (
-        <ContentDisplayWrapper content={circles}>
-            <MapSwipeContainer circles={circles} mapboxKey={serverConfig?.mapboxKey ?? ""} />
+        <ContentDisplayWrapper content={circlesWithMetrics}>
+            <MapSwipeContainer circles={circlesWithMetrics} mapboxKey={serverConfig?.mapboxKey ?? ""} />
         </ContentDisplayWrapper>
     );
 }
