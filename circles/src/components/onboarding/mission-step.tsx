@@ -28,6 +28,7 @@ function MissionStep({ userData, setUserData, nextStep, prevStep }: OnboardingSt
 
     const handleNext = async () => {
         startTransition(async () => {
+            console.log("Saving mission");
             const response = await saveMissionAction(userData.mission, user?._id);
             if (!response.success) {
                 // Handle error
@@ -36,6 +37,7 @@ function MissionStep({ userData, setUserData, nextStep, prevStep }: OnboardingSt
                 // Update userAtom
                 setUser((prev) => (prev ? { ...prev, mission: userData.mission } : prev));
             }
+            console.log("calling nextStep");
             nextStep();
         });
     };

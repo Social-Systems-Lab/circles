@@ -56,7 +56,7 @@ export default function Onboarding() {
     // Filter steps based on what's already completed
     const steps = useMemo(() => {
         // Mapping of step IDs to components
-        const stepComponents = {
+        const stepComponents: Record<string, React.ComponentType<OnboardingStepProps>> = {
             welcome: WelcomeStep,
             mission: MissionStep,
             profile: ProfileStep,
@@ -93,24 +93,25 @@ export default function Onboarding() {
             stepsToShow.push("welcome");
         }
 
-        // Add all incomplete steps
-        ONBOARDING_STEPS.forEach((step) => {
+        // Add all incomplete steps in their original order
+        for (const step of ONBOARDING_STEPS) {
             if (!completedSteps.includes(step) && step !== "welcome") {
                 stepsToShow.push(step);
             }
-        });
+        }
 
         // Always include Final step
         if (stepsToShow.length > 0 && !stepsToShow.includes("final")) {
             stepsToShow.push("final");
         }
 
+        // Convert to step objects
         return stepsToShow.map((stepId) => ({
             id: stepId,
             component: stepComponents[stepId],
             title: getStepTitle(stepId),
         }));
-    }, [user]);
+    }, [user?.did]); // intentionally only update once user changes
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -128,8 +129,10 @@ export default function Onboarding() {
         }
     }, [user, authInfo, hasClosedOnboarding, steps]);
 
+    // Effect to initialize user data when onboarding opens
     useEffect(() => {
         if (!isOpen || !user) return;
+
         setUserData({
             name: user.name || "",
             mission: user.mission || "",
@@ -138,12 +141,16 @@ export default function Onboarding() {
             selectedQuests: [],
             picture: user.picture?.url || "/images/default-user-picture.png",
         });
+    }, [isOpen, user]);
 
-        // If we have steps to show, set the current step to the first one
-        if (steps.length > 0) {
+    // Separate effect to reset step index only when onboarding opens or steps array changes
+    useEffect(() => {
+        // Only reset the current step when onboarding is first opened
+        // or when the steps array changes structure (not when user state updates)
+        if (isOpen && steps.length > 0) {
             setCurrentStepIndex(0);
         }
-    }, [isOpen, user, steps]);
+    }, [isOpen, steps.length]);
 
     // Helper function to get step titles
     function getStepTitle(stepId: string) {
@@ -171,7 +178,9 @@ export default function Onboarding() {
 
     const nextStep = () => {
         if (currentStepIndex + 1 < steps.length) {
-            setCurrentStepIndex(currentStepIndex + 1);
+            // Explicitly set the next step index
+            const nextStepIndex = currentStepIndex + 1;
+            setCurrentStepIndex(nextStepIndex);
         } else {
             setIsOpen(false);
             setHasClosedOnboarding(true);

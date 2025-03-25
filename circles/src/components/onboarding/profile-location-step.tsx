@@ -27,13 +27,15 @@ export default function ProfileLocationStep({ userData, nextStep, prevStep }: On
             
             if (result.success) {
                 // Update local user state with new location
+                const updatedSteps = [...(user.completedOnboardingSteps || [])];
+                if (!updatedSteps.includes("location")) {
+                    updatedSteps.push("location");
+                }
+                
                 setUser({
                     ...user,
                     location,
-                    completedOnboardingSteps: [
-                        ...(user.completedOnboardingSteps || []),
-                        "location"
-                    ]
+                    completedOnboardingSteps: updatedSteps
                 });
                 
                 // Move to next step

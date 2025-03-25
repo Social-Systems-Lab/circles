@@ -27,14 +27,16 @@ export default function ProfileStep({ userData, nextStep, prevStep }: Onboarding
             
             if (result.success) {
                 // Update local user state with new values
+                const updatedSteps = [...(user.completedOnboardingSteps || [])];
+                if (!updatedSteps.includes("profile")) {
+                    updatedSteps.push("profile");
+                }
+                
                 setUser({
                     ...user,
                     description: shortBio,
                     content: content,
-                    completedOnboardingSteps: [
-                        ...(user.completedOnboardingSteps || []),
-                        "profile"
-                    ]
+                    completedOnboardingSteps: updatedSteps
                 });
                 
                 // Move to next step

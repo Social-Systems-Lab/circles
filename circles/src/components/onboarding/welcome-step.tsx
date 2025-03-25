@@ -23,12 +23,14 @@ function WelcomeStep({ nextStep }: OnboardingStepProps) {
             await completeWelcomeStep(user._id);
             
             // Update local user state
+            const updatedSteps = [...(user.completedOnboardingSteps || [])];
+            if (!updatedSteps.includes("welcome")) {
+                updatedSteps.push("welcome");
+            }
+            
             setUser({
                 ...user,
-                completedOnboardingSteps: [
-                    ...(user.completedOnboardingSteps || []),
-                    "welcome"
-                ]
+                completedOnboardingSteps: updatedSteps
             });
             
             nextStep();
