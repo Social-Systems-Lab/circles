@@ -15,17 +15,17 @@ import { useToast } from "@/components/ui/use-toast";
 import Image from "next/image";
 
 // Create a custom image upload component specifically for onboarding
-function OnboardingImageUpload({ 
-    id, 
-    src, 
-    alt, 
-    circleId, 
+function OnboardingImageUpload({
+    id,
+    src,
+    alt,
+    circleId,
     className,
-    onImageUpdate
-}: { 
-    id: string; 
-    src: string; 
-    alt: string; 
+    onImageUpdate,
+}: {
+    id: string;
+    src: string;
+    alt: string;
     circleId: string;
     className?: string;
     onImageUpdate: (newUrl: string) => void;
@@ -33,22 +33,22 @@ function OnboardingImageUpload({
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isUploading, setIsUploading] = useState(false);
     const { toast } = useToast();
-    
+
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
-        
+
         setIsUploading(true);
         try {
             // Create temporary URL for immediate feedback
             const tempUrl = URL.createObjectURL(file);
             onImageUpdate(tempUrl);
-            
+
             // Upload to server
             const formData = new FormData();
             formData.append(id, file);
             const result = await updateCircleField(circleId, formData);
-            
+
             if (result.success) {
                 // Get the permanent URL from the server response
                 const permanentUrl = result.circle?.[id]?.url;
@@ -57,20 +57,24 @@ function OnboardingImageUpload({
                     toast({ title: "Success", description: "Image updated successfully" });
                 }
             } else {
-                toast({ title: "Error", description: result.message || "Failed to update image", variant: "destructive" });
+                toast({
+                    title: "Error",
+                    description: result.message || "Failed to update image",
+                    variant: "destructive",
+                });
             }
         } catch (error) {
-            toast({ 
-                title: "Error", 
-                description: "Failed to upload image", 
-                variant: "destructive" 
+            toast({
+                title: "Error",
+                description: "Failed to upload image",
+                variant: "destructive",
             });
             console.error("Image upload error:", error);
         } finally {
             setIsUploading(false);
         }
     };
-    
+
     return (
         <div className="group relative h-full w-full">
             {isUploading && (
@@ -78,12 +82,7 @@ function OnboardingImageUpload({
                     <Loader2 className="h-8 w-8 animate-spin text-white" />
                 </div>
             )}
-            <Image 
-                src={src} 
-                alt={alt} 
-                fill 
-                className={className} 
-            />
+            <Image src={src} alt={alt} fill className={className} />
             <label
                 htmlFor={`imageUpload-${id}`}
                 className="absolute bottom-2 right-2 hidden cursor-pointer text-white group-hover:block"
@@ -119,20 +118,20 @@ export default function ProfileStep({ userData, setUserData, nextStep, prevStep 
             setContent(user.content || "");
             setProfilePicture(user.picture?.url || "/images/default-user-picture.png");
             setCoverImage(user.cover?.url || "/images/default-cover.jpg");
-            
+
             // Initialize userData picture as well, if it exists
             if (setUserData && userData) {
                 // Do this in a timeout to avoid React batch updates that might cause loops
                 setTimeout(() => {
-                    setUserData(prev => ({
+                    setUserData((prev) => ({
                         ...prev,
-                        picture: user.picture?.url || prev.picture
+                        picture: user.picture?.url || prev.picture,
                     }));
                 }, 0);
             }
         }
     }, []); // Empty dependency array = only run once on mount
-    
+
     // We'll control userData updates directly in the handlers instead of with useEffect
 
     const handleSubmit = async () => {
@@ -157,7 +156,7 @@ export default function ProfileStep({ userData, setUserData, nextStep, prevStep 
                     completedOnboardingSteps: updatedSteps,
                     // Ensure images are explicitly included
                     picture: user.picture, // Keep existing picture data
-                    cover: user.cover // Keep existing cover data
+                    cover: user.cover, // Keep existing cover data
                 });
 
                 // Move to next step
@@ -171,43 +170,49 @@ export default function ProfileStep({ userData, setUserData, nextStep, prevStep 
             setIsSubmitting(false);
         }
     };
-    
+
     // Function to handle profile picture updates
     const handleProfilePictureUpdate = (newUrl: string) => {
         setProfilePicture(newUrl);
-        
+
         // Update user atom if the update isn't from a temporary URL
-        if (!newUrl.startsWith('blob:')) {
-            setUser(prev => ({
-                ...prev,
-                picture: {
-                    ...prev.picture,
-                    url: newUrl
-                }
-            }));
-            
+        if (!newUrl.startsWith("blob:")) {
+            setUser((prev) => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    picture: {
+                        ...prev.picture,
+                        url: newUrl,
+                    },
+                };
+            });
+
             // Also update userData for profile summary
             if (setUserData && userData) {
-                setUserData(prev => ({
-                    ...prev,
-                    picture: newUrl
-                }));
+                setUserData((prev) => {
+                    if (!prev) return userData;
+                    return {
+                        ...prev,
+                        picture: newUrl,
+                    };
+                });
             }
         }
     };
-    
+
     // Function to handle cover image updates
     const handleCoverImageUpdate = (newUrl: string) => {
         setCoverImage(newUrl);
-        
+
         // Update user atom if the update isn't from a temporary URL
-        if (!newUrl.startsWith('blob:')) {
-            setUser(prev => ({
+        if (!newUrl.startsWith("blob:")) {
+            setUser((prev) => ({
                 ...prev,
                 cover: {
                     ...prev.cover,
-                    url: newUrl
-                }
+                    url: newUrl,
+                },
             }));
         }
     };
