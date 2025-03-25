@@ -9,11 +9,12 @@ import { ChevronRight, Shield, Key, User, Share2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createAccountAction, verifySignatureAction } from "./actions";
-import { AccountAndPrivateKey } from "@/models/models";
+import { AccountAndPrivateKey, Location } from "@/models/models";
 import { WebviewLog } from "./authenticator";
 import { useAtom } from "jotai";
 import { authInfoAtom, userAtom } from "@/lib/data/atoms";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import LocationPicker from "../forms/location-picker";
 // import crypto from "crypto-browserify";
 
 interface WelcomeStepProps {
@@ -169,12 +170,17 @@ const DisplayNameStep: React.FC<DisplayNameStepProps> = ({ onNext }) => {
     );
 };
 
-interface ProfilePictureStepProps {
+interface ProfileSetupStepProps {
     onNext: () => void;
 }
 
-const ProfilePictureStep: React.FC<ProfilePictureStepProps> = ({ onNext }) => {
+const ProfileSetupStep: React.FC<ProfileSetupStepProps> = ({ onNext }) => {
     const [profilePicture, setProfilePicture] = useState<File | null>(null);
+    const [shortBio, setShortBio] = useState("");
+    const [longDescription, setLongDescription] = useState("");
+    const [location, setLocation] = useState<Location>();
+    const [user, setUser] = useAtom(userAtom);
+    const [isPending, setIsPending] = useState(false);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files?.[0]) {
@@ -182,11 +188,27 @@ const ProfilePictureStep: React.FC<ProfilePictureStepProps> = ({ onNext }) => {
         }
     };
 
+    const handleUpdateProfile = async () => {
+        setIsPending(true);
+        try {
+            // Here we would implement the API call to update the user profile
+            // with the bio, description, location, and profile picture
+            // For now we'll just simulate a delay and move to the next step
+            setTimeout(() => {
+                setIsPending(false);
+                onNext();
+            }, 1000);
+        } catch (error) {
+            console.error("Error updating profile:", error);
+            setIsPending(false);
+        }
+    };
+
     return (
         <div className="mx-auto max-w-md space-y-6">
-            <h2 className="text-center text-2xl font-semibold tracking-tight md:text-3xl">Add a profile picture</h2>
-            <p className="text-center text-gray-600">Show the world who you are.</p>
-            <div className="space-y-4">
+            <h2 className="text-center text-2xl font-semibold tracking-tight md:text-3xl">Complete your profile</h2>
+            <p className="text-center text-gray-600">Help others find and connect with you.</p>
+            <div className="space-y-6">
                 <div className="flex flex-col items-center gap-4">
                     <div className="relative">
                         {profilePicture ? (
@@ -217,8 +239,46 @@ const ProfilePictureStep: React.FC<ProfilePictureStepProps> = ({ onNext }) => {
                         </Label>
                     </div>
                 </div>
-                <Button onClick={onNext} className="w-full rounded-full bg-blue-600 text-white hover:bg-blue-700">
-                    Continue
+                
+                <div className="space-y-2">
+                    <Label htmlFor="shortBio">Short Bio</Label>
+                    <Input
+                        id="shortBio"
+                        placeholder="A brief description about yourself"
+                        value={shortBio}
+                        onChange={(e) => setShortBio(e.target.value)}
+                    />
+                </div>
+                
+                <div className="space-y-2">
+                    <Label htmlFor="longDescription">About Me</Label>
+                    <textarea
+                        id="longDescription"
+                        className="h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        placeholder="Tell us more about yourself, your interests, and what brings you here"
+                        value={longDescription}
+                        onChange={(e) => setLongDescription(e.target.value)}
+                    />
+                </div>
+                
+                <div className="space-y-2">
+                    <Label>Your Location</Label>
+                    <LocationPicker value={location} onChange={setLocation} />
+                </div>
+                
+                <Button 
+                    onClick={handleUpdateProfile} 
+                    disabled={isPending}
+                    className="w-full rounded-full bg-blue-600 text-white hover:bg-blue-700"
+                >
+                    {isPending ? (
+                        <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Saving...
+                        </>
+                    ) : (
+                        "Continue"
+                    )}
                 </Button>
             </div>
         </div>
@@ -275,9 +335,9 @@ export const CreateAccountWizard = () => {
                 return <IdentityStep onNext={handleNextStep} />;
             case 2:
                 return <DisplayNameStep onNext={handleNextStep} />;
-            // case 3:
-            //     return <ProfilePictureStep onNext={handleNextStep} />;
             case 3:
+                return <ProfileSetupStep onNext={handleNextStep} />;
+            case 4:
                 return <ResponsibilityStep />;
             default:
                 return null;
@@ -289,7 +349,7 @@ export const CreateAccountWizard = () => {
             <div className="h-2 bg-gray-100">
                 <div
                     className="h-full bg-blue-600 transition-all duration-300 ease-in-out"
-                    style={{ width: `${(step / 4) * 100}%` }}
+                    style={{ width: `${(step / 5) * 100}%` }}
                 />
             </div>
             <div className="flex flex-grow items-center justify-center p-4 pl-6 pr-6">

@@ -13,16 +13,6 @@ export const signupFormSchema: FormSchema = {
     },
     fields: [
         {
-            name: "type",
-            label: "Account Type",
-            type: "select",
-            options: [
-                { value: "user", label: "Personal" },
-                { value: "organization", label: "Organization" },
-            ],
-            required: true,
-        },
-        {
             name: "name",
             label: "Name",
             type: "text",
@@ -31,10 +21,9 @@ export const signupFormSchema: FormSchema = {
         {
             name: "handle",
             label: "Handle",
-            type: "handle",
+            type: "auto-handle",
             placeholder: "handle",
-            description:
-                "Choose a unique handle that will identify the account on the platform, e.g., a nickname or organization name.",
+            description: "Your unique identifier on the platform.",
             required: true,
         },
         {

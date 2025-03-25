@@ -11,6 +11,8 @@ import MissionStep from "./mission-step";
 import CausesStep from "./causes-step";
 import SkillsStep from "./skills-step";
 import QuestsStep from "./quests-step";
+import ProfileStep from "./profile-step";
+import ProfileLocationStep from "./profile-location-step";
 import FinalStep from "./final-step";
 import ProfileSummary from "./profile-summary";
 import { Cause, Skill } from "@/models/models";
@@ -90,6 +92,16 @@ export default function Onboarding() {
             title: "Your Mission",
         },
         {
+            id: "profile",
+            component: ProfileStep,
+            title: "About You",
+        },
+        {
+            id: "location",
+            component: ProfileLocationStep,
+            title: "Your Location",
+        },
+        {
             id: "causes",
             component: CausesStep,
             title: "Choose Your Causes",
@@ -154,8 +166,8 @@ export default function Onboarding() {
                 onClick={() => setIsOpen(false)}
             ></div>
 
-            <Card className="w-full max-w-5xl overflow-hidden rounded-2xl border-0 bg-[#f9f9f9] shadow-xl backdrop-blur-sm">
-                <CardContent className="p-6">
+            <Card className="w-full max-w-5xl overflow-hidden rounded-2xl border-0 bg-[#f9f9f9] shadow-xl backdrop-blur-sm max-h-[90vh]">
+                <CardContent className="p-6 max-h-[calc(90vh-2rem)] overflow-y-auto">
                     <div className="flex gap-6">
                         <div className="hidden md:block">
                             <ProfileSummary userData={userData!} />

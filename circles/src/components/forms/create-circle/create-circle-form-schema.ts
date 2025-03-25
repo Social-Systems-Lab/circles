@@ -10,17 +10,6 @@ export const createCircleFormSchema: FormSchema = {
     },
     fields: [
         {
-            name: "circleType",
-            label: "Type",
-            type: "select",
-            required: true,
-            options: [
-                { value: "circle", label: "Circle" },
-                { value: "project", label: "Project" },
-            ],
-            description: "Choose the type of content you want to create.",
-        },
-        {
             name: "name",
             label: "Name",
             type: "text",
@@ -30,9 +19,9 @@ export const createCircleFormSchema: FormSchema = {
         {
             name: "handle",
             label: "Handle",
-            type: "handle",
+            type: "auto-handle",
             placeholder: "circle-handle",
-            description: "Choose a unique handle for your circle.",
+            description: "Your unique identifier for this circle.",
             required: true,
             autoComplete: "one-time-code",
         },
@@ -48,6 +37,12 @@ export const createCircleFormSchema: FormSchema = {
             type: "textarea",
             required: false,
             description: "For projects, enter detailed information here.",
+        },
+        {
+            name: "location",
+            label: "Location",
+            type: "location",
+            description: "Set the location for your circle.",
         },
         {
             name: "picture",

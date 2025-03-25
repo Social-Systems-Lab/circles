@@ -45,6 +45,16 @@ function ProfileSummary({ userData }: ProfileSummaryProps) {
                         <p className="text-sm text-gray-600">{userData.mission}</p>
                     </div>
                 )}
+                {user?.location && user.location.lngLat && (
+                    <div>
+                        <div className="mb-0 mt-0 font-semibold">Location</div>
+                        <p className="text-sm text-gray-600">
+                            {user.location.city ? user.location.city + ', ' : ''}
+                            {user.location.country || ''}
+                        </p>
+                    </div>
+                )}
+                
                 {userData.selectedCauses.length > 0 && (
                     <div>
                         <div className="mb-0 mt-0 font-semibold">Causes</div>

@@ -612,7 +612,8 @@ export type FormFieldType =
     | "tags"
     | "location"
     | "causes"
-    | "skills";
+    | "skills"
+    | "auto-handle";
 
 export type FormField = {
     name: string;

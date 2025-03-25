@@ -27,13 +27,15 @@ type PrecisionLevel = 0 | 1 | 2 | 3 | 4;
 interface LocationPickerProps {
     value?: Location;
     onChange: (value: Location) => void;
+    compact?: boolean; // Add compact mode option
 }
 
-const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange }) => {
+const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compact = false }) => {
     const map = useRef<mapboxgl.Map | null>(null);
     const mapContainer = useRef<HTMLDivElement | null>(null);
     const mapMarker = useRef<mapboxgl.Marker | null>(null);
     const [searchOptions, setSearchOptions] = useState<Option[]>([]);
+    // Default to Exact precision (4), regardless of whether location is set
     const [precision, setPrecision] = useState<PrecisionLevel>((value?.precision as PrecisionLevel) ?? 4);
     const [mapboxKey] = useAtom(mapboxKeyAtom);
     const [isLoading, setIsLoading] = useState(false);
@@ -62,20 +64,61 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange }) => {
 
         if (!mapboxKey || !mapContainer.current) return;
         if (map?.current) return; // only initialize mapbox once
+        
+        // Debug info
+        console.log("Initializing map with:", {
+            hasLocation: !!value?.lngLat,
+            precision: precision,
+            zoomLevel: value?.lngLat ? precisionLevels[precision].zoom : 1
+        });
 
         console.log("************* Creating mapbox map *********");
         mapboxgl.accessToken = mapboxKey;
+        
+        // Default to global view when no location is set
+        const defaultCenter: [number, number] = [0, 20]; // Center on equator but slightly north for better world view
+        const defaultZoom = 1; // Global view zoom level - 1 is the most zoomed out
+        
+        // Create the map with explicit defaults
+        // Set two different zoom behaviors:
+        // 1. For UI/slider - maintain precision at Exact (4) for user selection
+        // 2. For map view - use zoom level 1 (global view) when no location set
+        // This way we keep "Exact" precision selected but start with a zoomed out map
+        const initialZoom = value?.lngLat ? precisionLevels[precision].zoom : 1;
+        
         map.current = new mapboxgl.Map({
             container: mapContainer.current,
             style: "mapbox://styles/mapbox/streets-v11",
-            center: value?.lngLat ?? [0, 0],
-            zoom: value?.lngLat ? precisionLevels[precision].zoom : 1,
+            center: value?.lngLat ?? defaultCenter,
+            zoom: initialZoom,
+            maxZoom: 18,
+            minZoom: 0.5,
+            trackResize: true
         });
+        
+        // Log the initial zoom for debugging
+        console.log("Initial map zoom:", value?.lngLat ? precisionLevels[precision].zoom : defaultZoom);
 
-        // add marker
+        // add marker only if location is defined
         const marker = new mapboxgl.Marker();
-        marker.setLngLat(value?.lngLat ?? [0, 0]);
-        marker.addTo(map.current);
+        if (value?.lngLat) {
+            marker.setLngLat(value.lngLat);
+            marker.addTo(map.current);
+        }
+        mapMarker.current = marker;
+        
+        // Make sure the map zoom is correct after load
+        map.current.on('load', () => {
+            const actualZoom = map.current?.getZoom() || 0;
+            console.log("Map loaded with zoom:", actualZoom);
+            
+            // If the zoom is unexpectedly high and no location is set, reset it
+            if (actualZoom > 5 && !value?.lngLat) {
+                console.log("Correcting zoom to global view");
+                map.current?.setZoom(1);
+                map.current?.setCenter([0, 20]);
+            }
+        });
         mapMarker.current = marker;
 
         // Add click event listener to the map
@@ -101,36 +144,58 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange }) => {
     const updateLocation = async (lngLat: LngLat, flyTo: boolean) => {
         if (!map.current || !mapMarker.current) return;
 
-        const response = await fetch(
-            `https://api.mapbox.com/geocoding/v5/mapbox.places/${lngLat.lng},${lngLat.lat}.json?access_token=${mapboxgl.accessToken}`,
-        );
-        const data = await response.json();
+        try {
+            const response = await fetch(
+                `https://api.mapbox.com/geocoding/v5/mapbox.places/${lngLat.lng},${lngLat.lat}.json?access_token=${mapboxgl.accessToken}`,
+            );
+            const data = await response.json();
 
-        if (data.features && data.features.length > 0) {
-            const feature = data.features[0];
-            const newLocation: Location = {
-                precision,
-                country: feature.context.find((c: any) => c.id.startsWith("country"))?.text,
-                region: feature.context.find((c: any) => c.id.startsWith("region"))?.text,
-                city: feature.context.find((c: any) => c.id.startsWith("place"))?.text,
-                street: feature.text,
-                lngLat: lngLat,
-            };
+            if (data.features && data.features.length > 0) {
+                const feature = data.features[0];
+                
+                // Try to safely get context data
+                let country, region, city, street;
+                if (feature.context) {
+                    country = feature.context.find((c: any) => c.id.startsWith("country"))?.text;
+                    region = feature.context.find((c: any) => c.id.startsWith("region"))?.text;
+                    city = feature.context.find((c: any) => c.id.startsWith("place"))?.text;
+                }
+                street = feature.text;
 
-            onChange(newLocation);
+                const newLocation: Location = {
+                    precision,
+                    country,
+                    region,
+                    city, 
+                    street,
+                    lngLat: lngLat,
+                };
 
-            mapMarker.current.setLngLat(lngLat);
-            if (flyTo) {
-                map.current.flyTo({ center: lngLat, zoom: precisionLevels[precision].zoom });
+                // Update the map marker position
+                mapMarker.current.setLngLat(lngLat);
+                if (flyTo) {
+                    map.current.flyTo({ center: lngLat, zoom: precisionLevels[precision].zoom });
+                }
+                
+                // After map updates are done, update the location state
+                onChange(newLocation);
             }
+        } catch (error) {
+            console.error("Error updating location:", error);
         }
     };
 
+    // This effect updates the location's precision when the slider changes
     useEffect(() => {
-        if (value) {
-            const updatedValue = { ...value, precision };
-            onChange(updatedValue);
-            if (map.current && mapMarker.current && value.lngLat) {
+        if (value && value.lngLat) {
+            // Only update if we have an actual location and precision has changed
+            if (value.precision !== precision) {
+                const updatedValue = { ...value, precision };
+                onChange(updatedValue);
+            }
+            
+            // Always update the map view when precision changes
+            if (map.current && mapMarker.current) {
                 map.current.flyTo({ center: value.lngLat, zoom: precisionLevels[precision].zoom });
                 mapMarker.current.setLngLat(value.lngLat);
             }
@@ -202,12 +267,18 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange }) => {
         return parts.length > 0 ? parts.join(", ") : "";
     }, []);
 
+    // Update the autocomplete value when the location or precision changes
+    const memoizedDisplayLocation = useMemo(() => 
+        getDisplayLocation(value, precision), 
+        [value, precision, getDisplayLocation]
+    );
+    
     useEffect(() => {
         setAutoCompleteValue({
             value: value?.lngLat ? `${value.lngLat.lat},${value.lngLat.lng}` : "",
-            label: getDisplayLocation(value, precision),
+            label: memoizedDisplayLocation,
         });
-    }, [value, precision, getDisplayLocation]);
+    }, [value?.lngLat, memoizedDisplayLocation]);
 
     const handleClearLocation = () => {
         onChange({ precision } as Location);
@@ -231,46 +302,53 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange }) => {
                 <MapPin className="mr-2 h-4 w-4" />
                 Use Current Location
             </Button>
-            <div className="relative h-[300px] w-full">
+            {/* Adjust map height based on compact mode */}
+            <div className={`relative w-full ${compact ? 'h-[200px]' : 'h-[300px]'}`}>
                 <div ref={mapContainer} style={{ width: "100%", height: "100%" }}></div>
             </div>
-            <div className="w-full max-w-sm space-y-4">
-                <div className="space-y-2">
-                    <Label>Location Precision</Label>
-                    <Slider
-                        min={0}
-                        max={4}
-                        step={1}
-                        value={[precision]}
-                        onValueChange={(value) => setPrecision(value[0] as PrecisionLevel)}
-                        className="w-full"
-                    />
-                </div>
-                <div className="flex justify-between px-1">
-                    {precisionLevels.map((level, index) => {
-                        const IconComponent = level.icon;
-                        return (
-                            <div
-                                key={level.name}
-                                className={cn(
-                                    "text-center",
-                                    index === precision ? "text-primary" : "text-muted-foreground",
-                                )}
-                            >
-                                <IconComponent
-                                    className={cn(
-                                        "h-6 w-6",
-                                        index === precision ? "scale-125 transition-transform" : "",
-                                    )}
-                                />
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-            <div className="flex flex-col">
-                Precision Level: <span className="font-bold">{precisionLevels[precision].name}</span>
-            </div>
+            
+            {/* Only show precision controls if not in compact mode */}
+            {!compact && (
+                <>
+                    <div className="w-full max-w-sm space-y-4">
+                        <div className="space-y-2">
+                            <Label>Location Precision</Label>
+                            <Slider
+                                min={0}
+                                max={4}
+                                step={1}
+                                value={[precision]}
+                                onValueChange={(value) => setPrecision(value[0] as PrecisionLevel)}
+                                className="w-full"
+                            />
+                        </div>
+                        <div className="flex justify-between px-1">
+                            {precisionLevels.map((level, index) => {
+                                const IconComponent = level.icon;
+                                return (
+                                    <div
+                                        key={level.name}
+                                        className={cn(
+                                            "text-center",
+                                            index === precision ? "text-primary" : "text-muted-foreground",
+                                        )}
+                                    >
+                                        <IconComponent
+                                            className={cn(
+                                                "h-6 w-6",
+                                                index === precision ? "scale-125 transition-transform" : "",
+                                            )}
+                                        />
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <div className="flex flex-col">
+                        Precision Level: <span className="font-bold">{precisionLevels[precision].name}</span>
+                    </div>
+                </>
+            )}
         </div>
     );
 };

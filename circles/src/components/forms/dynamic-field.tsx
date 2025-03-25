@@ -72,6 +72,7 @@ export const DynamicTextField: React.FC<RenderFieldProps> = ({ field, formField,
                 placeholder={field.placeholder}
                 autoComplete={field.autoComplete}
                 readOnly={readOnly}
+                disabled={field.disabled}
                 {...formField}
                 value={formField.value || ""}
             />
@@ -226,6 +227,71 @@ export const DynamicImageField: React.FC<RenderFieldProps> = ({ field, formField
                 </Button>
             )}
 
+            {field.description && <FormDescription>{getUserOrCircleInfo(field.description, isUser)}</FormDescription>}
+            <FormMessage />
+        </FormItem>
+    );
+};
+
+export const DynamicAutoHandleField: React.FC<RenderFieldProps> = ({ field, formField, readOnly, isUser }) => {
+    const { watch } = useFormContext();
+    const nameField = watch('name');
+    const [hasUserEdited, setHasUserEdited] = useState(false);
+    const previousNameRef = useRef(nameField);
+    
+    // Function to generate handle from name
+    const generateHandleFromName = (name: string) => {
+        if (!name) return '';
+        return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    };
+
+    useEffect(() => {
+        // Only auto-update handle if the user hasn't manually edited it yet
+        // and if the name has actually changed (prevents infinite loops)
+        if (!hasUserEdited && nameField && nameField !== previousNameRef.current) {
+            previousNameRef.current = nameField;
+            const generatedHandle = generateHandleFromName(nameField);
+            // Only update if handle would actually change
+            if (generatedHandle !== formField.value) {
+                formField.onChange(generatedHandle);
+            }
+        }
+    }, [nameField, formField, hasUserEdited]);
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newValue = e.target.value;
+        // Mark as user-edited if the value was changed by the user
+        if (newValue !== formField.value) {
+            setHasUserEdited(true);
+        }
+        formField.onChange(newValue);
+    };
+
+    // Check on mount if handle already has a value (for form resubmission cases)
+    useEffect(() => {
+        if (formField.value && nameField) {
+            const generatedHandle = generateHandleFromName(nameField);
+            // If value differs from what would be generated, assume user edited it
+            if (formField.value !== generatedHandle) {
+                setHasUserEdited(true);
+            }
+        }
+    }, []);
+
+    return (
+        <FormItem>
+            <FormLabel>{getUserOrCircleInfo(field.label, isUser)}</FormLabel>
+            <FormControl>
+                <Input
+                    type="text"
+                    placeholder={field.placeholder}
+                    autoComplete={field.autoComplete}
+                    readOnly={readOnly}
+                    {...formField}
+                    value={formField.value || ''}
+                    onChange={handleInputChange}
+                />
+            </FormControl>
             {field.description && <FormDescription>{getUserOrCircleInfo(field.description, isUser)}</FormDescription>}
             <FormMessage />
         </FormItem>
@@ -1041,6 +1107,8 @@ export const DynamicField: React.FC<RenderFieldProps> = ({ field, formField, con
             return DynamicArrayField({ field, formField, control, readOnly, isUser });
         case "hidden":
             return DynamicTextField({ field, formField, control, readOnly, isUser, collapse: true });
+        case "auto-handle":
+            return DynamicAutoHandleField({ field, formField, control, readOnly, isUser });
         case "handle":
         case "text":
         case "email":

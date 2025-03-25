@@ -6,12 +6,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useRouter } from "next/navigation";
-import { Circle } from "@/models/models";
+import { Circle, Location } from "@/models/models";
 import { generateHandle } from "@/lib/utils/helpers-client";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { Plus } from "lucide-react";
 import { onFormSubmit } from "@/components/forms/actions";
+import LocationPicker from "@/components/forms/location-picker";
 
 interface CreateProjectDialogProps {
     parentCircle: Circle;
@@ -22,6 +23,7 @@ export function CreateProjectDialog({ parentCircle }: CreateProjectDialogProps) 
     const [title, setTitle] = useState("");
     const [content, setContent] = useState("");
     const [coverImage, setCoverImage] = useState<File | null>(null);
+    const [location, setLocation] = useState<Location>();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const router = useRouter();
     const { toast } = useToast();
@@ -78,6 +80,10 @@ export function CreateProjectDialog({ parentCircle }: CreateProjectDialogProps) 
             if (coverImage) {
                 formData.append("cover", coverImage);
             }
+            
+            if (location) {
+                formData.append("location", JSON.stringify(location));
+            }
 
             // Call the `onFormSubmit` server action
             const response = await onFormSubmit("create-circle-form", formData);
@@ -119,7 +125,7 @@ export function CreateProjectDialog({ parentCircle }: CreateProjectDialogProps) 
                     New Project
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[425px] max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Create New Project</DialogTitle>
                 </DialogHeader>
@@ -154,6 +160,11 @@ export function CreateProjectDialog({ parentCircle }: CreateProjectDialogProps) 
                             accept="image/*"
                             onChange={(e) => setCoverImage(e.target.files ? e.target.files[0] : null)}
                         />
+                    </div>
+                    
+                    <div className="space-y-2">
+                        <Label>Project Location</Label>
+                        <LocationPicker value={location} onChange={setLocation} compact={true} />
                     </div>
 
                     <div className="flex justify-end space-x-2 pt-4">

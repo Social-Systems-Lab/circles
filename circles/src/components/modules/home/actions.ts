@@ -12,7 +12,7 @@ import { getAuthenticatedUserDid, getAuthorizedMembers, isAuthorized } from "@/l
 import { features } from "@/lib/data/constants";
 import { saveFile } from "@/lib/data/storage";
 import { revalidatePath } from "next/cache";
-import { getUser, getUserById, getUserPrivate, updateUser } from "@/lib/data/user";
+import { getUser, getUserById, getUserPrivate } from "@/lib/data/user";
 import { notifyNewMember, sendNotifications } from "@/lib/data/matrix";
 
 type CircleActionResponse = {
@@ -152,6 +152,53 @@ export const cancelFollowRequest = async (circle: Circle): Promise<CircleActionR
     }
 };
 
+export const updateUser = async (userId: string, formData: FormData): Promise<UserPrivate | undefined> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return undefined;
+    }
+
+    try {
+        // Get current user
+        const currentUser = await getUserById(userId);
+        if (!currentUser || currentUser.did !== userDid) {
+            // Only allow users to update their own profile
+            return undefined;
+        }
+
+        let updateData: Partial<Circle> = { _id: userId };
+
+        for (const [key, value] of formData.entries() as any) {
+            if (key === "picture" || key === "cover") {
+                let fileInfo = await saveFile(value, key, userId, true);
+                updateData[key as keyof Circle] = fileInfo;
+                revalidatePath(fileInfo.url);
+            } else if (key === "location") {
+                // Parse location JSON
+                try {
+                    updateData[key as keyof Circle] = JSON.parse(value as string);
+                } catch (e) {
+                    console.error("Failed to parse location data", e);
+                }
+            } else {
+                updateData[key as keyof Circle] = value as string;
+            }
+        }
+
+        await updateCircle(updateData);
+
+        // Revalidate the profile path
+        revalidatePath(`/circles/${currentUser.handle}`);
+
+        // Get updated user data
+        const updatedUser = await getUserPrivate(userDid);
+        return updatedUser;
+    } catch (error) {
+        console.error("Failed to update user", error);
+        return undefined;
+    }
+};
+
 export const updateCircleField = async (circleId: string, formData: FormData): Promise<CircleActionResponse> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -171,6 +218,13 @@ export const updateCircleField = async (circleId: string, formData: FormData): P
                 let fileInfo = await saveFile(value, key, circleId, true);
                 updateData[key as keyof Circle] = fileInfo;
                 revalidatePath(fileInfo.url);
+            } else if (key === "location") {
+                // Parse location JSON
+                try {
+                    updateData[key as keyof Circle] = JSON.parse(value as string);
+                } catch (e) {
+                    console.error("Failed to parse location data", e);
+                }
             } else {
                 updateData[key as keyof Circle] = value as string;
             }
