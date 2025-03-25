@@ -6,10 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { OnboardingStepProps } from "./onboarding";
 import { useState } from "react";
-import { updateUser } from "@/components/modules/home/actions";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { Loader2 } from "lucide-react";
+import { saveProfileAction } from "./actions";
 
 export default function ProfileStep({ userData, nextStep, prevStep }: OnboardingStepProps) {
     const [user, setUser] = useAtom(userAtom);
@@ -22,20 +22,26 @@ export default function ProfileStep({ userData, nextStep, prevStep }: Onboarding
         
         setIsSubmitting(true);
         try {
-            // Create FormData object to send to server
-            const formData = new FormData();
-            formData.append("description", shortBio);
-            formData.append("content", content);
-
-            // Send form data to server
-            const updatedUser = await updateUser(user._id, formData);
+            // Save profile and mark the step as completed
+            const result = await saveProfileAction(shortBio, content, user._id);
             
-            if (updatedUser) {
-                setUser(updatedUser);
+            if (result.success) {
+                // Update local user state with new values
+                setUser({
+                    ...user,
+                    description: shortBio,
+                    content: content,
+                    completedOnboardingSteps: [
+                        ...(user.completedOnboardingSteps || []),
+                        "profile"
+                    ]
+                });
+                
+                // Move to next step
+                nextStep();
+            } else {
+                console.error("Error saving profile:", result.message);
             }
-            
-            // Move to next step
-            nextStep();
         } catch (error) {
             console.error("Error updating user profile:", error);
         } finally {

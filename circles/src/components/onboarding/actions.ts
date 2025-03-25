@@ -258,6 +258,151 @@ type FetchMissionStatementsResponse = {
     message?: string;
 };
 
+// Action to save profile info (description and content) and mark the step complete
+export const saveProfileAction = async (
+    description: string,
+    content: string,
+    circleId: string,
+): Promise<SaveMissionActionResponse> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to edit profile" };
+    }
+
+    try {
+        let circle: Partial<Circle> = {
+            _id: circleId,
+            description,
+            content,
+        };
+
+        // Check if user is authorized to edit circle settings
+        let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
+        if (!authorized) {
+            return { success: false, message: "You are not authorized to edit profile" };
+        }
+
+        // Add profile step to completedOnboardingSteps
+        let user = await getUserByDid(userDid);
+        circle.completedOnboardingSteps = user.completedOnboardingSteps ?? [];
+        if (!circle.completedOnboardingSteps.includes("profile")) {
+            circle.completedOnboardingSteps.push("profile");
+        }
+
+        await updateCircle(circle);
+
+        // Clear page cache so pages update
+        let circlePath = await getCirclePath(circle);
+        revalidatePath(circlePath);
+
+        return { success: true, message: "Profile saved successfully" };
+    } catch (error) {
+        console.log("error", error);
+        if (error instanceof Error) {
+            return { success: false, message: error.message };
+        } else {
+            return { success: false, message: "Failed to save profile. " + error };
+        }
+    }
+};
+
+// Action to save location and mark the step complete
+export const saveLocationAction = async (location: any, circleId: string): Promise<SaveMissionActionResponse> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to set location" };
+    }
+
+    try {
+        let circle: Partial<Circle> = {
+            _id: circleId,
+            location,
+        };
+
+        // Check if user is authorized to edit circle settings
+        let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
+        if (!authorized) {
+            return { success: false, message: "You are not authorized to edit location" };
+        }
+
+        // Add location step to completedOnboardingSteps
+        let user = await getUserByDid(userDid);
+        circle.completedOnboardingSteps = user.completedOnboardingSteps ?? [];
+        if (!circle.completedOnboardingSteps.includes("location")) {
+            circle.completedOnboardingSteps.push("location");
+        }
+
+        await updateCircle(circle);
+
+        // Clear page cache so pages update
+        let circlePath = await getCirclePath(circle);
+        revalidatePath(circlePath);
+
+        return { success: true, message: "Location saved successfully" };
+    } catch (error) {
+        console.log("error", error);
+        if (error instanceof Error) {
+            return { success: false, message: error.message };
+        } else {
+            return { success: false, message: "Failed to save location. " + error };
+        }
+    }
+};
+
+// Mark welcome step as completed
+export const completeWelcomeStep = async (circleId: string): Promise<SaveMissionActionResponse> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in" };
+    }
+
+    try {
+        // Add welcome step to completedOnboardingSteps
+        let user = await getUserByDid(userDid);
+        let circle: Partial<Circle> = {
+            _id: circleId,
+            completedOnboardingSteps: user.completedOnboardingSteps ?? [],
+        };
+
+        if (!circle.completedOnboardingSteps?.includes("welcome")) {
+            circle.completedOnboardingSteps?.push("welcome");
+        }
+
+        await updateCircle(circle);
+        return { success: true, message: "Welcome step completed" };
+    } catch (error) {
+        console.log("error", error);
+        return { success: false, message: "Failed to update step status" };
+    }
+};
+
+// Mark final step as completed
+export const completeFinalStep = async (circleId: string): Promise<SaveMissionActionResponse> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in" };
+    }
+
+    try {
+        // Add final step to completedOnboardingSteps
+        let user = await getUserByDid(userDid);
+        let circle: Partial<Circle> = {
+            _id: circleId,
+            completedOnboardingSteps: user.completedOnboardingSteps ?? [],
+        };
+
+        if (!circle.completedOnboardingSteps?.includes("final")) {
+            circle.completedOnboardingSteps?.push("final");
+        }
+
+        await updateCircle(circle);
+        return { success: true, message: "Final step completed" };
+    } catch (error) {
+        console.log("error", error);
+        return { success: false, message: "Failed to update step status" };
+    }
+};
+
 export const fetchMissionStatements = async (circleId: string): Promise<FetchMissionStatementsResponse> => {
     try {
         const client = await getQdrantClient();

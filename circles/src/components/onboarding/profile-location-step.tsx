@@ -5,12 +5,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { OnboardingStepProps } from "./onboarding";
 import { useState } from "react";
-import { updateUser } from "@/components/modules/home/actions";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { Loader2, MapPin } from "lucide-react";
 import { Location } from "@/models/models";
 import LocationPicker from "@/components/forms/location-picker";
+import { saveLocationAction } from "./actions";
 
 export default function ProfileLocationStep({ userData, nextStep, prevStep }: OnboardingStepProps) {
     const [user, setUser] = useAtom(userAtom);
@@ -22,22 +22,25 @@ export default function ProfileLocationStep({ userData, nextStep, prevStep }: On
         
         setIsSubmitting(true);
         try {
-            // Create FormData object to send to server
-            const formData = new FormData();
+            // Save location and mark the step as completed
+            const result = await saveLocationAction(location, user._id);
             
-            if (location) {
-                formData.append("location", JSON.stringify(location));
+            if (result.success) {
+                // Update local user state with new location
+                setUser({
+                    ...user,
+                    location,
+                    completedOnboardingSteps: [
+                        ...(user.completedOnboardingSteps || []),
+                        "location"
+                    ]
+                });
+                
+                // Move to next step
+                nextStep();
+            } else {
+                console.error("Error saving location:", result.message);
             }
-
-            // Send form data to server
-            const updatedUser = await updateUser(user._id, formData);
-            
-            if (updatedUser) {
-                setUser(updatedUser);
-            }
-            
-            // Move to next step
-            nextStep();
         } catch (error) {
             console.error("Error updating user location:", error);
         } finally {

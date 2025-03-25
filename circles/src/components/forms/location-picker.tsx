@@ -99,12 +99,16 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
         // Log the initial zoom for debugging
         console.log("Initial map zoom:", value?.lngLat ? precisionLevels[precision].zoom : defaultZoom);
 
-        // add marker only if location is defined
+        // Create the marker but don't add it to the map yet if no location
         const marker = new mapboxgl.Marker();
+        
+        // If we have an initial location, set the marker and add it to map
         if (value?.lngLat) {
             marker.setLngLat(value.lngLat);
             marker.addTo(map.current);
         }
+        
+        // Store the marker reference for later use
         mapMarker.current = marker;
         
         // Make sure the map zoom is correct after load
@@ -123,6 +127,13 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
 
         // Add click event listener to the map
         map.current.on("click", (e) => {
+            // When a user clicks on the map, ensure the marker is added if it's the first click
+            if (mapMarker.current && !mapMarker.current.getLngLat()) {
+                // This is the first click, need to add the marker to the map
+                mapMarker.current.setLngLat([e.lngLat.lng, e.lngLat.lat]);
+                mapMarker.current.addTo(map.current);
+            }
+            
             updateLocation({ lng: e.lngLat.lng, lat: e.lngLat.lat }, false);
             setIsLocationConfirmed(true);
         });
@@ -173,6 +184,12 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
 
                 // Update the map marker position
                 mapMarker.current.setLngLat(lngLat);
+                
+                // Make sure the marker is added to the map if it hasn't been yet
+                if (!mapMarker.current.getElement().parentNode) {
+                    mapMarker.current.addTo(map.current);
+                }
+                
                 if (flyTo) {
                     map.current.flyTo({ center: lngLat, zoom: precisionLevels[precision].zoom });
                 }

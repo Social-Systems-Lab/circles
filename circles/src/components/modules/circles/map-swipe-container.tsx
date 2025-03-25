@@ -54,7 +54,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
         },
         [displayedCircles],
     );
-    
+
     // Update map zoom whenever currentIndex changes
     useEffect(() => {
         if (currentIndex < displayedCircles.length) {
@@ -69,9 +69,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
     }, [currentIndex, displayedCircles, setZoomContent]);
 
     const handleRefresh = () => {
-        // Reset to the first card
-        setCurrentIndex(0);
-        // The useEffect hooked to currentIndex will handle the map zoom
+        window.location.reload();
     };
 
     // Initial focus on first circle when loaded
@@ -149,7 +147,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
                                                 <Image
                                                     src={circle.cover?.url ?? "/images/default-cover.png"}
                                                     alt=""
-                                                    className="object-cover pointer-events-none"
+                                                    className="pointer-events-none object-cover"
                                                     fill
                                                 />
                                             </div>
@@ -171,7 +169,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
                                     </p>
                                     <Button onClick={handleRefresh} className="mt-4 gap-2">
                                         <RefreshCw className="h-4 w-4" />
-                                        Start Over
+                                        Refresh
                                     </Button>
                                 </motion.div>
                             )}

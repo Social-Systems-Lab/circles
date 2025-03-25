@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,7 +15,7 @@ import ProfileStep from "./profile-step";
 import ProfileLocationStep from "./profile-location-step";
 import FinalStep from "./final-step";
 import ProfileSummary from "./profile-summary";
-import { Cause, Skill } from "@/models/models";
+import { Cause, ONBOARDING_STEPS, OnboardingStep, Skill } from "@/models/models";
 import { causes, LOG_LEVEL_TRACE, logLevel, skills } from "@/lib/data/constants";
 
 export type Quest = {
@@ -53,6 +53,65 @@ export default function Onboarding() {
 
     const [userData, setUserData] = useState<OnboardingUserData | undefined>(undefined);
 
+    // Filter steps based on what's already completed
+    const steps = useMemo(() => {
+        // Mapping of step IDs to components
+        const stepComponents = {
+            welcome: WelcomeStep,
+            mission: MissionStep,
+            profile: ProfileStep,
+            location: ProfileLocationStep,
+            causes: CausesStep,
+            skills: SkillsStep,
+            final: FinalStep,
+        };
+
+        if (!user || !user.completedOnboardingSteps) {
+            // First time - show all steps
+            return ONBOARDING_STEPS.map((stepId) => ({
+                id: stepId,
+                component: stepComponents[stepId],
+                title: getStepTitle(stepId),
+            }));
+        }
+
+        // Get remaining steps the user needs to complete
+        const completedSteps = user.completedOnboardingSteps as OnboardingStep[];
+
+        // If user has completed all steps, don't open onboarding
+        const allStepsComplete = ONBOARDING_STEPS.every((step) => completedSteps.includes(step));
+
+        if (allStepsComplete) {
+            return [];
+        }
+
+        // Filter to only show incomplete steps
+        let stepsToShow: OnboardingStep[] = [];
+
+        // Always show Welcome step if nothing completed yet
+        if (completedSteps.length === 0) {
+            stepsToShow.push("welcome");
+        }
+
+        // Add all incomplete steps
+        ONBOARDING_STEPS.forEach((step) => {
+            if (!completedSteps.includes(step) && step !== "welcome") {
+                stepsToShow.push(step);
+            }
+        });
+
+        // Always include Final step
+        if (stepsToShow.length > 0 && !stepsToShow.includes("final")) {
+            stepsToShow.push("final");
+        }
+
+        return stepsToShow.map((stepId) => ({
+            id: stepId,
+            component: stepComponents[stepId],
+            title: getStepTitle(stepId),
+        }));
+    }, [user]);
+
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
             console.log("useEffect.Onboarding.1");
@@ -62,66 +121,51 @@ export default function Onboarding() {
     useEffect(() => {
         if (!user) return;
         if (authInfo.authStatus !== "authenticated") return;
-        if (!user.completedOnboardingSteps && !hasClosedOnboarding) {
-            // TODO here we can show steps based on user's progress through onboarding, for now any steps done is considered complete
+
+        // Check if there are any steps to show
+        if (steps.length > 0 && !hasClosedOnboarding) {
             setIsOpen(true);
         }
-    }, [user, authInfo, hasClosedOnboarding]);
+    }, [user, authInfo, hasClosedOnboarding, steps]);
 
     useEffect(() => {
-        if (!isOpen) return;
+        if (!isOpen || !user) return;
         setUserData({
-            name: user?.name || "",
-            mission: user?.mission || "",
-            selectedCauses: user?.causes?.map((x) => causes.find((y) => y.handle === x) as Cause) ?? [],
-            selectedSkills: user?.skills?.map((x) => skills.find((y) => y.handle === x) as Skill) ?? [],
+            name: user.name || "",
+            mission: user.mission || "",
+            selectedCauses: user.causes?.map((x) => causes.find((y) => y.handle === x) as Cause) ?? [],
+            selectedSkills: user.skills?.map((x) => skills.find((y) => y.handle === x) as Skill) ?? [],
             selectedQuests: [],
-            picture: user?.picture?.url || "/images/default-user-picture.png",
+            picture: user.picture?.url || "/images/default-user-picture.png",
         });
-    }, [isOpen, user?.causes, user?.mission, user?.name, user?.picture?.url, user?.skills]);
 
-    const steps = [
-        {
-            id: "welcome",
-            component: WelcomeStep,
-            title: "Welcome to Circles",
-        },
-        {
-            id: "mission",
-            component: MissionStep,
-            title: "Your Mission",
-        },
-        {
-            id: "profile",
-            component: ProfileStep,
-            title: "About You",
-        },
-        {
-            id: "location",
-            component: ProfileLocationStep,
-            title: "Your Location",
-        },
-        {
-            id: "causes",
-            component: CausesStep,
-            title: "Choose Your Causes",
-        },
-        {
-            id: "skills",
-            component: SkillsStep,
-            title: "Your Skills and Powers",
-        },
-        // {
-        //     id: "quests",
-        //     component: QuestsStep,
-        //     title: "Embark on Quests",
-        // },
-        {
-            id: "final",
-            component: FinalStep,
-            title: "Welcome, Changemaker!",
-        },
-    ];
+        // If we have steps to show, set the current step to the first one
+        if (steps.length > 0) {
+            setCurrentStepIndex(0);
+        }
+    }, [isOpen, user, steps]);
+
+    // Helper function to get step titles
+    function getStepTitle(stepId: string) {
+        switch (stepId) {
+            case "welcome":
+                return "Welcome to Circles";
+            case "mission":
+                return "Your Mission";
+            case "profile":
+                return "About You";
+            case "location":
+                return "Your Location";
+            case "causes":
+                return "Choose Your Causes";
+            case "skills":
+                return "Your Skills and Powers";
+            case "final":
+                return "Welcome, Changemaker!";
+            default:
+                return "Onboarding";
+        }
+    }
 
     const totalSteps = steps.length;
 
@@ -140,7 +184,7 @@ export default function Onboarding() {
         }
     };
 
-    const CurrentStepComponent = steps[currentStepIndex].component;
+    const CurrentStepComponent = steps[currentStepIndex]?.component;
 
     if (!isOpen || !userData) {
         return (
@@ -166,8 +210,8 @@ export default function Onboarding() {
                 onClick={() => setIsOpen(false)}
             ></div>
 
-            <Card className="w-full max-w-5xl overflow-hidden rounded-2xl border-0 bg-[#f9f9f9] shadow-xl backdrop-blur-sm max-h-[90vh]">
-                <CardContent className="p-6 max-h-[calc(90vh-2rem)] overflow-y-auto">
+            <Card className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl border-0 bg-[#f9f9f9] shadow-xl backdrop-blur-sm">
+                <CardContent className="max-h-[calc(90vh-2rem)] overflow-y-auto p-6">
                     <div className="flex gap-6">
                         <div className="hidden md:block">
                             <ProfileSummary userData={userData!} />

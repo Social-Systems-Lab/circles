@@ -771,3 +771,8 @@ export type NotificationType =
     | "project_comment" // Someone commented on your project
     | "project_comment_reply" // Someone replied to your comment on a project
     | "project_mention"; // Someone mentioned you in a project comment
+
+// Define all onboarding steps in a single place for consistency
+export const ONBOARDING_STEPS = ["welcome", "mission", "profile", "location", "causes", "skills", "final"] as const;
+
+export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];

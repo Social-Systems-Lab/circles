@@ -8,17 +8,50 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { OnboardingStepProps } from "./onboarding";
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
-import { getPlatformMetrics } from "./actions";
+import { completeFinalStep, getPlatformMetrics } from "./actions";
 import { PlatformMetrics } from "@/models/models";
+import { useAtom } from "jotai";
+import { userAtom } from "@/lib/data/atoms";
 
 function FinalStep({ nextStep }: OnboardingStepProps) {
     const [platformMetrics, setPlatformMetrics] = useState<PlatformMetrics | undefined>(undefined);
+    const [user, setUser] = useAtom(userAtom);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         getPlatformMetrics().then((metrics) => {
             setPlatformMetrics(metrics);
         });
     }, []);
+    
+    const handleComplete = async () => {
+        if (!user?._id) {
+            nextStep();
+            return;
+        }
+        
+        setIsSubmitting(true);
+        try {
+            // Mark final step as completed
+            await completeFinalStep(user._id);
+            
+            // Update local user state
+            setUser({
+                ...user,
+                completedOnboardingSteps: [
+                    ...(user.completedOnboardingSteps || []),
+                    "final"
+                ]
+            });
+            
+            nextStep();
+        } catch (error) {
+            console.error("Error marking final step complete:", error);
+            nextStep(); // Continue anyway
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     return (
         <div className="space-y-4">
@@ -77,7 +110,11 @@ function FinalStep({ nextStep }: OnboardingStepProps) {
                 make a difference together!
             </p>
             <div className="mt-4 flex items-center justify-center">
-                <Button onClick={nextStep} className="mx-auto rounded-full">
+                <Button 
+                    onClick={handleComplete} 
+                    className="mx-auto rounded-full"
+                    disabled={isSubmitting}
+                >
                     Begin Your Adventure
                 </Button>
             </div>
