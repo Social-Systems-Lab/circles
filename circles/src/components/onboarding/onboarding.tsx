@@ -129,19 +129,25 @@ export default function Onboarding() {
         }
     }, [user, authInfo, hasClosedOnboarding, steps]);
 
-    // Effect to initialize user data when onboarding opens
+    // Effect to initialize and keep user data in sync
     useEffect(() => {
         if (!isOpen || !user) return;
 
-        setUserData({
-            name: user.name || "",
-            mission: user.mission || "",
-            selectedCauses: user.causes?.map((x) => causes.find((y) => y.handle === x) as Cause) ?? [],
-            selectedSkills: user.skills?.map((x) => skills.find((y) => y.handle === x) as Skill) ?? [],
-            selectedQuests: [],
-            picture: user.picture?.url || "/images/default-user-picture.png",
+        // Create or update the userData with current user values
+        setUserData(prev => {
+            const newData = {
+                name: user.name || "",
+                mission: user.mission || "",
+                selectedCauses: user.causes?.map((x) => causes.find((y) => y.handle === x) as Cause) ?? [],
+                selectedSkills: user.skills?.map((x) => skills.find((y) => y.handle === x) as Skill) ?? [],
+                selectedQuests: prev?.selectedQuests ?? [],
+                picture: user.picture?.url || "/images/default-user-picture.png",
+            };
+            
+            // If userData doesn't exist yet or if values have changed, return the new object
+            return newData;
         });
-    }, [isOpen, user]);
+    }, [isOpen, user?._id, user?.picture?.url]); // Only depend on significant user properties
 
     // Separate effect to reset step index only when onboarding opens or steps array changes
     useEffect(() => {

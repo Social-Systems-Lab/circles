@@ -5,7 +5,7 @@ import Image from "next/image";
 import { OnboardingUserData } from "./onboarding";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
-import EditableImage from "../modules/home/editable-image";
+import { useEffect, useState } from "react";
 import EditableField from "../modules/home/editable-field";
 
 type ProfileSummaryProps = {
@@ -14,6 +14,32 @@ type ProfileSummaryProps = {
 
 function ProfileSummary({ userData }: ProfileSummaryProps) {
     const [user, setUser] = useAtom(userAtom);
+    const [profilePicture, setProfilePicture] = useState<string | undefined>(undefined);
+    
+    // Use a reference to track if we've set the initial value
+    const [initialized, setInitialized] = useState(false);
+    
+    // Initialize profile picture ONCE when component mounts
+    useEffect(() => {
+        if (!initialized) {
+            // Prioritize user.picture from the atom as it's the most up-to-date
+            if (user?.picture?.url) {
+                setProfilePicture(user.picture.url);
+            } else if (userData?.picture) {
+                setProfilePicture(userData.picture);
+            } else {
+                setProfilePicture("/images/default-picture.png");
+            }
+            setInitialized(true);
+        }
+    }, [initialized, user, userData]);
+    
+    // Only update when user picture changes
+    useEffect(() => {
+        if (initialized && user?.picture?.url) {
+            setProfilePicture(user.picture.url);
+        }
+    }, [initialized, user?.picture?.url]);
 
     if (!user) {
         return null;
@@ -24,14 +50,11 @@ function ProfileSummary({ userData }: ProfileSummaryProps) {
             <div className="space-y-4">
                 <div className="relative flex flex-col items-center">
                     <div className="relative h-[80px] w-[80px]">
-                        <EditableImage
-                            id="picture"
-                            src={user?.picture?.url ?? "/images/default-picture.png"}
+                        <Image
+                            src={profilePicture || "/images/default-picture.png"}
                             alt="Profile Picture"
                             fill
                             className="rounded-full border-2 border-white bg-white object-cover shadow-lg"
-                            circleId={user?._id!}
-                            setCircle={setUser}
                         />
                     </div>
                     <div className="mt-2 text-[18px] font-semibold">
