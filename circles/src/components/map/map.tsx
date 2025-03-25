@@ -92,6 +92,7 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
             style: "mapbox://styles/mapbox/streets-v12",
             center: [lng, lat],
             zoom: zoom,
+            maxZoom: 12, // Limit maximum zoom to city level
         });
     }, [mapContainer, lat, lng, zoom, mapboxKey, displayedContent]);
 
@@ -145,10 +146,16 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
         // zoom in on content
         let location = zoomContent?.location as Location;
         if (location?.lngLat) {
-            let zoom = precisionLevels[location.precision].zoom ?? 14;
+            // Get the zoom level based on precision
+            let calculatedZoom = precisionLevels[location.precision].zoom ?? 14;
+            
+            // Limit maximum zoom to city level (12), regardless of the precision setting
+            const maxZoom = 12; // City level zoom
+            const finalZoom = Math.min(calculatedZoom, maxZoom);
+            
             map.current?.flyTo({
                 center: location.lngLat,
-                zoom: zoom,
+                zoom: finalZoom,
                 essential: true, // this animation is considered essential with respect to prefers-reduced-motion
             });
         }
@@ -164,7 +171,7 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
             if (map.current) {
                 map.current.flyTo({
                     center: [userLng, userLat],
-                    zoom: 12, // Adjust this value for city-level zoom
+                    zoom: 12, // City-level zoom
                     essential: true, // this animation is considered essential with respect to prefers-reduced-motion
                 });
             }

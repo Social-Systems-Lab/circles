@@ -8,10 +8,12 @@ import { motion } from "framer-motion";
 import CircleSwipeCard from "./circle-swipe-card";
 import { MapDisplay } from "@/components/map/map";
 import { Button } from "@/components/ui/button";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Binoculars, X } from "lucide-react";
 import { useAtom } from "jotai";
 import { userAtom, zoomContentAtom } from "@/lib/data/atoms";
 import Image from "next/image";
+import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface MapSwipeContainerProps {
     circles: WithMetric<Circle>[];
@@ -25,6 +27,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
     const [, setZoomContent] = useAtom(zoomContentAtom);
     const isMobile = useIsMobile();
     const { windowWidth, windowHeight } = useWindowDimensions();
+    const [showCards, setShowCards] = useState(true); // State to toggle card visibility
 
     // Filter out circles the user already follows or has ignored
     useEffect(() => {
@@ -104,14 +107,38 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
                 </div>
             )}
 
+            {/* Toggle button for cards */}
+            <div className="absolute left-4 top-4 z-50">
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                onClick={() => setShowCards(!showCards)}
+                                className="flex h-10 w-10 items-center justify-center rounded-full bg-white p-2 shadow-md hover:bg-gray-100"
+                                variant="ghost"
+                                size="icon"
+                            >
+                                {showCards ? <X className="h-5 w-5" /> : <Binoculars className="h-5 w-5" />}
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>{showCards ? "Hide cards" : "Show cards"}</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+            </div>
+
             {/* Cards container - positioned on the left for desktop or full-width for mobile */}
             <div
-                className={`absolute left-4 z-40 flex flex-col items-center justify-start overflow-visible ${
-                    isMobile ? "w-full" : "w-[400px]"
-                }`}
+                className={cn(
+                    `absolute left-4 z-40 flex flex-col items-center justify-start overflow-visible transition-all duration-300`,
+                    isMobile ? "w-full" : "w-[400px]",
+                    !showCards && "pointer-events-none opacity-0",
+                )}
                 style={{
                     top: isMobile ? "80px" : "100px",
                     height: `calc(${windowHeight}px - 150px)`,
+                    transform: showCards ? "translateX(0)" : "translateX(-20px)",
                 }}
             >
                 <div className="relative mb-4 flex w-full max-w-[400px] flex-col items-center">

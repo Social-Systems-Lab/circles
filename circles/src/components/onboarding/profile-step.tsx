@@ -123,10 +123,13 @@ export default function ProfileStep({ userData, setUserData, nextStep, prevStep 
             if (setUserData && userData) {
                 // Do this in a timeout to avoid React batch updates that might cause loops
                 setTimeout(() => {
-                    setUserData((prev) => ({
-                        ...prev,
-                        picture: user.picture?.url || prev.picture,
-                    }));
+                    setUserData((prev) => {
+                        if (!prev) return prev;
+                        return {
+                            ...prev,
+                            picture: user.picture?.url || prev.picture,
+                        };
+                    });
                 }, 0);
             }
         }
@@ -207,13 +210,16 @@ export default function ProfileStep({ userData, setUserData, nextStep, prevStep 
 
         // Update user atom if the update isn't from a temporary URL
         if (!newUrl.startsWith("blob:")) {
-            setUser((prev) => ({
-                ...prev,
-                cover: {
-                    ...prev.cover,
-                    url: newUrl,
-                },
-            }));
+            setUser((prev) => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    cover: {
+                        ...prev.cover,
+                        url: newUrl,
+                    },
+                };
+            });
         }
     };
 
