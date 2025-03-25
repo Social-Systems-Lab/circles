@@ -64,28 +64,28 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
 
         if (!mapboxKey || !mapContainer.current) return;
         if (map?.current) return; // only initialize mapbox once
-        
+
         // Debug info
         console.log("Initializing map with:", {
             hasLocation: !!value?.lngLat,
             precision: precision,
-            zoomLevel: value?.lngLat ? precisionLevels[precision].zoom : 1
+            zoomLevel: value?.lngLat ? precisionLevels[precision].zoom : 1,
         });
 
         console.log("************* Creating mapbox map *********");
         mapboxgl.accessToken = mapboxKey;
-        
+
         // Default to global view when no location is set
         const defaultCenter: [number, number] = [0, 20]; // Center on equator but slightly north for better world view
         const defaultZoom = 1; // Global view zoom level - 1 is the most zoomed out
-        
+
         // Create the map with explicit defaults
         // Set two different zoom behaviors:
         // 1. For UI/slider - maintain precision at Exact (4) for user selection
         // 2. For map view - use zoom level 1 (global view) when no location set
         // This way we keep "Exact" precision selected but start with a zoomed out map
         const initialZoom = value?.lngLat ? precisionLevels[precision].zoom : 1;
-        
+
         map.current = new mapboxgl.Map({
             container: mapContainer.current,
             style: "mapbox://styles/mapbox/streets-v11",
@@ -93,29 +93,29 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
             zoom: initialZoom,
             maxZoom: 18,
             minZoom: 0.5,
-            trackResize: true
+            trackResize: true,
         });
-        
+
         // Log the initial zoom for debugging
         console.log("Initial map zoom:", value?.lngLat ? precisionLevels[precision].zoom : defaultZoom);
 
         // Create the marker but don't add it to the map yet if no location
         const marker = new mapboxgl.Marker();
-        
+
         // If we have an initial location, set the marker and add it to map
         if (value?.lngLat) {
             marker.setLngLat(value.lngLat);
             marker.addTo(map.current);
         }
-        
+
         // Store the marker reference for later use
         mapMarker.current = marker;
-        
+
         // Make sure the map zoom is correct after load
-        map.current.on('load', () => {
+        map.current.on("load", () => {
             const actualZoom = map.current?.getZoom() || 0;
             console.log("Map loaded with zoom:", actualZoom);
-            
+
             // If the zoom is unexpectedly high and no location is set, reset it
             if (actualZoom > 5 && !value?.lngLat) {
                 console.log("Correcting zoom to global view");
@@ -128,12 +128,12 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
         // Add click event listener to the map
         map.current.on("click", (e) => {
             // When a user clicks on the map, ensure the marker is added if it's the first click
-            if (mapMarker.current && !mapMarker.current.getLngLat()) {
+            if (map.current && mapMarker.current && !mapMarker.current.getLngLat()) {
                 // This is the first click, need to add the marker to the map
                 mapMarker.current.setLngLat([e.lngLat.lng, e.lngLat.lat]);
                 mapMarker.current.addTo(map.current);
             }
-            
+
             updateLocation({ lng: e.lngLat.lng, lat: e.lngLat.lat }, false);
             setIsLocationConfirmed(true);
         });
@@ -163,7 +163,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
 
             if (data.features && data.features.length > 0) {
                 const feature = data.features[0];
-                
+
                 // Try to safely get context data
                 let country, region, city, street;
                 if (feature.context) {
@@ -177,23 +177,23 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
                     precision,
                     country,
                     region,
-                    city, 
+                    city,
                     street,
                     lngLat: lngLat,
                 };
 
                 // Update the map marker position
                 mapMarker.current.setLngLat(lngLat);
-                
+
                 // Make sure the marker is added to the map if it hasn't been yet
                 if (!mapMarker.current.getElement().parentNode) {
                     mapMarker.current.addTo(map.current);
                 }
-                
+
                 if (flyTo) {
                     map.current.flyTo({ center: lngLat, zoom: precisionLevels[precision].zoom });
                 }
-                
+
                 // After map updates are done, update the location state
                 onChange(newLocation);
             }
@@ -210,7 +210,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
                 const updatedValue = { ...value, precision };
                 onChange(updatedValue);
             }
-            
+
             // Always update the map view when precision changes
             if (map.current && mapMarker.current) {
                 map.current.flyTo({ center: value.lngLat, zoom: precisionLevels[precision].zoom });
@@ -285,11 +285,11 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
     }, []);
 
     // Update the autocomplete value when the location or precision changes
-    const memoizedDisplayLocation = useMemo(() => 
-        getDisplayLocation(value, precision), 
-        [value, precision, getDisplayLocation]
+    const memoizedDisplayLocation = useMemo(
+        () => getDisplayLocation(value, precision),
+        [value, precision, getDisplayLocation],
     );
-    
+
     useEffect(() => {
         setAutoCompleteValue({
             value: value?.lngLat ? `${value.lngLat.lat},${value.lngLat.lng}` : "",
@@ -320,10 +320,10 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
                 Use Current Location
             </Button>
             {/* Adjust map height based on compact mode */}
-            <div className={`relative w-full ${compact ? 'h-[200px]' : 'h-[300px]'}`}>
+            <div className={`relative w-full ${compact ? "h-[200px]" : "h-[300px]"}`}>
                 <div ref={mapContainer} style={{ width: "100%", height: "100%" }}></div>
             </div>
-            
+
             {/* Only show precision controls if not in compact mode */}
             {!compact && (
                 <>

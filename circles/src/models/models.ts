@@ -634,6 +634,7 @@ export type FormField = {
     showInHeader?: boolean;
     ensureUniqueField?: string;
     defaultValue?: any;
+    disabled?: boolean;
 };
 
 export type UserAndCircleInfo = {

@@ -51,7 +51,7 @@ function OnboardingImageUpload({
 
             if (result.success) {
                 // Get the permanent URL from the server response
-                const permanentUrl = result.circle?.[id]?.url;
+                const permanentUrl = (result.circle as Record<string, { url: string }>)?.[id]?.url;
                 if (permanentUrl) {
                     onImageUpdate(permanentUrl);
                     toast({ title: "Success", description: "Image updated successfully" });
