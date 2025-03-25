@@ -44,19 +44,17 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
                 !userIgnoredIds.includes(circle._id),
         );
 
+        console.log("ignoredCircles", userIgnoredIds);
         setDisplayedCircles(filtered);
-    }, [circles, user]);
+    }, [circles, user?.did]); // intentionally only update when user did changes
 
-    const handleSwiped = useCallback(
-        (circle: Circle, direction: "left" | "right") => {
-            // Move to the next card
-            setCurrentIndex((prev) => {
-                const newIndex = prev + 1;
-                return newIndex;
-            });
-        },
-        [displayedCircles],
-    );
+    const handleSwiped = useCallback((circle: Circle, direction: "left" | "right") => {
+        // Move to the next card
+        setCurrentIndex((prev) => {
+            const newIndex = prev + 1;
+            return newIndex;
+        });
+    }, []);
 
     // Update map zoom whenever currentIndex changes
     useEffect(() => {

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
-import { getUserByDid, updateUser } from "@/lib/data/user";
+import { getPrivateUserByDid, getUserByDid, updateUser } from "@/lib/data/user";
 
 export interface IgnoreCircleResult {
     success: boolean;
@@ -16,7 +16,7 @@ export async function ignoreCircle(circleId: string): Promise<IgnoreCircleResult
             return { success: false, message: "Not authenticated" };
         }
 
-        const user = await getUserByDid(userDid);
+        const user = await getPrivateUserByDid(userDid);
         if (!user) {
             return { success: false, message: "User not found" };
         }
@@ -34,8 +34,6 @@ export async function ignoreCircle(circleId: string): Promise<IgnoreCircleResult
 
         // Update user with new ignoredCircles list
         await updateUser({ _id: user._id, ignoredCircles });
-
-        revalidatePath("/");
 
         return { success: true };
     } catch (error) {
