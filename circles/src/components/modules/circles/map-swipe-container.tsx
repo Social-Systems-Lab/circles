@@ -106,25 +106,27 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
             )}
 
             {/* Toggle button for cards */}
-            <div className="absolute left-4 top-4 z-50">
-                <TooltipProvider>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button
-                                onClick={() => setShowCards(!showCards)}
-                                className="flex h-10 w-10 items-center justify-center rounded-full bg-white p-2 shadow-md hover:bg-gray-100"
-                                variant="ghost"
-                                size="icon"
-                            >
-                                {showCards ? <X className="h-5 w-5" /> : <Binoculars className="h-5 w-5" />}
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            <p>{showCards ? "Hide cards" : "Show cards"}</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
-            </div>
+            {!isMobile && (
+                <div className="absolute left-4 top-4 z-50">
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    onClick={() => setShowCards(!showCards)}
+                                    className="flex h-10 w-10 items-center justify-center rounded-full bg-white p-2 shadow-md hover:bg-gray-100"
+                                    variant="ghost"
+                                    size="icon"
+                                >
+                                    {showCards ? <X className="h-5 w-5" /> : <Binoculars className="h-5 w-5" />}
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>{showCards ? "Hide cards" : "Show cards"}</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                </div>
+            )}
 
             {/* Cards container - positioned on the left for desktop or full-width for mobile */}
             <div
@@ -159,7 +161,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
                                     {displayedCircles.slice(currentIndex + 1, currentIndex + 5).map((circle, index) => (
                                         <div
                                             key={circle._id}
-                                            className="absolute h-[500px] w-full max-w-[400px] overflow-hidden rounded-xl border bg-white shadow-lg"
+                                            className="absolute h-[450px] w-full max-w-[400px] overflow-hidden rounded-xl border bg-white shadow-lg md:h-[500px]"
                                             style={{
                                                 zIndex: 29 - index,
                                                 transform: `translateX(${(index + 1) * 3}px) translateY(${(index + 1) * -2}px)`,

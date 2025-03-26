@@ -129,7 +129,7 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                 width: "100%",
                 maxWidth: "400px",
             }}
-            className="h-[500px] rounded-xl border bg-white shadow-lg"
+            className="h-[450px] rounded-xl border bg-white shadow-lg md:h-[500px]"
         >
             <div className="flex h-full flex-col overflow-hidden rounded-xl">
                 {/* Card Content */}
@@ -137,13 +137,13 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                     <Image
                         src={circle.cover?.url ?? "/images/default-cover.png"}
                         alt="Cover"
-                        className="object-cover pointer-events-none" 
+                        className="pointer-events-none object-cover"
                         fill
                     />
                     <div className="absolute right-2 top-2">
                         <CircleTypeIndicator circleType={circle.circleType || "circle"} size="36px" />
                     </div>
-                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4 text-white pointer-events-none">
+                    <div className="pointer-events-none absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4 text-white">
                         <h2 className="text-2xl font-bold">{circle.name}</h2>
                         <div className="flex items-center text-sm">
                             {circle.members} {circle?.members !== 1 ? "followers" : "follower"}
