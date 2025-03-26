@@ -26,6 +26,7 @@ import Link from "next/link";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { useIsMobile } from "../utils/use-is-mobile";
 import { ChatList } from "../modules/chat/chat-list";
+import { getCircleByIdAction } from "@/components/modules/circles/actions";
 
 export const UserToolbox = () => {
     const [user, setUser] = useAtom(userAtom);
@@ -62,21 +63,21 @@ export const UserToolbox = () => {
     }, [userToolboxState?.tab]);
 
     const openCircle = (circle: Circle) => {
+        console.log("openCircle", circle.circleType, circle.parentCircleId);
         if (circle.circleType === "project" && circle.parentCircleId) {
             // For projects, first fetch the parent circle and navigate to the project within that circle
-            import("@/components/modules/circles/actions").then(({ getCircleByIdAction }) => {
-                getCircleByIdAction(circle.parentCircleId!)
-                    .then((parentCircle) => {
-                        if (parentCircle?.handle) {
-                            router.push(`/circles/${parentCircle.handle}/project/${circle._id}`);
-                        } else {
-                            router.push(`/circles/${circle.handle}`);
-                        }
-                    })
-                    .catch(() => {
+
+            getCircleByIdAction(circle.parentCircleId!)
+                .then((parentCircle) => {
+                    if (parentCircle?.handle) {
+                        router.push(`/circles/${parentCircle.handle}/project/${circle._id}`);
+                    } else {
                         router.push(`/circles/${circle.handle}`);
-                    });
-            });
+                    }
+                })
+                .catch(() => {
+                    router.push(`/circles/${circle.handle}`);
+                });
         } else {
             // For regular circles and users
             router.push(`/circles/${circle.handle}`);
