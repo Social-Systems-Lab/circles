@@ -15,7 +15,7 @@ import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { CgFeed } from "react-icons/cg";
 import { MdRssFeed } from "react-icons/md";
 import { AiOutlineHome } from "react-icons/ai";
-import { RxDashboard } from "react-icons/rx";
+import { Hammer } from "lucide-react";
 
 function GlobalNavItem({
     item,
@@ -129,7 +129,7 @@ export default function GlobalNavItems() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5, delay: 2.5 * 0.1 }}
                     >
-                        <RxDashboard size={"24px"} />
+                        <Hammer size={"24px"} />
                         <motion.span
                             className="mt-[4px] text-[11px]"
                             initial={{ opacity: 0 }}

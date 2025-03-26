@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bell, MessageCircle, Users, Circle as CircleIcon } from "lucide-react";
+import { Bell, MessageCircle, Users, Circle as CircleIcon, Hammer } from "lucide-react";
 import { MdOutlineLogout } from "react-icons/md";
 import { RxDashboard } from "react-icons/rx";
 import {
@@ -143,7 +143,7 @@ export const UserToolbox = () => {
                             value="projects"
                             className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
                         >
-                            <RxDashboard className="h-5 w-5" />
+                            <Hammer className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger
                             value="contacts"

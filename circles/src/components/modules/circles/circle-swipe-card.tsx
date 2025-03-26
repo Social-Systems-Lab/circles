@@ -14,6 +14,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { ignoreCircle } from "../home/ignore-actions";
+import CircleTypeIndicator from "@/components/utils/circle-type-indicator";
 
 interface CircleSwipeCardProps {
     circle: WithMetric<Circle>;
@@ -139,6 +140,9 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                         className="object-cover pointer-events-none" 
                         fill
                     />
+                    <div className="absolute right-2 top-2">
+                        <CircleTypeIndicator circleType={circle.circleType || "circle"} size="36px" />
+                    </div>
                     <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4 text-white pointer-events-none">
                         <h2 className="text-2xl font-bold">{circle.name}</h2>
                         <div className="flex items-center text-sm">
@@ -150,7 +154,7 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                 <div className="relative flex justify-center">
                     <div className="absolute top-[-32px] flex justify-center">
                         <div className="h-[64px] w-[64px]">
-                            <CirclePicture circle={circle} size="64px" />
+                            <CirclePicture circle={circle} size="64px" showTypeIndicator={true} />
                         </div>
                     </div>
                 </div>

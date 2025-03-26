@@ -5,22 +5,30 @@ import { cn } from "@/lib/utils";
 import { Circle, ContentPreviewData } from "@/models/models";
 import { useAtom } from "jotai";
 import { useRouter } from "next/navigation";
+import CircleTypeIndicator from "@/components/utils/circle-type-indicator";
 
 type CirclePictureProps = {
     circle: Circle;
     size?: string;
     className?: string;
     openPreview?: boolean;
+    showTypeIndicator?: boolean;
 };
 
-export const CirclePicture = ({ circle, size, className, openPreview }: CirclePictureProps) => {
+export const CirclePicture = ({
+    circle,
+    size,
+    className,
+    openPreview,
+    showTypeIndicator = false,
+}: CirclePictureProps) => {
     const [, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const isMobile = useIsMobile();
     const router = useRouter();
 
-    // Don't render anything for projects - they should only show cover images
-    if (circle?.circleType === "project") {
+    // Don't render anything for projects unless explicitly showing type indicator
+    if (circle?.circleType === "project" && !showTypeIndicator) {
         return null;
     }
 
@@ -51,6 +59,15 @@ export const CirclePicture = ({ circle, size, className, openPreview }: CirclePi
         );
     };
 
+    // If it's a project and we want to show the type indicator, just return the type indicator
+    if (circle?.circleType === "project" && showTypeIndicator) {
+        return (
+            <div className={className} style={size ? { width: size, height: size } : {}}>
+                <CircleTypeIndicator circleType="project" size={size || "40px"} />
+            </div>
+        );
+    }
+
     return (
         <div className={className}>
             <Avatar
@@ -61,6 +78,22 @@ export const CirclePicture = ({ circle, size, className, openPreview }: CirclePi
                 <AvatarImage src={circle?.picture?.url} />
                 <AvatarFallback>{getInitials()}</AvatarFallback>
             </Avatar>
+
+            {showTypeIndicator && (
+                <div
+                    style={{
+                        position: "absolute",
+                        right: "-5px",
+                        bottom: "-5px",
+                        zIndex: 10,
+                    }}
+                >
+                    <CircleTypeIndicator
+                        circleType={circle?.circleType || "circle"}
+                        size={`${parseInt(size || "40") / 3}px`}
+                    />
+                </div>
+            )}
         </div>
     );
 };
