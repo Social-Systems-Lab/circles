@@ -9,6 +9,8 @@ import { HoverCardTrigger } from "@radix-ui/react-hover-card";
 import { contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { memo, useMemo, useCallback } from "react";
+import { useIsMobile } from "@/components/utils/use-is-mobile";
+import { useRouter } from "next/navigation";
 
 const needsMarkdown = (content: string): boolean => {
     // Check for common markdown syntax
@@ -34,8 +36,18 @@ type MentionHoverCardProps = {
 const MentionHoverCard = memo(({ mention, children }: MentionHoverCardProps) => {
     const [, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+    const isMobile = useIsMobile();
+    const router = useRouter();
 
     const openMention = useCallback(() => {
+        if (isMobile) {
+            // Otherwise use the standard route
+            if (mention.circle?.handle) {
+                router.push(`/circles/${mention.circle.handle}`);
+            }
+            return;
+        }
+
         let contentPreviewData: ContentPreviewData = {
             type: "circle",
             content: mention.circle!,

@@ -243,6 +243,7 @@ export const PostItem = ({
     const [, setImageGallery] = useAtom(imageGalleryAtom);
     const [focusPost, setFocusPost] = useAtom(focusPostAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+    const router = useRouter();
 
     const [openDropdown, setOpenDropdown] = useState(false);
 
@@ -300,6 +301,12 @@ export const PostItem = ({
     }, [carouselApi]);
 
     const handleAuthorClick = (author: Circle) => {
+        if (isMobile) {
+            // Otherwise use the standard route
+            router.push(`/circles/${author.handle}`);
+            return;
+        }
+
         let contentPreviewData: ContentPreviewData = {
             type: "user",
             content: author,
@@ -468,12 +475,22 @@ export const PostItem = ({
     const handleImageClick = (index: number) => {
         if (post.media && post.media.length > 0) {
             // open content preview
-            let contentPreviewData: ContentPreviewData = {
-                type: "post",
-                content: post,
-                props: { post, circle, feed, page, subpage, initialComments: comments, initialShowAllComments: true },
-            };
-            setContentPreview(contentPreviewData);
+            if (!isMobile) {
+                let contentPreviewData: ContentPreviewData = {
+                    type: "post",
+                    content: post,
+                    props: {
+                        post,
+                        circle,
+                        feed,
+                        page,
+                        subpage,
+                        initialComments: comments,
+                        initialShowAllComments: true,
+                    },
+                };
+                setContentPreview(contentPreviewData);
+            }
             setImageGallery({ images: post.media, initialIndex: index });
         }
     };
@@ -907,6 +924,7 @@ const CommentItem = ({
     const [isPending, startTransition] = useTransition();
     const [, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+    const router = useRouter();
 
     const isAuthor = user && comment.createdBy === user?.did;
     const canModerateFeature = feedFeaturePrefix + feed.handle + "_moderate";
@@ -924,6 +942,12 @@ const CommentItem = ({
     const { toast } = useToast();
 
     const handleAuthorClick = (author: Circle) => {
+        if (isMobile) {
+            // Otherwise use the standard route
+            router.push(`/circles/${author.handle}`);
+            return;
+        }
+
         let contentPreviewData: ContentPreviewData = {
             type: "user",
             content: author,

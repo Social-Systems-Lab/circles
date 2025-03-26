@@ -276,6 +276,11 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
     };
 
     const handleRowClick = (member: MemberDisplay) => {
+        if (isCompact) {
+            router.push(`/circle/${member.handle}`);
+            return;
+        }
+
         let contentPreviewData: ContentPreviewData = {
             type: "member",
             content: member,

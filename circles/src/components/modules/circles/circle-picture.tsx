@@ -40,6 +40,11 @@ export const CirclePicture = ({
     };
 
     const onOpenPreview = () => {
+        if (isMobile) {
+            router.push(`/circle/${circle?.handle}`);
+            return;
+        }
+
         // Open preview
         let contentPreviewData: ContentPreviewData = {
             type: "user",
@@ -64,7 +69,7 @@ export const CirclePicture = ({
                         <AvatarImage src={circle?.cover?.url ?? "/images/default-cover.png"} />
                         <AvatarFallback>{getInitials()}</AvatarFallback>
                     </Avatar>
-                    
+
                     <div
                         style={{
                             position: "absolute",
@@ -73,10 +78,7 @@ export const CirclePicture = ({
                             zIndex: 10,
                         }}
                     >
-                        <CircleTypeIndicator
-                            circleType="project"
-                            size={`${parseInt(size || "40") / 3}px`}
-                        />
+                        <CircleTypeIndicator circleType="project" size={`${parseInt(size || "40") / 3}px`} />
                     </div>
                 </div>
             );

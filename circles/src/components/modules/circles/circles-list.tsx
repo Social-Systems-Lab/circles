@@ -121,6 +121,29 @@ const CirclesList = ({
     };
 
     const handleCircleClick = (circle: Circle) => {
+        if (isMobile) {
+            if (circle.circleType === "project" && circle.parentCircleId) {
+                // If we're not in a parent circle context but the project has a parent, need to fetch parent first
+                import("./actions").then(({ getCircleByIdAction }) => {
+                    getCircleByIdAction(circle.parentCircleId!)
+                        .then((parentCircle) => {
+                            if (parentCircle?.handle) {
+                                router.push(`/circles/${parentCircle.handle}/project/${circle._id}`);
+                            } else {
+                                router.push(`/circles/${circle.handle}`);
+                            }
+                        })
+                        .catch(() => {
+                            router.push(`/circles/${circle.handle}`);
+                        });
+                });
+            } else {
+                // Otherwise use the standard route
+                router.push(`/circles/${circle.handle}`);
+            }
+            return;
+        }
+
         let contentPreviewData: ContentPreviewData = {
             type: circle?.circleType === "user" ? "user" : circle?.circleType === "project" ? "project" : "circle",
             content: circle,
