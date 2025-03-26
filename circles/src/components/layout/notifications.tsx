@@ -10,7 +10,8 @@ import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { Circle, NotificationType, Post, Comment } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { sendReadReceipt } from "@/lib/data/client-matrix";
-import { MdOutlineArticle, MdWorkOutline } from "react-icons/md";
+import { MdOutlineArticle } from "react-icons/md";
+import { Hammer } from "lucide-react";
 import { AiFillHeart } from "react-icons/ai";
 
 type Notification = {
@@ -376,10 +377,20 @@ export const Notifications = () => {
                                         />
                                     )}
 
-                                    {/* Project icon in bottom-right position in a small circle */}
-                                    <div className="absolute bottom-0 right-0 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-gray-100">
-                                        <MdWorkOutline size="14px" />
-                                    </div>
+                                    {/* Project picture in bottom-right with hammer icon overlay */}
+                                    {groupedNotification.latestNotification.project && (
+                                        <div className="absolute bottom-0 right-0">
+                                            <CirclePicture
+                                                circle={{
+                                                    name: groupedNotification.latestNotification.project.name,
+                                                    cover: groupedNotification.latestNotification.project.cover,
+                                                    circleType: "project"
+                                                }}
+                                                size="20px"
+                                                showTypeIndicator={true}
+                                            />
+                                        </div>
+                                    )}
                                 </>
                             ) : ["post_like", "comment_like"].includes(
                                   groupedNotification.latestNotification.notificationType,

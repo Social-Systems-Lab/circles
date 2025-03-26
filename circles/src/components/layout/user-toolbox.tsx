@@ -62,7 +62,25 @@ export const UserToolbox = () => {
     }, [userToolboxState?.tab]);
 
     const openCircle = (circle: Circle) => {
-        router.push(`/circles/${circle.handle}`);
+        if (circle.circleType === "project" && circle.parentCircleId) {
+            // For projects, first fetch the parent circle and navigate to the project within that circle
+            import("@/components/modules/circles/actions").then(({ getCircleByIdAction }) => {
+                getCircleByIdAction(circle.parentCircleId!)
+                    .then((parentCircle) => {
+                        if (parentCircle?.handle) {
+                            router.push(`/circles/${parentCircle.handle}/project/${circle._id}`);
+                        } else {
+                            router.push(`/circles/${circle.handle}`);
+                        }
+                    })
+                    .catch(() => {
+                        router.push(`/circles/${circle.handle}`);
+                    });
+            });
+        } else {
+            // For regular circles and users
+            router.push(`/circles/${circle.handle}`);
+        }
     };
 
     const circles =

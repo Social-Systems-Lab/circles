@@ -545,6 +545,8 @@ export const PostItem = ({
                         <UserPicture
                             name={post.author?.name}
                             picture={post.author?.picture?.url}
+                            cover={post.author?.cover?.url}
+                            circleType={post.author?.circleType}
                             onClick={(e) => {
                                 e.stopPropagation();
                                 handleAuthorClick(post.author);
@@ -1109,6 +1111,8 @@ const CommentItem = ({
                         <UserPicture
                             name={comment.author.name}
                             picture={comment.author.picture?.url}
+                            cover={comment.author.cover?.url}
+                            circleType={comment.author.circleType}
                             onClick={() => handleAuthorClick(comment.author)}
                             size="32px"
                         />

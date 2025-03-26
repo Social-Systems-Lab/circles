@@ -227,7 +227,7 @@ const CirclesList = ({
                                 <div className="relative flex justify-center">
                                     <div className="absolute top-[-32px] flex justify-center">
                                         <div className="h-[64px] w-[64px]">
-                                            <CirclePicture circle={circle} size="64px" showTypeIndicator={true} />
+                                            <CirclePicture circle={circle} size="64px" />
                                         </div>
                                     </div>
                                 </div>

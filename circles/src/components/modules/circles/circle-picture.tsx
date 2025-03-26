@@ -27,11 +27,6 @@ export const CirclePicture = ({
     const isMobile = useIsMobile();
     const router = useRouter();
 
-    // Don't render anything for projects unless explicitly showing type indicator
-    if (circle?.circleType === "project" && !showTypeIndicator) {
-        return null;
-    }
-
     var getInitials = () => {
         let name = circle?.name;
         if (!name) return "";
@@ -45,10 +40,6 @@ export const CirclePicture = ({
     };
 
     const onOpenPreview = () => {
-        // if (isMobile) {
-        //     router.push(`/circles/${circle.handle}`);
-        // }
-
         // Open preview
         let contentPreviewData: ContentPreviewData = {
             type: "user",
@@ -59,13 +50,38 @@ export const CirclePicture = ({
         );
     };
 
-    // If it's a project and we want to show the type indicator, just return the type indicator
-    if (circle?.circleType === "project" && showTypeIndicator) {
-        return (
-            <div className={className} style={size ? { width: size, height: size } : {}}>
-                <CircleTypeIndicator circleType="project" size={size || "40px"} />
-            </div>
-        );
+    // Projects handling:
+    // - For chat list, show cover image with type indicator
+    // - Elsewhere, don't show profile picture (only cover image)
+    if (circle?.circleType === "project") {
+        if (showTypeIndicator) {
+            return (
+                <div className={className} style={{ position: "relative" }}>
+                    <Avatar
+                        className="overflow-hidden bg-white shadow-lg"
+                        style={size ? { width: size, height: size } : {}}
+                    >
+                        <AvatarImage src={circle?.cover?.url ?? "/images/default-cover.png"} />
+                        <AvatarFallback>{getInitials()}</AvatarFallback>
+                    </Avatar>
+                    
+                    <div
+                        style={{
+                            position: "absolute",
+                            right: "-5px",
+                            bottom: "-5px",
+                            zIndex: 10,
+                        }}
+                    >
+                        <CircleTypeIndicator
+                            circleType="project"
+                            size={`${parseInt(size || "40") / 3}px`}
+                        />
+                    </div>
+                </div>
+            );
+        }
+        return null;
     }
 
     return (
@@ -79,6 +95,7 @@ export const CirclePicture = ({
                 <AvatarFallback>{getInitials()}</AvatarFallback>
             </Avatar>
 
+            {/* Only show type indicators in chat list */}
             {showTypeIndicator && (
                 <div
                     style={{
