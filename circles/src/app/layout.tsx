@@ -18,6 +18,7 @@ import { SidePanel } from "@/components/layout/side-panel";
 import { Metadata } from "next";
 import { getDefaultCircle } from "@/lib/data/circle";
 import { MapboxInitializer } from "@/components/map/map-initializer";
+import { SupportButton } from "@/components/layout/support-button";
 
 // Disable caching for this layout to prevent the "hard refresh bug"
 export const dynamic = "force-dynamic";
@@ -61,6 +62,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
                         <Onboarding />
                         <MatrixSync />
                         <MapboxInitializer mapboxKey={serverConfig.mapboxKey} />
+                        <SupportButton />
                     </main>
                     <Script id="version-check">
                         {`
