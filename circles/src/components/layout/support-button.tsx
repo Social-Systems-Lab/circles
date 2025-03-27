@@ -4,6 +4,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MdOutlineContactSupport } from "react-icons/md";
+import Image from "next/image";
 
 export const SupportButton = () => {
     return (
@@ -26,14 +27,24 @@ export const SupportButton = () => {
                         </p>
                         <div className="rounded-md border bg-gray-50 p-4">
                             {/* Placeholder for QR code - will be added later */}
-                            <div className="mb-2 flex h-32 w-full items-center justify-center bg-gray-200">
-                                <p className="text-xs text-gray-500">QR Code Placeholder</p>
+                            <div className="mb-2 flex w-full items-center justify-center">
+                                <Image
+                                    src="/images/whatsapp-support-qr.png"
+                                    width={246}
+                                    height={243}
+                                    alt="WhatsApp QR Code"
+                                />
                             </div>
                             <p className="text-center text-xs text-muted-foreground">
                                 Scan this code or click the link below
                             </p>
                         </div>
-                        <a href="#" className="block w-full text-center text-sm text-[#66a5ff] hover:underline">
+                        <a
+                            href="https://chat.whatsapp.com/HxM0bXeFpxA6XsxkzOpoeE"
+                            className="block w-full text-center text-sm text-[#66a5ff] hover:underline"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
                             Join WhatsApp Support Chat
                         </a>
                     </div>
