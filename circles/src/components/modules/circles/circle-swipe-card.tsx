@@ -126,7 +126,7 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                 zIndex,
                 rotateZ: exitX * 0.05, // Add some rotation during exit
                 position: "absolute",
-                width: "100%",
+                width: "calc(100% - 2rem)",
                 maxWidth: "400px",
             }}
             className="h-[450px] rounded-xl border bg-white shadow-lg md:h-[500px]"

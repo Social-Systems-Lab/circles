@@ -131,7 +131,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
             {/* Cards container - positioned on the left for desktop or full-width for mobile */}
             <div
                 className={cn(
-                    `absolute left-4 z-40 flex flex-col items-center justify-start overflow-visible transition-all duration-300`,
+                    `absolute z-40 flex flex-col items-center justify-start overflow-visible transition-all duration-300`,
                     isMobile ? "w-full" : "w-[400px]",
                     !showCards && "pointer-events-none opacity-0",
                 )}
@@ -161,12 +161,13 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
                                     {displayedCircles.slice(currentIndex + 1, currentIndex + 5).map((circle, index) => (
                                         <div
                                             key={circle._id}
-                                            className="absolute h-[450px] w-full max-w-[400px] overflow-hidden rounded-xl border bg-white shadow-lg md:h-[500px]"
+                                            className="absolute h-[450px] max-w-[400px] overflow-hidden rounded-xl border bg-white shadow-lg md:h-[500px]"
                                             style={{
                                                 zIndex: 29 - index,
                                                 transform: `translateX(${(index + 1) * 3}px) translateY(${(index + 1) * -2}px)`,
                                                 opacity: 0.9 - index * 0.15,
                                                 pointerEvents: "none",
+                                                width: "calc(100% - 2rem)",
                                             }}
                                         >
                                             {/* Simplified preview of card content */}
