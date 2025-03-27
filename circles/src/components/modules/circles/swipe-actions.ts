@@ -32,10 +32,6 @@ export const completeSwipeOnboardingAction = async (): Promise<CompleteSwipeOnbo
 
         await updateCircle(circle);
 
-        // Clear page cache so pages update
-        let circlePath = await getCirclePath(circle);
-        revalidatePath(circlePath);
-
         return { success: true, message: "Swipe onboarding completed" };
     } catch (error) {
         console.log("error", error);

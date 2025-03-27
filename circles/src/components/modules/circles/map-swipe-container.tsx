@@ -24,7 +24,7 @@ interface MapSwipeContainerProps {
 export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, mapboxKey }) => {
     const [displayedCircles, setDisplayedCircles] = useState<WithMetric<Circle>[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [user] = useAtom(userAtom);
+    const [user, setUser] = useAtom(userAtom);
     const [, setZoomContent] = useAtom(zoomContentAtom);
     const isMobile = useIsMobile();
     const { windowWidth, windowHeight } = useWindowDimensions();
@@ -109,6 +109,11 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
         if (user) {
             // Add "swipe" to completedOnboardingSteps
             await completeSwipeOnboardingAction();
+            // update user state
+            setUser((prevUser) => ({
+                ...prevUser!,
+                completedOnboardingSteps: [...(prevUser!.completedOnboardingSteps || []), "swipe"],
+            }));
         }
     };
 
