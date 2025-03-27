@@ -296,7 +296,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
 
     return (
         <div className="flex flex-1 flex-row justify-center">
-            <div className="ml-2 mr-2 mt-4 flex max-w-[1100px] flex-1 flex-col">
+            <div className="mb-4 ml-2 mr-2 mt-4 flex max-w-[1100px] flex-1 flex-col">
                 <div className="flex w-full flex-row items-center gap-2">
                     <div className="flex flex-1 flex-col">
                         <Input
