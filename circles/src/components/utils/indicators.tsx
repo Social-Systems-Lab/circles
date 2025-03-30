@@ -10,13 +10,19 @@ interface SimilarityScoreProps {
     score: number;
     color?: string;
     size?: string;
+    tooltipAlign?: "center" | "start" | "end";
+    tooltipSideOffset?: number;
 }
 
-export function SimilarityScore({ score, color, size }: SimilarityScoreProps) {
+export function SimilarityScore({ score, color, size, tooltipAlign, tooltipSideOffset }: SimilarityScoreProps) {
     const formattedScore = (101 - score * 100).toFixed(0);
     const defaultColor = "#ac22c3";
     const iconColor = color ?? defaultColor;
     const iconSize = size ?? "0.75rem";
+    33;
+    // Show tooltip on left for mobile, right for desktop in swipe view
+    const align = tooltipAlign || "center";
+    const sideOffset = tooltipSideOffset || 4;
 
     return (
         <HoverCard openDelay={200}>
@@ -28,7 +34,11 @@ export function SimilarityScore({ score, color, size }: SimilarityScoreProps) {
                     </span>
                 </div>
             </HoverCardTrigger>
-            <HoverCardContent className="z-[500] w-[300px] p-2 pt-[6px] text-[14px]">
+            <HoverCardContent
+                className="z-[1000] w-[300px] p-2 pt-[6px] text-[14px]"
+                align={align}
+                sideOffset={sideOffset}
+            >
                 <p>
                     <AudioLines className={`mr-1 inline-block h-5 w-5`} style={{ color: defaultColor }} />
                     <b>Resonance:</b> How similar your profile is to this content (lower number means higher similarity)
@@ -44,14 +54,30 @@ interface ProximityIndicatorProps {
     content?: Content;
     size?: string;
     onMapPinClick?: () => void;
+    tooltipAlign?: "center" | "start" | "end";
+    tooltipSideOffset?: number;
+    isSwipeCard?: boolean;
 }
 
-export function ProximityIndicator({ distance, color, content, size, onMapPinClick }: ProximityIndicatorProps) {
+export function ProximityIndicator({
+    distance,
+    color,
+    content,
+    size,
+    onMapPinClick,
+    tooltipAlign,
+    tooltipSideOffset,
+    isSwipeCard,
+}: ProximityIndicatorProps) {
     const defaultColor = "#c3224d";
     const iconColor = color ?? defaultColor;
     const [, setZoomContent] = useAtom(zoomContentAtom);
     const [, setTriggerOpen] = useAtom(triggerMapOpenAtom);
     const iconSize = size ?? "0.75rem";
+
+    // Show tooltip on left for mobile, right for desktop in swipe view
+    const align = tooltipAlign || (isSwipeCard ? "start" : "center");
+    const sideOffset = tooltipSideOffset || 4;
 
     const getDistanceString = () => {
         if (!distance) {
@@ -106,7 +132,11 @@ export function ProximityIndicator({ distance, color, content, size, onMapPinCli
                     </span>
                 </div>
             </HoverCardTrigger>
-            <HoverCardContent className="z-[500] w-[300px] p-2 pt-[6px] text-[14px]">
+            <HoverCardContent
+                className="z-[1000] w-[300px] p-2 pt-[6px] text-[14px]"
+                align={align}
+                sideOffset={sideOffset}
+            >
                 <p>
                     <MapPin className={`mr-1 inline-block h-5 w-5`} style={{ color: defaultColor }} />
                     <b>Proximity:</b> Distance from your location.
@@ -130,7 +160,7 @@ export function PopularityIndicator({ score }: PopularityIndicatorProps) {
                         <span className="text-sm font-medium text-yellow-500">{score}</span>
                     </div>
                 </TooltipTrigger>
-                <TooltipContent>
+                <TooltipContent className="z-[1000]">
                     <p>Popularity score based on user engagement</p>
                 </TooltipContent>
             </Tooltip>
@@ -145,9 +175,22 @@ interface IndicatorsProps {
     content?: Content;
     size?: string;
     onMapPinClick?: () => void;
+    tooltipAlign?: "center" | "start" | "end";
+    tooltipSideOffset?: number;
+    isSwipeCard?: boolean;
 }
 
-export function Indicators({ metrics, className, color, content, size, onMapPinClick }: IndicatorsProps) {
+export function Indicators({
+    metrics,
+    className,
+    color,
+    content,
+    size,
+    onMapPinClick,
+    tooltipAlign,
+    tooltipSideOffset,
+    isSwipeCard,
+}: IndicatorsProps) {
     return (
         <div
             className={cn(
@@ -157,7 +200,14 @@ export function Indicators({ metrics, className, color, content, size, onMapPinC
         >
             {/* rounded-lg bg-white p-4 shadow */}
             {metrics.similarity !== undefined && (
-                <SimilarityScore score={metrics.similarity} color={color} size={size} />
+                <SimilarityScore
+                    score={metrics.similarity}
+                    color={color}
+                    size={size}
+                    tooltipAlign={tooltipAlign}
+                    tooltipSideOffset={tooltipSideOffset}
+                    isSwipeCard={isSwipeCard}
+                />
             )}
 
             {/* Render ProximityIndicator if 'proximity' is defined */}
@@ -168,6 +218,9 @@ export function Indicators({ metrics, className, color, content, size, onMapPinC
                     content={content}
                     size={size}
                     onMapPinClick={onMapPinClick}
+                    tooltipAlign={tooltipAlign}
+                    tooltipSideOffset={tooltipSideOffset}
+                    isSwipeCard={isSwipeCard}
                 />
             )}
 

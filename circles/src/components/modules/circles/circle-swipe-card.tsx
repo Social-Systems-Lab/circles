@@ -149,6 +149,7 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                             metrics={circle.metrics}
                             className="absolute left-2 top-2"
                             content={circle}
+                            tooltipAlign={"start"}
                         />
                     )}
                     <div className="pointer-events-none absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4 text-white">
