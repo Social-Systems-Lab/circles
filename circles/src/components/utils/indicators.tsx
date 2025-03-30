@@ -56,7 +56,6 @@ interface ProximityIndicatorProps {
     onMapPinClick?: () => void;
     tooltipAlign?: "center" | "start" | "end";
     tooltipSideOffset?: number;
-    isSwipeCard?: boolean;
 }
 
 export function ProximityIndicator({
@@ -67,7 +66,6 @@ export function ProximityIndicator({
     onMapPinClick,
     tooltipAlign,
     tooltipSideOffset,
-    isSwipeCard,
 }: ProximityIndicatorProps) {
     const defaultColor = "#c3224d";
     const iconColor = color ?? defaultColor;
@@ -76,7 +74,7 @@ export function ProximityIndicator({
     const iconSize = size ?? "0.75rem";
 
     // Show tooltip on left for mobile, right for desktop in swipe view
-    const align = tooltipAlign || (isSwipeCard ? "start" : "center");
+    const align = tooltipAlign || "center";
     const sideOffset = tooltipSideOffset || 4;
 
     const getDistanceString = () => {
@@ -177,7 +175,6 @@ interface IndicatorsProps {
     onMapPinClick?: () => void;
     tooltipAlign?: "center" | "start" | "end";
     tooltipSideOffset?: number;
-    isSwipeCard?: boolean;
 }
 
 export function Indicators({
@@ -189,7 +186,6 @@ export function Indicators({
     onMapPinClick,
     tooltipAlign,
     tooltipSideOffset,
-    isSwipeCard,
 }: IndicatorsProps) {
     return (
         <div
@@ -206,7 +202,6 @@ export function Indicators({
                     size={size}
                     tooltipAlign={tooltipAlign}
                     tooltipSideOffset={tooltipSideOffset}
-                    isSwipeCard={isSwipeCard}
                 />
             )}
 
@@ -220,7 +215,6 @@ export function Indicators({
                     onMapPinClick={onMapPinClick}
                     tooltipAlign={tooltipAlign}
                     tooltipSideOffset={tooltipSideOffset}
-                    isSwipeCard={isSwipeCard}
                 />
             )}
 
