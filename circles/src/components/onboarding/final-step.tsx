@@ -23,27 +23,24 @@ function FinalStep({ nextStep }: OnboardingStepProps) {
             setPlatformMetrics(metrics);
         });
     }, []);
-    
+
     const handleComplete = async () => {
         if (!user?._id) {
             nextStep();
             return;
         }
-        
+
         setIsSubmitting(true);
         try {
             // Mark final step as completed
             await completeFinalStep(user._id);
-            
+
             // Update local user state
             setUser({
                 ...user,
-                completedOnboardingSteps: [
-                    ...(user.completedOnboardingSteps || []),
-                    "final"
-                ]
+                completedOnboardingSteps: [...(user.completedOnboardingSteps || []), "final"],
             });
-            
+
             nextStep();
         } catch (error) {
             console.error("Error marking final step complete:", error);
@@ -84,7 +81,7 @@ function FinalStep({ nextStep }: OnboardingStepProps) {
             </div>
             <h2 className="mb-0 mt-0 text-2xl  font-semibold text-gray-800">Welcome, Changemaker!</h2>
             <p className="text-gray-600">
-                Your journey in Circles begins now. Here&apos;s a glimpse of the world you&apos;re about to enter:
+                Your journey in MakeCircles begins now. Here&apos;s a glimpse of the world you&apos;re about to enter:
             </p>
             {platformMetrics ? (
                 <div className="grid grid-cols-2 gap-4">
@@ -110,11 +107,7 @@ function FinalStep({ nextStep }: OnboardingStepProps) {
                 make a difference together!
             </p>
             <div className="mt-4 flex items-center justify-center">
-                <Button 
-                    onClick={handleComplete} 
-                    className="mx-auto rounded-full"
-                    disabled={isSubmitting}
-                >
+                <Button onClick={handleComplete} className="mx-auto rounded-full" disabled={isSubmitting}>
                     Begin Your Adventure
                 </Button>
             </div>

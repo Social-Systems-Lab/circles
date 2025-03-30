@@ -23,7 +23,7 @@ interface WelcomeStepProps {
 
 const WelcomeStep: React.FC<WelcomeStepProps> = ({ onNext }) => (
     <div className="mx-auto max-w-md space-y-6">
-        <h1 className="text-center text-3xl font-bold tracking-tight md:text-4xl">Welcome to Circles</h1>
+        <h1 className="text-center text-3xl font-bold tracking-tight md:text-4xl">Welcome to MakeCircles</h1>
         <p className="text-center text-lg text-gray-600 md:text-xl">
             Your journey to a more intentional digital space begins here
         </p>
@@ -69,7 +69,7 @@ const IdentityStep: React.FC<IdentityStepProps> = ({ onNext }) => (
     <div className="mx-auto max-w-md space-y-6">
         <h2 className="text-center text-2xl font-semibold tracking-tight md:text-3xl">Your Digital Identity</h2>
         <div className="space-y-4 text-sm text-gray-600 md:text-base">
-            <p>In the next steps, you&apos;ll create your basic profile. Circles is designed to provide:</p>
+            <p>In the next steps, you&apos;ll create your basic profile. MakeCircles is designed to provide:</p>
             <ul className="space-y-2">
                 <li className="flex items-start">
                     <Smartphone className="mr-2 mt-1 h-5 w-5 flex-shrink-0 text-blue-600" />
@@ -86,8 +86,8 @@ const IdentityStep: React.FC<IdentityStepProps> = ({ onNext }) => (
             </ul>
             <p>
                 We&apos;re working toward giving you full ownership of your data, with less reliance on centralized
-                systems. For now, your Circles profile lives securely on our platform, but we’re on a path to bring even
-                more control to your fingertips.
+                systems. For now, your MakeCircles profile lives securely on our platform, but we’re on a path to bring
+                even more control to your fingertips.
             </p>
         </div>
         <Button onClick={onNext} className="w-full rounded-full bg-blue-600 text-white hover:bg-blue-700">
@@ -139,7 +139,7 @@ const DisplayNameStep: React.FC<DisplayNameStepProps> = ({ onNext }) => {
     return (
         <div className="mx-auto max-w-md space-y-6">
             <h2 className="text-center text-2xl font-semibold tracking-tight md:text-3xl">Choose your display name</h2>
-            <p className="text-center text-gray-600">This is how you&apos;ll appear to others in Circles</p>
+            <p className="text-center text-gray-600">This is how you&apos;ll appear to others in MakeCircles</p>
             <div className="space-y-4">
                 <div className="space-y-2">
                     <Label htmlFor="displayName">Display Name</Label>
@@ -239,7 +239,7 @@ const ProfileSetupStep: React.FC<ProfileSetupStepProps> = ({ onNext }) => {
                         </Label>
                     </div>
                 </div>
-                
+
                 <div className="space-y-2">
                     <Label htmlFor="shortBio">Short Bio</Label>
                     <Input
@@ -249,7 +249,7 @@ const ProfileSetupStep: React.FC<ProfileSetupStepProps> = ({ onNext }) => {
                         onChange={(e) => setShortBio(e.target.value)}
                     />
                 </div>
-                
+
                 <div className="space-y-2">
                     <Label htmlFor="longDescription">About Me</Label>
                     <textarea
@@ -260,14 +260,14 @@ const ProfileSetupStep: React.FC<ProfileSetupStepProps> = ({ onNext }) => {
                         onChange={(e) => setLongDescription(e.target.value)}
                     />
                 </div>
-                
+
                 <div className="space-y-2">
                     <Label>Your Location</Label>
                     <LocationPicker value={location} onChange={setLocation} />
                 </div>
-                
-                <Button 
-                    onClick={handleUpdateProfile} 
+
+                <Button
+                    onClick={handleUpdateProfile}
                     disabled={isPending}
                     className="w-full rounded-full bg-blue-600 text-white hover:bg-blue-700"
                 >
@@ -298,7 +298,7 @@ const ResponsibilityStep: React.FC = () => {
             <div className="space-y-4 text-sm text-gray-600 md:text-base">
                 <p className="font-medium">With great power comes great responsibility:</p>
                 <ul className="list-disc space-y-2 pl-6">
-                    <li>Please use Circles ethically and responsibly.</li>
+                    <li>Please use MakeCircles ethically and responsibly.</li>
                     <li>You are responsible for managing and protecting your own data.</li>
                     <li>Share data only with consent and consideration for privacy.</li>
                 </ul>
@@ -308,7 +308,7 @@ const ResponsibilityStep: React.FC = () => {
                 size="lg"
                 className="w-full rounded-full bg-blue-600 text-white hover:bg-blue-700"
             >
-                Enter Circles
+                Enter MakeCircles
             </Button>
         </div>
     );

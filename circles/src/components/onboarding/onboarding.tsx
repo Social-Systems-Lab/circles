@@ -134,7 +134,7 @@ export default function Onboarding() {
         if (!isOpen || !user) return;
 
         // Create or update the userData with current user values
-        setUserData(prev => {
+        setUserData((prev) => {
             const newData = {
                 name: user.name || "",
                 mission: user.mission || "",
@@ -143,7 +143,7 @@ export default function Onboarding() {
                 selectedQuests: prev?.selectedQuests ?? [],
                 picture: user.picture?.url || "/images/default-user-picture.png",
             };
-            
+
             // If userData doesn't exist yet or if values have changed, return the new object
             return newData;
         });
@@ -162,7 +162,7 @@ export default function Onboarding() {
     function getStepTitle(stepId: string) {
         switch (stepId) {
             case "welcome":
-                return "Welcome to Circles";
+                return "Welcome to MakeCircles";
             case "mission":
                 return "Your Mission";
             case "profile":

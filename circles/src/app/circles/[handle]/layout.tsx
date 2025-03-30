@@ -1,14 +1,9 @@
 import type { Metadata } from "next";
-import { getServerSettings } from "@/lib/data/server-settings";
-import { getCircleByHandle, getCirclesWithMetrics, getDefaultCircle } from "@/lib/data/circle";
-import BaseLayout from "@/components/layout/base-layout";
+import { getCircleByHandle, getDefaultCircle } from "@/lib/data/circle";
 import { redirect } from "next/navigation";
-import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 import HomeCover from "@/components/modules/home/home-cover";
 import HomeContent from "@/components/modules/home/home-content";
-import HomeModuleWrapper from "@/components/modules/home/home-module-wrapper";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
-import { getMembersWithMetrics } from "@/lib/data/member";
 import { features } from "@/lib/data/constants";
 import { CircleTabs } from "@/components/layout/circle-tabs";
 

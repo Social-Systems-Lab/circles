@@ -60,19 +60,10 @@ export default function LandingPage() {
 
     return (
         <div className="flex min-h-screen flex-col items-center bg-gray-50 px-4 text-gray-800">
-            <main className="w-screen max-w-6xl md:py-8">
+            <main className="w-screen max-w-6xl">
                 {/* Hero */}
-                <div className="m-4 flex flex-row items-center justify-center gap-2 md:mb-12 md:flex-col">
-                    <div className="h-16 w-16 overflow-hidden rounded-full bg-white p-2 shadow-lg md:h-24 md:w-24">
-                        <Image
-                            src="/images/default-picture.png"
-                            alt="Circles Logo"
-                            width={80}
-                            height={80}
-                            className="h-full w-full object-cover"
-                        />
-                    </div>
-                    <div className="text-4xl font-bold md:mt-4 md:text-6xl">Circles</div>
+                <div className="m-4 flex flex-row items-center justify-center gap-2 md:mb-4 md:flex-col">
+                    <Image src="/images/makecircles.png" alt="MakeCircles Logo" width={450} height={120} />
                 </div>
 
                 {/* Features */}
