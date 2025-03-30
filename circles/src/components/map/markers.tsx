@@ -37,6 +37,12 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
     const handleMapPinClick = () => {
         if (onMapPinClick && content) {
             onMapPinClick(content);
+            return;
+        }
+        
+        // If no explicit handler provided, set zoomContent to zoom in on map
+        if (content) {
+            setZoomContent(content);
         }
     };
 

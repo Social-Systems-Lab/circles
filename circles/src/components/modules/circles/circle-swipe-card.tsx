@@ -15,6 +15,7 @@ import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { ignoreCircle } from "../home/ignore-actions";
 import CircleTypeIndicator from "@/components/utils/circle-type-indicator";
+import Indicators from "@/components/utils/indicators";
 
 interface CircleSwipeCardProps {
     circle: WithMetric<Circle>;
@@ -143,6 +144,13 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                     <div className="absolute right-2 top-2">
                         <CircleTypeIndicator circleType={circle.circleType || "circle"} size="36px" />
                     </div>
+                    {circle.metrics && (
+                        <Indicators
+                            metrics={circle.metrics}
+                            className="absolute left-2 top-2"
+                            content={circle}
+                        />
+                    )}
                     <div className="pointer-events-none absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4 text-white">
                         <h2 className="text-2xl font-bold">{circle.name}</h2>
                         <div className="flex items-center text-sm">
