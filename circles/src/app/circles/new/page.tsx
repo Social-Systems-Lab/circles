@@ -8,15 +8,15 @@ type NewCircleProps = {
 export default async function NewCirclePage(props: NewCircleProps) {
     const searchParams = await props.searchParams;
 
-  return (
-    <Suspense fallback={<div>Loading form...</div>}>
-        <div className="pt-4">
-            <DynamicForm
-                formSchemaId="create-circle-form"
-                initialFormData={{ parentCircleId: searchParams?.parentCircleId as string }}
-                maxWidth="600px"
-            />
-        </div>
-    </Suspense>
-  );
+    return (
+        <Suspense fallback={<div>Loading form...</div>}>
+            <div className="pt-4">
+                <DynamicForm
+                    formSchemaId="create-circle-form"
+                    initialFormData={{ parentCircleId: searchParams?.parentCircleId as string, isPublic: true }}
+                    maxWidth="600px"
+                />
+            </div>
+        </Suspense>
+    );
 }

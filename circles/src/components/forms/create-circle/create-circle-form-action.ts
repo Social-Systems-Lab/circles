@@ -14,13 +14,13 @@ export const createCircleFormAction: FormAction = {
             name: values.name,
             handle: values.handle,
             description: values.description,
-            isPublic: values.isPublic,
+            isPublic: values.isPublic !== undefined ? values.isPublic : true,
             parentCircleId: values.parentCircleId,
             circleType: values.circleType || "circle",
             content: values.content,
         };
 
-        console.log("Test1");
+        console.log("Creating circle", circle);
 
         // check if user is authorized to edit circle settings
         const userDid = await getAuthenticatedUserDid();

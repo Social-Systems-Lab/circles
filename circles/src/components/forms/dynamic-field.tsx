@@ -235,14 +235,17 @@ export const DynamicImageField: React.FC<RenderFieldProps> = ({ field, formField
 
 export const DynamicAutoHandleField: React.FC<RenderFieldProps> = ({ field, formField, readOnly, isUser }) => {
     const { watch } = useFormContext();
-    const nameField = watch('name');
+    const nameField = watch("name");
     const [hasUserEdited, setHasUserEdited] = useState(false);
     const previousNameRef = useRef(nameField);
-    
+
     // Function to generate handle from name
     const generateHandleFromName = (name: string) => {
-        if (!name) return '';
-        return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        if (!name) return "";
+        return name
+            .toLowerCase()
+            .replace(/\s+/g, "-")
+            .replace(/[^a-z0-9-]/g, "");
     };
 
     useEffect(() => {
@@ -288,7 +291,7 @@ export const DynamicAutoHandleField: React.FC<RenderFieldProps> = ({ field, form
                     autoComplete={field.autoComplete}
                     readOnly={readOnly}
                     {...formField}
-                    value={formField.value || ''}
+                    value={formField.value || ""}
                     onChange={handleInputChange}
                 />
             </FormControl>
@@ -841,7 +844,7 @@ export const DynamicSwitchField: React.FC<RenderFieldProps> = ({ field, formFiel
                 </Label>
                 <Switch
                     id={field.name}
-                    checked={formField.value}
+                    checked={formField.value !== undefined ? formField.value : field.defaultValue}
                     onCheckedChange={formField.onChange}
                     disabled={readOnly}
                     aria-readonly={readOnly}

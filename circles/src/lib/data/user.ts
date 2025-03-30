@@ -92,7 +92,7 @@ export const createNewUser = (
         accessRules: getDefaultAccessRulesForUser(),
         pages: defaultPagesForUser,
         questionnaire: [],
-        isPublic: false,
+        isPublic: true,
     };
     return user;
 };
