@@ -134,7 +134,7 @@ export function addFeedsAccessRules(
                         "admins",
                         "moderators",
                         "members",
-                    ];                    
+                    ];
                 }
             }
         }
@@ -255,11 +255,8 @@ export function safeModifyAccessRules(
         updatedRules[feature] = existingRules[feature];
     }
 
-    // process submitted items
-    for (const feature in existingRules) {
-        if (!featureSet.has(feature)) {
-            continue; // ignore features not in existing rules
-        }
+    // process submitted items - include both existing and new features
+    for (const feature in submittedRules) {
         updatedRules[feature] = submittedRules[feature];
     }
 

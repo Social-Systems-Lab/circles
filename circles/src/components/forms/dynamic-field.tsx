@@ -559,6 +559,31 @@ export const DynamicAccessRulesGrid: React.FC<DynamicAccessRulesGridProps> = ({
     const { setValue, getValues } = useFormContext();
     const accessRules = useWatch({ control, name: "accessRules" });
 
+    // Initialize default user groups for features that don't have access rules defined
+    useEffect(() => {
+        const currentAccessRules = getValues("accessRules") || {};
+        let hasChanges = false;
+
+        // For each feature, check if it has access rules defined
+        for (const feature of features) {
+            if (!currentAccessRules[feature]) {
+                // If not, initialize with default user groups
+                if (feature in featuresList) {
+                    const featureObj = featuresList[feature as keyof typeof featuresList];
+                    if (featureObj?.defaultUserGroups) {
+                        currentAccessRules[feature] = [...featureObj.defaultUserGroups];
+                        hasChanges = true;
+                    }
+                }
+            }
+        }
+
+        // If we made changes, update the form
+        if (hasChanges) {
+            setValue("accessRules", { ...currentAccessRules });
+        }
+    }, [features, setValue, getValues]);
+
     const handleCellClick = (feature: string, userGroup: string) => {
         const currentAccessRules = getValues("accessRules");
         const userGroupsForFeature = currentAccessRules?.[feature] || [];
