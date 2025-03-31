@@ -403,6 +403,48 @@ export const completeFinalStep = async (circleId: string): Promise<SaveMissionAc
     }
 };
 
+// Save terms agreement action
+export const saveTermsAgreementAction = async (
+    agreedToTos: boolean,
+    agreedToEmailUpdates: boolean,
+    circleId: string,
+): Promise<SaveMissionActionResponse> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in" };
+    }
+
+    try {
+        // Update user with terms agreement
+        let user = await getUserByDid(userDid);
+        let circle: Partial<Circle> = {
+            _id: circleId,
+            agreedToTos,
+            agreedToEmailUpdates,
+            completedOnboardingSteps: user.completedOnboardingSteps ?? [],
+        };
+
+        if (!circle.completedOnboardingSteps?.includes("terms")) {
+            circle.completedOnboardingSteps?.push("terms");
+        }
+
+        await updateCircle(circle);
+
+        // clear page cache so pages update
+        let circlePath = await getCirclePath(circle);
+        revalidatePath(circlePath);
+
+        return { success: true, message: "Terms agreement saved" };
+    } catch (error) {
+        console.log("error", error);
+        if (error instanceof Error) {
+            return { success: false, message: error.message };
+        } else {
+            return { success: false, message: "Failed to save terms agreement. " + error };
+        }
+    }
+};
+
 export const fetchMissionStatements = async (circleId: string): Promise<FetchMissionStatementsResponse> => {
     try {
         const client = await getQdrantClient();

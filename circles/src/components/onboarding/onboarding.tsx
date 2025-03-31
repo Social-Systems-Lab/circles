@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { authInfoAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import WelcomeStep from "./welcome-step";
+import TermsStep from "./terms-step";
 import MissionStep from "./mission-step";
 import CausesStep from "./causes-step";
 import SkillsStep from "./skills-step";
@@ -58,6 +59,7 @@ export default function Onboarding() {
         // Mapping of step IDs to components
         const stepComponents: Record<string, React.ComponentType<OnboardingStepProps>> = {
             welcome: WelcomeStep,
+            terms: TermsStep,
             mission: MissionStep,
             profile: ProfileStep,
             location: ProfileLocationStep,
@@ -163,6 +165,8 @@ export default function Onboarding() {
         switch (stepId) {
             case "welcome":
                 return "Welcome to MakeCircles";
+            case "terms":
+                return "Terms and Privacy";
             case "mission":
                 return "Your Mission";
             case "profile":

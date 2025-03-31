@@ -410,6 +410,8 @@ export const circleSchema = z.object({
     matrixNotificationsRoomId: z.string().optional(),
     isAdmin: z.boolean().optional(),
     ignoredCircles: z.array(z.string()).optional(),
+    agreedToTos: z.boolean().optional(),
+    agreedToEmailUpdates: z.boolean().optional(),
     metadata: z.record(z.string(), z.any()).optional(), // For storing additional data like commentPostId
 });
 
@@ -774,6 +776,15 @@ export type NotificationType =
     | "project_mention"; // Someone mentioned you in a project comment
 
 // Define all onboarding steps in a single place for consistency
-export const ONBOARDING_STEPS = ["welcome", "mission", "profile", "location", "causes", "skills", "final"] as const;
+export const ONBOARDING_STEPS = [
+    "welcome",
+    "terms",
+    "mission",
+    "profile",
+    "location",
+    "causes",
+    "skills",
+    "final",
+] as const;
 
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
