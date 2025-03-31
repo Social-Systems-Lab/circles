@@ -6,7 +6,7 @@ import path from "path";
 import { Challenges, Circles, Members } from "../data/db";
 import { Account, AccountType, Challenge, Circle, Feature, Member, UserPrivate } from "@/models/models";
 import { ObjectId } from "mongodb";
-import { maxAccessLevel } from "../data/constants";
+import { features, maxAccessLevel } from "../data/constants";
 import { cookies } from "next/headers";
 import { createSession, generateUserToken, verifyUserToken } from "./jwt";
 import { createNewUser, getUserById, getUserPrivate } from "../data/user";
@@ -273,7 +273,13 @@ export const isAuthorized = async (
 
     let featureHandle = typeof feature === "string" ? feature : feature.handle;
     let allowedUserGroups = circle?.accessRules?.[featureHandle];
-    if (!allowedUserGroups) return false;
+
+    // If feature not found in access rules, get default user groups
+    if (!allowedUserGroups) {
+        const featureObj = typeof feature === "string" ? features[feature as keyof typeof features] : feature;
+        allowedUserGroups = featureObj?.defaultUserGroups ?? [];
+    }
+
     if (allowedUserGroups.includes("everyone")) return true;
 
     // lookup user membership in circle

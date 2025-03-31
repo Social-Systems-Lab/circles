@@ -2,6 +2,7 @@ import { getCircleByHandle, getDefaultCircle } from "@/lib/data/circle";
 import { getMember } from "@/lib/data/member";
 import { Circle } from "@/models/models";
 import { NextResponse } from "next/server";
+import { features, pageFeaturePrefix } from "@/lib/data/constants";
 
 export async function POST(req: Request) {
     try {
@@ -21,7 +22,19 @@ export async function POST(req: Request) {
         }
 
         const accessRules = circle.accessRules || {};
-        const allowedUserGroups = accessRules["__page_" + pageHandle];
+        let allowedUserGroups = accessRules["__page_" + pageHandle];
+
+        // If page access rule not found in access rules, get default user groups
+        if (!allowedUserGroups) {
+            // For pages, we need to check the default page permissions
+            const featureKey = pageFeaturePrefix + pageHandle;
+            const defaultPages = circle.pages || [];
+            const page = defaultPages.find((p) => p.handle === pageHandle);
+
+            if (page?.defaultUserGroups) {
+                allowedUserGroups = page.defaultUserGroups;
+            }
+        }
 
         // if the page allows access to "everyone", consider it authorized
         if (allowedUserGroups?.includes("everyone")) {

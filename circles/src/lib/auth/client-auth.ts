@@ -1,5 +1,5 @@
 import { Circle, Feature, MemberDisplay, UserPrivate } from "@/models/models";
-import { maxAccessLevel } from "../data/constants";
+import { features, maxAccessLevel } from "../data/constants";
 
 export const getMemberAccessLevel = (user: UserPrivate | MemberDisplay | undefined, circle: Circle): number => {
     if (!user) return maxAccessLevel;
@@ -41,7 +41,12 @@ export const isAuthorized = (user: UserPrivate | undefined, circle: Circle, feat
     let featureHandle = typeof feature === "string" ? feature : feature.handle;
     let allowedUserGroups = circle.accessRules?.[featureHandle];
 
-    if (!allowedUserGroups) return false;
+    // If feature not found in access rules, get default user groups
+    if (!allowedUserGroups) {
+        const featureObj = typeof feature === "string" ? features[feature as keyof typeof features] : feature;
+        allowedUserGroups = featureObj?.defaultUserGroups ?? [];
+    }
+
     if (allowedUserGroups.includes("everyone")) return true;
 
     let membership = user?.memberships?.find((c) => c.circleId === circle._id);
