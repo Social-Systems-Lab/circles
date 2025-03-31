@@ -80,7 +80,7 @@ export function CreateProjectDialog({ parentCircle }: CreateProjectDialogProps) 
             if (coverImage) {
                 formData.append("cover", coverImage);
             }
-            
+
             if (location) {
                 formData.append("location", JSON.stringify(location));
             }
@@ -125,7 +125,12 @@ export function CreateProjectDialog({ parentCircle }: CreateProjectDialogProps) 
                     New Project
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px] max-h-[85vh] overflow-y-auto">
+            <DialogContent
+                className="max-h-[85vh] overflow-y-auto sm:max-w-[425px]"
+                onInteractOutside={(e) => {
+                    e.preventDefault();
+                }}
+            >
                 <DialogHeader>
                     <DialogTitle>Create New Project</DialogTitle>
                 </DialogHeader>
@@ -161,7 +166,7 @@ export function CreateProjectDialog({ parentCircle }: CreateProjectDialogProps) 
                             onChange={(e) => setCoverImage(e.target.files ? e.target.files[0] : null)}
                         />
                     </div>
-                    
+
                     <div className="space-y-2">
                         <Label>Project Location</Label>
                         <LocationPicker value={location} onChange={setLocation} compact={true} />

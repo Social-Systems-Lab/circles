@@ -7,7 +7,7 @@ import { features } from "@/lib/data/constants";
 import { isFile, saveFile } from "@/lib/data/storage";
 import { addMember } from "@/lib/data/member";
 
-export async function createCircleAction(circleData: any) {
+export async function createCircleAction(circleData: any, formData?: FormData) {
     try {
         // Check if user is authorized to create circles
         const userDid = await getAuthenticatedUserDid();
@@ -46,16 +46,36 @@ export async function createCircleAction(circleData: any) {
         try {
             let needUpdate = false;
 
-            if (isFile(circleData.picture)) {
-                // Save the picture and get the file info
-                newCircle.picture = await saveFile(circleData.picture, "picture", newCircle._id, true);
-                needUpdate = true;
-            }
+            // Check if we have FormData with image files
+            if (formData) {
+                // Extract picture file from FormData
+                const pictureFile = formData.get("picture") as File;
+                if (pictureFile && pictureFile instanceof File) {
+                    // Save the picture and get the file info
+                    newCircle.picture = await saveFile(pictureFile, "picture", newCircle._id, true);
+                    needUpdate = true;
+                }
 
-            if (isFile(circleData.cover)) {
-                // Save the cover and get the file info
-                newCircle.cover = await saveFile(circleData.cover, "cover", newCircle._id, true);
-                needUpdate = true;
+                // Extract cover file from FormData
+                const coverFile = formData.get("cover") as File;
+                if (coverFile && coverFile instanceof File) {
+                    // Save the cover and get the file info
+                    newCircle.cover = await saveFile(coverFile, "cover", newCircle._id, true);
+                    needUpdate = true;
+                }
+            } else {
+                // Fall back to the old method if no FormData is provided
+                if (circleData.pictureFile) {
+                    // Save the picture and get the file info
+                    newCircle.picture = await saveFile(circleData.pictureFile, "picture", newCircle._id, true);
+                    needUpdate = true;
+                }
+
+                if (circleData.coverFile) {
+                    // Save the cover and get the file info
+                    newCircle.cover = await saveFile(circleData.coverFile, "cover", newCircle._id, true);
+                    needUpdate = true;
+                }
             }
 
             if (needUpdate) {

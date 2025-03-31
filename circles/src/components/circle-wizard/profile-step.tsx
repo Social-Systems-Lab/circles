@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CircleWizardStepProps } from "./circle-wizard";
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import { Loader2, Camera, ImageIcon } from "lucide-react";
 import { saveProfileAction } from "./actions";
 import { useToast } from "@/components/ui/use-toast";
@@ -18,16 +18,19 @@ function CircleImageUpload({
     alt,
     className,
     onImageUpdate,
+    circleData,
 }: {
     id: string;
     src: string;
     alt: string;
     className?: string;
     onImageUpdate: (newUrl: string) => void;
+    circleData: any;
 }) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isUploading, setIsUploading] = useState(false);
     const { toast } = useToast();
+    const [fileToUpload, setFileToUpload] = useState<File | null>(null);
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -39,8 +42,9 @@ function CircleImageUpload({
             const tempUrl = URL.createObjectURL(file);
             onImageUpdate(tempUrl);
 
-            // The actual upload will happen when the form is submitted
-            // This is just for preview
+            // Store the file for later upload
+            setFileToUpload(file);
+
             toast({
                 title: "Image selected",
                 description: "The image will be uploaded when you save this step",
@@ -56,6 +60,17 @@ function CircleImageUpload({
             setIsUploading(false);
         }
     };
+
+    // Expose the file to the parent component
+    useEffect(() => {
+        if (fileToUpload) {
+            if (id === "picture") {
+                circleData.pictureFile = fileToUpload;
+            } else if (id === "cover") {
+                circleData.coverFile = fileToUpload;
+            }
+        }
+    }, [fileToUpload, id, circleData]);
 
     return (
         <div className="group relative h-full w-full">
@@ -126,21 +141,19 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
 
     const handleNext = () => {
         startTransition(async () => {
-            // Save the profile information
-            const result = await saveProfileAction(
-                circleData.description,
-                circleData.content,
-                undefined,
-                circleData.picture,
-                circleData.cover,
-            );
+            try {
+                // For new circles, we don't need to save the profile information yet
+                // Just validate and move to the next step
+                if (!circleData.description.trim()) {
+                    setProfileError("Please provide a short description for your circle");
+                    return;
+                }
 
-            if (result.success) {
+                // Move to the next step
                 nextStep();
-            } else {
-                // Handle error
-                setProfileError(result.message || "Failed to save profile information");
-                console.error(result.message);
+            } catch (error) {
+                setProfileError("An error occurred while processing profile information");
+                console.error("Profile error:", error);
             }
         });
     };
@@ -167,6 +180,7 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                                 src={circleData.picture}
                                 alt="Circle Picture"
                                 className="rounded-full border-2 border-white bg-white object-cover shadow-lg"
+                                circleData={circleData}
                                 onImageUpdate={(newUrl) => {
                                     setCircleData((prev) => ({
                                         ...prev,
@@ -190,6 +204,7 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                                 src={circleData.cover}
                                 alt="Cover Image"
                                 className="object-cover"
+                                circleData={circleData}
                                 onImageUpdate={(newUrl) => {
                                     setCircleData((prev) => ({
                                         ...prev,

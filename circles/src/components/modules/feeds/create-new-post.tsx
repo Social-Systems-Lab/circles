@@ -72,7 +72,12 @@ export function CreateNewPost({ circle, feed, page, subpage }: CreateNewPostProp
                 </div>
             </DialogTrigger>
 
-            <DialogContent className="rounded-[15px] bg-white p-0 sm:max-w-[425px] sm:rounded-[15px]">
+            <DialogContent
+                className="rounded-[15px] bg-white p-0 sm:max-w-[425px] sm:rounded-[15px]"
+                onInteractOutside={(e) => {
+                    e.preventDefault();
+                }}
+            >
                 <div className="hidden">
                     <DialogTitle>Create a new post</DialogTitle>
                 </div>

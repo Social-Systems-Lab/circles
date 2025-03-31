@@ -22,18 +22,35 @@ export default function FinalStep({
 
     const handleCreateCircle = () => {
         startTransition(async () => {
-            // Create the circle
-            const result = await createCircleAction(circleData);
+            try {
+                // Create FormData for image uploads
+                const formData = new FormData();
 
-            if (result.success) {
-                setIsCreated(true);
-                if (result.data?.circle?.handle) {
-                    setCreatedCircleHandle(result.data.circle.handle);
+                // Add image files if they exist
+                if (circleData.pictureFile) {
+                    formData.append("picture", circleData.pictureFile);
                 }
-            } else {
-                // Handle error
-                setError(result.message || "Failed to create circle");
-                console.error(result.message);
+
+                if (circleData.coverFile) {
+                    formData.append("cover", circleData.coverFile);
+                }
+
+                // Create the circle
+                const result = await createCircleAction(circleData, formData);
+
+                if (result.success) {
+                    setIsCreated(true);
+                    if (result.data?.circle?.handle) {
+                        setCreatedCircleHandle(result.data.circle.handle);
+                    }
+                } else {
+                    // Handle error
+                    setError(result.message || "Failed to create circle");
+                    console.error(result.message);
+                }
+            } catch (error) {
+                setError("An error occurred while creating the circle");
+                console.error("Circle creation error:", error);
             }
         });
     };

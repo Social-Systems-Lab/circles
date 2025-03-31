@@ -32,6 +32,8 @@ export type CircleData = {
     picture: string;
     cover: string;
     parentCircleId?: string;
+    pictureFile?: File;
+    coverFile?: File;
 };
 
 export type CircleWizardStepProps = {
