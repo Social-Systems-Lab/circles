@@ -175,7 +175,13 @@ export async function createCircleAction(circleData: any, formData?: FormData) {
     }
 }
 
-export async function saveBasicInfoAction(name: string, handle: string, isPublic: boolean, circleId?: string) {
+export async function saveBasicInfoAction(
+    name: string,
+    handle: string,
+    isPublic: boolean,
+    circleId?: string,
+    parentCircleId?: string,
+) {
     try {
         if (circleId) {
             // If circleId exists, update the existing circle
@@ -186,10 +192,47 @@ export async function saveBasicInfoAction(name: string, handle: string, isPublic
                 isPublic,
             });
             return { success: true, message: "Basic info updated successfully", data: { circle } };
-        }
+        } else {
+            // For new circles, create the circle in the database
+            const userDid = await getAuthenticatedUserDid();
+            if (!userDid) {
+                return { success: false, message: "You need to be logged in to create a circle" };
+            }
 
-        // For new circles, we'll just return success as the actual creation happens at the end
-        return { success: true, message: "Basic info saved" };
+            const authorized = await isAuthorized(userDid, parentCircleId ?? "", features.create_subcircle);
+            if (!authorized) {
+                return { success: false, message: "You are not authorized to create new circles" };
+            }
+
+            // Create a new circle with basic info
+            const circle: Circle = {
+                name,
+                handle,
+                isPublic,
+                description: "",
+                content: "",
+                mission: "",
+                circleType: "circle",
+                createdBy: userDid,
+                parentCircleId,
+                picture: { url: "/images/default-picture.png" },
+                cover: { url: "/images/default-cover.png" },
+                causes: [],
+                skills: [],
+            };
+
+            // Create the circle in the database
+            const newCircle = await createCircle(circle);
+
+            // Add the user as an admin member to the new circle
+            await addMember(userDid, newCircle._id!, ["admins", "moderators", "members"]);
+
+            return {
+                success: true,
+                message: "Circle created successfully",
+                data: { circle: newCircle },
+            };
+        }
     } catch (error) {
         if (error instanceof Error) {
             return { success: false, message: error.message };

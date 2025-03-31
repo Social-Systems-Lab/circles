@@ -69,10 +69,27 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
         if (!validateForm()) return;
 
         startTransition(async () => {
-            // Save the basic info
-            const result = await saveBasicInfoAction(circleData.name, circleData.handle, circleData.isPublic);
+            // Save the basic info and create the circle
+            const result = await saveBasicInfoAction(
+                circleData.name,
+                circleData.handle,
+                circleData.isPublic,
+                circleData._id,
+                circleData.parentCircleId,
+            );
 
             if (result.success) {
+                // If we created a new circle, store its ID
+                if (result.data && result.data.circle) {
+                    const circle = result.data.circle;
+                    setCircleData((prev) => ({
+                        ...prev,
+                        _id: circle._id,
+                        // Also update any other fields that might have been set by the server
+                        picture: circle.picture?.url || prev.picture,
+                        cover: circle.cover?.url || prev.cover,
+                    }));
+                }
                 nextStep();
             } else {
                 // Handle error

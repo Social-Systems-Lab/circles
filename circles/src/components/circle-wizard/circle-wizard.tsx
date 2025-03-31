@@ -20,6 +20,7 @@ import { Location } from "@/models/models";
 import { Card, CardContent } from "../ui/card";
 
 export type CircleData = {
+    _id?: string; // Added circle ID
     name: string;
     handle: string;
     isPublic: boolean;

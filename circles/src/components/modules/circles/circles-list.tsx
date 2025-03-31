@@ -47,12 +47,12 @@ export const CreateCircleButton: React.FC<CreateCircleButtonProps> = ({ circle }
     const isProjectsPage = window.location.pathname.includes("/projects");
 
     return (
-        <Link href={`/circles/new?parentCircleId=${parentId}${isProjectsPage ? "&circleType=project" : ""}`}>
-            <Button variant={isCompact ? "ghost" : "outline"} className={isCompact ? "h-[32px] w-[32px] p-0" : "gap-2"}>
-                <Plus className="h-4 w-4" />
-                {isCompact ? "" : `Create ${isProjectsPage ? "Project" : "Circle"}`}
-            </Button>
-        </Link>
+        <div className="flex h-9 items-center">
+            {React.createElement(require("@/components/circle-wizard/create-circle-dialog").CreateCircleDialog, {
+                parentCircleId: parentId,
+                isProjectsPage: isProjectsPage,
+            })}
+        </div>
     );
 };
 

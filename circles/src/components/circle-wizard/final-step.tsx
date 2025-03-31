@@ -16,11 +16,28 @@ export default function FinalStep({
 }: CircleWizardStepProps) {
     const [isPending, startTransition] = useTransition();
     const [error, setError] = useState("");
-    const [isCreated, setIsCreated] = useState(false);
-    const [createdCircleHandle, setCreatedCircleHandle] = useState("");
+    const [isCreated, setIsCreated] = useState(!!circleData._id); // Set to true if circle already exists
+    const [createdCircleHandle, setCreatedCircleHandle] = useState(circleData.handle || "");
     const router = useRouter();
 
+    // If the circle already exists, we don't need to create it again
+    useEffect(() => {
+        if (circleData._id) {
+            setIsCreated(true);
+            setCreatedCircleHandle(circleData.handle);
+        }
+    }, [circleData._id, circleData.handle]);
+
     const handleCreateCircle = () => {
+        // If the circle already exists, just redirect to it
+        if (circleData._id && circleData.handle) {
+            router.push(`/circles/${circleData.handle}`);
+            if (onComplete) {
+                onComplete();
+            }
+            return;
+        }
+
         startTransition(async () => {
             try {
                 // Create FormData for image uploads

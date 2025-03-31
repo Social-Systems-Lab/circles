@@ -67,16 +67,41 @@ export default function CausesStep({
         }
 
         startTransition(async () => {
-            // Save the causes
+            // Get the cause handles
             const causeHandles = circleData.selectedCauses.map((cause) => cause.handle);
-            const result = await saveCausesAction(causeHandles);
 
-            if (result.success) {
-                nextStep();
+            // If we have a circle ID, update the circle with the causes
+            if (circleData._id) {
+                const result = await saveCausesAction(causeHandles, circleData._id);
+
+                if (result.success) {
+                    // Update the circle data with any changes from the server
+                    if (result.data?.circle) {
+                        const circle = result.data.circle as any;
+                        if (circle.causes) {
+                            // Convert causes array back to Cause objects
+                            const updatedCauses = circle.causes.map((handle: string) => {
+                                return (
+                                    causes.find((c) => c.handle === handle) || { handle, name: handle, description: "" }
+                                );
+                            });
+
+                            setCircleData((prev) => ({
+                                ...prev,
+                                selectedCauses: updatedCauses,
+                            }));
+                        }
+                    }
+                    nextStep();
+                } else {
+                    // Handle error
+                    setCausesError(result.message || "Failed to save causes");
+                    console.error(result.message);
+                }
             } else {
-                // Handle error
-                setCausesError(result.message || "Failed to save causes");
-                console.error(result.message);
+                // If no circle ID yet, just store the causes in state and move to the next step
+                console.warn("No circle ID yet, causes will be saved when the circle is created");
+                nextStep();
             }
         });
     };

@@ -27,15 +27,29 @@ export default function LocationStep({ circleData, setCircleData, nextStep, prev
 
     const handleNext = () => {
         startTransition(async () => {
-            // Save the location
-            const result = await saveLocationAction(circleData.location);
+            // If we have a circle ID, update the circle with the location
+            if (circleData._id) {
+                const result = await saveLocationAction(circleData.location, circleData._id);
 
-            if (result.success) {
-                nextStep();
+                if (result.success) {
+                    // Update the circle data with any changes from the server
+                    if (result.data?.circle) {
+                        const circle = result.data.circle as any;
+                        setCircleData((prev) => ({
+                            ...prev,
+                            location: circle.location || prev.location,
+                        }));
+                    }
+                    nextStep();
+                } else {
+                    // Handle error
+                    setLocationError(result.message || "Failed to save location");
+                    console.error(result.message);
+                }
             } else {
-                // Handle error
-                setLocationError(result.message || "Failed to save location");
-                console.error(result.message);
+                // If no circle ID yet, just store the location in state and move to the next step
+                console.warn("No circle ID yet, location will be saved when the circle is created");
+                nextStep();
             }
         });
     };

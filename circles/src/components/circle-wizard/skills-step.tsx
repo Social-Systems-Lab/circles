@@ -67,16 +67,41 @@ export default function SkillsStep({
         }
 
         startTransition(async () => {
-            // Save the skills
+            // Get the skill handles
             const skillHandles = circleData.selectedSkills.map((skill) => skill.handle);
-            const result = await saveSkillsAction(skillHandles);
 
-            if (result.success) {
-                nextStep();
+            // If we have a circle ID, update the circle with the skills
+            if (circleData._id) {
+                const result = await saveSkillsAction(skillHandles, circleData._id);
+
+                if (result.success) {
+                    // Update the circle data with any changes from the server
+                    if (result.data?.circle) {
+                        const circle = result.data.circle as any;
+                        if (circle.skills) {
+                            // Convert skills array back to Skill objects
+                            const updatedSkills = circle.skills.map((handle: string) => {
+                                return (
+                                    skills.find((s) => s.handle === handle) || { handle, name: handle, description: "" }
+                                );
+                            });
+
+                            setCircleData((prev) => ({
+                                ...prev,
+                                selectedSkills: updatedSkills,
+                            }));
+                        }
+                    }
+                    nextStep();
+                } else {
+                    // Handle error
+                    setSkillsError(result.message || "Failed to save skills");
+                    console.error(result.message);
+                }
             } else {
-                // Handle error
-                setSkillsError(result.message || "Failed to save skills");
-                console.error(result.message);
+                // If no circle ID yet, just store the skills in state and move to the next step
+                console.warn("No circle ID yet, skills will be saved when the circle is created");
+                nextStep();
             }
         });
     };

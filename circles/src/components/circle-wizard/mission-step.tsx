@@ -27,15 +27,35 @@ export default function MissionStep({ circleData, setCircleData, nextStep, prevS
 
     const handleNext = () => {
         startTransition(async () => {
-            // Save the mission
-            const result = await saveMissionAction(circleData.mission);
+            // Validate mission
+            if (!circleData.mission.trim()) {
+                setMissionError("Please provide a mission for your circle");
+                return;
+            }
 
-            if (result.success) {
-                nextStep();
+            // If we have a circle ID, update the circle with the mission
+            if (circleData._id) {
+                const result = await saveMissionAction(circleData.mission, circleData._id);
+
+                if (result.success) {
+                    // Update the circle data with any changes from the server
+                    if (result.data?.circle) {
+                        const circle = result.data.circle as any;
+                        setCircleData((prev) => ({
+                            ...prev,
+                            mission: circle.mission || prev.mission,
+                        }));
+                    }
+                    nextStep();
+                } else {
+                    // Handle error
+                    setMissionError(result.message || "Failed to save mission");
+                    console.error(result.message);
+                }
             } else {
-                // Handle error
-                setMissionError(result.message || "Failed to save mission");
-                console.error(result.message);
+                // If no circle ID yet, just store the mission in state and move to the next step
+                console.warn("No circle ID yet, mission will be saved when the circle is created");
+                nextStep();
             }
         });
     };

@@ -44,63 +44,51 @@ function CircleImageUpload({
             const tempUrl = URL.createObjectURL(file);
             onImageUpdate(tempUrl);
 
-            // Store the file for later upload
-            setFileToUpload(file);
-            console.log(`CircleImageUpload (${id}): File stored for later upload:`, file.name);
+            // If we have a circle ID, upload the file immediately
+            if (circleData._id) {
+                // Upload to server
+                const formData = new FormData();
+                formData.append(id, file);
 
-            toast({
-                title: "Image selected",
-                description: "The image will be uploaded when you create the circle",
-            });
+                // Use updateCircleField from modules/home/actions.ts
+                const { updateCircleField } = await import("@/components/modules/home/actions");
+                const result = await updateCircleField(circleData._id, formData);
+
+                if (result.success) {
+                    // Get the permanent URL from the server response
+                    const permanentUrl = (result.circle as any)?.[id]?.url;
+                    if (permanentUrl) {
+                        onImageUpdate(permanentUrl);
+                        toast({ title: "Success", description: "Image updated successfully" });
+                    }
+                } else {
+                    toast({
+                        title: "Error",
+                        description: result.message || "Failed to update image",
+                        variant: "destructive",
+                    });
+                }
+            } else {
+                // If no circle ID yet, store the file for later upload
+                setFileToUpload(file);
+                console.log(`CircleImageUpload (${id}): No circle ID yet, storing file for later:`, file.name);
+
+                toast({
+                    title: "Image selected",
+                    description: "The image will be uploaded when you create the circle",
+                });
+            }
         } catch (error) {
             toast({
                 title: "Error",
-                description: "Failed to preview image",
+                description: "Failed to upload image",
                 variant: "destructive",
             });
-            console.error(`CircleImageUpload (${id}): Image preview error:`, error);
+            console.error(`CircleImageUpload (${id}): Image upload error:`, error);
         } finally {
             setIsUploading(false);
         }
     };
-
-    // Expose the file to the parent component
-    useEffect(() => {
-        if (fileToUpload) {
-            console.log(`CircleImageUpload (${id}): Setting file in circleData:`, fileToUpload.name);
-
-            if (id === "picture") {
-                circleData.pictureFile = fileToUpload;
-                console.log(
-                    "CircleData after setting pictureFile:",
-                    circleData.pictureFile ? `File set (${circleData.pictureFile.name})` : "No file set",
-                );
-            } else if (id === "cover") {
-                circleData.coverFile = fileToUpload;
-                console.log(
-                    "CircleData after setting coverFile:",
-                    circleData.coverFile ? `File set (${circleData.coverFile.name})` : "No file set",
-                );
-            }
-
-            // Verify the file is still a File object
-            if (id === "picture" && circleData.pictureFile) {
-                console.log(
-                    "Verifying pictureFile is still a File object:",
-                    circleData.pictureFile instanceof File,
-                    "Size:",
-                    circleData.pictureFile.size,
-                );
-            } else if (id === "cover" && circleData.coverFile) {
-                console.log(
-                    "Verifying coverFile is still a File object:",
-                    circleData.coverFile instanceof File,
-                    "Size:",
-                    circleData.coverFile.size,
-                );
-            }
-        }
-    }, [fileToUpload, id, circleData]);
 
     return (
         <div className="group relative h-full w-full">
@@ -172,11 +160,32 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
     const handleNext = () => {
         startTransition(async () => {
             try {
-                // For new circles, we don't need to save the profile information yet
-                // Just validate and move to the next step
+                // Validate the description
                 if (!circleData.description.trim()) {
                     setProfileError("Please provide a short description for your circle");
                     return;
+                }
+
+                // If we have a circle ID, update the circle with the profile information
+                if (circleData._id) {
+                    const result = await saveProfileAction(circleData.description, circleData.content, circleData._id);
+
+                    if (!result.success) {
+                        setProfileError(result.message || "Failed to save profile information");
+                        return;
+                    }
+
+                    // Update the circle data with any changes from the server
+                    if (result.data?.circle) {
+                        const circle = result.data.circle as any;
+                        setCircleData((prev) => ({
+                            ...prev,
+                            description: circle.description || prev.description,
+                            content: circle.content || prev.content,
+                            picture: circle.picture?.url || prev.picture,
+                            cover: circle.cover?.url || prev.cover,
+                        }));
+                    }
                 }
 
                 // Move to the next step
