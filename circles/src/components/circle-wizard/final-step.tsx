@@ -7,7 +7,13 @@ import { Loader2, Check, ArrowRight } from "lucide-react";
 import { createCircleAction } from "./actions";
 import { useRouter } from "next/navigation";
 
-export default function FinalStep({ circleData, setCircleData, nextStep, prevStep }: CircleWizardStepProps) {
+export default function FinalStep({
+    circleData,
+    setCircleData,
+    nextStep,
+    prevStep,
+    onComplete,
+}: CircleWizardStepProps) {
     const [isPending, startTransition] = useTransition();
     const [error, setError] = useState("");
     const [isCreated, setIsCreated] = useState(false);

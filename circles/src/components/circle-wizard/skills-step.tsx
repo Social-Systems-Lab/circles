@@ -13,7 +13,13 @@ import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { ItemGrid, ItemList } from "./item-card";
 import SelectedItemBadge from "./selected-item-badge";
 
-export default function SkillsStep({ circleData, setCircleData, nextStep, prevStep }: CircleWizardStepProps) {
+export default function SkillsStep({
+    circleData,
+    setCircleData,
+    nextStep,
+    prevStep,
+    onComplete,
+}: CircleWizardStepProps) {
     const [skillSearch, setSkillSearch] = useState("");
     const [isPending, startTransition] = useTransition();
     const [skillsError, setSkillsError] = useState("");
@@ -77,8 +83,8 @@ export default function SkillsStep({ circleData, setCircleData, nextStep, prevSt
 
     return (
         <div className="space-y-4">
-            <h2 className="text-2xl font-bold">Choose Skills</h2>
-            <p className="text-gray-500">Select skills that are relevant to your circle:</p>
+            <h2 className="text-2xl font-bold">Choose Needs</h2>
+            <p className="text-gray-500">Select skills that your circle needs:</p>
 
             <div className="relative">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 transform text-gray-400" />

@@ -13,7 +13,13 @@ import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { ItemGrid, ItemList } from "./item-card";
 import SelectedItemBadge from "./selected-item-badge";
 
-export default function CausesStep({ circleData, setCircleData, nextStep, prevStep }: CircleWizardStepProps) {
+export default function CausesStep({
+    circleData,
+    setCircleData,
+    nextStep,
+    prevStep,
+    onComplete,
+}: CircleWizardStepProps) {
     const [causeSearch, setCauseSearch] = useState("");
     const [isPending, startTransition] = useTransition();
     const [causesError, setCausesError] = useState("");

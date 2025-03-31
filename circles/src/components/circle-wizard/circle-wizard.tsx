@@ -103,7 +103,7 @@ export default function CircleWizard({ parentCircleId, isProjectsPage = false, o
             case 4:
                 return "Choose Causes";
             case 5:
-                return "Choose Skills";
+                return "Choose Needs";
             case 6:
                 return "Create Circle";
             default:
