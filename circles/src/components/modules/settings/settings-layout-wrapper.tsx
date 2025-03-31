@@ -40,6 +40,10 @@ const settingsForms: SettingsForm[] = [
         handle: "matchmaking",
     },
     {
+        name: "General",
+        handle: "general",
+    },
+    {
         name: "Server",
         handle: "server-settings",
     },

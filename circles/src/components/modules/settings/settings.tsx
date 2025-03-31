@@ -5,6 +5,7 @@ import { getServerSettings } from "@/lib/data/server-settings";
 import MembershipGateway from "../membership-requests/membership-requests";
 import { getAllMembershipRequestsAction } from "../membership-requests/actions";
 import { SettingsForm } from "./settings-form";
+import { CircleGeneralForm } from "@/components/forms/circle-settings/general/circle-general-form";
 
 export default async function SettingsModule({ circle, page, subpage, isDefaultCircle }: ModulePageProps) {
     const getFormSchemaId = () => {
@@ -12,6 +13,8 @@ export default async function SettingsModule({ circle, page, subpage, isDefaultC
             default:
             case "about":
                 return "circle-about-form";
+            case "general":
+                return "circle-general-form";
             case "user-groups":
                 return "circle-user-groups-form";
             case "access-rules":
@@ -29,16 +32,8 @@ export default async function SettingsModule({ circle, page, subpage, isDefaultC
 
     const getSettingsComponent = async () => {
         switch (subpage) {
-            default:
-                return (
-                    <SettingsForm
-                        formSchemaId={getFormSchemaId()}
-                        initialFormData={initialFormData}
-                        page={page}
-                        subpage={subpage}
-                        circle={circle}
-                    />
-                );
+            case "general":
+                return <CircleGeneralForm circle={circle} />;
             case "membership-requests":
                 const { success, pendingRequests, rejectedRequests, message } = await getAllMembershipRequestsAction(
                     circle._id,
@@ -54,6 +49,16 @@ export default async function SettingsModule({ circle, page, subpage, isDefaultC
                         page={page}
                         pendingRequests={pendingRequests ?? []}
                         rejectedRequests={rejectedRequests ?? []}
+                    />
+                );
+            default:
+                return (
+                    <SettingsForm
+                        formSchemaId={getFormSchemaId()}
+                        initialFormData={initialFormData}
+                        page={page}
+                        subpage={subpage}
+                        circle={circle}
                     />
                 );
         }

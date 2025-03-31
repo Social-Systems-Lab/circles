@@ -2,7 +2,7 @@
 
 import { Circle, CircleType, PlatformMetrics, ServerSettings, SortingOptions, WithMetric } from "@/models/models";
 import { getServerSettings } from "./server-settings";
-import { Circles } from "./db";
+import { Circles, Members, MembershipRequests, Feeds, Posts, ChatRooms } from "./db";
 import { ObjectId } from "mongodb";
 import { getDefaultAccessRules, defaultUserGroups, defaultPages, features } from "./constants";
 import { getMetrics } from "../utils/metrics";
@@ -320,4 +320,47 @@ export const findProjectByShadowPostId = async (postId: string): Promise<Circle 
     }
 
     return project || null;
+};
+
+/**
+ * Delete a circle and all associated data
+ * @param circleId The ID of the circle to delete
+ */
+export const deleteCircle = async (circleId: string): Promise<void> => {
+    console.log("🗑️ [DB] Deleting circle:", circleId);
+
+    // Get the circle to be deleted
+    const circle = await getCircleById(circleId);
+    if (!circle) {
+        throw new Error("Circle not found");
+    }
+
+    // Delete the circle from the database
+    const result = await Circles.deleteOne({ _id: new ObjectId(circleId) });
+
+    if (result.deletedCount === 0) {
+        throw new Error("Failed to delete circle");
+    }
+
+    // Delete all members of the circle
+    await Members.deleteMany({ circleId: circleId });
+
+    // Delete all membership requests for the circle
+    await MembershipRequests.deleteMany({ circleId: circleId });
+
+    // Delete all feeds associated with the circle
+    const feeds = await Feeds.find({ circleId: circleId }).toArray();
+    const feedIds = feeds.map((feed) => feed._id.toString());
+
+    await Feeds.deleteMany({ circleId: circleId });
+
+    // Delete all posts in the feeds
+    for (const feedId of feedIds) {
+        await Posts.deleteMany({ feedId: feedId });
+    }
+
+    // Delete all chat rooms associated with the circle
+    await ChatRooms.deleteMany({ circleId: circleId });
+
+    console.log("🗑️ [DB] Circle deleted successfully:", circleId);
 };

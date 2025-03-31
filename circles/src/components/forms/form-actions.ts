@@ -10,6 +10,7 @@ import { createCircleFormAction } from "./create-circle/create-circle-form-actio
 import { circleMatchmakingFormAction } from "./circle-settings/matchmaking/circle-matchmaking-form-action";
 import { signupFormAction } from "./signup/signup-form-action";
 import { loginFormAction } from "./login/login-form-action";
+import { circleGeneralFormAction } from "./circle-settings/general/circle-general-form-action";
 
 export const formActions: Record<string, FormAction> = {
     "signup-form": signupFormAction,
@@ -22,4 +23,5 @@ export const formActions: Record<string, FormAction> = {
     "server-settings-form": serverSettingsFormAction,
     "create-circle-form": createCircleFormAction,
     "circle-matchmaking-form": circleMatchmakingFormAction,
+    "circle-general-form": circleGeneralFormAction,
 };

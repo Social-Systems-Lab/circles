@@ -9,6 +9,7 @@ import { createCircleFormSchema } from "./create-circle/create-circle-form-schem
 import { circleMatchmakingFormSchema } from "./circle-settings/matchmaking/circle-matchmaking-form-schema";
 import { signupFormSchema } from "./signup/signup-form-schema";
 import { loginFormSchema } from "./login/login-form-schema";
+import { circleGeneralFormSchema } from "./circle-settings/general/circle-general-form-schema";
 
 export const formSchemas: Record<string, FormSchema> = {
     "signup-form": signupFormSchema,
@@ -21,4 +22,5 @@ export const formSchemas: Record<string, FormSchema> = {
     "server-settings-form": serverSettingsFormSchema,
     "create-circle-form": createCircleFormSchema,
     "circle-matchmaking-form": circleMatchmakingFormSchema,
+    "circle-general-form": circleGeneralFormSchema,
 };
