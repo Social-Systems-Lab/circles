@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 import {
@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/use-toast";
 import { Circle } from "@/models/models";
-import { deleteCircleAction } from "@/components/modules/circles/actions";
+import { deleteCircleAction, getCircleDeletionStatsAction } from "@/components/modules/circles/actions";
 
 interface DeleteCircleButtonProps {
     circle: Circle;
@@ -26,8 +26,41 @@ export function DeleteCircleButton({ circle }: DeleteCircleButtonProps) {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [confirmationText, setConfirmationText] = useState("");
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isLoadingStats, setIsLoadingStats] = useState(false);
+    const [deletionStats, setDeletionStats] = useState<{
+        membersCount: number;
+        feedsCount: number;
+        postsCount: number;
+        isUser: boolean;
+    } | null>(null);
     const router = useRouter();
     const { toast } = useToast();
+
+    // Fetch deletion stats when dialog opens
+    useEffect(() => {
+        if (isDialogOpen && !deletionStats) {
+            const fetchStats = async () => {
+                setIsLoadingStats(true);
+                try {
+                    const result = await getCircleDeletionStatsAction(circle._id!);
+                    if (result.success && result.stats) {
+                        setDeletionStats(result.stats);
+                    } else {
+                        toast({
+                            title: "Error",
+                            description: result.message || "Failed to fetch deletion statistics",
+                            variant: "destructive",
+                        });
+                    }
+                } catch (error) {
+                    console.error("Error fetching deletion stats:", error);
+                } finally {
+                    setIsLoadingStats(false);
+                }
+            };
+            fetchStats();
+        }
+    }, [isDialogOpen, circle._id, deletionStats, toast]);
 
     const handleDelete = async () => {
         if (confirmationText !== circle.name) {
@@ -98,7 +131,16 @@ export function DeleteCircleButton({ circle }: DeleteCircleButtonProps) {
                 </div>
             </div>
 
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <Dialog
+                open={isDialogOpen}
+                onOpenChange={(open) => {
+                    setIsDialogOpen(open);
+                    if (!open) {
+                        setDeletionStats(null);
+                        setConfirmationText("");
+                    }
+                }}
+            >
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>Delete Circle</DialogTitle>
@@ -108,6 +150,28 @@ export function DeleteCircleButton({ circle }: DeleteCircleButtonProps) {
                         </DialogDescription>
                     </DialogHeader>
                     <div className="py-4">
+                        {isLoadingStats ? (
+                            <div className="py-4 text-center">
+                                <p className="text-sm text-gray-500">Loading deletion information...</p>
+                            </div>
+                        ) : deletionStats ? (
+                            <div className="mb-6 rounded-md bg-red-50 p-3">
+                                <h4 className="mb-2 text-sm font-medium text-red-800">
+                                    The following will be deleted:
+                                </h4>
+                                <ul className="list-disc space-y-1 pl-5 text-sm text-red-700">
+                                    <li>{deletionStats.membersCount} followers</li>
+                                    <li>{deletionStats.feedsCount} feeds</li>
+                                    <li>{deletionStats.postsCount} posts</li>
+                                    {deletionStats.isUser && (
+                                        <li>
+                                            <strong>User account</strong> and associated files
+                                        </li>
+                                    )}
+                                </ul>
+                            </div>
+                        ) : null}
+
                         <p className="mb-4 text-sm text-gray-500">
                             To confirm, please type the name of the circle: <strong>{circle.name}</strong>
                         </p>

@@ -46,6 +46,12 @@ export const features = {
         description: "Create a new sub-circle that is part of this circle",
         defaultUserGroups: ["admins", "moderators"],
     },
+    delete_circle: {
+        name: "Delete Circle",
+        handle: "delete_circle",
+        description: "Delete Circle",
+        defaultUserGroups: ["admins"],
+    },
 };
 
 export const maxAccessLevel = 9999999;
