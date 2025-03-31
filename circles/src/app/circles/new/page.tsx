@@ -1,22 +1,10 @@
 import { Suspense } from "react";
-import DynamicForm from "@/components/forms/dynamic-form";
+import CircleWizard from "@/components/circle-wizard/circle-wizard";
 
-type NewCircleProps = {
-    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
-};
-
-export default async function NewCirclePage(props: NewCircleProps) {
-    const searchParams = await props.searchParams;
-
+export default function NewCirclePage() {
     return (
-        <Suspense fallback={<div>Loading form...</div>}>
-            <div className="pt-4">
-                <DynamicForm
-                    formSchemaId="create-circle-form"
-                    initialFormData={{ parentCircleId: searchParams?.parentCircleId as string, isPublic: true }}
-                    maxWidth="600px"
-                />
-            </div>
+        <Suspense fallback={<div>Loading wizard...</div>}>
+            <CircleWizard />
         </Suspense>
     );
 }

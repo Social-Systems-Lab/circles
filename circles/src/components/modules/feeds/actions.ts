@@ -127,7 +127,7 @@ export async function getPostsAction(
     const feature = feedFeaturePrefix + feed.handle + "_view";
     const authorized = await isAuthorized(userDid, circleId, feature);
     if (!authorized) {
-        redirect("/not-authorized");
+        redirect("/unauthorized");
     }
 
     // get posts for feed

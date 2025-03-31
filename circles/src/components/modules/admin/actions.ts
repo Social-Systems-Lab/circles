@@ -5,9 +5,21 @@ import { Circles } from "@/lib/data/db";
 import { deleteCircle } from "@/lib/data/circle";
 import { Circle } from "@/models/models";
 import { ObjectId } from "mongodb";
+import { getAuthenticatedUserDid } from "@/lib/auth/auth";
+import { getUserPrivate } from "@/lib/data/user";
 
 // Get all circles of a specific type
 export async function getEntitiesByType(type: "circle" | "user" | "project") {
+    // check if user is admin
+    let userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        throw new Error("Unauthorized: You do not have permission to access this resource.");
+    }
+    let user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        throw new Error("Unauthorized: You do not have permission to access this resource.");
+    }
+
     try {
         const entities = await Circles.find(
             { circleType: type },
@@ -38,6 +50,16 @@ export async function getEntitiesByType(type: "circle" | "user" | "project") {
 
 // Delete an entity (circle, user, or project)
 export async function deleteEntity(id: string) {
+    // check if user is admin
+    let userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        throw new Error("Unauthorized: You do not have permission to access this resource.");
+    }
+    let user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        throw new Error("Unauthorized: You do not have permission to access this resource.");
+    }
+
     try {
         await deleteCircle(id);
         revalidatePath("/admin");
@@ -53,6 +75,16 @@ export async function deleteEntity(id: string) {
 
 // Get all super admins
 export async function getSuperAdmins() {
+    // check if user is admin
+    let userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        throw new Error("Unauthorized: You do not have permission to access this resource.");
+    }
+    let user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        throw new Error("Unauthorized: You do not have permission to access this resource.");
+    }
+
     try {
         const admins = await Circles.find(
             { isAdmin: true, circleType: "user" },
@@ -80,6 +112,16 @@ export async function getSuperAdmins() {
 
 // Toggle super admin status
 export async function toggleSuperAdmin(userId: string, isAdmin: boolean) {
+    // check if user is admin
+    let userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        throw new Error("Unauthorized: You do not have permission to access this resource.");
+    }
+    let user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        throw new Error("Unauthorized: You do not have permission to access this resource.");
+    }
+
     try {
         await Circles.updateOne({ _id: new ObjectId(userId) }, { $set: { isAdmin } });
         revalidatePath("/admin");
@@ -98,6 +140,16 @@ export async function toggleSuperAdmin(userId: string, isAdmin: boolean) {
 
 // Get platform statistics
 export async function getPlatformStats() {
+    // check if user is admin
+    let userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        throw new Error("Unauthorized: You do not have permission to access this resource.");
+    }
+    let user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        throw new Error("Unauthorized: You do not have permission to access this resource.");
+    }
+
     try {
         const circlesCount = await Circles.countDocuments({ circleType: "circle" });
         const usersCount = await Circles.countDocuments({ circleType: "user" });
