@@ -46,36 +46,54 @@ export async function createCircleAction(circleData: any, formData?: FormData) {
         try {
             let needUpdate = false;
 
+            // Debug information
+            console.log("FormData provided:", !!formData);
+            console.log("circleData.pictureFile:", !!circleData.pictureFile);
+            console.log("circleData.coverFile:", !!circleData.coverFile);
+
             // Check if we have FormData with image files
             if (formData) {
+                console.log("FormData entries:");
+                for (const [key, value] of formData.entries()) {
+                    console.log(`- ${key}: ${value instanceof File ? "File object" : value}`);
+                }
+
                 // Extract picture file from FormData
                 const pictureFile = formData.get("picture") as File;
                 if (pictureFile && pictureFile instanceof File) {
+                    console.log("Picture file found in FormData:", pictureFile.name, pictureFile.size);
                     // Save the picture and get the file info
                     newCircle.picture = await saveFile(pictureFile, "picture", newCircle._id, true);
+                    console.log("Picture saved:", newCircle.picture);
                     needUpdate = true;
                 }
 
                 // Extract cover file from FormData
                 const coverFile = formData.get("cover") as File;
                 if (coverFile && coverFile instanceof File) {
+                    console.log("Cover file found in FormData:", coverFile.name, coverFile.size);
                     // Save the cover and get the file info
                     newCircle.cover = await saveFile(coverFile, "cover", newCircle._id, true);
+                    console.log("Cover saved:", newCircle.cover);
                     needUpdate = true;
                 }
-            } else {
-                // Fall back to the old method if no FormData is provided
-                if (circleData.pictureFile) {
-                    // Save the picture and get the file info
-                    newCircle.picture = await saveFile(circleData.pictureFile, "picture", newCircle._id, true);
-                    needUpdate = true;
-                }
+            }
 
-                if (circleData.coverFile) {
-                    // Save the cover and get the file info
-                    newCircle.cover = await saveFile(circleData.coverFile, "cover", newCircle._id, true);
-                    needUpdate = true;
-                }
+            // Always try the direct method as a fallback
+            if (circleData.pictureFile) {
+                console.log("Using pictureFile from circleData");
+                // Save the picture and get the file info
+                newCircle.picture = await saveFile(circleData.pictureFile, "picture", newCircle._id, true);
+                console.log("Picture saved from circleData:", newCircle.picture);
+                needUpdate = true;
+            }
+
+            if (circleData.coverFile) {
+                console.log("Using coverFile from circleData");
+                // Save the cover and get the file info
+                newCircle.cover = await saveFile(circleData.coverFile, "cover", newCircle._id, true);
+                console.log("Cover saved from circleData:", newCircle.cover);
+                needUpdate = true;
             }
 
             if (needUpdate) {

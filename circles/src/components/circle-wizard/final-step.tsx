@@ -27,12 +27,39 @@ export default function FinalStep({
                 const formData = new FormData();
 
                 // Add image files if they exist
+                console.log("Client-side: circleData.pictureFile exists:", !!circleData.pictureFile);
+                console.log("Client-side: circleData.coverFile exists:", !!circleData.coverFile);
+
                 if (circleData.pictureFile) {
+                    console.log(
+                        "Client-side: Adding picture file to FormData:",
+                        circleData.pictureFile.name,
+                        circleData.pictureFile.size,
+                        circleData.pictureFile.type,
+                    );
                     formData.append("picture", circleData.pictureFile);
                 }
 
                 if (circleData.coverFile) {
+                    console.log(
+                        "Client-side: Adding cover file to FormData:",
+                        circleData.coverFile.name,
+                        circleData.coverFile.size,
+                        circleData.coverFile.type,
+                    );
                     formData.append("cover", circleData.coverFile);
+                }
+
+                // Log FormData entries
+                console.log("Client-side FormData entries:");
+                for (const [key, value] of formData.entries()) {
+                    console.log(
+                        `- ${key}: ${
+                            value instanceof File
+                                ? `File (${(value as File).name}, ${(value as File).size} bytes)`
+                                : value
+                        }`,
+                    );
                 }
 
                 // Create the circle

@@ -36,6 +36,8 @@ function CircleImageUpload({
         const file = event.target.files?.[0];
         if (!file) return;
 
+        console.log(`CircleImageUpload (${id}): File selected:`, file.name, file.size, file.type);
+
         setIsUploading(true);
         try {
             // Create temporary URL for immediate feedback
@@ -44,10 +46,11 @@ function CircleImageUpload({
 
             // Store the file for later upload
             setFileToUpload(file);
+            console.log(`CircleImageUpload (${id}): File stored for later upload:`, file.name);
 
             toast({
                 title: "Image selected",
-                description: "The image will be uploaded when you save this step",
+                description: "The image will be uploaded when you create the circle",
             });
         } catch (error) {
             toast({
@@ -55,7 +58,7 @@ function CircleImageUpload({
                 description: "Failed to preview image",
                 variant: "destructive",
             });
-            console.error("Image preview error:", error);
+            console.error(`CircleImageUpload (${id}): Image preview error:`, error);
         } finally {
             setIsUploading(false);
         }
@@ -64,10 +67,37 @@ function CircleImageUpload({
     // Expose the file to the parent component
     useEffect(() => {
         if (fileToUpload) {
+            console.log(`CircleImageUpload (${id}): Setting file in circleData:`, fileToUpload.name);
+
             if (id === "picture") {
                 circleData.pictureFile = fileToUpload;
+                console.log(
+                    "CircleData after setting pictureFile:",
+                    circleData.pictureFile ? `File set (${circleData.pictureFile.name})` : "No file set",
+                );
             } else if (id === "cover") {
                 circleData.coverFile = fileToUpload;
+                console.log(
+                    "CircleData after setting coverFile:",
+                    circleData.coverFile ? `File set (${circleData.coverFile.name})` : "No file set",
+                );
+            }
+
+            // Verify the file is still a File object
+            if (id === "picture" && circleData.pictureFile) {
+                console.log(
+                    "Verifying pictureFile is still a File object:",
+                    circleData.pictureFile instanceof File,
+                    "Size:",
+                    circleData.pictureFile.size,
+                );
+            } else if (id === "cover" && circleData.coverFile) {
+                console.log(
+                    "Verifying coverFile is still a File object:",
+                    circleData.coverFile instanceof File,
+                    "Size:",
+                    circleData.coverFile.size,
+                );
             }
         }
     }, [fileToUpload, id, circleData]);
