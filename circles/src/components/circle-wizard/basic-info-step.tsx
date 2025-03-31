@@ -159,7 +159,7 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
                             Saving...
                         </>
                     ) : (
-                        "Next"
+                        "Create Circle"
                     )}
                 </Button>
             </div>
