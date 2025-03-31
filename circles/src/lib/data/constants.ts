@@ -145,6 +145,13 @@ export const defaultPagesForUser: Page[] = [
         defaultUserGroups: ["admins", "moderators", "members"],
     },
     {
+        name: "Circles",
+        handle: "circles",
+        description: "Circles page",
+        module: "circles",
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
         name: "Projects",
         handle: "projects",
         description: "Projects page",
@@ -605,6 +612,13 @@ export const defaultPages: Page[] = [
         handle: "members",
         description: "Members page",
         module: "members",
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Circles",
+        handle: "circles",
+        description: "Circles page",
+        module: "circles",
         defaultUserGroups: ["admins", "moderators", "members", "everyone"],
     },
     {

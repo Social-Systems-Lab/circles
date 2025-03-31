@@ -180,8 +180,8 @@ export default function ProjectsTab() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will permanently delete the project "{projectToDelete?.name}" and all associated data.
-                            This action cannot be undone.
+                            This will permanently delete the project &quot;{projectToDelete?.name}&quot; and all
+                            associated data. This action cannot be undone.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

@@ -176,8 +176,8 @@ export default function CirclesTab() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will permanently delete the circle "{circleToDelete?.name}" and all associated data.
-                            This action cannot be undone.
+                            This will permanently delete the circle &quot;{circleToDelete?.name}&quot; and all
+                            associated data. This action cannot be undone.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

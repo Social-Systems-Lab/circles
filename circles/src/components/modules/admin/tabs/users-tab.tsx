@@ -182,8 +182,8 @@ export default function UsersTab() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will permanently delete the user "{userToDelete?.name}" and all associated data. This
-                            action cannot be undone.
+                            This will permanently delete the user &quot;{userToDelete?.name}&quot; and all associated
+                            data. This action cannot be undone.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
