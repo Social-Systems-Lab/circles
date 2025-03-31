@@ -670,7 +670,18 @@ export const DynamicAccessRulesField: React.FC<RenderFieldProps> = ({
 }) => {
     const userGroups = useWatch({ control, name: "userGroups" }) || [];
     const pages = useWatch({ control, name: "pages" }) || [];
-    const features = Object.keys(formField.value || {});
+
+    // Get all features from the circle's access rules
+    const circleFeatures = Object.keys(formField.value || {});
+
+    // Get all features from the features object in constants.ts
+    const allFeatureKeys = Object.keys(features);
+
+    // Get all page features
+    const pageFeatures = pages.map((page: Page) => `${pageFeaturePrefix}${page.handle}`);
+
+    // Combine all features, removing duplicates
+    const allFeatures = Array.from(new Set([...circleFeatures, ...allFeatureKeys, ...pageFeatures]));
 
     return (
         <FormItem>
@@ -678,7 +689,7 @@ export const DynamicAccessRulesField: React.FC<RenderFieldProps> = ({
                 <h1 className="m-0 p-0 pb-3 text-xl font-bold">{getUserOrCircleInfo(field.label, isUser)}</h1>
             </div>
 
-            <DynamicAccessRulesGrid features={features} pages={pages} userGroups={userGroups} control={control} />
+            <DynamicAccessRulesGrid features={allFeatures} pages={pages} userGroups={userGroups} control={control} />
             <FormMessage />
         </FormItem>
     );

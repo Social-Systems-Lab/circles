@@ -17,6 +17,9 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/use-toast";
 import { Circle } from "@/models/models";
 import { deleteCircleAction, getCircleDeletionStatsAction } from "@/components/modules/circles/actions";
+import { useAtom } from "jotai";
+import { userAtom } from "@/lib/data/atoms";
+import { getUserPrivateAction } from "@/components/modules/home/actions";
 
 interface DeleteCircleButtonProps {
     circle: Circle;
@@ -35,6 +38,7 @@ export function DeleteCircleButton({ circle }: DeleteCircleButtonProps) {
     } | null>(null);
     const router = useRouter();
     const { toast } = useToast();
+    const [user, setUser] = useAtom(userAtom);
 
     // Fetch deletion stats when dialog opens
     useEffect(() => {
@@ -82,6 +86,15 @@ export function DeleteCircleButton({ circle }: DeleteCircleButtonProps) {
                     title: "Success",
                     description: result.message,
                 });
+
+                // Update user atom by removing the membership for this circle
+                if (user && user.memberships) {
+                    // Option 1: Update the user atom directly by filtering out the deleted circle
+                    const updatedMemberships = user.memberships.filter(
+                        (membership) => membership.circleId !== circle._id,
+                    );
+                    setUser({ ...user, memberships: updatedMemberships });
+                }
 
                 // Redirect to circles page
                 if (result.data?.redirectTo) {
