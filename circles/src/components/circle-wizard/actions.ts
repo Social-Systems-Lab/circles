@@ -52,48 +52,110 @@ export async function createCircleAction(circleData: any, formData?: FormData) {
             console.log("circleData.coverFile:", !!circleData.coverFile);
 
             // Check if we have FormData with image files
-            if (formData) {
-                console.log("FormData entries:");
-                for (const [key, value] of formData.entries()) {
-                    console.log(`- ${key}: ${value instanceof File ? "File object" : value}`);
+            try {
+                if (formData) {
+                    console.log("FormData entries:");
+                    try {
+                        for (const [key, value] of formData.entries()) {
+                            console.log(`- ${key}: ${typeof value}`);
+                        }
+                    } catch (error) {
+                        console.log("Error iterating FormData entries:", error);
+                    }
+
+                    // Handle picture file
+                    try {
+                        const pictureFile = formData.get("picture");
+                        if (pictureFile) {
+                            console.log("Picture file found in FormData, type:", typeof pictureFile);
+
+                            // Convert to Buffer if needed
+                            if (typeof Buffer !== "undefined" && pictureFile instanceof Buffer) {
+                                console.log("Picture is a Buffer");
+                                // Save the picture and get the file info
+                                newCircle.picture = await saveFile(pictureFile, "picture", newCircle._id, true);
+                                console.log("Picture saved:", newCircle.picture);
+                                needUpdate = true;
+                            } else if (typeof Blob !== "undefined" && pictureFile instanceof Blob) {
+                                console.log("Picture is a Blob");
+                                // Convert Blob to Buffer
+                                const arrayBuffer = await pictureFile.arrayBuffer();
+                                const buffer = Buffer.from(arrayBuffer);
+                                newCircle.picture = await saveFile(buffer, "picture", newCircle._id, true);
+                                console.log("Picture saved from Blob:", newCircle.picture);
+                                needUpdate = true;
+                            } else {
+                                console.log("Picture is another type:", pictureFile.constructor?.name);
+                                // Try to save it directly
+                                newCircle.picture = await saveFile(pictureFile, "picture", newCircle._id, true);
+                                console.log("Picture saved directly:", newCircle.picture);
+                                needUpdate = true;
+                            }
+                        }
+                    } catch (error) {
+                        console.log("Error processing picture file:", error);
+                    }
+
+                    // Handle cover file
+                    try {
+                        const coverFile = formData.get("cover");
+                        if (coverFile) {
+                            console.log("Cover file found in FormData, type:", typeof coverFile);
+
+                            // Convert to Buffer if needed
+                            if (typeof Buffer !== "undefined" && coverFile instanceof Buffer) {
+                                console.log("Cover is a Buffer");
+                                // Save the cover and get the file info
+                                newCircle.cover = await saveFile(coverFile, "cover", newCircle._id, true);
+                                console.log("Cover saved:", newCircle.cover);
+                                needUpdate = true;
+                            } else if (typeof Blob !== "undefined" && coverFile instanceof Blob) {
+                                console.log("Cover is a Blob");
+                                // Convert Blob to Buffer
+                                const arrayBuffer = await coverFile.arrayBuffer();
+                                const buffer = Buffer.from(arrayBuffer);
+                                newCircle.cover = await saveFile(buffer, "cover", newCircle._id, true);
+                                console.log("Cover saved from Blob:", newCircle.cover);
+                                needUpdate = true;
+                            } else {
+                                console.log("Cover is another type:", coverFile.constructor?.name);
+                                // Try to save it directly
+                                newCircle.cover = await saveFile(coverFile, "cover", newCircle._id, true);
+                                console.log("Cover saved directly:", newCircle.cover);
+                                needUpdate = true;
+                            }
+                        }
+                    } catch (error) {
+                        console.log("Error processing cover file:", error);
+                    }
                 }
 
-                // Extract picture file from FormData
-                const pictureFile = formData.get("picture") as File;
-                if (pictureFile && pictureFile instanceof File) {
-                    console.log("Picture file found in FormData:", pictureFile.name, pictureFile.size);
-                    // Save the picture and get the file info
-                    newCircle.picture = await saveFile(pictureFile, "picture", newCircle._id, true);
-                    console.log("Picture saved:", newCircle.picture);
-                    needUpdate = true;
+                // Try the direct method as a fallback
+                if (circleData.pictureFile && !newCircle.picture) {
+                    console.log("Using pictureFile from circleData, type:", typeof circleData.pictureFile);
+                    try {
+                        // Save the picture and get the file info
+                        newCircle.picture = await saveFile(circleData.pictureFile, "picture", newCircle._id, true);
+                        console.log("Picture saved from circleData:", newCircle.picture);
+                        needUpdate = true;
+                    } catch (error) {
+                        console.log("Error saving picture from circleData:", error);
+                    }
                 }
 
-                // Extract cover file from FormData
-                const coverFile = formData.get("cover") as File;
-                if (coverFile && coverFile instanceof File) {
-                    console.log("Cover file found in FormData:", coverFile.name, coverFile.size);
-                    // Save the cover and get the file info
-                    newCircle.cover = await saveFile(coverFile, "cover", newCircle._id, true);
-                    console.log("Cover saved:", newCircle.cover);
-                    needUpdate = true;
+                if (circleData.coverFile && !newCircle.cover) {
+                    console.log("Using coverFile from circleData, type:", typeof circleData.coverFile);
+                    try {
+                        // Save the cover and get the file info
+                        newCircle.cover = await saveFile(circleData.coverFile, "cover", newCircle._id, true);
+                        console.log("Cover saved from circleData:", newCircle.cover);
+                        needUpdate = true;
+                    } catch (error) {
+                        console.log("Error saving cover from circleData:", error);
+                    }
                 }
-            }
-
-            // Always try the direct method as a fallback
-            if (circleData.pictureFile) {
-                console.log("Using pictureFile from circleData");
-                // Save the picture and get the file info
-                newCircle.picture = await saveFile(circleData.pictureFile, "picture", newCircle._id, true);
-                console.log("Picture saved from circleData:", newCircle.picture);
-                needUpdate = true;
-            }
-
-            if (circleData.coverFile) {
-                console.log("Using coverFile from circleData");
-                // Save the cover and get the file info
-                newCircle.cover = await saveFile(circleData.coverFile, "cover", newCircle._id, true);
-                console.log("Cover saved from circleData:", newCircle.cover);
-                needUpdate = true;
+            } catch (error) {
+                console.log("Error in file processing section:", error);
             }
 
             if (needUpdate) {
