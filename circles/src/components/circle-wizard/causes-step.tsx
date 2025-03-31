@@ -1,59 +1,23 @@
 "use client";
 
-import { useState, useEffect, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Search } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
 import { CircleWizardStepProps } from "./circle-wizard";
 import { causes } from "@/lib/data/constants";
 import { saveCausesAction } from "./actions";
 import { Cause } from "@/models/models";
-
-// Badge component for selected causes
-function SelectedCauseBadge({ cause, onRemove }: { cause: Cause; onRemove: (cause: Cause) => void }) {
-    return (
-        <Badge variant="secondary" className="m-1 cursor-pointer" onClick={() => onRemove(cause)}>
-            {cause.name}
-            <span className="ml-1">×</span>
-        </Badge>
-    );
-}
-
-// Cause card component
-function CauseCard({
-    cause,
-    isSelected,
-    onToggle,
-}: {
-    cause: Cause;
-    isSelected: boolean;
-    onToggle: (cause: Cause) => void;
-}) {
-    return (
-        <div
-            className={`flex cursor-pointer flex-col items-center rounded-lg border p-3 transition-colors ${
-                isSelected ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-blue-300"
-            }`}
-            onClick={() => onToggle(cause)}
-        >
-            <div className="mb-2 h-12 w-12 overflow-hidden rounded-full">
-                <img
-                    src={cause.picture?.url || `/images/causes/${cause.handle}.png`}
-                    alt={cause.name}
-                    className="h-full w-full object-cover"
-                />
-            </div>
-            <h3 className="text-center text-sm font-medium">{cause.name}</h3>
-        </div>
-    );
-}
+import { useIsMobile } from "@/components/utils/use-is-mobile";
+import { ItemGrid, ItemList } from "./item-card";
+import SelectedItemBadge from "./selected-item-badge";
 
 export default function CausesStep({ circleData, setCircleData, nextStep, prevStep }: CircleWizardStepProps) {
     const [causeSearch, setCauseSearch] = useState("");
     const [isPending, startTransition] = useTransition();
     const [causesError, setCausesError] = useState("");
+    const isMobile = useIsMobile();
 
     const visibleCauses = useMemo(() => {
         if (causeSearch) {
@@ -128,27 +92,38 @@ export default function CausesStep({ circleData, setCircleData, nextStep, prevSt
             </div>
 
             <ScrollArea className="h-[360px] w-full rounded-md border-0">
-                <div className="grid grid-cols-2 gap-3 p-1 md:grid-cols-3">
-                    {visibleCauses.map((cause) => (
-                        <CauseCard
-                            key={cause.handle}
-                            cause={cause}
-                            isSelected={circleData.selectedCauses.some((c) => c.handle === cause.handle)}
-                            onToggle={handleCauseToggle}
-                        />
-                    ))}
+                {isPending && (!visibleCauses || visibleCauses.length <= 0) && (
+                    <div className="col-span-3 flex items-center justify-center">
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Loading causes...
+                    </div>
+                )}
 
-                    {visibleCauses.length === 0 && (
-                        <div className="col-span-3 py-8 text-center text-gray-500">
-                            No causes found matching "{causeSearch}"
-                        </div>
-                    )}
-                </div>
+                {isMobile ? (
+                    <ItemList
+                        items={visibleCauses}
+                        selectedItems={circleData.selectedCauses}
+                        onToggle={handleCauseToggle}
+                    />
+                ) : (
+                    <ItemGrid
+                        items={visibleCauses}
+                        selectedItems={circleData.selectedCauses}
+                        onToggle={handleCauseToggle}
+                        isCause={true}
+                    />
+                )}
+
+                {visibleCauses.length === 0 && (
+                    <div className="col-span-3 py-8 text-center text-gray-500">
+                        No causes found matching "{causeSearch}"
+                    </div>
+                )}
             </ScrollArea>
 
             <div className="flex flex-wrap">
                 {circleData.selectedCauses.map((cause) => (
-                    <SelectedCauseBadge key={cause.handle} cause={cause} onRemove={handleCauseToggle} />
+                    <SelectedItemBadge key={cause.handle} item={cause} onRemove={handleCauseToggle} />
                 ))}
             </div>
 

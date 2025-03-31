@@ -183,7 +183,15 @@ const CirclesList = ({
                                 })}
                             </div>
                         ) : (
-                            <CreateCircleButton circle={circle} isDefaultCircle={isDefaultCircle} />
+                            <div className="flex h-9 items-center">
+                                {React.createElement(
+                                    require("@/components/circle-wizard/create-circle-dialog").CreateCircleDialog,
+                                    {
+                                        parentCircleId: circle?._id,
+                                        isProjectsPage: isProjectsList,
+                                    },
+                                )}
+                            </div>
                         ))}
                 </div>
 

@@ -8,6 +8,82 @@ import { CircleWizardStepProps } from "./circle-wizard";
 import { useState, useTransition, useRef } from "react";
 import { Loader2, Camera, ImageIcon } from "lucide-react";
 import { saveProfileAction } from "./actions";
+import { useToast } from "@/components/ui/use-toast";
+import Image from "next/image";
+
+// Create a custom image upload component for the circle wizard
+function CircleImageUpload({
+    id,
+    src,
+    alt,
+    className,
+    onImageUpdate,
+}: {
+    id: string;
+    src: string;
+    alt: string;
+    className?: string;
+    onImageUpdate: (newUrl: string) => void;
+}) {
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const { toast } = useToast();
+
+    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setIsUploading(true);
+        try {
+            // Create temporary URL for immediate feedback
+            const tempUrl = URL.createObjectURL(file);
+            onImageUpdate(tempUrl);
+
+            // The actual upload will happen when the form is submitted
+            // This is just for preview
+            toast({
+                title: "Image selected",
+                description: "The image will be uploaded when you save this step",
+            });
+        } catch (error) {
+            toast({
+                title: "Error",
+                description: "Failed to preview image",
+                variant: "destructive",
+            });
+            console.error("Image preview error:", error);
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    return (
+        <div className="group relative h-full w-full">
+            {isUploading && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30">
+                    <Loader2 className="h-8 w-8 animate-spin text-white" />
+                </div>
+            )}
+            <Image src={src} alt={alt} fill className={className} />
+            <label
+                htmlFor={`imageUpload-${id}`}
+                className="absolute bottom-2 right-2 hidden cursor-pointer text-white group-hover:block"
+            >
+                <div className="flex h-[28px] w-[28px] items-center justify-center rounded-full bg-[#252525]">
+                    <Camera className="h-4 w-4" />
+                </div>
+            </label>
+            <input
+                id={`imageUpload-${id}`}
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+            />
+        </div>
+    );
+}
 
 export default function ProfileStep({ circleData, setCircleData, nextStep, prevStep }: CircleWizardStepProps) {
     const [isPending, startTransition] = useTransition();
@@ -51,7 +127,13 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
     const handleNext = () => {
         startTransition(async () => {
             // Save the profile information
-            const result = await saveProfileAction(circleData.description, circleData.content);
+            const result = await saveProfileAction(
+                circleData.description,
+                circleData.content,
+                undefined,
+                circleData.picture,
+                circleData.cover,
+            );
 
             if (result.success) {
                 nextStep();
@@ -80,25 +162,17 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                             <Camera className="h-4 w-4" /> Circle Picture
                         </Label>
                         <div className="relative mx-auto h-24 w-24 overflow-hidden rounded-full">
-                            <img
+                            <CircleImageUpload
+                                id="picture"
                                 src={circleData.picture}
                                 alt="Circle Picture"
-                                className="h-full w-full rounded-full border-2 border-white bg-white object-cover shadow-lg"
-                            />
-                            <label
-                                htmlFor="picture"
-                                className="absolute bottom-0 left-0 right-0 cursor-pointer bg-black/50 p-1 text-center text-xs text-white"
-                            >
-                                Change
-                            </label>
-                            <input
-                                ref={profilePictureRef}
-                                id="picture"
-                                name="picture"
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={handleFileChange}
+                                className="rounded-full border-2 border-white bg-white object-cover shadow-lg"
+                                onImageUpdate={(newUrl) => {
+                                    setCircleData((prev) => ({
+                                        ...prev,
+                                        picture: newUrl,
+                                    }));
+                                }}
                             />
                         </div>
                         <p className="text-center text-xs text-gray-500">
@@ -111,21 +185,17 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                             <ImageIcon className="h-4 w-4" /> Cover Image
                         </Label>
                         <div className="relative mx-auto h-32 w-full overflow-hidden rounded-lg">
-                            <img src={circleData.cover} alt="Cover Image" className="h-full w-full object-cover" />
-                            <label
-                                htmlFor="cover"
-                                className="absolute bottom-0 left-0 right-0 cursor-pointer bg-black/50 p-1 text-center text-xs text-white"
-                            >
-                                Change
-                            </label>
-                            <input
-                                ref={coverImageRef}
+                            <CircleImageUpload
                                 id="cover"
-                                name="cover"
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={handleFileChange}
+                                src={circleData.cover}
+                                alt="Cover Image"
+                                className="object-cover"
+                                onImageUpdate={(newUrl) => {
+                                    setCircleData((prev) => ({
+                                        ...prev,
+                                        cover: newUrl,
+                                    }));
+                                }}
                             />
                         </div>
                         <p className="text-center text-xs text-gray-500">

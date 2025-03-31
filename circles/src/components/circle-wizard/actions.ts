@@ -121,15 +121,38 @@ export async function saveMissionAction(mission: string, circleId?: string) {
     }
 }
 
-export async function saveProfileAction(description: string, content: string, circleId?: string) {
+export async function saveProfileAction(
+    description: string,
+    content: string,
+    circleId?: string,
+    picture?: any,
+    cover?: any,
+) {
     try {
         if (circleId) {
             // If circleId exists, update the existing circle
-            const circle = await updateCircle({
+            const updateData: any = {
                 _id: circleId,
                 description,
                 content,
-            });
+            };
+
+            // Handle file uploads if needed
+            try {
+                if (isFile(picture)) {
+                    // Save the picture and get the file info
+                    updateData.picture = await saveFile(picture, "picture", circleId, true);
+                }
+
+                if (isFile(cover)) {
+                    // Save the cover and get the file info
+                    updateData.cover = await saveFile(cover, "cover", circleId, true);
+                }
+            } catch (error) {
+                console.log("Failed to save circle files", error);
+            }
+
+            const circle = await updateCircle(updateData);
             return { success: true, message: "Profile updated successfully", data: { circle } };
         }
 

@@ -3,7 +3,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Progress } from "@/components/ui/progress";
-import { Card, CardContent } from "@/components/ui/card";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { Cause, Skill } from "@/models/models";
@@ -18,6 +17,7 @@ import SkillsStep from "./skills-step";
 import FinalStep from "./final-step";
 import CircleSummary from "./circle-summary";
 import { Location } from "@/models/models";
+import { Card, CardContent } from "../ui/card";
 
 export type CircleData = {
     name: string;
@@ -39,15 +39,20 @@ export type CircleWizardStepProps = {
     setCircleData: React.Dispatch<React.SetStateAction<CircleData>>;
     nextStep: () => void;
     prevStep: () => void;
+    onComplete?: () => void;
 };
 
-export default function CircleWizard() {
+interface CircleWizardProps {
+    parentCircleId?: string;
+    isProjectsPage?: boolean;
+    onComplete?: () => void;
+}
+
+export default function CircleWizard({ parentCircleId, isProjectsPage = false, onComplete }: CircleWizardProps) {
     const [isOpen, setIsOpen] = useState(true);
     const [user] = useAtom(userAtom);
     const [currentStepIndex, setCurrentStepIndex] = useState(0);
     const router = useRouter();
-    const searchParams = useSearchParams();
-    const parentCircleId = searchParams.get("parentCircleId") || undefined;
 
     const [circleData, setCircleData] = useState<CircleData>({
         name: "",
@@ -115,8 +120,13 @@ export default function CircleWizard() {
             setCurrentStepIndex(nextStepIndex);
         } else {
             setIsOpen(false);
-            // Navigate back to circles page or to the new circle's page
-            router.push("/circles");
+            // Call onComplete callback if provided
+            if (onComplete) {
+                onComplete();
+            } else {
+                // Navigate back to circles page or to the new circle's page
+                router.push("/circles");
+            }
         }
     };
 
@@ -133,7 +143,7 @@ export default function CircleWizard() {
     }
 
     return (
-        <div className="fixed z-[500] flex h-screen w-screen items-center justify-center bg-gradient-to-br from-[#dce5ffcf] to-[#e3eaffcf] p-4">
+        <div className={`${!isOpen ? "hidden" : ""} flex items-center justify-center p-0`}>
             <Card className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl border-0 bg-[#f9f9f9] shadow-xl backdrop-blur-sm">
                 <CardContent className="max-h-[calc(90vh-2rem)] overflow-y-auto p-6">
                     <div className="flex gap-6">
@@ -155,6 +165,7 @@ export default function CircleWizard() {
                                         setCircleData={setCircleData}
                                         nextStep={nextStep}
                                         prevStep={prevStep}
+                                        onComplete={onComplete}
                                     />
                                 </motion.div>
                             </AnimatePresence>

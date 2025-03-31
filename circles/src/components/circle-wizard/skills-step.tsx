@@ -5,55 +5,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Search } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
 import { CircleWizardStepProps } from "./circle-wizard";
 import { skills } from "@/lib/data/constants";
 import { saveSkillsAction } from "./actions";
 import { Skill } from "@/models/models";
-
-// Badge component for selected skills
-function SelectedSkillBadge({ skill, onRemove }: { skill: Skill; onRemove: (skill: Skill) => void }) {
-    return (
-        <Badge variant="secondary" className="m-1 cursor-pointer" onClick={() => onRemove(skill)}>
-            {skill.name}
-            <span className="ml-1">×</span>
-        </Badge>
-    );
-}
-
-// Skill card component
-function SkillCard({
-    skill,
-    isSelected,
-    onToggle,
-}: {
-    skill: Skill;
-    isSelected: boolean;
-    onToggle: (skill: Skill) => void;
-}) {
-    return (
-        <div
-            className={`flex cursor-pointer flex-col items-center rounded-lg border p-3 transition-colors ${
-                isSelected ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-blue-300"
-            }`}
-            onClick={() => onToggle(skill)}
-        >
-            <div className="mb-2 h-12 w-12 overflow-hidden rounded-full">
-                <img
-                    src={skill.picture?.url || `/images/skills/${skill.handle}.png`}
-                    alt={skill.name}
-                    className="h-full w-full object-cover"
-                />
-            </div>
-            <h3 className="text-center text-sm font-medium">{skill.name}</h3>
-        </div>
-    );
-}
+import { useIsMobile } from "@/components/utils/use-is-mobile";
+import { ItemGrid, ItemList } from "./item-card";
+import SelectedItemBadge from "./selected-item-badge";
 
 export default function SkillsStep({ circleData, setCircleData, nextStep, prevStep }: CircleWizardStepProps) {
     const [skillSearch, setSkillSearch] = useState("");
     const [isPending, startTransition] = useTransition();
     const [skillsError, setSkillsError] = useState("");
+    const isMobile = useIsMobile();
 
     const visibleSkills = useMemo(() => {
         if (skillSearch) {
@@ -128,27 +92,38 @@ export default function SkillsStep({ circleData, setCircleData, nextStep, prevSt
             </div>
 
             <ScrollArea className="h-[360px] w-full rounded-md border-0">
-                <div className="grid grid-cols-2 gap-3 p-1 md:grid-cols-3">
-                    {visibleSkills.map((skill) => (
-                        <SkillCard
-                            key={skill.handle}
-                            skill={skill}
-                            isSelected={circleData.selectedSkills.some((s) => s.handle === skill.handle)}
-                            onToggle={handleSkillToggle}
-                        />
-                    ))}
+                {isPending && (!visibleSkills || visibleSkills.length <= 0) && (
+                    <div className="col-span-3 flex items-center justify-center">
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Loading skills...
+                    </div>
+                )}
 
-                    {visibleSkills.length === 0 && (
-                        <div className="col-span-3 py-8 text-center text-gray-500">
-                            No skills found matching "{skillSearch}"
-                        </div>
-                    )}
-                </div>
+                {isMobile ? (
+                    <ItemList
+                        items={visibleSkills}
+                        selectedItems={circleData.selectedSkills}
+                        onToggle={handleSkillToggle}
+                    />
+                ) : (
+                    <ItemGrid
+                        items={visibleSkills}
+                        selectedItems={circleData.selectedSkills}
+                        onToggle={handleSkillToggle}
+                        isCause={false}
+                    />
+                )}
+
+                {visibleSkills.length === 0 && (
+                    <div className="col-span-3 py-8 text-center text-gray-500">
+                        No skills found matching "{skillSearch}"
+                    </div>
+                )}
             </ScrollArea>
 
             <div className="flex flex-wrap">
                 {circleData.selectedSkills.map((skill) => (
-                    <SelectedSkillBadge key={skill.handle} skill={skill} onRemove={handleSkillToggle} />
+                    <SelectedItemBadge key={skill.handle} item={skill} onRemove={handleSkillToggle} />
                 ))}
             </div>
 

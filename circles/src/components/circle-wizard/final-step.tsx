@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { CircleWizardStepProps } from "./circle-wizard";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { Loader2, Check, ArrowRight } from "lucide-react";
 import { createCircleAction } from "./actions";
 import { useRouter } from "next/navigation";
@@ -39,6 +39,21 @@ export default function FinalStep({ circleData, setCircleData, nextStep, prevSte
             router.push("/circles");
         }
     };
+
+    // Automatically redirect to the created circle
+    useEffect(() => {
+        if (isCreated && createdCircleHandle) {
+            // Small delay to allow the UI to update
+            const timer = setTimeout(() => {
+                router.push(`/circles/${createdCircleHandle}`);
+                if (onComplete) {
+                    onComplete();
+                }
+            }, 1500);
+
+            return () => clearTimeout(timer);
+        }
+    }, [isCreated, createdCircleHandle, router, onComplete]);
 
     return (
         <div className="space-y-6">
