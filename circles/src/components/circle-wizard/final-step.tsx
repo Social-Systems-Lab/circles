@@ -82,7 +82,7 @@ export default function FinalStep({
         <div className="space-y-6">
             <div>
                 <h2 className="text-2xl font-bold">Create Your Circle</h2>
-                <p className="text-gray-500">You're all set! Review your circle details and create your circle.</p>
+                <p className="text-gray-500">You&apos;re all set! Review your circle details and create your circle.</p>
             </div>
 
             <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">

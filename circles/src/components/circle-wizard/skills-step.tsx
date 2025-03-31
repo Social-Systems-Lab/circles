@@ -122,7 +122,7 @@ export default function SkillsStep({
 
                 {visibleSkills.length === 0 && (
                     <div className="col-span-3 py-8 text-center text-gray-500">
-                        No skills found matching "{skillSearch}"
+                        No skills found matching &quot;{skillSearch}&quot;
                     </div>
                 )}
             </ScrollArea>

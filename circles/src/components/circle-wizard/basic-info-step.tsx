@@ -89,7 +89,7 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
         <div className="space-y-6">
             <div>
                 <h2 className="text-2xl font-bold">Create a New Circle</h2>
-                <p className="text-gray-500">Let's start with the basic information for your circle.</p>
+                <p className="text-gray-500">Let&apos;s start with the basic information for your circle.</p>
             </div>
 
             <div className="space-y-4">
