@@ -571,7 +571,6 @@ export async function getPostsFromMultipleFeeds(
         const filteredPosts = posts.filter((post) => {
             // If post has no user groups or empty user groups array, it's visible to everyone
             if (!post.userGroups || post.userGroups.length === 0) {
-                console.log("Post with no userGroups:", post.content);
                 return true;
             }
 
@@ -583,12 +582,6 @@ export async function getPostsFromMultipleFeeds(
 
             // Check if user has membership in this circle
             const userGroupsInCircle = userMemberships.get(circleId) || [];
-
-            if (post.userGroups?.[0] === "admins" && post.userGroups.length === 1) {
-                console.log("Found post for only admins: ", post.content);
-                console.log("userGroupsInCircle", post.content);
-            }
-            console.log("Post with no userGroups:", userGroupsInCircle);
 
             // Check if any of the post's user groups match the user's groups in this circle
             // Note: "everyone" in post.userGroups means it's visible to everyone
@@ -943,7 +936,6 @@ export const getPosts = async (
         const filteredPosts = posts.filter((post) => {
             // If post has no user groups or empty user groups array, it's visible to everyone
             if (!post.userGroups || post.userGroups.length === 0) {
-                console.log("Post with no userGroups:", post.content);
                 return true;
             }
 
@@ -953,12 +945,6 @@ export const getPosts = async (
 
             // Check if user has membership in this circle
             const userGroupsInCircle = userMemberships.get(circleId) || [];
-
-            if (post.userGroups?.[0] === "admins" && post.userGroups.length === 1) {
-                console.log("Found post for only admins: ", post.content);
-                console.log("userGroupsInCircle", post.content);
-            }
-            console.log("Post with no userGroups:", userGroupsInCircle);
 
             // Check if any of the post's user groups match the user's groups in this circle
             // Note: "everyone" in post.userGroups means it's visible to everyone

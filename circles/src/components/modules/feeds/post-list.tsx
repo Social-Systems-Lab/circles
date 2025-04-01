@@ -582,11 +582,7 @@ export const PostItem = ({
                             <div className="cursor-pointer text-sm text-gray-500">
                                 {formattedDate}
 
-                                {isAggregateFeed && post.circle && post.feed && (
-                                    <span>
-                                        &nbsp;• {post.circle.name} • {post.feed.name}
-                                    </span>
-                                )}
+                                {isAggregateFeed && post.circle && <span>&nbsp;• {post.circle.name}</span>}
                             </div>
                         </div>
                     </div>
