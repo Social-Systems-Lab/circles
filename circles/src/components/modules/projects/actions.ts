@@ -84,6 +84,7 @@ export const createProjectAction = async (formData: FormData): Promise<CircleAct
                             comments: 0,
                             media: [],
                             postType: "project", // Mark as project shadow post
+                            userGroups: ["admins", "moderators", "members", "everyone"],
                         };
 
                         const newPost = await createPost(post);

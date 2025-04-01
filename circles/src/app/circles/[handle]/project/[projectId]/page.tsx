@@ -37,6 +37,7 @@ async function ensureShadowPost(
         comments: 0,
         media: [],
         postType: "project", // Mark as project shadow post
+        userGroups: ["admins", "moderators", "members", "everyone"],
     };
 
     try {

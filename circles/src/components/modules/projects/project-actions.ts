@@ -24,18 +24,18 @@ export async function createShadowPostForProjectAction(projectId: string, feedId
         if (!userDid) {
             return { success: false, message: "You need to be logged in" };
         }
-        
+
         // Get the project
         const project = await getCircleById(projectId);
         if (!project) {
             return { success: false, message: "Project not found" };
         }
-        
+
         // Ensure this is a project
         if (project.circleType !== "project") {
             return { success: false, message: "Invalid project ID" };
         }
-        
+
         // Check if user is authorized to update the project
         if (project.parentCircleId) {
             const isAdmin = await isAuthorized(userDid, project.parentCircleId, "admin");
@@ -45,20 +45,20 @@ export async function createShadowPostForProjectAction(projectId: string, feedId
         } else {
             return { success: false, message: "Project has no parent circle" };
         }
-        
+
         // Check if the project already has a shadow post
         if (project.metadata?.commentPostId) {
             // Get the post to verify it exists
             const existingPost = await getPost(project.metadata.commentPostId);
             if (existingPost) {
-                return { 
-                    success: true, 
-                    message: "Project already has comments enabled", 
-                    data: { post: existingPost } 
+                return {
+                    success: true,
+                    message: "Project already has comments enabled",
+                    data: { post: existingPost },
                 };
             }
         }
-        
+
         // Create a post to store comments
         const post: Post = {
             feedId: feedId,
@@ -68,32 +68,33 @@ export async function createShadowPostForProjectAction(projectId: string, feedId
             reactions: {},
             comments: 0,
             media: [],
-            postType: "project" // Mark as project shadow post
+            postType: "project", // Mark as project shadow post
+            userGroups: ["admins", "moderators", "members", "everyone"],
         };
-        
+
         const newPost = await createPost(post);
-        
+
         // Store the post ID in the project metadata
         const updatedProject: Partial<Circle> = {
             _id: project._id,
             metadata: {
                 ...project.metadata,
-                commentPostId: newPost._id
-            }
+                commentPostId: newPost._id,
+            },
         };
-        
+
         await updateCircle(updatedProject);
-        
-        return { 
-            success: true, 
-            message: "Comments enabled for this project", 
-            data: { post: newPost } 
+
+        return {
+            success: true,
+            message: "Comments enabled for this project",
+            data: { post: newPost },
         };
     } catch (error) {
         console.error("Failed to create shadow post for project", error);
-        return { 
-            success: false, 
-            message: error instanceof Error ? error.message : "Unknown error enabling comments" 
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Unknown error enabling comments",
         };
     }
 }
