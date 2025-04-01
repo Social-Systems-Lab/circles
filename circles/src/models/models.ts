@@ -210,6 +210,7 @@ export const postSchema = z.object({
     comments: z.number().default(0),
     mentions: z.array(mentionSchema).optional(),
     postType: z.enum(["post", "project"]).optional(), // To identify shadow posts for projects
+    userGroups: z.array(z.string()).default([]), // User groups that can see this post
 });
 
 export type Post = z.infer<typeof postSchema>;

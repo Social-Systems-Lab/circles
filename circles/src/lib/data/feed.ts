@@ -1,5 +1,5 @@
 // feed.ts - Feed data access functions
-import { Feeds, Posts, Comments, Reactions, Circles } from "./db";
+import { Feeds, Posts, Comments, Reactions, Circles, Members } from "./db";
 import { ObjectId } from "mongodb";
 import { Feed, Post, PostDisplay, Comment, CommentDisplay, Circle, Mention, SortingOptions } from "@/models/models";
 import { getCircleById, SAFE_CIRCLE_PROJECTION, updateCircle } from "./circle";
@@ -98,41 +98,27 @@ export const createDefaultFeeds = async (circleId: string): Promise<Feed[] | nul
         return null;
     }
 
-    let feeds: Feed[] = [];
-    let publicFeed = await getFeedByHandle(circleId, "default");
-    if (!publicFeed) {
-        publicFeed = {
-            name: "Public Feed",
+    // Only create a single default feed per circle
+    let defaultFeed = await getFeedByHandle(circleId, "default");
+    if (!defaultFeed) {
+        defaultFeed = {
+            name: "Circle Feed",
             handle: "default",
             circleId,
             userGroups: ["admins", "moderators", "members", "everyone"],
             createdAt: new Date(),
         };
-        publicFeed = await createFeed(publicFeed);
+        defaultFeed = await createFeed(defaultFeed);
     }
-    feeds.push(publicFeed);
 
-    let membersFeed = await getFeedByHandle(circleId, "members");
-    if (!membersFeed) {
-        membersFeed = {
-            name: "Followers Only",
-            handle: "members",
-            circleId,
-            userGroups: ["admins", "moderators", "members"],
-            createdAt: new Date(),
-        };
-        membersFeed = await createFeed(membersFeed);
-    }
-    feeds.push(membersFeed);
-
-    // get all feeds
+    // Get all feeds (should only be the default feed now)
     let existingFeeds = await getFeeds(circleId);
 
-    // make sure access rules exist for all feeds
+    // Make sure access rules exist for the feed
     const finalAccessRules = addFeedsAccessRules(existingFeeds, circle.accessRules ?? {});
     circle.accessRules = finalAccessRules;
 
-    // update the circle
+    // Update the circle
     await updateCircle(circle);
     return existingFeeds;
 };
@@ -172,6 +158,17 @@ export const getPost = async (postId: string): Promise<Post | null> => {
         post._id = post._id.toString();
     }
     return post;
+};
+
+// Function to update the highlighted comment for a post
+export const updateHighlightedComment = async (postId: string): Promise<void> => {
+    const mostLikedComment = await Comments.find({ postId, parentCommentId: null })
+        .sort({ "reactions.like": -1, createdAt: -1 })
+        .limit(1)
+        .toArray();
+
+    const highlightedCommentId = mostLikedComment.length > 0 ? mostLikedComment[0]._id?.toString() : undefined;
+    await Posts.updateOne({ _id: new ObjectId(postId) }, { $set: { highlightedCommentId } });
 };
 
 export const createComment = async (comment: Comment): Promise<Comment> => {
@@ -243,15 +240,13 @@ export async function getPostsFromMultipleFeeds(
     skip: number,
     sort?: SortingOptions,
 ): Promise<PostDisplay[]> {
+    // Get all posts from the specified feeds without user group filtering
     const posts = (await Posts.aggregate([
         {
             $match: {
                 feedId: { $in: feedIds },
                 // Filter out project shadow posts from regular feeds
-                $or: [
-                    { postType: { $ne: "project" } },
-                    { postType: { $exists: false } }
-                ]
+                $or: [{ postType: { $ne: "project" } }, { postType: { $exists: false } }],
             },
         },
 
@@ -554,7 +549,50 @@ export async function getPostsFromMultipleFeeds(
         },
     ]).toArray()) as PostDisplay[];
 
-    return posts;
+    // Post-processing to filter based on user groups
+    if (userDid) {
+        // Get user's memberships for each circle
+        const userMemberships = new Map<string, string[]>();
+
+        // Always add "everyone" as a group the user belongs to
+        userMemberships.set("everyone", ["everyone"]);
+
+        // Get the user's memberships from the Members collection
+        const memberDocs = await Members.find({ userDid }).toArray();
+
+        for (const memberDoc of memberDocs) {
+            if (memberDoc.userGroups && memberDoc.userGroups.length > 0) {
+                userMemberships.set(memberDoc.circleId, memberDoc.userGroups);
+            }
+        }
+
+        // Filter posts based on user groups
+        const filteredPosts = posts.filter((post) => {
+            // If post has no user groups or empty user groups array, it's visible to everyone
+            if (!post.userGroups || post.userGroups.length === 0) {
+                return true;
+            }
+
+            // Get the circle ID for this post
+            const circleId = post.circle?._id;
+            if (!circleId) {
+                return false; // No circle info, can't determine visibility
+            }
+
+            // Check if user has membership in this circle
+            const userGroupsInCircle = userMemberships.get(circleId) || ["everyone"];
+
+            // Check if any of the post's user groups match the user's groups in this circle
+            return post.userGroups.some((group) => userGroupsInCircle.includes(group) || group === "everyone");
+        });
+
+        return filteredPosts;
+    }
+
+    // If no user is specified, only return posts with "everyone" user group
+    return posts.filter(
+        (post) => !post.userGroups || post.userGroups.length === 0 || post.userGroups.includes("everyone"),
+    );
 }
 
 export async function getPostsFromMultipleFeedsWithMetrics(
@@ -615,18 +653,15 @@ export const getPosts = async (
     const safeLimit = Math.max(1, limit);
     const safeOffset = Math.max(0, offset);
 
+    // Get posts without user group filtering initially
     const posts = (await Posts.aggregate([
         {
             $match: {
                 feedId: feedId,
                 // Filter out project shadow posts from regular feeds
-                $or: [
-                    { postType: { $ne: "project" } },
-                    { postType: { $exists: false } }
-                ]
+                $or: [{ postType: { $ne: "project" } }, { postType: { $exists: false } }],
             },
         },
-
         // Lookup for author details
         {
             $lookup: {
@@ -870,7 +905,52 @@ export const getPosts = async (
         },
     ]).toArray()) as PostDisplay[];
 
-    return posts;
+    // Post-processing to filter based on user groups
+    if (userDid) {
+        // Get user's memberships for each circle
+        const userMemberships = new Map<string, string[]>();
+
+        // Always add "everyone" as a group the user belongs to
+        userMemberships.set("everyone", ["everyone"]);
+
+        // Get the user's memberships from the Members collection
+        const memberDocs = await Members.find({ userDid }).toArray();
+
+        for (const memberDoc of memberDocs) {
+            if (memberDoc.userGroups && memberDoc.userGroups.length > 0) {
+                userMemberships.set(memberDoc.circleId, memberDoc.userGroups);
+            }
+        }
+
+        // For single feed posts, we need to get the circle ID from the feed
+        const feed = await getFeed(feedId);
+        const circleId = feed?.circleId;
+
+        // Filter posts based on user groups
+        const filteredPosts = posts.filter((post) => {
+            // If post has no user groups or empty user groups array, it's visible to everyone
+            if (!post.userGroups || post.userGroups.length === 0) {
+                return true;
+            }
+
+            if (!circleId) {
+                return false; // No circle info, can't determine visibility
+            }
+
+            // Check if user has membership in this circle
+            const userGroupsInCircle = userMemberships.get(circleId) || ["everyone"];
+
+            // Check if any of the post's user groups match the user's groups in this circle
+            return post.userGroups.some((group) => userGroupsInCircle.includes(group) || group === "everyone");
+        });
+
+        return filteredPosts;
+    }
+
+    // If no user is specified, only return posts with "everyone" user group
+    return posts.filter(
+        (post) => !post.userGroups || post.userGroups.length === 0 || post.userGroups.includes("everyone"),
+    );
 };
 
 export const updatePost = async (post: Partial<Post>): Promise<void> => {
@@ -1192,16 +1272,6 @@ export const checkIfLiked = async (
     return !!reaction;
 };
 
-export const updateHighlightedComment = async (postId: string): Promise<void> => {
-    const mostLikedComment = await Comments.find({ postId, parentCommentId: null })
-        .sort({ "reactions.like": -1, createdAt: -1 })
-        .limit(1)
-        .toArray();
-
-    const highlightedCommentId = mostLikedComment.length > 0 ? mostLikedComment[0]._id?.toString() : undefined;
-    await Posts.updateOne({ _id: new ObjectId(postId) }, { $set: { highlightedCommentId } });
-};
-
 /**
  * Check if a post ID belongs to a project shadow post
  * @param postId The post ID to check
@@ -1209,11 +1279,8 @@ export const updateHighlightedComment = async (postId: string): Promise<void> =>
  */
 export const isShadowPost = async (postId: string): Promise<boolean> => {
     try {
-        const post = await Posts.findOne(
-            { _id: new ObjectId(postId) },
-            { projection: { postType: 1 } }
-        );
-        
+        const post = await Posts.findOne({ _id: new ObjectId(postId) }, { projection: { postType: 1 } });
+
         return post?.postType === "project";
     } catch (error) {
         console.error(`Error checking if post ${postId} is a shadow post:`, error);

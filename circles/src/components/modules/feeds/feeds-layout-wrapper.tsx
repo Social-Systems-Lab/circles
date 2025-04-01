@@ -2,8 +2,6 @@
 
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { Circle, Feed } from "@/models/models";
-import { FormNav, NavItem } from "@/components/forms/form-nav";
-import { FeedsNav } from "./feeds-nav";
 import { useEffect } from "react";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
@@ -16,10 +14,6 @@ export type FeedsLayoutWrapperProps = {
 
 export const FeedsLayoutWrapper = ({ children, circle, feeds, isDefaultCircle }: FeedsLayoutWrapperProps) => {
     const isCompact = useIsCompact();
-    const navItems = feeds.map((item) => ({
-        name: item.name,
-        handle: item.handle,
-    })) as NavItem[];
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -42,9 +36,7 @@ export const FeedsLayoutWrapper = ({ children, circle, feeds, isDefaultCircle }:
                     minWidth: isCompact ? "0px" : "240px",
                     paddingTop: isCompact ? "0" : "72px",
                 }}
-            >
-                <FeedsNav items={navItems} circle={circle} isDefaultCircle={isDefaultCircle} />
-            </div>
+            ></div>
             {children}
         </div>
     );

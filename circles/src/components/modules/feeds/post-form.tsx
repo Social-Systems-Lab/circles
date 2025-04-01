@@ -1,9 +1,9 @@
 // post-form.tsx
 import React, { useState, useCallback, useEffect, useTransition } from "react";
 import { Textarea } from "@/components/ui/textarea";
-import { ImageIcon, MapPinIcon, BarChartIcon, Trash2, Loader2, MapPin } from "lucide-react";
+import { ImageIcon, MapPinIcon, BarChartIcon, Trash2, Loader2, MapPin, ChevronDown, Users } from "lucide-react";
 import { UserPicture } from "../members/user-picture";
-import { Circle, Feed, Location, Media, Page, PostDisplay } from "@/models/models";
+import { Circle, Feed, Location, Media, Page, PostDisplay, UserPrivate } from "@/models/models";
 import { CirclePicture } from "../circles/circle-picture";
 import {
     Carousel,
@@ -25,8 +25,12 @@ import {
     handleMentionQuery,
     renderCircleSuggestion,
 } from "./post-list";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { getFullLocationName } from "@/lib/utils";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { userAtom } from "@/lib/data/atoms";
 
 const postMentionsInputStyle = {
     control: {
@@ -76,7 +80,7 @@ type ImageItem = {
 type PostFormProps = {
     circle: Circle;
     feed: Feed;
-    user: any;
+    user: UserPrivate;
     initialPost?: PostDisplay;
     onSubmit: (formData: FormData) => Promise<void>;
     onCancel: () => void;
@@ -92,6 +96,61 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
     const [isPending, startTransition] = useTransition();
     const [location, setLocation] = useState<Location | undefined>(initialPost?.location);
     const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
+
+    // New state for circle selection and user groups
+    const [selectedCircle, setSelectedCircle] = useState<Circle>(circle);
+    const [selectedFeed, setSelectedFeed] = useState<Feed>(feed);
+    const [userGroups, setUserGroups] = useState<string[]>(["everyone"]);
+    const [isUserGroupsDialogOpen, setIsUserGroupsDialogOpen] = useState(false);
+    const [availableCircles, setAvailableCircles] = useState<Circle[]>([]);
+
+    // Get all circles the user is a member of
+    useEffect(() => {
+        if (user && user.memberships) {
+            const circles = user.memberships.map((membership) => membership.circle);
+            setAvailableCircles(circles);
+        }
+    }, [user]);
+
+    // Get available user groups for the selected circle
+    const getAvailableUserGroups = () => {
+        if (!selectedCircle || !selectedCircle.userGroups) return [];
+
+        // Always include "everyone" as an option
+        const groups = ["everyone"];
+
+        // Add the circle's user groups
+        selectedCircle.userGroups.forEach((group) => {
+            if (!groups.includes(group.handle)) {
+                groups.push(group.handle);
+            }
+        });
+
+        return groups;
+    };
+
+    // Handle circle change
+    const handleCircleChange = (circleId: string) => {
+        const newCircle = availableCircles.find((c) => c._id === circleId);
+        if (newCircle) {
+            setSelectedCircle(newCircle);
+
+            // Find the default feed for this circle
+            const defaultFeed = {
+                _id: "default",
+                name: "Circle Feed",
+                handle: "default",
+                circleId: newCircle._id,
+                createdAt: new Date(),
+                userGroups: ["everyone"],
+            };
+
+            setSelectedFeed(defaultFeed);
+
+            // Reset user groups to default
+            setUserGroups(["everyone"]);
+        }
+    };
 
     useEffect(() => {
         if (initialPost) {
@@ -163,12 +222,17 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
         startTransition(async () => {
             const formData = new FormData();
             formData.append("content", postContent);
-            if (circle) {
-                formData.append("circleId", circle._id);
-            }
-            if (feed) {
-                formData.append("feedId", feed._id);
-            }
+
+            // Use the selected circle instead of the default one
+            formData.append("circleId", selectedCircle._id);
+            formData.append("feedId", selectedFeed._id);
+
+            // Add user groups
+            userGroups.forEach((group) => {
+                formData.append("userGroups", group);
+            });
+
+            // Add media
             images.forEach((image, index) => {
                 if (image.file) {
                     formData.append("media", image.file);
@@ -176,12 +240,15 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                     formData.append(`existingMedia`, JSON.stringify(image.media));
                 }
             });
+
+            // Add other data
             if (initialPost) {
                 formData.append("postId", initialPost._id);
             }
             if (location) {
                 formData.append("location", JSON.stringify(location));
             }
+
             await onSubmit(formData);
         });
     };
@@ -195,8 +262,48 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                         <div className="text-sm font-semibold">{user?.name}</div>
                         <div className="flex flex-row items-center justify-center gap-[4px]">
                             <div className="text-xs text-gray-500">Post in</div>
-                            <CirclePicture circle={circle} size="14px" />
-                            <div className="text-xs text-gray-500">{circle?.name}</div>
+
+                            {/* Circle selector */}
+                            {availableCircles.length > 0 ? (
+                                <Select value={selectedCircle._id} onValueChange={handleCircleChange}>
+                                    <SelectTrigger className="h-6 w-auto border-0 bg-transparent p-0 pl-1 text-xs hover:bg-gray-100">
+                                        <div className="flex items-center gap-1">
+                                            <CirclePicture circle={selectedCircle} size="14px" />
+                                            <span>{selectedCircle.name}</span>
+                                            <ChevronDown className="h-3 w-3" />
+                                        </div>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableCircles.map((c) => (
+                                            <SelectItem key={c._id} value={c._id}>
+                                                <div className="flex items-center gap-2">
+                                                    <CirclePicture circle={c} size="20px" />
+                                                    <span>{c.name}</span>
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            ) : (
+                                <div className="flex items-center gap-1">
+                                    <CirclePicture circle={selectedCircle} size="14px" />
+                                    <span className="text-xs">{selectedCircle.name}</span>
+                                </div>
+                            )}
+
+                            {/* User group selector */}
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="ml-2 h-6 p-0 pl-1 text-xs hover:bg-gray-100"
+                                onClick={() => setIsUserGroupsDialogOpen(true)}
+                            >
+                                <div className="flex items-center gap-1">
+                                    <Users className="h-3 w-3" />
+                                    <span>{userGroups.includes("everyone") ? "Everyone" : "Restricted"}</span>
+                                    <ChevronDown className="h-3 w-3" />
+                                </div>
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -338,6 +445,7 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                 </div>
             )}
 
+            {/* Location Dialog */}
             <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
@@ -352,6 +460,57 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                             Set Location
                         </Button>
                     </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* User Groups Dialog */}
+            <Dialog open={isUserGroupsDialogOpen} onOpenChange={setIsUserGroupsDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Who can see this post?</DialogTitle>
+                    </DialogHeader>
+                    <div className="mt-4 space-y-4">
+                        <div className="space-y-2">
+                            {getAvailableUserGroups().map((group) => (
+                                <div key={group} className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id={`group-${group}`}
+                                        checked={userGroups.includes(group)}
+                                        onCheckedChange={(checked) => {
+                                            if (checked) {
+                                                // If "everyone" is selected, clear other selections
+                                                if (group === "everyone") {
+                                                    setUserGroups(["everyone"]);
+                                                } else {
+                                                    // If another group is selected, remove "everyone"
+                                                    setUserGroups((prev) => [
+                                                        ...prev.filter((g) => g !== "everyone"),
+                                                        group,
+                                                    ]);
+                                                }
+                                            } else {
+                                                // Don't allow deselecting all groups
+                                                if (userGroups.length > 1) {
+                                                    setUserGroups((prev) => prev.filter((g) => g !== group));
+                                                }
+                                            }
+                                        }}
+                                    />
+                                    <Label htmlFor={`group-${group}`} className="capitalize">
+                                        {group === "everyone" ? "Everyone" : group}
+                                    </Label>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                            {userGroups.includes("everyone")
+                                ? "Anyone can see this post"
+                                : "Only selected groups can see this post"}
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button onClick={() => setIsUserGroupsDialogOpen(false)}>Done</Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>

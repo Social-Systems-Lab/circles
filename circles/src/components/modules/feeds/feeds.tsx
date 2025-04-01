@@ -10,8 +10,9 @@ import { getPostsAction } from "./actions";
 import { SortingOptions } from "@/models/models";
 import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 
-export default async function FeedsModule({ circle, page, subpage, isDefaultCircle, searchParams }: ModulePageProps) {
-    const feed = await getFeedByHandle(circle?._id, subpage);
+export default async function FeedsModule({ circle, page, isDefaultCircle, searchParams }: ModulePageProps) {
+    // Always use the default feed
+    const feed = await getFeedByHandle(circle?._id, "default");
     if (!feed) {
         return <div></div>;
     }
@@ -19,14 +20,7 @@ export default async function FeedsModule({ circle, page, subpage, isDefaultCirc
 
     return (
         <ContentDisplayWrapper content={posts}>
-            <FeedComponent
-                posts={posts}
-                feed={feed}
-                circle={circle}
-                page={page}
-                subpage={subpage}
-                isDefaultCircle={isDefaultCircle}
-            />
+            <FeedComponent posts={posts} feed={feed} circle={circle} page={page} isDefaultCircle={isDefaultCircle} />
             <ThirdColumn />
         </ContentDisplayWrapper>
     );

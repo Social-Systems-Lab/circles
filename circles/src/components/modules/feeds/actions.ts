@@ -151,6 +151,9 @@ export async function createPostAction(
         const feedId = formData.get("feedId") as string;
         const locationStr = formData.get("location") as string;
         const location = locationStr ? JSON.parse(locationStr) : undefined;
+
+        // Get user groups from form data
+        const userGroups = formData.getAll("userGroups") as string[];
         const feed = await getFeed(feedId);
         if (!feed) {
             return { success: false, message: "Feed not found" };
@@ -170,6 +173,7 @@ export async function createPostAction(
             reactions: {},
             comments: 0,
             location,
+            userGroups: userGroups.length > 0 ? userGroups : ["everyone"], // Use provided user groups or default to everyone
         };
 
         console.log("creating post", JSON.stringify(post.location));
