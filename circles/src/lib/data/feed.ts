@@ -440,6 +440,7 @@ export async function getPostsFromMultipleFeeds(
                 createdBy: 1,
                 comments: 1,
                 location: 1,
+                userGroups: 1,
                 circleType: { $literal: "post" },
 
                 highlightedCommentId: { $toString: "$highlightedCommentId" },
@@ -570,6 +571,7 @@ export async function getPostsFromMultipleFeeds(
         const filteredPosts = posts.filter((post) => {
             // If post has no user groups or empty user groups array, it's visible to everyone
             if (!post.userGroups || post.userGroups.length === 0) {
+                console.log("Post with no userGroups:", post.content);
                 return true;
             }
 
@@ -580,10 +582,20 @@ export async function getPostsFromMultipleFeeds(
             }
 
             // Check if user has membership in this circle
-            const userGroupsInCircle = userMemberships.get(circleId) || ["everyone"];
+            const userGroupsInCircle = userMemberships.get(circleId) || [];
+
+            if (post.userGroups?.[0] === "admins" && post.userGroups.length === 1) {
+                console.log("Found post for only admins: ", post.content);
+                console.log("userGroupsInCircle", post.content);
+            }
+            console.log("Post with no userGroups:", userGroupsInCircle);
 
             // Check if any of the post's user groups match the user's groups in this circle
-            return post.userGroups.some((group) => userGroupsInCircle.includes(group) || group === "everyone");
+            // Note: "everyone" in post.userGroups means it's visible to everyone
+            return (
+                post.userGroups.includes("everyone") ||
+                post.userGroups.some((group) => userGroupsInCircle.includes(group))
+            );
         });
 
         return filteredPosts;
@@ -812,6 +824,7 @@ export const getPosts = async (
                 createdBy: 1,
                 comments: 1,
                 location: 1,
+                userGroups: 1,
                 circleType: { $literal: "post" },
                 highlightedCommentId: { $toString: "$highlightedCommentId" },
                 mentions: 1,
@@ -930,6 +943,7 @@ export const getPosts = async (
         const filteredPosts = posts.filter((post) => {
             // If post has no user groups or empty user groups array, it's visible to everyone
             if (!post.userGroups || post.userGroups.length === 0) {
+                console.log("Post with no userGroups:", post.content);
                 return true;
             }
 
@@ -938,10 +952,20 @@ export const getPosts = async (
             }
 
             // Check if user has membership in this circle
-            const userGroupsInCircle = userMemberships.get(circleId) || ["everyone"];
+            const userGroupsInCircle = userMemberships.get(circleId) || [];
+
+            if (post.userGroups?.[0] === "admins" && post.userGroups.length === 1) {
+                console.log("Found post for only admins: ", post.content);
+                console.log("userGroupsInCircle", post.content);
+            }
+            console.log("Post with no userGroups:", userGroupsInCircle);
 
             // Check if any of the post's user groups match the user's groups in this circle
-            return post.userGroups.some((group) => userGroupsInCircle.includes(group) || group === "everyone");
+            // Note: "everyone" in post.userGroups means it's visible to everyone
+            return (
+                post.userGroups.includes("everyone") ||
+                post.userGroups.some((group) => userGroupsInCircle.includes(group))
+            );
         });
 
         return filteredPosts;
