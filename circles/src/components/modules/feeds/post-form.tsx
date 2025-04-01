@@ -1,7 +1,7 @@
 // post-form.tsx
 import React, { useState, useCallback, useEffect, useTransition } from "react";
 import { Textarea } from "@/components/ui/textarea";
-import { ImageIcon, MapPinIcon, BarChartIcon, Trash2, Loader2, MapPin, ChevronDown, Users } from "lucide-react";
+import { ImageIcon, MapPinIcon, BarChartIcon, Trash2, Loader2, MapPin, ChevronDown, Users, Globe } from "lucide-react";
 import { UserPicture } from "../members/user-picture";
 import { Circle, Feed, Location, Media, Page, PostDisplay, UserPrivate } from "@/models/models";
 import { CirclePicture } from "../circles/circle-picture";
@@ -112,19 +112,35 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
         }
     }, [user]);
 
-    // Get available user groups for the selected circle
+    const getUserGroupName = (userGroup: string) => {
+        if (!selectedCircle) return userGroup;
+        const group = selectedCircle.userGroups?.find((g) => g.handle === userGroup);
+        return group ? group.name : userGroup;
+    };
+
+    // Get available user groups for the selected circle that the user is a member of
     const getAvailableUserGroups = () => {
-        if (!selectedCircle || !selectedCircle.userGroups) return [];
+        if (!selectedCircle || !user || !user.memberships) return ["everyone"];
+
+        // Find the user's membership for the selected circle
+        const membership = user.memberships.find((m) => m.circleId === selectedCircle._id);
+
+        if (!membership) {
+            // If user is not a member of this circle, only allow "everyone"
+            return ["everyone"];
+        }
 
         // Always include "everyone" as an option
         const groups = ["everyone"];
 
-        // Add the circle's user groups
-        selectedCircle.userGroups.forEach((group) => {
-            if (!groups.includes(group.handle)) {
-                groups.push(group.handle);
-            }
-        });
+        // Add the user groups the user is a member of in this circle
+        if (membership.userGroups && membership.userGroups.length > 0) {
+            membership.userGroups.forEach((group) => {
+                if (!groups.includes(group)) {
+                    groups.push(group);
+                }
+            });
+        }
 
         return groups;
     };
@@ -255,7 +271,7 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
 
     return (
         <div {...getRootProps()} className="p-4">
-            <div className="flex items-center justify-between">
+            <div className="mb-[5px] flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                     <UserPicture name={user?.name} picture={user?.picture?.url} size="40px" />
                     <div>
@@ -270,7 +286,6 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                                         <div className="flex items-center gap-1">
                                             <CirclePicture circle={selectedCircle} size="14px" />
                                             <span>{selectedCircle.name}</span>
-                                            <ChevronDown className="h-3 w-3" />
                                         </div>
                                     </SelectTrigger>
                                     <SelectContent>
@@ -300,7 +315,11 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                             >
                                 <div className="flex items-center gap-1">
                                     <Users className="h-3 w-3" />
-                                    <span>{userGroups.includes("everyone") ? "Everyone" : "Restricted"}</span>
+                                    <span>
+                                        {userGroups.includes("everyone")
+                                            ? "Everyone"
+                                            : getUserGroupName(userGroups?.[0])}
+                                    </span>
                                     <ChevronDown className="h-3 w-3" />
                                 </div>
                             </Button>
@@ -465,50 +484,81 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
 
             {/* User Groups Dialog */}
             <Dialog open={isUserGroupsDialogOpen} onOpenChange={setIsUserGroupsDialogOpen}>
-                <DialogContent>
+                <DialogContent className="max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Who can see this post?</DialogTitle>
+                        <DialogTitle className="text-center text-xl font-bold">Who can see your post?</DialogTitle>
                     </DialogHeader>
-                    <div className="mt-4 space-y-4">
-                        <div className="space-y-2">
-                            {getAvailableUserGroups().map((group) => (
-                                <div key={group} className="flex items-center space-x-2">
-                                    <Checkbox
-                                        id={`group-${group}`}
-                                        checked={userGroups.includes(group)}
-                                        onCheckedChange={(checked) => {
-                                            if (checked) {
-                                                // If "everyone" is selected, clear other selections
-                                                if (group === "everyone") {
-                                                    setUserGroups(["everyone"]);
-                                                } else {
-                                                    // If another group is selected, remove "everyone"
-                                                    setUserGroups((prev) => [
-                                                        ...prev.filter((g) => g !== "everyone"),
-                                                        group,
-                                                    ]);
-                                                }
-                                            } else {
-                                                // Don't allow deselecting all groups
-                                                if (userGroups.length > 1) {
-                                                    setUserGroups((prev) => prev.filter((g) => g !== group));
-                                                }
-                                            }
-                                        }}
-                                    />
-                                    <Label htmlFor={`group-${group}`} className="capitalize">
-                                        {group === "everyone" ? "Everyone" : group}
-                                    </Label>
+                    <div className="mt-2 space-y-4">
+                        <div className="text-sm text-gray-600">
+                            Your post will be visible in feeds, on your profile, and in search results.
+                        </div>
+
+                        <div className="text-sm text-gray-600">
+                            Your default audience is <span className="font-semibold">Everyone</span> but you can change
+                            the audience for this post.
+                        </div>
+
+                        <div className="max-h-[300px] space-y-3 overflow-y-auto py-2">
+                            {/* Everyone option */}
+                            <div className="flex items-center rounded-lg p-2 hover:bg-gray-100">
+                                <div className="mr-3 flex h-10 w-10 items-center justify-center rounded-full bg-gray-200">
+                                    <Globe className="h-5 w-5 text-gray-700" />
                                 </div>
-                            ))}
+                                <div className="flex-1">
+                                    <div className="font-medium">Everyone</div>
+                                    <div className="text-xs text-gray-500">Everyone on and outside MakeCircles</div>
+                                </div>
+                                <div className="ml-2">
+                                    <input
+                                        type="radio"
+                                        id="group-everyone"
+                                        name="visibility"
+                                        className="h-4 w-4 text-blue-600"
+                                        checked={userGroups.includes("everyone")}
+                                        onChange={() => setUserGroups(["everyone"])}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Other user groups */}
+                            {getAvailableUserGroups()
+                                .filter((group) => group !== "everyone")
+                                .map((group) => (
+                                    <div key={group} className="flex items-center rounded-lg p-2 hover:bg-gray-100">
+                                        <div className="mr-3 flex h-10 w-10 items-center justify-center rounded-full bg-gray-200">
+                                            <Users className="h-5 w-5 text-gray-700" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <div className="font-medium">{getUserGroupName(group)}</div>
+                                            <div className="text-xs text-gray-500">
+                                                Only {getUserGroupName(group)?.toLowerCase()} of {selectedCircle.name}
+                                            </div>
+                                        </div>
+                                        <div className="ml-2">
+                                            <input
+                                                type="radio"
+                                                id={`group-${group}`}
+                                                name="visibility"
+                                                className="h-4 w-4 text-blue-600"
+                                                checked={userGroups.includes(group) && !userGroups.includes("everyone")}
+                                                onChange={() => setUserGroups([group])}
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
                         </div>
-                        <div className="text-sm text-gray-500">
-                            {userGroups.includes("everyone")
-                                ? "Anyone can see this post"
-                                : "Only selected groups can see this post"}
-                        </div>
+
+                        {/* <div className="flex items-center space-x-2 pt-2">
+                            <Checkbox id="set-as-default" />
+                            <Label htmlFor="set-as-default" className="text-sm">
+                                Set as default audience
+                            </Label>
+                        </div> */}
                     </div>
-                    <DialogFooter>
+                    <DialogFooter className="flex justify-between sm:justify-between">
+                        <Button variant="ghost" onClick={() => setIsUserGroupsDialogOpen(false)}>
+                            Cancel
+                        </Button>
                         <Button onClick={() => setIsUserGroupsDialogOpen(false)}>Done</Button>
                     </DialogFooter>
                 </DialogContent>
