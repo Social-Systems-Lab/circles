@@ -9,6 +9,7 @@ import {
     getReactions,
     checkIfLiked,
     getFeed,
+    getFeedByHandle,
     updatePost,
     getPost,
     deletePost,
@@ -148,16 +149,19 @@ export async function createPostAction(
     try {
         const content = formData.get("content") as string;
         const circleId = formData.get("circleId") as string;
-        const feedId = formData.get("feedId") as string;
         const locationStr = formData.get("location") as string;
         const location = locationStr ? JSON.parse(locationStr) : undefined;
 
         // Get user groups from form data
         const userGroups = formData.getAll("userGroups") as string[];
-        const feed = await getFeed(feedId);
+
+        // Get the default feed for this circle
+        const feed = await getFeedByHandle(circleId, "default");
         if (!feed) {
-            return { success: false, message: "Feed not found" };
+            return { success: false, message: "Default feed not found for this circle" };
         }
+
+        const feedId = feed._id.toString();
 
         const feature = feedFeaturePrefix + feed.handle + "_post";
         const authorized = await isAuthorized(userDid, circleId, feature);

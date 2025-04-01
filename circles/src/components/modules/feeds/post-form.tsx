@@ -97,9 +97,8 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
     const [location, setLocation] = useState<Location | undefined>(initialPost?.location);
     const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
 
-    // New state for circle selection and user groups
+    // State for circle selection and user groups
     const [selectedCircle, setSelectedCircle] = useState<Circle>(circle);
-    const [selectedFeed, setSelectedFeed] = useState<Feed>(feed);
     const [userGroups, setUserGroups] = useState<string[]>(["everyone"]);
     const [isUserGroupsDialogOpen, setIsUserGroupsDialogOpen] = useState(false);
     const [availableCircles, setAvailableCircles] = useState<Circle[]>([]);
@@ -113,9 +112,20 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
     }, [user]);
 
     const getUserGroupName = (userGroup: string) => {
-        if (!selectedCircle) return userGroup;
-        const group = selectedCircle.userGroups?.find((g) => g.handle === userGroup);
-        return group ? group.name : userGroup;
+        if (!selectedCircle || !selectedCircle.userGroups) {
+            // If no circle is selected or it has no user groups, capitalize the first letter of the group name
+            return userGroup.charAt(0).toUpperCase() + userGroup.slice(1);
+        }
+
+        // Find the user group in the selected circle's user groups
+        const group = selectedCircle.userGroups.find((g) => g.handle === userGroup);
+
+        // If the group is not found, capitalize the first letter of the group name
+        if (!group) {
+            return userGroup.charAt(0).toUpperCase() + userGroup.slice(1);
+        }
+
+        return group.name;
     };
 
     // Get available user groups for the selected circle that the user is a member of
@@ -150,18 +160,6 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
         const newCircle = availableCircles.find((c) => c._id === circleId);
         if (newCircle) {
             setSelectedCircle(newCircle);
-
-            // Find the default feed for this circle
-            const defaultFeed = {
-                _id: "default",
-                name: "Circle Feed",
-                handle: "default",
-                circleId: newCircle._id,
-                createdAt: new Date(),
-                userGroups: ["everyone"],
-            };
-
-            setSelectedFeed(defaultFeed);
 
             // Reset user groups to default
             setUserGroups(["everyone"]);
@@ -239,9 +237,8 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
             const formData = new FormData();
             formData.append("content", postContent);
 
-            // Use the selected circle instead of the default one
+            // Only pass the selected circle ID - the backend will find the default feed
             formData.append("circleId", selectedCircle._id);
-            formData.append("feedId", selectedFeed._id);
 
             // Add user groups
             userGroups.forEach((group) => {
