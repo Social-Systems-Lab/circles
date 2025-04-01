@@ -174,6 +174,7 @@ export const upsertVbdCircles = async (circles: Circle[]) => {
             payload: {
                 name: circle.name,
                 description: circle.description,
+                content: circle.content ?? "",
                 mission: circle.mission,
                 circleType: circle.circleType,
                 createdAt: circle.createdAt?.toISOString(),
