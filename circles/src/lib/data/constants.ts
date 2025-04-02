@@ -608,9 +608,9 @@ export const defaultPages: Page[] = [
     //     defaultUserGroups: ["admins", "moderators", "members", "everyone"],
     // },
     {
-        name: "Members",
+        name: "Followers",
         handle: "members",
-        description: "Members page",
+        description: "Followers page",
         module: "members",
         defaultUserGroups: ["admins", "moderators", "members", "everyone"],
     },

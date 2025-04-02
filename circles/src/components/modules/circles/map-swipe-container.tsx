@@ -234,12 +234,18 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
                             )}
                         </div>
                     ) : (
-                        <div className="flex flex-col items-center gap-4 rounded-xl border bg-white p-8 shadow-lg">
-                            <div className="text-xl font-semibold">No circles to discover</div>
-                            <p className="text-center text-gray-600">
-                                You&apos;ve already explored all available circles
-                            </p>
-                        </div>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="flex flex-col items-center gap-4 rounded-xl border bg-white p-8 shadow-lg"
+                        >
+                            <div className="text-xl font-semibold">You&apos;ve seen all circles!</div>
+                            <p className="text-center text-gray-600">Check back later for more recommendations</p>
+                            <Button onClick={handleRefresh} className="mt-4 gap-2">
+                                <RefreshCw className="h-4 w-4" />
+                                Refresh
+                            </Button>
+                        </motion.div>
                     )}
                 </div>
             </div>
