@@ -109,7 +109,9 @@ export default function CausesStep({
     return (
         <div className="space-y-4">
             <h2 className="text-2xl font-bold">Choose Causes</h2>
-            <p className="text-gray-500">Select causes that align with your circle&apos;s mission:</p>
+            <p className="text-gray-500">
+                Select causes that align with your {circleData.isProjectsPage ? "project" : "circle"}&apos;s mission:
+            </p>
 
             <div className="relative">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 transform text-gray-400" />

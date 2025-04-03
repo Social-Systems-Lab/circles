@@ -29,7 +29,9 @@ export default function MissionStep({ circleData, setCircleData, nextStep, prevS
         startTransition(async () => {
             // Validate mission
             if (!circleData.mission.trim()) {
-                setMissionError("Please provide a mission for your circle");
+                setMissionError(
+                    `Please provide a mission for your ${circleData.isProjectsPage ? "project" : "circle"}`,
+                );
                 return;
             }
 
@@ -63,15 +65,18 @@ export default function MissionStep({ circleData, setCircleData, nextStep, prevS
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-2xl font-bold">Circle Mission</h2>
+                <h2 className="text-2xl font-bold">{circleData.isProjectsPage ? "Project" : "Circle"} Mission</h2>
                 <p className="text-gray-500">
-                    Define the purpose and goals of your circle. What change do you want to see in the world?
+                    Define the purpose and goals of your {circleData.isProjectsPage ? "project" : "circle"}. What change
+                    do you want to see in the world?
                 </p>
             </div>
 
             <div className="space-y-4">
                 <div className="space-y-2">
-                    <Label htmlFor="mission">What is the mission of this circle?</Label>
+                    <Label htmlFor="mission">
+                        What is the mission of this {circleData.isProjectsPage ? "project" : "circle"}?
+                    </Label>
                     <Textarea
                         id="mission"
                         name="mission"
@@ -84,8 +89,8 @@ export default function MissionStep({ circleData, setCircleData, nextStep, prevS
                 </div>
 
                 <p className="text-sm text-gray-500">
-                    A clear mission helps potential members understand what your circle stands for and attracts
-                    like-minded individuals.
+                    A clear mission helps potential members understand what your{" "}
+                    {circleData.isProjectsPage ? "project" : "circle"} stands for and attracts like-minded individuals.
                 </p>
             </div>
 

@@ -36,26 +36,6 @@ export const twoLineEllipsisStyle = {
     overflow: "hidden",
 };
 
-type CreateCircleButtonProps = {
-    circle: Circle;
-    isDefaultCircle: boolean;
-};
-
-export const CreateCircleButton: React.FC<CreateCircleButtonProps> = ({ circle }) => {
-    const isCompact = useIsCompact();
-    const parentId = circle?._id;
-    const isProjectsPage = window.location.pathname.includes("/projects");
-
-    return (
-        <div className="flex h-9 items-center">
-            {React.createElement(require("@/components/circle-wizard/create-circle-dialog").CreateCircleDialog, {
-                parentCircleId: parentId,
-                isProjectsPage: isProjectsPage,
-            })}
-        </div>
-    );
-};
-
 interface CirclesListProps {
     circles: WithMetric<Circle>[];
     circle: Circle;

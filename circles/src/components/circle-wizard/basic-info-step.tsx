@@ -49,13 +49,13 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
 
         // Validate name
         if (!circleData.name.trim()) {
-            setNameError("Circle name is required");
+            setNameError(`${circleData.isProjectsPage ? "Project" : "Circle"} name is required`);
             isValid = false;
         }
 
         // Validate handle
         if (!circleData.handle.trim()) {
-            setHandleError("Circle handle is required");
+            setHandleError(`${circleData.isProjectsPage ? "Project" : "Circle"} handle is required`);
             isValid = false;
         } else if (!/^[a-zA-Z0-9\-]*$/.test(circleData.handle)) {
             setHandleError("Handle can only contain letters, numbers and hyphens (-)");
@@ -105,25 +105,28 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-2xl font-bold">Create a New Circle</h2>
-                <p className="text-gray-500">Let&apos;s start with the basic information for your circle.</p>
+                <h2 className="text-2xl font-bold">Create a New {circleData.isProjectsPage ? "Project" : "Circle"}</h2>
+                <p className="text-gray-500">
+                    Let&apos;s start with the basic information for your{" "}
+                    {circleData.isProjectsPage ? "project" : "circle"}.
+                </p>
             </div>
 
             <div className="space-y-4">
                 <div className="space-y-2">
-                    <Label htmlFor="name">Circle Name</Label>
+                    <Label htmlFor="name">{circleData.isProjectsPage ? "Project" : "Circle"} Name</Label>
                     <Input
                         id="name"
                         name="name"
                         value={circleData.name}
                         onChange={handleInputChange}
-                        placeholder="Enter circle name"
+                        placeholder={`Enter ${circleData.isProjectsPage ? "project" : "circle"} name`}
                     />
                     {nameError && <p className="text-sm text-red-500">{nameError}</p>}
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="handle">Circle Handle</Label>
+                    <Label htmlFor="handle">{circleData.isProjectsPage ? "Project" : "Circle"} Handle</Label>
                     <div className="flex items-center">
                         <span className="mr-1 text-gray-500">@</span>
                         <Input
@@ -131,22 +134,23 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
                             name="handle"
                             value={circleData.handle}
                             onChange={handleInputChange}
-                            placeholder="circle-handle"
+                            placeholder={`${circleData.isProjectsPage ? "project" : "circle"}-handle`}
                         />
                     </div>
                     <p className="text-xs text-gray-500">
-                        This will be used in the URL for your circle: circles/{circleData.handle || "circle-handle"}
+                        This will be used in the URL for your {circleData.isProjectsPage ? "project" : "circle"}:
+                        circles/{circleData.handle || `${circleData.isProjectsPage ? "project" : "circle"}-handle`}
                     </p>
                     {handleError && <p className="text-sm text-red-500">{handleError}</p>}
                 </div>
 
                 <div className="flex items-center space-x-2">
                     <Switch id="isPublic" checked={circleData.isPublic} onCheckedChange={handleSwitchChange} />
-                    <Label htmlFor="isPublic">Public Circle</Label>
+                    <Label htmlFor="isPublic">Public {circleData.isProjectsPage ? "Project" : "Circle"}</Label>
                     <p className="text-xs text-gray-500">
                         {circleData.isPublic
-                            ? "Anyone can follow this circle without approval"
-                            : "New followers will need approval"}
+                            ? `Anyone can follow this ${circleData.isProjectsPage ? "project" : "circle"} without approval`
+                            : `New followers will need approval`}
                     </p>
                 </div>
             </div>
@@ -159,7 +163,7 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
                             Saving...
                         </>
                     ) : (
-                        "Create Circle"
+                        `Create ${circleData.isProjectsPage ? "Project" : "Circle"}`
                     )}
                 </Button>
             </div>

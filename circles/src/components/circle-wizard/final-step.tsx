@@ -107,21 +107,6 @@ export default function FinalStep({
         }
     };
 
-    // Automatically redirect to the created circle
-    useEffect(() => {
-        if (isCreated && createdCircleHandle) {
-            // Small delay to allow the UI to update
-            const timer = setTimeout(() => {
-                router.push(`/circles/${createdCircleHandle}`);
-                if (onComplete) {
-                    onComplete();
-                }
-            }, 1500);
-
-            return () => clearTimeout(timer);
-        }
-    }, [isCreated, createdCircleHandle, router, onComplete]);
-
     return (
         <div className="space-y-6">
             <div>

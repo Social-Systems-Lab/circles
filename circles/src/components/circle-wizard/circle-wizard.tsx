@@ -70,6 +70,7 @@ export default function CircleWizard({ parentCircleId, isProjectsPage = false, o
         picture: "/images/default-picture.png",
         cover: "/images/default-cover.png",
         parentCircleId,
+        isProjectsPage,
     });
 
     // Define the steps for the wizard

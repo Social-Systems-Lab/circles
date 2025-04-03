@@ -200,9 +200,10 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-2xl font-bold">Circle Profile</h2>
+                <h2 className="text-2xl font-bold">{circleData.isProjectsPage ? "Project" : "Circle"} Profile</h2>
                 <p className="text-gray-500">
-                    Add details about your circle to help others understand what it&apos;s about.
+                    Add details about your {circleData.isProjectsPage ? "project" : "circle"} to help others understand
+                    what it&apos;s about.
                 </p>
             </div>
 
@@ -211,7 +212,7 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                 <div className="space-y-4">
                     <div className="space-y-2">
                         <Label className="flex items-center gap-2">
-                            <Camera className="h-4 w-4" /> Circle Picture
+                            <Camera className="h-4 w-4" /> {circleData.isProjectsPage ? "Project" : "Circle"} Picture
                         </Label>
                         <div className="relative mx-auto h-24 w-24 overflow-hidden rounded-full">
                             <CircleImageUpload
@@ -229,7 +230,8 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                             />
                         </div>
                         <p className="text-center text-xs text-gray-500">
-                            This appears on all of your circle&apos;s posts and comments
+                            This appears on all of your {circleData.isProjectsPage ? "project" : "circle"}&apos;s posts
+                            and comments
                         </p>
                     </div>
 
@@ -253,7 +255,8 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                             />
                         </div>
                         <p className="text-center text-xs text-gray-500">
-                            This appears at the top of your circle&apos;s page
+                            This appears at the top of your {circleData.isProjectsPage ? "project" : "circle"}&apos;s
+                            page
                         </p>
                     </div>
                 </div>
@@ -267,7 +270,7 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                             name="description"
                             value={circleData.description}
                             onChange={handleTextChange}
-                            placeholder="A brief description about this circle"
+                            placeholder={`A brief description about this ${circleData.isProjectsPage ? "project" : "circle"}`}
                         />
                         <p className="text-xs text-gray-500">This short description appears in cards and previews</p>
                     </div>
@@ -279,11 +282,12 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                             name="content"
                             value={circleData.content}
                             onChange={handleTextChange}
-                            placeholder="Tell more about this circle, its goals, and what members can expect"
+                            placeholder={`Tell more about this ${circleData.isProjectsPage ? "project" : "circle"}, its goals, and what members can expect`}
                             className="h-36"
                         />
                         <p className="text-xs text-gray-500">
-                            This detailed description appears on your circle&apos;s page
+                            This detailed description appears on your {circleData.isProjectsPage ? "project" : "circle"}
+                            &apos;s page
                         </p>
                     </div>
                 </div>

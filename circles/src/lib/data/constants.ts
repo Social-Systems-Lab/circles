@@ -642,13 +642,6 @@ export const defaultPagesForProjects: Page[] = [
         defaultUserGroups: ["admins", "moderators", "members"],
     },
     {
-        name: "Projects",
-        handle: "projects",
-        description: "Projects page",
-        module: "projects",
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
         name: "Settings",
         handle: "settings",
         description: "Settings page",

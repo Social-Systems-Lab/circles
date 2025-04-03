@@ -57,15 +57,16 @@ export default function LocationStep({ circleData, setCircleData, nextStep, prev
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-2xl font-bold">Circle Location</h2>
+                <h2 className="text-2xl font-bold">{circleData.isProjectsPage ? "Project" : "Circle"} Location</h2>
                 <p className="text-gray-500">
-                    Add a location to help people find your circle and connect with nearby members.
+                    Add a location to help people find your {circleData.isProjectsPage ? "project" : "circle"} and
+                    connect with nearby members.
                 </p>
             </div>
 
             <Card>
                 <CardContent className="pt-6">
-                    <Label>Circle Location</Label>
+                    <Label>{circleData.isProjectsPage ? "Project" : "Circle"} Location</Label>
                     <LocationPicker value={circleData.location} onChange={handleLocationChange} compact={true} />
                 </CardContent>
             </Card>
