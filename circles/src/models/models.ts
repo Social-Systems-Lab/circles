@@ -394,7 +394,7 @@ export const circleSchema = z.object({
     userGroups: z.array(userGroupSchema).default([]).optional(),
     // @deprecated Use enabledModules instead
     pages: z.array(pageSchema).default([]).optional(),
-    enabledModules: z.array(z.string()).default(["feed", "followers", "circles", "projects"]).optional(),
+    enabledModules: z.array(z.string()).default(["feed", "followers", "circles", "projects", "settings"]).optional(),
     accessRules: accessRulesSchema.optional(),
     members: z.number().default(0).optional(),
     questionnaire: z.array(questionSchema).default([]).optional(),
