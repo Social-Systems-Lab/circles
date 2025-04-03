@@ -122,25 +122,7 @@ const CirclesList = ({
 
     const handleCircleClick = (circle: Circle) => {
         if (isMobile) {
-            if (circle.circleType === "project" && circle.parentCircleId) {
-                // If we're not in a parent circle context but the project has a parent, need to fetch parent first
-                import("./actions").then(({ getCircleByIdAction }) => {
-                    getCircleByIdAction(circle.parentCircleId!)
-                        .then((parentCircle) => {
-                            if (parentCircle?.handle) {
-                                router.push(`/circles/${parentCircle.handle}/project/${circle._id}`);
-                            } else {
-                                router.push(`/circles/${circle.handle}`);
-                            }
-                        })
-                        .catch(() => {
-                            router.push(`/circles/${circle.handle}`);
-                        });
-                });
-            } else {
-                // Otherwise use the standard route
-                router.push(`/circles/${circle.handle}`);
-            }
+            router.push(`/circles/${circle.handle}`);
             return;
         }
 
@@ -271,14 +253,6 @@ const CirclesList = ({
                                     {circle.description && (
                                         <p className="line-clamp-2 pl-1 pr-1 pt-2 text-[15px]">{circle.description}</p>
                                     )}
-
-                                    {circle.circleType === "project" && circle.content && (
-                                        <div className="mt-2 border-t border-gray-100 pt-2">
-                                            <div className="line-clamp-2 pl-2 pr-2 text-[13px] text-gray-600">
-                                                <RichText content={circle.content} />
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                                 <div className="mt-auto flex">
                                     <Button
@@ -286,27 +260,7 @@ const CirclesList = ({
                                         className="m-2 mt-4 w-full"
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            if (circle.circleType === "project" && circle.parentCircleId) {
-                                                // If we're not in a parent circle context but the project has a parent, need to fetch parent first
-                                                import("./actions").then(({ getCircleByIdAction }) => {
-                                                    getCircleByIdAction(circle.parentCircleId!)
-                                                        .then((parentCircle) => {
-                                                            if (parentCircle?.handle) {
-                                                                router.push(
-                                                                    `/circles/${parentCircle.handle}/project/${circle._id}`,
-                                                                );
-                                                            } else {
-                                                                router.push(`/circles/${circle.handle}`);
-                                                            }
-                                                        })
-                                                        .catch(() => {
-                                                            router.push(`/circles/${circle.handle}`);
-                                                        });
-                                                });
-                                            } else {
-                                                // Otherwise use the standard route
-                                                router.push(`/circles/${circle.handle}`);
-                                            }
+                                            router.push(`/circles/${circle.handle}`);
                                         }}
                                     >
                                         Open

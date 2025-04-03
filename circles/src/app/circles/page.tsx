@@ -1,17 +1,10 @@
 // circles/page.tsx - circles list
 import CirclesList from "@/components/modules/circles/circles-list";
 import CirclesTabs from "@/components/modules/circles/circles-tab";
-import { getAggregatePostsAction } from "@/components/modules/feeds/actions";
-import { AggregateFeedComponent, FeedComponent } from "@/components/modules/feeds/feed";
-import { ThirdColumn } from "@/components/modules/feeds/third-column";
-import HomeContent from "@/components/modules/home/home-content";
-import HomeCover from "@/components/modules/home/home-cover";
-import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
-import { getCirclesByIds, getCirclesWithMetrics, getDefaultCircle, getMetricsForCircles } from "@/lib/data/circle";
-import { getPublicUserFeed } from "@/lib/data/feed";
-import { getUserByDid, getUserPrivate } from "@/lib/data/user";
-import { Circle, Page, SortingOptions, WithMetric } from "@/models/models";
+import { getCirclesByIds, getCirclesWithMetrics, getMetricsForCircles } from "@/lib/data/circle";
+import { getUserPrivate } from "@/lib/data/user";
+import { Circle, SortingOptions, WithMetric } from "@/models/models";
 
 type CirclesProps = {
     params: Promise<{ handle: string }>;
@@ -22,7 +15,7 @@ export default async function Home(props: CirclesProps) {
     const searchParams = await props.searchParams;
     let activeTab = searchParams?.tab as string;
     let circleType = searchParams?.circleType as "circle" | "project" | undefined;
-    
+
     // get user handle
     let userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -31,10 +24,10 @@ export default async function Home(props: CirclesProps) {
 
     let circles: WithMetric<Circle>[] = [];
     let user = await getUserPrivate(userDid);
-    
+
     // Default to circle type if not specified
     const filterType = circleType || "circle";
-    
+
     if (activeTab === "following" || !activeTab) {
         const memberIds =
             user?.memberships
@@ -57,12 +50,12 @@ export default async function Home(props: CirclesProps) {
                     <CirclesTabs currentTab={activeTab} circleType={circleType} />
                 </div>
             </div>
-            <CirclesList 
-                circle={user} 
-                circles={circles} 
-                isDefaultCircle={false} 
-                activeTab={activeTab} 
-                isProjectsList={circleType === "project"} 
+            <CirclesList
+                circle={user}
+                circles={circles}
+                isDefaultCircle={false}
+                activeTab={activeTab}
+                isProjectsList={circleType === "project"}
             />
             {/* </div> */}
         </div>
