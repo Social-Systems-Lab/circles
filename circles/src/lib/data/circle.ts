@@ -4,7 +4,7 @@ import { Circle, CircleType, PlatformMetrics, Post, ServerSettings, SortingOptio
 import { getServerSettings } from "./server-settings";
 import { Circles, Members, MembershipRequests, Feeds, Posts, ChatRooms } from "./db";
 import { ObjectId } from "mongodb";
-import { getDefaultAccessRules, defaultUserGroups, defaultPages, features } from "./constants";
+import { getDefaultAccessRules, defaultUserGroups, defaultPages, defaultPagesForProjects, features } from "./constants";
 import { getMetrics } from "../utils/metrics";
 import { deleteVbdCircle, deleteVbdPost, upsertVbdCircles } from "./vdb";
 import { createDefaultChatRooms, getChatRoomByHandle, updateChatRoom } from "./chat";
@@ -201,7 +201,7 @@ export const createCircle = async (circle: Circle): Promise<Circle> => {
     circle.createdAt = new Date();
     circle.userGroups = defaultUserGroups;
     circle.accessRules = getDefaultAccessRules();
-    circle.pages = defaultPages;
+    circle.pages = circle.circleType === "project" ? defaultPagesForProjects : defaultPages;
     circle.questionnaire = [];
     circle.circleType = circle.circleType || "circle";
 

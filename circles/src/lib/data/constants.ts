@@ -112,62 +112,6 @@ export const defaultUserGroupsForUser: UserGroup[] = [
     },
 ];
 
-// default pages every circle will be created with
-export const defaultPagesForUser: Page[] = [
-    // {
-    //     name: "Home",
-    //     handle: "",
-    //     description: "Home page",
-    //     module: "home",
-    //     readOnly: true,
-    //     defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    // },
-    {
-        name: "Feed",
-        handle: "feeds",
-        description: "Feed page",
-        module: "feeds",
-        readOnly: true,
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    // {
-    //     name: "Chat",
-    //     handle: "chat",
-    //     description: "Chat page",
-    //     module: "chat",
-    //     defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    // },
-    {
-        name: "Followers",
-        handle: "friends",
-        description: "Followers page",
-        module: "members",
-        defaultUserGroups: ["admins", "moderators", "members"],
-    },
-    {
-        name: "Circles",
-        handle: "circles",
-        description: "Circles page",
-        module: "circles",
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Projects",
-        handle: "projects",
-        description: "Projects page",
-        module: "projects",
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Settings",
-        handle: "settings",
-        description: "Settings page",
-        module: "settings",
-        readOnly: true,
-        defaultUserGroups: ["admins"],
-    },
-];
-
 export const causes: Cause[] = [
     {
         handle: "climate-action",
@@ -600,19 +544,102 @@ export const defaultPages: Page[] = [
         readOnly: true,
         defaultUserGroups: ["admins", "moderators", "members", "everyone"],
     },
-    // {
-    //     name: "Chat",
-    //     handle: "chat",
-    //     description: "Chat page",
-    //     module: "chat",
-    //     defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    // },
     {
         name: "Followers",
         handle: "members",
         description: "Followers page",
         module: "members",
         defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Projects",
+        handle: "projects",
+        description: "Projects page",
+        module: "projects",
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Settings",
+        handle: "settings",
+        description: "Settings page",
+        module: "settings",
+        readOnly: true,
+        defaultUserGroups: ["admins"],
+    },
+];
+
+// default pages every circle will be created with
+export const defaultPagesForUser: Page[] = [
+    // {
+    //     name: "Home",
+    //     handle: "",
+    //     description: "Home page",
+    //     module: "home",
+    //     readOnly: true,
+    //     defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    // },
+    {
+        name: "Feed",
+        handle: "feeds",
+        description: "Feed page",
+        module: "feeds",
+        readOnly: true,
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Followers",
+        handle: "friends",
+        description: "Followers page",
+        module: "members",
+        defaultUserGroups: ["admins", "moderators", "members"],
+    },
+    {
+        name: "Circles",
+        handle: "circles",
+        description: "Circles page",
+        module: "circles",
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Projects",
+        handle: "projects",
+        description: "Projects page",
+        module: "projects",
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Settings",
+        handle: "settings",
+        description: "Settings page",
+        module: "settings",
+        readOnly: true,
+        defaultUserGroups: ["admins"],
+    },
+];
+
+export const defaultPagesForProjects: Page[] = [
+    // {
+    //     name: "Home",
+    //     handle: "",
+    //     description: "Home page",
+    //     module: "home",
+    //     readOnly: true,
+    //     defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    // },
+    {
+        name: "Feed",
+        handle: "feeds",
+        description: "Feed page",
+        module: "feeds",
+        readOnly: true,
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Followers",
+        handle: "friends",
+        description: "Followers page",
+        module: "members",
+        defaultUserGroups: ["admins", "moderators", "members"],
     },
     {
         name: "Projects",

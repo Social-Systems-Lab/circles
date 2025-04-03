@@ -35,6 +35,7 @@ export type CircleData = {
     parentCircleId?: string;
     pictureFile?: File;
     coverFile?: File;
+    isProjectsPage?: boolean;
 };
 
 export type CircleWizardStepProps = {
@@ -94,23 +95,24 @@ export default function CircleWizard({ parentCircleId, isProjectsPage = false, o
 
     // Helper function to get step titles
     function getStepTitle(stepIndex: number) {
+        const entityType = isProjectsPage ? "Project" : "Circle";
         switch (stepIndex) {
             case 0:
                 return "Basic Information";
             case 1:
-                return "Circle Mission";
+                return `${entityType} Mission`;
             case 2:
-                return "Circle Profile";
+                return `${entityType} Profile`;
             case 3:
-                return "Circle Location";
+                return `${entityType} Location`;
             case 4:
                 return "Choose Causes";
             case 5:
                 return "Choose Needs";
             case 6:
-                return "Create Circle";
+                return `Create ${entityType}`;
             default:
-                return "Circle Creation";
+                return `${entityType} Creation`;
         }
     }
 
@@ -164,7 +166,7 @@ export default function CircleWizard({ parentCircleId, isProjectsPage = false, o
                                     transition={{ duration: 0.3 }}
                                 >
                                     <CurrentStepComponent
-                                        circleData={circleData}
+                                        circleData={{ ...circleData, isProjectsPage }}
                                         setCircleData={setCircleData}
                                         nextStep={nextStep}
                                         prevStep={prevStep}

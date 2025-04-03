@@ -7,7 +7,7 @@ import { features } from "@/lib/data/constants";
 import { isFile, saveFile } from "@/lib/data/storage";
 import { addMember } from "@/lib/data/member";
 
-export async function createCircleAction(circleData: any, formData?: FormData) {
+export async function createCircleAction(circleData: any, formData?: FormData, isProjectsPage?: boolean) {
     try {
         // Check if user is authorized to create circles
         const userDid = await getAuthenticatedUserDid();
@@ -29,7 +29,7 @@ export async function createCircleAction(circleData: any, formData?: FormData) {
             mission: circleData.mission,
             isPublic: circleData.isPublic !== undefined ? circleData.isPublic : true,
             parentCircleId: circleData.parentCircleId,
-            circleType: "circle",
+            circleType: circleData.isProjectsPage || isProjectsPage ? "project" : "circle",
             createdBy: userDid,
             location: circleData.location,
             causes: circleData.selectedCauses?.map((cause: any) => cause.handle) || [],

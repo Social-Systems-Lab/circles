@@ -24,12 +24,14 @@ export default function CircleSummary({ circleData }: CircleSummaryProps) {
                     <AvatarImage src={picture || "/images/default-picture.png"} alt={name} />
                     <AvatarFallback>{name?.slice(0, 2) || "CI"}</AvatarFallback>
                 </Avatar>
-                <h3 className="mb-0 mt-3 pb-0 text-center text-lg font-semibold">{name || "Circle Name"}</h3>
+                <h3 className="mb-0 mt-3 pb-0 text-center text-lg font-semibold">
+                    {name || (circleData.isProjectsPage ? "Project Name" : "Circle Name")}
+                </h3>
                 <p className="mb-0 mt-0 text-sm text-gray-500" style={{ marginBottom: 0, marginTop: 0 }}>
                     @{handle || "handle"}
                 </p>
                 <Badge variant={isPublic ? "default" : "outline"} className="mt-1">
-                    {isPublic ? "Public" : "Private"}
+                    {isPublic ? "Public" : "Private"} {circleData.isProjectsPage ? "Project" : "Circle"}
                 </Badge>
             </div>
 
@@ -49,7 +51,9 @@ export default function CircleSummary({ circleData }: CircleSummaryProps) {
 
             {mission && (
                 <div className="space-y-1">
-                    <div className="text-md m-0 p-0 pb-0 font-semibold uppercase text-gray-500">Mission</div>
+                    <div className="text-md m-0 p-0 pb-0 font-semibold uppercase text-gray-500">
+                        {circleData.isProjectsPage ? "Project" : "Circle"} Mission
+                    </div>
                     <p className="text-sm italic text-gray-700">&quot;{mission}&quot;</p>
                 </div>
             )}

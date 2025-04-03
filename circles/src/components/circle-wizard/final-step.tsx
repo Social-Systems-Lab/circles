@@ -80,7 +80,7 @@ export default function FinalStep({
                 }
 
                 // Create the circle
-                const result = await createCircleAction(circleData, formData);
+                const result = await createCircleAction(circleData, formData, circleData.isProjectsPage);
 
                 if (result.success) {
                     setIsCreated(true);
@@ -89,12 +89,12 @@ export default function FinalStep({
                     }
                 } else {
                     // Handle error
-                    setError(result.message || "Failed to create circle");
+                    setError(result.message || `Failed to create ${circleData.isProjectsPage ? "project" : "circle"}`);
                     console.error(result.message);
                 }
             } catch (error) {
-                setError("An error occurred while creating the circle");
-                console.error("Circle creation error:", error);
+                setError(`An error occurred while creating the ${circleData.isProjectsPage ? "project" : "circle"}`);
+                console.error(`${circleData.isProjectsPage ? "Project" : "Circle"} creation error:`, error);
             }
         });
     };
@@ -125,8 +125,11 @@ export default function FinalStep({
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-2xl font-bold">Create Your Circle</h2>
-                <p className="text-gray-500">You&apos;re all set! Review your circle details and create your circle.</p>
+                <h2 className="text-2xl font-bold">Create Your {circleData.isProjectsPage ? "Project" : "Circle"}</h2>
+                <p className="text-gray-500">
+                    You&apos;re all set! Review your {circleData.isProjectsPage ? "project" : "circle"} details and
+                    create your {circleData.isProjectsPage ? "project" : "circle"}.
+                </p>
             </div>
 
             <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
@@ -135,7 +138,10 @@ export default function FinalStep({
                         <h3 className="text-sm font-semibold uppercase text-gray-500">Basic Info</h3>
                         <p className="text-lg font-medium">{circleData.name}</p>
                         <p className="text-sm text-gray-600">@{circleData.handle}</p>
-                        <p className="text-sm text-gray-600">{circleData.isPublic ? "Public" : "Private"} Circle</p>
+                        <p className="text-sm text-gray-600">
+                            {circleData.isPublic ? "Public" : "Private"}{" "}
+                            {circleData.isProjectsPage ? "Project" : "Circle"}
+                        </p>
                     </div>
 
                     <div>
@@ -204,7 +210,7 @@ export default function FinalStep({
                 {isCreated ? (
                     <Button onClick={handleViewCircle} className="rounded-full">
                         <Check className="mr-2 h-4 w-4" />
-                        View Circle
+                        View {circleData.isProjectsPage ? "Project" : "Circle"}
                         <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
                 ) : (
@@ -212,10 +218,10 @@ export default function FinalStep({
                         {isPending ? (
                             <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Creating Circle...
+                                Creating {circleData.isProjectsPage ? "Project" : "Circle"}...
                             </>
                         ) : (
-                            "Create Circle"
+                            `Create ${circleData.isProjectsPage ? "Project" : "Circle"}`
                         )}
                     </Button>
                 )}

@@ -174,25 +174,17 @@ const CirclesList = ({
                         onChange={(event) => setSearchQuery(event.target.value)}
                         className="flex-1"
                     />
-                    {canCreateSubcircle &&
-                        !inUser &&
-                        (isProjectsList ? (
-                            <div className="flex h-9 items-center">
-                                {React.createElement(require("../projects/create-project-dialog").CreateProjectDialog, {
-                                    parentCircle: circle,
-                                })}
-                            </div>
-                        ) : (
-                            <div className="flex h-9 items-center">
-                                {React.createElement(
-                                    require("@/components/circle-wizard/create-circle-dialog").CreateCircleDialog,
-                                    {
-                                        parentCircleId: circle?._id,
-                                        isProjectsPage: isProjectsList,
-                                    },
-                                )}
-                            </div>
-                        ))}
+                    {canCreateSubcircle && !inUser && (
+                        <div className="flex h-9 items-center">
+                            {React.createElement(
+                                require("@/components/circle-wizard/create-circle-dialog").CreateCircleDialog,
+                                {
+                                    parentCircleId: circle?._id,
+                                    isProjectsPage: isProjectsList,
+                                },
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 <ListFilter onFilterChange={handleFilterChange} />
