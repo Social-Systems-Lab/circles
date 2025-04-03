@@ -11,6 +11,13 @@ export const pagesFormSchema: FormSchema = {
     },
     fields: [
         {
+            name: "enabled",
+            label: "Enabled",
+            type: "switch",
+            description: "Enable or disable this page. Disabled pages won't appear in the navigation menu.",
+            showInHeader: true,
+        },
+        {
             name: "name",
             label: "Name",
             type: "text",
@@ -46,7 +53,7 @@ export const circlePagesFormSchema: FormSchema = {
     id: "circle-pages-form",
     title: "Pages",
     description:
-        "Manage the pages that appear in the circle's top navigation menu. These pages can be configured to use different modules, determining what kind of content and functionality they provide.",
+        "Manage the pages that appear in the circle's navigation menu. Enable or disable pages to control what functionality is available in your circle.",
     button: {
         text: "Save",
     },
@@ -59,16 +66,8 @@ export const circlePagesFormSchema: FormSchema = {
         {
             name: "pages",
             label: "Pages",
-            type: "table",
+            type: "pages",
             required: true,
-            itemSchema: pagesFormSchema,
-            ensureUniqueField: "handle",
-            defaultValue: {
-                name: "New Page",
-                handle: "new_page",
-                module: "members",
-                description: "New page",
-            },
         },
     ],
 };

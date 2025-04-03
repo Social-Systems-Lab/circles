@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState, useTransition } from "reac
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CirclePagesField } from "./circle-settings/pages/circle-pages-field";
 import {
     Control,
     Controller,
@@ -53,6 +54,7 @@ import { fetchCausesMatchedToCircle, fetchSkillsMatchedToCircle } from "../onboa
 import { ScrollArea } from "../ui/scroll-area";
 import { ItemGridCard } from "../onboarding/item-card";
 import SelectedItemBadge from "../onboarding/selected-item-badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
 
 type RenderFieldProps = {
     field: FormFieldType;
@@ -1010,6 +1012,47 @@ export const DynamicTagsField: React.FC<RenderFieldProps> = ({ field, formField,
     );
 };
 
+export const DynamicPagesField: React.FC<RenderFieldProps> = ({ field, formField, readOnly, isUser }) => {
+    const { setValue, watch } = useFormContext();
+    const pages: Page[] = watch("pages");
+
+    const handleToggle = (page: Page, enabled: boolean) => {
+        const updatedPages = pages.map((p: Page) => {
+            if (p.handle === page.handle) {
+                return { ...p, enabled };
+            }
+            return p;
+        });
+        setValue("pages", updatedPages);
+    };
+
+    return (
+        <FormItem>
+            <FormControl>
+                <div className="formatted space-y-4">
+                    {pages.map((page: Page) => (
+                        <Card key={page.handle}>
+                            <CardHeader className="pb-2">
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="text-lg">{page.name}</CardTitle>
+                                    <Switch
+                                        checked={page.enabled !== false}
+                                        onCheckedChange={(checked) => handleToggle(page, checked)}
+                                        disabled={page.readOnly}
+                                        aria-readonly={page.readOnly}
+                                    />
+                                </div>
+                                <CardDescription>{page.description}</CardDescription>
+                            </CardHeader>
+                        </Card>
+                    ))}
+                </div>
+            </FormControl>
+            <FormMessage />
+        </FormItem>
+    );
+};
+
 export const DynamicLocationField: React.FC<RenderFieldProps> = ({ field, formField, readOnly, isUser }) => {
     return (
         <FormItem>
@@ -1169,6 +1212,8 @@ export const DynamicField: React.FC<RenderFieldProps> = ({ field, formField, con
             return DynamicTagsField({ field, formField, control, readOnly, isUser });
         case "location":
             return DynamicLocationField({ field, formField, control, readOnly, isUser });
+        case "pages":
+            return DynamicPagesField({ field, formField, control, readOnly, isUser });
         case "skills":
         case "causes":
             return (

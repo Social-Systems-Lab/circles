@@ -362,6 +362,7 @@ export const pageSchema = z.object({
     description: z.string(),
     module: z.string(),
     readOnly: z.boolean().optional(),
+    enabled: z.boolean().default(true).optional(),
     defaultUserGroups: z.array(z.string()).optional(),
 });
 
@@ -616,7 +617,9 @@ export type FormFieldType =
     | "location"
     | "causes"
     | "skills"
-    | "auto-handle";
+    | "auto-handle"
+    | "custom"
+    | "pages";
 
 export type FormField = {
     name: string;
@@ -638,6 +641,7 @@ export type FormField = {
     ensureUniqueField?: string;
     defaultValue?: any;
     disabled?: boolean;
+    component?: string; // For custom field components
 };
 
 export type UserAndCircleInfo = {

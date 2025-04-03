@@ -4,7 +4,14 @@ import { Circle, CircleType, PlatformMetrics, Post, ServerSettings, SortingOptio
 import { getServerSettings } from "./server-settings";
 import { Circles, Members, MembershipRequests, Feeds, Posts, ChatRooms } from "./db";
 import { ObjectId } from "mongodb";
-import { getDefaultAccessRules, defaultUserGroups, defaultPages, defaultPagesForProjects, features } from "./constants";
+import {
+    getDefaultAccessRules,
+    defaultUserGroups,
+    defaultPages,
+    defaultPagesForProjects,
+    features,
+    getAllModulePages,
+} from "./constants";
 import { getMetrics } from "../utils/metrics";
 import { deleteVbdCircle, deleteVbdPost, upsertVbdCircles } from "./vdb";
 import { createDefaultChatRooms, getChatRoomByHandle, updateChatRoom } from "./chat";
@@ -171,6 +178,21 @@ export const getMetricsForCircles = async (circles: WithMetric<Circle>[], userDi
 };
 
 export const createDefaultCircle = (): Circle => {
+    // Get all available module pages with enabled=false by default
+    const allPages = getAllModulePages();
+
+    // Enable the default pages
+    for (const page of allPages) {
+        // Check if this page should be enabled by default
+        const defaultPage = defaultPages.find((p) => p.handle === page.handle);
+        if (defaultPage) {
+            page.enabled = true;
+            // Copy any other properties from the default page
+            page.defaultUserGroups = defaultPage.defaultUserGroups;
+            page.readOnly = defaultPage.readOnly;
+        }
+    }
+
     let circle: Circle = {
         name: "Circles",
         description: "Connect. Collaborate. Create Change.",
@@ -179,7 +201,7 @@ export const createDefaultCircle = (): Circle => {
         cover: { url: "/images/default-cover.png" },
         userGroups: defaultUserGroups,
         accessRules: getDefaultAccessRules(),
-        pages: defaultPages,
+        pages: allPages,
         questionnaire: [],
         isPublic: true,
         circleType: "circle",
@@ -200,8 +222,28 @@ export const createCircle = async (circle: Circle): Promise<Circle> => {
 
     circle.createdAt = new Date();
     circle.userGroups = defaultUserGroups;
+
+    // Get all available module pages with enabled=false by default
+    const allPages = getAllModulePages();
+
+    // Get default pages based on circle type
+    const defaultPagesToEnable = circle.circleType === "project" ? defaultPagesForProjects : defaultPages;
+
+    // Enable the default pages
+    for (const page of allPages) {
+        // Check if this page should be enabled by default
+        const defaultPage = defaultPagesToEnable.find((p) => p.handle === page.handle);
+        if (defaultPage) {
+            page.enabled = true;
+            // Copy any other properties from the default page
+            page.defaultUserGroups = defaultPage.defaultUserGroups;
+            page.readOnly = defaultPage.readOnly;
+        }
+    }
+
+    // Set the pages and access rules
+    circle.pages = allPages;
     circle.accessRules = getDefaultAccessRules();
-    circle.pages = circle.circleType === "project" ? defaultPagesForProjects : defaultPages;
     circle.questionnaire = [];
     circle.circleType = circle.circleType || "circle";
 

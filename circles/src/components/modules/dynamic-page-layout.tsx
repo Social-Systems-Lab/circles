@@ -32,8 +32,8 @@ export const DynamicPageLayout = async ({
     }
 
     let page = circle?.pages?.find((p) => p.handle === pageHandle);
-    if (!page) {
-        // redirect to not-found
+    if (!page || page.enabled === false) {
+        // redirect to not-found if page doesn't exist or is disabled
         redirect(`/not-found`);
     }
 

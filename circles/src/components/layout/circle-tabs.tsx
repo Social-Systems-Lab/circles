@@ -43,8 +43,11 @@ export function CircleTabs({ circle, isDefaultCircle }: CircleTabsProps) {
         [circle.accessRules, userGroups],
     );
 
-    // Filter pages based on user access
-    const authorizedPages = useMemo(() => circle?.pages?.filter(hasAccess) ?? [], [circle.pages, hasAccess]);
+    // Filter pages based on user access and enabled status
+    const authorizedPages = useMemo(
+        () => circle?.pages?.filter((page) => hasAccess(page) && page.enabled !== false) ?? [],
+        [circle.pages, hasAccess],
+    );
 
     // Generate the correct path for a page based on default circle status
     const getPath = useCallback(

@@ -54,6 +54,52 @@ export const features = {
     },
 };
 
+export const chatFeaturePrefix = "__chat_";
+export const chatFeatures: Feature[] = [
+    {
+        name: "View",
+        handle: "view",
+        description: "View the chat messages",
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Moderate",
+        handle: "moderate",
+        description: "Moderate chat messages in the chat",
+        defaultUserGroups: ["admins", "moderators"],
+    },
+];
+
+export const feedFeaturePrefix = "__feed_";
+export const feedFeatures: Feature[] = [
+    {
+        name: "View",
+        handle: "view",
+        description: "View the feed",
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Post",
+        handle: "post",
+        description: "Create a post in the feed",
+        defaultUserGroups: ["admins", "moderators", "members"],
+    },
+    {
+        name: "Comment",
+        handle: "comment",
+        description: "Comment on posts in the feed",
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Moderate",
+        handle: "moderate",
+        description: "Moderate posts in the feed",
+        defaultUserGroups: ["admins", "moderators"],
+    },
+];
+
+export const pageFeaturePrefix = "__page_";
+
 export const maxAccessLevel = 9999999;
 
 // default user groups that all circles will be created with
@@ -111,6 +157,249 @@ export const defaultUserGroupsForUser: UserGroup[] = [
         readOnly: true,
     },
 ];
+
+// All available module pages
+export const getAllModulePages = (): Page[] => {
+    return [
+        {
+            name: "Feed",
+            handle: "feeds",
+            description: "Feed page",
+            module: "feeds",
+            readOnly: true,
+            enabled: false,
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+        },
+        {
+            name: "Followers",
+            handle: "members",
+            description: "Followers page",
+            module: "members",
+            enabled: false,
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+        },
+        {
+            name: "Circles",
+            handle: "circles",
+            description: "Circles page",
+            module: "circles",
+            enabled: false,
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+        },
+        {
+            name: "Projects",
+            handle: "projects",
+            description: "Projects page",
+            module: "projects",
+            enabled: false,
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+        },
+        {
+            name: "Settings",
+            handle: "settings",
+            description: "Settings page",
+            module: "settings",
+            readOnly: true,
+            enabled: false,
+            defaultUserGroups: ["admins"],
+        },
+    ];
+};
+
+// default pages every circle will be created with
+export const defaultPages: Page[] = [
+    {
+        name: "Feed",
+        handle: "feeds",
+        description: "Feed page",
+        module: "feeds",
+        readOnly: true,
+        enabled: true,
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Followers",
+        handle: "members",
+        description: "Followers page",
+        module: "members",
+        enabled: true,
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Projects",
+        handle: "projects",
+        description: "Projects page",
+        module: "projects",
+        enabled: true,
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Settings",
+        handle: "settings",
+        description: "Settings page",
+        module: "settings",
+        readOnly: true,
+        enabled: true,
+        defaultUserGroups: ["admins"],
+    },
+];
+
+// default pages every user will be created with
+export const defaultPagesForUser: Page[] = [
+    {
+        name: "Feed",
+        handle: "feeds",
+        description: "Feed page",
+        module: "feeds",
+        readOnly: true,
+        enabled: true,
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Followers",
+        handle: "friends",
+        description: "Followers page",
+        module: "members",
+        enabled: true,
+        defaultUserGroups: ["admins", "moderators", "members"],
+    },
+    {
+        name: "Circles",
+        handle: "circles",
+        description: "Circles page",
+        module: "circles",
+        enabled: true,
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Projects",
+        handle: "projects",
+        description: "Projects page",
+        module: "projects",
+        enabled: true,
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Settings",
+        handle: "settings",
+        description: "Settings page",
+        module: "settings",
+        readOnly: true,
+        enabled: true,
+        defaultUserGroups: ["admins"],
+    },
+];
+
+export const defaultPagesForProjects: Page[] = [
+    {
+        name: "Feed",
+        handle: "feeds",
+        description: "Feed page",
+        module: "feeds",
+        readOnly: true,
+        enabled: true,
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
+        name: "Followers",
+        handle: "friends",
+        description: "Followers page",
+        module: "members",
+        enabled: true,
+        defaultUserGroups: ["admins", "moderators", "members"],
+    },
+    {
+        name: "Settings",
+        handle: "settings",
+        description: "Settings page",
+        module: "settings",
+        readOnly: true,
+        enabled: true,
+        defaultUserGroups: ["admins"],
+    },
+];
+
+// Get features for a specific module
+export const getModuleFeatures = (moduleHandle: string): Feature[] => {
+    switch (moduleHandle) {
+        case "feeds":
+            return feedFeatures;
+        case "chat":
+            return chatFeatures;
+        default:
+            return [];
+    }
+};
+
+// Get module feature prefix for a specific module
+export const getModuleFeaturePrefix = (moduleHandle: string): string => {
+    switch (moduleHandle) {
+        case "feeds":
+            return feedFeaturePrefix;
+        case "chat":
+            return chatFeaturePrefix;
+        default:
+            return "";
+    }
+};
+
+export const getDefaultAccessRules = () => {
+    let accessRules: Record<string, string[]> = {};
+
+    // Add general features
+    for (let feature in features) {
+        accessRules[feature] = (features as { [key: string]: Feature })[feature].defaultUserGroups ?? [];
+    }
+
+    // Add page access rules
+    for (let page of defaultPages) {
+        if (page.enabled) {
+            // Add page access rule
+            accessRules[pageFeaturePrefix + page.handle] = page.defaultUserGroups ?? [];
+
+            // Add module-specific features for this page
+            const moduleFeatures = getModuleFeatures(page.module);
+            const modulePrefix = getModuleFeaturePrefix(page.module);
+
+            if (moduleFeatures.length > 0 && modulePrefix) {
+                for (let feature of moduleFeatures) {
+                    accessRules[modulePrefix + page.handle + "_" + feature.handle] = feature.defaultUserGroups ?? [];
+                }
+            }
+        }
+    }
+
+    return accessRules;
+};
+
+export const getDefaultAccessRulesForUser = () => {
+    let accessRules: Record<string, string[]> = {};
+
+    // Add general features
+    for (let feature in features) {
+        accessRules[feature] = (features as { [key: string]: Feature })[feature].defaultUserGroups ?? [];
+    }
+
+    // Add page access rules
+    for (let page of defaultPagesForUser) {
+        if (page.enabled) {
+            // Add page access rule
+            accessRules[pageFeaturePrefix + page.handle] = page.defaultUserGroups ?? [];
+
+            // Add module-specific features for this page
+            const moduleFeatures = getModuleFeatures(page.module);
+            const modulePrefix = getModuleFeaturePrefix(page.module);
+
+            if (moduleFeatures.length > 0 && modulePrefix) {
+                for (let feature of moduleFeatures) {
+                    accessRules[modulePrefix + page.handle + "_" + feature.handle] = feature.defaultUserGroups ?? [];
+                }
+            }
+        }
+    }
+
+    return accessRules;
+};
 
 export const causes: Cause[] = [
     {
@@ -525,200 +814,3 @@ export const skills: Skill[] = [
         description: "Analyzing gender and its intersections with other social categories.",
     },
 ];
-
-// default pages every circle will be created with
-export const defaultPages: Page[] = [
-    // {
-    //     name: "Home",
-    //     handle: "",
-    //     description: "Home page",
-    //     module: "home",
-    //     readOnly: true,
-    //     defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    // },
-    {
-        name: "Feed",
-        handle: "feeds",
-        description: "Feed page",
-        module: "feeds",
-        readOnly: true,
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Followers",
-        handle: "members",
-        description: "Followers page",
-        module: "members",
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Projects",
-        handle: "projects",
-        description: "Projects page",
-        module: "projects",
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Settings",
-        handle: "settings",
-        description: "Settings page",
-        module: "settings",
-        readOnly: true,
-        defaultUserGroups: ["admins"],
-    },
-];
-
-// default pages every circle will be created with
-export const defaultPagesForUser: Page[] = [
-    // {
-    //     name: "Home",
-    //     handle: "",
-    //     description: "Home page",
-    //     module: "home",
-    //     readOnly: true,
-    //     defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    // },
-    {
-        name: "Feed",
-        handle: "feeds",
-        description: "Feed page",
-        module: "feeds",
-        readOnly: true,
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Followers",
-        handle: "friends",
-        description: "Followers page",
-        module: "members",
-        defaultUserGroups: ["admins", "moderators", "members"],
-    },
-    {
-        name: "Circles",
-        handle: "circles",
-        description: "Circles page",
-        module: "circles",
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Projects",
-        handle: "projects",
-        description: "Projects page",
-        module: "projects",
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Settings",
-        handle: "settings",
-        description: "Settings page",
-        module: "settings",
-        readOnly: true,
-        defaultUserGroups: ["admins"],
-    },
-];
-
-export const defaultPagesForProjects: Page[] = [
-    // {
-    //     name: "Home",
-    //     handle: "",
-    //     description: "Home page",
-    //     module: "home",
-    //     readOnly: true,
-    //     defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    // },
-    {
-        name: "Feed",
-        handle: "feeds",
-        description: "Feed page",
-        module: "feeds",
-        readOnly: true,
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Followers",
-        handle: "friends",
-        description: "Followers page",
-        module: "members",
-        defaultUserGroups: ["admins", "moderators", "members"],
-    },
-    {
-        name: "Settings",
-        handle: "settings",
-        description: "Settings page",
-        module: "settings",
-        readOnly: true,
-        defaultUserGroups: ["admins"],
-    },
-];
-
-export const chatFeaturePrefix = "__chat_";
-export const chatFeatures: Feature[] = [
-    {
-        name: "View",
-        handle: "view",
-        description: "View the chat messages",
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Moderate",
-        handle: "moderate",
-        description: "Moderate chat messages in the chat",
-        defaultUserGroups: ["admins", "moderators"],
-    },
-];
-
-export const feedFeaturePrefix = "__feed_";
-export const feedFeatures: Feature[] = [
-    {
-        name: "View",
-        handle: "view",
-        description: "View the feed",
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Post",
-        handle: "post",
-        description: "Create a post in the feed",
-        defaultUserGroups: ["admins", "moderators", "members"],
-    },
-    {
-        name: "Comment",
-        handle: "comment",
-        description: "Comment on posts in the feed",
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Moderate",
-        handle: "moderate",
-        description: "Moderate posts in the feed",
-        defaultUserGroups: ["admins", "moderators"],
-    },
-];
-
-export const pageFeaturePrefix = "__page_";
-
-export const getDefaultAccessRules = () => {
-    let accessRules: Record<string, string[]> = {};
-    for (let feature in features) {
-        accessRules[feature] = (features as { [key: string]: Feature })[feature].defaultUserGroups ?? [];
-    }
-    // add default access rules for default pages
-    for (let page of defaultPages) {
-        accessRules[pageFeaturePrefix + page.handle] = page.defaultUserGroups ?? [];
-    }
-
-    return accessRules;
-};
-
-export const getDefaultAccessRulesForUser = () => {
-    let accessRules: Record<string, string[]> = {};
-    for (let feature in features) {
-        accessRules[feature] = (features as { [key: string]: Feature })[feature].defaultUserGroups ?? [];
-    }
-    // add default access rules for default pages
-    for (let page of defaultPagesForUser) {
-        accessRules[pageFeaturePrefix + page.handle] = page.defaultUserGroups ?? [];
-    }
-
-    return accessRules;
-};

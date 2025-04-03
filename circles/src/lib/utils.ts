@@ -3,7 +3,15 @@
 import { ChatRoom, Circle, Content, Feed, Location, Page } from "@/models/models";
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { chatFeaturePrefix, chatFeatures, feedFeaturePrefix, feedFeatures, pageFeaturePrefix } from "./data/constants";
+import {
+    chatFeaturePrefix,
+    chatFeatures,
+    feedFeaturePrefix,
+    feedFeatures,
+    pageFeaturePrefix,
+    getModuleFeatures,
+    getModuleFeaturePrefix,
+} from "./data/constants";
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -63,18 +71,67 @@ export function addPagesAccessRules(
     pages: Page[],
     existingAccessRules: Record<string, string[]>,
 ): Record<string, string[]> {
-    // add rule for page if it doesn't exist
+    // Add or update rules for enabled pages
     for (const page of pages) {
-        if (!existingAccessRules[pageFeaturePrefix + page.handle]) {
-            existingAccessRules[pageFeaturePrefix + page.handle] = ["admins", "moderators", "members"]; // TODO add default access rules based on page type
+        if (page.enabled) {
+            // Add page access rule if it doesn't exist
+            if (!existingAccessRules[pageFeaturePrefix + page.handle]) {
+                existingAccessRules[pageFeaturePrefix + page.handle] = page.defaultUserGroups ?? [
+                    "admins",
+                    "moderators",
+                    "members",
+                ];
+            }
+
+            // Add module-specific features for this page
+            const moduleFeatures = getModuleFeatures(page.module);
+            const modulePrefix = getModuleFeaturePrefix(page.module);
+
+            if (moduleFeatures.length > 0 && modulePrefix) {
+                for (const feature of moduleFeatures) {
+                    const featureKey = modulePrefix + page.handle + "_" + feature.handle;
+                    if (!existingAccessRules[featureKey]) {
+                        existingAccessRules[featureKey] = feature.defaultUserGroups ?? [
+                            "admins",
+                            "moderators",
+                            "members",
+                        ];
+                    }
+                }
+            }
+        } else {
+            // Remove access rules for disabled pages
+            existingAccessRules[pageFeaturePrefix + page.handle] = ["admins"];
+
+            // Remove module-specific features for this page
+            const modulePrefix = getModuleFeaturePrefix(page.module);
+            if (modulePrefix) {
+                for (const rule in existingAccessRules) {
+                    if (rule.startsWith(modulePrefix + page.handle + "_")) {
+                        delete existingAccessRules[rule];
+                    }
+                }
+            }
         }
     }
 
-    // remove rules for pages that don't exist
+    // Remove rules for pages that don't exist
     for (const rule in existingAccessRules) {
         if (rule.startsWith(pageFeaturePrefix)) {
             const handle = rule.replace(pageFeaturePrefix, "");
             if (!pages.find((page) => page.handle === handle)) {
+                delete existingAccessRules[rule];
+            }
+        }
+    }
+
+    // Remove module-specific features for pages that don't exist
+    for (const rule in existingAccessRules) {
+        const modulePrefix = getModuleFeaturePrefix("feeds"); // Check feed features
+        if (modulePrefix && rule.startsWith(modulePrefix)) {
+            const parts = rule.replace(modulePrefix, "").split("_");
+            const pageHandle = parts[0];
+            if (!pages.find((page) => page.handle === pageHandle)) {
                 delete existingAccessRules[rule];
             }
         }
