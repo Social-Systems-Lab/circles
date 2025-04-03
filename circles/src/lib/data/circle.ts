@@ -35,6 +35,7 @@ export const SAFE_CIRCLE_PROJECTION = {
     isPublic: 1,
     userGroups: 1,
     pages: 1,
+    enabledModules: 1,
     accessRules: 1,
     members: 1,
     questionnaire: 1,
@@ -178,18 +179,33 @@ export const getMetricsForCircles = async (circles: WithMetric<Circle>[], userDi
 };
 
 export const createDefaultCircle = (): Circle => {
+    // Default enabled modules
+    const defaultModules = ["feed", "followers", "circles", "projects", "settings"];
+
     // Get all available module pages with enabled=false by default
     const allPages = getAllModulePages();
 
-    // Enable the default pages
+    // Enable the pages that correspond to enabled modules
     for (const page of allPages) {
-        // Check if this page should be enabled by default
-        const defaultPage = defaultPages.find((p) => p.handle === page.handle);
-        if (defaultPage) {
+        // Check if the corresponding module is enabled
+        const moduleHandle = page.module;
+        const moduleEnabled = defaultModules.includes(
+            moduleHandle === "feeds" ? "feed" : moduleHandle === "members" ? "followers" : moduleHandle,
+        );
+
+        if (moduleEnabled) {
             page.enabled = true;
-            // Copy any other properties from the default page
-            page.defaultUserGroups = defaultPage.defaultUserGroups;
-            page.readOnly = defaultPage.readOnly;
+
+            // Set default user groups and readOnly status
+            if (moduleHandle === "feeds" || moduleHandle === "settings") {
+                page.readOnly = true;
+            }
+
+            if (moduleHandle === "settings") {
+                page.defaultUserGroups = ["admins"];
+            } else {
+                page.defaultUserGroups = ["admins", "moderators", "members", "everyone"];
+            }
         }
     }
 
@@ -200,7 +216,8 @@ export const createDefaultCircle = (): Circle => {
         picture: { url: "/images/default-picture.png" },
         cover: { url: "/images/default-cover.png" },
         userGroups: defaultUserGroups,
-        accessRules: getDefaultAccessRules(),
+        enabledModules: defaultModules,
+        accessRules: getDefaultAccessRules(defaultModules),
         pages: allPages,
         questionnaire: [],
         isPublic: true,
@@ -223,27 +240,48 @@ export const createCircle = async (circle: Circle): Promise<Circle> => {
     circle.createdAt = new Date();
     circle.userGroups = defaultUserGroups;
 
+    // Set default enabled modules based on circle type
+    const defaultModules = ["feed", "followers", "settings"];
+
+    // Add circles and projects modules for regular circles
+    if (circle.circleType !== "project") {
+        defaultModules.push("circles", "projects");
+    }
+
+    // Set the enabledModules
+    circle.enabledModules = circle.enabledModules || defaultModules;
+
+    // For backward compatibility, also set pages
     // Get all available module pages with enabled=false by default
     const allPages = getAllModulePages();
 
-    // Get default pages based on circle type
-    const defaultPagesToEnable = circle.circleType === "project" ? defaultPagesForProjects : defaultPages;
-
-    // Enable the default pages
+    // Enable the pages that correspond to enabled modules
     for (const page of allPages) {
-        // Check if this page should be enabled by default
-        const defaultPage = defaultPagesToEnable.find((p) => p.handle === page.handle);
-        if (defaultPage) {
+        // Check if the corresponding module is enabled
+        const moduleHandle = page.module;
+        const moduleEnabled = circle.enabledModules.includes(
+            moduleHandle === "feeds" ? "feed" : moduleHandle === "members" ? "followers" : moduleHandle,
+        );
+
+        if (moduleEnabled) {
             page.enabled = true;
-            // Copy any other properties from the default page
-            page.defaultUserGroups = defaultPage.defaultUserGroups;
-            page.readOnly = defaultPage.readOnly;
+
+            // Set default user groups and readOnly status
+            if (moduleHandle === "feeds" || moduleHandle === "settings") {
+                page.readOnly = true;
+            }
+
+            if (moduleHandle === "settings") {
+                page.defaultUserGroups = ["admins"];
+            } else {
+                page.defaultUserGroups = ["admins", "moderators", "members", "everyone"];
+            }
         }
     }
 
     // Set the pages and access rules
     circle.pages = allPages;
-    circle.accessRules = getDefaultAccessRules();
+    circle.accessRules = getDefaultAccessRules(circle.enabledModules);
     circle.questionnaire = [];
     circle.circleType = circle.circleType || "circle";
 

@@ -343,7 +343,7 @@ export const getModuleFeaturePrefix = (moduleHandle: string): string => {
     }
 };
 
-export const getDefaultAccessRules = () => {
+export const getDefaultAccessRules = (enabledModules?: string[]) => {
     let accessRules: Record<string, string[]> = {};
 
     // Add general features
@@ -351,19 +351,47 @@ export const getDefaultAccessRules = () => {
         accessRules[feature] = (features as { [key: string]: Feature })[feature].defaultUserGroups ?? [];
     }
 
-    // Add page access rules
-    for (let page of defaultPages) {
-        if (page.enabled) {
-            // Add page access rule
-            accessRules[pageFeaturePrefix + page.handle] = page.defaultUserGroups ?? [];
+    // If no enabledModules provided, use the default pages approach for backward compatibility
+    if (!enabledModules || enabledModules.length === 0) {
+        // Add page access rules
+        for (let page of defaultPages) {
+            if (page.enabled) {
+                // Add page access rule
+                accessRules[pageFeaturePrefix + page.handle] = page.defaultUserGroups ?? [];
 
-            // Add module-specific features for this page
-            const moduleFeatures = getModuleFeatures(page.module);
-            const modulePrefix = getModuleFeaturePrefix(page.module);
+                // Add module-specific features for this page
+                const moduleFeatures = getModuleFeatures(page.module);
+                const modulePrefix = getModuleFeaturePrefix(page.module);
+
+                if (moduleFeatures.length > 0 && modulePrefix) {
+                    for (let feature of moduleFeatures) {
+                        accessRules[modulePrefix + page.handle + "_" + feature.handle] =
+                            feature.defaultUserGroups ?? [];
+                    }
+                }
+            }
+        }
+    } else {
+        // Add module access rules
+        for (let moduleHandle of enabledModules) {
+            // Map module handles to page handles for backward compatibility
+            const pageHandle =
+                moduleHandle === "feed" ? "feeds" : moduleHandle === "followers" ? "members" : moduleHandle;
+
+            // Add module access rule
+            accessRules["__module_" + moduleHandle] = ["admins", "moderators", "members", "everyone"];
+
+            // Also add page access rule for backward compatibility
+            accessRules[pageFeaturePrefix + pageHandle] =
+                moduleHandle === "settings" ? ["admins"] : ["admins", "moderators", "members", "everyone"];
+
+            // Add module-specific features
+            const moduleFeatures = getModuleFeatures(pageHandle);
+            const modulePrefix = getModuleFeaturePrefix(pageHandle);
 
             if (moduleFeatures.length > 0 && modulePrefix) {
                 for (let feature of moduleFeatures) {
-                    accessRules[modulePrefix + page.handle + "_" + feature.handle] = feature.defaultUserGroups ?? [];
+                    accessRules[modulePrefix + pageHandle + "_" + feature.handle] = feature.defaultUserGroups ?? [];
                 }
             }
         }

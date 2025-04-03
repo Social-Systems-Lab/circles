@@ -10,13 +10,13 @@ import ChatModule from "./chat/chat";
 import ChatModuleLayout from "./chat/chat-layout";
 
 export const modules: Record<string, Module> = {
-    // home: {
-    //     name: "Home",
-    //     handle: "home",
-    //     description: "Landing page",
-    //     excludeFromMenu: true,
-    //     defaultIcon: "AiOutlineHome",
-    // },
+    home: {
+        name: "Home",
+        handle: "home",
+        description: "Landing page",
+        component: FeedsModule, // Temporarily using FeedsModule until Home module is implemented
+        defaultIcon: "AiOutlineHome",
+    },
     projects: {
         name: "Projects",
         handle: "projects",
@@ -33,9 +33,9 @@ export const modules: Record<string, Module> = {
         excludeFromMenu: true,
         defaultIcon: "AiOutlineSetting",
     },
-    members: {
+    followers: {
         name: "Followers",
-        handle: "members",
+        handle: "followers",
         description: "Followers page",
         component: MembersModule,
         defaultIcon: "AiOutlineContacts",
@@ -47,9 +47,9 @@ export const modules: Record<string, Module> = {
         component: CirclesModule,
         defaultIcon: "FaRegCircle",
     },
-    feeds: {
+    feed: {
         name: "Feed",
-        handle: "feeds",
+        handle: "feed",
         description: "Feed page",
         component: FeedsModule,
         layoutComponent: FeedsModuleLayout,

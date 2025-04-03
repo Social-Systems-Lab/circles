@@ -6,14 +6,14 @@ import { getUserByHandle } from "@/lib/data/user";
 
 export type DynamicLayoutPageProps = {
     circleHandle?: string;
-    pageHandle?: string;
+    moduleHandle?: string;
     isDefaultCircle: boolean;
     children: React.ReactNode;
 };
 
 export type ModuleLayoutPageProps = {
     circle: Circle;
-    page: Page;
+    moduleHandle: string;
     isDefaultCircle: boolean;
     children: React.ReactNode;
 };
@@ -21,7 +21,7 @@ export type ModuleLayoutPageProps = {
 export const DynamicPageLayout = async ({
     children,
     circleHandle,
-    pageHandle,
+    moduleHandle,
     isDefaultCircle,
 }: DynamicLayoutPageProps) => {
     let circle: Circle = {};
@@ -31,21 +31,35 @@ export const DynamicPageLayout = async ({
         circle = await getCircleByHandle(circleHandle);
     }
 
-    let page = circle?.pages?.find((p) => p.handle === pageHandle);
-    if (!page || page.enabled === false) {
-        // redirect to not-found if page doesn't exist or is disabled
+    // Check if the module is enabled for this circle
+    const enabledModules = circle.enabledModules || [];
+    const isModuleEnabled = enabledModules.includes(moduleHandle || "");
+
+    // For backward compatibility, also check pages
+    const isEnabledInPages = circle.pages?.some((p) => p.module === moduleHandle && p.enabled !== false);
+
+    if (!isModuleEnabled && !isEnabledInPages) {
+        // Redirect to not-found if module is not enabled
         redirect(`/not-found`);
     }
 
-    let _module = modules[page.module];
+    let _module = modules[moduleHandle || ""];
     if (!_module) {
-        // redirect to not-found
+        // Redirect to not-found if module doesn't exist
         redirect(`/not-found`);
     }
 
     if (!_module.layoutComponent) {
         return <>{children}</>;
     }
+
+    // Create a synthetic page object for backward compatibility
+    const page: Page = {
+        name: _module.name,
+        handle: _module.handle,
+        description: _module.description,
+        module: _module.handle,
+    };
 
     return (
         <_module.layoutComponent circle={circle} page={page} isDefaultCircle={isDefaultCircle}>

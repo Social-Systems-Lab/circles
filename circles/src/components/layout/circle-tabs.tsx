@@ -8,8 +8,9 @@ import { cn } from "@/lib/utils";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { useMemo, useCallback, useEffect } from "react";
-import type { Circle, Page } from "@/models/models";
+import type { Circle } from "@/models/models";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import { modules } from "@/components/modules/modules";
 
 type CircleTabsProps = {
     circle: Circle;
@@ -32,10 +33,10 @@ export function CircleTabs({ circle, isDefaultCircle }: CircleTabsProps) {
         return membership ? membership.userGroups : [];
     }, [user, circle?._id]);
 
-    // Check if the user has access to a specific page
+    // Check if the user has access to a specific module
     const hasAccess = useCallback(
-        (page: Page) => {
-            const allowedUserGroups = circle.accessRules?.[`__page_${page.handle}`] || [];
+        (moduleHandle: string) => {
+            const allowedUserGroups = circle.accessRules?.[`__module_${moduleHandle}`] || [];
             return (
                 allowedUserGroups.includes("everyone") || userGroups.some((group) => allowedUserGroups.includes(group))
             );
@@ -43,19 +44,30 @@ export function CircleTabs({ circle, isDefaultCircle }: CircleTabsProps) {
         [circle.accessRules, userGroups],
     );
 
-    // Filter pages based on user access and enabled status
-    const authorizedPages = useMemo(
-        () => circle?.pages?.filter((page) => hasAccess(page) && page.enabled !== false) ?? [],
-        [circle.pages, hasAccess],
-    );
+    // For backward compatibility, check if we should use pages or enabledModules
+    const enabledModules = useMemo(() => {
+        if (circle.enabledModules && circle.enabledModules.length > 0) {
+            return circle.enabledModules;
+        }
 
-    // Generate the correct path for a page based on default circle status
+        // Fallback to pages for backward compatibility
+        return circle.pages?.filter((p) => p.enabled !== false).map((p) => p.module) || [];
+    }, [circle.enabledModules, circle.pages]);
+
+    // Filter modules based on enabledModules and excludeFromMenu
+    const visibleModules = useMemo(() => {
+        return Object.values(modules).filter(
+            (module) => enabledModules.includes(module.handle) && !module.excludeFromMenu && hasAccess(module.handle),
+        );
+    }, [enabledModules, hasAccess]);
+
+    // Generate the correct path for a module based on default circle status
     const getPath = useCallback(
-        (page: Page) => {
+        (moduleHandle: string) => {
             if (isDefaultCircle) {
-                return `/${page.handle}`;
+                return `/${moduleHandle}`;
             } else {
-                return `/circles/${circle.handle}${page.handle ? `/${page.handle}` : ""}`;
+                return `/circles/${circle.handle}/${moduleHandle}`;
             }
         },
         [isDefaultCircle, circle.handle],
@@ -65,14 +77,14 @@ export function CircleTabs({ circle, isDefaultCircle }: CircleTabsProps) {
         <div>
             <div className="mx-auto max-w-6xl px-4 pt-2">
                 <nav className="flex gap-1" aria-label="Tabs">
-                    {authorizedPages.map((page) => {
-                        const pagePath = getPath(page);
-                        const isActive = page.handle === "" ? pathname === pagePath : pathname.startsWith(pagePath);
+                    {visibleModules.map((module) => {
+                        const modulePath = getPath(module.handle);
+                        const isActive = pathname.startsWith(modulePath);
 
                         return (
                             <Link
-                                key={page.handle}
-                                href={pagePath}
+                                key={module.handle}
+                                href={modulePath}
                                 className={cn(
                                     "rounded-t-lg px-4 py-2 text-sm font-medium",
                                     isActive
@@ -80,7 +92,7 @@ export function CircleTabs({ circle, isDefaultCircle }: CircleTabsProps) {
                                         : "text-muted-foreground hover:bg-muted hover:text-foreground",
                                 )}
                             >
-                                {page.name}
+                                {module.name}
                             </Link>
                         );
                     })}

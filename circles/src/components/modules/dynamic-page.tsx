@@ -6,7 +6,7 @@ import { getUserByHandle } from "@/lib/data/user";
 
 export type DynamicPageProps = {
     circleHandle?: string;
-    pageHandle?: string;
+    moduleHandle?: string;
     subpage?: string;
     isDefaultCircle: boolean;
     searchParams?: { [key: string]: string | string[] | undefined };
@@ -14,7 +14,7 @@ export type DynamicPageProps = {
 
 export type ModulePageProps = {
     circle: Circle;
-    page: Page;
+    moduleHandle: string;
     isDefaultCircle: boolean;
     subpage?: string;
     searchParams?: { [key: string]: string | string[] | undefined };
@@ -22,7 +22,7 @@ export type ModulePageProps = {
 
 export default async function DynamicPage({
     circleHandle,
-    pageHandle,
+    moduleHandle,
     subpage,
     isDefaultCircle,
     searchParams,
@@ -34,17 +34,31 @@ export default async function DynamicPage({
         circle = await getCircleByHandle(circleHandle);
     }
 
-    let page = circle?.pages?.find((p) => p.handle === pageHandle);
-    if (!page || page.enabled === false) {
-        // redirect to not-found if page doesn't exist or is disabled
+    // Check if the module is enabled for this circle
+    const enabledModules = circle.enabledModules || [];
+    const isModuleEnabled = enabledModules.includes(moduleHandle || "");
+
+    // For backward compatibility, also check pages
+    const isEnabledInPages = circle.pages?.some((p) => p.module === moduleHandle && p.enabled !== false);
+
+    if (!isModuleEnabled && !isEnabledInPages) {
+        // Redirect to not-found if module is not enabled
         redirect(`/not-found`);
     }
 
-    let _module = modules[page.module];
+    let _module = modules[moduleHandle || ""];
     if (!_module) {
-        // redirect to not-found
+        // Redirect to not-found if module doesn't exist
         redirect(`/not-found`);
     }
+
+    // Create a synthetic page object for backward compatibility
+    const page: Page = {
+        name: _module.name,
+        handle: _module.handle,
+        description: _module.description,
+        module: _module.handle,
+    };
 
     return (
         <_module.component
