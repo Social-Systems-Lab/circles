@@ -9,15 +9,7 @@ import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
-export default function CircleMenu({
-    circle,
-    defaultCircle,
-    isDefaultCircle,
-}: {
-    circle: Circle;
-    defaultCircle: Circle;
-    isDefaultCircle: boolean;
-}) {
+export default function CircleMenu({ circle, defaultCircle }: { circle: Circle; defaultCircle: Circle }) {
     const [circleMenuOpen, setCircleMenuOpen] = useState(false);
     const [user, setUser] = useAtom(userAtom);
     const router = useRouter();

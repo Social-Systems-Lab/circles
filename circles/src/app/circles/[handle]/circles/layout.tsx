@@ -10,7 +10,7 @@ export default async function CirclesLayout(props: LayoutProps) {
     const { children } = props;
 
     return (
-        <DynamicPageLayout moduleHandle="circles" circleHandle={params.handle} isDefaultCircle={false}>
+        <DynamicPageLayout moduleHandle="circles" circleHandle={params.handle}>
             {children}
         </DynamicPageLayout>
     );

@@ -6,7 +6,7 @@ import { ChatLayoutWrapper } from "./chat-layout-wrapper";
 import { redirect } from "next/navigation";
 import { ChatRoom } from "@/models/models";
 
-export default async function ChatLayout({ children, circle, page, isDefaultCircle }: ModuleLayoutPageProps) {
+export default async function ChatLayout({ children, circle, page }: ModuleLayoutPageProps) {
     // get chat-rooms
     let chatRooms = await getChatRooms(circle?._id);
     if (!chatRooms || chatRooms.length === 0) {
@@ -21,7 +21,7 @@ export default async function ChatLayout({ children, circle, page, isDefaultCirc
     }
 
     return (
-        <ChatLayoutWrapper circle={circle} chatRooms={chatRooms} isDefaultCircle={isDefaultCircle}>
+        <ChatLayoutWrapper circle={circle} chatRooms={chatRooms}>
             {children}
         </ChatLayoutWrapper>
     );

@@ -17,13 +17,12 @@ export type NavItem = {
 type FormNavProps = {
     items: NavItem[];
     circle: Circle;
-    isDefaultCircle: boolean;
     className?: string;
 };
 
-export const FormNav: React.FC<FormNavProps> = ({ items, circle, isDefaultCircle, className, ...props }) => {
+export const FormNav: React.FC<FormNavProps> = ({ items, circle, className, ...props }) => {
     const pathname = usePathname();
-    const filteredItems = isDefaultCircle ? items : items.filter((item) => item.handle !== "server-settings");
+    const filteredItems = items.filter((item) => item.handle !== "server-settings");
     const isCompact = useIsCompact();
 
     useEffect(() => {
@@ -33,11 +32,7 @@ export const FormNav: React.FC<FormNavProps> = ({ items, circle, isDefaultCircle
     }, []);
 
     const getPath = (item: NavItem) => {
-        if (isDefaultCircle) {
-            return `/settings${item.handle ? `/${item.handle}` : ""}`;
-        } else {
-            return `/circles/${circle.handle}/settings${item.handle ? `/${item.handle}` : ""}`;
-        }
+        return `/circles/${circle.handle}/settings${item.handle ? `/${item.handle}` : ""}`;
     };
 
     return (

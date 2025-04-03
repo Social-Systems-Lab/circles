@@ -17,11 +17,10 @@ import { useAtom } from "jotai";
 
 type HomeContentProps = {
     circle: Circle;
-    isDefaultCircle: boolean;
     authorizedToEdit: boolean;
 };
 
-export default function HomeContent({ circle, isDefaultCircle, authorizedToEdit }: HomeContentProps) {
+export default function HomeContent({ circle, authorizedToEdit }: HomeContentProps) {
     const isUser = circle?.circleType === "user";
     const memberCount = circle?.members ? (isUser ? circle.members - 1 : circle.members) : 0;
     const isCompact = useIsCompact();
@@ -80,7 +79,7 @@ export default function HomeContent({ circle, isDefaultCircle, authorizedToEdit 
                                 </div>
                             )}
                             <div className={`absolute right-0 top-0 flex flex-row gap-1 pt-2`}>
-                                <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />
+                                <InviteButton circle={circle} />
                                 <FollowButton circle={circle} />
                             </div>
                         </>
@@ -129,7 +128,7 @@ export default function HomeContent({ circle, isDefaultCircle, authorizedToEdit 
                             {isUser && circle._id !== user?._id && (
                                 <MessageButton circle={circle} renderCompact={false} />
                             )}
-                            <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />
+                            <InviteButton circle={circle} />
                             <FollowButton circle={circle} />
                         </div>
                     )}

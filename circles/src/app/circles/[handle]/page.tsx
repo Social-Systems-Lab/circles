@@ -15,7 +15,5 @@ export default async function Home(props: HomeProps) {
         redirect("/not-found");
     }
 
-    redirect(`/circles/${params.handle}/feeds`);
-
-    // return <FeedsModule circle={circle} isDefaultCircle={false} />;
+    redirect(`/circles/${params.handle}/feed`);
 }

@@ -26,10 +26,9 @@ export type FeedComponentProps = {
     page: Page;
     feed: Feed;
     subpage?: string;
-    isDefaultCircle?: boolean;
 };
 
-export const FeedComponent = ({ circle, posts, page, subpage, feed, isDefaultCircle }: FeedComponentProps) => {
+export const FeedComponent = ({ circle, posts, page, subpage, feed }: FeedComponentProps) => {
     const isCompact = useIsCompact();
     const [user] = useAtom(userAtom);
 
@@ -64,7 +63,6 @@ export const FeedComponent = ({ circle, posts, page, subpage, feed, isDefaultCir
                         circle={circle}
                         page={page}
                         subpage={feed.handle && feed.handle !== "default" ? feed.name : undefined}
-                        isDefaultCircle={isDefaultCircle}
                     />
                 </div> */}
                 {canPost && (

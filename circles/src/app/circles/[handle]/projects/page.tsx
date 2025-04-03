@@ -6,12 +6,5 @@ type PageProps = {
 };
 
 export default async function ProjectsPage({ params, searchParams }: PageProps) {
-    return (
-        <DynamicPage
-            circleHandle={params.handle}
-            moduleHandle="projects"
-            isDefaultCircle={false}
-            searchParams={searchParams}
-        />
-    );
+    return <DynamicPage circleHandle={params.handle} moduleHandle="projects" searchParams={searchParams} />;
 }

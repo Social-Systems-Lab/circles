@@ -14,10 +14,9 @@ import { modules } from "@/components/modules/modules";
 
 type CircleTabsProps = {
     circle: Circle;
-    isDefaultCircle: boolean;
 };
 
-export function CircleTabs({ circle, isDefaultCircle }: CircleTabsProps) {
+export function CircleTabs({ circle }: CircleTabsProps) {
     const pathname = usePathname();
     const [user] = useAtom(userAtom);
 
@@ -64,13 +63,9 @@ export function CircleTabs({ circle, isDefaultCircle }: CircleTabsProps) {
     // Generate the correct path for a module based on default circle status
     const getPath = useCallback(
         (moduleHandle: string) => {
-            if (isDefaultCircle) {
-                return `/${moduleHandle}`;
-            } else {
-                return `/circles/${circle.handle}/${moduleHandle}`;
-            }
+            return `/circles/${circle.handle}/${moduleHandle}`;
         },
-        [isDefaultCircle, circle.handle],
+        [circle.handle],
     );
 
     return (

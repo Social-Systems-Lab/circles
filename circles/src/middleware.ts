@@ -22,54 +22,51 @@ export async function middleware(request: NextRequest) {
         console.error("Error verifying token", error);
     }
 
-    // get circle handle and page handle from url
+    // get circle handle and module handle from url
     const urlSegments = request.nextUrl.pathname.split("/").filter(Boolean);
     let circleHandle = "";
-    let pageHandle = "";
+    let moduleHandle = "";
     if (urlSegments.length === 0) {
         // route: /
-        pageHandle = "";
+        moduleHandle = "";
         return;
     } else if (urlSegments[0] === "circles") {
         circleHandle = urlSegments[1];
         if (urlSegments.length === 1) {
             // route: /circles
-            pageHandle = "circles";
+            moduleHandle = "circles";
         } else if (urlSegments.length === 2) {
-            // route: /circles/<circle-handle>
-            if (urlSegments[1] === "new") {
-                return;
-            }
-            pageHandle = "feeds";
+            // Default to feed module if no module specified
+            moduleHandle = "feed";
         } else if (urlSegments.length >= 3) {
-            // route: /circles/<circle-handle>/<page-handle>
-            pageHandle = urlSegments[2];
+            // route: /circles/<circle-handle>/<module-handle>
+            moduleHandle = urlSegments[2];
 
             // Special case for post view routes
-            if (pageHandle === "post" && urlSegments.length >= 4) {
-                // For post routes, use 'feeds' as the page handle for permission checking
+            if (moduleHandle === "post" && urlSegments.length >= 4) {
+                // For post routes, use 'feed' as the module handle for permission checking
                 // This ensures post viewing uses the same permissions as feed viewing
-                pageHandle = "feeds";
+                moduleHandle = "feed";
             }
 
             // Special case for project view routes
-            if (pageHandle === "project" && urlSegments.length >= 4) {
-                // For project routes, use 'projects' as the page handle for permission checking
+            if (moduleHandle === "project" && urlSegments.length >= 4) {
+                // For project routes, use 'projects' as the module handle for permission checking
                 // This ensures project viewing uses the same permissions as project viewing
-                pageHandle = "projects";
+                moduleHandle = "projects";
             }
         }
     } else {
-        // route: /<page-handle>
-        pageHandle = urlSegments[0];
+        // route: /<module-handle>
+        moduleHandle = urlSegments[0];
         return;
     }
 
-    // fetch access rules for specified circle and page
+    // fetch access rules for specified circle and module
     try {
         const response = await fetch(`http://${host}:${port}/api/access`, {
             method: "POST",
-            body: JSON.stringify({ userDid, circleHandle, pageHandle }),
+            body: JSON.stringify({ userDid, circleHandle, moduleHandle }),
             headers: {
                 "Content-Type": "application/json",
             },

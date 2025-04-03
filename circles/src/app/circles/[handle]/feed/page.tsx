@@ -6,12 +6,5 @@ type PageProps = {
 };
 
 export default async function FeedPage({ params, searchParams }: PageProps) {
-    return (
-        <DynamicPage
-            circleHandle={params.handle}
-            moduleHandle="feed"
-            isDefaultCircle={false}
-            searchParams={searchParams}
-        />
-    );
+    return <DynamicPage circleHandle={params.handle} moduleHandle="feed" searchParams={searchParams} />;
 }

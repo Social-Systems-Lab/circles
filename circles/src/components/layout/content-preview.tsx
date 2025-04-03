@@ -116,7 +116,7 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                         </Button>
                     </div>
                     <div className="absolute bottom-[-45px] right-2 flex flex-row gap-1">
-                        <InviteButton circle={circle as Circle} isDefaultCircle={false} renderCompact={true} />
+                        <InviteButton circle={circle as Circle} renderCompact={true} />
                         <FollowButton circle={circle as Circle} renderCompact={true} />
                     </div>
 

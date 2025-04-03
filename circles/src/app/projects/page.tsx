@@ -21,7 +21,7 @@ type ProjectsProps = {
 export default async function Projects(props: ProjectsProps) {
     const searchParams = await props.searchParams;
     let activeTab = searchParams?.tab as string;
-    
+
     // get user handle
     let userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -30,10 +30,10 @@ export default async function Projects(props: ProjectsProps) {
 
     let circles: WithMetric<Circle>[] = [];
     let user = await getUserPrivate(userDid);
-    
+
     // Always use project type for this page
     const filterType = "project";
-    
+
     if (activeTab === "following" || !activeTab) {
         const memberIds =
             user?.memberships
@@ -56,13 +56,7 @@ export default async function Projects(props: ProjectsProps) {
                     <CirclesTabs currentTab={activeTab} circleType={filterType} />
                 </div>
             </div>
-            <CirclesList 
-                circle={user} 
-                circles={circles} 
-                isDefaultCircle={false} 
-                activeTab={activeTab} 
-                isProjectsList={true} 
-            />
+            <CirclesList circle={user} circles={circles} activeTab={activeTab} isProjectsList={true} />
         </div>
     );
 }

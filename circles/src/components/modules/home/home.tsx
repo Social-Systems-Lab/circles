@@ -10,11 +10,10 @@ import { getMembersWithMetrics } from "@/lib/data/member";
 
 type HomeModuleProps = {
     circle: Circle;
-    isDefaultCircle: boolean;
     searchParams?: { [key: string]: string | string[] | undefined };
 };
 
-export default async function HomeModule({ circle, isDefaultCircle, searchParams }: HomeModuleProps) {
+export default async function HomeModule({ circle, searchParams }: HomeModuleProps) {
     if (process.env.IS_BUILD === "true") {
         return null;
     }
@@ -27,5 +26,5 @@ export default async function HomeModule({ circle, isDefaultCircle, searchParams
     let circles = await getCirclesWithMetrics(userDid, circle?._id, searchParams?.sort as SortingOptions);
     let members = await getMembersWithMetrics(userDid, circle?._id, searchParams?.sort as SortingOptions);
 
-    return <HomeContent circle={circle} isDefaultCircle={isDefaultCircle} authorizedToEdit={authorizedToEdit} />;
+    return <HomeContent circle={circle} authorizedToEdit={authorizedToEdit} />;
 }

@@ -6,7 +6,7 @@ import { FeedsLayoutWrapper } from "./feeds-layout-wrapper";
 import { redirect } from "next/navigation";
 import { Feed } from "@/models/models";
 
-export default async function FeedsModuleLayout({ children, circle, page, isDefaultCircle }: ModuleLayoutPageProps) {
+export default async function FeedsModuleLayout({ children, circle, page }: ModuleLayoutPageProps) {
     // get feeds
     let feeds = await getFeeds(circle?._id);
     if (!feeds || feeds.length === 0) {
@@ -21,7 +21,7 @@ export default async function FeedsModuleLayout({ children, circle, page, isDefa
     }
 
     return (
-        <FeedsLayoutWrapper circle={circle} feeds={feeds} isDefaultCircle={isDefaultCircle}>
+        <FeedsLayoutWrapper circle={circle} feeds={feeds}>
             {children}
         </FeedsLayoutWrapper>
     );

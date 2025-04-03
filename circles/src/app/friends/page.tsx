@@ -47,11 +47,7 @@ export default async function Friends(props: CirclesProps) {
                 </div>
             </div>
 
-            <CirclesList circle={user} circles={circles} isDefaultCircle={false} activeTab={activeTab} inUser={true} />
-            {/* <MembersTable circle={user} members={circles} isDefaultCircle={false} activeTab={activeTab} /> */}
-
-            {/* <MemberTable circle={user} circles={circles} isDefaultCircle={false} activeTab={activeTab} /> */}
-            {/* </div> */}
+            <CirclesList circle={user} circles={circles} activeTab={activeTab} inUser={true} />
         </div>
     );
 }

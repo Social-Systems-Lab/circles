@@ -17,11 +17,10 @@ export type NavItem = {
 type FeedsNavProps = {
     items: NavItem[];
     circle: Circle;
-    isDefaultCircle: boolean;
     className?: string;
 };
 
-export const FeedsNav: React.FC<FeedsNavProps> = ({ items, circle, isDefaultCircle, className, ...props }) => {
+export const FeedsNav: React.FC<FeedsNavProps> = ({ items, circle, className, ...props }) => {
     const pathname = usePathname();
     const filteredItems = items;
     const isCompact = useIsCompact();
@@ -33,11 +32,7 @@ export const FeedsNav: React.FC<FeedsNavProps> = ({ items, circle, isDefaultCirc
     }, []);
 
     const getPath = (item: NavItem) => {
-        if (isDefaultCircle) {
-            return `/feeds${item.handle && item.handle !== "default" ? `/${item.handle}` : ""}`;
-        } else {
-            return `/circles/${circle.handle}/feeds${item.handle && item.handle !== "default" ? `/${item.handle}` : ""}`;
-        }
+        return `/circles/${circle.handle}/feeds${item.handle && item.handle !== "default" ? `/${item.handle}` : ""}`;
     };
 
     return (

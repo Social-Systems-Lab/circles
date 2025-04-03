@@ -3,10 +3,11 @@ import { getMember } from "@/lib/data/member";
 import { Circle } from "@/models/models";
 import { NextResponse } from "next/server";
 import { features, pageFeaturePrefix } from "@/lib/data/constants";
+import { isModuleEnabled } from "@/lib/auth/client-auth";
 
 export async function POST(req: Request) {
     try {
-        const { userDid, circleHandle, pageHandle } = await req.json();
+        const { userDid, circleHandle, moduleHandle } = await req.json();
 
         // get circle
         let circle: Circle | null = null;
@@ -21,13 +22,29 @@ export async function POST(req: Request) {
             return NextResponse.json({ notFound: true }, { status: 404 });
         }
 
-        const accessRules = circle.accessRules || {};
-        let allowedUserGroups = accessRules["__page_" + pageHandle];
+        // First check if the module is enabled for this circle
+        // Map moduleHandle to pageHandle for backward compatibility
+        const pageHandle = moduleHandle === "feed" ? "feeds" : moduleHandle === "followers" ? "members" : moduleHandle;
 
-        // If page access rule not found in access rules, get default user groups
+        // Check if module is enabled using enabledModules or pages
+        const moduleEnabled = isModuleEnabled(circle, moduleHandle);
+        if (!moduleEnabled) {
+            return NextResponse.json({ notFound: true }, { status: 404 });
+        }
+
+        // Check access rules
+        const accessRules = circle.accessRules || {};
+
+        // First try module-specific access rule
+        let allowedUserGroups = accessRules["__module_" + moduleHandle];
+
+        // If not found, try page-specific access rule for backward compatibility
         if (!allowedUserGroups) {
-            // For pages, we need to check the default page permissions
-            const featureKey = pageFeaturePrefix + pageHandle;
+            allowedUserGroups = accessRules["__page_" + pageHandle];
+        }
+
+        // If still not found, check the page's default user groups
+        if (!allowedUserGroups) {
             const defaultPages = circle.pages || [];
             const page = defaultPages.find((p) => p.handle === pageHandle);
 
@@ -36,8 +53,13 @@ export async function POST(req: Request) {
             }
         }
 
-        // if the page allows access to "everyone", consider it authorized
-        if (allowedUserGroups?.includes("everyone")) {
+        // If still not found, use default permissions for everyone
+        if (!allowedUserGroups) {
+            allowedUserGroups = ["everyone"];
+        }
+
+        // if the module allows access to "everyone", consider it authorized
+        if (allowedUserGroups.includes("everyone")) {
             return NextResponse.json({ authenticated: true, authorized: true });
         }
 
@@ -52,7 +74,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ authenticated: true, authorized: false });
         }
 
-        const isUserAuthorized = allowedUserGroups?.some((group) => membership.userGroups?.includes(group));
+        const isUserAuthorized = allowedUserGroups.some((group) => membership.userGroups?.includes(group));
         return NextResponse.json({ authenticated: true, authorized: isUserAuthorized });
     } catch (error) {
         console.error("Error in /api/access:", error);

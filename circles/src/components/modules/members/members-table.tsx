@@ -58,7 +58,6 @@ interface MemberTableProps {
     members: MemberDisplay[];
     circle: Circle;
     page: Page;
-    isDefaultCircle: boolean;
 }
 
 export const multiSelectFilter: FilterFn<MemberDisplay> = (
@@ -97,7 +96,7 @@ const tableRowVariants = {
     }),
 };
 
-const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefaultCircle }) => {
+const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page }) => {
     const data = React.useMemo(() => members, [members]);
     const [sorting, setSorting] = React.useState<SortingState>([]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -305,7 +304,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page, isDefa
                             onChange={(event) => table.getColumn("name")?.setFilterValue(event.target.value)}
                         />
                     </div>
-                    <InviteButton circle={circle} isDefaultCircle={isDefaultCircle} />
+                    <InviteButton circle={circle} />
                     <Select
                         value={(table.getColumn("userGroups")?.getFilterValue() as string) ?? ""}
                         onValueChange={(value) => {

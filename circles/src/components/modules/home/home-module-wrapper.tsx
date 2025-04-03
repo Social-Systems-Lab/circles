@@ -9,10 +9,9 @@ import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 type HomeModuleWrapperProps = {
     children: ReactNode[];
     circle: Circle;
-    isDefaultCircle: boolean;
 };
 
-const HomeModuleWrapper: React.FC<HomeModuleWrapperProps> = ({ children, circle, isDefaultCircle }) => {
+const HomeModuleWrapper: React.FC<HomeModuleWrapperProps> = ({ children, circle }) => {
     const isCompact = useIsCompact();
 
     const [coverComponent, contentComponent] = children;
@@ -27,7 +26,7 @@ const HomeModuleWrapper: React.FC<HomeModuleWrapperProps> = ({ children, circle,
         <div className="flex flex-1 flex-col">
             {coverComponent}
             <div className={`flex ${isCompact ? "flex-col" : "flex-row justify-center"}`}>
-                <CircleSidePanel circle={circle} isCompact={isCompact} isDefaultCircle={isDefaultCircle} />
+                <CircleSidePanel circle={circle} isCompact={isCompact} />
                 <div className={`${isCompact ? "w-full" : "flex-1"}`}>{contentComponent}</div>
                 {!isCompact && <div className="w-64" />} {/* Right column spacer */}
             </div>

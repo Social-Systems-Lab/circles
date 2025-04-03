@@ -8,11 +8,10 @@ import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 export type FeedsLayoutWrapperProps = {
     circle: Circle;
     children: React.ReactNode;
-    isDefaultCircle: boolean;
     feeds: Feed[];
 };
 
-export const FeedsLayoutWrapper = ({ children, circle, feeds, isDefaultCircle }: FeedsLayoutWrapperProps) => {
+export const FeedsLayoutWrapper = ({ children, circle, feeds }: FeedsLayoutWrapperProps) => {
     const isCompact = useIsCompact();
 
     useEffect(() => {

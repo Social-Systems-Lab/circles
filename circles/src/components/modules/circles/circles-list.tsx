@@ -40,21 +40,12 @@ interface CirclesListProps {
     circles: WithMetric<Circle>[];
     circle: Circle;
     page?: Page;
-    isDefaultCircle: boolean;
     activeTab?: string;
     inUser?: boolean;
     isProjectsList?: boolean;
 }
 
-const CirclesList = ({
-    circle,
-    circles,
-    page,
-    isDefaultCircle,
-    activeTab,
-    inUser,
-    isProjectsList,
-}: CirclesListProps) => {
+const CirclesList = ({ circle, circles, page, activeTab, inUser, isProjectsList }: CirclesListProps) => {
     const [user] = useAtom(userAtom);
     const isCompact = useIsCompact();
     const isMobile = useIsMobile();
@@ -123,7 +114,6 @@ const CirclesList = ({
     return (
         <div className="flex flex-1 flex-row justify-center overflow-hidden">
             <div className="mb-4 ml-4 mr-4 mt-4 flex max-w-[1100px] flex-1 flex-col">
-                {/* <CircleHeader circle={circle} page={page} isDefaultCircle={isDefaultCircle} /> */}
                 <div
                     className="flex w-full flex-row items-center gap-2"
                     style={{

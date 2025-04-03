@@ -9,11 +9,10 @@ import GalleryTrigger from "./gallery-trigger";
 
 type HomeContentProps = {
     circle: Circle;
-    isDefaultCircle: boolean;
     authorizedToEdit: boolean;
 };
 
-export default function HomeCover({ circle, isDefaultCircle, authorizedToEdit }: HomeContentProps) {
+export default function HomeCover({ circle, authorizedToEdit }: HomeContentProps) {
     const isMobile = useIsMobile();
     return (
         <>

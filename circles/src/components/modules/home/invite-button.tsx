@@ -20,35 +20,26 @@ import { useIsCompact } from "@/components/utils/use-is-compact";
 
 interface InviteButtonProps {
     circle: Circle;
-    isDefaultCircle: boolean;
     renderCompact?: boolean;
 }
 
-const InviteButton: React.FC<InviteButtonProps> = ({ circle, isDefaultCircle, renderCompact }) => {
+const InviteButton: React.FC<InviteButtonProps> = ({ circle, renderCompact }) => {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const isCompact = useIsCompact();
     const { toast } = useToast();
     const isUser = circle?.circleType === "user";
     const compact = isCompact || renderCompact;
 
-    const getCirclePagePath = (
-        circle: Circle,
-        isDefaultCircle: boolean,
-        pageHandle: string,
-        absolutePath: boolean,
-    ): string => {
+    const getCirclePagePath = (circle: Circle, pageHandle: string, absolutePath: boolean): string => {
         if (typeof window === "undefined") {
             return "";
         }
 
         let rootPath = absolutePath ? window.location.origin : "";
-        if (isDefaultCircle) {
-            return `${rootPath}${pageHandle ? `/${pageHandle}` : ""}`;
-        }
         return `${rootPath}/circles/${circle.handle}${pageHandle ? `/${pageHandle}` : ""}`;
     };
 
-    const inviteLink = getCirclePagePath(circle, isDefaultCircle, "", true);
+    const inviteLink = getCirclePagePath(circle, "", true);
 
     const copyToClipboard = async () => {
         try {

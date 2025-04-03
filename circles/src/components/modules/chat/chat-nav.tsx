@@ -17,11 +17,10 @@ export type NavItem = {
 type ChatNavProps = {
     items: NavItem[];
     circle: Circle;
-    isDefaultCircle: boolean;
     className?: string;
 };
 
-export const ChatNav: React.FC<ChatNavProps> = ({ items, circle, isDefaultCircle, className, ...props }) => {
+export const ChatNav: React.FC<ChatNavProps> = ({ items, circle, className, ...props }) => {
     const pathname = usePathname();
     const filteredItems = items;
     const isCompact = useIsCompact();
@@ -33,11 +32,7 @@ export const ChatNav: React.FC<ChatNavProps> = ({ items, circle, isDefaultCircle
     }, []);
 
     const getPath = (item: NavItem) => {
-        if (isDefaultCircle) {
-            return `/chat${item.handle && item.handle !== "default" ? `/${item.handle}` : ""}`;
-        } else {
-            return `/circles/${circle.handle}/chat${item.handle && item.handle !== "default" ? `/${item.handle}` : ""}`;
-        }
+        return `/circles/${circle.handle}/chat${item.handle && item.handle !== "default" ? `/${item.handle}` : ""}`;
     };
 
     return (

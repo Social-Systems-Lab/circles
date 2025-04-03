@@ -10,11 +10,10 @@ import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 export type ChatLayoutWrapperProps = {
     circle: Circle;
     children: React.ReactNode;
-    isDefaultCircle: boolean;
     chatRooms: ChatRoom[];
 };
 
-export const ChatLayoutWrapper = ({ children, circle, chatRooms, isDefaultCircle }: ChatLayoutWrapperProps) => {
+export const ChatLayoutWrapper = ({ children, circle, chatRooms }: ChatLayoutWrapperProps) => {
     const isCompact = useIsCompact();
     const navItems = chatRooms.map((item) => ({
         name: item.name,
@@ -43,7 +42,7 @@ export const ChatLayoutWrapper = ({ children, circle, chatRooms, isDefaultCircle
                     paddingTop: isCompact ? "0" : "72px",
                 }}
             >
-                <ChatNav items={navItems} circle={circle} isDefaultCircle={isDefaultCircle} />
+                <ChatNav items={navItems} circle={circle} />
             </div>
             {children}
         </div>

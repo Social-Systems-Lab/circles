@@ -7,7 +7,7 @@ import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { SortingOptions } from "@/models/models";
 
-export default async function ProjectsModule({ circle, page, subpage, isDefaultCircle, searchParams }: ModulePageProps) {
+export default async function ProjectsModule({ circle, page, subpage, searchParams }: ModulePageProps) {
     // get user handle
     let userDid = await getAuthenticatedUserDid();
 
@@ -16,13 +16,7 @@ export default async function ProjectsModule({ circle, page, subpage, isDefaultC
 
     return (
         <ContentDisplayWrapper content={projects}>
-            <CirclesList 
-                circle={circle} 
-                circles={projects} 
-                page={page} 
-                isDefaultCircle={isDefaultCircle} 
-                isProjectsList={true} 
-            />
+            <CirclesList circle={circle} circles={projects} page={page} isProjectsList={true} />
         </ContentDisplayWrapper>
     );
 }

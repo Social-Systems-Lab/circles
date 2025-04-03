@@ -10,23 +10,18 @@ type CircleHeaderProps = {
     circle: Circle;
     page?: Page;
     subpage?: string;
-    isDefaultCircle?: boolean;
 };
 
-export const CircleHeader: React.FC<CircleHeaderProps> = ({ circle, page, subpage, isDefaultCircle }) => {
+export const CircleHeader: React.FC<CircleHeaderProps> = ({ circle, page, subpage }) => {
     const isCompact = useIsCompact();
 
     const getPath = useCallback(
         (page?: Page) => {
             let pageHandle = page?.handle ?? "";
 
-            if (isDefaultCircle) {
-                return `/${pageHandle}`;
-            } else {
-                return `/circles/${circle.handle}${pageHandle ? `/${pageHandle}` : ""}`;
-            }
+            return `/circles/${circle.handle}${pageHandle ? `/${pageHandle}` : ""}`;
         },
-        [isDefaultCircle, circle.handle],
+        [circle.handle],
     );
 
     // if (true || isCompact) {

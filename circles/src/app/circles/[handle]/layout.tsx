@@ -34,11 +34,10 @@ export default async function RootLayout(props: Props) {
     return (
         <>
             <>
-                <HomeCover circle={circle} isDefaultCircle={false} authorizedToEdit={authorizedToEdit} />
-                {/* <CircleHeading circle={circle} isDefaultCircle={false} /> */}
-                <HomeContent circle={circle} isDefaultCircle={false} authorizedToEdit={authorizedToEdit} />
+                <HomeCover circle={circle} authorizedToEdit={authorizedToEdit} />
+                <HomeContent circle={circle} authorizedToEdit={authorizedToEdit} />
             </>
-            <CircleTabs circle={circle} isDefaultCircle={false} />
+            <CircleTabs circle={circle} />
 
             {children}
         </>

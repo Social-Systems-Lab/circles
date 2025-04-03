@@ -9,7 +9,7 @@ import { ChatRoomDisplay, SortingOptions } from "@/models/models";
 import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 import { ThirdColumn } from "../feeds/third-column";
 
-export default async function ChatModule({ circle, page, subpage, isDefaultCircle, searchParams }: ModulePageProps) {
+export default async function ChatModule({ circle, page, subpage, searchParams }: ModulePageProps) {
     const chatRoom = (await getChatRoomByHandle(circle?._id, subpage)) as ChatRoomDisplay;
     if (!chatRoom) {
         return <div></div>;
@@ -17,13 +17,7 @@ export default async function ChatModule({ circle, page, subpage, isDefaultCircl
 
     return (
         <ContentDisplayWrapper content={[]}>
-            <ChatRoomComponent
-                chatRoom={chatRoom}
-                circle={circle}
-                page={page}
-                subpage={subpage}
-                isDefaultCircle={isDefaultCircle}
-            />
+            <ChatRoomComponent chatRoom={chatRoom} circle={circle} page={page} subpage={subpage} />
             <ThirdColumn />
         </ContentDisplayWrapper>
     );

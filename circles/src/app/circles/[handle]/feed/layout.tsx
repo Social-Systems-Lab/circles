@@ -10,7 +10,7 @@ export default async function FeedLayout(props: LayoutProps) {
     const { children } = props;
 
     return (
-        <DynamicPageLayout moduleHandle="feed" circleHandle={params.handle} isDefaultCircle={false}>
+        <DynamicPageLayout moduleHandle="feed" circleHandle={params.handle}>
             {children}
         </DynamicPageLayout>
     );

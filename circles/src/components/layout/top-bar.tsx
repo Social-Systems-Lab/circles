@@ -7,10 +7,9 @@ import { Suspense } from "react";
 
 type TopBarProps = {
     circle: Circle;
-    isDefaultCircle: boolean;
 };
 
-export default function TopBar({ circle, isDefaultCircle }: TopBarProps) {
+export default function TopBar({ circle }: TopBarProps) {
     return (
         <>
             <div className={`h-[60px] w-full flex-shrink-0`}></div>
@@ -30,7 +29,7 @@ export default function TopBar({ circle, isDefaultCircle }: TopBarProps) {
                             <h4 className="m-0 ml-4 p-0">{circle?.name ?? "Circles"}</h4>
                         </Link>
                     </div>
-                    <TopBarNavItems circle={circle} isDefaultCircle={isDefaultCircle} />
+                    <TopBarNavItems circle={circle} />
                     <ProfileMenu />
                 </div>
             </div>

@@ -8,29 +8,19 @@ export type DynamicPageProps = {
     circleHandle?: string;
     moduleHandle?: string;
     subpage?: string;
-    isDefaultCircle: boolean;
     searchParams?: { [key: string]: string | string[] | undefined };
 };
 
 export type ModulePageProps = {
     circle: Circle;
     moduleHandle: string;
-    isDefaultCircle: boolean;
     subpage?: string;
     searchParams?: { [key: string]: string | string[] | undefined };
 };
 
-export default async function DynamicPage({
-    circleHandle,
-    moduleHandle,
-    subpage,
-    isDefaultCircle,
-    searchParams,
-}: DynamicPageProps) {
+export default async function DynamicPage({ circleHandle, moduleHandle, subpage, searchParams }: DynamicPageProps) {
     let circle: Circle = {};
-    if (isDefaultCircle) {
-        circle = await getDefaultCircle();
-    } else if (circleHandle) {
+    if (circleHandle) {
         circle = await getCircleByHandle(circleHandle);
     }
 
@@ -60,13 +50,5 @@ export default async function DynamicPage({
         module: _module.handle,
     };
 
-    return (
-        <_module.component
-            circle={circle}
-            page={page}
-            subpage={subpage}
-            isDefaultCircle={isDefaultCircle}
-            searchParams={searchParams}
-        />
-    );
+    return <_module.component circle={circle} page={page} subpage={subpage} searchParams={searchParams} />;
 }

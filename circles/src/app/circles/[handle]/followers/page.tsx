@@ -6,12 +6,5 @@ type PageProps = {
 };
 
 export default async function FollowersPage({ params, searchParams }: PageProps) {
-    return (
-        <DynamicPage
-            circleHandle={params.handle}
-            moduleHandle="followers"
-            isDefaultCircle={false}
-            searchParams={searchParams}
-        />
-    );
+    return <DynamicPage circleHandle={params.handle} moduleHandle="followers" searchParams={searchParams} />;
 }

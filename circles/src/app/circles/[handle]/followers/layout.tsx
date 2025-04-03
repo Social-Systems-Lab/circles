@@ -10,7 +10,7 @@ export default async function FollowersLayout(props: LayoutProps) {
     const { children } = props;
 
     return (
-        <DynamicPageLayout moduleHandle="followers" circleHandle={params.handle} isDefaultCircle={false}>
+        <DynamicPageLayout moduleHandle="followers" circleHandle={params.handle}>
             {children}
         </DynamicPageLayout>
     );

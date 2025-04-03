@@ -8,7 +8,7 @@ import { HiChevronDown } from "react-icons/hi";
 import { Circle, Page } from "@/models/models";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
-export default function TopBarNavItems({ circle, isDefaultCircle }: { circle: Circle; isDefaultCircle: boolean }) {
+export default function TopBarNavItems({ circle }: { circle: Circle }) {
     // Filter out disabled pages
     const enabledPages = useMemo(() => circle?.pages?.filter((page) => page.enabled !== false) ?? [], [circle?.pages]);
 
@@ -26,13 +26,9 @@ export default function TopBarNavItems({ circle, isDefaultCircle }: { circle: Ci
 
     const getPath = useCallback(
         (page: Page) => {
-            if (isDefaultCircle) {
-                return `/${page.handle}`;
-            } else {
-                return `/circles/${circle.handle}${page.handle ? `/${page.handle}` : ""}`;
-            }
+            return `/circles/${circle.handle}${page.handle ? `/${page.handle}` : ""}`;
         },
-        [isDefaultCircle, circle.handle],
+        [circle.handle],
     );
 
     const currentNavItem = useMemo(() => {

@@ -8,12 +8,10 @@ type PageProps = {
 export default async function PageLayout(props: PageProps) {
     const params = await props.params;
 
-    const {
-        children
-    } = props;
+    const { children } = props;
 
     return (
-        <DynamicPageLayout pageHandle={params.page} circleHandle={params.handle} isDefaultCircle={false}>
+        <DynamicPageLayout pageHandle={params.page} circleHandle={params.handle}>
             {children}
         </DynamicPageLayout>
     );

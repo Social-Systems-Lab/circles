@@ -7,7 +7,7 @@ import { getAllMembershipRequestsAction } from "../membership-requests/actions";
 import { SettingsForm } from "./settings-form";
 import { CircleGeneralForm } from "@/components/forms/circle-settings/general/circle-general-form";
 
-export default async function SettingsModule({ circle, page, subpage, isDefaultCircle }: ModulePageProps) {
+export default async function SettingsModule({ circle, page, subpage }: ModulePageProps) {
     const getFormSchemaId = () => {
         switch (subpage) {
             default:

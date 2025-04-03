@@ -52,10 +52,9 @@ const settingsForms: SettingsForm[] = [
 export type SettingsLayoutWrapperProps = {
     circle: Circle;
     children: React.ReactNode;
-    isDefaultCircle: boolean;
 };
 
-export const SettingsLayoutWrapper = ({ children, circle, isDefaultCircle }: SettingsLayoutWrapperProps) => {
+export const SettingsLayoutWrapper = ({ children, circle }: SettingsLayoutWrapperProps) => {
     const isCompact = useIsCompact();
     const isUser = circle.circleType === "user";
     const navItems = settingsForms.map((item) => ({
@@ -79,7 +78,7 @@ export const SettingsLayoutWrapper = ({ children, circle, isDefaultCircle }: Set
                     minWidth: isCompact ? "0px" : "240px",
                 }}
             >
-                <FormNav items={navItems} circle={circle} isDefaultCircle={isDefaultCircle} />
+                <FormNav items={navItems} circle={circle} />
             </div>
             {children}
         </div>

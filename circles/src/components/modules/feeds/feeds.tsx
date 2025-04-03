@@ -10,7 +10,7 @@ import { getPostsAction } from "./actions";
 import { SortingOptions } from "@/models/models";
 import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 
-export default async function FeedsModule({ circle, page, isDefaultCircle, searchParams }: ModulePageProps) {
+export default async function FeedsModule({ circle, page, searchParams }: ModulePageProps) {
     // Always use the default feed
     const feed = await getFeedByHandle(circle?._id, "default");
     if (!feed) {
@@ -20,7 +20,7 @@ export default async function FeedsModule({ circle, page, isDefaultCircle, searc
 
     return (
         <ContentDisplayWrapper content={posts}>
-            <FeedComponent posts={posts} feed={feed} circle={circle} page={page} isDefaultCircle={isDefaultCircle} />
+            <FeedComponent posts={posts} feed={feed} circle={circle} page={page} />
             <ThirdColumn />
         </ContentDisplayWrapper>
     );

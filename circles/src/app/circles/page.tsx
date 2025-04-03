@@ -53,7 +53,6 @@ export default async function Home(props: CirclesProps) {
             <CirclesList
                 circle={user}
                 circles={circles}
-                isDefaultCircle={false}
                 activeTab={activeTab}
                 isProjectsList={circleType === "project"}
             />

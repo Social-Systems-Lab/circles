@@ -6,12 +6,5 @@ type PageProps = {
 };
 
 export default async function SettingsPage({ params, searchParams }: PageProps) {
-    return (
-        <DynamicPage
-            circleHandle={params.handle}
-            moduleHandle="settings"
-            isDefaultCircle={false}
-            searchParams={searchParams}
-        />
-    );
+    return <DynamicPage circleHandle={params.handle} moduleHandle="settings" searchParams={searchParams} />;
 }

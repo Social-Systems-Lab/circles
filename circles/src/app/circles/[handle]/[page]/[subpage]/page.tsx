@@ -13,7 +13,6 @@ export default async function Subpage(props: PageProps) {
             circleHandle={params.handle}
             pageHandle={params.page}
             subpage={params.subpage}
-            isDefaultCircle={false}
             searchParams={searchParams}
         />
     );
