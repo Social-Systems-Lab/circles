@@ -149,14 +149,6 @@ export const pageFeaturePrefix = "__page_";
 
 // Helper function to get all features for a specific module
 export const getModuleFeatures = (moduleHandle: string): Record<string, Feature> | Feature[] => {
-    // For backward compatibility with old code
-    if (moduleHandle === "feeds") {
-        return Object.values(features.feed);
-    } else if (moduleHandle === "chat") {
-        return Object.values(features.chat);
-    }
-
-    // New approach
     return features[moduleHandle as keyof typeof features] || {};
 };
 
@@ -170,10 +162,6 @@ export const getFeature = (moduleHandle: string, featureHandle: string): Feature
 export const getAvailableModules = (): string[] => {
     return Object.keys(features);
 };
-
-// For backward compatibility
-export const feedFeatures = Object.values(features.feed);
-export const chatFeatures = Object.values(features.chat);
 
 export const maxAccessLevel = 9999999;
 
@@ -427,7 +415,7 @@ export const getDefaultAccessRules = (enabledModules?: string[]): Record<string,
 
     // Add general features
     for (const featureHandle in features.general) {
-        const feature = features.general[featureHandle];
+        const feature = features.general[featureHandle as keyof typeof features.general];
         accessRules.general[featureHandle] = feature.defaultUserGroups || [];
     }
 
@@ -465,7 +453,7 @@ export const getDefaultAccessRulesForUser = (): Record<string, string[]> => {
 
     // Add general features
     for (const featureHandle in features.general) {
-        const feature = features.general[featureHandle];
+        const feature = features.general[featureHandle as keyof typeof features.general];
         flatAccessRules[featureHandle] = feature.defaultUserGroups || [];
     }
 
@@ -485,7 +473,7 @@ export const getDefaultAccessRulesForUser = (): Record<string, string[]> => {
         // Add module-specific features
         const moduleFeatures = features[moduleHandle as keyof typeof features];
         for (const featureHandle in moduleFeatures) {
-            const feature = moduleFeatures[featureHandle as keyof typeof moduleFeatures];
+            const feature = (moduleFeatures as Record<string, Feature>)[featureHandle];
             flatAccessRules[feedFeaturePrefix + page.handle + "_" + featureHandle] = feature.defaultUserGroups || [];
         }
     }

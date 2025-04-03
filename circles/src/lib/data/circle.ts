@@ -251,36 +251,7 @@ export const createCircle = async (circle: Circle): Promise<Circle> => {
     // Set the enabledModules
     circle.enabledModules = circle.enabledModules || defaultModules;
 
-    // For backward compatibility, also set pages
-    // Get all available module pages with enabled=false by default
-    const allPages = getAllModulePages();
-
-    // Enable the pages that correspond to enabled modules
-    for (const page of allPages) {
-        // Check if the corresponding module is enabled
-        const moduleHandle = page.module;
-        const moduleEnabled = circle.enabledModules.includes(
-            moduleHandle === "feeds" ? "feed" : moduleHandle === "members" ? "followers" : moduleHandle,
-        );
-
-        if (moduleEnabled) {
-            page.enabled = true;
-
-            // Set default user groups and readOnly status
-            if (moduleHandle === "feeds" || moduleHandle === "settings") {
-                page.readOnly = true;
-            }
-
-            if (moduleHandle === "settings") {
-                page.defaultUserGroups = ["admins"];
-            } else {
-                page.defaultUserGroups = ["admins", "moderators", "members", "everyone"];
-            }
-        }
-    }
-
-    // Set the pages and access rules
-    circle.pages = allPages;
+    // Set the access rules
     circle.accessRules = getDefaultAccessRules(circle.enabledModules);
     circle.questionnaire = [];
     circle.circleType = circle.circleType || "circle";

@@ -22,10 +22,6 @@ export async function POST(req: Request) {
             return NextResponse.json({ notFound: true }, { status: 404 });
         }
 
-        // First check if the module is enabled for this circle
-        // Map moduleHandle to pageHandle for backward compatibility
-        const pageHandle = moduleHandle === "feed" ? "feeds" : moduleHandle === "followers" ? "members" : moduleHandle;
-
         // Check if module is enabled using enabledModules or pages
         const moduleEnabled = isModuleEnabled(circle, moduleHandle);
         if (!moduleEnabled) {

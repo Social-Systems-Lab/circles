@@ -35,7 +35,7 @@ export function CircleTabs({ circle }: CircleTabsProps) {
     // Check if the user has access to a specific module
     const hasAccess = useCallback(
         (moduleHandle: string) => {
-            const allowedUserGroups = circle.accessRules?.[`__module_${moduleHandle}`] || [];
+            const allowedUserGroups = circle.accessRules?.[moduleHandle].view || [];
             return (
                 allowedUserGroups.includes("everyone") || userGroups.some((group) => allowedUserGroups.includes(group))
             );
@@ -43,15 +43,9 @@ export function CircleTabs({ circle }: CircleTabsProps) {
         [circle.accessRules, userGroups],
     );
 
-    // For backward compatibility, check if we should use pages or enabledModules
     const enabledModules = useMemo(() => {
-        if (circle.enabledModules && circle.enabledModules.length > 0) {
-            return circle.enabledModules;
-        }
-
-        // Fallback to pages for backward compatibility
-        return circle.pages?.filter((p) => p.enabled !== false).map((p) => p.module) || [];
-    }, [circle.enabledModules, circle.pages]);
+        return circle.enabledModules ?? [];
+    }, [circle.enabledModules]);
 
     // Filter modules based on enabledModules and excludeFromMenu
     const visibleModules = useMemo(() => {

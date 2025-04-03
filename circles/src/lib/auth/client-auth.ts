@@ -145,15 +145,6 @@ export const isModuleEnabled = (circle: Circle, moduleHandle: string): boolean =
         return circle.enabledModules.includes(moduleHandle);
     }
 
-    // For backward compatibility, check pages
-    if (circle.pages && circle.pages.length > 0) {
-        // Map module handle to page module
-        const pageModule = moduleHandle === "feed" ? "feeds" : moduleHandle === "followers" ? "members" : moduleHandle;
-
-        // Check if any page with this module is enabled
-        return circle.pages.some((page) => page.module === pageModule && page.enabled !== false);
-    }
-
     // Default to false if no enabledModules or pages
     return false;
 };
@@ -167,19 +158,6 @@ export const getEnabledModules = (circle: Circle): string[] => {
     // First check enabledModules array if it exists
     if (circle.enabledModules && circle.enabledModules.length > 0) {
         return circle.enabledModules;
-    }
-
-    // For backward compatibility, check pages
-    if (circle.pages && circle.pages.length > 0) {
-        // Get all enabled pages
-        const enabledPages = circle.pages.filter((page) => page.enabled !== false);
-
-        // Map page modules to module handles
-        return enabledPages.map((page) => {
-            if (page.module === "feeds") return "feed";
-            if (page.module === "members") return "followers";
-            return page.module;
-        });
     }
 
     // Default to empty array if no enabledModules or pages

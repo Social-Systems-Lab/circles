@@ -30,17 +30,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { cn, removeLast } from "@/lib/utils";
 import { FaLock } from "react-icons/fa6";
 import { FaCheck } from "react-icons/fa";
-import {
-    features,
-    features as featuresList,
-    feedFeatures,
-    pageFeaturePrefix,
-    feedFeaturePrefix,
-    chatFeaturePrefix,
-    causes,
-    skills,
-    chatFeatures,
-} from "@/lib/data/constants";
+import { features, features as featuresList, feedFeatures, causes, skills, chatFeatures } from "@/lib/data/constants";
 import { CheckCircle2, ChevronDown, ChevronUp, Loader2, Search, XCircle } from "lucide-react";
 import { getMemberAccessLevel, isAuthorized } from "@/lib/auth/client-auth";
 import { FaEye, FaEyeSlash } from "react-icons/fa";

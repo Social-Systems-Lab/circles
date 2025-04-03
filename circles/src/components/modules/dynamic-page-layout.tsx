@@ -26,10 +26,7 @@ export const DynamicPageLayout = async ({ children, circleHandle, moduleHandle }
     const enabledModules = circle.enabledModules || [];
     const isModuleEnabled = enabledModules.includes(moduleHandle || "");
 
-    // For backward compatibility, also check pages
-    const isEnabledInPages = circle.pages?.some((p) => p.module === moduleHandle && p.enabled !== false);
-
-    if (!isModuleEnabled && !isEnabledInPages) {
+    if (!isModuleEnabled) {
         // Redirect to not-found if module is not enabled
         redirect(`/not-found`);
     }
