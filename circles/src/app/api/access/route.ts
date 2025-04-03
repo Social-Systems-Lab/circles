@@ -2,7 +2,6 @@ import { getCircleByHandle, getDefaultCircle } from "@/lib/data/circle";
 import { getMember } from "@/lib/data/member";
 import { Circle } from "@/models/models";
 import { NextResponse } from "next/server";
-import { features, pageFeaturePrefix } from "@/lib/data/constants";
 import { isModuleEnabled } from "@/lib/auth/client-auth";
 
 export async function POST(req: Request) {

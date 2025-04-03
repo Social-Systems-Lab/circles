@@ -21,8 +21,8 @@ export const circlePagesFormAction: FormAction = {
             return { success: false, message: "You need to be logged in to edit circle settings" };
         }
 
+        let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_pages);
         try {
-            let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
             if (!authorized) {
                 return { success: false, message: "You are not authorized to edit circle settings" };
             }
@@ -34,16 +34,6 @@ export const circlePagesFormAction: FormAction = {
             if (!existingCircle) {
                 throw new Error("Circle not found");
             }
-
-            const finalPages = safeModifyArray(existingCircle.pages || [], values.pages || []);
-            circle.pages = finalPages;
-
-            // make sure access rules exists for all pages
-            const finalAccessRules = addPagesAccessRules(finalPages, existingCircle.accessRules ?? {});
-            circle.accessRules = finalAccessRules;
-
-            // TODO remove, resets to default access rules to circle for testing
-            // circle.pages = defaultPages;
 
             // update the circle
             await updateCircle(circle);

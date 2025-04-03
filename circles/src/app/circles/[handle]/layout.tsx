@@ -29,7 +29,7 @@ export default async function RootLayout(props: Props) {
 
     let authorizedToEdit = false;
     let userDid = await getAuthenticatedUserDid();
-    authorizedToEdit = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
+    authorizedToEdit = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_about);
 
     return (
         <>

@@ -32,7 +32,7 @@ export const getAllMembershipRequestsAction = async (circleId: string): Promise<
         }
 
         // check if the user is authorized to view membership requests
-        const authorized = await isAuthorized(userDid, circleId, features.manage_membership_requests);
+        const authorized = await isAuthorized(userDid, circleId, features.general.manage_membership_requests);
         if (!authorized) {
             return { success: false, message: "You are not authorized to view follow requests" };
         }
@@ -61,7 +61,7 @@ export const approveMembershipRequestAction = async (
 
     try {
         // Check if the user is authorized to approve membership requests
-        const authorized = await isAuthorized(userDid, circle._id ?? "", features.manage_membership_requests);
+        const authorized = await isAuthorized(userDid, circle._id ?? "", features.general.manage_membership_requests);
         if (!authorized) {
             return { success: false, message: "You are not authorized to manage membership requests" };
         }
@@ -100,7 +100,7 @@ export const rejectMembershipRequestAction = async (
 
     try {
         // Check if the user is authorized to reject membership requests
-        const authorized = await isAuthorized(userDid, circle._id ?? "", features.manage_membership_requests);
+        const authorized = await isAuthorized(userDid, circle._id ?? "", features.general.manage_membership_requests);
         if (!authorized) {
             return { success: false, message: "You are not authorized to manage membership requests" };
         }

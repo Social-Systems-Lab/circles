@@ -14,7 +14,7 @@ interface CircleGeneralFormProps {
 
 export function CircleGeneralForm({ circle }: CircleGeneralFormProps) {
     const [user] = useAtom(userAtom);
-    const isAdmin = isAuthorized(user, circle, features.settings_edit);
+    const isAdmin = isAuthorized(user, circle, features.settings.edit_critical_settings);
 
     return (
         <div className="space-y-6">

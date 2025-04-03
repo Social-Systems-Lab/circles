@@ -15,7 +15,7 @@ export async function createCircleAction(circleData: any, formData?: FormData, i
             return { success: false, message: "You need to be logged in to create a circle" };
         }
 
-        const authorized = await isAuthorized(userDid, circleData.parentCircleId ?? "", features.create_subcircle);
+        const authorized = await isAuthorized(userDid, circleData.parentCircleId ?? "", features.circles.create);
         if (!authorized) {
             return { success: false, message: "You are not authorized to create new circles" };
         }
@@ -199,7 +199,7 @@ export async function saveBasicInfoAction(
                 return { success: false, message: "You need to be logged in to create a circle" };
             }
 
-            const authorized = await isAuthorized(userDid, parentCircleId ?? "", features.create_subcircle);
+            const authorized = await isAuthorized(userDid, parentCircleId ?? "", features.circles.create);
             if (!authorized) {
                 return { success: false, message: "You are not authorized to create new circles" };
             }

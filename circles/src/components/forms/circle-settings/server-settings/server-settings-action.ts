@@ -16,7 +16,6 @@ export const serverSettingsFormAction: FormAction = {
     onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
         //console.log("Saving server settings with values", values);
         let registrySuccess = true;
-        let circleId = values.defaultCircleId;
 
         // check if user is authorized to edit server settings, we use the same permission as for default circle settings
         const userDid = await getAuthenticatedUserDid();
@@ -29,10 +28,7 @@ export const serverSettingsFormAction: FormAction = {
 
             console.log("Editing server settings, got User", JSON.stringify(user, null, 2), "userDid", userDid);
             if (!user?.isAdmin) {
-                let authorized = await isAuthorized(userDid, circleId ?? "", features.settings_edit);
-                if (!authorized) {
-                    return { success: false, message: "You are not authorized to edit server settings" };
-                }
+                return { success: false, message: "You are not authorized to edit server settings" };
             }
 
             // update server settings

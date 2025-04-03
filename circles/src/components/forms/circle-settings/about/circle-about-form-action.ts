@@ -28,7 +28,7 @@ export const circleAboutFormAction: FormAction = {
         }
 
         try {
-            let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
+            let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_about);
             if (!authorized) {
                 return { success: false, message: "You are not authorized to edit circle settings" };
             }

@@ -730,9 +730,9 @@ export const MemberUserGroupsGrid: React.FC<MemberUserGroupsGridProps> = ({
 
     const currentUserAccessLevel = getMemberAccessLevel(currentUser, circle);
     const canEditUserGroups =
-        isAuthorized(currentUser, circle, features.edit_lower_user_groups) ||
-        isAuthorized(currentUser, circle, features.edit_same_level_user_groups);
-    const canEditSameLevelUserGroups = isAuthorized(currentUser, circle, features.edit_same_level_user_groups);
+        isAuthorized(currentUser, circle, features.general.edit_lower_user_groups) ||
+        isAuthorized(currentUser, circle, features.general.edit_same_level_user_groups);
+    const canEditSameLevelUserGroups = isAuthorized(currentUser, circle, features.general.edit_same_level_user_groups);
 
     useEffect(() => {
         const initialMemberUserGroups = members.reduce((acc: { [key: string]: string[] }, member) => {

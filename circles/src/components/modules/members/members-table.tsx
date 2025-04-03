@@ -114,13 +114,13 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page }) => {
 
     // if user is allowed to edit settings show edit button
     const canEditUserGroups =
-        isAuthorized(user, circle, features.edit_lower_user_groups) ||
-        isAuthorized(user, circle, features.edit_same_level_user_groups);
+        isAuthorized(user, circle, features.general.edit_lower_user_groups) ||
+        isAuthorized(user, circle, features.general.edit_same_level_user_groups);
     const canRemoveUser =
-        isAuthorized(user, circle, features.remove_lower_members) ||
-        isAuthorized(user, circle, features.remove_same_level_members);
-    const canEditSameLevelUserGroups = isAuthorized(user, circle, features.edit_same_level_user_groups);
-    const canRemoveSameLevelUser = isAuthorized(user, circle, features.remove_same_level_members);
+        isAuthorized(user, circle, features.general.remove_lower_members) ||
+        isAuthorized(user, circle, features.general.remove_same_level_members);
+    const canEditSameLevelUserGroups = isAuthorized(user, circle, features.general.edit_same_level_user_groups);
+    const canRemoveSameLevelUser = isAuthorized(user, circle, features.general.remove_same_level_members);
     const canEdit = canEditUserGroups || canRemoveUser;
 
     useEffect(() => {

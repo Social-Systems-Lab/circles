@@ -29,7 +29,7 @@ export const createCircleFormAction: FormAction = {
         }
 
         try {
-            let authorized = await isAuthorized(userDid, circle.parentCircleId ?? "", features.create_subcircle);
+            let authorized = await isAuthorized(userDid, circle.parentCircleId ?? "", features.circles.create);
             if (!authorized) {
                 return { success: false, message: "You are not authorized to create new circles" };
             }

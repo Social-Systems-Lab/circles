@@ -28,7 +28,7 @@ export const createProjectAction = async (formData: FormData): Promise<CircleAct
         const values = Object.fromEntries(formData.entries()) as any;
         const parentCircleId = values.parentCircleId as string;
 
-        let authorized = await isAuthorized(userDid, parentCircleId, features.create_subcircle);
+        let authorized = await isAuthorized(userDid, parentCircleId, features.circles.create);
         if (!authorized) {
             return { success: false, message: "You are not authorized to create new circles" };
         }

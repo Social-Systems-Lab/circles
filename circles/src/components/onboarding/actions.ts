@@ -26,7 +26,7 @@ export const saveMissionAction = async (mission: string, circleId: string): Prom
         };
 
         // check if user is authorized to edit circle settings
-        let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
+        let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_about);
         if (!authorized) {
             return { success: false, message: "You are not authorized to edit circle settings" };
         }
@@ -81,7 +81,7 @@ export const saveCausesAction = async (
         };
 
         // check if user is authorized to edit circle settings
-        let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
+        let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_causes_and_skills);
         if (!authorized) {
             return { success: false, message: "You are not authorized to edit circle settings" };
         }
@@ -126,7 +126,7 @@ export const saveSkillsAction = async (
         };
 
         // check if user is authorized to edit circle settings
-        let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
+        let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_causes_and_skills);
         if (!authorized) {
             return { success: false, message: "You are not authorized to edit circle settings" };
         }
@@ -277,7 +277,7 @@ export const saveProfileAction = async (
         };
 
         // Check if user is authorized to edit circle settings
-        let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
+        let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_about);
         if (!authorized) {
             return { success: false, message: "You are not authorized to edit profile" };
         }
@@ -320,7 +320,7 @@ export const saveLocationAction = async (location: any, circleId: string): Promi
         };
 
         // Check if user is authorized to edit circle settings
-        let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
+        let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_about);
         if (!authorized) {
             return { success: false, message: "You are not authorized to edit location" };
         }

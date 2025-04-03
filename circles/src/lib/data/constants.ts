@@ -5,12 +5,6 @@ export const LOG_LEVEL_TRACE = 5;
 
 export const features = {
     general: {
-        settings_edit: {
-            name: "Edit Settings",
-            handle: "settings_edit",
-            description: "Edit circle settings",
-            defaultUserGroups: ["admins"],
-        },
         edit_same_level_user_groups: {
             name: "Edit Same Level User Groups",
             handle: "edit_same_level_user_groups",
@@ -109,6 +103,18 @@ export const features = {
             description: "View the circles list",
             defaultUserGroups: ["admins", "moderators", "members", "everyone"],
         },
+        create: {
+            name: "Create Circle",
+            handle: "create",
+            description: "Create a new circle",
+            defaultUserGroups: ["admins", "moderators", "members"],
+        },
+        delete: {
+            name: "Delete Circle",
+            handle: "delete",
+            description: "Delete a circle",
+            defaultUserGroups: ["admins"],
+        },
     },
     projects: {
         view: {
@@ -131,6 +137,48 @@ export const features = {
             description: "View the settings page",
             defaultUserGroups: ["admins"],
         },
+        edit_about: {
+            name: "Edit About",
+            handle: "edit_about",
+            description: "Edit circle about settings",
+            defaultUserGroups: ["admins"],
+        },
+        edit_user_groups: {
+            name: "Edit User Groups",
+            handle: "edit_user_groups",
+            description: "Edit user groups settings",
+            defaultUserGroups: ["admins"],
+        },
+        edit_pages: {
+            name: "Edit Pages",
+            handle: "edit_pages",
+            description: "Edit pages settings",
+            defaultUserGroups: ["admins"],
+        },
+        edit_access_rules: {
+            name: "Edit Access Rules",
+            handle: "edit_access_rules",
+            description: "Edit circle access rules settings",
+            defaultUserGroups: ["admins"],
+        },
+        edit_causes_and_skills: {
+            name: "Edit Causes and Skills",
+            handle: "edit_causes_and_skills",
+            description: "Edit causes and skills",
+            defaultUserGroups: ["admins"],
+        },
+        edit_questionnaire: {
+            name: "Edit Questionnaire",
+            handle: "edit_questionnaire",
+            description: "Edit questionnaire settings",
+            defaultUserGroups: ["admins"],
+        },
+        edit_critical_settings: {
+            name: "Edit Critical Settings",
+            handle: "edit_critical_settings",
+            description: "Edit critical and sensitive settings",
+            defaultUserGroups: ["admins"],
+        },
     },
     home: {
         view: {
@@ -142,10 +190,7 @@ export const features = {
     },
 };
 
-// For backward compatibility
-export const feedFeaturePrefix = "__feed_";
-export const chatFeaturePrefix = "__chat_";
-export const pageFeaturePrefix = "__page_";
+// No longer needed - removed prefixes
 
 // Helper function to get all features for a specific module
 export const getModuleFeatures = (moduleHandle: string): Record<string, Feature> | Feature[] => {
@@ -382,16 +427,10 @@ export const defaultPagesForProjects: Page[] = [
     },
 ];
 
-// Get module feature prefix for a specific module
+// This function is no longer needed with the new access rules structure
 export const getModuleFeaturePrefix = (moduleHandle: string): string => {
-    switch (moduleHandle) {
-        case "feeds":
-            return feedFeaturePrefix;
-        case "chat":
-            return chatFeaturePrefix;
-        default:
-            return "";
-    }
+    // Return empty string as we no longer use prefixes
+    return "";
 };
 
 /**
@@ -445,16 +484,21 @@ export const getDefaultAccessRules = (enabledModules?: string[]): Record<string,
 
 /**
  * Get default access rules for a user
- * @returns Record of access rules
+ * @returns Record of access rules for a user
  */
-export const getDefaultAccessRulesForUser = (): Record<string, string[]> => {
+export const getDefaultAccessRulesForUser = (): Record<string, Record<string, string[]>> => {
     // Use the same approach as getDefaultAccessRules but with defaultPagesForUser
-    const flatAccessRules: Record<string, string[]> = {};
+    let accessRules: Record<string, Record<string, string[]>> = {};
+
+    // Initialize with empty objects for each module
+    for (const moduleHandle of Object.keys(features)) {
+        accessRules[moduleHandle] = {};
+    }
 
     // Add general features
     for (const featureHandle in features.general) {
         const feature = features.general[featureHandle as keyof typeof features.general];
-        flatAccessRules[featureHandle] = feature.defaultUserGroups || [];
+        accessRules.general[featureHandle] = feature.defaultUserGroups || [];
     }
 
     // Add module features based on defaultPagesForUser
@@ -467,18 +511,17 @@ export const getDefaultAccessRulesForUser = (): Record<string, string[]> => {
         // Skip if module doesn't exist in features
         if (!features[moduleHandle as keyof typeof features]) continue;
 
-        // Add page access rule
-        flatAccessRules[pageFeaturePrefix + page.handle] = page.defaultUserGroups || [];
-
         // Add module-specific features
         const moduleFeatures = features[moduleHandle as keyof typeof features];
         for (const featureHandle in moduleFeatures) {
-            const feature = (moduleFeatures as Record<string, Feature>)[featureHandle];
-            flatAccessRules[feedFeaturePrefix + page.handle + "_" + featureHandle] = feature.defaultUserGroups || [];
+            const feature = (moduleFeatures as any)[featureHandle];
+            if (feature && feature.defaultUserGroups) {
+                accessRules[moduleHandle][featureHandle] = feature.defaultUserGroups;
+            }
         }
     }
 
-    return flatAccessRules;
+    return accessRules;
 };
 
 export const causes: Cause[] = [

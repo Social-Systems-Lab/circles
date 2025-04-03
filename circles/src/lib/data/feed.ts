@@ -3,7 +3,6 @@ import { Feeds, Posts, Comments, Reactions, Circles, Members } from "./db";
 import { ObjectId } from "mongodb";
 import { Feed, Post, PostDisplay, Comment, CommentDisplay, Circle, Mention, SortingOptions } from "@/models/models";
 import { getCircleById, SAFE_CIRCLE_PROJECTION, updateCircle } from "./circle";
-import { addFeedsAccessRules } from "../utils";
 import { getUserByDid } from "./user";
 import { getMetrics } from "../utils/metrics";
 import { deleteVbdPost, upsertVbdPosts } from "./vdb";
@@ -113,10 +112,6 @@ export const createDefaultFeeds = async (circleId: string): Promise<Feed[] | nul
 
     // Get all feeds (should only be the default feed now)
     let existingFeeds = await getFeeds(circleId);
-
-    // Make sure access rules exist for the feed
-    const finalAccessRules = addFeedsAccessRules(existingFeeds, circle.accessRules ?? {});
-    circle.accessRules = finalAccessRules;
 
     // Update the circle
     await updateCircle(circle);

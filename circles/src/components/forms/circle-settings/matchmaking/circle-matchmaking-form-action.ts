@@ -17,7 +17,7 @@ export const circleMatchmakingFormAction: FormAction = {
             let circle = null;
             circle = await getCircleById(values._id);
 
-            let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
+            let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_causes_and_skills);
             if (!authorized) {
                 return { success: false, message: "You are not authorized to edit circle settings" };
             }

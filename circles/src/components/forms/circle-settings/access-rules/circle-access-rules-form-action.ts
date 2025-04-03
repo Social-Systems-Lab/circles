@@ -20,7 +20,7 @@ export const circleAccessRulesFormAction: FormAction = {
         }
 
         try {
-            let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings_edit);
+            let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_access_rules);
             if (!authorized) {
                 return { success: false, message: "You are not authorized to edit circle settings" };
             }

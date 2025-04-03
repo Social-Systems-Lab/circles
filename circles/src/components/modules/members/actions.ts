@@ -26,8 +26,12 @@ export const removeMemberAction = async (
 
     try {
         // confirm the user is authorized to remove member
-        let authorized = await isAuthorized(userDid, circle._id ?? "", features.remove_lower_members);
-        let canRemoveSameLevel = await isAuthorized(userDid, circle._id ?? "", features.edit_same_level_user_groups);
+        let authorized = await isAuthorized(userDid, circle._id ?? "", features.general.remove_lower_members);
+        let canRemoveSameLevel = await isAuthorized(
+            userDid,
+            circle._id ?? "",
+            features.general.edit_same_level_user_groups,
+        );
 
         if (!authorized && !canRemoveSameLevel) {
             return { success: false, message: "You are not authorized to remove this member" };
@@ -77,8 +81,12 @@ export const updateUserGroupsAction = async (
 
     try {
         // confirm the user is authorized to edit user groups
-        let authorized = await isAuthorized(userDid, circle._id ?? "", features.edit_lower_user_groups);
-        let canEditSameLevel = await isAuthorized(userDid, circle._id ?? "", features.edit_same_level_user_groups);
+        let authorized = await isAuthorized(userDid, circle._id ?? "", features.general.edit_lower_user_groups);
+        let canEditSameLevel = await isAuthorized(
+            userDid,
+            circle._id ?? "",
+            features.general.edit_same_level_user_groups,
+        );
         if (!authorized && !canEditSameLevel) {
             return { success: false, message: "You are not authorized to edit user groups" };
         }

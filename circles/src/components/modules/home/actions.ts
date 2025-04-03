@@ -73,7 +73,7 @@ export const followCircle = async (circle: Circle, answers?: Record<string, stri
             await createPendingMembershipRequest(userDid, updatedCircle._id ?? "", answers);
 
             // get access rules for circle feature
-            let members = await getAuthorizedMembers(updatedCircle, features.manage_membership_requests);
+            let members = await getAuthorizedMembers(updatedCircle, features.general.manage_membership_requests);
 
             // send a notification to all users that have permission to accept requests
             let user = await getUser(userDid);
@@ -206,7 +206,7 @@ export const updateCircleField = async (circleId: string, formData: FormData): P
     }
 
     try {
-        let authorized = await isAuthorized(userDid, circleId, features.settings_edit);
+        let authorized = await isAuthorized(userDid, circleId, features.settings.edit_about);
         if (!authorized) {
             return { success: false, message: "You are not authorized to edit circle settings" };
         }
