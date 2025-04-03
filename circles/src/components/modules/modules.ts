@@ -48,9 +48,9 @@ export const modules: Record<string, Module> = {
         defaultIcon: "FaRegCircle",
     },
     feeds: {
-        name: "Feeds",
+        name: "Feed",
         handle: "feeds",
-        description: "Feeds page",
+        description: "Feed page",
         component: FeedsModule,
         layoutComponent: FeedsModuleLayout,
         defaultIcon: "AiOutlineWifi",
