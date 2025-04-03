@@ -4,101 +4,176 @@ export const logLevel = 5; // 0: none, 1: error, 2: warn, 3: info, 4: debug, 5: 
 export const LOG_LEVEL_TRACE = 5;
 
 export const features = {
-    settings_edit: {
-        name: "Edit Settings",
-        handle: "settings_edit",
-        description: "Edit circle settings",
-        defaultUserGroups: ["admins"],
+    general: {
+        settings_edit: {
+            name: "Edit Settings",
+            handle: "settings_edit",
+            description: "Edit circle settings",
+            defaultUserGroups: ["admins"],
+        },
+        edit_same_level_user_groups: {
+            name: "Edit Same Level User Groups",
+            handle: "edit_same_level_user_groups",
+            description: "Edit circle user groups of same level members",
+            defaultUserGroups: ["admins"],
+        },
+        edit_lower_user_groups: {
+            name: "Edit Lower Member User Groups",
+            handle: "edit_lower_user_groups",
+            description: "Edit circle user groups of lower members",
+            defaultUserGroups: ["admins", "moderators"],
+        },
+        remove_same_level_members: {
+            name: "Remove Same Level Members",
+            handle: "remove_same_level_members",
+            description: "Remove same level members from the circle",
+            defaultUserGroups: ["admins"],
+        },
+        remove_lower_members: {
+            name: "Remove Lower Members",
+            handle: "remove_lower_members",
+            description: "Remove lower members from the circle",
+            defaultUserGroups: ["admins", "moderators"],
+        },
+        manage_membership_requests: {
+            name: "Manage Follow Requests",
+            handle: "manage_membership_requests",
+            description: "Manage requests to follow the circle",
+            defaultUserGroups: ["admins", "moderators"],
+        },
+        create_subcircle: {
+            name: "Create Sub-Circle",
+            handle: "create_subcircle",
+            description: "Create a new sub-circle that is part of this circle",
+            defaultUserGroups: ["admins", "moderators"],
+        },
+        delete_circle: {
+            name: "Delete Circle",
+            handle: "delete_circle",
+            description: "Delete Circle",
+            defaultUserGroups: ["admins"],
+        },
     },
-    edit_same_level_user_groups: {
-        name: "Edit Same Level User Groups",
-        handle: "edit_same_level_user_groups",
-        description: "Edit circle user groups of same level members",
-        defaultUserGroups: ["admins"],
+    feed: {
+        view: {
+            name: "View Feed",
+            handle: "view",
+            description: "View the feed",
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+        },
+        post: {
+            name: "Create Post",
+            handle: "post",
+            description: "Create a post in the feed",
+            defaultUserGroups: ["admins", "moderators", "members"],
+        },
+        comment: {
+            name: "Comment",
+            handle: "comment",
+            description: "Comment on posts in the feed",
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+        },
+        moderate: {
+            name: "Moderate Feed",
+            handle: "moderate",
+            description: "Moderate posts in the feed",
+            defaultUserGroups: ["admins", "moderators"],
+        },
     },
-    edit_lower_user_groups: {
-        name: "Edit Lower Member User Groups",
-        handle: "edit_lower_user_groups",
-        description: "Edit circle user groups of lower members",
-        defaultUserGroups: ["admins", "moderators"],
+    chat: {
+        view: {
+            name: "View Chat",
+            handle: "view",
+            description: "View the chat messages",
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+        },
+        moderate: {
+            name: "Moderate Chat",
+            handle: "moderate",
+            description: "Moderate chat messages in the chat",
+            defaultUserGroups: ["admins", "moderators"],
+        },
     },
-    remove_same_level_members: {
-        name: "Remove Same Level Members",
-        handle: "remove_same_level_members",
-        description: "Remove same level members from the circle",
-        defaultUserGroups: ["admins"],
+    followers: {
+        view: {
+            name: "View Followers",
+            handle: "view",
+            description: "View the followers list",
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+        },
     },
-    remove_lower_members: {
-        name: "Remove Lower Members",
-        handle: "remove_lower_members",
-        description: "Remove lower members from the circle",
-        defaultUserGroups: ["admins", "moderators"],
+    circles: {
+        view: {
+            name: "View Circles",
+            handle: "view",
+            description: "View the circles list",
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+        },
     },
-    manage_membership_requests: {
-        name: "Manage Follow Requests",
-        handle: "manage_membership_requests",
-        description: "Manage requests to follow the circle",
-        defaultUserGroups: ["admins", "moderators"],
+    projects: {
+        view: {
+            name: "View Projects",
+            handle: "view",
+            description: "View the projects list",
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+        },
+        create: {
+            name: "Create Project",
+            handle: "create",
+            description: "Create a new project",
+            defaultUserGroups: ["admins", "moderators", "members"],
+        },
     },
-    create_subcircle: {
-        name: "Create Sub-Circle",
-        handle: "create_subcircle",
-        description: "Create a new sub-circle that is part of this circle",
-        defaultUserGroups: ["admins", "moderators"],
+    settings: {
+        view: {
+            name: "View Settings",
+            handle: "view",
+            description: "View the settings page",
+            defaultUserGroups: ["admins"],
+        },
     },
-    delete_circle: {
-        name: "Delete Circle",
-        handle: "delete_circle",
-        description: "Delete Circle",
-        defaultUserGroups: ["admins"],
+    home: {
+        view: {
+            name: "View Home",
+            handle: "view",
+            description: "View the home page",
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+        },
     },
 };
 
-export const chatFeaturePrefix = "__chat_";
-export const chatFeatures: Feature[] = [
-    {
-        name: "View",
-        handle: "view",
-        description: "View the chat messages",
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Moderate",
-        handle: "moderate",
-        description: "Moderate chat messages in the chat",
-        defaultUserGroups: ["admins", "moderators"],
-    },
-];
-
+// For backward compatibility
 export const feedFeaturePrefix = "__feed_";
-export const feedFeatures: Feature[] = [
-    {
-        name: "View",
-        handle: "view",
-        description: "View the feed",
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Post",
-        handle: "post",
-        description: "Create a post in the feed",
-        defaultUserGroups: ["admins", "moderators", "members"],
-    },
-    {
-        name: "Comment",
-        handle: "comment",
-        description: "Comment on posts in the feed",
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Moderate",
-        handle: "moderate",
-        description: "Moderate posts in the feed",
-        defaultUserGroups: ["admins", "moderators"],
-    },
-];
-
+export const chatFeaturePrefix = "__chat_";
 export const pageFeaturePrefix = "__page_";
+
+// Helper function to get all features for a specific module
+export const getModuleFeatures = (moduleHandle: string): Record<string, Feature> | Feature[] => {
+    // For backward compatibility with old code
+    if (moduleHandle === "feeds") {
+        return Object.values(features.feed);
+    } else if (moduleHandle === "chat") {
+        return Object.values(features.chat);
+    }
+
+    // New approach
+    return features[moduleHandle as keyof typeof features] || {};
+};
+
+// Helper function to get a specific feature
+export const getFeature = (moduleHandle: string, featureHandle: string): Feature | undefined => {
+    const moduleFeatures = features[moduleHandle as keyof typeof features] || {};
+    return moduleFeatures[featureHandle as keyof typeof moduleFeatures];
+};
+
+// Helper function to get all available modules
+export const getAvailableModules = (): string[] => {
+    return Object.keys(features);
+};
+
+// For backward compatibility
+export const feedFeatures = Object.values(features.feed);
+export const chatFeatures = Object.values(features.chat);
 
 export const maxAccessLevel = 9999999;
 
@@ -319,18 +394,6 @@ export const defaultPagesForProjects: Page[] = [
     },
 ];
 
-// Get features for a specific module
-export const getModuleFeatures = (moduleHandle: string): Feature[] => {
-    switch (moduleHandle) {
-        case "feeds":
-            return feedFeatures;
-        case "chat":
-            return chatFeatures;
-        default:
-            return [];
-    }
-};
-
 // Get module feature prefix for a specific module
 export const getModuleFeaturePrefix = (moduleHandle: string): string => {
     switch (moduleHandle) {
@@ -343,56 +406,48 @@ export const getModuleFeaturePrefix = (moduleHandle: string): string => {
     }
 };
 
-export const getDefaultAccessRules = (enabledModules?: string[]) => {
-    let accessRules: Record<string, string[]> = {};
+/**
+ * Get default access rules for a circle
+ * @param enabledModules Optional list of enabled modules
+ * @returns Record of access rules
+ */
+/**
+ * Get default access rules for a circle
+ * @param enabledModules Optional list of enabled modules
+ * @returns Record of access rules
+ */
+export const getDefaultAccessRules = (enabledModules?: string[]): Record<string, Record<string, string[]>> => {
+    // Create nested access rules by module
+    let accessRules: Record<string, Record<string, string[]>> = {};
 
-    // Add general features
-    for (let feature in features) {
-        accessRules[feature] = (features as { [key: string]: Feature })[feature].defaultUserGroups ?? [];
+    // Initialize with empty objects for each module
+    for (const moduleHandle of Object.keys(features)) {
+        accessRules[moduleHandle] = {};
     }
 
-    // If no enabledModules provided, use the default pages approach for backward compatibility
-    if (!enabledModules || enabledModules.length === 0) {
-        // Add page access rules
-        for (let page of defaultPages) {
-            if (page.enabled) {
-                // Add page access rule
-                accessRules[pageFeaturePrefix + page.handle] = page.defaultUserGroups ?? [];
+    // Add general features
+    for (const featureHandle in features.general) {
+        const feature = features.general[featureHandle];
+        accessRules.general[featureHandle] = feature.defaultUserGroups || [];
+    }
 
-                // Add module-specific features for this page
-                const moduleFeatures = getModuleFeatures(page.module);
-                const modulePrefix = getModuleFeaturePrefix(page.module);
+    // If enabledModules is provided, only include those modules
+    const modulesToInclude = enabledModules || Object.keys(features);
 
-                if (moduleFeatures.length > 0 && modulePrefix) {
-                    for (let feature of moduleFeatures) {
-                        accessRules[modulePrefix + page.handle + "_" + feature.handle] =
-                            feature.defaultUserGroups ?? [];
-                    }
-                }
-            }
-        }
-    } else {
-        // Add module access rules
-        for (let moduleHandle of enabledModules) {
-            // Map module handles to page handles for backward compatibility
-            const pageHandle =
-                moduleHandle === "feed" ? "feeds" : moduleHandle === "followers" ? "members" : moduleHandle;
+    // Add module-specific features
+    for (const moduleHandle of modulesToInclude) {
+        if (moduleHandle === "general") continue; // Already handled above
 
-            // Add module access rule
-            accessRules["__module_" + moduleHandle] = ["admins", "moderators", "members", "everyone"];
+        // Skip if module doesn't exist in features
+        if (!features[moduleHandle as keyof typeof features]) continue;
 
-            // Also add page access rule for backward compatibility
-            accessRules[pageFeaturePrefix + pageHandle] =
-                moduleHandle === "settings" ? ["admins"] : ["admins", "moderators", "members", "everyone"];
+        const moduleFeatures = features[moduleHandle as keyof typeof features];
 
-            // Add module-specific features
-            const moduleFeatures = getModuleFeatures(pageHandle);
-            const modulePrefix = getModuleFeaturePrefix(pageHandle);
-
-            if (moduleFeatures.length > 0 && modulePrefix) {
-                for (let feature of moduleFeatures) {
-                    accessRules[modulePrefix + pageHandle + "_" + feature.handle] = feature.defaultUserGroups ?? [];
-                }
+        // Add each feature for this module
+        for (const featureHandle in moduleFeatures) {
+            const feature = (moduleFeatures as any)[featureHandle];
+            if (feature && feature.defaultUserGroups) {
+                accessRules[moduleHandle][featureHandle] = feature.defaultUserGroups;
             }
         }
     }
@@ -400,33 +455,42 @@ export const getDefaultAccessRules = (enabledModules?: string[]) => {
     return accessRules;
 };
 
-export const getDefaultAccessRulesForUser = () => {
-    let accessRules: Record<string, string[]> = {};
+/**
+ * Get default access rules for a user
+ * @returns Record of access rules
+ */
+export const getDefaultAccessRulesForUser = (): Record<string, string[]> => {
+    // Use the same approach as getDefaultAccessRules but with defaultPagesForUser
+    const flatAccessRules: Record<string, string[]> = {};
 
     // Add general features
-    for (let feature in features) {
-        accessRules[feature] = (features as { [key: string]: Feature })[feature].defaultUserGroups ?? [];
+    for (const featureHandle in features.general) {
+        const feature = features.general[featureHandle];
+        flatAccessRules[featureHandle] = feature.defaultUserGroups || [];
     }
 
-    // Add page access rules
-    for (let page of defaultPagesForUser) {
-        if (page.enabled) {
-            // Add page access rule
-            accessRules[pageFeaturePrefix + page.handle] = page.defaultUserGroups ?? [];
+    // Add module features based on defaultPagesForUser
+    for (const page of defaultPagesForUser) {
+        if (!page.enabled) continue;
 
-            // Add module-specific features for this page
-            const moduleFeatures = getModuleFeatures(page.module);
-            const modulePrefix = getModuleFeaturePrefix(page.module);
+        // Map module to moduleHandle
+        const moduleHandle = page.module === "feeds" ? "feed" : page.module === "members" ? "followers" : page.module;
 
-            if (moduleFeatures.length > 0 && modulePrefix) {
-                for (let feature of moduleFeatures) {
-                    accessRules[modulePrefix + page.handle + "_" + feature.handle] = feature.defaultUserGroups ?? [];
-                }
-            }
+        // Skip if module doesn't exist in features
+        if (!features[moduleHandle as keyof typeof features]) continue;
+
+        // Add page access rule
+        flatAccessRules[pageFeaturePrefix + page.handle] = page.defaultUserGroups || [];
+
+        // Add module-specific features
+        const moduleFeatures = features[moduleHandle as keyof typeof features];
+        for (const featureHandle in moduleFeatures) {
+            const feature = moduleFeatures[featureHandle as keyof typeof moduleFeatures];
+            flatAccessRules[feedFeaturePrefix + page.handle + "_" + featureHandle] = feature.defaultUserGroups || [];
         }
     }
 
-    return accessRules;
+    return flatAccessRules;
 };
 
 export const causes: Cause[] = [

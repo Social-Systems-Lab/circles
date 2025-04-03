@@ -36,22 +36,7 @@ export async function POST(req: Request) {
         const accessRules = circle.accessRules || {};
 
         // First try module-specific access rule
-        let allowedUserGroups = accessRules["__module_" + moduleHandle];
-
-        // If not found, try page-specific access rule for backward compatibility
-        if (!allowedUserGroups) {
-            allowedUserGroups = accessRules["__page_" + pageHandle];
-        }
-
-        // If still not found, check the page's default user groups
-        if (!allowedUserGroups) {
-            const defaultPages = circle.pages || [];
-            const page = defaultPages.find((p) => p.handle === pageHandle);
-
-            if (page?.defaultUserGroups) {
-                allowedUserGroups = page.defaultUserGroups;
-            }
-        }
+        let allowedUserGroups = accessRules[moduleHandle].view;
 
         // If still not found, use default permissions for everyone
         if (!allowedUserGroups) {

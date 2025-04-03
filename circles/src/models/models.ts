@@ -353,8 +353,11 @@ export type Weights = {
     recentness: number;
 };
 
-// access rules are a map of features to array of user groups that are granted access to the feature
-export const accessRulesSchema = z.record(z.string(), z.array(z.string()));
+// Define the schema for module-specific access rules (feature -> user groups)
+export const moduleAccessRulesSchema = z.record(z.string(), z.array(z.string()));
+
+// Define the schema for the entire access rules structure
+export const accessRulesSchema = z.record(z.string(), moduleAccessRulesSchema);
 
 export const pageSchema = z.object({
     name: z.string(),
