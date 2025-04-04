@@ -135,6 +135,50 @@ export const features = {
             module: "projects",
         },
     },
+    proposals: {
+        view: {
+            name: "View Proposals",
+            handle: "view",
+            description: "View the proposals list",
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+            module: "proposals",
+        },
+        create: {
+            name: "Create Proposal",
+            handle: "create",
+            description: "Create a new proposal",
+            defaultUserGroups: ["admins", "moderators", "members"],
+            module: "proposals",
+        },
+        review: {
+            name: "Review Proposals",
+            handle: "review",
+            description: "Review proposals and move them to voting stage",
+            defaultUserGroups: ["admins", "moderators"],
+            module: "proposals",
+        },
+        vote: {
+            name: "Vote on Proposals",
+            handle: "vote",
+            description: "Vote on proposals in the voting stage",
+            defaultUserGroups: ["admins", "moderators", "members"],
+            module: "proposals",
+        },
+        resolve: {
+            name: "Resolve Proposals",
+            handle: "resolve",
+            description: "Mark proposals as resolved (accepted/rejected)",
+            defaultUserGroups: ["admins", "moderators"],
+            module: "proposals",
+        },
+        moderate: {
+            name: "Moderate Proposals",
+            handle: "moderate",
+            description: "Edit or delete any proposal",
+            defaultUserGroups: ["admins"],
+            module: "proposals",
+        },
+    },
     settings: {
         view: {
             name: "View Settings",
@@ -231,10 +275,16 @@ export const modules: ModuleInfo[] = [
             "Lists all projects the circle is working on or supporting. Offers a structured overview of ongoing initiatives, goals, and collaboration opportunities for members.",
     },
     {
+        name: "Proposals",
+        handle: "proposals",
+        description:
+            "A structured system for collecting and deciding on ideas or motions within the circle. Proposals move through stages from drafting to resolution, enabling transparent decision-making.",
+    },
+    {
         name: "Settings",
         handle: "settings",
         description:
-            "Provides administrative controls for circle governance and customization. Manage privacy levels, user groups, questionnaires, location settings, and more to shape the circle’s operations.",
+            "Provides administrative controls for circle governance and customization. Manage privacy levels, user groups, questionnaires, location settings, and more to shape the circle's operations.",
         readOnly: true,
     },
 ];
@@ -343,6 +393,14 @@ export const defaultPages: Page[] = [
         defaultUserGroups: ["admins", "moderators", "members", "everyone"],
     },
     {
+        name: "Proposals",
+        handle: "proposals",
+        description: "Proposals page",
+        module: "proposals",
+        enabled: true,
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+    },
+    {
         name: "Settings",
         handle: "settings",
         description: "Settings page",
@@ -416,6 +474,14 @@ export const defaultPagesForProjects: Page[] = [
         module: "members",
         enabled: true,
         defaultUserGroups: ["admins", "moderators", "members"],
+    },
+    {
+        name: "Proposals",
+        handle: "proposals",
+        description: "Proposals page",
+        module: "proposals",
+        enabled: true,
+        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
     },
     {
         name: "Settings",

@@ -14,6 +14,7 @@ import {
     ChatMessage,
     ChatRoomMember,
     Challenge,
+    Proposal,
 } from "@/models/models";
 
 const MONGO_HOST = process.env.MONGO_HOST || "127.0.0.1";
@@ -41,16 +42,17 @@ let ChatRooms: Collection<ChatRoom>;
 let ChatMessages: Collection<ChatMessage>;
 let ChatRoomMembers: Collection<ChatRoomMember>;
 let Challenges: Collection<Challenge>;
+let Proposals: Collection<Proposal>;
 
 // Only initialize the database connection if not in build mode
 if (process.env.IS_BUILD !== "true") {
     client = new MongoClient(MONGO_CONNECTION_STRING, options);
-    
+
     // Connect the client - this establishes the connection more reliably
-    client.connect().catch(err => {
+    client.connect().catch((err) => {
         console.error("MongoDB connection error:", err);
     });
-    
+
     db = client.db("circles");
 
     Circles = db.collection<Circle>("circles");
@@ -67,6 +69,7 @@ if (process.env.IS_BUILD !== "true") {
     ChatMessages = db.collection<ChatMessage>("chatMessages");
     ChatRoomMembers = db.collection<ChatRoomMember>("chatRoomMembers");
     Challenges = db.collection<Challenge>("challenges");
+    Proposals = db.collection<Proposal>("proposals");
 }
 
 export {
@@ -86,4 +89,5 @@ export {
     ChatMessages,
     ChatRoomMembers,
     Challenges,
+    Proposals,
 };

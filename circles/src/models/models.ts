@@ -251,8 +251,8 @@ export interface CommentDisplay extends Comment {
 
 export const reactionSchema = z.object({
     _id: z.any().optional(),
-    contentId: z.string(), // ID of the post or comment
-    contentType: z.enum(["post", "comment", "chatMessage"]),
+    contentId: z.string(), // ID of the post, comment, or proposal
+    contentType: z.enum(["post", "comment", "chatMessage", "proposal"]),
     userDid: didSchema,
     reactionType: z.string(),
     createdAt: z.date(),
@@ -470,7 +470,8 @@ export type ContentPreviewData =
     | { type: "user"; content: Circle; props?: never }
     | { type: "circle"; content: Circle; props?: never }
     | { type: "project"; content: Circle; props?: never }
-    | { type: "default"; content: Content; props?: Record<string, unknown> };
+    | { type: "proposal"; content: Proposal; props?: Record<string, unknown> }
+    | { type: "default"; content: Content | ProposalDisplay; props?: Record<string, unknown> };
 
 // server setup form wizard
 
@@ -806,3 +807,41 @@ export type ModuleInfo = {
     description: string;
     readOnly?: boolean;
 };
+
+// Proposal stages
+export const proposalStageSchema = z.enum(["draft", "review", "voting", "resolved"]);
+
+export type ProposalStage = z.infer<typeof proposalStageSchema>;
+
+// Proposal outcome (when resolved)
+export const proposalOutcomeSchema = z.enum(["accepted", "rejected"]);
+
+export type ProposalOutcome = z.infer<typeof proposalOutcomeSchema>;
+
+// Proposal model
+export const proposalSchema = z.object({
+    _id: z.any().optional(),
+    circleId: z.string(),
+    createdBy: didSchema,
+    createdAt: z.date(),
+    editedAt: z.date().optional(),
+    name: z.string(),
+    description: z.string(),
+    stage: proposalStageSchema.default("draft"),
+    outcome: proposalOutcomeSchema.optional(),
+    outcomeReason: z.string().optional(),
+    votingDeadline: z.date().optional(),
+    reactions: z.record(z.string(), z.number()).default({}), // For "likes" in voting stage
+    userGroups: z.array(z.string()).default([]), // User groups that can see this proposal
+    reviewers: z.array(z.string()).optional(), // Users who can review the proposal
+    media: z.array(mediaSchema).optional(), // For attached images
+});
+
+export type Proposal = z.infer<typeof proposalSchema>;
+
+// Display type with author information
+export interface ProposalDisplay extends Proposal {
+    author: Circle;
+    userReaction?: string; // Current user's reaction
+    circle?: Circle;
+}

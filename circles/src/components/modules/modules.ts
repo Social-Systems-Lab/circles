@@ -8,6 +8,8 @@ import FeedsModule from "./feeds/feeds";
 import FeedsModuleLayout from "./feeds/feeds-layout";
 import ChatModule from "./chat/chat";
 import ChatModuleLayout from "./chat/chat-layout";
+import dynamic from "next/dynamic";
+import ProposalsModule from "./proposals/proposals";
 
 export const modules: Record<string, Module> = {
     home: {
@@ -54,6 +56,13 @@ export const modules: Record<string, Module> = {
         component: FeedsModule,
         layoutComponent: FeedsModuleLayout,
         defaultIcon: "AiOutlineWifi",
+    },
+    proposals: {
+        name: "Proposals",
+        handle: "proposals",
+        description: "Proposals page",
+        component: dynamic(() => import("./proposals/proposals")),
+        defaultIcon: "AiOutlineFileText",
     },
     // chat: {
     //     name: "Chat",

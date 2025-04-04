@@ -24,6 +24,7 @@ import { SupportButton } from "@/components/layout/support-button";
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 export const revalidate = 0;
+const enableReactScan = false;
 
 const inter = Inter({ subsets: ["latin"] });
 const wix = Wix_Madefor_Display({ subsets: ["latin"], variable: "--font-wix-display" });
@@ -39,7 +40,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
     return (
         <Provider>
             <html lang="en" className={`${wix.variable} ${libre.variable}`}>
-                {process.env.NODE_ENV === "development" && <ReactScan />}
+                {process.env.NODE_ENV === "development" && enableReactScan && <ReactScan />}
                 <head>
                     <meta name="app-version" content={process.env.version} />
                 </head>

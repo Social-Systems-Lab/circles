@@ -14,6 +14,7 @@ export type DynamicPageProps = {
 export type ModulePageProps = {
     circle: Circle;
     moduleHandle: string;
+    page?: Page;
     subpage?: string;
     searchParams?: { [key: string]: string | string[] | undefined };
 };
@@ -47,5 +48,13 @@ export default async function DynamicPage({ circleHandle, moduleHandle, subpage,
         module: _module.handle,
     };
 
-    return <_module.component circle={circle} page={page} subpage={subpage} searchParams={searchParams} />;
+    return (
+        <_module.component
+            circle={circle}
+            page={page}
+            moduleHandle={moduleHandle || ""}
+            subpage={subpage}
+            searchParams={searchParams}
+        />
+    );
 }

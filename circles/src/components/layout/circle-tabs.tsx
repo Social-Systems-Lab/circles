@@ -9,8 +9,7 @@ import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { useMemo, useCallback, useEffect } from "react";
 import type { Circle } from "@/models/models";
-import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
-import { modules } from "@/components/modules/modules";
+import { LOG_LEVEL_TRACE, logLevel, modules } from "@/lib/data/constants";
 
 type CircleTabsProps = {
     circle: Circle;
@@ -51,10 +50,10 @@ export function CircleTabs({ circle }: CircleTabsProps) {
     const visibleModules = useMemo(() => {
         return enabledModules
             .filter((moduleHandle) => {
-                const module = modules[moduleHandle];
+                const module = modules.find((x) => x.handle === moduleHandle);
                 return module && hasAccess(moduleHandle);
             })
-            .map((moduleHandle) => modules[moduleHandle]);
+            .map((moduleHandle) => modules.find((x) => x.handle === moduleHandle)!);
     }, [enabledModules, hasAccess]);
 
     // Generate the correct path for a module based on default circle status
