@@ -46,11 +46,6 @@ export async function createCircleAction(circleData: any, formData?: FormData, i
         try {
             let needUpdate = false;
 
-            // Debug information
-            console.log("FormData provided:", !!formData);
-            console.log("circleData.pictureFile:", !!circleData.pictureFile);
-            console.log("circleData.coverFile:", !!circleData.coverFile);
-
             // Check if we have FormData with image files
             try {
                 if (formData) {
@@ -67,28 +62,20 @@ export async function createCircleAction(circleData: any, formData?: FormData, i
                     try {
                         const pictureFile = formData.get("picture");
                         if (pictureFile) {
-                            console.log("Picture file found in FormData, type:", typeof pictureFile);
-
                             // Convert to Buffer if needed
                             if (typeof Buffer !== "undefined" && pictureFile instanceof Buffer) {
-                                console.log("Picture is a Buffer");
                                 // Save the picture and get the file info
                                 newCircle.picture = await saveFile(pictureFile, "picture", newCircle._id, true);
-                                console.log("Picture saved:", newCircle.picture);
                                 needUpdate = true;
                             } else if (typeof Blob !== "undefined" && pictureFile instanceof Blob) {
-                                console.log("Picture is a Blob");
                                 // Convert Blob to Buffer
                                 const arrayBuffer = await pictureFile.arrayBuffer();
                                 const buffer = Buffer.from(arrayBuffer);
                                 newCircle.picture = await saveFile(buffer, "picture", newCircle._id, true);
-                                console.log("Picture saved from Blob:", newCircle.picture);
                                 needUpdate = true;
                             } else {
-                                console.log("Picture is another type:", pictureFile.constructor?.name);
                                 // Try to save it directly
                                 newCircle.picture = await saveFile(pictureFile, "picture", newCircle._id, true);
-                                console.log("Picture saved directly:", newCircle.picture);
                                 needUpdate = true;
                             }
                         }
@@ -100,28 +87,20 @@ export async function createCircleAction(circleData: any, formData?: FormData, i
                     try {
                         const coverFile = formData.get("cover");
                         if (coverFile) {
-                            console.log("Cover file found in FormData, type:", typeof coverFile);
-
                             // Convert to Buffer if needed
                             if (typeof Buffer !== "undefined" && coverFile instanceof Buffer) {
-                                console.log("Cover is a Buffer");
                                 // Save the cover and get the file info
                                 newCircle.cover = await saveFile(coverFile, "cover", newCircle._id, true);
-                                console.log("Cover saved:", newCircle.cover);
                                 needUpdate = true;
                             } else if (typeof Blob !== "undefined" && coverFile instanceof Blob) {
-                                console.log("Cover is a Blob");
                                 // Convert Blob to Buffer
                                 const arrayBuffer = await coverFile.arrayBuffer();
                                 const buffer = Buffer.from(arrayBuffer);
                                 newCircle.cover = await saveFile(buffer, "cover", newCircle._id, true);
-                                console.log("Cover saved from Blob:", newCircle.cover);
                                 needUpdate = true;
                             } else {
-                                console.log("Cover is another type:", coverFile.constructor?.name);
                                 // Try to save it directly
                                 newCircle.cover = await saveFile(coverFile, "cover", newCircle._id, true);
-                                console.log("Cover saved directly:", newCircle.cover);
                                 needUpdate = true;
                             }
                         }
@@ -132,11 +111,9 @@ export async function createCircleAction(circleData: any, formData?: FormData, i
 
                 // Try the direct method as a fallback
                 if (circleData.pictureFile && !newCircle.picture) {
-                    console.log("Using pictureFile from circleData, type:", typeof circleData.pictureFile);
                     try {
                         // Save the picture and get the file info
                         newCircle.picture = await saveFile(circleData.pictureFile, "picture", newCircle._id, true);
-                        console.log("Picture saved from circleData:", newCircle.picture);
                         needUpdate = true;
                     } catch (error) {
                         console.log("Error saving picture from circleData:", error);
@@ -144,11 +121,9 @@ export async function createCircleAction(circleData: any, formData?: FormData, i
                 }
 
                 if (circleData.coverFile && !newCircle.cover) {
-                    console.log("Using coverFile from circleData, type:", typeof circleData.coverFile);
                     try {
                         // Save the cover and get the file info
                         newCircle.cover = await saveFile(circleData.coverFile, "cover", newCircle._id, true);
-                        console.log("Cover saved from circleData:", newCircle.cover);
                         needUpdate = true;
                     } catch (error) {
                         console.log("Error saving cover from circleData:", error);
@@ -184,6 +159,17 @@ export async function saveBasicInfoAction(
 ) {
     try {
         if (circleId) {
+            // Check if user is authorized to create circles
+            const userDid = await getAuthenticatedUserDid();
+            if (!userDid) {
+                return { success: false, message: "You need to be logged in to update a circle" };
+            }
+
+            const authorized = await isAuthorized(userDid, circleId ?? "", features.settings.edit_about);
+            if (!authorized) {
+                return { success: false, message: "You are not authorized to update the circle" };
+            }
+
             // If circleId exists, update the existing circle
             const circle = await updateCircle({
                 _id: circleId,
@@ -244,6 +230,16 @@ export async function saveBasicInfoAction(
 
 export async function saveMissionAction(mission: string, circleId?: string) {
     try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "You need to be logged in to update a circle" };
+        }
+
+        const authorized = await isAuthorized(userDid, circleId ?? "", features.settings.edit_about);
+        if (!authorized) {
+            return { success: false, message: "You are not authorized to update the circles" };
+        }
+
         if (circleId) {
             // If circleId exists, update the existing circle
             const circle = await updateCircle({
@@ -273,6 +269,16 @@ export async function saveProfileAction(
 ) {
     try {
         if (circleId) {
+            const userDid = await getAuthenticatedUserDid();
+            if (!userDid) {
+                return { success: false, message: "You need to be logged in to update a circle" };
+            }
+
+            const authorized = await isAuthorized(userDid, circleId ?? "", features.settings.edit_about);
+            if (!authorized) {
+                return { success: false, message: "You are not authorized to update the circles" };
+            }
+
             // If circleId exists, update the existing circle
             const updateData: any = {
                 _id: circleId,
@@ -313,6 +319,16 @@ export async function saveProfileAction(
 export async function saveLocationAction(location: any, circleId?: string) {
     try {
         if (circleId) {
+            const userDid = await getAuthenticatedUserDid();
+            if (!userDid) {
+                return { success: false, message: "You need to be logged in to update a circle" };
+            }
+
+            const authorized = await isAuthorized(userDid, circleId ?? "", features.settings.edit_about);
+            if (!authorized) {
+                return { success: false, message: "You are not authorized to update the circles" };
+            }
+
             // If circleId exists, update the existing circle
             const circle = await updateCircle({
                 _id: circleId,
@@ -335,6 +351,16 @@ export async function saveLocationAction(location: any, circleId?: string) {
 export async function saveCausesAction(causes: string[], circleId?: string) {
     try {
         if (circleId) {
+            const userDid = await getAuthenticatedUserDid();
+            if (!userDid) {
+                return { success: false, message: "You need to be logged in to update a circle" };
+            }
+
+            const authorized = await isAuthorized(userDid, circleId ?? "", features.settings.edit_causes_and_skills);
+            if (!authorized) {
+                return { success: false, message: "You are not authorized to update the circles" };
+            }
+
             // If circleId exists, update the existing circle
             const circle = await updateCircle({
                 _id: circleId,
@@ -357,6 +383,16 @@ export async function saveCausesAction(causes: string[], circleId?: string) {
 export async function saveSkillsAction(skills: string[], circleId?: string) {
     try {
         if (circleId) {
+            const userDid = await getAuthenticatedUserDid();
+            if (!userDid) {
+                return { success: false, message: "You need to be logged in to update a circle" };
+            }
+
+            const authorized = await isAuthorized(userDid, circleId ?? "", features.settings.edit_causes_and_skills);
+            if (!authorized) {
+                return { success: false, message: "You are not authorized to update the circles" };
+            }
+
             // If circleId exists, update the existing circle
             const circle = await updateCircle({
                 _id: circleId,

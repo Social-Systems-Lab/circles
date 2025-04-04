@@ -7,7 +7,7 @@ import { Circle, Feed, Page, PostDisplay } from "@/models/models";
 import { CreateNewPost } from "./create-new-post";
 import PostList from "./post-list";
 import CircleHeader from "../circles/circle-header";
-import { feedFeaturePrefix, LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import { features, LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { isAuthorized } from "@/lib/auth/client-auth";
@@ -33,8 +33,7 @@ export const FeedComponent = ({ circle, posts, page, subpage, feed }: FeedCompon
     const [user] = useAtom(userAtom);
 
     // check if authorized to post
-    const canPostFeature = feedFeaturePrefix + feed?.handle + "_post";
-    const canPost = isAuthorized(user, circle, canPostFeature);
+    const canPost = isAuthorized(user, circle, features.feed.post);
 
     const router = useRouter();
 

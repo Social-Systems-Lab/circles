@@ -75,7 +75,7 @@ import { AiOutlineHeart, AiFillHeart } from "react-icons/ai";
 import { useToast } from "@/components/ui/use-toast";
 import { PostForm } from "./post-form";
 import { isAuthorized } from "@/lib/auth/client-auth";
-import { feedFeaturePrefix, LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import { features, LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { MentionsInput, Mention, MentionItem, SuggestionDataItem } from "react-mentions";
 import { over, set } from "lodash";
 import ReactMarkdown from "react-markdown";
@@ -233,10 +233,8 @@ export const PostItem = ({
     const [, setContentPreview] = useAtom(contentPreviewAtom);
     const [user] = useAtom(userAtom);
     const isAuthor = user && post.createdBy === user?.did;
-    const canModerateFeature = feedFeaturePrefix + feed?.handle + "_moderate";
-    const canModerate = circle && isAuthorized(user, circle, canModerateFeature);
-    const canCommentFeature = feedFeaturePrefix + feed?.handle + "_comment";
-    const canComment = circle && isAuthorized(user, circle, canCommentFeature);
+    const canModerate = circle && isAuthorized(user, circle, features.feed.moderate);
+    const canComment = circle && isAuthorized(user, circle, features.feed.comment);
     const [isPending, startTransition] = useTransition();
     const [isFetchingComments, startCommentsTransition] = useTransition();
     const { toast } = useToast();
@@ -923,8 +921,7 @@ const CommentItem = ({
     const router = useRouter();
 
     const isAuthor = user && comment.createdBy === user?.did;
-    const canModerateFeature = feedFeaturePrefix + feed.handle + "_moderate";
-    const canModerate = isAuthorized(user, circle, canModerateFeature);
+    const canModerate = isAuthorized(user, circle, features.feed.moderate);
     const formattedDate = getPublishTime(comment.createdAt);
 
     const replies = useMemo<CommentDisplay[]>(

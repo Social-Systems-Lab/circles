@@ -4,9 +4,7 @@ import { ChatRooms, Circles, ChatRoomMembers } from "./db";
 import { ObjectId } from "mongodb";
 import { ChatRoom, ChatRoomMember, ChatRoomDisplay, Circle } from "@/models/models";
 import { getCircleById, updateCircle } from "./circle";
-import { addChatRoomsAccessRules } from "../utils";
 import { addUserToRoom, createMatrixRoom } from "./matrix";
-import { revalidatePath } from "next/cache";
 import { getPrivateUserByDid } from "./user";
 
 // Chat Room Functions
@@ -111,8 +109,6 @@ export const createDefaultChatRooms = async (circleId: string): Promise<ChatRoom
     chatRooms.push(membersChat);
 
     let existingChatRooms = await getChatRooms(circleId);
-
-    circle.accessRules = addChatRoomsAccessRules(existingChatRooms, circle.accessRules ?? {});
 
     await updateCircle(circle);
     return existingChatRooms;

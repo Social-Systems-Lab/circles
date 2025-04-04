@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState, useTransition } from "reac
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CirclePagesField } from "./circle-settings/pages/circle-pages-field";
 import {
     Control,
     Controller,
@@ -30,7 +29,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { cn, removeLast } from "@/lib/utils";
 import { FaLock } from "react-icons/fa6";
 import { FaCheck } from "react-icons/fa";
-import { features, features as featuresList, feedFeatures, causes, skills, chatFeatures } from "@/lib/data/constants";
+import { features, features as featuresList, causes, skills } from "@/lib/data/constants";
 import { CheckCircle2, ChevronDown, ChevronUp, Loader2, Search, XCircle } from "lucide-react";
 import { getMemberAccessLevel, isAuthorized } from "@/lib/auth/client-auth";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
@@ -38,13 +37,11 @@ import { Switch } from "../ui/switch";
 import { WithContext as ReactTags } from "react-tag-input";
 import { getUserOrCircleInfo } from "@/lib/utils/form";
 import LocationPicker from "./location-picker";
-import { useAtom } from "jotai";
-import { userAtom } from "@/lib/data/atoms";
 import { fetchCausesMatchedToCircle, fetchSkillsMatchedToCircle } from "../onboarding/actions";
 import { ScrollArea } from "../ui/scroll-area";
 import { ItemGridCard } from "../onboarding/item-card";
 import SelectedItemBadge from "../onboarding/selected-item-badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
+import { Card, CardDescription, CardHeader, CardTitle } from "../ui/card";
 
 type RenderFieldProps = {
     field: FormFieldType;

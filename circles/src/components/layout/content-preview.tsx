@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import { useAtom } from "jotai";
 import { Button } from "@/components/ui/button";
 import { contentPreviewAtom, imageGalleryAtom, userAtom } from "@/lib/data/atoms";
@@ -9,28 +9,13 @@ import { FaUsers } from "react-icons/fa6";
 import { useRouter } from "next/navigation";
 import InviteButton from "../modules/home/invite-button";
 import FollowButton from "../modules/home/follow-button";
-import {
-    Circle,
-    CommentDisplay,
-    Feed,
-    FileInfo,
-    Media,
-    MemberDisplay,
-    Post,
-    PostItemProps,
-    WithMetric,
-} from "@/models/models";
+import { Circle, FileInfo, Media, MemberDisplay, Post, PostItemProps, WithMetric } from "@/models/models";
 import { PostItem } from "../modules/feeds/post-list";
 import Indicators from "../utils/indicators";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { MessageButton } from "../modules/home/message-button";
-import dynamic from "next/dynamic";
-import { Loader2 } from "lucide-react";
-import { getCircleByIdAction } from "../modules/circles/actions";
-import { getPostAction, getAllCommentsAction, getFeedByHandleAction } from "../modules/feeds/actions";
-import { ProjectCommentsSection } from "../modules/projects/project-comments";
-
-const RichText = dynamic(() => import("@/components/modules/feeds/RichText"), { ssr: false });
+//import dynamic from "next/dynamic";
+// const RichText = dynamic(() => import("@/components/modules/feeds/RichText"), { ssr: false });
 
 export const PostPreview = ({
     post,
@@ -206,85 +191,6 @@ type ProjectCommentsSectionLoaderProps = {
     parentCircleId: string;
     commentPostId: string;
     embedded?: boolean;
-};
-
-const ProjectCommentsSectionLoader = ({
-    projectId,
-    parentCircleId,
-    commentPostId,
-    embedded = false,
-}: ProjectCommentsSectionLoaderProps) => {
-    const [isLoading, setIsLoading] = useState(true);
-    const [project, setProject] = useState<Circle | null>(null);
-    const [parentCircle, setParentCircle] = useState<Circle | null>(null);
-    const [feed, setFeed] = useState<Feed | null>(null);
-    const [post, setPost] = useState<Post | null>(null);
-    const [comments, setComments] = useState<CommentDisplay[]>([]);
-    const [user] = useAtom(userAtom);
-
-    useEffect(() => {
-        const loadData = async () => {
-            try {
-                setIsLoading(true);
-
-                // Load data in parallel
-                const [projectResult, parentCircleResult, postResult] = await Promise.all([
-                    getCircleByIdAction(projectId),
-                    getCircleByIdAction(parentCircleId),
-                    getPostAction(commentPostId),
-                ]);
-
-                setProject(projectResult);
-                setParentCircle(parentCircleResult);
-                setPost(postResult);
-
-                // Get the feed
-                if (parentCircleResult?._id) {
-                    const feedResult = await getFeedByHandleAction(parentCircleResult._id, "default");
-                    setFeed(feedResult);
-                }
-
-                // Get comments if we have a post
-                if (postResult?._id && user?.did) {
-                    const commentsResult = await getAllCommentsAction(postResult._id);
-                    if (commentsResult.success && commentsResult.comments) {
-                        setComments(commentsResult.comments);
-                    }
-                }
-            } catch (error) {
-                console.error("Error loading project data:", error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        loadData();
-    }, [projectId, parentCircleId, commentPostId, user?.did]);
-
-    if (isLoading) {
-        return (
-            <div className="flex items-center justify-center py-2">
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                <span className="text-sm text-gray-500">Loading comments...</span>
-            </div>
-        );
-    }
-
-    if (!project || !parentCircle || !feed || !post) {
-        return null;
-    }
-
-    return (
-        <ProjectCommentsSection
-            project={project}
-            circle={parentCircle}
-            feed={feed}
-            initialComments={comments}
-            commentPostId={commentPostId}
-            post={post}
-            embedded={embedded}
-        />
-    );
 };
 
 export default ContentPreview;

@@ -27,7 +27,7 @@ import {
 } from "@/lib/data/feed";
 import { saveFile, isFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
-import { feedFeaturePrefix } from "@/lib/data/constants";
+import { features } from "@/lib/data/constants";
 import {
     Media,
     Post,
@@ -125,8 +125,7 @@ export async function getPostsAction(
         redirect("/not-found");
     }
 
-    const feature = feedFeaturePrefix + feed.handle + "_view";
-    const authorized = await isAuthorized(userDid, circleId, feature);
+    const authorized = await isAuthorized(userDid, circleId, features.feed.view);
     if (!authorized) {
         redirect("/unauthorized");
     }
@@ -162,9 +161,7 @@ export async function createPostAction(
         }
 
         const feedId = feed._id.toString();
-
-        const feature = feedFeaturePrefix + feed.handle + "_post";
-        const authorized = await isAuthorized(userDid, circleId, feature);
+        const authorized = await isAuthorized(userDid, circleId, features.feed.post);
         if (!authorized) {
             return { success: false, message: "You are not authorized to post in this feed" };
         }
@@ -365,8 +362,7 @@ export async function deletePostAction(
         const feed = await getFeed(post.feedId);
         let canModerate = false;
         if (feed) {
-            const feature = feedFeaturePrefix + feed.handle + "_moderate";
-            canModerate = await isAuthorized(userDid, feed.circleId, feature);
+            canModerate = await isAuthorized(userDid, feed.circleId, features.feed.moderate);
         }
 
         // check if user can moderate feed or is creator of the post
@@ -416,10 +412,9 @@ export async function createCommentAction(
             return { success: false, message: "Feed not found" };
         }
 
-        const feature = feedFeaturePrefix + feed.handle + "_comment";
-        const authorized = await isAuthorized(userDid, feed.circleId, feature);
+        const authorized = await isAuthorized(userDid, feed.circleId, features.feed.comment);
         if (!authorized) {
-            console.log("🐞 [ACTION] User not authorized:", { userDid, feature });
+            console.log("🐞 [ACTION] User not authorized:", { userDid });
             return { success: false, message: "You are not authorized to comment in this feed" };
         }
 
@@ -546,8 +541,7 @@ export async function getAllCommentsAction(
             return { success: false, message: "Feed not found" };
         }
 
-        const feature = feedFeaturePrefix + feed.handle + "_view";
-        const authorized = await isAuthorized(userDid, feed.circleId, feature);
+        const authorized = await isAuthorized(userDid, feed.circleId, features.feed.view);
         if (!authorized) {
             return { success: false, message: "You are not authorized to view comments in this feed" };
         }
@@ -648,7 +642,7 @@ export async function deleteCommentAction(commentId: string): Promise<{ success:
             return { success: false, message: "Feed not found" };
         }
 
-        const canModerate = await isAuthorized(userDid, feed.circleId, feedFeaturePrefix + feed.handle + "_moderate");
+        const canModerate = await isAuthorized(userDid, feed.circleId, features.feed.moderate);
 
         if (comment.createdBy !== userDid && !canModerate) {
             return { success: false, message: "You are not authorized to delete this comment" };
@@ -690,8 +684,7 @@ export async function likeContentAction(
 
         const feed = await getFeed(post.feedId);
         if (feed) {
-            const feature = feedFeaturePrefix + feed.handle + "_view";
-            let canReact = await isAuthorized(userDid, feed.circleId, feature);
+            let canReact = await isAuthorized(userDid, feed.circleId, features.feed.view);
             if (!canReact) {
                 return { success: false, message: "You are not authorized to like content in this feed" };
             }
@@ -793,8 +786,7 @@ export async function getPostAction(postId: string): Promise<Post | null> {
         if (!feed) return null;
 
         // Check if user has permission to view the feed
-        const feature = feedFeaturePrefix + feed.handle + "_view";
-        const authorized = await isAuthorized(userDid, feed.circleId, feature);
+        const authorized = await isAuthorized(userDid, feed.circleId, features.feed.view);
         if (!authorized) return null;
 
         return post;
@@ -816,8 +808,7 @@ export async function getFeedByHandleAction(circleId: string, feedHandle: string
         if (!feed) return null;
 
         // Check if user has permission to view the feed
-        const feature = feedFeaturePrefix + feed.handle + "_view";
-        const authorized = await isAuthorized(userDid, circleId, feature);
+        const authorized = await isAuthorized(userDid, circleId, features.feed.view);
         if (!authorized) return null;
 
         return feed;

@@ -10,7 +10,6 @@ import {
     getUserPrivate,
     getUsersByMatrixUsernames,
 } from "@/lib/data/user";
-import { chatFeaturePrefix } from "@/lib/data/constants";
 import {
     addChatRoomMember,
     findOrCreateDMRoom,
@@ -19,6 +18,7 @@ import {
     removeChatRoomMember,
 } from "@/lib/data/chat";
 import { addUserToRoom, sendReadReceipt } from "@/lib/data/matrix";
+import { features } from "@/lib/data/constants";
 
 export async function joinChatRoomAction(
     chatRoomId: string,
@@ -39,8 +39,7 @@ export async function joinChatRoomAction(
         }
 
         const circleId = chatRoom.circleId;
-        const feature = chatFeaturePrefix + chatRoom.handle + "_view";
-        const authorized = await isAuthorized(userDid, circleId, feature);
+        const authorized = await isAuthorized(userDid, circleId, features.chat.view);
         if (!authorized) {
             return { success: false, message: "You are not authorized to join this chat room" };
         }

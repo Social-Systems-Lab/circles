@@ -241,18 +241,25 @@ export const createCircle = async (circle: Circle): Promise<Circle> => {
     circle.userGroups = defaultUserGroups;
 
     // Set default enabled modules based on circle type
-    const defaultModules = ["feed", "followers", "settings"];
-
-    // Add circles and projects modules for regular circles
-    if (circle.circleType !== "project") {
-        defaultModules.push("circles", "projects");
+    let defaultModules = ["feed", "followers", "circles", "projects", "settings"];
+    switch (circle.circleType) {
+        default:
+        case "circle":
+            defaultModules = ["feed", "followers", "projects", "settings"];
+            break;
+        case "project":
+            defaultModules = ["feed", "followers", "settings"];
+            break;
+        case "user":
+            defaultModules = ["feed", "followers", "circles", "projects", "settings"];
+            break;
     }
 
     // Set the enabledModules
     circle.enabledModules = circle.enabledModules || defaultModules;
 
     // Set the access rules
-    circle.accessRules = getDefaultAccessRules(circle.enabledModules);
+    circle.accessRules = getDefaultAccessRules();
     circle.questionnaire = [];
     circle.circleType = circle.circleType || "circle";
 
