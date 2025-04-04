@@ -3,13 +3,13 @@ import FeedsLayout from "@/components/modules/feeds/feeds-layout"; // Assuming d
 import { notFound } from "next/navigation";
 
 type LayoutProps = {
-    params: { handle: string };
+    params: Promise<{ handle: string }>;
     children: React.ReactNode;
 };
 
 export default async function FeedLayout({ params, children }: LayoutProps) {
-    // Fetch circle data if needed by FeedsLayout (assuming it might be)
-    const circle = await getCircleByHandle(params.handle);
+    const p = await params;
+    const circle = await getCircleByHandle(p.handle);
 
     if (!circle) {
         notFound();

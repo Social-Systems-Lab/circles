@@ -1,4 +1,4 @@
-import { ServerSettingsForm } from "@/components/forms/circle-settings/server-settings/server-settings-form";
+import { ServerSettingsForm } from "@/components/forms/circle-settings/server-settings-form";
 import { getCircleByHandle } from "@/lib/data/circle";
 import { getServerSettings } from "@/lib/data/server-settings";
 

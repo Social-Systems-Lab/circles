@@ -6,11 +6,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // 
 import { Terminal } from "lucide-react";
 
 type PageProps = {
-    params: { handle: string };
+    params: Promise<{ handle: string }>;
 };
 
 export default async function MembershipRequestsPage({ params }: PageProps) {
-    const circle = await getCircleByHandle(params.handle);
+    const p = await params;
+    const circle = await getCircleByHandle(p.handle);
 
     if (!circle || !circle._id) {
         notFound();

@@ -3,12 +3,12 @@ import { CircleGeneralForm } from "@/components/forms/circle-settings/circle-gen
 import { notFound } from "next/navigation";
 
 type PageProps = {
-    params: { handle: string };
-    // searchParams are no longer needed by the specific form
+    params: Promise<{ handle: string }>;
 };
 
 export default async function GeneralSettingsPage({ params }: PageProps) {
-    const circle = await getCircleByHandle(params.handle);
+    const p = await params;
+    const circle = await getCircleByHandle(p.handle);
 
     if (!circle) {
         notFound(); // Or handle appropriately if circle not found

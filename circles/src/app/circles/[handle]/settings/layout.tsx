@@ -3,12 +3,13 @@ import { notFound } from "next/navigation";
 import { SettingsLayoutWrapper } from "./settings-layout-wrapper";
 
 type LayoutProps = {
-    params: { handle: string };
+    params: Promise<{ handle: string }>;
     children: React.ReactNode;
 };
 
 export default async function SettingsLayout({ params, children }: LayoutProps) {
-    const circle = await getCircleByHandle(params.handle);
+    const p = await params;
+    const circle = await getCircleByHandle(p.handle);
 
     if (!circle) {
         notFound();
