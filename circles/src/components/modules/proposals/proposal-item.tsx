@@ -186,8 +186,8 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle }) 
     };
 
     const confirmRejectReview = () => {
-        const reason = rejectionReason.trim() ? `Rejected in review: ${rejectionReason.trim()}` : "Rejected in review";
-        handleStageChange("resolved", "rejected", reason);
+        // Pass the raw reason, the backend now handles setting resolvedAtStage
+        handleStageChange("resolved", "rejected", rejectionReason.trim());
         setRejectReviewDialogOpen(false);
         setRejectionReason(""); // Reset reason
     };
@@ -311,7 +311,12 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle }) 
     return (
         <>
             <div className="mb-12 ml-4 mr-4">
-                <ProposalStageTimeline currentStage={proposal.stage} />
+                {/* Pass outcome and resolvedAtStage to timeline */}
+                <ProposalStageTimeline
+                    currentStage={proposal.stage}
+                    outcome={proposal.outcome}
+                    resolvedAtStage={proposal.resolvedAtStage} // Pass the new prop
+                />
             </div>
 
             <Card className="mb-6">
@@ -368,10 +373,12 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle }) 
                                     : "bg-red-50 text-red-800",
                             )}
                         >
-                            <div className="font-medium font-semibold">
+                            <span className="font-medium">
                                 {proposal.outcome === "accepted" ? "Accepted" : "Rejected"}
-                            </div>
-                            <p className="font-medium">{proposal.outcomeReason}</p>
+                                {proposal.resolvedAtStage &&
+                                    ` during ${proposal.resolvedAtStage.charAt(0).toUpperCase() + proposal.resolvedAtStage.slice(1)} Stage`}
+                            </span>
+                            {proposal.outcomeReason && `: ${proposal.outcomeReason}`}
                         </div>
                     )}
 

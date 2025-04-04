@@ -830,6 +830,7 @@ export const proposalSchema = z.object({
     stage: proposalStageSchema.default("draft"),
     outcome: proposalOutcomeSchema.optional(),
     outcomeReason: z.string().optional(),
+    resolvedAtStage: proposalStageSchema.optional(), // Stage when the proposal was resolved
     votingDeadline: z.date().optional(),
     reactions: z.record(z.string(), z.number()).default({}), // For "likes" in voting stage
     userGroups: z.array(z.string()).default([]), // User groups that can see this proposal

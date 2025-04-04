@@ -22,6 +22,7 @@ export const SAFE_PROPOSAL_PROJECTION = {
     userGroups: 1,
     reviewers: 1,
     media: 1,
+    resolvedAtStage: 1, // Include the new field
 } as const;
 
 /**
@@ -109,12 +110,16 @@ export const getProposalsByCircleId = async (circleId: string, userDid?: string)
                     userGroups: 1,
                     reviewers: 1,
                     media: 1,
+                    resolvedAtStage: 1, // Project the new field
                     author: {
                         _id: { $toString: "$authorDetails._id" },
                         did: "$authorDetails.did",
                         name: "$authorDetails.name",
                         handle: "$authorDetails.handle",
                         picture: "$authorDetails.picture",
+                        cover: "$authorDetails.cover",
+                        mission: "$authorDetails.mission",
+                        description: "$authorDetails.description",
                     },
                     userReaction: { $arrayElemAt: ["$userReaction.reactionType", 0] },
                     circle: "$circleDetails",
@@ -256,6 +261,7 @@ export const getProposalById = async (proposalId: string, userDid?: string): Pro
                     userGroups: 1,
                     reviewers: 1,
                     media: 1,
+                    resolvedAtStage: 1, // Project the new field
                     author: {
                         _id: { $toString: "$authorDetails._id" },
                         did: "$authorDetails.did",
@@ -346,17 +352,37 @@ export const changeProposalStage = async (
     outcomeReason?: string,
 ): Promise<boolean> => {
     try {
-        const updates: any = { stage: newStage };
+        const updates: Partial<Proposal> = { stage: newStage };
+        let unsetFields: any = {}; // Fields to potentially remove
 
-        // If moving to resolved stage, include outcome and reason
+        // If moving to resolved stage, include outcome, reason, and the stage it was resolved at
         if (newStage === "resolved" && outcome) {
+            // Find the proposal to determine the stage it's coming *from*
+            const proposal = await Proposals.findOne({ _id: new ObjectId(proposalId) });
+            if (!proposal) return false; // Proposal not found
+
             updates.outcome = outcome;
+            updates.resolvedAtStage = proposal.stage; // Store the stage before resolving
             if (outcomeReason) {
                 updates.outcomeReason = outcomeReason;
+            } else {
+                // If reason is empty or undefined, ensure it's removed from the document
+                unsetFields.outcomeReason = "";
             }
+        } else {
+            // If moving *out* of resolved, clear outcome fields
+            unsetFields.outcome = "";
+            unsetFields.outcomeReason = "";
+            unsetFields.resolvedAtStage = "";
         }
 
-        const result = await Proposals.updateOne({ _id: new ObjectId(proposalId) }, { $set: updates });
+        // Perform the update and potentially unset fields in one operation
+        const updateOperation: any = { $set: updates };
+        if (Object.keys(unsetFields).length > 0) {
+            updateOperation.$unset = unsetFields;
+        }
+
+        const result = await Proposals.updateOne({ _id: new ObjectId(proposalId) }, updateOperation);
 
         return result.matchedCount > 0;
     } catch (error) {

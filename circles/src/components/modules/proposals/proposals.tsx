@@ -29,6 +29,42 @@ export default async function ProposalsModule({ circle, moduleHandle, subpage, s
     // Get proposals for this circle
     const proposals = await getProposalsAction(circle.handle as string);
 
+    const canModerateProposal = await isAuthorized(userDid, circle._id as string, features.proposals.moderate);
+    const canReviewProposal = await isAuthorized(userDid, circle._id as string, features.proposals.review);
+    const canVoteProposal = await isAuthorized(userDid, circle._id as string, features.proposals.vote);
+    const canResolveProposal = await isAuthorized(userDid, circle._id as string, features.proposals.resolve);
+
+    // remove all draft proposals from the list that doesn't belong to the current user
+    const filteredProposals = proposals.filter((proposal) => {
+        // remove all draft proposals that don't belong to the current user
+        if (proposal.stage === "draft" && proposal.author.did !== userDid) {
+            return false;
+        }
+
+        // remove all proposals that are rejected that don't belong to the current user
+        if (
+            proposal.stage === "resolved" &&
+            proposal.outcome === "rejected" &&
+            proposal.resolvedAtStage !== "voting" &&
+            proposal.author.did !== userDid
+        ) {
+            return false;
+        }
+
+        // remove all proposals that user doesn't have permission to view
+        if (proposal.stage === "review" && !(canReviewProposal || canModerateProposal)) {
+            return false;
+        }
+        if (proposal.stage === "voting" && !(canVoteProposal || canModerateProposal)) {
+            return false;
+        }
+        if (proposal.stage === "resolved" && proposal.resolvedAtStage !== "voting" && !canResolveProposal) {
+            return false;
+        }
+
+        return true;
+    });
+
     // Create a synthetic page object for the proposals list
     const page: Page = {
         name: "Proposals",
@@ -39,7 +75,7 @@ export default async function ProposalsModule({ circle, moduleHandle, subpage, s
 
     return (
         <div className="flex h-full w-full flex-col">
-            <ProposalsList proposals={proposals} circle={circle} page={page} />
+            <ProposalsList proposals={filteredProposals} circle={circle} page={page} />
         </div>
     );
 }
