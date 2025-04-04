@@ -69,9 +69,11 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle }) 
     const [isPending, startTransition] = useTransition();
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [submitReviewDialogOpen, setSubmitReviewDialogOpen] = useState(false);
-    const [rejectReviewDialogOpen, setRejectReviewDialogOpen] = useState(false); // State for reject confirmation
-    const [approveVotingDialogOpen, setApproveVotingDialogOpen] = useState(false); // State for approve confirmation
-    const [rejectionReason, setRejectionReason] = useState(""); // State for rejection reason
+    const [rejectReviewDialogOpen, setRejectReviewDialogOpen] = useState(false);
+    const [approveVotingDialogOpen, setApproveVotingDialogOpen] = useState(false);
+    const [rejectVotingDialogOpen, setRejectVotingDialogOpen] = useState(false); // State for reject confirmation (voting)
+    const [acceptVotingDialogOpen, setAcceptVotingDialogOpen] = useState(false); // State for accept confirmation (voting)
+    const [resolutionReason, setResolutionReason] = useState(""); // State for accept/reject reason (voting)
     const [isVoting, setIsVoting] = useState(false);
     const { toast } = useToast();
     const router = useRouter();
@@ -186,15 +188,26 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle }) 
     };
 
     const confirmRejectReview = () => {
-        // Pass the raw reason, the backend now handles setting resolvedAtStage
-        handleStageChange("resolved", "rejected", rejectionReason.trim());
+        handleStageChange("resolved", "rejected", resolutionReason.trim());
         setRejectReviewDialogOpen(false);
-        setRejectionReason(""); // Reset reason
+        setResolutionReason(""); // Reset reason
     };
 
     const confirmApproveVoting = () => {
         handleStageChange("voting");
         setApproveVotingDialogOpen(false);
+    };
+
+    const confirmRejectVoting = () => {
+        handleStageChange("resolved", "rejected", resolutionReason.trim());
+        setRejectVotingDialogOpen(false);
+        setResolutionReason(""); // Reset reason
+    };
+
+    const confirmAcceptVoting = () => {
+        handleStageChange("resolved", "accepted", resolutionReason.trim());
+        setAcceptVotingDialogOpen(false);
+        setResolutionReason(""); // Reset reason
     };
 
     const openCircle = () => {
@@ -282,17 +295,16 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle }) 
                         )}
                         {canResolve && (
                             <>
+                                {/* Open reject dialog */}
                                 <Button
                                     variant="destructive"
-                                    onClick={() => handleStageChange("resolved", "rejected", "Rejected after voting")}
+                                    onClick={() => setRejectVotingDialogOpen(true)}
                                     disabled={isPending}
                                 >
                                     Reject
                                 </Button>
-                                <Button
-                                    onClick={() => handleStageChange("resolved", "accepted", "Accepted after voting")}
-                                    disabled={isPending}
-                                >
+                                {/* Open accept dialog */}
+                                <Button onClick={() => setAcceptVotingDialogOpen(true)} disabled={isPending}>
                                     Accept
                                 </Button>
                             </>
@@ -404,7 +416,6 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle }) 
                         <UserPicture name={proposal.author.name} picture={proposal.author.picture?.url} size="32px" />
                         <span className="ml-2">{proposal.author.name}</span>
                     </div>
-
                     {renderStageActions()}
                 </CardFooter>
 
@@ -473,11 +484,11 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle }) 
                             </DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 py-4">
-                            <Label htmlFor="rejection-reason">Reason (Optional)</Label>
+                            <Label htmlFor="resolution-reason-reject-review">Reason (Optional)</Label>
                             <Textarea
-                                id="rejection-reason"
-                                value={rejectionReason}
-                                onChange={(e) => setRejectionReason(e.target.value)}
+                                id="resolution-reason-reject-review"
+                                value={resolutionReason}
+                                onChange={(e) => setResolutionReason(e.target.value)}
                                 placeholder="Enter reason for rejection..."
                             />
                         </div>
@@ -520,6 +531,80 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle }) 
                                     </>
                                 ) : (
                                     <>Confirm Approve</>
+                                )}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Reject Voting Confirmation Dialog */}
+                <Dialog open={rejectVotingDialogOpen} onOpenChange={setRejectVotingDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Reject Proposal?</DialogTitle>
+                            <DialogDescription>
+                                Are you sure you want to reject this proposal after the voting period? It will be moved
+                                to the Resolved stage. You can optionally provide a reason.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                            <Label htmlFor="resolution-reason-reject">Reason (Optional)</Label>
+                            <Textarea
+                                id="resolution-reason-reject"
+                                value={resolutionReason}
+                                onChange={(e) => setResolutionReason(e.target.value)}
+                                placeholder="Enter reason for rejection..."
+                            />
+                        </div>
+                        <DialogFooter>
+                            <DialogClose asChild>
+                                <Button variant="outline">Cancel</Button>
+                            </DialogClose>
+                            <Button variant="destructive" onClick={confirmRejectVoting} disabled={isPending}>
+                                {isPending ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Rejecting...
+                                    </>
+                                ) : (
+                                    <>Confirm Reject</>
+                                )}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Accept Voting Confirmation Dialog */}
+                <Dialog open={acceptVotingDialogOpen} onOpenChange={setAcceptVotingDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Accept Proposal?</DialogTitle>
+                            <DialogDescription>
+                                Are you sure you want to accept this proposal after the voting period? It will be moved
+                                to the Resolved stage. You can optionally provide a reason.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                            <Label htmlFor="resolution-reason-accept">Reason (Optional)</Label>
+                            <Textarea
+                                id="resolution-reason-accept"
+                                value={resolutionReason}
+                                onChange={(e) => setResolutionReason(e.target.value)}
+                                placeholder="Enter reason for acceptance..."
+                            />
+                        </div>
+                        <DialogFooter>
+                            <DialogClose asChild>
+                                <Button variant="outline">Cancel</Button>
+                            </DialogClose>
+                            <Button onClick={confirmAcceptVoting} disabled={isPending}>
+                                {isPending ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Accepting...
+                                    </>
+                                ) : (
+                                    <>Confirm Accept</>
                                 )}
                             </Button>
                         </DialogFooter>

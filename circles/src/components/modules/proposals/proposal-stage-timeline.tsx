@@ -24,12 +24,21 @@ export const ProposalStageTimeline: React.FC<ProposalStageTimelineProps> = ({
 
     // Find the index of the current stage
     const currentStageIndex = stages.indexOf(currentStage);
+    const rejectionStageIndex = rejectionStage ? stages.indexOf(rejectionStage) : -1;
 
     // Helper function to determine the status of each stage
     const getStageStatus = (stage: ProposalStage) => {
         const stageIndex = stages.indexOf(stage);
 
-        if (stage === rejectionStage) return "rejected"; // Use rejectionStage directly
+        // If the proposal is rejected, the rejection stage itself is 'completed' visually (green check)
+        // but the 'Resolved' stage shows the rejection.
+        if (outcome === "rejected") {
+            if (stage === "resolved") return "rejected"; // Final stage shows rejection
+            if (stageIndex <= rejectionStageIndex) return "completed"; // Stages up to rejection are completed
+            return "skipped"; // Stages after rejection are skipped
+        }
+
+        // If accepted or still in progress
         if (stageIndex < currentStageIndex) return "completed";
         if (stageIndex === currentStageIndex) return "current";
         return "upcoming";
@@ -38,16 +47,16 @@ export const ProposalStageTimeline: React.FC<ProposalStageTimelineProps> = ({
     // Helper function to get the appropriate icon for each stage
     const getStageIcon = (stage: ProposalStage, status: string) => {
         if (status === "rejected") {
+            // Only the 'Resolved' stage will have this status now
             return <XCircle className="h-6 w-6 text-red-500" />;
         }
         if (status === "completed") {
             return <CheckCircle2 className="h-6 w-6 text-green-500" />;
         }
+        if (status === "skipped") {
+            return <Circle className="h-6 w-6 text-gray-300" />; // Use upcoming icon for skipped
+        }
         if (status === "current") {
-            // If current stage is 'resolved' and it was rejected, show rejected icon
-            if (stage === "resolved" && outcome === "rejected") {
-                return <XCircle className="h-6 w-6 text-red-500" />;
-            }
             // If current stage is 'resolved' and it was accepted, show completed icon
             if (stage === "resolved" && outcome === "accepted") {
                 return <CheckCircle2 className="h-6 w-6 text-green-500" />;
@@ -92,13 +101,12 @@ export const ProposalStageTimeline: React.FC<ProposalStageTimelineProps> = ({
                                 <div
                                     className={cn(
                                         "flex h-10 w-10 items-center justify-center rounded-full",
-                                        status === "rejected" && "bg-red-100", // Red background for rejected
+                                        status === "rejected" && "bg-red-100",
                                         status === "completed" && "bg-green-100",
                                         status === "current" && "bg-blue-100",
-                                        status === "upcoming" && "bg-gray-100",
-                                        // Special case for resolved stage based on outcome
+                                        (status === "upcoming" || status === "skipped") && "bg-gray-100", // Skipped uses upcoming style
+                                        // Special case for resolved stage when accepted
                                         stage === "resolved" && outcome === "accepted" && "bg-green-100",
-                                        stage === "resolved" && outcome === "rejected" && "bg-red-100",
                                     )}
                                 >
                                     {getStageIcon(stage, status)}
@@ -106,13 +114,12 @@ export const ProposalStageTimeline: React.FC<ProposalStageTimelineProps> = ({
                                 <span
                                     className={cn(
                                         "absolute bottom-[-25px] text-sm font-medium",
-                                        status === "rejected" && "text-red-600", // Red text for rejected
+                                        status === "rejected" && "text-red-600",
                                         status === "completed" && "text-green-600",
                                         status === "current" && "text-blue-600",
-                                        status === "upcoming" && "text-gray-500",
-                                        // Special case for resolved stage based on outcome
+                                        (status === "upcoming" || status === "skipped") && "text-gray-500", // Skipped uses upcoming style
+                                        // Special case for resolved stage when accepted
                                         stage === "resolved" && outcome === "accepted" && "text-green-600",
-                                        stage === "resolved" && outcome === "rejected" && "text-red-600",
                                     )}
                                 >
                                     {getStageLabel(stage)}
@@ -124,16 +131,16 @@ export const ProposalStageTimeline: React.FC<ProposalStageTimelineProps> = ({
                                 <div
                                     className={cn(
                                         "h-0.5 flex-1",
-                                        // Line is green if the *next* stage is completed or current (and not rejected)
-                                        // Or if the current stage itself is completed (and not rejected)
-                                        index < currentStageIndex && stages[index + 1] !== rejectionStage
-                                            ? "bg-green-500"
-                                            : "bg-gray-200",
-                                        // If the current stage is the rejection stage, the line before it should be gray
-                                        stages[index + 1] === rejectionStage && "bg-gray-200",
-                                        // If the proposal is resolved rejected, all lines after rejection point are gray
-                                        rejectionStage && index >= stages.indexOf(rejectionStage) && "bg-gray-200",
-                                        // If the proposal is resolved accepted, all lines are green
+                                        // Line logic based on the *next* stage's status
+                                        getStageStatus(stages[index + 1]) === "completed" ||
+                                            (getStageStatus(stages[index + 1]) === "current" &&
+                                                outcome !== "rejected") ||
+                                            getStageStatus(stages[index + 1]) === "rejected"
+                                            ? "bg-green-500" // Green if next is completed, current (and not rejected), or the final rejected stage
+                                            : "bg-gray-200", // Gray otherwise (upcoming or skipped)
+                                        // If the proposal was rejected, lines after the rejection stage are gray
+                                        rejectionStage && index >= rejectionStageIndex && "bg-gray-200",
+                                        // If the proposal was accepted, all lines are green
                                         currentStage === "resolved" && outcome === "accepted" && "bg-green-500",
                                     )}
                                 />
