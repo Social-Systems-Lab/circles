@@ -8,9 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { signupFormAction } from "./signup-form-action"; // Import the action object
+import { submitSignupFormAction } from "./actions";
+import { useAtom } from "jotai";
+import { authInfoAtom, userAtom } from "@/lib/data/atoms";
 
 // Zod schema based on signupFormSchema
 const signupValidationSchema = z.object({
@@ -29,6 +31,9 @@ export function SignupForm(): React.ReactElement {
     const { toast } = useToast();
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [, setUser] = useAtom(userAtom);
+    const [, setAuthInfo] = useAtom(authInfoAtom);
+    const searchParams = useSearchParams();
 
     const form = useForm<SignupFormData>({
         resolver: zodResolver(signupValidationSchema),
@@ -44,14 +49,20 @@ export function SignupForm(): React.ReactElement {
         setIsSubmitting(true);
         try {
             // Call the onSubmit method from the imported action object
-            const result = await signupFormAction.onSubmit(data);
+            const result = await submitSignupFormAction(data);
             if (result.success) {
                 toast({
                     title: "Signup Successful",
                     description: "Welcome! Redirecting you now...",
                 });
-                // Redirect to welcome page after successful signup
-                router.push("/welcome");
+
+                // set logged in user and authenticate status
+                setUser(result.data.user);
+                setAuthInfo((prev) => ({ ...prev, authStatus: "authenticated" }));
+
+                // redirect to requested page
+                let redirectUrl = searchParams?.get("redirectTo") ?? `/circles/${result.data.user.handle}`;
+                router.push(redirectUrl);
             } else {
                 toast({
                     title: "Signup Failed",

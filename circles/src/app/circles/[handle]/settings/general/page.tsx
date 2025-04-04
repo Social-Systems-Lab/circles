@@ -1,5 +1,5 @@
 import { getCircleByHandle } from "@/lib/data/circle";
-import { CircleGeneralForm } from "@/components/forms/circle-settings/general/circle-general-form";
+import { CircleGeneralForm } from "@/components/forms/circle-settings/circle-general-form";
 import { notFound } from "next/navigation";
 
 type PageProps = {

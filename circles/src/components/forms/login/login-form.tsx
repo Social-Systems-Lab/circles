@@ -8,9 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { loginFormAction } from "./login-form-action"; // Import the action object
+import { submitLoginFormAction } from "./actions"; // Import the action object
+import { useAtom } from "jotai";
+import { authInfoAtom, userAtom } from "@/lib/data/atoms";
 
 // Zod schema based on loginFormSchema
 const loginValidationSchema = z.object({
@@ -24,6 +26,9 @@ export function LoginForm(): React.ReactElement {
     const { toast } = useToast();
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [, setUser] = useAtom(userAtom);
+    const [, setAuthInfo] = useAtom(authInfoAtom);
+    const searchParams = useSearchParams();
 
     const form = useForm<LoginFormData>({
         resolver: zodResolver(loginValidationSchema),
@@ -37,15 +42,20 @@ export function LoginForm(): React.ReactElement {
         setIsSubmitting(true);
         try {
             // Call the onSubmit method from the imported action object
-            const result = await loginFormAction.onSubmit(data);
+            const result = await submitLoginFormAction(data);
             if (result.success) {
                 toast({
                     title: "Login Successful",
                     description: "Welcome back!",
                 });
-                // Redirect to home or dashboard after login
-                router.push("/"); // Or potentially result.data.user.defaultPath or similar if available
-                router.refresh(); // Force refresh to update layout/auth state
+
+                // set logged in user and authenticate status
+                setUser(result.data.user);
+                setAuthInfo((prev) => ({ ...prev, authStatus: "authenticated" }));
+
+                // redirect to requested page
+                let redirectUrl = searchParams?.get("redirectTo") ?? `/circles/${result.data.user.handle}`;
+                router.push(redirectUrl);
             } else {
                 toast({
                     title: "Login Failed",
