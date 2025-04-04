@@ -12,7 +12,7 @@ import { Challenges, ChatRoomMembers, Circles, Members } from "./db";
 import { ObjectId } from "mongodb";
 import { signRegisterUserChallenge } from "../auth/auth";
 import { getUserPendingMembershipRequests } from "./membership-requests";
-import { defaultPagesForUser, defaultUserGroupsForUser, getDefaultAccessRulesForUser } from "./constants";
+import { defaultPagesForUser, defaultUserGroupsForUser, getDefaultAccessRules } from "./constants";
 import { SAFE_CIRCLE_PROJECTION } from "./circle";
 
 export const getAllUsers = async (): Promise<Circle[]> => {
@@ -89,7 +89,7 @@ export const createNewUser = (
         picture: { url: "/images/default-user-picture.png" },
         cover: { url: "/images/default-user-cover.png" },
         userGroups: defaultUserGroupsForUser,
-        accessRules: getDefaultAccessRulesForUser(),
+        accessRules: getDefaultAccessRules(),
         pages: defaultPagesForUser,
         questionnaire: [],
         isPublic: true,

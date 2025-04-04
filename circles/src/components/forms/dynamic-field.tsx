@@ -26,10 +26,10 @@ import { Label } from "../ui/label";
 import { Button } from "../ui/button";
 import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
-import { cn, removeLast } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { FaLock } from "react-icons/fa6";
 import { FaCheck } from "react-icons/fa";
-import { features, features as featuresList, causes, skills } from "@/lib/data/constants";
+import { features, causes, skills } from "@/lib/data/constants";
 import { CheckCircle2, ChevronDown, ChevronUp, Loader2, Search, XCircle } from "lucide-react";
 import { getMemberAccessLevel, isAuthorized } from "@/lib/auth/client-auth";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
@@ -533,36 +533,50 @@ export const DynamicTableField: React.FC<RenderFieldProps> = ({ field, formField
 };
 
 type DynamicAccessRulesGridProps = {
-    features: string[];
     userGroups: UserGroup[];
-    pages: Page[];
+    enabledModules: string[];
     control: any;
 };
 
 export const DynamicAccessRulesGrid: React.FC<DynamicAccessRulesGridProps> = ({
-    features,
-    pages,
     userGroups,
+    enabledModules,
     control,
 }) => {
     const { setValue, getValues } = useFormContext();
     const accessRules = useWatch({ control, name: "accessRules" });
 
-    // Initialize default user groups for features that don't have access rules defined
+    // Initialize default access rules if they don't exist
     useEffect(() => {
         const currentAccessRules = getValues("accessRules") || {};
         let hasChanges = false;
 
-        // For each feature, check if it has access rules defined
-        for (const feature of features) {
-            if (!currentAccessRules[feature]) {
-                // If not, initialize with default user groups
-                if (feature in featuresList) {
-                    const featureObj = featuresList[feature as keyof typeof featuresList];
-                    if (featureObj?.defaultUserGroups) {
-                        currentAccessRules[feature] = [...featureObj.defaultUserGroups];
-                        hasChanges = true;
-                    }
+        // For each module in features
+        for (const moduleHandle of Object.keys(features)) {
+            // Skip modules that aren't enabled
+            if (moduleHandle !== "general" && !enabledModules.includes(moduleHandle)) continue;
+
+            // Initialize module if it doesn't exist
+            if (!currentAccessRules[moduleHandle]) {
+                currentAccessRules[moduleHandle] = {};
+                hasChanges = true;
+            }
+
+            // Get module features
+            const moduleFeatures = features[moduleHandle as keyof typeof features];
+
+            // For each feature in the module
+            for (const featureHandle in moduleFeatures) {
+                // Skip if feature already has access rules
+                if (currentAccessRules[moduleHandle][featureHandle]) continue;
+
+                // Get feature
+                const feature = (moduleFeatures as any)[featureHandle];
+
+                // Initialize with default user groups
+                if (feature && feature.defaultUserGroups) {
+                    currentAccessRules[moduleHandle][featureHandle] = [...feature.defaultUserGroups];
+                    hasChanges = true;
                 }
             }
         }
@@ -571,106 +585,143 @@ export const DynamicAccessRulesGrid: React.FC<DynamicAccessRulesGridProps> = ({
         if (hasChanges) {
             setValue("accessRules", { ...currentAccessRules });
         }
-    }, [features, setValue, getValues]);
+    }, [enabledModules, setValue, getValues]);
 
-    const handleCellClick = (feature: string, userGroup: string) => {
-        const currentAccessRules = getValues("accessRules");
-        const userGroupsForFeature = currentAccessRules?.[feature] || [];
-        const updatedUserGroupsForFeature = userGroupsForFeature.includes(userGroup)
-            ? userGroupsForFeature.filter((ug: string) => ug !== userGroup)
-            : [...userGroupsForFeature, userGroup];
-        setValue(`accessRules["${feature}"]`, updatedUserGroupsForFeature);
+    const handleCellClick = (moduleHandle: string, featureHandle: string, userGroup: string) => {
+        const currentAccessRules = getValues("accessRules") || {};
+
+        // Initialize module if it doesn't exist
+        if (!currentAccessRules[moduleHandle]) {
+            currentAccessRules[moduleHandle] = {};
+        }
+
+        // Initialize feature if it doesn't exist
+        if (!currentAccessRules[moduleHandle][featureHandle]) {
+            currentAccessRules[moduleHandle][featureHandle] = [];
+        }
+
+        const userGroups = currentAccessRules[moduleHandle][featureHandle] || [];
+
+        // Toggle user group
+        const updatedUserGroups = userGroups.includes(userGroup)
+            ? userGroups.filter((ug: string) => ug !== userGroup)
+            : [...userGroups, userGroup];
+
+        // Update access rules
+        setValue(`accessRules.${moduleHandle}.${featureHandle}`, updatedUserGroups);
     };
 
-    const getFeatureDescription = (feature: string) => {
-        if (feature.startsWith(pageFeaturePrefix)) {
-            // get page handle
-            const pageHandle = feature.replace(pageFeaturePrefix, "");
+    // Get feature name from module and feature handle
+    const getFeatureName = (moduleHandle: string, featureHandle: string): string => {
+        const moduleFeatures = features[moduleHandle as keyof typeof features];
+        if (!moduleFeatures) return featureHandle;
 
-            // get name from page
-            const page = pages.find((p) => p.handle === pageHandle);
-            return "View Page: " + page?.name;
-        } else if (feature.startsWith(feedFeaturePrefix)) {
-            // get feed handle
-            const featureWithoutPrefix = feature.replace(feedFeaturePrefix, "");
+        const feature = (moduleFeatures as any)[featureHandle];
+        return feature?.name || featureHandle;
+    };
 
-            // loop through feed features and see if the feature relates to it
-            for (const feedFeature of feedFeatures) {
-                if (featureWithoutPrefix.endsWith(`_${feedFeature.handle}`)) {
-                    const feedHandle = removeLast(featureWithoutPrefix, `_${feedFeature.handle}`);
-                    return `${feedFeature.name} Feed: ${feedHandle}`;
-                }
-            }
-        } else if (feature.startsWith(chatFeaturePrefix)) {
-            // get chat handle
-            const featureWithoutPrefix = feature.replace(chatFeaturePrefix, "");
-
-            // loop through chat features and see if the feature relates to it
-            for (const chatFeature of chatFeatures) {
-                if (featureWithoutPrefix.endsWith(`_${chatFeature.handle}`)) {
-                    const chatHandle = removeLast(featureWithoutPrefix, `_${chatFeature.handle}`);
-                    return `${chatFeature.name} Chat Room: ${chatHandle}`;
-                }
-            }
-        } else {
-            if (feature in featuresList) {
-                return featuresList[feature as keyof typeof featuresList]?.name ?? feature;
-            }
+    // Get module name from module handle
+    const getModuleName = (moduleHandle: string): string => {
+        switch (moduleHandle) {
+            case "general":
+                return "General";
+            case "feed":
+                return "Feed";
+            case "chat":
+                return "Chat";
+            case "followers":
+                return "Followers";
+            case "circles":
+                return "Circles";
+            case "projects":
+                return "Projects";
+            case "settings":
+                return "Settings";
+            case "home":
+                return "Home";
+            default:
+                return moduleHandle;
         }
     };
 
+    // Get all enabled modules, always include general
+    const modulesToShow = ["general", ...enabledModules.filter((m) => m !== "general")];
+
     return (
-        <div>
-            <table className="w-full table-fixed border-collapse">
-                <thead>
-                    <tr>
-                        <th className="w-1/4"></th>
-                        {userGroups.map((userGroup, index) => (
-                            <th key={index} className={cn("relative h-32 overflow-visible font-normal")}>
-                                <div className="absolute bottom-[5px] left-1/2 origin-bottom-left -rotate-45 transform whitespace-nowrap">
-                                    {userGroup.name}
-                                </div>
-                            </th>
-                        ))}
-                        <th className="relative h-32 overflow-visible font-normal">
-                            <div className="absolute bottom-[5px] left-1/2 origin-bottom-left -rotate-45 transform whitespace-nowrap">
-                                Everyone
-                            </div>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {features.map((feature, rowIndex) => (
-                        <tr key={rowIndex} className="border-t">
-                            <td className="border-r p-2">{getFeatureDescription(feature)}</td>
-                            {userGroups.map((userGroup, colIndex) => (
-                                <td
-                                    key={colIndex}
-                                    className={cn("cursor-pointer p-2 text-center text-[#254d19]", {
-                                        "bg-[#baf9c0]": accessRules?.[feature]?.includes(userGroup.handle),
-                                    })}
-                                    onClick={() => handleCellClick(feature, userGroup.handle)}
-                                >
-                                    <div className="flex items-center justify-center">
-                                        {accessRules?.[feature]?.includes(userGroup.handle) ? <FaCheck /> : ""}
-                                    </div>
-                                </td>
-                            ))}
-                            <td
-                                key="everyone"
-                                className={cn("cursor-pointer p-2 text-center text-[#254d19]", {
-                                    "bg-[#baf9c0]": accessRules?.[feature]?.includes("everyone"),
-                                })}
-                                onClick={() => handleCellClick(feature, "everyone")}
-                            >
-                                <div className="flex items-center justify-center">
-                                    {accessRules?.[feature]?.includes("everyone") ? <FaCheck /> : ""}
-                                </div>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+        <div className="space-y-8">
+            {modulesToShow.map((moduleHandle) => {
+                // Get module features
+                const moduleFeatures = features[moduleHandle as keyof typeof features];
+                if (!moduleFeatures) return null;
+
+                // Get feature handles
+                const featureHandles = Object.keys(moduleFeatures);
+                if (featureHandles.length === 0) return null;
+
+                return (
+                    <div key={moduleHandle} className="rounded-md border">
+                        <div className="border-b bg-muted/50 p-2 font-medium">{getModuleName(moduleHandle)}</div>
+                        <table className="w-full table-fixed border-collapse">
+                            <thead>
+                                <tr>
+                                    <th className="w-1/4 border-b p-2 text-left">Feature</th>
+                                    {userGroups.map((userGroup) => (
+                                        <th key={userGroup.handle} className="border-b p-2 text-center">
+                                            {userGroup.name}
+                                        </th>
+                                    ))}
+                                    <th className="border-b p-2 text-center">Everyone</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {featureHandles.map((featureHandle) => (
+                                    <tr key={featureHandle} className="border-t">
+                                        <td className="border-r p-2">{getFeatureName(moduleHandle, featureHandle)}</td>
+                                        {userGroups.map((userGroup) => (
+                                            <td
+                                                key={userGroup.handle}
+                                                className={cn("cursor-pointer p-2 text-center text-[#254d19]", {
+                                                    "bg-[#baf9c0]": accessRules?.[moduleHandle]?.[
+                                                        featureHandle
+                                                    ]?.includes(userGroup.handle),
+                                                })}
+                                                onClick={() =>
+                                                    handleCellClick(moduleHandle, featureHandle, userGroup.handle)
+                                                }
+                                            >
+                                                <div className="flex items-center justify-center">
+                                                    {accessRules?.[moduleHandle]?.[featureHandle]?.includes(
+                                                        userGroup.handle,
+                                                    ) ? (
+                                                        <FaCheck />
+                                                    ) : (
+                                                        ""
+                                                    )}
+                                                </div>
+                                            </td>
+                                        ))}
+                                        <td
+                                            className={cn("cursor-pointer p-2 text-center text-[#254d19]", {
+                                                "bg-[#baf9c0]":
+                                                    accessRules?.[moduleHandle]?.[featureHandle]?.includes("everyone"),
+                                            })}
+                                            onClick={() => handleCellClick(moduleHandle, featureHandle, "everyone")}
+                                        >
+                                            <div className="flex items-center justify-center">
+                                                {accessRules?.[moduleHandle]?.[featureHandle]?.includes("everyone") ? (
+                                                    <FaCheck />
+                                                ) : (
+                                                    ""
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                );
+            })}
         </div>
     );
 };
@@ -683,19 +734,7 @@ export const DynamicAccessRulesField: React.FC<RenderFieldProps> = ({
     isUser,
 }) => {
     const userGroups = useWatch({ control, name: "userGroups" }) || [];
-    const pages = useWatch({ control, name: "pages" }) || [];
-
-    // Get all features from the circle's access rules
-    const circleFeatures = Object.keys(formField.value || {});
-
-    // Get all features from the features object in constants.ts
-    const allFeatureKeys = Object.keys(features);
-
-    // Get all page features
-    const pageFeatures = pages.map((page: Page) => `${pageFeaturePrefix}${page.handle}`);
-
-    // Combine all features, removing duplicates
-    const allFeatures = Array.from(new Set([...circleFeatures, ...allFeatureKeys, ...pageFeatures]));
+    const enabledModules = useWatch({ control, name: "enabledModules" }) || [];
 
     return (
         <FormItem>
@@ -703,7 +742,7 @@ export const DynamicAccessRulesField: React.FC<RenderFieldProps> = ({
                 <h1 className="m-0 p-0 pb-3 text-xl font-bold">{getUserOrCircleInfo(field.label, isUser)}</h1>
             </div>
 
-            <DynamicAccessRulesGrid features={allFeatures} pages={pages} userGroups={userGroups} control={control} />
+            <DynamicAccessRulesGrid userGroups={userGroups} enabledModules={enabledModules} control={control} />
             <FormMessage />
         </FormItem>
     );

@@ -266,54 +266,6 @@ export const defaultUserGroupsForUser: UserGroup[] = [
     },
 ];
 
-// All available module pages
-export const getAllModulePages = (): Page[] => {
-    return [
-        {
-            name: "Feed",
-            handle: "feeds",
-            description: "Feed page",
-            module: "feeds",
-            readOnly: true,
-            enabled: false,
-            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-        },
-        {
-            name: "Followers",
-            handle: "members",
-            description: "Followers page",
-            module: "members",
-            enabled: false,
-            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-        },
-        {
-            name: "Circles",
-            handle: "circles",
-            description: "Circles page",
-            module: "circles",
-            enabled: false,
-            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-        },
-        {
-            name: "Projects",
-            handle: "projects",
-            description: "Projects page",
-            module: "projects",
-            enabled: false,
-            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-        },
-        {
-            name: "Settings",
-            handle: "settings",
-            description: "Settings page",
-            module: "settings",
-            readOnly: true,
-            enabled: false,
-            defaultUserGroups: ["admins"],
-        },
-    ];
-};
-
 // default pages every circle will be created with
 export const defaultPages: Page[] = [
     {
@@ -471,48 +423,6 @@ export const getDefaultAccessRules = (enabledModules?: string[]): Record<string,
         const moduleFeatures = features[moduleHandle as keyof typeof features];
 
         // Add each feature for this module
-        for (const featureHandle in moduleFeatures) {
-            const feature = (moduleFeatures as any)[featureHandle];
-            if (feature && feature.defaultUserGroups) {
-                accessRules[moduleHandle][featureHandle] = feature.defaultUserGroups;
-            }
-        }
-    }
-
-    return accessRules;
-};
-
-/**
- * Get default access rules for a user
- * @returns Record of access rules for a user
- */
-export const getDefaultAccessRulesForUser = (): Record<string, Record<string, string[]>> => {
-    // Use the same approach as getDefaultAccessRules but with defaultPagesForUser
-    let accessRules: Record<string, Record<string, string[]>> = {};
-
-    // Initialize with empty objects for each module
-    for (const moduleHandle of Object.keys(features)) {
-        accessRules[moduleHandle] = {};
-    }
-
-    // Add general features
-    for (const featureHandle in features.general) {
-        const feature = features.general[featureHandle as keyof typeof features.general];
-        accessRules.general[featureHandle] = feature.defaultUserGroups || [];
-    }
-
-    // Add module features based on defaultPagesForUser
-    for (const page of defaultPagesForUser) {
-        if (!page.enabled) continue;
-
-        // Map module to moduleHandle
-        const moduleHandle = page.module === "feeds" ? "feed" : page.module === "members" ? "followers" : page.module;
-
-        // Skip if module doesn't exist in features
-        if (!features[moduleHandle as keyof typeof features]) continue;
-
-        // Add module-specific features
-        const moduleFeatures = features[moduleHandle as keyof typeof features];
         for (const featureHandle in moduleFeatures) {
             const feature = (moduleFeatures as any)[featureHandle];
             if (feature && feature.defaultUserGroups) {

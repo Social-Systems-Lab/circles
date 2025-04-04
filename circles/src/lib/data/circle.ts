@@ -4,14 +4,7 @@ import { Circle, CircleType, PlatformMetrics, Post, ServerSettings, SortingOptio
 import { getServerSettings } from "./server-settings";
 import { Circles, Members, MembershipRequests, Feeds, Posts, ChatRooms } from "./db";
 import { ObjectId } from "mongodb";
-import {
-    getDefaultAccessRules,
-    defaultUserGroups,
-    defaultPages,
-    defaultPagesForProjects,
-    features,
-    getAllModulePages,
-} from "./constants";
+import { getDefaultAccessRules, defaultUserGroups, defaultPages, defaultPagesForProjects, features } from "./constants";
 import { getMetrics } from "../utils/metrics";
 import { deleteVbdCircle, deleteVbdPost, upsertVbdCircles } from "./vdb";
 import { createDefaultChatRooms, getChatRoomByHandle, updateChatRoom } from "./chat";
@@ -182,33 +175,6 @@ export const createDefaultCircle = (): Circle => {
     // Default enabled modules
     const defaultModules = ["feed", "followers", "circles", "projects", "settings"];
 
-    // Get all available module pages with enabled=false by default
-    const allPages = getAllModulePages();
-
-    // Enable the pages that correspond to enabled modules
-    for (const page of allPages) {
-        // Check if the corresponding module is enabled
-        const moduleHandle = page.module;
-        const moduleEnabled = defaultModules.includes(
-            moduleHandle === "feeds" ? "feed" : moduleHandle === "members" ? "followers" : moduleHandle,
-        );
-
-        if (moduleEnabled) {
-            page.enabled = true;
-
-            // Set default user groups and readOnly status
-            if (moduleHandle === "feeds" || moduleHandle === "settings") {
-                page.readOnly = true;
-            }
-
-            if (moduleHandle === "settings") {
-                page.defaultUserGroups = ["admins"];
-            } else {
-                page.defaultUserGroups = ["admins", "moderators", "members", "everyone"];
-            }
-        }
-    }
-
     let circle: Circle = {
         name: "Circles",
         description: "Connect. Collaborate. Create Change.",
@@ -217,8 +183,7 @@ export const createDefaultCircle = (): Circle => {
         cover: { url: "/images/default-cover.png" },
         userGroups: defaultUserGroups,
         enabledModules: defaultModules,
-        accessRules: getDefaultAccessRules(defaultModules),
-        pages: allPages,
+        accessRules: getDefaultAccessRules(),
         questionnaire: [],
         isPublic: true,
         circleType: "circle",

@@ -1,4 +1,5 @@
 "use client";
+
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { userSettingsAtom } from "@/lib/data/atoms";
 import { updateQueryParam } from "@/lib/utils/helpers-client";
@@ -7,7 +8,7 @@ import { useAtom } from "jotai";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-export default function CirclesTabs({ currentTab, circleType }: { currentTab?: string, circleType?: string }) {
+export default function CirclesTabs({ currentTab, circleType }: { currentTab?: string; circleType?: string }) {
     const router = useRouter();
     const isCompact = useIsCompact();
     const [settings, setSettings] = useAtom(userSettingsAtom);
@@ -26,7 +27,7 @@ export default function CirclesTabs({ currentTab, circleType }: { currentTab?: s
 
     return (
         <div className="w-full">
-            <h1 className="text-2xl font-bold mb-4">{circleType === "project" ? "Projects" : "Circles"}</h1>
+            <h1 className="mb-4 text-2xl font-bold">{circleType === "project" ? "Projects" : "Circles"}</h1>
             <div className="flex w-full border-b">
                 <button
                     className={`flex-1 py-2 text-center ${
