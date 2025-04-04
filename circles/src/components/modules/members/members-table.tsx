@@ -245,7 +245,6 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
                 selectedMember,
                 circle,
                 data.memberUserGroups[selectedMember.userDid],
-                page,
             );
             if (result.success) {
                 toast({

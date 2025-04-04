@@ -1,12 +1,17 @@
 "use server";
 
 import { createDefaultChatRooms, getChatRooms } from "@/lib/data/chat";
-import { ModuleLayoutPageProps } from "../dynamic-page-layout";
 import { ChatLayoutWrapper } from "./chat-layout-wrapper";
 import { redirect } from "next/navigation";
-import { ChatRoom } from "@/models/models";
+import { ChatRoom, Circle } from "@/models/models";
+import React from "react";
 
-export default async function ChatLayout({ children, circle }: ModuleLayoutPageProps) {
+type PageProps = {
+    circle: Circle;
+    children: React.ReactNode;
+};
+
+export default async function ChatLayout({ children, circle }: PageProps) {
     // get chat-rooms
     let chatRooms = await getChatRooms(circle?._id);
     if (!chatRooms || chatRooms.length === 0) {

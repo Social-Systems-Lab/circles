@@ -1,5 +1,3 @@
-// Removed DynamicPageLayout import
-
 type LayoutProps = {
     // params are no longer needed as the wrapper is removed
     children: React.ReactNode;

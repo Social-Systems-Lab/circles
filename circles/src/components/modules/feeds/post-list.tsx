@@ -6,7 +6,6 @@ import {
     Feed,
     PostDisplay,
     CommentDisplay,
-    Page,
     PostItemProps,
     ContentPreviewData,
     MentionDisplay,

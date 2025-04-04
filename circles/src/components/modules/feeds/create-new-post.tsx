@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { UserPicture } from "../members/user-picture";
-import { Circle, Feed, Page, UserPrivate } from "@/models/models";
+import { Circle, Feed, UserPrivate } from "@/models/models";
 import { createPostAction } from "./actions";
 import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "@/components/utils/use-is-compact";

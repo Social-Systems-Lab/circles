@@ -10,7 +10,7 @@ import {
     getMembershipRequest,
     updatePendingMembershipRequestStatus,
 } from "@/lib/data/membership-requests";
-import { Circle, MembershipRequest, Page } from "@/models/models";
+import { Circle, MembershipRequest } from "@/models/models";
 import { revalidatePath } from "next/cache";
 
 type MembershipRequestsResponse = {

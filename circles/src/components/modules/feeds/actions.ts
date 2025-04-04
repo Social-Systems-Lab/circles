@@ -35,7 +35,6 @@ import {
     Comment,
     commentSchema,
     Circle,
-    Page,
     PostDisplay,
     CommentDisplay,
     SortingOptions,

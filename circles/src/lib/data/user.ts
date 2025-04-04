@@ -12,7 +12,7 @@ import { Challenges, ChatRoomMembers, Circles, Members } from "./db";
 import { ObjectId } from "mongodb";
 import { signRegisterUserChallenge } from "../auth/auth";
 import { getUserPendingMembershipRequests } from "./membership-requests";
-import { defaultPagesForUser, defaultUserGroupsForUser, getDefaultAccessRules, getDefaultModules } from "./constants";
+import { defaultUserGroupsForUser, getDefaultAccessRules, getDefaultModules } from "./constants";
 import { SAFE_CIRCLE_PROJECTION } from "./circle";
 
 export const getAllUsers = async (): Promise<Circle[]> => {

@@ -265,18 +265,18 @@ export const getAuthenticatedUserDid = async (): Promise<string | undefined> => 
 export const isAuthorized = async (
     userDid: string | undefined,
     circleId: string,
-    feature: Feature | string,
+    feature: Feature,
 ): Promise<boolean> => {
     // lookup access rules in circle for the features
     let circle = await Circles.findOne({ _id: new ObjectId(circleId) });
     if (!circle) return false;
 
-    let featureHandle = typeof feature === "string" ? feature : feature.handle;
-    let allowedUserGroups = circle?.accessRules?.[featureHandle];
+    let featureHandle = feature.handle;
+    let allowedUserGroups = circle?.accessRules?.[feature.module]?.[featureHandle];
 
     // If feature not found in access rules, get default user groups
     if (!allowedUserGroups) {
-        const featureObj = typeof feature === "string" ? features[feature as keyof typeof features] : feature;
+        const featureObj = feature;
         allowedUserGroups = featureObj?.defaultUserGroups ?? [];
     }
 
@@ -288,12 +288,12 @@ export const isAuthorized = async (
     return allowedUserGroups.some((group) => membership?.userGroups?.includes(group));
 };
 
-export const getAuthorizedMembers = async (circle: string | Circle, feature: Feature | string): Promise<Circle[]> => {
+export const getAuthorizedMembers = async (circle: string | Circle, feature: Feature): Promise<Circle[]> => {
     if (typeof circle === "string") {
         circle = await getCircleById(circle);
     }
-    let featureHandle = typeof feature === "string" ? feature : feature.handle;
-    let allowedUserGroups = circle?.accessRules?.[featureHandle];
+    let featureHandle = feature.handle;
+    let allowedUserGroups = circle?.accessRules?.[feature.module]?.[featureHandle];
 
     if (!allowedUserGroups) return [];
 

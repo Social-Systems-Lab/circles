@@ -14,11 +14,7 @@ interface MembershipGatewayProps {
     rejectedRequests: MembershipRequest[];
 }
 
-const MembershipGateway: React.FC<MembershipGatewayProps> = ({
-    circle,
-    /* page, */ pendingRequests,
-    rejectedRequests,
-}) => {
+const MembershipGateway: React.FC<MembershipGatewayProps> = ({ circle, pendingRequests, rejectedRequests }) => {
     // Commented out page destructuring
     const isCompact = useIsCompact();
 

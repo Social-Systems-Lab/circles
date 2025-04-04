@@ -9,7 +9,7 @@ interface RejectedRequestsTableProps {
     requests: MembershipRequest[];
 }
 
-const RejectedRequestsTable: React.FC<RejectedRequestsTableProps> = ({ circle, /* page, */ requests }) => {
+const RejectedRequestsTable: React.FC<RejectedRequestsTableProps> = ({ circle, requests }) => {
     // Commented out page destructuring
     return (
         <Table>

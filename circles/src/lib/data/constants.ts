@@ -1,4 +1,4 @@
-import { Page, UserGroup, Module, Feature, Cause, Skill, ModuleInfo, CircleType } from "@/models/models";
+import { UserGroup, Module, Feature, Cause, Skill, ModuleInfo, CircleType } from "@/models/models";
 
 export const logLevel = 5; // 0: none, 1: error, 2: warn, 3: info, 4: debug, 5: trace
 export const LOG_LEVEL_TRACE = 5;
@@ -11,35 +11,35 @@ export const features = {
             description: "Edit circle user groups of same level members",
             defaultUserGroups: ["admins"],
             module: "general",
-        },
+        } as Feature,
         edit_lower_user_groups: {
             name: "Edit Lower Member User Groups",
             handle: "edit_lower_user_groups",
             description: "Edit circle user groups of lower members",
             defaultUserGroups: ["admins", "moderators"],
             module: "general",
-        },
+        } as Feature,
         remove_same_level_members: {
             name: "Remove Same Level Members",
             handle: "remove_same_level_members",
             description: "Remove same level members from the circle",
             defaultUserGroups: ["admins"],
             module: "general",
-        },
+        } as Feature,
         remove_lower_members: {
             name: "Remove Lower Members",
             handle: "remove_lower_members",
             description: "Remove lower members from the circle",
             defaultUserGroups: ["admins", "moderators"],
             module: "general",
-        },
+        } as Feature,
         manage_membership_requests: {
             name: "Manage Follow Requests",
             handle: "manage_membership_requests",
             description: "Manage requests to follow the circle",
             defaultUserGroups: ["admins", "moderators"],
             module: "general",
-        },
+        } as Feature,
     },
     feed: {
         view: {
@@ -48,28 +48,28 @@ export const features = {
             description: "View the feed",
             defaultUserGroups: ["admins", "moderators", "members", "everyone"],
             module: "feed",
-        },
+        } as Feature,
         post: {
             name: "Create Post",
             handle: "post",
             description: "Create a post in the feed",
             defaultUserGroups: ["admins", "moderators", "members"],
             module: "feed",
-        },
+        } as Feature,
         comment: {
             name: "Comment",
             handle: "comment",
             description: "Comment on posts in the feed",
             defaultUserGroups: ["admins", "moderators", "members", "everyone"],
             module: "feed",
-        },
+        } as Feature,
         moderate: {
             name: "Moderate Feed",
             handle: "moderate",
             description: "Moderate posts in the feed",
             defaultUserGroups: ["admins", "moderators"],
             module: "feed",
-        },
+        } as Feature,
     },
     chat: {
         view: {
@@ -78,14 +78,14 @@ export const features = {
             description: "View the chat messages",
             defaultUserGroups: ["admins", "moderators", "members", "everyone"],
             module: "chat",
-        },
+        } as Feature,
         moderate: {
             name: "Moderate Chat",
             handle: "moderate",
             description: "Moderate chat messages in the chat",
             defaultUserGroups: ["admins", "moderators"],
             module: "chat",
-        },
+        } as Feature,
     },
     followers: {
         view: {
@@ -94,7 +94,7 @@ export const features = {
             description: "View the followers list",
             defaultUserGroups: ["admins", "moderators", "members", "everyone"],
             module: "followers",
-        },
+        } as Feature,
     },
     circles: {
         view: {
@@ -103,21 +103,21 @@ export const features = {
             description: "View the circles list",
             defaultUserGroups: ["admins", "moderators", "members", "everyone"],
             module: "circles",
-        },
+        } as Feature,
         create: {
             name: "Create Circle",
             handle: "create",
             description: "Create a new circle",
             defaultUserGroups: ["admins", "moderators", "members"],
             module: "circles",
-        },
+        } as Feature,
         delete: {
             name: "Delete Circle",
             handle: "delete",
             description: "Delete a circle",
             defaultUserGroups: ["admins"],
             module: "circles",
-        },
+        } as Feature,
     },
     projects: {
         view: {
@@ -126,14 +126,14 @@ export const features = {
             description: "View the projects list",
             defaultUserGroups: ["admins", "moderators", "members", "everyone"],
             module: "projects",
-        },
+        } as Feature,
         create: {
             name: "Create Project",
             handle: "create",
             description: "Create a new project",
             defaultUserGroups: ["admins", "moderators", "members"],
             module: "projects",
-        },
+        } as Feature,
     },
     proposals: {
         view: {
@@ -142,42 +142,42 @@ export const features = {
             description: "View the proposals list",
             defaultUserGroups: ["admins", "moderators", "members", "everyone"],
             module: "proposals",
-        },
+        } as Feature,
         create: {
             name: "Create Proposal",
             handle: "create",
             description: "Create a new proposal",
             defaultUserGroups: ["admins", "moderators", "members"],
             module: "proposals",
-        },
+        } as Feature,
         review: {
             name: "Review Proposals",
             handle: "review",
             description: "Review proposals and move them to voting stage",
             defaultUserGroups: ["admins", "moderators"],
             module: "proposals",
-        },
+        } as Feature,
         vote: {
             name: "Vote on Proposals",
             handle: "vote",
             description: "Vote on proposals in the voting stage",
             defaultUserGroups: ["admins", "moderators", "members"],
             module: "proposals",
-        },
+        } as Feature,
         resolve: {
             name: "Resolve Proposals",
             handle: "resolve",
             description: "Mark proposals as resolved (accepted/rejected)",
             defaultUserGroups: ["admins", "moderators"],
             module: "proposals",
-        },
+        } as Feature,
         moderate: {
             name: "Moderate Proposals",
             handle: "moderate",
             description: "Edit or delete any proposal",
             defaultUserGroups: ["admins"],
             module: "proposals",
-        },
+        } as Feature,
     },
     settings: {
         view: {
@@ -186,56 +186,56 @@ export const features = {
             description: "View the settings page",
             defaultUserGroups: ["admins"],
             module: "settings",
-        },
+        } as Feature,
         edit_about: {
             name: "Edit About",
             handle: "edit_about",
             description: "Edit circle about settings",
             defaultUserGroups: ["admins"],
             module: "settings",
-        },
+        } as Feature,
         edit_user_groups: {
             name: "Edit User Groups",
             handle: "edit_user_groups",
             description: "Edit user groups settings",
             defaultUserGroups: ["admins"],
             module: "settings",
-        },
+        } as Feature,
         edit_pages: {
             name: "Edit Pages",
             handle: "edit_pages",
             description: "Edit pages settings",
             defaultUserGroups: ["admins"],
             module: "settings",
-        },
+        } as Feature,
         edit_access_rules: {
             name: "Edit Access Rules",
             handle: "edit_access_rules",
             description: "Edit circle access rules settings",
             defaultUserGroups: ["admins"],
             module: "settings",
-        },
+        } as Feature,
         edit_causes_and_skills: {
             name: "Edit Causes and Skills",
             handle: "edit_causes_and_skills",
             description: "Edit causes and skills",
             defaultUserGroups: ["admins"],
             module: "settings",
-        },
+        } as Feature,
         edit_questionnaire: {
             name: "Edit Questionnaire",
             handle: "edit_questionnaire",
             description: "Edit questionnaire settings",
             defaultUserGroups: ["admins"],
             module: "settings",
-        },
+        } as Feature,
         edit_critical_settings: {
             name: "Edit Critical Settings",
             handle: "edit_critical_settings",
             description: "Edit critical and sensitive settings",
             defaultUserGroups: ["admins"],
             module: "settings",
-        },
+        } as Feature,
     },
     home: {
         view: {
@@ -244,7 +244,7 @@ export const features = {
             description: "View the home page",
             defaultUserGroups: ["admins", "moderators", "members", "everyone"],
             module: "home",
-        },
+        } as Feature,
     },
 };
 

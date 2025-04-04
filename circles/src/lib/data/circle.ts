@@ -4,14 +4,7 @@ import { Circle, CircleType, PlatformMetrics, Post, ServerSettings, SortingOptio
 import { getServerSettings } from "./server-settings";
 import { Circles, Members, MembershipRequests, Feeds, Posts, ChatRooms } from "./db";
 import { ObjectId } from "mongodb";
-import {
-    getDefaultAccessRules,
-    defaultUserGroups,
-    defaultPages,
-    defaultPagesForProjects,
-    features,
-    getDefaultModules,
-} from "./constants";
+import { getDefaultAccessRules, defaultUserGroups, getDefaultModules } from "./constants";
 import { getMetrics } from "../utils/metrics";
 import { deleteVbdCircle, deleteVbdPost, upsertVbdCircles } from "./vdb";
 import { createDefaultChatRooms, getChatRoomByHandle, updateChatRoom } from "./chat";

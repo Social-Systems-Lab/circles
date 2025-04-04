@@ -3,7 +3,7 @@ import React, { useState, useCallback, useEffect, useTransition } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageIcon, MapPinIcon, BarChartIcon, Trash2, Loader2, MapPin, ChevronDown, Users, Globe } from "lucide-react";
 import { UserPicture } from "../members/user-picture";
-import { Circle, Feed, Location, Media, Page, PostDisplay, UserPrivate } from "@/models/models";
+import { Circle, Feed, Location, Media, PostDisplay, UserPrivate } from "@/models/models";
 import { CirclePicture } from "../circles/circle-picture";
 import {
     Carousel,

@@ -14,7 +14,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Circle, ContentPreviewData, Page, ProposalDisplay, ProposalStage } from "@/models/models";
+import { Circle, ContentPreviewData, ProposalDisplay, ProposalStage } from "@/models/models";
 import { Button } from "@/components/ui/button";
 import { ArrowDown, ArrowUp, Loader2, MoreHorizontal, Plus } from "lucide-react";
 import { Label } from "@/components/ui/label";

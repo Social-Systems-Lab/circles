@@ -1,12 +1,16 @@
 "use server";
 
 import { createDefaultFeeds, getFeeds } from "@/lib/data/feed";
-import { ModuleLayoutPageProps } from "../dynamic-page-layout";
 import { FeedsLayoutWrapper } from "./feeds-layout-wrapper";
 import { redirect } from "next/navigation";
-import { Feed } from "@/models/models";
+import { Circle, Feed } from "@/models/models";
 
-export default async function FeedsModuleLayout({ children, circle }: ModuleLayoutPageProps) {
+type PageProps = {
+    circle: Circle;
+    children: React.ReactNode;
+};
+
+export default async function FeedsModuleLayout({ children, circle }: PageProps) {
     // get feeds
     let feeds = await getFeeds(circle?._id);
     if (!feeds || feeds.length === 0) {

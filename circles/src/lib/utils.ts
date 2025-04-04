@@ -1,6 +1,6 @@
 // used by tailwindcss to merge classnames, shadcn/ui CLI assumes the file is here
 
-import { ChatRoom, Circle, Content, Feed, Location, Page } from "@/models/models";
+import { ChatRoom, Circle, Content, Feed, Location } from "@/models/models";
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { getModuleFeatures, features } from "./data/constants";

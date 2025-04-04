@@ -28,7 +28,7 @@ const QuestionnaireAnswers: React.FC<{ answers: Record<string, string>; question
     </div>
 );
 
-const MembershipRequestsTable: React.FC<MembershipRequestsTableProps> = ({ circle, /* page, */ requests }) => {
+const MembershipRequestsTable: React.FC<MembershipRequestsTableProps> = ({ circle, requests }) => {
     // Commented out page destructuring
     const { toast } = useToast();
     const [loadingStates, setLoadingStates] = useState<{ [key: string]: boolean }>({});
@@ -37,7 +37,7 @@ const MembershipRequestsTable: React.FC<MembershipRequestsTableProps> = ({ circl
     const handleApprove = async (requestId: string) => {
         setLoadingStates((prev) => ({ ...prev, [requestId]: true }));
         // Pass undefined for the page argument
-        const result = await approveMembershipRequestAction(requestId, circle, undefined as any);
+        const result = await approveMembershipRequestAction(requestId, circle);
         setLoadingStates((prev) => ({ ...prev, [requestId]: false }));
         setOpenDialogs((prev) => ({ ...prev, [requestId]: false }));
 
@@ -58,7 +58,7 @@ const MembershipRequestsTable: React.FC<MembershipRequestsTableProps> = ({ circl
     const handleReject = async (requestId: string) => {
         setLoadingStates((prev) => ({ ...prev, [requestId]: true }));
         // Pass undefined for the page argument
-        const result = await rejectMembershipRequestAction(requestId, circle, undefined as any);
+        const result = await rejectMembershipRequestAction(requestId, circle);
         setLoadingStates((prev) => ({ ...prev, [requestId]: false }));
         setOpenDialogs((prev) => ({ ...prev, [requestId]: false }));
 
