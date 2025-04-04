@@ -114,10 +114,10 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                             name="handle"
                             control={form.control as unknown as Control}
                             render={({ field }) => (
-                                <DynamicAutoHandleField
+                                <DynamicTextField
                                     field={{
                                         name: "handle",
-                                        type: "auto-handle",
+                                        type: "text",
                                         label: "Handle",
                                         placeholder: "handle",
                                         description: {

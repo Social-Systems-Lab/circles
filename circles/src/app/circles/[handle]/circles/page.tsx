@@ -1,13 +1,20 @@
-import DynamicPage from "@/components/modules/dynamic-page";
+import { getCircleByHandle } from "@/lib/data/circle";
+import CirclesModule from "@/components/modules/circles/circles"; // Assuming default export
+import { notFound } from "next/navigation";
 
 type PageProps = {
-    params: Promise<{ handle: string }>;
-    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+    params: { handle: string };
+    searchParams: { [key: string]: string | string[] | undefined };
 };
 
 export default async function CirclesPage(props: PageProps) {
-    const params = await props.params;
-    const searchParams = await props.searchParams;
+    const circle = await getCircleByHandle(props.params.handle);
 
-    return <DynamicPage circleHandle={params.handle} moduleHandle="circles" searchParams={searchParams} />;
+    if (!circle) {
+        notFound();
+    }
+
+    // Pass circle and original props down to CirclesModule
+    // CirclesModule likely fetches its own sub-circle data using these props
+    return <CirclesModule {...props} circle={circle} />;
 }

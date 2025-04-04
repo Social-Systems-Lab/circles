@@ -1,13 +1,20 @@
-import DynamicPage from "@/components/modules/dynamic-page";
+import { getCircleByHandle } from "@/lib/data/circle";
+import ProposalsModule from "@/components/modules/proposals/proposals"; // Assuming default export
+import { notFound } from "next/navigation";
 
 type PageProps = {
-    params: Promise<{ handle: string }>;
-    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+    params: { handle: string };
+    searchParams: { [key: string]: string | string[] | undefined };
 };
 
 export default async function ProposalsPage(props: PageProps) {
-    const params = await props.params;
-    const searchParams = await props.searchParams;
+    const circle = await getCircleByHandle(props.params.handle);
 
-    return <DynamicPage circleHandle={params.handle} moduleHandle="proposals" searchParams={searchParams} />;
+    if (!circle) {
+        notFound();
+    }
+
+    // Pass circle and original props down to ProposalsModule
+    // ProposalsModule likely fetches its own proposal data using these props
+    return <ProposalsModule {...props} circle={circle} />;
 }

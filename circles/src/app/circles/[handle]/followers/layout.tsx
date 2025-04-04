@@ -1,17 +1,11 @@
-import { DynamicPageLayout } from "@/components/modules/dynamic-page-layout";
+// Removed DynamicPageLayout import
 
 type LayoutProps = {
-    params: Promise<{ handle: string }>;
+    // params are no longer needed as the wrapper is removed
     children: React.ReactNode;
 };
 
-export default async function FollowersLayout(props: LayoutProps) {
-    const params = await props.params;
-    const { children } = props;
-
-    return (
-        <DynamicPageLayout moduleHandle="followers" circleHandle={params.handle}>
-            {children}
-        </DynamicPageLayout>
-    );
+export default async function FollowersLayout({ children }: LayoutProps) {
+    // Simply return children as no specific layout wrapper is needed
+    return <>{children}</>;
 }

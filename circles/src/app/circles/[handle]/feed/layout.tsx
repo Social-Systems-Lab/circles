@@ -1,17 +1,21 @@
-import { DynamicPageLayout } from "@/components/modules/dynamic-page-layout";
+import { getCircleByHandle } from "@/lib/data/circle";
+import FeedsLayout from "@/components/modules/feeds/feeds-layout"; // Assuming default export
+import { notFound } from "next/navigation";
 
 type LayoutProps = {
-    params: Promise<{ handle: string }>;
+    params: { handle: string };
     children: React.ReactNode;
 };
 
-export default async function FeedLayout(props: LayoutProps) {
-    const params = await props.params;
-    const { children } = props;
+export default async function FeedLayout({ params, children }: LayoutProps) {
+    // Fetch circle data if needed by FeedsLayout (assuming it might be)
+    const circle = await getCircleByHandle(params.handle);
 
-    return (
-        <DynamicPageLayout moduleHandle="feed" circleHandle={params.handle}>
-            {children}
-        </DynamicPageLayout>
-    );
+    if (!circle) {
+        notFound();
+    }
+
+    // Use the specific layout component
+    // Assuming FeedsLayout takes circle and children props
+    return <FeedsLayout circle={circle}>{children}</FeedsLayout>;
 }
