@@ -1,4 +1,4 @@
-import { AboutSettingsForm } from "@/components/forms/circle-settings/about/about-settings-form";
+import { AboutSettingsForm } from "@/components/forms/circle-settings/about-settings-form";
 import { getCircleByHandle } from "@/lib/data/circle";
 
 type PageProps = {

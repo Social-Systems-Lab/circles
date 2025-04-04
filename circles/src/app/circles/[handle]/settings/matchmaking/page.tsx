@@ -1,4 +1,4 @@
-import { MatchmakingSettingsForm } from "@/components/forms/circle-settings/matchmaking/matchmaking-settings-form";
+import { MatchmakingSettingsForm } from "@/components/forms/circle-settings/matchmaking-settings-form";
 import { getCircleByHandle } from "@/lib/data/circle";
 
 type PageProps = {

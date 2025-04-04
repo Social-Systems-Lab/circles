@@ -1,4 +1,4 @@
-import { UserGroupsSettingsForm } from "@/components/forms/circle-settings/user-groups/user-groups-settings-form";
+import { UserGroupsSettingsForm } from "@/components/forms/circle-settings/user-groups-settings-form";
 import { getCircleByHandle } from "@/lib/data/circle";
 
 type PageProps = {

@@ -1,4 +1,4 @@
-import { QuestionnaireSettingsForm } from "@/components/forms/circle-settings/questionnaire/questionnaire-settings-form";
+import { QuestionnaireSettingsForm } from "@/components/forms/circle-settings/questionnaire-settings-form";
 import { getCircleByHandle } from "@/lib/data/circle";
 
 type PageProps = {

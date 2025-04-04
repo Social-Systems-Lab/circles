@@ -1,4 +1,4 @@
-import { PagesSettingsForm } from "@/components/forms/circle-settings/pages/pages-settings-form";
+import { PagesSettingsForm } from "@/components/forms/circle-settings/pages-settings-form";
 import { getCircleByHandle } from "@/lib/data/circle";
 
 type PageProps = {

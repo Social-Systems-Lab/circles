@@ -19,6 +19,9 @@ import {
     DynamicLocationField,
     DynamicAutoHandleField,
 } from "@/components/forms/dynamic-field";
+import { getUserPrivateAction } from "@/components/modules/home/actions";
+import { useAtom } from "jotai";
+import { userAtom } from "@/lib/data/atoms";
 
 interface AboutSettingsFormProps {
     circle: Circle;
@@ -26,6 +29,7 @@ interface AboutSettingsFormProps {
 
 export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.ReactElement {
     const { toast } = useToast();
+    const [, setUser] = useAtom(userAtom);
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -64,6 +68,9 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                     title: "Success",
                     description: "Circle profile updated successfully",
                 });
+                // fetch new user data
+                let userData = await getUserPrivateAction();
+                setUser(userData);
                 router.refresh();
             } else {
                 toast({

@@ -1,4 +1,4 @@
-import { AccessRulesSettingsForm } from "@/components/forms/circle-settings/access-rules/access-rules-settings-form";
+import { AccessRulesSettingsForm } from "@/components/forms/circle-settings/access-rules-settings-form";
 import { getCircleByHandle } from "@/lib/data/circle";
 
 type PageProps = {
