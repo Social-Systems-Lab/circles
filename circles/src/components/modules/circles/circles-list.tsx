@@ -49,7 +49,11 @@ const CirclesList = ({ circle, circles, page, activeTab, inUser, isProjectsList 
     const [user] = useAtom(userAtom);
     const isCompact = useIsCompact();
     const isMobile = useIsMobile();
-    const canCreateSubcircle = isAuthorized(user, circle, features.circles.create);
+    const canCreateSubcircle = isAuthorized(
+        user,
+        circle,
+        isProjectsList ? features.projects.create : features.circles.create,
+    );
     const router = useRouter();
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [searchQuery, setSearchQuery] = useState("");

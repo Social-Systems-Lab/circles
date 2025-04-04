@@ -62,7 +62,7 @@ export const isAuthorized = (user: UserPrivate | undefined, circle: Circle, feat
         }
     } else {
         // It's a Feature object
-        moduleHandle = "general"; // Default to general module
+        moduleHandle = feature.module;
         featureHandle = feature.handle;
     }
 

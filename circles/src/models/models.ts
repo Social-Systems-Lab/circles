@@ -147,6 +147,7 @@ export type UserGroup = z.infer<typeof userGroupSchema>;
 
 export const featureSchema = z.object({
     name: z.string(),
+    module: z.string(),
     handle: handleSchema,
     description: z.string(),
     defaultUserGroups: z.array(z.string()).optional(),
