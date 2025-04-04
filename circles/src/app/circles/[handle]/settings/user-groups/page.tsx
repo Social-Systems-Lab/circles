@@ -2,12 +2,13 @@ import { UserGroupsSettingsForm } from "@/components/forms/circle-settings/user-
 import { getCircleByHandle } from "@/lib/data/circle";
 
 type PageProps = {
-    params: { handle: string };
-    searchParams: { [key: string]: string | string[] | undefined };
+    params: Promise<{ handle: string }>;
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
 export default async function UserGroupsSettingsPage(props: PageProps) {
-    const { handle } = props.params;
+    const params = await props.params;
+    const { handle } = params;
     const circle = await getCircleByHandle(handle);
 
     if (!circle) {

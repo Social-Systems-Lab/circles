@@ -14,11 +14,9 @@ import { DynamicField } from "@/components/forms/dynamic-field";
 
 interface MatchmakingSettingsFormProps {
     circle: Circle;
-    causes: { handle: string; name: string; description: string; picture?: any }[];
-    skills: { handle: string; name: string; description: string; picture?: any }[];
 }
 
-export function MatchmakingSettingsForm({ circle, causes, skills }: MatchmakingSettingsFormProps): React.ReactElement {
+export function MatchmakingSettingsForm({ circle }: MatchmakingSettingsFormProps): React.ReactElement {
     const { toast } = useToast();
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);

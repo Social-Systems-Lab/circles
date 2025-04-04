@@ -1,8 +1,8 @@
 import DynamicPage from "@/components/modules/dynamic-page";
 
 type PageProps = {
-    params: { handle: string };
-    searchParams: { [key: string]: string | string[] | undefined };
+    params: Promise<{ handle: string }>;
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
 export default async function ProposalsPage(props: PageProps) {

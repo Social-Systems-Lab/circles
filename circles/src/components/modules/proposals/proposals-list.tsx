@@ -463,8 +463,8 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, page }
                         <DialogHeader>
                             <DialogTitle>Delete Proposal</DialogTitle>
                             <DialogDescription>
-                                Are you sure you want to delete the proposal "{selectedProposal?.name}"? This action
-                                cannot be undone.
+                                Are you sure you want to delete the proposal &quot;{selectedProposal?.name}&quot;? This
+                                action cannot be undone.
                             </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>

@@ -1,10 +1,12 @@
 import DynamicPage from "@/components/modules/dynamic-page";
 
 type PageProps = {
-    params: { handle: string };
-    searchParams: { [key: string]: string | string[] | undefined };
+    params: Promise<{ handle: string }>;
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
-export default async function FeedPage({ params, searchParams }: PageProps) {
+export default async function FeedPage(props: PageProps) {
+    const params = await props.params;
+    const searchParams = await props.searchParams;
     return <DynamicPage circleHandle={params.handle} moduleHandle="feed" searchParams={searchParams} />;
 }

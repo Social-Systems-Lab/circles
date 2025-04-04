@@ -50,8 +50,8 @@ export function CircleTabs({ circle }: CircleTabsProps) {
     const visibleModules = useMemo(() => {
         return enabledModules
             .filter((moduleHandle) => {
-                const module = modules.find((x) => x.handle === moduleHandle);
-                return module && hasAccess(moduleHandle);
+                let m = modules.find((x) => x.handle === moduleHandle);
+                return m && hasAccess(moduleHandle);
             })
             .map((moduleHandle) => modules.find((x) => x.handle === moduleHandle)!);
     }, [enabledModules, hasAccess]);

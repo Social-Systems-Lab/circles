@@ -6,7 +6,7 @@ import { FeedsLayoutWrapper } from "./feeds-layout-wrapper";
 import { redirect } from "next/navigation";
 import { Feed } from "@/models/models";
 
-export default async function FeedsModuleLayout({ children, circle, page }: ModuleLayoutPageProps) {
+export default async function FeedsModuleLayout({ children, circle }: ModuleLayoutPageProps) {
     // get feeds
     let feeds = await getFeeds(circle?._id);
     if (!feeds || feeds.length === 0) {

@@ -9,10 +9,11 @@ import { features } from "@/lib/data/constants";
 import { redirect } from "next/navigation";
 
 type PageProps = {
-    params: { handle: string; proposalId: string };
+    params: Promise<{ handle: string; proposalId: string }>;
 };
 
-export default async function EditProposalPage({ params }: PageProps) {
+export default async function EditProposalPage(props: PageProps) {
+    const params = await props.params;
     const circleHandle = params.handle;
     const proposalId = params.proposalId;
 
@@ -45,7 +46,9 @@ export default async function EditProposalPage({ params }: PageProps) {
         return (
             <div className="flex h-full w-full flex-col items-center justify-center p-4 text-center">
                 <h2 className="mb-2 text-xl font-semibold">Proposal Not Found</h2>
-                <p className="text-gray-600">The proposal you're trying to edit doesn't exist or has been removed.</p>
+                <p className="text-gray-600">
+                    The proposal you&apos;re trying to edit doesn&apos;t exist or has been removed.
+                </p>
                 <Button asChild className="mt-4">
                     <Link href={`/circles/${circleHandle}/proposals`}>
                         <ArrowLeft className="mr-2 h-4 w-4" />
@@ -65,7 +68,7 @@ export default async function EditProposalPage({ params }: PageProps) {
         return (
             <div className="flex h-full w-full flex-col items-center justify-center p-4 text-center">
                 <h2 className="mb-2 text-xl font-semibold">Access Denied</h2>
-                <p className="text-gray-600">You don't have permission to edit this proposal.</p>
+                <p className="text-gray-600">You don&apos;t have permission to edit this proposal.</p>
                 <Button asChild className="mt-4">
                     <Link href={`/circles/${circleHandle}/proposals/${proposalId}`}>
                         <ArrowLeft className="mr-2 h-4 w-4" />
