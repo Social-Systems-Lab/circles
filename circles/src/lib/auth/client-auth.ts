@@ -1,6 +1,5 @@
 import { Circle, Feature, MemberDisplay, UserPrivate } from "@/models/models";
 import { features, maxAccessLevel } from "../data/constants";
-import { modules } from "@/components/modules/modules";
 
 export const getMemberAccessLevel = (user: UserPrivate | MemberDisplay | undefined, circle: Circle): number => {
     if (!user) return maxAccessLevel;

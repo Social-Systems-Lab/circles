@@ -118,7 +118,6 @@ const CirclesList = ({ circle, circles, page, activeTab, inUser, isProjectsList 
     return (
         <div className="flex flex-1 flex-row justify-center overflow-hidden">
             <div className="mb-4 ml-4 mr-4 mt-4 flex max-w-[1100px] flex-1 flex-col">
-                <pre>{JSON.stringify(canCreateSubcircle.toString(), null, 2)}</pre>
                 <div
                     className="flex w-full flex-row items-center gap-2"
                     style={{

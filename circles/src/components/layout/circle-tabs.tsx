@@ -49,9 +49,12 @@ export function CircleTabs({ circle }: CircleTabsProps) {
 
     // Filter modules based on enabledModules and excludeFromMenu
     const visibleModules = useMemo(() => {
-        return Object.values(modules).filter(
-            (module) => enabledModules.includes(module.handle) && !module.excludeFromMenu && hasAccess(module.handle),
-        );
+        return enabledModules
+            .filter((moduleHandle) => {
+                const module = modules[moduleHandle];
+                return module && hasAccess(moduleHandle);
+            })
+            .map((moduleHandle) => modules[moduleHandle]);
     }, [enabledModules, hasAccess]);
 
     // Generate the correct path for a module based on default circle status
