@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm, Controller, Control } from "react-hook-form";
 import { saveMatchmaking } from "@/app/circles/[handle]/settings/matchmaking/actions";
+import { DynamicField } from "@/components/forms/dynamic-field";
 
 interface MatchmakingSettingsFormProps {
     circle: Circle;
@@ -61,7 +62,7 @@ export function MatchmakingSettingsForm({ circle, causes, skills }: MatchmakingS
 
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="formatted space-y-6">
                 <Card>
                     <CardHeader>
                         <CardTitle>Causes</CardTitle>
@@ -75,33 +76,17 @@ export function MatchmakingSettingsForm({ circle, causes, skills }: MatchmakingS
                             name="causes"
                             control={form.control}
                             render={({ field }) => (
-                                <div className="space-y-4">
-                                    <div className="grid grid-cols-3 gap-4">
-                                        {causes.map((cause) => (
-                                            <div
-                                                key={cause.handle}
-                                                className={`cursor-pointer rounded-lg border p-4 transition-colors ${
-                                                    field.value.includes(cause.handle)
-                                                        ? "border-primary bg-primary/10"
-                                                        : "border-border hover:border-primary/50"
-                                                }`}
-                                                onClick={() => {
-                                                    const newValue = field.value.includes(cause.handle)
-                                                        ? field.value.filter((h: string) => h !== cause.handle)
-                                                        : [...field.value, cause.handle];
-                                                    field.onChange(newValue);
-                                                }}
-                                            >
-                                                <div className="flex flex-col items-center gap-2 text-center">
-                                                    <div className="text-sm font-medium">{cause.name}</div>
-                                                    <div className="text-xs text-muted-foreground">
-                                                        {cause.description}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
+                                <DynamicField
+                                    field={{
+                                        name: "causes",
+                                        type: "causes",
+                                        label: "Causes",
+                                        placeholder: "Search causes...",
+                                        description: "Select the causes that your circle is focused on.",
+                                    }}
+                                    formField={field}
+                                    control={form.control as unknown as Control}
+                                />
                             )}
                         />
                     </CardContent>
@@ -120,33 +105,17 @@ export function MatchmakingSettingsForm({ circle, causes, skills }: MatchmakingS
                             name="skills"
                             control={form.control}
                             render={({ field }) => (
-                                <div className="space-y-4">
-                                    <div className="grid grid-cols-3 gap-4">
-                                        {skills.map((skill) => (
-                                            <div
-                                                key={skill.handle}
-                                                className={`cursor-pointer rounded-lg border p-4 transition-colors ${
-                                                    field.value.includes(skill.handle)
-                                                        ? "border-primary bg-primary/10"
-                                                        : "border-border hover:border-primary/50"
-                                                }`}
-                                                onClick={() => {
-                                                    const newValue = field.value.includes(skill.handle)
-                                                        ? field.value.filter((h: string) => h !== skill.handle)
-                                                        : [...field.value, skill.handle];
-                                                    field.onChange(newValue);
-                                                }}
-                                            >
-                                                <div className="flex flex-col items-center gap-2 text-center">
-                                                    <div className="text-sm font-medium">{skill.name}</div>
-                                                    <div className="text-xs text-muted-foreground">
-                                                        {skill.description}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
+                                <DynamicField
+                                    field={{
+                                        name: "skills",
+                                        type: "skills",
+                                        label: "Skills",
+                                        placeholder: "Search skills...",
+                                        description: "Select the skills that are relevant to your circle.",
+                                    }}
+                                    formField={field}
+                                    control={form.control as unknown as Control}
+                                />
                             )}
                         />
                     </CardContent>

@@ -4,7 +4,7 @@ import { getCircleById, getCirclePath, updateCircle } from "@/lib/data/circle";
 import { Circle, FormSubmitResponse } from "@/models/models";
 import { revalidatePath } from "next/cache";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
-import { features } from "@/lib/data/constants";
+import { features, modules } from "@/lib/data/constants";
 
 export async function savePages(values: { _id: any; enabledModules: string[] }): Promise<FormSubmitResponse> {
     console.log("Saving circle modules with values", values);
@@ -32,13 +32,16 @@ export async function savePages(values: { _id: any; enabledModules: string[] }):
             throw new Error("Circle not found");
         }
 
-        // Make sure general and settings modules are always enabled
-        if (!circle.enabledModules?.includes("general")) {
-            circle.enabledModules = [...(circle.enabledModules || []), "general"];
-        }
-        if (!circle.enabledModules?.includes("settings")) {
-            circle.enabledModules = [...(circle.enabledModules || []), "settings"];
-        }
+        // go through all modules and see which should be enabled
+        let enabledModules = modules.filter((module) => {
+            if (module.readOnly) {
+                return true;
+            }
+
+            return circle.enabledModules?.includes(module.handle);
+        });
+
+        circle.enabledModules = enabledModules.map((module) => module.handle);
 
         // update the circle
         await updateCircle(circle);
