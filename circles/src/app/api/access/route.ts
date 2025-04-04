@@ -31,7 +31,7 @@ export async function POST(req: Request) {
         const accessRules = circle.accessRules || {};
 
         // First try module-specific access rule
-        let allowedUserGroups = accessRules[moduleHandle].view;
+        let allowedUserGroups = accessRules[moduleHandle]?.view;
 
         // If still not found, use default permissions for everyone
         if (!allowedUserGroups) {

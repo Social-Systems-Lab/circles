@@ -2,7 +2,6 @@ import { verifyUserToken } from "@/lib/auth/jwt";
 import type { NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
-    return;
     let userDid = undefined;
 
     // determine host and port based on environment
@@ -48,13 +47,6 @@ export async function middleware(request: NextRequest) {
                 // For post routes, use 'feed' as the module handle for permission checking
                 // This ensures post viewing uses the same permissions as feed viewing
                 moduleHandle = "feed";
-            }
-
-            // Special case for project view routes
-            if (moduleHandle === "project" && urlSegments.length >= 4) {
-                // For project routes, use 'projects' as the module handle for permission checking
-                // This ensures project viewing uses the same permissions as project viewing
-                moduleHandle = "projects";
             }
         }
     } else {
