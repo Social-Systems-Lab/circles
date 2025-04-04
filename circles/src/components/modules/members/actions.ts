@@ -6,7 +6,7 @@ import { getCircleById, getCirclePath } from "@/lib/data/circle";
 import { features } from "@/lib/data/constants";
 import { countAdmins, getMember, removeMember, updateMemberUserGroups } from "@/lib/data/member";
 import { safeModifyMemberUserGroups } from "@/lib/utils";
-import { Circle, MemberDisplay, Page } from "@/models/models";
+import { Circle, MemberDisplay } from "@/models/models";
 import { revalidatePath } from "next/cache";
 
 type RemoveMemberResponse = {
@@ -14,11 +14,7 @@ type RemoveMemberResponse = {
     message?: string;
 };
 
-export const removeMemberAction = async (
-    member: MemberDisplay,
-    circle: Circle,
-    page: Page,
-): Promise<RemoveMemberResponse> => {
+export const removeMemberAction = async (member: MemberDisplay, circle: Circle): Promise<RemoveMemberResponse> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to remove a member" };
@@ -55,7 +51,7 @@ export const removeMemberAction = async (
 
         // clear page cache so page update
         let circlePath = await getCirclePath(circle);
-        revalidatePath(`${circlePath}${page?.handle}`);
+        revalidatePath(`${circlePath}followers`);
 
         return { success: true };
     } catch (error) {
@@ -72,7 +68,6 @@ export const updateUserGroupsAction = async (
     member: MemberDisplay,
     circle: Circle,
     newGroups: string[],
-    page: Page,
 ): Promise<UpdateUserGroupsResponse> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -132,7 +127,7 @@ export const updateUserGroupsAction = async (
 
         // clear page cache so page update
         let circlePath = await getCirclePath(circle);
-        revalidatePath(`${circlePath}${page?.handle}`);
+        revalidatePath(`${circlePath}followers`);
 
         return { success: true };
     } catch (error) {

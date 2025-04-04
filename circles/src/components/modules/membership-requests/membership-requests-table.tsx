@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Circle, MembershipRequest, Page, Question } from "@/models/models";
+import { Circle, MembershipRequest, Question } from "@/models/models"; // Removed Page import
 import { useToast } from "@/components/ui/use-toast";
 import { approveMembershipRequestAction, rejectMembershipRequestAction } from "./actions";
 import { Eye, Loader2 } from "lucide-react";
@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 
 interface MembershipRequestsTableProps {
     circle: Circle;
-    page: Page;
     requests: MembershipRequest[];
 }
 
@@ -29,14 +28,16 @@ const QuestionnaireAnswers: React.FC<{ answers: Record<string, string>; question
     </div>
 );
 
-const MembershipRequestsTable: React.FC<MembershipRequestsTableProps> = ({ circle, page, requests }) => {
+const MembershipRequestsTable: React.FC<MembershipRequestsTableProps> = ({ circle, /* page, */ requests }) => {
+    // Commented out page destructuring
     const { toast } = useToast();
     const [loadingStates, setLoadingStates] = useState<{ [key: string]: boolean }>({});
     const [openDialogs, setOpenDialogs] = useState<{ [key: string]: boolean }>({});
 
     const handleApprove = async (requestId: string) => {
         setLoadingStates((prev) => ({ ...prev, [requestId]: true }));
-        const result = await approveMembershipRequestAction(requestId, circle, page);
+        // Pass undefined for the page argument
+        const result = await approveMembershipRequestAction(requestId, circle, undefined as any);
         setLoadingStates((prev) => ({ ...prev, [requestId]: false }));
         setOpenDialogs((prev) => ({ ...prev, [requestId]: false }));
 
@@ -56,7 +57,8 @@ const MembershipRequestsTable: React.FC<MembershipRequestsTableProps> = ({ circl
 
     const handleReject = async (requestId: string) => {
         setLoadingStates((prev) => ({ ...prev, [requestId]: true }));
-        const result = await rejectMembershipRequestAction(requestId, circle, page);
+        // Pass undefined for the page argument
+        const result = await rejectMembershipRequestAction(requestId, circle, undefined as any);
         setLoadingStates((prev) => ({ ...prev, [requestId]: false }));
         setOpenDialogs((prev) => ({ ...prev, [requestId]: false }));
 

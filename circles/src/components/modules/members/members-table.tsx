@@ -16,7 +16,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Circle, Content, ContentPreviewData, MemberDisplay, Page } from "@/models/models";
+import { Circle, Content, ContentPreviewData, MemberDisplay } from "@/models/models";
 import { Button } from "@/components/ui/button";
 import { ArrowDown, ArrowUp, Loader2, MoreHorizontal } from "lucide-react";
 import {
@@ -48,7 +48,6 @@ import InviteButton from "../home/invite-button";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { UserPicture } from "./user-picture";
 import { motion } from "framer-motion";
-import CircleHeader from "../circles/circle-header";
 import { ListFilter } from "@/components/utils/list-filter";
 import { useRouter } from "next/navigation";
 import Indicators from "@/components/utils/indicators";
@@ -57,7 +56,6 @@ import { updateQueryParam } from "@/lib/utils/helpers-client";
 interface MemberTableProps {
     members: MemberDisplay[];
     circle: Circle;
-    page: Page;
 }
 
 export const multiSelectFilter: FilterFn<MemberDisplay> = (
@@ -96,7 +94,7 @@ const tableRowVariants = {
     }),
 };
 
-const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page }) => {
+const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
     const data = React.useMemo(() => members, [members]);
     const [sorting, setSorting] = React.useState<SortingState>([]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -217,7 +215,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members, page }) => {
 
         startTransition(async () => {
             // call server action to remove user from circle
-            let result = await removeMemberAction(selectedMember, circle, page);
+            let result = await removeMemberAction(selectedMember, circle);
             if (result.success) {
                 toast({
                     icon: "success",

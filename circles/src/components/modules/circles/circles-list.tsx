@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Input } from "@/components/ui/input";
-import { Circle, ContentPreviewData, Page, WithMetric } from "@/models/models";
+import { Circle, ContentPreviewData, WithMetric } from "@/models/models"; // Removed Page import
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import Image from "next/image";
@@ -14,11 +14,9 @@ import { isAuthorized } from "@/lib/auth/client-auth";
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { CirclePicture } from "./circle-picture";
-import DynamicForm from "@/components/forms/dynamic-form";
 import { useRouter } from "next/navigation";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import CircleTags from "./circle-tags";
-import CircleHeader from "./circle-header";
 import Indicators from "@/components/utils/indicators";
 import { ListFilter } from "@/components/utils/list-filter";
 import emptyFeed from "@images/empty-feed.png";
@@ -39,13 +37,12 @@ export const twoLineEllipsisStyle = {
 interface CirclesListProps {
     circles: WithMetric<Circle>[];
     circle: Circle;
-    page?: Page;
     activeTab?: string;
     inUser?: boolean;
     isProjectsList?: boolean;
 }
 
-const CirclesList = ({ circle, circles, page, activeTab, inUser, isProjectsList }: CirclesListProps) => {
+const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: CirclesListProps) => {
     const [user] = useAtom(userAtom);
     const isCompact = useIsCompact();
     const isMobile = useIsMobile();

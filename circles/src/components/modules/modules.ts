@@ -1,5 +1,4 @@
 import { Module } from "@/models/models";
-import SettingsModule from "@/components/modules/settings/settings";
 import SettingsModuleLayout from "./settings/settings-layout";
 import MembersModule from "./members/members";
 import CirclesModule from "./circles/circles";

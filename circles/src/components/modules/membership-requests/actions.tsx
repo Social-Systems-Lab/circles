@@ -52,7 +52,6 @@ type UpdateMembershipRequestResponse = {
 export const approveMembershipRequestAction = async (
     requestId: string,
     circle: Circle,
-    page: Page,
 ): Promise<UpdateMembershipRequestResponse> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -77,7 +76,7 @@ export const approveMembershipRequestAction = async (
 
         // clear page cache
         let circlePath = await getCirclePath(circle);
-        revalidatePath(`${circlePath}${page?.handle}`);
+        revalidatePath(`${circlePath}`);
 
         // update status of request
         await updatePendingMembershipRequestStatus(request._id!, "approved");
@@ -91,7 +90,6 @@ export const approveMembershipRequestAction = async (
 export const rejectMembershipRequestAction = async (
     requestId: string,
     circle: Circle,
-    page: Page,
 ): Promise<UpdateMembershipRequestResponse> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -110,7 +108,7 @@ export const rejectMembershipRequestAction = async (
 
         // Clear page cache
         let circlePath = await getCirclePath(circle);
-        revalidatePath(`${circlePath}${page?.handle}`);
+        revalidatePath(`${circlePath}`);
 
         // update status of request
         await updatePendingMembershipRequestStatus(request._id!, "rejected");

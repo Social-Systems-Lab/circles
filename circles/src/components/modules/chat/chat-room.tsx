@@ -2,8 +2,7 @@
 "use client";
 
 import { Dispatch, KeyboardEvent, SetStateAction, useCallback, useMemo, useTransition } from "react";
-import { Circle, ChatMessage, Page, MatrixUserCache, ChatRoomDisplay } from "@/models/models";
-import CircleHeader from "../circles/circle-header";
+import { Circle, ChatMessage, MatrixUserCache, ChatRoomDisplay } from "@/models/models";
 import { mapOpenAtom, matrixUserCacheAtom, roomMessagesAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { Button } from "@/components/ui/button";
@@ -483,12 +482,6 @@ export const ChatRoomComponent: React.FC<{
                 }}
             >
                 <div ref={inputRef} className="relative flex h-full w-full flex-col">
-                    {!inToolbox && (
-                        <div className="mt-4">
-                            <CircleHeader circle={circle} />
-                        </div>
-                    )}
-
                     {inToolbox ? (
                         <ScrollArea
                             className="p-4"

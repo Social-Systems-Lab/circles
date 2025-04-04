@@ -1,14 +1,17 @@
 "use server";
 
-import { ModulePageProps } from "../dynamic-page";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { getProposalsAction } from "@/app/circles/[handle]/proposals/actions";
 import ProposalsList from "./proposals-list";
 import { redirect } from "next/navigation";
-import { Page } from "@/models/models";
+import { Circle } from "@/models/models";
 
-export default async function ProposalsModule({ circle }: ModulePageProps) {
+type PageProps = {
+    circle: Circle;
+};
+
+export default async function ProposalsModule({ circle }: PageProps) {
     // Get the current user DID
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -65,17 +68,9 @@ export default async function ProposalsModule({ circle }: ModulePageProps) {
         return true;
     });
 
-    // Create a synthetic page object for the proposals list
-    const page: Page = {
-        name: "Proposals",
-        handle: "proposals",
-        description: "Proposals page",
-        module: "proposals",
-    };
-
     return (
         <div className="flex h-full w-full flex-col">
-            <ProposalsList proposals={filteredProposals} circle={circle} page={page} />
+            <ProposalsList proposals={filteredProposals} circle={circle} />
         </div>
     );
 }

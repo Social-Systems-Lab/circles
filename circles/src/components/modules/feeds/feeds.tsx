@@ -2,15 +2,19 @@
 
 "use server";
 
-import { ModulePageProps } from "../dynamic-page";
 import { getFeedByHandle, getPosts } from "@/lib/data/feed";
 import { FeedComponent } from "./feed";
 import { ThirdColumn } from "./third-column";
 import { getPostsAction } from "./actions";
-import { SortingOptions } from "@/models/models";
+import { Circle, SortingOptions } from "@/models/models";
 import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 
-export default async function FeedsModule({ circle, page, searchParams }: ModulePageProps) {
+type PageProps = {
+    circle: Circle;
+    searchParams?: { [key: string]: string | string[] | undefined };
+};
+
+export default async function FeedsModule({ circle, searchParams }: PageProps) {
     // Always use the default feed
     const feed = await getFeedByHandle(circle?._id, "default");
     if (!feed) {
@@ -20,7 +24,7 @@ export default async function FeedsModule({ circle, page, searchParams }: Module
 
     return (
         <ContentDisplayWrapper content={posts}>
-            <FeedComponent posts={posts} feed={feed} circle={circle} page={page} />
+            <FeedComponent posts={posts} feed={feed} circle={circle} />
             <ThirdColumn />
         </ContentDisplayWrapper>
     );

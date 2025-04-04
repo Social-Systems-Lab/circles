@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import DynamicForm from "@/components/forms/dynamic-form";
+import { GlobalServerSettingsForm } from "./global-server-settings-form"; // Import the new form
 import { ServerSettings } from "@/models/models";
 import CirclesTab from "./tabs/circles-tab";
 import UsersTab from "./tabs/users-tab";
@@ -30,11 +30,7 @@ export default function AdminDashboard({ serverSettings }: AdminDashboardProps) 
                 <div className="mb-8">
                     <h2 className="mb-2 text-xl font-semibold">Server Settings</h2>
                     <div className="pt-4">
-                        <DynamicForm
-                            formSchemaId="server-settings-form"
-                            initialFormData={serverSettings}
-                            maxWidth="600px"
-                        />
+                        <GlobalServerSettingsForm serverSettings={serverSettings} maxWidth="600px" />
                     </div>
                 </div>
             </TabsContent>

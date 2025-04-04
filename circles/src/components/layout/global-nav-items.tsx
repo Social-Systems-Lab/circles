@@ -3,7 +3,6 @@
 import Link from "next/link";
 import React, { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { Page } from "@/models/models";
 import PageIcon from "../modules/page-icon";
 import { motion } from "framer-motion";
 import { userSettingsAtom } from "@/lib/data/atoms";
@@ -16,43 +15,6 @@ import { CgFeed } from "react-icons/cg";
 import { MdRssFeed } from "react-icons/md";
 import { AiOutlineHome } from "react-icons/ai";
 import { Hammer } from "lucide-react";
-
-function GlobalNavItem({
-    item,
-    currentNavItem,
-    getPath,
-    index,
-}: {
-    item: Page;
-    currentNavItem: Page | undefined;
-    getPath: (page: Page) => string;
-    index: number;
-}) {
-    return (
-        <Link href={getPath(item)}>
-            <motion.div
-                className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
-                    item === currentNavItem ? "text-[#495cff]" : "text-[#696969]"
-                }`}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.95 }}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-            >
-                <PageIcon module={item.module} size="24px" />
-                <motion.span
-                    className="mt-[4px] text-[11px]"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.3, delay: 0.2 + index * 0.1 }}
-                >
-                    {item.name}
-                </motion.span>
-            </motion.div>
-        </Link>
-    );
-}
 
 export default function GlobalNavItems() {
     const pathname = usePathname();
@@ -117,7 +79,7 @@ export default function GlobalNavItems() {
                         </motion.span>
                     </motion.div>
                 </Link>
-                
+
                 <Link href={`/projects?tab=${settings?.circlesTab ?? "following"}`}>
                     <motion.div
                         className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${

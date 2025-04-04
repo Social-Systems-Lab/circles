@@ -52,7 +52,6 @@ import { CheckCircle, XCircle } from "lucide-react"; // Import icons for outcome
 interface ProposalsListProps {
     proposals: ProposalDisplay[];
     circle: Circle;
-    page?: Page;
 }
 
 const SortIcon = ({ sortDir }: { sortDir: string | boolean }) => {
@@ -92,7 +91,7 @@ const getStageBadgeColor = (stage: ProposalStage) => {
     }
 };
 
-const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, page }) => {
+const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle }) => {
     const data = React.useMemo(() => proposals, [proposals]);
     const [sorting, setSorting] = React.useState<SortingState>([{ id: "createdAt", desc: true }]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);

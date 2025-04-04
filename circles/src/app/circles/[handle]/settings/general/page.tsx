@@ -1,13 +1,19 @@
-import DynamicPage from "@/components/modules/dynamic-page";
+import { getCircleByHandle } from "@/lib/data/circle";
+import { CircleGeneralForm } from "@/components/forms/circle-settings/general/circle-general-form";
+import { notFound } from "next/navigation";
 
 type PageProps = {
-    params: Promise<{ handle: string }>;
-    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+    params: { handle: string };
+    // searchParams are no longer needed by the specific form
 };
 
-export default async function GeneralSettingsPage(props: PageProps) {
-    const searchParams = await props.searchParams;
-    const params = await props.params;
+export default async function GeneralSettingsPage({ params }: PageProps) {
+    const circle = await getCircleByHandle(params.handle);
 
-    return <DynamicPage circleHandle={params.handle} moduleHandle="settings" searchParams={searchParams} />;
+    if (!circle) {
+        notFound(); // Or handle appropriately if circle not found
+    }
+
+    // Render the specific form component, passing the circle data
+    return <CircleGeneralForm circle={circle} />;
 }

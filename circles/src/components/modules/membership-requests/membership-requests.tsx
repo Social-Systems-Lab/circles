@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Circle, MembershipRequest, Page } from "@/models/models";
+import { Circle, MembershipRequest } from "@/models/models"; // Removed Page import
 import MembershipRequestsTable from "./membership-requests-table";
 import RejectedRequestsTable from "./rejected-requests-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,12 +10,16 @@ import { useIsCompact } from "@/components/utils/use-is-compact";
 
 interface MembershipGatewayProps {
     circle: Circle;
-    page: Page;
     pendingRequests: MembershipRequest[];
     rejectedRequests: MembershipRequest[];
 }
 
-const MembershipGateway: React.FC<MembershipGatewayProps> = ({ circle, page, pendingRequests, rejectedRequests }) => {
+const MembershipGateway: React.FC<MembershipGatewayProps> = ({
+    circle,
+    /* page, */ pendingRequests,
+    rejectedRequests,
+}) => {
+    // Commented out page destructuring
     const isCompact = useIsCompact();
 
     return (
@@ -36,10 +40,12 @@ const MembershipGateway: React.FC<MembershipGatewayProps> = ({ circle, page, pen
                             <TabsTrigger value="rejected">Rejected Requests</TabsTrigger>
                         </TabsList>
                         <TabsContent value="pending">
-                            <MembershipRequestsTable circle={circle} page={page} requests={pendingRequests} />
+                            {/* Removed page prop from MembershipRequestsTable */}
+                            <MembershipRequestsTable circle={circle} requests={pendingRequests} />
                         </TabsContent>
                         <TabsContent value="rejected">
-                            <RejectedRequestsTable circle={circle} page={page} requests={rejectedRequests} />
+                            {/* Removed page prop from RejectedRequestsTable */}
+                            <RejectedRequestsTable circle={circle} requests={rejectedRequests} />
                         </TabsContent>
                     </Tabs>
                 </div>

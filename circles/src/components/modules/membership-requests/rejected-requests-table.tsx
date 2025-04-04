@@ -2,15 +2,15 @@
 
 import React from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Circle, MembershipRequest, Page } from "@/models/models";
+import { Circle, MembershipRequest } from "@/models/models"; // Removed Page import
 
 interface RejectedRequestsTableProps {
     circle: Circle;
-    page: Page;
     requests: MembershipRequest[];
 }
 
-const RejectedRequestsTable: React.FC<RejectedRequestsTableProps> = ({ circle, page, requests }) => {
+const RejectedRequestsTable: React.FC<RejectedRequestsTableProps> = ({ circle, /* page, */ requests }) => {
+    // Commented out page destructuring
     return (
         <Table>
             <TableHeader>

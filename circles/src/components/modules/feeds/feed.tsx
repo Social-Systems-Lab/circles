@@ -1,12 +1,10 @@
 // feed.tsx - component for displaying feeds
 "use client";
 
-import DynamicForm from "@/components/forms/dynamic-form";
 import { useIsCompact } from "@/components/utils/use-is-compact";
-import { Circle, Feed, Page, PostDisplay } from "@/models/models";
+import { Circle, Feed, PostDisplay } from "@/models/models"; // Removed DynamicForm and Page imports
 import { CreateNewPost } from "./create-new-post";
 import PostList from "./post-list";
-import CircleHeader from "../circles/circle-header";
 import { features, LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
