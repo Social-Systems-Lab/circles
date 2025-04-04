@@ -2,17 +2,17 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { Circle, Question } from "@/models/models";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useState, useEffect } from "react";
+import { useForm, Controller, Control, useFieldArray } from "react-hook-form";
 import { saveQuestionnaire } from "@/app/circles/[handle]/settings/questionnaire/actions";
-import { PlusCircle, Trash2 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PlusCircle, Trash2 } from "lucide-react";
 
 interface QuestionnaireSettingsFormProps {
     circle: Circle;
@@ -23,10 +23,16 @@ export function QuestionnaireSettingsForm({ circle }: QuestionnaireSettingsFormP
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Ensure all questions have a type
+    const normalizedQuestionnaire = (circle.questionnaire || []).map((q) => ({
+        ...q,
+        type: q.type || "text", // Default to "text" if type is missing
+    }));
+
     const form = useForm({
         defaultValues: {
             _id: circle._id,
-            questionnaire: circle.questionnaire || [],
+            questionnaire: normalizedQuestionnaire,
         },
     });
 
@@ -34,6 +40,13 @@ export function QuestionnaireSettingsForm({ circle }: QuestionnaireSettingsFormP
         control: form.control,
         name: "questionnaire",
     });
+
+    const addNewQuestion = () => {
+        append({
+            question: "",
+            type: "text", // Explicitly set default type
+        });
+    };
 
     const onSubmit = async (data: { _id: any; questionnaire: Question[] }) => {
         setIsSubmitting(true);
@@ -76,16 +89,9 @@ export function QuestionnaireSettingsForm({ circle }: QuestionnaireSettingsFormP
         }
     };
 
-    const addNewQuestion = () => {
-        append({
-            question: "",
-            type: "text",
-        });
-    };
-
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="formatted space-y-6">
                 <div className="space-y-4">
                     {fields.map((field, index) => (
                         <Card key={field.id}>
@@ -107,20 +113,22 @@ export function QuestionnaireSettingsForm({ circle }: QuestionnaireSettingsFormP
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium">Question Type</label>
-                                    <Select
-                                        defaultValue={form.getValues(`questionnaire.${index}.type`)}
-                                        onValueChange={(value) =>
-                                            form.setValue(`questionnaire.${index}.type`, value as "text" | "yesno")
-                                        }
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select question type" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="text">Text (Free response)</SelectItem>
-                                            <SelectItem value="yesno">Yes/No</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    <Controller
+                                        control={form.control}
+                                        name={`questionnaire.${index}.type`}
+                                        defaultValue="text"
+                                        render={({ field }) => (
+                                            <Select value={field.value} onValueChange={field.onChange}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select question type" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="text">Text (Free response)</SelectItem>
+                                                    <SelectItem value="yesno">Yes/No</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    />
                                 </div>
                             </CardContent>
                         </Card>

@@ -8,14 +8,13 @@ import { useToast } from "@/components/ui/use-toast";
 import { Circle } from "@/models/models";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller, Control } from "react-hook-form";
 import { saveMatchmaking } from "@/app/circles/[handle]/settings/matchmaking/actions";
-import { Checkbox } from "@/components/ui/checkbox";
 
 interface MatchmakingSettingsFormProps {
     circle: Circle;
-    causes: { handle: string; name: string }[];
-    skills: { handle: string; name: string }[];
+    causes: { handle: string; name: string; description: string; picture?: any }[];
+    skills: { handle: string; name: string; description: string; picture?: any }[];
 }
 
 export function MatchmakingSettingsForm({ circle, causes, skills }: MatchmakingSettingsFormProps): React.ReactElement {
@@ -32,16 +31,9 @@ export function MatchmakingSettingsForm({ circle, causes, skills }: MatchmakingS
         },
     });
 
-    const [selectedCauses, setSelectedCauses] = useState<string[]>(circle.causes || []);
-    const [selectedSkills, setSelectedSkills] = useState<string[]>(circle.skills || []);
-
     const onSubmit = async (data: { _id: any; causes?: string[]; skills?: string[]; location?: any }) => {
         setIsSubmitting(true);
         try {
-            // Update with selected values
-            data.causes = selectedCauses;
-            data.skills = selectedSkills;
-
             const result = await saveMatchmaking(data);
             if (result.success) {
                 toast({
@@ -79,29 +71,39 @@ export function MatchmakingSettingsForm({ circle, causes, skills }: MatchmakingS
                             Select the causes that your circle is focused on. This helps connect your circle with others
                             who share similar interests.
                         </p>
-                        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
-                            {causes.map((cause) => (
-                                <div key={cause.handle} className="flex items-center space-x-2">
-                                    <Checkbox
-                                        id={`cause-${cause.handle}`}
-                                        checked={selectedCauses.includes(cause.handle)}
-                                        onCheckedChange={(checked) => {
-                                            if (checked) {
-                                                setSelectedCauses([...selectedCauses, cause.handle]);
-                                            } else {
-                                                setSelectedCauses(selectedCauses.filter((c) => c !== cause.handle));
-                                            }
-                                        }}
-                                    />
-                                    <label
-                                        htmlFor={`cause-${cause.handle}`}
-                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                                    >
-                                        {cause.name}
-                                    </label>
+                        <Controller
+                            name="causes"
+                            control={form.control}
+                            render={({ field }) => (
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-3 gap-4">
+                                        {causes.map((cause) => (
+                                            <div
+                                                key={cause.handle}
+                                                className={`cursor-pointer rounded-lg border p-4 transition-colors ${
+                                                    field.value.includes(cause.handle)
+                                                        ? "border-primary bg-primary/10"
+                                                        : "border-border hover:border-primary/50"
+                                                }`}
+                                                onClick={() => {
+                                                    const newValue = field.value.includes(cause.handle)
+                                                        ? field.value.filter((h: string) => h !== cause.handle)
+                                                        : [...field.value, cause.handle];
+                                                    field.onChange(newValue);
+                                                }}
+                                            >
+                                                <div className="flex flex-col items-center gap-2 text-center">
+                                                    <div className="text-sm font-medium">{cause.name}</div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                        {cause.description}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                            ))}
-                        </div>
+                            )}
+                        />
                     </CardContent>
                 </Card>
 
@@ -114,29 +116,39 @@ export function MatchmakingSettingsForm({ circle, causes, skills }: MatchmakingS
                             Select the skills that are relevant to your circle. This helps match your circle with
                             members who have the skills you need.
                         </p>
-                        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
-                            {skills.map((skill) => (
-                                <div key={skill.handle} className="flex items-center space-x-2">
-                                    <Checkbox
-                                        id={`skill-${skill.handle}`}
-                                        checked={selectedSkills.includes(skill.handle)}
-                                        onCheckedChange={(checked) => {
-                                            if (checked) {
-                                                setSelectedSkills([...selectedSkills, skill.handle]);
-                                            } else {
-                                                setSelectedSkills(selectedSkills.filter((s) => s !== skill.handle));
-                                            }
-                                        }}
-                                    />
-                                    <label
-                                        htmlFor={`skill-${skill.handle}`}
-                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                                    >
-                                        {skill.name}
-                                    </label>
+                        <Controller
+                            name="skills"
+                            control={form.control}
+                            render={({ field }) => (
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-3 gap-4">
+                                        {skills.map((skill) => (
+                                            <div
+                                                key={skill.handle}
+                                                className={`cursor-pointer rounded-lg border p-4 transition-colors ${
+                                                    field.value.includes(skill.handle)
+                                                        ? "border-primary bg-primary/10"
+                                                        : "border-border hover:border-primary/50"
+                                                }`}
+                                                onClick={() => {
+                                                    const newValue = field.value.includes(skill.handle)
+                                                        ? field.value.filter((h: string) => h !== skill.handle)
+                                                        : [...field.value, skill.handle];
+                                                    field.onChange(newValue);
+                                                }}
+                                            >
+                                                <div className="flex flex-col items-center gap-2 text-center">
+                                                    <div className="text-sm font-medium">{skill.name}</div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                        {skill.description}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                            ))}
-                        </div>
+                            )}
+                        />
                     </CardContent>
                 </Card>
 

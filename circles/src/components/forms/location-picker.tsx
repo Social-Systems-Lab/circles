@@ -52,27 +52,9 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
     }, []);
 
     useEffect(() => {
-        if (!mapboxKey) {
-            console.error("************* Mapbox key not set");
-        }
-        if (!mapContainer.current) {
-            console.error("************* Map container not set");
-        }
-        if (map?.current) {
-            console.error("************* Map already initialized");
-        }
-
         if (!mapboxKey || !mapContainer.current) return;
         if (map?.current) return; // only initialize mapbox once
 
-        // Debug info
-        console.log("Initializing map with:", {
-            hasLocation: !!value?.lngLat,
-            precision: precision,
-            zoomLevel: value?.lngLat ? precisionLevels[precision].zoom : 1,
-        });
-
-        console.log("************* Creating mapbox map *********");
         mapboxgl.accessToken = mapboxKey;
 
         // Default to global view when no location is set

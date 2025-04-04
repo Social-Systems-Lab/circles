@@ -1,17 +1,17 @@
 "use server";
 
 import { getCircleById, getCirclePath, updateCircle } from "@/lib/data/circle";
-import { Circle, FormSubmitResponse, Page } from "@/models/models";
+import { Circle, FormSubmitResponse } from "@/models/models";
 import { revalidatePath } from "next/cache";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 
-export async function savePages(values: { _id: any; pages: Page[] }): Promise<FormSubmitResponse> {
-    console.log("Saving circle pages with values", values);
+export async function savePages(values: { _id: any; enabledModules: string[] }): Promise<FormSubmitResponse> {
+    console.log("Saving circle modules with values", values);
 
     let circle: Partial<Circle> = {
         _id: values._id,
-        pages: values.pages,
+        enabledModules: values.enabledModules,
     };
 
     // check if user is authorized to edit circle settings
@@ -26,21 +26,18 @@ export async function savePages(values: { _id: any; pages: Page[] }): Promise<Fo
             return { success: false, message: "You are not authorized to edit circle settings" };
         }
 
-        // make sure readOnly pages are not updated
+        // make sure the circle exists
         let existingCircle = await getCircleById(values._id);
         if (!existingCircle) {
             throw new Error("Circle not found");
         }
 
-        // Preserve readOnly status from existing pages
-        if (existingCircle.pages && circle.pages) {
-            circle.pages = circle.pages.map((p) => {
-                const existingPage = existingCircle.pages?.find((ep) => ep.handle === p.handle);
-                if (existingPage?.readOnly) {
-                    return { ...p, readOnly: true };
-                }
-                return p;
-            });
+        // Make sure general and settings modules are always enabled
+        if (!circle.enabledModules?.includes("general")) {
+            circle.enabledModules = [...(circle.enabledModules || []), "general"];
+        }
+        if (!circle.enabledModules?.includes("settings")) {
+            circle.enabledModules = [...(circle.enabledModules || []), "settings"];
         }
 
         // update the circle
@@ -51,12 +48,12 @@ export async function savePages(values: { _id: any; pages: Page[] }): Promise<Fo
         revalidatePath(`${circlePath}`);
         revalidatePath(`${circlePath}/settings/pages`);
 
-        return { success: true, message: "Circle pages saved successfully" };
+        return { success: true, message: "Circle modules saved successfully" };
     } catch (error) {
         if (error instanceof Error) {
             return { success: false, message: error.message };
         } else {
-            return { success: false, message: "Failed to save circle pages. " + JSON.stringify(error) };
+            return { success: false, message: "Failed to save circle modules. " + JSON.stringify(error) };
         }
     }
 }

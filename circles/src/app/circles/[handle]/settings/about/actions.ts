@@ -5,6 +5,7 @@ import { Circle, FormSubmitResponse } from "@/models/models";
 import { revalidatePath } from "next/cache";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
+import { isFile, saveFile } from "@/lib/data/storage";
 
 export async function saveAbout(values: {
     _id: any;
@@ -27,8 +28,6 @@ export async function saveAbout(values: {
         description: values.description,
         content: values.content,
         mission: values.mission,
-        picture: values.picture,
-        cover: values.cover,
         isPublic: values.isPublic,
         location: values.location,
     };
@@ -51,12 +50,26 @@ export async function saveAbout(values: {
             throw new Error("Circle not found");
         }
 
+        // Handle image uploads
+        if (isFile(values.picture)) {
+            // save the picture and get the file info
+            circle.picture = await saveFile(values.picture, "picture", values._id, true);
+            revalidatePath(circle.picture.url);
+        }
+
+        if (isFile(values.cover)) {
+            // save the cover and get the file info
+            circle.cover = await saveFile(values.cover, "cover", values._id, true);
+            revalidatePath(circle.cover.url);
+        }
+
         // update the circle
         await updateCircle(circle);
 
         // clear page cache
         let circlePath = await getCirclePath(circle);
         revalidatePath(`${circlePath}/settings/about`);
+        revalidatePath(circlePath); // revalidate home page too
 
         return { success: true, message: "Circle about saved successfully" };
     } catch (error) {

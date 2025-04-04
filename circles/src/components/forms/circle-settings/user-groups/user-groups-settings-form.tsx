@@ -2,17 +2,15 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { Circle, UserGroup } from "@/models/models";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, Controller, Control } from "react-hook-form";
 import { saveUserGroups } from "@/app/circles/[handle]/settings/user-groups/actions";
-import { PlusCircle, Trash2 } from "lucide-react";
 import { handleSchema } from "@/models/models";
+import { DynamicTableField } from "@/components/forms/dynamic-field";
 
 interface UserGroupsSettingsFormProps {
     circle: Circle;
@@ -28,11 +26,6 @@ export function UserGroupsSettingsForm({ circle }: UserGroupsSettingsFormProps):
             _id: circle._id,
             userGroups: circle.userGroups || [],
         },
-    });
-
-    const { fields, append, remove } = useFieldArray({
-        control: form.control,
-        name: "userGroups",
     });
 
     const onSubmit = async (data: { _id: any; userGroups: UserGroup[] }) => {
@@ -83,99 +76,82 @@ export function UserGroupsSettingsForm({ circle }: UserGroupsSettingsFormProps):
         }
     };
 
-    const addNewUserGroup = () => {
-        append({
-            name: "",
-            handle: "",
-            title: "",
-            description: "",
-            accessLevel: 400, // Default access level for new groups
-            readOnly: false,
-        });
-    };
-
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                <div className="space-y-4">
-                    {fields.map((field, index) => {
-                        const isReadOnly = form.getValues(`userGroups.${index}.readOnly`);
-
-                        return (
-                            <Card key={field.id}>
-                                <CardHeader className="pb-2">
-                                    <div className="flex items-center justify-between">
-                                        <CardTitle className="text-lg">
-                                            {form.getValues(`userGroups.${index}.name`) || "New User Group"}
-                                        </CardTitle>
-                                        {!isReadOnly && (
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => remove(index)}
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        )}
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium">Name</label>
-                                            <Input
-                                                {...form.register(`userGroups.${index}.name`)}
-                                                disabled={isReadOnly}
-                                                placeholder="Group name"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium">Handle</label>
-                                            <Input
-                                                {...form.register(`userGroups.${index}.handle`)}
-                                                disabled={isReadOnly}
-                                                placeholder="group-handle"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium">Title</label>
-                                            <Input
-                                                {...form.register(`userGroups.${index}.title`)}
-                                                disabled={isReadOnly}
-                                                placeholder="Member title"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium">Access Level</label>
-                                            <Input
-                                                type="number"
-                                                {...form.register(`userGroups.${index}.accessLevel`, {
-                                                    valueAsNumber: true,
-                                                })}
-                                                disabled={isReadOnly}
-                                                placeholder="100"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">Description</label>
-                                        <Input
-                                            {...form.register(`userGroups.${index}.description`)}
-                                            disabled={isReadOnly}
-                                            placeholder="Group description"
-                                        />
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        );
-                    })}
-                </div>
-
-                <Button type="button" variant="outline" onClick={addNewUserGroup} className="w-full">
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Add User Group
-                </Button>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="formatted space-y-6">
+                <Controller
+                    name="userGroups"
+                    control={form.control}
+                    render={({ field }) => (
+                        <DynamicTableField
+                            field={{
+                                name: "userGroups",
+                                type: "table",
+                                label: "User Groups",
+                                itemSchema: {
+                                    id: "user-groups-table",
+                                    title: "User Group",
+                                    description: "Configure user groups for your circle",
+                                    button: { text: "Save" },
+                                    fields: [
+                                        {
+                                            name: "name",
+                                            type: "text",
+                                            label: "Name",
+                                            placeholder: "Group name",
+                                            showInHeader: true,
+                                            required: true,
+                                        },
+                                        {
+                                            name: "handle",
+                                            type: "text",
+                                            label: "Handle",
+                                            placeholder: "group-handle",
+                                            showInHeader: true,
+                                            required: true,
+                                        },
+                                        {
+                                            name: "title",
+                                            type: "text",
+                                            label: "Title",
+                                            placeholder: "Member title",
+                                            showInHeader: true,
+                                        },
+                                        {
+                                            name: "accessLevel",
+                                            type: "number",
+                                            label: "Access Level",
+                                            placeholder: "100",
+                                            showInHeader: true,
+                                            required: true,
+                                        },
+                                        {
+                                            name: "description",
+                                            type: "text",
+                                            label: "Description",
+                                            placeholder: "Group description",
+                                        },
+                                        {
+                                            name: "readOnly",
+                                            type: "hidden",
+                                            label: "Read Only",
+                                        },
+                                    ],
+                                },
+                                defaultValue: {
+                                    name: "",
+                                    handle: "",
+                                    title: "",
+                                    description: "",
+                                    accessLevel: 400,
+                                    readOnly: false,
+                                },
+                            }}
+                            formField={field}
+                            control={form.control as unknown as Control}
+                        />
+                    )}
+                />
 
                 <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting ? "Saving..." : "Save Changes"}

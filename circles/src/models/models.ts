@@ -799,3 +799,10 @@ export const ONBOARDING_STEPS = [
 ] as const;
 
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
+
+export type ModuleInfo = {
+    handle: string;
+    name: string;
+    description: string;
+    readOnly?: boolean;
+};

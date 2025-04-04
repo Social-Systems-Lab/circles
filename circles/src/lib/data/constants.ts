@@ -1,4 +1,4 @@
-import { Page, UserGroup, Module, Feature, Cause, Skill } from "@/models/models";
+import { Page, UserGroup, Module, Feature, Cause, Skill, ModuleInfo } from "@/models/models";
 
 export const logLevel = 5; // 0: none, 1: error, 2: warn, 3: info, 4: debug, 5: trace
 export const LOG_LEVEL_TRACE = 5;
@@ -203,6 +203,41 @@ export const features = {
         },
     },
 };
+
+export const modules: ModuleInfo[] = [
+    {
+        name: "Feed",
+        handle: "feed",
+        description:
+            "A shared space for circle members to post updates, share ideas, and engage in discussions. Serves as the central communication hub to foster transparent collaboration and community engagement.",
+        readOnly: true,
+    },
+    {
+        name: "Followers",
+        handle: "followers",
+        description:
+            "Shows everyone who follows or is part of the circle. Admins can see, manage, and engage with supporters, making it easier to track growth and involvement.",
+    },
+    {
+        name: "Circles",
+        handle: "circles",
+        description:
+            "Displays all sub-circles and affiliated groups connected to this circle. Helps members navigate related communities, deepen partnerships, and organize nested initiatives.",
+    },
+    {
+        name: "Projects",
+        handle: "projects",
+        description:
+            "Lists all projects the circle is working on or supporting. Offers a structured overview of ongoing initiatives, goals, and collaboration opportunities for members.",
+    },
+    {
+        name: "Settings",
+        handle: "settings",
+        description:
+            "Provides administrative controls for circle governance and customization. Manage privacy levels, user groups, questionnaires, location settings, and more to shape the circle’s operations.",
+        readOnly: true,
+    },
+];
 
 // No longer needed - removed prefixes
 

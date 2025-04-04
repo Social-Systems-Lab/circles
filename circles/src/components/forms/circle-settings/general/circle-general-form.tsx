@@ -17,7 +17,7 @@ export function CircleGeneralForm({ circle }: CircleGeneralFormProps) {
     const isAdmin = isAuthorized(user, circle, features.settings.edit_critical_settings);
 
     return (
-        <div className="space-y-6">
+        <div className="formatted space-y-6">
             <Card>
                 <CardHeader>
                     <CardTitle>General Settings</CardTitle>
