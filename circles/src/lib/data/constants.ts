@@ -290,7 +290,7 @@ export const modules: ModuleInfo[] = [
 ];
 
 export const defaultUserModules = ["feed", "followers", "circles", "projects", "settings"];
-export const defaultCircleModules = ["feed", "followers", "circles", "projects", "settings"];
+export const defaultCircleModules = ["feed", "followers", "projects", "settings"];
 export const defaultProjectModules = ["feed", "followers", "proposals", "settings"];
 
 export const getDefaultModules = (circleType: CircleType) => {

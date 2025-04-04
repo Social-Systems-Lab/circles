@@ -15,5 +15,13 @@ export default async function GeneralSettingsPage({ params }: PageProps) {
     }
 
     // Render the specific form component, passing the circle data
-    return <CircleGeneralForm circle={circle} />;
+    return (
+        <div className="container py-6">
+            <h1 className="mb-6 text-2xl font-bold">General Settings</h1>
+            <p className="mb-6 text-muted-foreground">
+                This section contains general settings and administrative actions for this circle.
+            </p>
+            <CircleGeneralForm circle={circle} />;
+        </div>
+    );
 }

@@ -209,7 +209,7 @@ function TermsStep({ nextStep }: OnboardingStepProps) {
                 </TabsContent>
             </Tabs>
 
-            <div className="flex flex-col space-y-4">
+            <div className="flex flex-col space-y-4 pt-4">
                 <div className="flex items-center space-x-2">
                     <Checkbox
                         id="terms"

@@ -6,11 +6,14 @@ import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { SortingOptions } from "@/models/models";
 
 type PageProps = {
-    params: { handle: string };
-    searchParams: { [key: string]: string | string[] | undefined };
+    params: Promise<{ handle: string }>;
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
-export default async function FollowersPage({ params, searchParams }: PageProps) {
+export default async function FollowersPage(props: PageProps) {
+    const params = await props.params;
+    const searchParams = await props.searchParams;
+
     const circle = await getCircleByHandle(params.handle);
     const userDid = await getAuthenticatedUserDid(); // Needed for metrics calculation
 

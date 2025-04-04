@@ -75,7 +75,7 @@ export function GlobalServerSettingsForm({
 
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" style={{ maxWidth }}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="formatted space-y-6" style={{ maxWidth }}>
                 {/* Server Info Card */}
                 <Card>
                     <CardHeader>

@@ -11,10 +11,13 @@ import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 
 type PageProps = {
     circle: Circle;
-    searchParams?: { [key: string]: string | string[] | undefined };
+    searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
-export default async function FeedsModule({ circle, searchParams }: PageProps) {
+export default async function FeedsModule(props: PageProps) {
+    const circle = props.circle;
+    const searchParams = await props.searchParams;
+
     // Always use the default feed
     const feed = await getFeedByHandle(circle?._id, "default");
     if (!feed) {

@@ -17,7 +17,6 @@ import {
     DynamicImageField,
     DynamicSwitchField,
     DynamicLocationField,
-    DynamicAutoHandleField,
 } from "@/components/forms/dynamic-field";
 import { getUserPrivateAction } from "@/components/modules/home/actions";
 import { useAtom } from "jotai";

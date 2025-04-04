@@ -18,18 +18,6 @@ export function CircleGeneralForm({ circle }: CircleGeneralFormProps) {
 
     return (
         <div className="formatted space-y-6">
-            <Card>
-                <CardHeader>
-                    <CardTitle>General Settings</CardTitle>
-                    <CardDescription>Manage general settings for this circle</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <p className="text-sm text-gray-500">
-                        This section contains general settings and administrative actions for this circle.
-                    </p>
-                </CardContent>
-            </Card>
-
             {isAdmin && (
                 <Card>
                     <CardHeader>

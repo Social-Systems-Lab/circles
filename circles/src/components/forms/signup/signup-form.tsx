@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useForm } from "react-hook-form";
+import { Control, Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import Link from "next/link";
 import { submitSignupFormAction } from "./actions";
 import { useAtom } from "jotai";
 import { authInfoAtom, userAtom } from "@/lib/data/atoms";
+import { DynamicAutoHandleField } from "../dynamic-field";
 
 // Zod schema based on signupFormSchema
 const signupValidationSchema = z.object({
@@ -83,7 +84,7 @@ export function SignupForm(): React.ReactElement {
 
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="w-full space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="formatted w-full space-y-6">
                 <h2 className="text-center text-2xl font-semibold">Sign up</h2>
                 <p className="text-center text-sm text-muted-foreground">Create an account to get started.</p>
 
@@ -100,18 +101,26 @@ export function SignupForm(): React.ReactElement {
                         </FormItem>
                     )}
                 />
-                <FormField
-                    control={form.control}
+
+                <Controller
                     name="handle"
+                    control={form.control as unknown as Control}
                     render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Handle</FormLabel>
-                            <FormControl>
-                                <Input placeholder="your-unique-handle" {...field} />
-                            </FormControl>
-                            <FormDescription>Your unique identifier on the platform.</FormDescription>
-                            <FormMessage />
-                        </FormItem>
+                        <DynamicAutoHandleField
+                            field={{
+                                name: "handle",
+                                type: "text",
+                                label: "Handle",
+                                placeholder: "handle",
+                                description: {
+                                    circle: "Choose a unique handle that will identify the circle on the platform.",
+                                    user: "Choose a unique handle that will identify you on the platform.",
+                                },
+                                required: true,
+                            }}
+                            formField={field}
+                            control={form.control as unknown as Control}
+                        />
                     )}
                 />
                 <FormField
@@ -145,7 +154,7 @@ export function SignupForm(): React.ReactElement {
                     {isSubmitting ? "Signing up..." : "Sign up"}
                 </Button>
 
-                <div className="text-center text-sm text-muted-foreground">
+                <div className="pb-6 text-center text-sm text-muted-foreground">
                     Already have an account?{" "}
                     <Link href="/login" className="underline hover:text-primary">
                         Log in

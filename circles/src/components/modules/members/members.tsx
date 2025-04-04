@@ -4,9 +4,17 @@ import { getMembers, getMembersWithMetrics } from "@/lib/data/member";
 import MembersTable from "./members-table";
 import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
-import { SortingOptions } from "@/models/models";
+import { Circle, SortingOptions } from "@/models/models";
 
-export default async function MembersModule({ circle, moduleHandle, searchParams }: ModulePageProps) {
+type PageProps = {
+    circle: Circle;
+    searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+};
+
+export default async function MembersModule(props: PageProps) {
+    const circle = props.circle;
+    const searchParams = await props.searchParams;
+
     // get members of circle
     let userDid = await getAuthenticatedUserDid();
     let members = await getMembersWithMetrics(userDid, circle?._id, searchParams?.sort as SortingOptions);

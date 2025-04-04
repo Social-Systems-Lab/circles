@@ -1,13 +1,20 @@
 "use server";
 
-import { ModulePageProps } from "../dynamic-page";
 import { getCirclesWithMetrics } from "@/lib/data/circle";
 import CirclesList from "./circles-list";
 import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
-import { SortingOptions } from "@/models/models";
+import { Circle, SortingOptions } from "@/models/models";
 
-export default async function CirclesModule({ circle, searchParams }: ModulePageProps) {
+type PageProps = {
+    circle: Circle;
+    searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+};
+
+export default async function CirclesModule(props: PageProps) {
+    const circle = props.circle;
+    const searchParams = await props.searchParams;
+
     // get user handle
     let userDid = await getAuthenticatedUserDid();
 

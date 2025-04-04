@@ -1,6 +1,6 @@
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
-import { Circle, SortingOptions } from "@/models/models";
+import { Circle, proposalSchema, SortingOptions } from "@/models/models";
 import HomeModuleWrapper from "./home-module-wrapper";
 import HomeCover from "./home-cover";
 import HomeContent from "./home-content";
@@ -10,13 +10,16 @@ import { getMembersWithMetrics } from "@/lib/data/member";
 
 type HomeModuleProps = {
     circle: Circle;
-    searchParams?: { [key: string]: string | string[] | undefined };
+    searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
-export default async function HomeModule({ circle, searchParams }: HomeModuleProps) {
+export default async function HomeModule(props: HomeModuleProps) {
     if (process.env.IS_BUILD === "true") {
         return null;
     }
+
+    const circle = props.circle;
+    const searchParams = await props.searchParams;
 
     let authorizedToEdit = false;
     let userDid = await getAuthenticatedUserDid();

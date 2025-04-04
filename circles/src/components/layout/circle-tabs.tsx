@@ -59,6 +59,10 @@ export function CircleTabs({ circle }: CircleTabsProps) {
     // Generate the correct path for a module based on default circle status
     const getPath = useCallback(
         (moduleHandle: string) => {
+            if (moduleHandle === "settings") {
+                return `/circles/${circle.handle}/${moduleHandle}/about`;
+            }
+
             return `/circles/${circle.handle}/${moduleHandle}`;
         },
         [circle.handle],
