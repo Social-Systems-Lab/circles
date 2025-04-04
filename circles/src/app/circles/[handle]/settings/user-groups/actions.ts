@@ -48,7 +48,7 @@ export async function saveUserGroups(values: { _id: any; userGroups: UserGroup[]
 
         // clear page cache
         let circlePath = await getCirclePath(circle);
-        revalidatePath(`${circlePath}/settings/user-groups`);
+        revalidatePath(`${circlePath}settings/user-groups`);
 
         return { success: true, message: "Circle user groups saved successfully" };
     } catch (error) {

@@ -7,19 +7,21 @@ import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { SortingOptions } from "@/models/models";
 
-export default async function CirclesModule({ circle, page, subpage, searchParams }: ModulePageProps) {
+export default async function CirclesModule({ circle, searchParams }: ModulePageProps) {
     // get user handle
     let userDid = await getAuthenticatedUserDid();
 
-    // get appropriate circle type based on page name
-    const circleType = page?.name === "Projects" ? "project" : undefined;
-
     // get all circles or projects based on the page
-    let circles = await getCirclesWithMetrics(userDid, circle?._id, searchParams?.sort as SortingOptions, circleType);
+    let circles = await getCirclesWithMetrics(
+        userDid,
+        circle?._id,
+        searchParams?.sort as SortingOptions,
+        circle?.circleType,
+    );
 
     return (
         <ContentDisplayWrapper content={circles}>
-            <CirclesList circle={circle} circles={circles} page={page} />
+            <CirclesList circle={circle} circles={circles} />
         </ContentDisplayWrapper>
     );
 }

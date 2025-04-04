@@ -15,7 +15,6 @@ import {
     Circle,
     FormField as FormFieldType,
     MemberDisplay,
-    Page,
     RegistryInfo,
     UserGroup,
     UserPrivate,

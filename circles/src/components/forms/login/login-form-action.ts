@@ -6,7 +6,7 @@ import { getUserPrivate } from "@/lib/data/user";
 
 export const loginFormAction: FormAction = {
     id: "login-form",
-    onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
+    onSubmit: async (values: Record<string, any>): Promise<FormSubmitResponse> => {
         try {
             let email = values.email;
             let password = values.password;

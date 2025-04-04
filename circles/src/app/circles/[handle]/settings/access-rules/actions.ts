@@ -40,7 +40,7 @@ export async function saveAccessRules(values: {
 
         // clear page cache
         let circlePath = await getCirclePath(circle);
-        revalidatePath(`${circlePath}/settings/access-rules`);
+        revalidatePath(`${circlePath}settings/access-rules`);
 
         return { success: true, message: "Circle access rules saved successfully" };
     } catch (error) {

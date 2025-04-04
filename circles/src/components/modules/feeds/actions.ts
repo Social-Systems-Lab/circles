@@ -137,8 +137,6 @@ export async function getPostsAction(
 
 export async function createPostAction(
     formData: FormData,
-    page?: Page,
-    subpage?: string,
 ): Promise<{ success: boolean; message?: string; post?: Post }> {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -233,7 +231,7 @@ export async function createPostAction(
         }
 
         let circlePath = await getCirclePath({ _id: circleId } as Circle);
-        revalidatePath(`${circlePath}${page?.handle ?? ""}${subpage ? `/${subpage}` : ""}`);
+        revalidatePath(`${circlePath}feed`);
 
         return { success: true, message: "Post created successfully", post: newPost };
     } catch (error) {
@@ -243,8 +241,6 @@ export async function createPostAction(
 
 export async function updatePostAction(
     formData: FormData,
-    page: Page,
-    subpage?: string,
 ): Promise<{ success: boolean; message?: string; post?: Post }> {
     const userDid = await getAuthenticatedUserDid();
 
@@ -335,7 +331,7 @@ export async function updatePostAction(
         }
 
         let circlePath = await getCirclePath({ _id: circleId } as Circle);
-        revalidatePath(`${circlePath}${page.handle ?? ""}${subpage ? `/${subpage}` : ""}`);
+        revalidatePath(`${circlePath}feed`);
 
         return { success: true, message: "Post updated successfully" };
     } catch (error) {
@@ -343,11 +339,7 @@ export async function updatePostAction(
     }
 }
 
-export async function deletePostAction(
-    postId: string,
-    page: Page,
-    subpage?: string,
-): Promise<{ success: boolean; message?: string }> {
+export async function deletePostAction(postId: string): Promise<{ success: boolean; message?: string }> {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to delete a post" };
@@ -372,9 +364,6 @@ export async function deletePostAction(
 
         // delete post
         await deletePost(postId);
-
-        // revalidate the page to reflect the changes
-        revalidatePath(`/${page.handle}${subpage ? `/${subpage}` : ""}`);
 
         return { success: true, message: "Post deleted successfully" };
     } catch (error) {

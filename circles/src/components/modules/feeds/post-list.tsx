@@ -215,8 +215,6 @@ export const PostItem = ({
     post,
     circle,
     feed,
-    page,
-    subpage,
     inPreview,
     initialComments,
     initialShowAllComments,
@@ -274,7 +272,7 @@ export const PostItem = ({
         let contentPreviewData: ContentPreviewData = {
             type: "post",
             content: post,
-            props: { post, circle, feed, page, subpage, initialComments: comments, initialShowAllComments: true },
+            props: { post, circle, feed, initialComments: comments, initialShowAllComments: true },
         };
         setContentPreview((x) =>
             x?.content === post && sidePanelContentVisible === "content" ? undefined : contentPreviewData,
@@ -316,7 +314,7 @@ export const PostItem = ({
 
     const handleEditSubmit = async (formData: FormData) => {
         startTransition(async () => {
-            const response = await updatePostAction(formData, page!, subpage);
+            const response = await updatePostAction(formData);
 
             if (!response.success) {
                 toast({
@@ -336,7 +334,7 @@ export const PostItem = ({
 
     const handleDeleteConfirm = async () => {
         startTransition(async () => {
-            const response = await deletePostAction(post._id, page!, subpage);
+            const response = await deletePostAction(post._id);
 
             if (!response.success) {
                 toast({
@@ -481,8 +479,6 @@ export const PostItem = ({
                         post,
                         circle,
                         feed,
-                        page,
-                        subpage,
                         initialComments: comments,
                         initialShowAllComments: true,
                     },
@@ -498,7 +494,7 @@ export const PostItem = ({
         let contentPreviewData: ContentPreviewData = {
             type: "post",
             content: post,
-            props: { post, circle, feed, page, subpage, initialComments: comments, initialShowAllComments: true },
+            props: { post, circle, feed, initialComments: comments, initialShowAllComments: true },
         };
         setContentPreview((x) =>
             x?.content === post && sidePanelContentVisible === "content" ? undefined : contentPreviewData,
@@ -1330,12 +1326,10 @@ type PostListProps = {
     feed?: Feed;
     circle?: Circle;
     posts: PostDisplay[];
-    page?: Page;
-    subpage?: string;
     isAggregateFeed?: boolean;
 };
 
-const PostList = ({ feed, circle, posts, page, subpage, isAggregateFeed }: PostListProps) => {
+const PostList = ({ feed, circle, posts, isAggregateFeed }: PostListProps) => {
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
             console.log("useEffect.PostList.1");
@@ -1350,8 +1344,6 @@ const PostList = ({ feed, circle, posts, page, subpage, isAggregateFeed }: PostL
                     post={post}
                     circle={isAggregateFeed ? post.circle! : circle!}
                     feed={isAggregateFeed ? post.feed! : feed!}
-                    page={page}
-                    subpage={subpage}
                     isAggregateFeed={isAggregateFeed}
                 />
             ))}

@@ -9,12 +9,5 @@ export default async function MembershipRequestsSettingsPage(props: PageProps) {
     const searchParams = await props.searchParams;
     const params = await props.params;
 
-    return (
-        <DynamicPage
-            circleHandle={params.handle}
-            moduleHandle="settings"
-            subpage="membership-requests"
-            searchParams={searchParams}
-        />
-    );
+    return <DynamicPage circleHandle={params.handle} moduleHandle="settings" searchParams={searchParams} />;
 }

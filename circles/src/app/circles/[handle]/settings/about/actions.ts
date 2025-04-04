@@ -68,7 +68,7 @@ export async function saveAbout(values: {
 
         // clear page cache
         let circlePath = await getCirclePath(circle);
-        revalidatePath(`${circlePath}/settings/about`);
+        revalidatePath(`${circlePath}settings/about`);
         revalidatePath(circlePath); // revalidate home page too
 
         return { success: true, message: "Circle about saved successfully" };

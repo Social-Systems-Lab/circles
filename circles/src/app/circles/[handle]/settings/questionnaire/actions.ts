@@ -37,7 +37,7 @@ export async function saveQuestionnaire(values: { _id: any; questionnaire: Quest
 
         // clear page cache
         let circlePath = await getCirclePath(circle);
-        revalidatePath(`${circlePath}/settings/questionnaire`);
+        revalidatePath(`${circlePath}settings/questionnaire`);
 
         return { success: true, message: "Circle questionnaire saved successfully" };
     } catch (error) {

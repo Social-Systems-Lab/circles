@@ -7,14 +7,12 @@ import { Circle, Page } from "@/models/models";
 import { useEffect } from "react";
 
 export type SettingsFormProps = {
-    page: Page;
     initialFormData: any;
     formSchemaId: string;
-    subpage?: string;
     circle?: Circle;
 };
 
-export const SettingsForm = ({ formSchemaId, page, subpage, initialFormData, circle }: SettingsFormProps) => {
+export const SettingsForm = ({ formSchemaId, initialFormData, circle }: SettingsFormProps) => {
     const isCompact = useIsCompact();
     const isUser = circle?.circleType === "user";
 
@@ -36,8 +34,6 @@ export const SettingsForm = ({ formSchemaId, page, subpage, initialFormData, cir
                 formSchemaId={formSchemaId}
                 initialFormData={initialFormData}
                 maxWidth="none"
-                page={page}
-                subpage={subpage}
                 showReset={true}
                 isUser={isUser}
             />

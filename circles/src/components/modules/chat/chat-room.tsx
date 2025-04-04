@@ -385,9 +385,7 @@ export const ChatRoomComponent: React.FC<{
     setSelectedChat?: Dispatch<SetStateAction<ChatRoomDisplay | undefined>>;
     circle: Circle;
     inToolbox?: boolean;
-    page?: Page;
-    subpage?: string;
-}> = ({ chatRoom, setSelectedChat, circle, inToolbox, page, subpage }) => {
+}> = ({ chatRoom, setSelectedChat, circle, inToolbox }) => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const isCompact = useIsCompact();
@@ -487,7 +485,7 @@ export const ChatRoomComponent: React.FC<{
                 <div ref={inputRef} className="relative flex h-full w-full flex-col">
                     {!inToolbox && (
                         <div className="mt-4">
-                            <CircleHeader circle={circle} page={undefined} subpage={undefined} />
+                            <CircleHeader circle={circle} />
                         </div>
                     )}
 

@@ -360,18 +360,6 @@ export const moduleAccessRulesSchema = z.record(z.string(), z.array(z.string()))
 // Define the schema for the entire access rules structure
 export const accessRulesSchema = z.record(z.string(), moduleAccessRulesSchema);
 
-export const pageSchema = z.object({
-    name: z.string(),
-    handle: handleSchema,
-    description: z.string(),
-    module: z.string(),
-    readOnly: z.boolean().optional(),
-    enabled: z.boolean().default(true).optional(),
-    defaultUserGroups: z.array(z.string()).optional(),
-});
-
-export type Page = z.infer<typeof pageSchema>;
-
 export type QuestionType = "text" | "yesno";
 
 export const questionSchema = z.object({
@@ -451,8 +439,6 @@ export type PostItemProps = {
     post: PostDisplay;
     circle: Circle;
     feed: Feed;
-    page?: Page;
-    subpage?: string;
     inPreview?: boolean;
     initialComments?: CommentDisplay[];
     initialShowAllComments?: boolean;
@@ -674,7 +660,7 @@ export type FormSubmitResponse = {
 
 export type FormAction = {
     id: string;
-    onSubmit: (values: Record<string, any>, page?: Page, subpage?: string) => Promise<FormSubmitResponse>;
+    onSubmit: (values: Record<string, any>) => Promise<FormSubmitResponse>;
 };
 
 export type FormActionHandler = {

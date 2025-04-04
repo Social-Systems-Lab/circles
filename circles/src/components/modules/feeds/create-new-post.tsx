@@ -14,11 +14,9 @@ import { DialogTitle } from "@radix-ui/react-dialog";
 type CreateNewPostProps = {
     circle: Circle;
     feed: Feed;
-    page?: Page;
-    subpage?: string;
 };
 
-export function CreateNewPost({ circle, feed, page, subpage }: CreateNewPostProps) {
+export function CreateNewPost({ circle, feed }: CreateNewPostProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [user] = useAtom(userAtom);
     const [isPending, startTransition] = useTransition();
@@ -27,7 +25,7 @@ export function CreateNewPost({ circle, feed, page, subpage }: CreateNewPostProp
 
     const handleSubmit = async (formData: FormData) => {
         startTransition(async () => {
-            const response = await createPostAction(formData, page, subpage);
+            const response = await createPostAction(formData);
 
             if (!response.success) {
                 toast({

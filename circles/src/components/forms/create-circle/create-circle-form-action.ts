@@ -9,7 +9,7 @@ import { updateUser } from "@/lib/data/user";
 
 export const createCircleFormAction: FormAction = {
     id: "create-circle-form",
-    onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
+    onSubmit: async (values: Record<string, any>): Promise<FormSubmitResponse> => {
         let circle: Circle = {
             name: values.name,
             handle: values.handle,

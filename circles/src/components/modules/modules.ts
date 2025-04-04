@@ -6,10 +6,7 @@ import CirclesModule from "./circles/circles";
 import ProjectsModule from "./projects/projects";
 import FeedsModule from "./feeds/feeds";
 import FeedsModuleLayout from "./feeds/feeds-layout";
-import ChatModule from "./chat/chat";
-import ChatModuleLayout from "./chat/chat-layout";
 import dynamic from "next/dynamic";
-import ProposalsModule from "./proposals/proposals";
 
 export const modules: Record<string, Module> = {
     home: {

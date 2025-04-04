@@ -13,7 +13,7 @@ import { Circles } from "@/lib/data/db";
 
 export const serverSettingsFormAction: FormAction = {
     id: "server-settings-form",
-    onSubmit: async (values: Record<string, any>, page?: Page, subpage?: string): Promise<FormSubmitResponse> => {
+    onSubmit: async (values: Record<string, any>): Promise<FormSubmitResponse> => {
         //console.log("Saving server settings with values", values);
         let registrySuccess = true;
 
@@ -95,8 +95,6 @@ export const serverSettingsFormAction: FormAction = {
 
             // save server settings
             await updateServerSettings(serverSettings);
-
-            revalidatePath(`/${page?.handle}/${subpage}`);
 
             return {
                 success: registrySuccess,

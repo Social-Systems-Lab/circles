@@ -9,15 +9,15 @@ import { ChatRoomDisplay, SortingOptions } from "@/models/models";
 import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 import { ThirdColumn } from "../feeds/third-column";
 
-export default async function ChatModule({ circle, page, subpage, searchParams }: ModulePageProps) {
-    const chatRoom = (await getChatRoomByHandle(circle?._id, subpage)) as ChatRoomDisplay;
+export default async function ChatModule({ circle, , searchParams }: ModulePageProps) {
+    const chatRoom = (await getChatRoomByHandle(circle?._id)) as ChatRoomDisplay;
     if (!chatRoom) {
         return <div></div>;
     }
 
     return (
         <ContentDisplayWrapper content={[]}>
-            <ChatRoomComponent chatRoom={chatRoom} circle={circle} page={page} subpage={subpage} />
+            <ChatRoomComponent chatRoom={chatRoom} circle={circle} />
             <ThirdColumn />
         </ContentDisplayWrapper>
     );

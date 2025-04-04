@@ -8,11 +8,9 @@ import { CirclePicture } from "./circle-picture";
 
 type CircleHeaderProps = {
     circle: Circle;
-    page?: Page;
-    subpage?: string;
 };
 
-export const CircleHeader: React.FC<CircleHeaderProps> = ({ circle, page, subpage }) => {
+export const CircleHeader: React.FC<CircleHeaderProps> = ({ circle }) => {
     const isCompact = useIsCompact();
 
     const getPath = useCallback(
@@ -45,20 +43,6 @@ export const CircleHeader: React.FC<CircleHeaderProps> = ({ circle, page, subpag
                     )}
                     <span className="text-sm font-medium text-gray-800">{circle?.name}</span>
                 </Link>
-                {page && (
-                    <>
-                        <ChevronRight className="h-4 w-4 text-gray-400" />
-                        <span className="text-sm font-medium text-gray-600">
-                            <Link href={getPath(page)}>{page?.name}</Link>
-                        </span>
-                    </>
-                )}
-                {subpage && (
-                    <>
-                        <ChevronRight className="h-4 w-4 text-gray-400" />
-                        <span className="text-sm font-medium text-gray-600">{subpage}</span>
-                    </>
-                )}
             </div>
             <div className="h-10"></div>
         </div>

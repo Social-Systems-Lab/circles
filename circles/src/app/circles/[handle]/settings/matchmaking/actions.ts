@@ -44,7 +44,7 @@ export async function saveMatchmaking(values: {
 
         // clear page cache
         let circlePath = await getCirclePath(circle);
-        revalidatePath(`${circlePath}/settings/matchmaking`);
+        revalidatePath(`${circlePath}settings/matchmaking`);
 
         return { success: true, message: "Circle matchmaking saved successfully" };
     } catch (error) {

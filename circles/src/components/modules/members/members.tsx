@@ -7,7 +7,7 @@ import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { Page, SortingOptions } from "@/models/models";
 
-export default async function MembersModule({ circle, page, moduleHandle, subpage, searchParams }: ModulePageProps) {
+export default async function MembersModule({ circle, moduleHandle, searchParams }: ModulePageProps) {
     // get members of circle
     let userDid = await getAuthenticatedUserDid();
     let members = await getMembersWithMetrics(userDid, circle?._id, searchParams?.sort as SortingOptions);

@@ -49,7 +49,7 @@ export async function savePages(values: { _id: any; enabledModules: string[] }):
         // clear page cache
         let circlePath = await getCirclePath(circle);
         revalidatePath(`${circlePath}`);
-        revalidatePath(`${circlePath}/settings/pages`);
+        revalidatePath(`${circlePath}settings/pages`);
 
         return { success: true, message: "Circle modules saved successfully" };
     } catch (error) {

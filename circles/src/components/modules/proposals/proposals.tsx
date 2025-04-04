@@ -8,7 +8,7 @@ import ProposalsList from "./proposals-list";
 import { redirect } from "next/navigation";
 import { Page } from "@/models/models";
 
-export default async function ProposalsModule({ circle, moduleHandle, subpage, searchParams }: ModulePageProps) {
+export default async function ProposalsModule({ circle }: ModulePageProps) {
     // Get the current user DID
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {

@@ -8,7 +8,7 @@ import { Form, FormField, FormMessage } from "@/components/ui/form";
 import Link from "next/link";
 import { DynamicField } from "@/components/forms/dynamic-field";
 import { generateZodSchema, getUserOrCircleInfo } from "@/lib/utils/form";
-import { FormTools, Page } from "@/models/models";
+import { FormTools } from "@/models/models";
 import { Suspense, useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { formSchemas } from "@/components/forms/form-schemas";
 import { onFormSubmit } from "./actions";
@@ -26,8 +26,6 @@ interface DynamicFormProps {
     formData?: Record<string, any>;
     formSchemaId: string;
     maxWidth?: string;
-    page?: Page;
-    subpage?: string;
     showReset?: boolean;
     isUser?: boolean;
 }
@@ -37,8 +35,6 @@ const DynamicFormManager: React.FC<DynamicFormProps> = ({
     formData = {},
     formSchemaId,
     maxWidth = "400px",
-    page,
-    subpage,
     showReset,
     isUser,
 }) => {
@@ -105,7 +101,7 @@ const DynamicFormManager: React.FC<DynamicFormProps> = ({
 
                 formData.append(key, values[key]);
             });
-            let result = await onFormSubmit(formSchemaId, formData, page, subpage);
+            let result = await onFormSubmit(formSchemaId, formData);
 
             // call client action handler
             const formActionHandler = formActionHandlers[formSchemaId];
@@ -245,8 +241,6 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
     formData = {},
     formSchemaId,
     maxWidth = "400px",
-    page,
-    subpage,
     showReset,
     isUser,
 }) => {
@@ -257,8 +251,6 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
                 formData={formData}
                 formSchemaId={formSchemaId}
                 maxWidth={maxWidth}
-                page={page}
-                subpage={subpage}
                 showReset={showReset}
                 isUser={isUser}
             />

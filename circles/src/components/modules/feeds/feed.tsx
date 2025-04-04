@@ -23,12 +23,10 @@ import { useEffect } from "react";
 export type FeedComponentProps = {
     circle: Circle;
     posts: PostDisplay[];
-    page: Page;
     feed: Feed;
-    subpage?: string;
 };
 
-export const FeedComponent = ({ circle, posts, page, subpage, feed }: FeedComponentProps) => {
+export const FeedComponent = ({ circle, posts, feed }: FeedComponentProps) => {
     const isCompact = useIsCompact();
     const [user] = useAtom(userAtom);
 
@@ -57,22 +55,15 @@ export const FeedComponent = ({ circle, posts, page, subpage, feed }: FeedCompon
             }}
         >
             <div className="flex w-full flex-col">
-                {/* <div className="mt-4">
-                    <CircleHeader
-                        circle={circle}
-                        page={page}
-                        subpage={feed.handle && feed.handle !== "default" ? feed.name : undefined}
-                    />
-                </div> */}
                 {canPost && (
                     <div>
                         {/* className="mt-6" */}
-                        <CreateNewPost circle={circle} feed={feed} page={page} subpage={subpage} />
+                        <CreateNewPost circle={circle} feed={feed} />
                     </div>
                 )}
                 <ListFilter onFilterChange={handleFilterChange} />
 
-                <PostList posts={posts} feed={feed} circle={circle} page={page} subpage={subpage} />
+                <PostList posts={posts} feed={feed} circle={circle} />
             </div>
         </div>
     );
