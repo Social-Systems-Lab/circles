@@ -55,8 +55,8 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({ circle, proposal, on
                         result.message ||
                         (isEditing ? "Your proposal has been updated." : "Your proposal has been created."),
                 });
-                // Navigate back to proposals list
-                router.push(`/circles/${circle.handle}/proposals`);
+                // Navigate to the proposal
+                router.push(`/circles/${circle.handle}/proposals/${proposal?._id}`);
             } else {
                 toast({
                     title: "Error",
@@ -76,7 +76,13 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({ circle, proposal, on
     };
 
     return (
-        <div className="mx-auto max-w-3xl p-4">
+        <div className="formatted mx-auto">
+            {isEditing && proposal.stage && (
+                <div className="mb-12 ml-4 mr-4">
+                    <ProposalStageTimeline currentStage={proposal.stage} />
+                </div>
+            )}
+
             <Card className="mb-6">
                 <CardHeader>
                     <CardTitle>{isEditing ? "Edit Proposal" : "Create New Proposal"}</CardTitle>
@@ -87,13 +93,6 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({ circle, proposal, on
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {isEditing && proposal.stage && (
-                        <div className="mb-6">
-                            <h3 className="mb-2 text-sm font-medium">Current Stage</h3>
-                            <ProposalStageTimeline currentStage={proposal.stage} />
-                        </div>
-                    )}
-
                     <Form {...form}>
                         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
                             <FormField
@@ -144,7 +143,7 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({ circle, proposal, on
                                 <Button
                                     type="button"
                                     variant="outline"
-                                    onClick={() => router.push(`/circles/${circle.handle}/proposals`)}
+                                    onClick={() => router.push(`/circles/${circle.handle}/proposals/${proposal?._id}`)}
                                     disabled={isSubmitting}
                                 >
                                     Cancel

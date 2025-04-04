@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useTransition } from "react";
+import React, { useEffect, useState, useTransition, ChangeEvent } from "react";
 import {
     ColumnDef,
     ColumnFiltersState,
@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Circle, ContentPreviewData, Page, ProposalDisplay, ProposalStage } from "@/models/models";
 import { Button } from "@/components/ui/button";
 import { ArrowDown, ArrowUp, Loader2, MoreHorizontal, Plus } from "lucide-react";
+import { Label } from "@/components/ui/label";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -40,6 +41,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "@/components/utils/use-is-compact";
+import { createProposalAction } from "@/app/circles/[handle]/proposals/actions";
 import { UserPicture } from "../members/user-picture";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -101,21 +103,15 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, page }
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [stageFilter, setStageFilter] = useState<ProposalStage | "all">("all");
+    const [createProposalDialogOpen, setCreateProposalDialogOpen] = useState<boolean>(false);
+    const [newProposalName, setNewProposalName] = useState<string>("");
 
+    // Check permissions
     // Check permissions
     const canCreate = isAuthorized(user, circle, features.proposals.create);
     const canModerate = isAuthorized(user, circle, features.proposals.moderate);
 
     const { toast } = useToast();
-
-    useEffect(() => {
-        // Filter by stage if a stage filter is selected
-        if (stageFilter !== "all") {
-            table.getColumn("stage")?.setFilterValue(stageFilter);
-        } else {
-            table.getColumn("stage")?.setFilterValue(undefined);
-        }
-    }, [stageFilter]);
 
     const columns = React.useMemo<ColumnDef<ProposalDisplay>[]>(
         () => [
@@ -211,6 +207,15 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, page }
         },
     });
 
+    useEffect(() => {
+        // Filter by stage if a stage filter is selected
+        if (stageFilter !== "all") {
+            table.getColumn("stage")?.setFilterValue(stageFilter);
+        } else {
+            table.getColumn("stage")?.setFilterValue(undefined);
+        }
+    }, [stageFilter, table]); // Added table dependency
+
     const onConfirmDeleteProposal = async () => {
         if (!selectedProposal) {
             return;
@@ -239,26 +244,61 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, page }
             }
 
             setDeleteProposalDialogOpen(false);
+            setSelectedProposal(null); // Clear selected proposal
+        });
+    };
+
+    const onConfirmCreateProposal = async () => {
+        if (!newProposalName.trim()) {
+            toast({
+                title: "Error",
+                description: "Proposal name cannot be empty.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        startTransition(async () => {
+            const result = await createProposalAction(circle.handle!, { name: newProposalName, description: "" });
+
+            if (result.success && result.proposal) {
+                toast({
+                    title: "Success",
+                    description: "Proposal created. Redirecting to edit...",
+                });
+                setCreateProposalDialogOpen(false);
+                setNewProposalName(""); // Clear input
+                // Redirect to the edit page of the new proposal
+                router.push(`/circles/${circle.handle}/proposals/${result.proposal._id}/edit`);
+            } else {
+                toast({
+                    title: "Error",
+                    description: result.message || "Failed to create proposal",
+                    variant: "destructive",
+                });
+            }
         });
     };
 
     const handleRowClick = (proposal: ProposalDisplay) => {
-        if (isCompact) {
-            router.push(`/circles/${circle.handle}/proposals/${proposal._id}`);
-            return;
-        }
+        router.push(`/circles/${circle.handle}/proposals/${proposal._id}`);
 
-        let contentPreviewData: ContentPreviewData = {
-            type: "default",
-            content: proposal,
-        };
-        setContentPreview((x) =>
-            x?.content === proposal && sidePanelContentVisible === "content" ? undefined : contentPreviewData,
-        );
+        // if (isCompact) {
+        //     router.push(`/circles/${circle.handle}/proposals/${proposal._id}`);
+        //     return;
+        // }
+        // let contentPreviewData: ContentPreviewData = {
+        //     type: "default",
+        //     content: proposal,
+        // };
+        // setContentPreview((x) =>
+        //     x?.content === proposal && sidePanelContentVisible === "content" ? undefined : contentPreviewData,
+        // );
     };
 
-    const handleCreateProposal = () => {
-        router.push(`/circles/${circle.handle}/proposals/create`);
+    const handleCreateProposalClick = () => {
+        setNewProposalName(""); // Reset name field when opening dialog
+        setCreateProposalDialogOpen(true);
     };
 
     return (
@@ -273,7 +313,7 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, page }
                         />
                     </div>
                     {canCreate && (
-                        <Button onClick={handleCreateProposal}>
+                        <Button onClick={handleCreateProposalClick}>
                             <Plus className="mr-2 h-4 w-4" /> Create Proposal
                         </Button>
                     )}
@@ -409,6 +449,47 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, page }
                                     </>
                                 ) : (
                                     <>Delete</>
+                                )}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Create Proposal Dialog */}
+                <Dialog open={createProposalDialogOpen} onOpenChange={setCreateProposalDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Create New Proposal</DialogTitle>
+                            <DialogDescription>
+                                Enter a name for your new proposal. You can add more details later.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="proposal-name" className="text-right">
+                                    Name
+                                </Label>
+                                <Input
+                                    id="proposal-name"
+                                    value={newProposalName}
+                                    onChange={(e: ChangeEvent<HTMLInputElement>) => setNewProposalName(e.target.value)}
+                                    className="col-span-3"
+                                    placeholder="Proposal Name"
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <DialogClose asChild>
+                                <Button variant="outline">Cancel</Button>
+                            </DialogClose>
+                            <Button onClick={onConfirmCreateProposal} disabled={isPending || !newProposalName.trim()}>
+                                {isPending ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Creating...
+                                    </>
+                                ) : (
+                                    <>Create & Edit</>
                                 )}
                             </Button>
                         </DialogFooter>

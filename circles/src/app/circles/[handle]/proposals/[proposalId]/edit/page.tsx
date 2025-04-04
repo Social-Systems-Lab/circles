@@ -77,15 +77,14 @@ export default async function EditProposalPage({ params }: PageProps) {
     }
 
     return (
-        <div className="flex h-full w-full flex-col">
-            <div className="mb-4 flex items-center p-4">
+        <div className="formatted flex w-full flex-col">
+            <div className="flex items-center p-4">
                 <Button asChild variant="ghost" className="mr-2">
                     <Link href={`/circles/${circleHandle}/proposals/${proposalId}`}>
                         <ArrowLeft className="mr-2 h-4 w-4" />
                         Back to Proposal
                     </Link>
                 </Button>
-                <h1 className="text-2xl font-bold">Edit Proposal</h1>
             </div>
 
             <ProposalForm

@@ -60,7 +60,7 @@ export const ProposalStageTimeline: React.FC<ProposalStageTimelineProps> = ({ cu
 
     return (
         <div className="w-full">
-            <div className="flex items-center justify-between">
+            <div className="mb-[30px] flex items-center justify-between">
                 {stages.map((stage, index) => {
                     const status = getStageStatus(stage);
                     const isFirst = index === 0;
@@ -69,7 +69,7 @@ export const ProposalStageTimeline: React.FC<ProposalStageTimelineProps> = ({ cu
                     return (
                         <React.Fragment key={stage}>
                             {/* Stage indicator */}
-                            <div className="flex flex-col items-center">
+                            <div className="relative flex flex-col items-center">
                                 <div
                                     className={cn(
                                         "flex h-10 w-10 items-center justify-center rounded-full",
@@ -82,7 +82,7 @@ export const ProposalStageTimeline: React.FC<ProposalStageTimelineProps> = ({ cu
                                 </div>
                                 <span
                                     className={cn(
-                                        "mt-2 text-sm font-medium",
+                                        "absolute bottom-[-25px] text-sm font-medium",
                                         status === "completed" && "text-green-600",
                                         status === "current" && "text-blue-600",
                                         status === "upcoming" && "text-gray-500",
