@@ -446,7 +446,9 @@ export async function notifyNewMember(userDid: string, circle: Circle, omitFollo
     let recipients = await getCirclesByDids(otherMembersIds);
 
     // Send new follower notification to all existing followers
-    await sendNotifications("new_follower", recipients, { circle, user: newMemberUser });
+    if (circle.circleType !== "user") {
+        await sendNotifications("new_follower", recipients, { circle, user: newMemberUser });
+    }
     // Send "follow_accepted" notification to the new follower
     if (!omitFollowAccepted) {
         await sendNotifications("follow_accepted", [newMemberUser], { circle, user: newMemberUser });
