@@ -1,4 +1,5 @@
-import DynamicPage from "@/components/modules/dynamic-page";
+import { AccessRulesSettingsForm } from "@/components/forms/circle-settings/access-rules/access-rules-settings-form";
+import { getCircleByHandle } from "@/lib/data/circle";
 
 type PageProps = {
     params: { handle: string };
@@ -6,15 +7,21 @@ type PageProps = {
 };
 
 export default async function AccessRulesSettingsPage(props: PageProps) {
-    const searchParams = await props.searchParams;
-    const params = await props.params;
+    const { handle } = props.params;
+    const circle = await getCircleByHandle(handle);
+
+    if (!circle) {
+        return <div>Circle not found</div>;
+    }
 
     return (
-        <DynamicPage
-            circleHandle={params.handle}
-            moduleHandle="settings"
-            subpage="access-rules"
-            searchParams={searchParams}
-        />
+        <div className="container py-6">
+            <h1 className="mb-6 text-2xl font-bold">Access Rules Settings</h1>
+            <p className="mb-6 text-muted-foreground">
+                Manage who can access different features in your circle. Assign permissions to user groups to control
+                what actions they can perform.
+            </p>
+            <AccessRulesSettingsForm circle={circle} />
+        </div>
     );
 }

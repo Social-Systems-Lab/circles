@@ -16,6 +16,7 @@ export const circleAboutFormAction: FormAction = {
             name: values.name,
             handle: values.handle,
             description: values.description,
+            content: values.content,
             isPublic: values.isPublic,
             location: values.location,
             mission: values.mission,

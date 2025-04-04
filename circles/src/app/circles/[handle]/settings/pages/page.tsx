@@ -1,4 +1,5 @@
-import DynamicPage from "@/components/modules/dynamic-page";
+import { PagesSettingsForm } from "@/components/forms/circle-settings/pages/pages-settings-form";
+import { getCircleByHandle } from "@/lib/data/circle";
 
 type PageProps = {
     params: { handle: string };
@@ -6,10 +7,21 @@ type PageProps = {
 };
 
 export default async function PagesSettingsPage(props: PageProps) {
-    const searchParams = await props.searchParams;
-    const params = await props.params;
+    const { handle } = props.params;
+    const circle = await getCircleByHandle(handle);
+
+    if (!circle) {
+        return <div>Circle not found</div>;
+    }
 
     return (
-        <DynamicPage circleHandle={params.handle} moduleHandle="settings" subpage="pages" searchParams={searchParams} />
+        <div className="container py-6">
+            <h1 className="mb-6 text-2xl font-bold">Pages Settings</h1>
+            <p className="mb-6 text-muted-foreground">
+                Manage the pages that appear in the circle's navigation menu. Enable or disable pages to control what
+                functionality is available in your circle.
+            </p>
+            <PagesSettingsForm circle={circle} />
+        </div>
     );
 }
