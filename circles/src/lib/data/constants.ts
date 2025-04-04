@@ -1,4 +1,4 @@
-import { Page, UserGroup, Module, Feature, Cause, Skill, ModuleInfo } from "@/models/models";
+import { Page, UserGroup, Module, Feature, Cause, Skill, ModuleInfo, CircleType } from "@/models/models";
 
 export const logLevel = 5; // 0: none, 1: error, 2: warn, 3: info, 4: debug, 5: trace
 export const LOG_LEVEL_TRACE = 5;
@@ -289,6 +289,23 @@ export const modules: ModuleInfo[] = [
     },
 ];
 
+export const defaultUserModules = ["feed", "followers", "circles", "projects", "settings"];
+export const defaultCircleModules = ["feed", "followers", "circles", "projects", "settings"];
+export const defaultProjectModules = ["feed", "followers", "proposals", "settings"];
+
+export const getDefaultModules = (circleType: CircleType) => {
+    switch (circleType) {
+        case "user":
+            return defaultUserModules;
+        case "circle":
+            return defaultCircleModules;
+        case "project":
+            return defaultProjectModules;
+        default:
+            return defaultUserModules;
+    }
+};
+
 // No longer needed - removed prefixes
 
 // Helper function to get all features for a specific module
@@ -365,146 +382,12 @@ export const defaultUserGroupsForUser: UserGroup[] = [
     },
 ];
 
-// default pages every circle will be created with
-export const defaultPages: Page[] = [
-    {
-        name: "Feed",
-        handle: "feeds",
-        description: "Feed page",
-        module: "feeds",
-        readOnly: true,
-        enabled: true,
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Followers",
-        handle: "members",
-        description: "Followers page",
-        module: "members",
-        enabled: true,
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Projects",
-        handle: "projects",
-        description: "Projects page",
-        module: "projects",
-        enabled: true,
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Proposals",
-        handle: "proposals",
-        description: "Proposals page",
-        module: "proposals",
-        enabled: true,
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Settings",
-        handle: "settings",
-        description: "Settings page",
-        module: "settings",
-        readOnly: true,
-        enabled: true,
-        defaultUserGroups: ["admins"],
-    },
-];
-
-// default pages every user will be created with
-export const defaultPagesForUser: Page[] = [
-    {
-        name: "Feed",
-        handle: "feeds",
-        description: "Feed page",
-        module: "feeds",
-        readOnly: true,
-        enabled: true,
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Followers",
-        handle: "friends",
-        description: "Followers page",
-        module: "members",
-        enabled: true,
-        defaultUserGroups: ["admins", "moderators", "members"],
-    },
-    {
-        name: "Circles",
-        handle: "circles",
-        description: "Circles page",
-        module: "circles",
-        enabled: true,
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Projects",
-        handle: "projects",
-        description: "Projects page",
-        module: "projects",
-        enabled: true,
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Settings",
-        handle: "settings",
-        description: "Settings page",
-        module: "settings",
-        readOnly: true,
-        enabled: true,
-        defaultUserGroups: ["admins"],
-    },
-];
-
-export const defaultPagesForProjects: Page[] = [
-    {
-        name: "Feed",
-        handle: "feeds",
-        description: "Feed page",
-        module: "feeds",
-        readOnly: true,
-        enabled: true,
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Followers",
-        handle: "friends",
-        description: "Followers page",
-        module: "members",
-        enabled: true,
-        defaultUserGroups: ["admins", "moderators", "members"],
-    },
-    {
-        name: "Proposals",
-        handle: "proposals",
-        description: "Proposals page",
-        module: "proposals",
-        enabled: true,
-        defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-    },
-    {
-        name: "Settings",
-        handle: "settings",
-        description: "Settings page",
-        module: "settings",
-        readOnly: true,
-        enabled: true,
-        defaultUserGroups: ["admins"],
-    },
-];
-
 // This function is no longer needed with the new access rules structure
 export const getModuleFeaturePrefix = (moduleHandle: string): string => {
     // Return empty string as we no longer use prefixes
     return "";
 };
 
-/**
- * Get default access rules for a circle
- * @param enabledModules Optional list of enabled modules
- * @returns Record of access rules
- */
 /**
  * Get default access rules for a circle
  * @param enabledModules Optional list of enabled modules

@@ -90,7 +90,7 @@ export const createNewUser = (
         cover: { url: "/images/default-user-cover.png" },
         userGroups: defaultUserGroupsForUser,
         accessRules: getDefaultAccessRules(),
-        pages: defaultPagesForUser,
+        enabledModules: getDefaultUserModules(),
         questionnaire: [],
         isPublic: true,
     };

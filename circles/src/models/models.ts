@@ -396,9 +396,7 @@ export const circleSchema = z.object({
     mission: z.string().optional(),
     isPublic: z.boolean().optional(),
     userGroups: z.array(userGroupSchema).default([]).optional(),
-    // @deprecated Use enabledModules instead
-    pages: z.array(pageSchema).default([]).optional(),
-    enabledModules: z.array(z.string()).default(["feed", "followers", "circles", "projects", "settings"]).optional(),
+    enabledModules: z.array(z.string()).default([]).optional(),
     accessRules: accessRulesSchema.optional(),
     members: z.number().default(0).optional(),
     questionnaire: z.array(questionSchema).default([]).optional(),
@@ -624,9 +622,7 @@ export type FormFieldType =
     | "location"
     | "causes"
     | "skills"
-    | "auto-handle"
-    | "custom"
-    | "pages";
+    | "auto-handle";
 
 export type FormField = {
     name: string;

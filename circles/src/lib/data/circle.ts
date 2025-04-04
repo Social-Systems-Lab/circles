@@ -4,7 +4,14 @@ import { Circle, CircleType, PlatformMetrics, Post, ServerSettings, SortingOptio
 import { getServerSettings } from "./server-settings";
 import { Circles, Members, MembershipRequests, Feeds, Posts, ChatRooms } from "./db";
 import { ObjectId } from "mongodb";
-import { getDefaultAccessRules, defaultUserGroups, defaultPages, defaultPagesForProjects, features } from "./constants";
+import {
+    getDefaultAccessRules,
+    defaultUserGroups,
+    defaultPages,
+    defaultPagesForProjects,
+    features,
+    getDefaultModules,
+} from "./constants";
 import { getMetrics } from "../utils/metrics";
 import { deleteVbdCircle, deleteVbdPost, upsertVbdCircles } from "./vdb";
 import { createDefaultChatRooms, getChatRoomByHandle, updateChatRoom } from "./chat";
@@ -27,7 +34,6 @@ export const SAFE_CIRCLE_PROJECTION = {
     mission: 1,
     isPublic: 1,
     userGroups: 1,
-    pages: 1,
     enabledModules: 1,
     accessRules: 1,
     members: 1,
@@ -172,9 +178,6 @@ export const getMetricsForCircles = async (circles: WithMetric<Circle>[], userDi
 };
 
 export const createDefaultCircle = (): Circle => {
-    // Default enabled modules
-    const defaultModules = ["feed", "followers", "circles", "projects", "settings"];
-
     let circle: Circle = {
         name: "Circles",
         description: "Connect. Collaborate. Create Change.",
@@ -182,7 +185,7 @@ export const createDefaultCircle = (): Circle => {
         picture: { url: "/images/default-picture.png" },
         cover: { url: "/images/default-cover.png" },
         userGroups: defaultUserGroups,
-        enabledModules: defaultModules,
+        enabledModules: getDefaultModules("circle"),
         accessRules: getDefaultAccessRules(),
         questionnaire: [],
         isPublic: true,
@@ -206,19 +209,7 @@ export const createCircle = async (circle: Circle): Promise<Circle> => {
     circle.userGroups = defaultUserGroups;
 
     // Set default enabled modules based on circle type
-    let defaultModules = ["feed", "followers", "circles", "projects", "settings"];
-    switch (circle.circleType) {
-        default:
-        case "circle":
-            defaultModules = ["feed", "followers", "projects", "settings"];
-            break;
-        case "project":
-            defaultModules = ["feed", "followers", "settings"];
-            break;
-        case "user":
-            defaultModules = ["feed", "followers", "circles", "projects", "settings"];
-            break;
-    }
+    let defaultModules = getDefaultModules(circle.circleType ?? "circle");
 
     // Set the enabledModules
     circle.enabledModules = circle.enabledModules || defaultModules;
