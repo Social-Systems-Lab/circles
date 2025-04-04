@@ -309,6 +309,8 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
         user.fullMatrixName = `@${user.matrixUsername}:${process.env.MATRIX_DOMAIN}`;
     }
 
+    user.accessRules = getDefaultAccessRules();
+
     return user as UserPrivate;
 };
 
