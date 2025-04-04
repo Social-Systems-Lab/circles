@@ -470,7 +470,7 @@ export type ContentPreviewData =
     | { type: "user"; content: Circle; props?: never }
     | { type: "circle"; content: Circle; props?: never }
     | { type: "project"; content: Circle; props?: never }
-    | { type: "proposal"; content: Proposal; props?: Record<string, unknown> }
+    | { type: "proposal"; content: ProposalDisplay; props?: Record<string, unknown> } // Use ProposalDisplay
     | { type: "default"; content: Content | ProposalDisplay; props?: Record<string, unknown> };
 
 // server setup form wizard

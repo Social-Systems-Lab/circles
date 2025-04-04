@@ -46,6 +46,8 @@ import { UserPicture } from "../members/user-picture";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
+import Link from "next/link"; // Import Link
+import { CheckCircle, XCircle } from "lucide-react"; // Import icons for outcome
 
 interface ProposalsListProps {
     proposals: ProposalDisplay[];
@@ -126,7 +128,17 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, page }
                     );
                 },
                 cell: (info) => {
-                    return <div className="font-medium">{info.getValue() as string}</div>;
+                    const proposal = info.row.original;
+                    return (
+                        // Wrap name in a Link that stops propagation
+                        <Link
+                            href={`/circles/${circle.handle}/proposals/${proposal._id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="font-medium text-blue-600 hover:underline"
+                        >
+                            {info.getValue() as string}
+                        </Link>
+                    );
                 },
             },
             {
@@ -141,9 +153,24 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, page }
                 },
                 cell: (info) => {
                     const stage = info.getValue() as ProposalStage;
+                    const proposal = info.row.original;
+                    let badgeText = stage.charAt(0).toUpperCase() + stage.slice(1);
+                    let IconComponent = null;
+
+                    if (stage === "resolved") {
+                        if (proposal.outcome === "accepted") {
+                            badgeText += " (Accepted)";
+                            IconComponent = CheckCircle;
+                        } else if (proposal.outcome === "rejected") {
+                            badgeText += " (Rejected)";
+                            IconComponent = XCircle;
+                        }
+                    }
+
                     return (
-                        <Badge className={`${getStageBadgeColor(stage)}`}>
-                            {stage.charAt(0).toUpperCase() + stage.slice(1)}
+                        <Badge className={`${getStageBadgeColor(stage)} items-center gap-1`}>
+                            {IconComponent && <IconComponent className="h-3 w-3" />}
+                            {badgeText}
                         </Badge>
                     );
                 },
@@ -281,19 +308,22 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, page }
     };
 
     const handleRowClick = (proposal: ProposalDisplay) => {
-        router.push(`/circles/${circle.handle}/proposals/${proposal._id}`);
+        if (isCompact) {
+            router.push(`/circles/${circle.handle}/proposals/${proposal._id}`);
+            return;
+        }
 
-        // if (isCompact) {
-        //     router.push(`/circles/${circle.handle}/proposals/${proposal._id}`);
-        //     return;
-        // }
-        // let contentPreviewData: ContentPreviewData = {
-        //     type: "default",
-        //     content: proposal,
-        // };
-        // setContentPreview((x) =>
-        //     x?.content === proposal && sidePanelContentVisible === "content" ? undefined : contentPreviewData,
-        // );
+        // Open content preview for non-compact mode
+        let contentPreviewData: ContentPreviewData = {
+            type: "proposal", // Use the correct type
+            content: proposal,
+        };
+        setContentPreview((x) => {
+            // Toggle behavior: if clicking the same proposal again while preview is open, close it.
+            const isCurrentlyPreviewing =
+                x?.type === "proposal" && x?.content._id === proposal._id && sidePanelContentVisible === "content";
+            return isCurrentlyPreviewing ? undefined : contentPreviewData;
+        });
     };
 
     const handleCreateProposalClick = () => {

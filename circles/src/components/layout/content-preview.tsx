@@ -14,8 +14,11 @@ import { PostItem } from "../modules/feeds/post-list";
 import Indicators from "../utils/indicators";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { MessageButton } from "../modules/home/message-button";
-//import dynamic from "next/dynamic";
-// const RichText = dynamic(() => import("@/components/modules/feeds/RichText"), { ssr: false });
+import { ProposalDisplay, ProposalStage } from "@/models/models"; // Import Proposal types
+import { Badge } from "@/components/ui/badge"; // Import Badge
+import RichText from "../modules/feeds/RichText"; // Import RichText
+import { UserPicture } from "../modules/members/user-picture"; // Import UserPicture
+import { formatDistanceToNow } from "date-fns"; // Import date formatting
 
 export const PostPreview = ({
     post,
@@ -141,6 +144,76 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
     );
 };
 
+// Helper function for proposal stage badge color (copied from proposals-list)
+const getProposalStageBadgeColor = (stage: ProposalStage) => {
+    switch (stage) {
+        case "draft":
+            return "bg-gray-200 text-gray-800";
+        case "review":
+            return "bg-blue-200 text-blue-800";
+        case "voting":
+            return "bg-green-200 text-green-800";
+        case "resolved":
+            return "bg-purple-200 text-purple-800";
+        default:
+            return "bg-gray-200 text-gray-800";
+    }
+};
+
+// Simple component to render Proposal preview
+type ProposalPreviewProps = {
+    proposal: ProposalDisplay;
+};
+const ProposalPreview: React.FC<ProposalPreviewProps> = ({ proposal }) => {
+    const router = useRouter();
+    const [, setContentPreview] = useAtom(contentPreviewAtom);
+
+    const navigateToProposal = () => {
+        if (proposal.circle?.handle && proposal._id) {
+            router.push(`/circles/${proposal.circle.handle}/proposals/${proposal._id}`);
+            setContentPreview(undefined); // Close preview on navigation
+        }
+    };
+
+    const navigateToAuthor = (e: React.MouseEvent) => {
+        e.stopPropagation(); // Prevent triggering proposal navigation
+        if (proposal.author?.handle) {
+            router.push(`/circles/${proposal.author.handle}`);
+            setContentPreview(undefined); // Close preview on navigation
+        }
+    };
+
+    return (
+        <div className="flex h-full flex-col overflow-y-auto p-4">
+            <div className="mb-2 flex items-start justify-between">
+                <h4 className="cursor-pointer pb-1 text-lg font-semibold hover:underline" onClick={navigateToProposal}>
+                    {proposal.name}{" "}
+                    <Badge className={`${getProposalStageBadgeColor(proposal.stage)} ml-1 translate-y-[-2px]`}>
+                        {proposal.stage.charAt(0).toUpperCase() + proposal.stage.slice(1)}
+                    </Badge>
+                </h4>
+            </div>
+            <div
+                className="mb-4 flex cursor-pointer items-center space-x-2 text-sm text-muted-foreground"
+                onClick={navigateToAuthor}
+            >
+                <UserPicture name={proposal.author.name} picture={proposal.author.picture?.url} size="24px" />
+                <span>{proposal.author.name}</span>
+                <span>•</span>
+                <span>{formatDistanceToNow(new Date(proposal.createdAt), { addSuffix: true })}</span>
+            </div>
+
+            <div className="prose prose-sm mb-4 max-w-none flex-grow">
+                <RichText content={proposal.description} />
+            </div>
+            {/* TODO: Add simplified action buttons if needed */}
+            <Button onClick={navigateToProposal} className="mt-auto">
+                View Full Proposal
+            </Button>
+        </div>
+    );
+};
+
 export const ContentPreview: React.FC = () => {
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
 
@@ -163,6 +236,8 @@ export const ContentPreview: React.FC = () => {
             case "circle":
             case "project":
                 return <CirclePreview circle={contentPreview!.content as Circle} circleType={contentPreview.type} />;
+            case "proposal":
+                return <ProposalPreview proposal={contentPreview!.content as ProposalDisplay} />;
             case "post":
                 return (
                     <PostPreview
