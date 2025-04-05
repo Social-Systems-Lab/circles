@@ -280,7 +280,8 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                             dropzoneClassName="h-32" // Adjust dropzone height
                         />
                         <p className="text-center text-xs text-gray-500">
-                            Add images for your {circleData.isProjectsPage ? "project" : "circle"}. Drag to reorder.
+                            Add images to showcase and represent your {circleData.isProjectsPage ? "project" : "circle"}
+                            . Drag to reorder.
                         </p>
                     </div>
                 </div>

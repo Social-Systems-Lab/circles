@@ -272,7 +272,7 @@ export default function ProfileStep({ userData, setUserData, nextStep, prevStep 
                             dropzoneClassName="h-32" // Adjust dropzone height
                         />
                         <p className="text-center text-xs text-gray-500">
-                            Add images for your profile. Drag to reorder.
+                            Add cover images for your profile. Drag to reorder.
                         </p>
                     </div>
                 </div>
