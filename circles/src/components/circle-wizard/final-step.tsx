@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { CircleWizardStepProps } from "./circle-wizard";
 import { useState, useTransition, useEffect } from "react";
 import { Loader2, Check, ArrowRight } from "lucide-react";
-import { createCircleAction } from "./actions";
 import { useRouter } from "next/navigation";
 
 export default function FinalStep({
@@ -27,77 +26,6 @@ export default function FinalStep({
             setCreatedCircleHandle(circleData.handle);
         }
     }, [circleData._id, circleData.handle]);
-
-    const handleCreateCircle = () => {
-        // If the circle already exists, just redirect to it
-        if (circleData._id && circleData.handle) {
-            router.push(`/circles/${circleData.handle}`);
-            if (onComplete) {
-                onComplete();
-            }
-            return;
-        }
-
-        startTransition(async () => {
-            try {
-                // Create FormData for image uploads
-                const formData = new FormData();
-
-                // Add image files if they exist
-                console.log("Client-side: circleData.pictureFile exists:", !!circleData.pictureFile);
-                console.log("Client-side: circleData.coverFile exists:", !!circleData.coverFile);
-
-                if (circleData.pictureFile) {
-                    console.log(
-                        "Client-side: Adding picture file to FormData:",
-                        circleData.pictureFile.name,
-                        circleData.pictureFile.size,
-                        circleData.pictureFile.type,
-                    );
-                    formData.append("picture", circleData.pictureFile);
-                }
-
-                if (circleData.coverFile) {
-                    console.log(
-                        "Client-side: Adding cover file to FormData:",
-                        circleData.coverFile.name,
-                        circleData.coverFile.size,
-                        circleData.coverFile.type,
-                    );
-                    formData.append("cover", circleData.coverFile);
-                }
-
-                // Log FormData entries
-                console.log("Client-side FormData entries:");
-                for (const [key, value] of formData.entries()) {
-                    console.log(
-                        `- ${key}: ${
-                            value instanceof File
-                                ? `File (${(value as File).name}, ${(value as File).size} bytes)`
-                                : value
-                        }`,
-                    );
-                }
-
-                // Create the circle
-                const result = await createCircleAction(circleData, formData, circleData.isProjectsPage);
-
-                if (result.success) {
-                    setIsCreated(true);
-                    if (result.data?.circle?.handle) {
-                        setCreatedCircleHandle(result.data.circle.handle);
-                    }
-                } else {
-                    // Handle error
-                    setError(result.message || `Failed to create ${circleData.isProjectsPage ? "project" : "circle"}`);
-                    console.error(result.message);
-                }
-            } catch (error) {
-                setError(`An error occurred while creating the ${circleData.isProjectsPage ? "project" : "circle"}`);
-                console.error(`${circleData.isProjectsPage ? "Project" : "Circle"} creation error:`, error);
-            }
-        });
-    };
 
     const handleViewCircle = () => {
         if (createdCircleHandle) {
@@ -192,24 +120,11 @@ export default function FinalStep({
                     Back
                 </Button>
 
-                {isCreated ? (
-                    <Button onClick={handleViewCircle} className="rounded-full">
-                        <Check className="mr-2 h-4 w-4" />
-                        View {circleData.isProjectsPage ? "Project" : "Circle"}
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                ) : (
-                    <Button onClick={handleCreateCircle} className="rounded-full" disabled={isPending}>
-                        {isPending ? (
-                            <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Creating {circleData.isProjectsPage ? "Project" : "Circle"}...
-                            </>
-                        ) : (
-                            `Create ${circleData.isProjectsPage ? "Project" : "Circle"}`
-                        )}
-                    </Button>
-                )}
+                <Button onClick={handleViewCircle} className="rounded-full">
+                    <Check className="mr-2 h-4 w-4" />
+                    View {circleData.isProjectsPage ? "Project" : "Circle"}
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
             </div>
         </div>
     );
