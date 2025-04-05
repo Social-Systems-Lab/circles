@@ -18,8 +18,6 @@ export async function saveBasicInfoAction(
     circleId?: string,
     parentCircleId?: string,
     circleType?: CircleType,
-    // Pass the full circleData from the wizard state for image handling on creation
-    circleData?: any,
 ) {
     try {
         const userDid = await getAuthenticatedUserDid();
@@ -65,79 +63,7 @@ export async function saveBasicInfoAction(
             // 2. Add user as admin member
             await addMember(userDid, newCircle._id!, ["admins", "moderators", "members"]);
 
-            // 3. Handle file uploads AFTER initial creation
-            try {
-                let updatePayload: Partial<Circle> = { _id: newCircle._id };
-                let needUpdate = false;
-
-                // Handle Profile Picture (from circleData if provided)
-                if (circleData?.pictureFile && isFile(circleData.pictureFile)) {
-                    try {
-                        console.log("Uploading profile picture from circleData.pictureFile");
-                        updatePayload.picture = await saveFile(circleData.pictureFile, "picture", newCircle._id, true);
-                        needUpdate = true;
-                    } catch (error) {
-                        console.error("Error saving picture from circleData:", error);
-                    }
-                }
-
-                // Handle Images Array (from circleData if provided)
-                const finalMediaArray: Media[] = [];
-                if (circleData?.images && Array.isArray(circleData.images)) {
-                    console.log(`Processing ${circleData.images.length} images from circleData`);
-                    for (const imageItem of circleData.images as ImageItem[]) {
-                        if (imageItem.file && isFile(imageItem.file)) {
-                            try {
-                                console.log(`Uploading new image: ${imageItem.file.name}`);
-                                const savedFileInfo: FileInfo = await saveFile(
-                                    imageItem.file,
-                                    "image",
-                                    newCircle._id,
-                                    true,
-                                );
-                                finalMediaArray.push({
-                                    name: imageItem.file.name,
-                                    type: imageItem.file.type,
-                                    fileInfo: savedFileInfo,
-                                });
-                                needUpdate = true;
-                                console.log(`Uploaded successfully: ${savedFileInfo.url}`);
-                            } catch (uploadError) {
-                                console.error("Failed to upload new image:", uploadError);
-                            }
-                        }
-                        // No need to handle existingMediaUrl for a new circle
-                    }
-                    if (finalMediaArray.length > 0) {
-                        // Overwrite default image if new ones were uploaded
-                        updatePayload.images = finalMediaArray;
-                    }
-                }
-
-                // If files were processed, update the circle record
-                if (needUpdate) {
-                    console.log("Updating newly created circle with file info:", updatePayload);
-                    await updateCircle(updatePayload);
-                    // Re-fetch the circle to return the fully updated object
-                    const updatedCircleWithFiles = await getCircleById(newCircle._id);
-                    return {
-                        success: true,
-                        message: "Circle created successfully",
-                        data: { circle: updatedCircleWithFiles },
-                    };
-                } else {
-                    // No files needed updating, return the initially created circle
-                    return { success: true, message: "Circle created successfully", data: { circle: newCircle } };
-                }
-            } catch (error) {
-                console.error("Failed to process/save circle files after creation:", error);
-                // Return the initially created circle but maybe indicate a warning?
-                return {
-                    success: true,
-                    message: "Circle created, but failed to save some images.",
-                    data: { circle: newCircle },
-                };
-            }
+            return { success: true, message: "Circle created successfully", data: { circle: newCircle } };
         }
     } catch (error) {
         if (error instanceof Error) {
