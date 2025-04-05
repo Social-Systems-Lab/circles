@@ -1,5 +1,14 @@
 // matrix.ts - Matrix chat functionality
-import { ChatRoom, Circle, NotificationType, UserPrivate, Post, Comment } from "@/models/models";
+import {
+    ChatRoom,
+    Circle,
+    NotificationType,
+    UserPrivate,
+    Post,
+    Comment,
+    Proposal,
+    ProposalDisplay,
+} from "@/models/models";
 import crypto from "crypto";
 import { getCirclesByDids, updateCircle } from "./circle";
 import { getServerSettings, updateServerSettings } from "./server-settings";
@@ -468,6 +477,13 @@ export async function sendNotifications(
         commentId?: string;
         project?: Circle;
         projectId?: string;
+        // Proposal fields
+        proposal?: Proposal | ProposalDisplay;
+        proposalId?: string;
+        proposalName?: string;
+        proposalOutcome?: string;
+        proposalResolvedAtStage?: string;
+        messageBody?: string; // For pre-formatted messages like resolution
     },
 ): Promise<void> {
     console.log(
@@ -498,10 +514,18 @@ export async function sendNotifications(
             commentId: payload.commentId?.toString(),
             project: payload.project ? sanitizeCircle(payload.project) : undefined,
             projectId: payload.projectId?.toString(),
+            // Sanitize proposal fields
+            proposal: payload.proposal ? sanitizeProposal(payload.proposal) : undefined, // Use sanitizeContent for proposal
+            proposalId: payload.proposalId?.toString(),
+            proposalName: payload.proposalName,
+            proposalOutcome: payload.proposalOutcome,
+            proposalResolvedAtStage: payload.proposalResolvedAtStage,
+            messageBody: payload.messageBody,
         };
 
         // Build some text fallback and extra custom fields
-        const body = deriveBody(notificationType, payload);
+        // Use messageBody if provided, otherwise derive fallback
+        const body = payload.messageBody || deriveBody(notificationType, payload);
         const content = {
             msgtype: "m.text", // required for m.room.message
             body, // fallback text
@@ -529,6 +553,37 @@ function sanitizeContent(obj: any): any {
     if (sanitized.createdAt) sanitized.createdAt = sanitized.createdAt.toISOString();
     if (sanitized.editedAt) sanitized.editedAt = sanitized.editedAt.toISOString();
 
+    return sanitized;
+}
+
+function sanitizeProposal(proposal: Proposal | ProposalDisplay): any {
+    if (!proposal) return proposal;
+
+    const sanitized = { ...proposal } as any;
+    if (sanitized.location?.lgnLat) {
+        const { lng, lat } = sanitized.location.lngLat;
+        // Only do this if they're finite; or default to empty string
+        sanitized.location.lngLat.lng = Number.isFinite(lng) ? String(lng) : "";
+        sanitized.location.lngLat.lat = Number.isFinite(lat) ? String(lat) : "";
+    }
+
+    if (sanitized._id) sanitized._id = sanitized._id.toString();
+    if (sanitized.createdAt) {
+        const createdAtString = sanitized.createdAt.toISOString();
+        sanitized.createdAt = createdAtString;
+    }
+    if (sanitized.author) {
+        sanitized.author = sanitizeCircle(sanitized.author);
+    }
+    if (sanitized.circle) {
+        sanitized.circle = sanitizeCircle(sanitized.circle);
+    }
+    if (sanitized.votingDeadline) {
+        sanitized.votingDeadline = sanitized.votingDeadline.toISOString();
+    }
+    if (sanitized.editedAt) {
+        sanitized.editedAt = sanitized.editedAt.toISOString();
+    }
     return sanitized;
 }
 
@@ -564,28 +619,51 @@ function deriveBody(
         comment?: Comment;
         reaction?: string;
         project?: Circle;
+        // Proposal fields for fallback text generation
+        proposal?: Proposal | ProposalDisplay;
+        proposalName?: string;
     },
-) {
+): string {
+    const userName = payload.user?.name || "Someone";
+    const circleName = payload.circle?.name || "a circle";
+    const proposalName = payload.proposalName || payload.proposal?.name || "a proposal";
+
     switch (notificationType) {
         case "follow_request":
-            return `${payload.user?.name} has requested to follow circle ${payload?.circle?.name}`;
+            return `${userName} has requested to follow circle ${circleName}`;
         case "new_follower":
-            return `${payload.user?.name} has followed circle ${payload?.circle?.name}`;
+            return `${userName} has followed circle ${circleName}`;
         case "follow_accepted":
-            return `You have been accepted into circle ${payload?.circle?.name}`;
+            return `You have been accepted into circle ${circleName}`;
         case "post_comment":
-            return `${payload.user?.name} commented on your post`;
+            return `${userName} commented on your post`;
         case "comment_reply":
-            return `${payload.user?.name} replied to your comment`;
+            return `${userName} replied to your comment`;
         case "post_like":
-            return `${payload.user?.name} liked your post`;
+            return `${userName} liked your post`;
         case "comment_like":
-            return `${payload.user?.name} liked your comment`;
+            return `${userName} liked your comment`;
         case "post_mention":
-            return `${payload.user?.name} mentioned you in a post`;
+            return `${userName} mentioned you in a post`;
         case "comment_mention":
-            return `${payload.user?.name} mentioned you in a comment`;
+            return `${userName} mentioned you in a comment`;
+        // Proposal Notifications Fallbacks
+        case "proposal_submitted_for_review":
+            return `${userName} submitted proposal "${proposalName}" for review in ${circleName}`;
+        case "proposal_moved_to_voting":
+            return `Proposal "${proposalName}" in ${circleName} is now open for voting`;
+        case "proposal_approved_for_voting":
+            return `Your proposal "${proposalName}" in ${circleName} has been approved for voting`;
+        case "proposal_resolved": // Fallback, specific message should be in messageBody
+            return `Your proposal "${proposalName}" in ${circleName} has been resolved`;
+        case "proposal_resolved_voter": // Fallback, specific message should be in messageBody
+            return `Proposal "${proposalName}" in ${circleName} has been resolved`;
+        case "proposal_vote":
+            return `${userName} voted on your proposal "${proposalName}" in ${circleName}`;
         default:
+            // Ensure exhaustive check or provide a generic default
+            const exhaustiveCheck: never = notificationType;
+            console.warn(`Unhandled notification type in deriveBody: ${exhaustiveCheck}`);
             return "New notification";
     }
 }

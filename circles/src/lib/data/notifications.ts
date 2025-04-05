@@ -1,10 +1,23 @@
 // src/lib/data/notifications.ts - Functions to send and group notifications
-import { Circle, Comment, Post, NotificationType } from "@/models/models";
+import {
+    Circle,
+    Comment,
+    Post,
+    NotificationType,
+    Proposal,
+    ProposalDisplay,
+    ProposalStage,
+    ProposalOutcome,
+    UserPrivate,
+} from "@/models/models";
 import { sendNotifications } from "./matrix";
 import { getUser, getUserPrivate } from "./user";
 import { getFeed, getPost } from "./feed";
 import { getCircleById, findProjectByShadowPostId, getCirclesByDids } from "./circle";
 import { getMembers } from "./member";
+import { getProposalById, getProposalReactions } from "./proposal"; // Use getProposalReactions
+import { features } from "./constants";
+import { getAuthorizedMembers } from "../auth/auth"; // Import the function to get authorized members
 
 /**
  * Checks if a post is a shadow post for a project and returns the project if it is
@@ -290,4 +303,270 @@ export async function notifyCommentMentions(
         project: isProjectComment ? project! : undefined,
         projectId: isProjectComment ? project?._id?.toString() : undefined,
     });
+}
+
+// --- Proposal Notifications ---
+
+/**
+ * Helper to get the circle for a proposal notification
+ */
+async function getProposalCircle(proposal: Proposal | ProposalDisplay): Promise<Circle | null> {
+    if (!proposal?.circleId) {
+        console.error("🔔 [NOTIFY] Proposal missing circleId");
+        return null;
+    }
+    const circle = await getCircleById(proposal.circleId);
+    if (!circle) {
+        console.error("🔔 [NOTIFY] Circle not found for proposal:", proposal.circleId);
+    }
+    return circle;
+}
+
+/**
+ * Send notification when a proposal is submitted for review
+ */
+export async function notifyProposalSubmittedForReview(proposal: ProposalDisplay, submitter: Circle): Promise<void> {
+    try {
+        console.log("🔔 [NOTIFY] notifyProposalSubmittedForReview called:", {
+            proposalId: proposal._id,
+            submitterDid: submitter.did,
+        });
+        const circle = await getProposalCircle(proposal);
+        if (!circle) return;
+
+        // Find users with review permission (excluding the submitter)
+        const reviewers = (await getAuthorizedMembers(circle, features.proposals.review)).filter(
+            (user: Circle) => user.did !== submitter.did,
+        );
+
+        if (reviewers.length === 0) {
+            console.log("🔔 [NOTIFY] No reviewers found to notify for proposal:", proposal._id);
+            return; // Exit if no reviewers
+        }
+
+        console.log(`🔔 [NOTIFY] Sending proposal_submitted_for_review to ${reviewers.length} reviewers`);
+        await sendNotifications("proposal_submitted_for_review", reviewers, {
+            circle,
+            user: submitter, // The user who triggered the notification (submitter)
+            proposal, // Pass the full proposal object
+            proposalId: proposal._id?.toString(),
+            proposalName: proposal.name,
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyProposalSubmittedForReview:", error);
+    }
+}
+
+/**
+ * Send notification when a proposal is moved to the voting stage
+ */
+export async function notifyProposalMovedToVoting(proposal: ProposalDisplay, approver: Circle): Promise<void> {
+    try {
+        console.log("🔔 [NOTIFY] notifyProposalMovedToVoting called:", {
+            proposalId: proposal._id,
+            approverDid: approver.did,
+        });
+        const circle = await getProposalCircle(proposal);
+        if (!circle) return;
+
+        // Find users with voting permission (excluding the approver)
+        const voters = (await getAuthorizedMembers(circle, features.proposals.vote)).filter(
+            (user: Circle) => user.did !== approver.did,
+        );
+
+        if (voters.length === 0) {
+            console.log("🔔 [NOTIFY] No voters found to notify for proposal:", proposal._id);
+            return; // Exit if no voters
+        }
+
+        console.log(`🔔 [NOTIFY] Sending proposal_moved_to_voting to ${voters.length} voters`);
+        await sendNotifications("proposal_moved_to_voting", voters, {
+            circle,
+            user: approver, // The user who triggered the notification (approver)
+            proposal, // Pass the full proposal object
+            proposalId: proposal._id?.toString(),
+            proposalName: proposal.name,
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyProposalMovedToVoting:", error);
+    }
+}
+
+/**
+ * Send notification to the author when their proposal is approved for voting
+ */
+export async function notifyProposalApprovedForVoting(proposal: ProposalDisplay, approver: Circle): Promise<void> {
+    try {
+        console.log("🔔 [NOTIFY] notifyProposalApprovedForVoting called:", {
+            proposalId: proposal._id,
+            authorDid: proposal.createdBy,
+            approverDid: approver.did,
+        });
+        // Don't notify if approver is the author
+        if (proposal.createdBy === approver.did) {
+            console.log("🔔 [NOTIFY] Skipping notification - approver is author");
+            return;
+        }
+
+        const author = await getUserPrivate(proposal.createdBy);
+        if (!author) {
+            console.error("🔔 [NOTIFY] Author not found for proposal:", proposal._id);
+            return;
+        }
+
+        const circle = await getProposalCircle(proposal);
+        if (!circle) return;
+
+        console.log("🔔 [NOTIFY] Sending proposal_approved_for_voting to author:", author.name);
+        await sendNotifications("proposal_approved_for_voting", [author], {
+            circle,
+            user: approver, // The user who triggered the notification (approver)
+            proposal, // Pass the full proposal object
+            proposalId: proposal._id?.toString(),
+            proposalName: proposal.name,
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyProposalApprovedForVoting:", error);
+    }
+}
+
+/**
+ * Formats the resolution message for notifications.
+ */
+function formatProposalResolutionMessage(
+    proposal: ProposalDisplay,
+    outcomePrefix: string, // e.g., "Your proposal", "The proposal"
+): string {
+    const outcomeText = proposal.outcome === "accepted" ? "accepted" : "rejected";
+    let message = `${outcomePrefix} "${proposal.name}" was ${outcomeText}`;
+    if (proposal.resolvedAtStage) {
+        message += ` during the ${proposal.resolvedAtStage} stage`;
+    }
+    if (proposal.outcomeReason) {
+        message += `: ${proposal.outcomeReason}`;
+    } else {
+        message += ".";
+    }
+    return message;
+}
+
+/**
+ * Send notification to the author when their proposal is resolved
+ */
+export async function notifyProposalResolvedAuthor(proposal: ProposalDisplay, resolver: Circle): Promise<void> {
+    try {
+        console.log("🔔 [NOTIFY] notifyProposalResolvedAuthor called:", {
+            proposalId: proposal._id,
+            authorDid: proposal.createdBy,
+            resolverDid: resolver.did,
+        });
+        // Don't notify if resolver is the author
+        if (proposal.createdBy === resolver.did) {
+            console.log("🔔 [NOTIFY] Skipping notification - resolver is author");
+            return;
+        }
+
+        const author = await getUserPrivate(proposal.createdBy);
+        if (!author) {
+            console.error("🔔 [NOTIFY] Author not found for proposal:", proposal._id);
+            return;
+        }
+
+        const circle = await getProposalCircle(proposal);
+        if (!circle) return;
+
+        const message = formatProposalResolutionMessage(proposal, "Your proposal");
+
+        console.log("🔔 [NOTIFY] Sending proposal_resolved to author:", author.name);
+        await sendNotifications("proposal_resolved", [author], {
+            circle,
+            user: resolver, // The user who triggered the notification (resolver)
+            proposal, // Pass the full proposal object
+            proposalId: proposal._id?.toString(),
+            proposalName: proposal.name,
+            proposalOutcome: proposal.outcome,
+            proposalResolvedAtStage: proposal.resolvedAtStage,
+            messageBody: message, // Send pre-formatted message
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyProposalResolvedAuthor:", error);
+    }
+}
+
+/**
+ * Send notification to voters when a proposal is resolved
+ */
+export async function notifyProposalResolvedVoters(proposal: ProposalDisplay, resolver: Circle): Promise<void> {
+    try {
+        console.log("🔔 [NOTIFY] notifyProposalResolvedVoters called:", {
+            proposalId: proposal._id,
+            resolverDid: resolver.did,
+        });
+        const circle = await getProposalCircle(proposal);
+        if (!circle) return;
+
+        // Get users who voted (reacted) - excluding the resolver and the author
+        const voters = (await getProposalReactions(proposal._id as string)).filter(
+            (user: Circle) => user.did !== resolver.did && user.did !== proposal.createdBy,
+        );
+
+        if (voters.length === 0) {
+            console.log("🔔 [NOTIFY] No voters found to notify for resolved proposal:", proposal._id);
+            return; // Exit if no voters
+        }
+
+        const message = formatProposalResolutionMessage(proposal, "The proposal");
+
+        console.log(`🔔 [NOTIFY] Sending proposal_resolved_voter to ${voters.length} voters`);
+        await sendNotifications("proposal_resolved_voter", voters, {
+            circle,
+            user: resolver, // The user who triggered the notification (resolver)
+            proposal, // Pass the full proposal object
+            proposalId: proposal._id?.toString(),
+            proposalName: proposal.name,
+            proposalOutcome: proposal.outcome,
+            proposalResolvedAtStage: proposal.resolvedAtStage,
+            messageBody: message, // Send pre-formatted message
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyProposalResolvedVoters:", error);
+    }
+}
+
+/**
+ * Send notification to the author when someone votes on their proposal
+ */
+export async function notifyProposalVote(proposal: ProposalDisplay, voter: Circle): Promise<void> {
+    try {
+        console.log("🔔 [NOTIFY] notifyProposalVote called:", {
+            proposalId: proposal._id,
+            authorDid: proposal.createdBy,
+            voterDid: voter.did,
+        });
+        // Don't notify if voter is the author
+        if (proposal.createdBy === voter.did) {
+            console.log("🔔 [NOTIFY] Skipping notification - voter is author");
+            return;
+        }
+
+        const author = await getUserPrivate(proposal.createdBy);
+        if (!author) {
+            console.error("🔔 [NOTIFY] Author not found for proposal:", proposal._id);
+            return;
+        }
+
+        const circle = await getProposalCircle(proposal);
+        if (!circle) return;
+
+        console.log("🔔 [NOTIFY] Sending proposal_vote to author:", author.name);
+        await sendNotifications("proposal_vote", [author], {
+            circle,
+            user: voter, // The user who triggered the notification (voter)
+            proposal, // Pass the full proposal object
+            proposalId: proposal._id?.toString(),
+            proposalName: proposal.name,
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyProposalVote:", error);
+    }
 }

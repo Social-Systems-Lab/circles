@@ -764,7 +764,14 @@ export type NotificationType =
     | "post_like" // Someone liked a post - sent to post author
     | "comment_like" // Someone liked a comment - sent to comment author
     | "post_mention" // Someone mentioned a user in a post - sent to user mentioned
-    | "comment_mention"; // Someone mentioned as user in a comment - sent to user mentioned
+    | "comment_mention" // Someone mentioned as user in a comment - sent to user mentioned
+    // Proposal Notifications
+    | "proposal_submitted_for_review" // Proposal submitted for review - sent to users with review permissions
+    | "proposal_moved_to_voting" // Proposal moved to voting stage - sent to users with voting permissions
+    | "proposal_approved_for_voting" // Proposal approved for voting - sent to proposal author
+    | "proposal_resolved" // Proposal resolved - sent to proposal author (message adapts to outcome/stage)
+    | "proposal_resolved_voter" // Proposal resolved - sent to voters (message adapts to outcome/stage)
+    | "proposal_vote"; // Someone voted on a proposal - sent to proposal author
 
 // Define all onboarding steps in a single place for consistency
 export const ONBOARDING_STEPS = [

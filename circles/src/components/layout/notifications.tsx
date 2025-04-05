@@ -7,11 +7,11 @@ import { useAtom } from "jotai";
 import { useRouter } from "next/navigation";
 import { timeSince } from "@/lib/utils";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
-import { Circle, NotificationType, Post, Comment } from "@/models/models";
+import { Circle, NotificationType, Post, Comment, Proposal, ProposalDisplay } from "@/models/models"; // Add Proposal, ProposalDisplay
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { sendReadReceipt } from "@/lib/data/client-matrix";
 import { MdOutlineArticle } from "react-icons/md";
-import { Hammer } from "lucide-react";
+import { Hammer } from "lucide-react"; // Gavel icon for proposals
 import { AiFillHeart } from "react-icons/ai";
 
 type Notification = {
@@ -30,6 +30,10 @@ type Notification = {
     reaction?: string;
     project?: Circle;
     projectId?: string;
+    // Proposal fields
+    proposal?: Proposal | ProposalDisplay;
+    proposalId?: string;
+    proposalName?: string;
     // For grouping purposes
     key?: string;
 };
@@ -46,6 +50,9 @@ type GroupedNotification = {
     comment?: Comment;
     project?: Circle;
     projectId?: string;
+    proposal?: Proposal | ProposalDisplay;
+    proposalId?: string;
+    proposalName?: string;
 };
 
 export const Notifications = () => {
@@ -90,8 +97,12 @@ export const Notifications = () => {
                     case "comment_mention":
                         groupKey = `comment_mention_${msg.content?.commentId}`;
                         break;
+                    // Proposal grouping
+                    case "proposal_vote":
+                        groupKey = `proposal_vote_${msg.content?.proposalId}`;
+                        break;
                     default:
-                        // For non-groupable notifications, use unique ID
+                        // For other proposal types and non-groupable notifications, use unique ID
                         groupKey = msg.id;
                 }
 
@@ -111,6 +122,10 @@ export const Notifications = () => {
                     reaction: msg.content?.reaction,
                     project: msg.content?.project,
                     projectId: msg.content?.projectId,
+                    // Add proposal fields
+                    proposal: msg.content?.proposal,
+                    proposalId: msg.content?.proposalId,
+                    proposalName: msg.content?.proposalName,
                     key: groupKey,
                 };
                 return notification;
@@ -160,6 +175,10 @@ export const Notifications = () => {
                     comment: notification.comment,
                     project: notification.project,
                     projectId: notification.projectId,
+                    // Add proposal fields
+                    proposal: notification.proposal,
+                    proposalId: notification.proposalId,
+                    proposalName: notification.proposalName,
                 });
             }
         }
@@ -249,8 +268,22 @@ export const Notifications = () => {
                 }
                 break;
 
+            // Proposal Notifications Navigation
+            case "proposal_submitted_for_review":
+            case "proposal_moved_to_voting":
+            case "proposal_approved_for_voting":
+            case "proposal_resolved":
+            case "proposal_resolved_voter":
+            case "proposal_vote":
+                if (notification.proposalId) {
+                    router.push(`/circles/${circleHandle}/proposals/${notification.proposalId}`);
+                }
+                break;
+
             default:
-                console.log("Unknown notification type:", notification.notificationType);
+                // Ensure exhaustive check or provide a default behavior
+                const exhaustiveCheck: never = notification.notificationType;
+                console.log("Unknown notification type:", exhaustiveCheck);
                 break;
         }
     };
@@ -300,6 +333,12 @@ export const Notifications = () => {
             case "comment_mention":
                 return `${userList} mentioned you in a comment`;
 
+            // Proposal Grouped Messages
+            case "proposal_vote":
+                return `${userList} voted on your proposal "${groupedNotification.latestNotification.proposalName || "a proposal"}"`;
+
+            // For non-grouped or single proposal notifications, use the original message
+            // (especially important for resolved notifications with specific reasons)
             default:
                 return groupedNotification.latestNotification.message;
         }
@@ -318,9 +357,13 @@ export const Notifications = () => {
                             {/* Different layouts based on notification type */}
                             {["post_comment", "comment_reply", "post_mention", "comment_mention"].includes(
                                 groupedNotification.latestNotification.notificationType,
+                            ) ||
+                            // Add proposal types that involve a user action
+                            ["proposal_vote", "proposal_submitted_for_review"].includes(
+                                groupedNotification.latestNotification.notificationType,
                             ) ? (
                                 <>
-                                    {/* Show user picture in the center */}
+                                    {/* Show triggering user picture in the center */}
                                     {groupedNotification.latestNotification.user && (
                                         <CirclePicture
                                             circle={groupedNotification.latestNotification.user}
@@ -328,16 +371,22 @@ export const Notifications = () => {
                                         />
                                     )}
 
-                                    {/* Post icon in bottom-right position in a small circle */}
+                                    {/* Post/Proposal icon in bottom-right position */}
                                     <div className="absolute bottom-0 right-0 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-gray-100">
-                                        <MdOutlineArticle size="14px" />
+                                        {["post_comment", "comment_reply", "post_mention", "comment_mention"].includes(
+                                            groupedNotification.latestNotification.notificationType,
+                                        ) ? (
+                                            <MdOutlineArticle size="14px" />
+                                        ) : (
+                                            <Hammer size="14px" /> // Gavel for proposals
+                                        )}
                                     </div>
                                 </>
                             ) : ["post_like", "comment_like"].includes(
                                   groupedNotification.latestNotification.notificationType,
                               ) ? (
                                 <>
-                                    {/* Show user picture in the center */}
+                                    {/* Show triggering user picture in the center */}
                                     {groupedNotification.latestNotification.user && (
                                         <CirclePicture
                                             circle={groupedNotification.latestNotification.user}
@@ -345,14 +394,15 @@ export const Notifications = () => {
                                         />
                                     )}
 
-                                    {/* Heart icon in bottom-right position in a small circle */}
+                                    {/* Heart icon in bottom-right position */}
                                     <div className="absolute bottom-0 right-0 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-gray-100">
                                         <AiFillHeart className="fill-[#ff4772] stroke-[#ff4772]" size="14px" />
                                     </div>
                                 </>
                             ) : (
+                                // Default layout (e.g., follow requests, proposal status changes)
                                 <>
-                                    {/* Show circle picture when relevant for non-post notifications */}
+                                    {/* Show circle picture */}
                                     {groupedNotification.latestNotification.circle && (
                                         <CirclePicture
                                             circle={groupedNotification.latestNotification.circle}

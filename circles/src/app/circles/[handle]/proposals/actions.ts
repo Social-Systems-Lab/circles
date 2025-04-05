@@ -16,6 +16,14 @@ import {
     addReactionToProposal,
     removeReactionFromProposal,
 } from "@/lib/data/proposal";
+import {
+    notifyProposalSubmittedForReview,
+    notifyProposalMovedToVoting,
+    notifyProposalApprovedForVoting,
+    notifyProposalResolvedAuthor,
+    notifyProposalResolvedVoters,
+    notifyProposalVote,
+} from "@/lib/data/notifications";
 
 /**
  * Get all proposals for a circle
@@ -102,7 +110,11 @@ export async function createProposalAction(
         if (!userDid) {
             return { success: false, message: "User not authenticated" };
         }
-        const user = await getUserByDid(userDid);
+        const user = await getUserByDid(userDid); // Get user object for notifications
+        if (!user) {
+            // Should not happen if authenticated, but good practice to check
+            return { success: false, message: "User data not found" };
+        }
 
         // Get the circle
         const circle = await getCircleByHandle(circleHandle);
@@ -164,6 +176,10 @@ export async function updateProposalAction(
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) {
             return { success: false, message: "User not authenticated" };
+        }
+        const user = await getUserByDid(userDid); // Get user object for notifications
+        if (!user) {
+            return { success: false, message: "User data not found" };
         }
 
         // Get the circle
@@ -229,6 +245,10 @@ export async function deleteProposalAction(
         if (!userDid) {
             return { success: false, message: "User not authenticated" };
         }
+        const user = await getUserByDid(userDid); // Get user object for notifications
+        if (!user) {
+            return { success: false, message: "User data not found" };
+        }
 
         // Get the circle
         const circle = await getCircleByHandle(circleHandle);
@@ -289,6 +309,10 @@ export async function changeProposalStageAction(
         if (!userDid) {
             return { success: false, message: "User not authenticated" };
         }
+        const user = await getUserByDid(userDid); // Get user object for notifications
+        if (!user) {
+            return { success: false, message: "User data not found" };
+        }
 
         // Get the circle
         const circle = await getCircleByHandle(circleHandle);
@@ -336,6 +360,27 @@ export async function changeProposalStageAction(
             return { success: false, message: "Failed to change proposal stage" };
         }
 
+        // --- Trigger Notifications ---
+        // Fetch the updated proposal *after* the stage change to ensure correct data
+        const updatedProposal = await getProposalById(proposalId, userDid);
+        if (updatedProposal) {
+            if (proposal.stage === "draft" && newStage === "review") {
+                // Notify reviewers when submitted
+                notifyProposalSubmittedForReview(updatedProposal, user);
+            } else if (proposal.stage === "review" && newStage === "voting") {
+                // Notify voters and author when moved to voting
+                notifyProposalMovedToVoting(updatedProposal, user);
+                notifyProposalApprovedForVoting(updatedProposal, user);
+            } else if (newStage === "resolved") {
+                // Notify author and voters when resolved
+                notifyProposalResolvedAuthor(updatedProposal, user);
+                notifyProposalResolvedVoters(updatedProposal, user);
+            }
+        } else {
+            console.error("Failed to fetch updated proposal for notifications:", proposalId);
+        }
+        // --- End Notifications ---
+
         // Revalidate the proposal pages
         revalidatePath(`/circles/${circleHandle}/proposals`);
         revalidatePath(`/circles/${circleHandle}/proposals/${proposalId}`);
@@ -364,6 +409,10 @@ export async function voteOnProposalAction(
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) {
             return { success: false, message: "User not authenticated" };
+        }
+        const user = await getUserByDid(userDid); // Get user object for notifications
+        if (!user) {
+            return { success: false, message: "User data not found" };
         }
 
         // Get the circle
@@ -400,6 +449,13 @@ export async function voteOnProposalAction(
         if (!success) {
             return { success: false, message: "Failed to process vote" };
         }
+
+        // --- Trigger Notification ---
+        if (voteType === "like") {
+            // Notify author only when a vote is added (not removed)
+            notifyProposalVote(proposal, user);
+        }
+        // --- End Notification ---
 
         // Revalidate the proposal pages
         revalidatePath(`/circles/${circleHandle}/proposals`);
