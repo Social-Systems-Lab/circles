@@ -334,12 +334,13 @@ export const isAuthorized = async (
     return allowedUserGroups.some((group) => memberGroups.includes(group));
 };
 
-export const getAuthorizedMembers = async (circle: string | Circle, feature: Feature | string): Promise<Circle[]> => {
+export const getAuthorizedMembers = async (circle: string | Circle, feature: Feature): Promise<Circle[]> => {
     if (typeof circle === "string") {
         circle = await getCircleById(circle);
     }
-    let featureHandle = typeof feature === "string" ? feature : feature.handle;
-    let allowedUserGroups = circle?.accessRules?.[featureHandle];
+    let featureHandle = feature.handle;
+    let moduleHandle = feature.module;
+    let allowedUserGroups = circle?.accessRules?.[moduleHandle]?.[featureHandle];
 
     if (!allowedUserGroups) return [];
 

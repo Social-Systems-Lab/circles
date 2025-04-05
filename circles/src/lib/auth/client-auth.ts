@@ -43,27 +43,13 @@ export const hasHigherAccess = (
  * @param feature The feature to check, can be a Feature object or a string in format "moduleHandle.featureHandle" or just "featureHandle" for general features
  * @returns True if the user is authorized, false otherwise
  */
-export const isAuthorized = (user: UserPrivate | undefined, circle: Circle, feature: Feature | string): boolean => {
+export const isAuthorized = (user: UserPrivate | undefined, circle: Circle, feature: Feature): boolean => {
     let moduleHandle: string;
     let featureHandle: string;
 
-    // Parse the feature string if it's a string
-    if (typeof feature === "string") {
-        // Check if it's in the format "moduleHandle.featureHandle"
-        const parts = feature.split(".");
-        if (parts.length === 2) {
-            moduleHandle = parts[0];
-            featureHandle = parts[1];
-        } else {
-            // Assume it's a general feature
-            moduleHandle = "general";
-            featureHandle = feature;
-        }
-    } else {
-        // It's a Feature object
-        moduleHandle = feature.module;
-        featureHandle = feature.handle;
-    }
+    // It's a Feature object
+    moduleHandle = feature.module;
+    featureHandle = feature.handle;
 
     // Get the access rules for this circle
     const accessRules = circle.accessRules;
