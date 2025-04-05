@@ -7,7 +7,7 @@ type UserPictureProps = {
     picture?: string;
     size?: string;
     onClick?: MouseEventHandler<HTMLDivElement> | undefined;
-    circleType?: 'user' | 'circle' | 'project';
+    circleType?: "user" | "circle" | "project";
     cover?: string; // For projects, use cover image instead of profile picture
 };
 
@@ -24,15 +24,13 @@ export const UserPicture = ({ name, picture, size, onClick, circleType, cover }:
     };
 
     // For projects, use the cover image instead of profile picture
-    const imageSource = circleType === 'project' 
-        ? cover ?? "/images/default-cover.png"
-        : picture ?? "/images/default-user-picture.png";
+    const imageSource = picture ?? "/images/default-user-picture.png";
 
     return (
         <Avatar
             style={size ? { width: size, height: size } : {}}
             onClick={onClick}
-            className={`${onClick ? "cursor-pointer" : ""} ${circleType === 'project' ? 'overflow-hidden' : ''}`}
+            className={`${onClick ? "cursor-pointer" : ""} ${circleType === "project" ? "overflow-hidden" : ""}`}
         >
             <AvatarImage src={imageSource} />
             <AvatarFallback>{getInitials()}</AvatarFallback>

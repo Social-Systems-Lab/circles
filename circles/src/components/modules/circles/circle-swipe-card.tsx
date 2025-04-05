@@ -155,12 +155,6 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                         imageClassName="object-cover"
                         disableSwipe={true}
                     />
-                    {/* <Image
-                        src={circle.cover?.url ?? "/images/default-cover.png"}
-                        alt="Cover"
-                        className="pointer-events-none object-cover"
-                        fill
-                    /> */}
                     <div className="absolute right-2 top-2">
                         <CircleTypeIndicator circleType={circle.circleType || "circle"} size="36px" />
                     </div>

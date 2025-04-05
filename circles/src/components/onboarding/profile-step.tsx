@@ -110,7 +110,6 @@ export default function ProfileStep({ userData, setUserData, nextStep, prevStep 
     const [content, setContent] = useState(user?.content || "");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [profilePicture, setProfilePicture] = useState(user?.picture?.url || "/images/default-user-picture.png");
-    // const [coverImage, setCoverImage] = useState(user?.cover?.url || "/images/default-cover.jpg"); // Remove coverImage state
     const [imagesState, setImagesState] = useState<ImageItem[]>(
         user?.images?.map((media) => ({
             id: media.fileInfo.url,
@@ -125,7 +124,6 @@ export default function ProfileStep({ userData, setUserData, nextStep, prevStep 
             setShortBio(user.description || "");
             setContent(user.content || "");
             setProfilePicture(user.picture?.url || "/images/default-user-picture.png");
-            // setCoverImage(user.cover?.url || "/images/default-cover.jpg"); // Remove cover init
             setImagesState(
                 user.images?.map((media) => ({
                     id: media.fileInfo.url,
@@ -174,7 +172,6 @@ export default function ProfileStep({ userData, setUserData, nextStep, prevStep 
                     content: content,
                     completedOnboardingSteps: updatedSteps,
                     picture: user.picture, // Keep existing picture data
-                    // cover: user.cover, // Remove cover update
                     images: imagesState.map((item) => ({
                         // Reconstruct basic Media structure for local state update
                         name: item.file?.name || "Existing Image",

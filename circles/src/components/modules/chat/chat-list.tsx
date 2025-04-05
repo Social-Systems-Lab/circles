@@ -67,13 +67,12 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
                             onClick={() => handleChatClick(chat)}
                         >
                             <div className="relative">
-                                <CirclePicture 
-                                    circle={{ 
-                                        name: chat.name, 
+                                <CirclePicture
+                                    circle={{
+                                        name: chat.name,
                                         picture: chat.picture,
-                                        cover: chat.circle?.cover,
                                         circleType: chat.circle?.circleType || "circle",
-                                     }} 
+                                    }}
                                     size="40px"
                                     showTypeIndicator={chat.circle?.circleType !== "user"}
                                 />

@@ -59,7 +59,7 @@ export const getMembers = async (circleId?: string): Promise<MemberDisplay[]> =>
                 joinedAt: 1,
                 name: "$userDetails.name",
                 picture: "$userDetails.picture",
-                cover: "$userDetails.cover",
+                images: "$userDetails.images",
                 location: "$userDetails.location",
                 description: "$userDetails.description",
                 members: "$userDetails.members",

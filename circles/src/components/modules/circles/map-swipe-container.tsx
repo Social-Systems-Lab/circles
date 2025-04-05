@@ -204,7 +204,9 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
                                             {/* Simplified preview of card content */}
                                             <div className="relative h-3/5 w-full overflow-hidden">
                                                 <Image
-                                                    src={circle.cover?.url ?? "/images/default-cover.png"}
+                                                    src={
+                                                        circle.images?.[0]?.fileInfo?.url ?? "/images/default-cover.png"
+                                                    }
                                                     alt=""
                                                     className="pointer-events-none object-cover"
                                                     fill
