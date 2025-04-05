@@ -201,7 +201,7 @@ export const UserToolbox = () => {
                                 >
                                     <div className="h-[40px] w-[40px] overflow-hidden rounded-md">
                                         <img
-                                            src={project?.cover?.url ?? "/images/default-cover.png"}
+                                            src={project?.picture?.url ?? "/images/default-picture.png"}
                                             alt={project.name}
                                             className="h-full w-full object-cover"
                                         />

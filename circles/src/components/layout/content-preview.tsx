@@ -77,7 +77,6 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                     images={carouselImages}
                     options={{ loop: carouselImages.length > 1 }}
                     containerClassName="h-full"
-                    // slideClassName="h-full" // Removed unused prop
                     imageClassName="object-cover"
                 />
 
@@ -256,14 +255,6 @@ export const ContentPreview: React.FC = () => {
     }
 
     return <>{getPreviewContent()}</>;
-};
-
-// Component to load project comments for the content preview
-type ProjectCommentsSectionLoaderProps = {
-    projectId: string;
-    parentCircleId: string;
-    commentPostId: string;
-    embedded?: boolean;
 };
 
 export default ContentPreview;

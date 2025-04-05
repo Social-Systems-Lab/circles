@@ -18,6 +18,7 @@ type PropType = {
     showArrows?: boolean; // New prop
     showDots?: boolean; // New prop
     dotsPosition?: "bottom-center" | "bottom-right"; // New prop
+    disableSwipe?: boolean;
 };
 
 const ImageCarousel: React.FC<PropType> = ({
@@ -28,11 +29,13 @@ const ImageCarousel: React.FC<PropType> = ({
     showArrows = false, // Default to true
     showDots = true, // Default to false
     dotsPosition = "bottom-right", // Default position
+    disableSwipe = false,
 }) => {
     const [, setImageGallery] = useAtom(imageGalleryAtom);
     const [emblaRef, emblaApi] = useEmblaCarousel({
         align: "start",
         loop: true,
+        watchDrag: !disableSwipe,
         ...options, // Allow overriding defaults
     });
     const [prevBtnDisabled, setPrevBtnDisabled] = React.useState(true);
@@ -99,7 +102,14 @@ const ImageCarousel: React.FC<PropType> = ({
 
     // Render carousel for multiple images using useEmblaCarousel hook and standard img
     return (
-        <div className={cn("embla relative h-full w-full overflow-hidden", containerClassName)} ref={emblaRef}>
+        <div
+            className={cn(
+                "embla relative h-full w-full overflow-hidden",
+                containerClassName,
+                disableSwipe ? "pointer-events-none" : "",
+            )}
+            ref={emblaRef}
+        >
             <div className="embla__container flex h-full">
                 {images.map((media, index) => (
                     <div
@@ -146,7 +156,7 @@ const ImageCarousel: React.FC<PropType> = ({
             {showDots && images.length > 1 && (
                 <div
                     className={cn(
-                        "absolute bottom-2 left-0 right-0 z-10 flex items-center",
+                        "pointer-events-auto absolute bottom-2 left-0 right-0 z-10 flex items-center",
                         dotsPosition === "bottom-center" ? "justify-center" : "justify-end pr-4", // Position based on prop
                     )}
                 >

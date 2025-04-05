@@ -87,7 +87,6 @@ export const createNewUser = (
         circleType: "user",
         description: "",
         picture: { url: "/images/default-user-picture.png" },
-        images: [{ name: "Default Cover", type: "image/png", fileInfo: { url: "/images/default-user-cover.png" } }], // Initialize with default image
         userGroups: defaultUserGroupsForUser,
         accessRules: getDefaultAccessRules(),
         enabledModules: getDefaultModules("user"),

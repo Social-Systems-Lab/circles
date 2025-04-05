@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { motion, PanInfo, useAnimation } from "framer-motion";
-import { Circle, WithMetric } from "@/models/models";
+import { Circle, Media, WithMetric } from "@/models/models";
 import Image from "next/image";
 import { CirclePicture } from "./circle-picture";
 import CircleTags from "./circle-tags";
@@ -16,6 +16,7 @@ import { userAtom } from "@/lib/data/atoms";
 import { ignoreCircle } from "../home/ignore-actions";
 import CircleTypeIndicator from "@/components/utils/circle-type-indicator";
 import Indicators from "@/components/utils/indicators";
+import ImageCarousel from "@/components/ui/image-carousel";
 
 interface CircleSwipeCardProps {
     circle: WithMetric<Circle>;
@@ -116,6 +117,18 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
         }
     };
 
+    // Prepare images for the carousel, providing a default if none exist
+    const carouselImages: Media[] =
+        circle.images && circle.images.length > 0
+            ? circle.images
+            : [
+                  {
+                      name: "Default Cover",
+                      type: "image/png",
+                      fileInfo: { url: "/images/default-cover.png" },
+                  },
+              ];
+
     return (
         <motion.div
             drag="x"
@@ -135,12 +148,19 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
             <div className="flex h-full flex-col overflow-hidden rounded-xl">
                 {/* Card Content */}
                 <div className="relative h-3/5 w-full overflow-hidden">
-                    <Image
+                    <ImageCarousel
+                        images={carouselImages}
+                        options={{ loop: carouselImages.length > 1 }}
+                        containerClassName="h-full"
+                        imageClassName="object-cover"
+                        disableSwipe={true}
+                    />
+                    {/* <Image
                         src={circle.cover?.url ?? "/images/default-cover.png"}
                         alt="Cover"
                         className="pointer-events-none object-cover"
                         fill
-                    />
+                    /> */}
                     <div className="absolute right-2 top-2">
                         <CircleTypeIndicator circleType={circle.circleType || "circle"} size="36px" />
                     </div>

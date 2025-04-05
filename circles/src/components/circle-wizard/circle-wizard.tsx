@@ -70,7 +70,6 @@ export default function CircleWizard({ parentCircleId, isProjectsPage = false, o
         selectedCauses: [],
         selectedSkills: [],
         picture: "/images/default-picture.png",
-        // cover: "/images/default-cover.png", // Remove cover init
         images: [], // Initialize images as empty array
         parentCircleId,
         circleType: isProjectsPage ? "project" : "circle",

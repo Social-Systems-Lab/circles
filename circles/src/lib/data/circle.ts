@@ -176,7 +176,6 @@ export const createDefaultCircle = (): Circle => {
         description: "Connect. Collaborate. Create Change.",
         handle: "default",
         picture: { url: "/images/default-picture.png" },
-        images: [{ name: "Default Cover", type: "image/png", fileInfo: { url: "/images/default-cover.png" } }],
         userGroups: defaultUserGroups,
         enabledModules: getDefaultModules("circle"),
         accessRules: getDefaultAccessRules(),
