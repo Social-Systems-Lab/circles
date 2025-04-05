@@ -262,14 +262,14 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                 <div>
                                     <Label>Images</Label>
                                     <p className="pb-2 text-[0.8rem] text-muted-foreground">
-                                        Add images to represent your circle. Drag to reorder.
+                                        Add images to showcase and represent your circle. Drag to reorder.
                                     </p>
                                     <MultiImageUploader
                                         initialImages={circle.images || []} // Pass original images
                                         onChange={field.onChange} // Let the uploader manage state and report changes
-                                        previewMode="large"
                                         enableReordering={true}
                                         maxImages={10} // Example limit
+                                        previewMode="compact"
                                     />
                                 </div>
                             )}
