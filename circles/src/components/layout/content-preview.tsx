@@ -14,11 +14,12 @@ import { PostItem } from "../modules/feeds/post-list";
 import Indicators from "../utils/indicators";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { MessageButton } from "../modules/home/message-button";
-import { ProposalDisplay, ProposalStage } from "@/models/models"; // Import Proposal types
-import { Badge } from "@/components/ui/badge"; // Import Badge
-import RichText from "../modules/feeds/RichText"; // Import RichText
-import { UserPicture } from "../modules/members/user-picture"; // Import UserPicture
-import { formatDistanceToNow } from "date-fns"; // Import date formatting
+import { ProposalDisplay, ProposalStage } from "@/models/models";
+import { Badge } from "@/components/ui/badge";
+import RichText from "../modules/feeds/RichText";
+import { UserPicture } from "../modules/members/user-picture";
+import { formatDistanceToNow } from "date-fns";
+import ImageCarousel from "@/components/ui/image-carousel"; // Import the carousel
 
 export const PostPreview = ({ post, circle, feed, initialComments, initialShowAllComments }: PostItemProps) => {
     return (
@@ -42,10 +43,11 @@ type CirclePreviewProps = {
 export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
     const router = useRouter();
     const memberCount = circle?.members ? (circleType === "user" ? circle.members - 1 : circle.members) : 0;
-    const [, setImageGallery] = useAtom(imageGalleryAtom);
+    const [, setImageGallery] = useAtom(imageGalleryAtom); // Keep for profile picture click
     const [user] = useAtom(userAtom);
 
-    const handleImageClick = (name: string, image?: FileInfo) => {
+    // Keep handleImageClick for the profile picture
+    const handleProfilePicClick = (name: string, image?: FileInfo) => {
         if (!image?.url) return;
         let media: Media = {
             name: name,
@@ -55,22 +57,32 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
         setImageGallery({ images: [media], initialIndex: 0 });
     };
 
+    // Prepare images for the carousel, providing a default if none exist
+    const carouselImages: Media[] =
+        circle.images && circle.images.length > 0
+            ? circle.images
+            : [
+                  {
+                      name: "Default Cover",
+                      type: "image/png",
+                      fileInfo: { url: "/images/default-cover.png" },
+                  },
+              ];
+
     return (
         <>
+            {/* Replace static Image with ImageCarousel */}
             <div className="relative h-[270px] w-full">
-                <Image
-                    src={circle.images?.[0]?.fileInfo?.url ?? "/images/default-cover.png"}
-                    alt="Cover"
-                    style={{
-                        objectFit: "cover",
-                    }}
-                    sizes="100vw"
-                    fill
-                    onClick={() => handleImageClick("Cover Image", circle.images?.[0]?.fileInfo)}
+                <ImageCarousel
+                    images={carouselImages}
+                    options={{ loop: carouselImages.length > 1 }}
+                    containerClassName="h-full"
+                    // slideClassName="h-full" // Removed unused prop
+                    imageClassName="object-cover"
                 />
 
                 {circle?.metrics && (
-                    <Indicators metrics={circle.metrics} className="absolute left-2 top-2" content={circle} />
+                    <Indicators metrics={circle.metrics} className="absolute left-2 top-2 z-10" content={circle} /> // Added z-10
                 )}
 
                 {circleType === "user" && circle._id !== user?._id && (
@@ -105,7 +117,7 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                                 src={circle?.picture?.url ?? "/images/default-picture.png"}
                                 alt="Picture"
                                 fill
-                                onClick={() => handleImageClick("Profile Picture", circle?.picture)}
+                                onClick={() => handleProfilePicClick("Profile Picture", circle?.picture)} // Use updated handler name
                             />
                         </div>
                     </div>
