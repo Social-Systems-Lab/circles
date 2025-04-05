@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Progress } from "@/components/ui/progress";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
-import { Cause, Skill } from "@/models/models";
+import { Cause, CircleType, Skill } from "@/models/models";
 import { causes, skills } from "@/lib/data/constants";
 import { useRouter, useSearchParams } from "next/navigation";
 import BasicInfoStep from "./basic-info-step";
@@ -35,6 +35,7 @@ export type CircleData = {
     parentCircleId?: string;
     pictureFile?: File;
     coverFile?: File;
+    circleType?: CircleType;
     isProjectsPage?: boolean;
 };
 
@@ -70,6 +71,7 @@ export default function CircleWizard({ parentCircleId, isProjectsPage = false, o
         picture: "/images/default-picture.png",
         cover: "/images/default-cover.png",
         parentCircleId,
+        circleType: isProjectsPage ? "project" : "circle",
         isProjectsPage,
     });
 

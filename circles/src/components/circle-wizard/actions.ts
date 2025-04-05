@@ -1,7 +1,7 @@
 "use server";
 
 import { createCircle, updateCircle } from "@/lib/data/circle";
-import { Circle } from "@/models/models";
+import { Circle, CircleType } from "@/models/models";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { isFile, saveFile } from "@/lib/data/storage";
@@ -156,6 +156,7 @@ export async function saveBasicInfoAction(
     isPublic: boolean,
     circleId?: string,
     parentCircleId?: string,
+    circleType?: CircleType,
 ) {
     try {
         if (circleId) {
@@ -198,7 +199,7 @@ export async function saveBasicInfoAction(
                 description: "",
                 content: "",
                 mission: "",
-                circleType: "circle",
+                circleType: circleType === "project" ? "project" : "circle",
                 createdBy: userDid,
                 parentCircleId,
                 picture: { url: "/images/default-picture.png" },

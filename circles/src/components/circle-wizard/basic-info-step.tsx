@@ -76,6 +76,7 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
                 circleData.isPublic,
                 circleData._id,
                 circleData.parentCircleId,
+                circleData.circleType,
             );
 
             if (result.success) {
