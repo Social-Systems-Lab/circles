@@ -32,6 +32,12 @@ function CircleImageUpload({
     const [isUploading, setIsUploading] = useState(false);
     const { toast } = useToast();
     const [fileToUpload, setFileToUpload] = useState<File | null>(null);
+    const [currentSrc, setCurrentSrc] = useState(src); // Initialize internal state
+
+    // Effect to update internal state when src prop changes
+    useEffect(() => {
+        setCurrentSrc(src);
+    }, [src]);
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -98,7 +104,8 @@ function CircleImageUpload({
                     <Loader2 className="h-8 w-8 animate-spin text-white" />
                 </div>
             )}
-            <Image src={src} alt={alt} fill className={className} />
+            {/* Use internal currentSrc state for display */}
+            <Image src={currentSrc} alt={alt} fill className={className} />
             <label
                 htmlFor={`imageUpload-${id}`}
                 className="absolute bottom-2 right-2 hidden cursor-pointer text-white group-hover:block"

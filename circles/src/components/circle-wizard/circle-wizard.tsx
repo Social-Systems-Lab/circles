@@ -57,7 +57,6 @@ interface CircleWizardProps {
 
 export default function CircleWizard({ parentCircleId, isProjectsPage = false, onComplete }: CircleWizardProps) {
     const [isOpen, setIsOpen] = useState(true);
-    const [user] = useAtom(userAtom);
     const [currentStepIndex, setCurrentStepIndex] = useState(0);
     const router = useRouter();
 
@@ -77,6 +76,29 @@ export default function CircleWizard({ parentCircleId, isProjectsPage = false, o
         circleType: isProjectsPage ? "project" : "circle",
         isProjectsPage,
     });
+
+    // Effect to reset state if key props change (indicating a new wizard session)
+    useEffect(() => {
+        console.log("Wizard props changed, resetting state.");
+        setCircleData({
+            name: "",
+            handle: "",
+            isPublic: true,
+            mission: "",
+            description: "",
+            content: "",
+            selectedCauses: [],
+            selectedSkills: [],
+            picture: "/images/default-picture.png", // Reset picture
+            images: [], // Reset images
+            parentCircleId, // Update parentCircleId from props
+            circleType: isProjectsPage ? "project" : "circle", // Update type from props
+            isProjectsPage, // Update flag from props
+            _id: undefined, // Clear any existing ID
+            pictureFile: undefined, // Clear any lingering file object
+        });
+        setCurrentStepIndex(0); // Reset to the first step
+    }, [isOpen, parentCircleId, isProjectsPage]); // Dependency array
 
     // Define the steps for the wizard
     const steps = useMemo(() => {

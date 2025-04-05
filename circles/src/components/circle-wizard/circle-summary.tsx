@@ -10,17 +10,22 @@ interface CircleSummaryProps {
 }
 
 export default function CircleSummary({ circleData }: CircleSummaryProps) {
-    const { name, handle, isPublic, mission, description, picture, cover, selectedCauses, selectedSkills, location } =
+    const { name, handle, isPublic, mission, description, picture, images, selectedCauses, selectedSkills, location } =
         circleData;
+
+    // Determine the cover image URL from the images array
+    const coverImageUrl =
+        circleData.images?.[0]?.preview || circleData.images?.[0]?.existingMediaUrl || "/images/default-cover.png";
 
     return (
         <div className="sticky top-0 w-[240px] space-y-4 rounded-xl bg-white p-4 shadow-sm">
             <div className="relative h-24 w-full overflow-hidden rounded-lg">
-                <img src={cover || "/images/default-cover.png"} alt="Cover" className="h-full w-full object-cover" />
+                {/* Use coverImageUrl */}
+                <img src={coverImageUrl} alt="Cover" className="h-full w-full object-cover" />
             </div>
 
             <div className="relative -mt-12 flex flex-col items-center">
-                <Avatar className="absolute top-[-50px] h-16 w-16 border-4 border-white">
+                <Avatar className="border-blue absolute top-[-50px] h-16 w-16 border-white">
                     <AvatarImage src={picture || "/images/default-picture.png"} alt={name} />
                     <AvatarFallback>{name?.slice(0, 2) || "CI"}</AvatarFallback>
                 </Avatar>
@@ -31,7 +36,7 @@ export default function CircleSummary({ circleData }: CircleSummaryProps) {
                     @{handle || "handle"}
                 </p>
                 <Badge variant={isPublic ? "default" : "outline"} className="mt-1">
-                    {isPublic ? "Public" : "Private"} {circleData.isProjectsPage ? "Project" : "Circle"}
+                    {isPublic ? "Public" : "Private"}
                 </Badge>
             </div>
 
