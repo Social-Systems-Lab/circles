@@ -6,6 +6,8 @@ import { FaCamera } from "react-icons/fa";
 import { updateCircleField } from "./actions";
 import { useToast } from "@/components/ui/use-toast";
 import { Circle } from "@/models/models";
+import { useAtom } from "jotai";
+import { imageGalleryAtom } from "@/lib/data/atoms";
 
 type EditableImageProps = {
     id: string;
@@ -17,6 +19,7 @@ type EditableImageProps = {
     fill?: boolean;
     circleId: string;
     setCircle?: React.Dispatch<React.SetStateAction<any>>;
+    triggerGallery?: boolean;
 };
 
 const EditableImage: React.FC<EditableImageProps> = ({
@@ -29,6 +32,7 @@ const EditableImage: React.FC<EditableImageProps> = ({
     fill,
     circleId,
     setCircle,
+    triggerGallery,
 }) => {
     const [currentSrc, setCurrentSrc] = useState(src);
     const { toast } = useToast();
@@ -73,9 +77,37 @@ const EditableImage: React.FC<EditableImageProps> = ({
         }
     };
 
+    const [, setImageGallery] = useAtom(imageGalleryAtom);
+
+    const imageClick = () => {
+        if (!triggerGallery) return;
+        if (!currentSrc) return;
+        // Set the gallery state with the full array and the starting index
+        setImageGallery({
+            images: [
+                {
+                    name: "Picture",
+                    type: "image",
+                    fileInfo: {
+                        url: currentSrc,
+                    },
+                },
+            ],
+            initialIndex: 0,
+        });
+    };
+
     return (
         <div className="group relative h-full w-full">
-            <Image src={currentSrc} alt={alt} className={className} width={width} height={height} fill={fill} />
+            <Image
+                src={currentSrc}
+                alt={alt}
+                className={className}
+                width={width}
+                height={height}
+                fill={fill}
+                onClick={imageClick}
+            />
             <label
                 htmlFor={`imageUpload-${circleId}-${id}`}
                 className="absolute bottom-2 right-2 hidden cursor-pointer text-white group-hover:block"

@@ -54,6 +54,7 @@ export default function HomeContent({ circle, authorizedToEdit }: HomeContentPro
                                         className="rounded-full border-2 border-white bg-white object-cover shadow-lg"
                                         fill
                                         circleId={circle._id!}
+                                        triggerGallery={true}
                                     />
                                 ) : (
                                     <>

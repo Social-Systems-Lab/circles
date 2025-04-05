@@ -54,7 +54,7 @@ export async function saveBasicInfoAction(
                 createdBy: userDid,
                 parentCircleId,
                 picture: { url: "/images/default-picture.png" }, // Default picture
-                images: [{ name: "Default Cover", type: "image/png", fileInfo: { url: "/images/default-cover.png" } }], // Default image
+                // images: [{ name: "Default Cover", type: "image/png", fileInfo: { url: "/images/default-cover.png" } }], // Default image
                 causes: [],
                 skills: [],
             };
