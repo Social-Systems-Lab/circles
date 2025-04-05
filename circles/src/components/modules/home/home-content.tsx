@@ -64,7 +64,20 @@ export default function HomeContent({ circle, authorizedToEdit }: HomeContentPro
                                             fill
                                         />
                                         <div className="absolute top-0 h-full w-full">
-                                            <GalleryTrigger name="Profile Picture" image={circle.picture} />
+                                            <GalleryTrigger
+                                                name="Profile Picture"
+                                                images={
+                                                    circle.picture
+                                                        ? [
+                                                              {
+                                                                  name: "Profile Picture",
+                                                                  type: "image",
+                                                                  fileInfo: circle.picture,
+                                                              },
+                                                          ]
+                                                        : []
+                                                }
+                                            />
                                         </div>
                                     </>
                                 )}

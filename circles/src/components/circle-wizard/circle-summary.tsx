@@ -15,7 +15,10 @@ export default function CircleSummary({ circleData }: CircleSummaryProps) {
 
     // Determine the cover image URL from the images array
     const coverImageUrl =
-        circleData.images?.[0]?.preview || circleData.images?.[0]?.existingMediaUrl || "/images/default-cover.png";
+        circleData.images?.[0]?.preview ||
+        circleData.images?.[0]?.existingMediaUrl ||
+        circleData.images?.[0]?.fileInfo?.url ||
+        "/images/default-cover.png";
 
     return (
         <div className="sticky top-0 w-[240px] space-y-4 rounded-xl bg-white p-4 shadow-sm">

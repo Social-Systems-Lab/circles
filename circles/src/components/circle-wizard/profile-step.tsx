@@ -174,9 +174,15 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                     return;
                 }
 
-                // If we have a circle ID, update the circle with the profile information
+                // If we have a circle ID, update the circle with the profile information, including picture and images
                 if (circleData._id) {
-                    const result = await saveProfileAction(circleData.description, circleData.content, circleData._id);
+                    const result = await saveProfileAction(
+                        circleData.description,
+                        circleData.content,
+                        circleData._id,
+                        circleData.picture, // Pass picture data (might be URL or File)
+                        circleData.images, // Pass the images array
+                    );
 
                     if (!result.success) {
                         setProfileError(result.message || "Failed to save profile information");
@@ -190,8 +196,8 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                             ...prev,
                             description: circle.description || prev.description,
                             content: circle.content || prev.content,
-                            picture: circle.picture?.url || prev.picture,
-                            // cover: circle.cover?.url || prev.cover, // Removed cover update
+                            picture: circle.picture?.url || prev.picture, // Update picture URL if changed
+                            images: circle.images || prev.images, // Update images array if changed
                         }));
                     }
                 }

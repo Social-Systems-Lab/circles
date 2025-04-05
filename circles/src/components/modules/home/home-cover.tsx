@@ -85,15 +85,6 @@ export default function HomeCover({ circle, authorizedToEdit }: HomeContentProps
                 >
                     {authorizedToEdit ? (
                         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/30 p-4 opacity-0 transition-opacity group-hover:opacity-100">
-                            {/* TODO: Consider a modal or dedicated edit area instead of overlay */}
-                            <MultiImageUploader
-                                initialImages={circle.images || []}
-                                onChange={handleImageChange}
-                                previewMode="compact" // Use compact in the overlay/modal
-                                enableReordering={true}
-                                maxImages={10}
-                                className="w-full max-w-md rounded bg-white p-4 shadow-lg" // Style the uploader
-                            />
                             {hasChanges && (
                                 <Button onClick={handleSaveChanges} disabled={isPending} size="sm" className="mt-4">
                                     {isPending ? (

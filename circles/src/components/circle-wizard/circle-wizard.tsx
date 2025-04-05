@@ -33,7 +33,7 @@ export type CircleData = {
     selectedSkills: Skill[];
     picture: string; // Keep profile picture string for now
     // cover: string; // Remove cover string
-    images: ImageItem[]; // Add images array
+    images: any[]; // Add images array
     parentCircleId?: string;
     pictureFile?: File; // Keep profile picture file for now
     // coverFile?: File; // Remove cover file
