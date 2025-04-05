@@ -55,37 +55,6 @@ export const CirclePicture = ({
         );
     };
 
-    // Projects handling:
-    // - For chat list, show cover image with type indicator
-    // - Elsewhere, don't show profile picture (only cover image)
-    if (circle?.circleType === "project") {
-        if (showTypeIndicator) {
-            return (
-                <div className={className} style={{ position: "relative" }}>
-                    <Avatar
-                        className="overflow-hidden bg-white shadow-lg"
-                        style={size ? { width: size, height: size } : {}}
-                    >
-                        <AvatarImage src={circle?.cover?.url ?? "/images/default-cover.png"} />
-                        <AvatarFallback>{getInitials()}</AvatarFallback>
-                    </Avatar>
-
-                    <div
-                        style={{
-                            position: "absolute",
-                            right: "-5px",
-                            bottom: "-5px",
-                            zIndex: 10,
-                        }}
-                    >
-                        <CircleTypeIndicator circleType="project" size={`${parseInt(size || "40") / 3}px`} />
-                    </div>
-                </div>
-            );
-        }
-        return null;
-    }
-
     return (
         <div className={className}>
             <Avatar

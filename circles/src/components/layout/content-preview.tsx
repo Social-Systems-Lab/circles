@@ -98,19 +98,17 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                         <FollowButton circle={circle as Circle} renderCompact={true} />
                     </div>
 
-                    {circleType !== "project" && (
-                        <div className="absolute top-[-60px]">
-                            <div className="h-[124px] w-[124px]">
-                                <Image
-                                    className="rounded-full border-2 border-white bg-white object-cover shadow-lg"
-                                    src={circle?.picture?.url ?? "/images/default-picture.png"}
-                                    alt="Picture"
-                                    fill
-                                    onClick={() => handleImageClick("Profile Picture", circle?.picture)}
-                                />
-                            </div>
+                    <div className="absolute top-[-60px]">
+                        <div className="h-[124px] w-[124px]">
+                            <Image
+                                className="rounded-full border-2 border-white bg-white object-cover shadow-lg"
+                                src={circle?.picture?.url ?? "/images/default-picture.png"}
+                                alt="Picture"
+                                fill
+                                onClick={() => handleImageClick("Profile Picture", circle?.picture)}
+                            />
                         </div>
-                    )}
+                    </div>
                 </div>
 
                 <div className="mb-8 mt-[44px] flex flex-col items-center justify-center overflow-y-auto">
