@@ -16,7 +16,8 @@ import CausesStep from "./causes-step";
 import SkillsStep from "./skills-step";
 import FinalStep from "./final-step";
 import CircleSummary from "./circle-summary";
-import { Location } from "@/models/models";
+import { Location, Media } from "@/models/models"; // Added Media
+import { ImageItem } from "@/components/forms/controls/multi-image-uploader"; // Import ImageItem
 import { Card, CardContent } from "../ui/card";
 
 export type CircleData = {
@@ -30,11 +31,12 @@ export type CircleData = {
     location?: Location;
     selectedCauses: Cause[];
     selectedSkills: Skill[];
-    picture: string;
-    cover: string;
+    picture: string; // Keep profile picture string for now
+    // cover: string; // Remove cover string
+    images: ImageItem[]; // Add images array
     parentCircleId?: string;
-    pictureFile?: File;
-    coverFile?: File;
+    pictureFile?: File; // Keep profile picture file for now
+    // coverFile?: File; // Remove cover file
     circleType?: CircleType;
     isProjectsPage?: boolean;
 };
@@ -69,7 +71,8 @@ export default function CircleWizard({ parentCircleId, isProjectsPage = false, o
         selectedCauses: [],
         selectedSkills: [],
         picture: "/images/default-picture.png",
-        cover: "/images/default-cover.png",
+        // cover: "/images/default-cover.png", // Remove cover init
+        images: [], // Initialize images as empty array
         parentCircleId,
         circleType: isProjectsPage ? "project" : "circle",
         isProjectsPage,

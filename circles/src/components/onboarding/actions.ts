@@ -1,12 +1,24 @@
 "use server";
 
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
-import { countCirclesAndUsers, getCirclePath, updateCircle } from "@/lib/data/circle";
+import { countCirclesAndUsers, getCirclePath, updateCircle, getCircleById } from "@/lib/data/circle"; // Added getCircleById
 import { causes, skills, features } from "@/lib/data/constants";
 import { getUserByDid, getUserByHandle } from "@/lib/data/user";
 import { getQdrantClient, getVbdCircleById } from "@/lib/data/vdb";
-import { Cause, Circle, Metrics, MissionDisplay, PlatformMetrics, Skill, WithMetric } from "@/models/models";
+import {
+    Cause,
+    Circle,
+    FileInfo,
+    Media,
+    Metrics,
+    MissionDisplay,
+    PlatformMetrics,
+    Skill,
+    WithMetric,
+} from "@/models/models"; // Added Media, FileInfo
+import { ImageItem } from "@/components/forms/controls/multi-image-uploader"; // Import ImageItem
 import { revalidatePath } from "next/cache";
+import { isFile, saveFile, deleteFile } from "@/lib/data/storage"; // Added isFile, saveFile, deleteFile
 
 type SaveMissionActionResponse = {
     success: boolean;
@@ -258,11 +270,12 @@ type FetchMissionStatementsResponse = {
     message?: string;
 };
 
-// Action to save profile info (description and content) and mark the step complete
 export const saveProfileAction = async (
     description: string,
     content: string,
     circleId: string,
+    picture?: any, // Keep existing picture param for now
+    images?: ImageItem[], // Add new images param
 ): Promise<SaveMissionActionResponse> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -275,6 +288,76 @@ export const saveProfileAction = async (
             description,
             content,
         };
+
+        // Handle picture upload (keeping existing logic for profile picture)
+        if (isFile(picture)) {
+            try {
+                circle.picture = await saveFile(picture, "picture", circleId, true);
+                revalidatePath(circle.picture.url);
+            } catch (uploadError) {
+                console.error("Failed to upload profile picture:", uploadError);
+            }
+        }
+
+        // --- Handle 'images' array ---
+        const finalMediaArray: Media[] = [];
+        const finalImageUrls = new Set<string>();
+        const existingCircle = await getCircleById(circleId); // Fetch existing circle data
+
+        if (images && existingCircle) {
+            for (const imageItem of images) {
+                if (imageItem.file) {
+                    // New file upload
+                    try {
+                        console.log(`Uploading new profile image: ${imageItem.file.name}`);
+                        const savedFileInfo: FileInfo = await saveFile(imageItem.file, "image", circleId, true);
+                        finalMediaArray.push({
+                            name: imageItem.file.name,
+                            type: imageItem.file.type,
+                            fileInfo: savedFileInfo,
+                        });
+                        finalImageUrls.add(savedFileInfo.url);
+                        revalidatePath(savedFileInfo.url);
+                        console.log(`Uploaded successfully: ${savedFileInfo.url}`);
+                    } catch (uploadError) {
+                        console.error("Failed to upload new profile image:", uploadError);
+                    }
+                } else if (imageItem.existingMediaUrl) {
+                    // Existing image
+                    const existingMedia = existingCircle.images?.find(
+                        (m) => m.fileInfo.url === imageItem.existingMediaUrl,
+                    );
+                    if (existingMedia) {
+                        finalMediaArray.push(existingMedia);
+                        finalImageUrls.add(existingMedia.fileInfo.url);
+                    } else {
+                        console.warn(`Existing profile image URL not found: ${imageItem.existingMediaUrl}`);
+                        finalMediaArray.push({
+                            name: "Existing Image",
+                            type: "image/jpeg",
+                            fileInfo: { url: imageItem.existingMediaUrl },
+                        });
+                        finalImageUrls.add(imageItem.existingMediaUrl);
+                    }
+                }
+            }
+
+            // Handle deletion
+            const existingUrls = new Set(existingCircle.images?.map((m) => m.fileInfo.url) || []);
+            for (const urlToDelete of existingUrls) {
+                if (!finalImageUrls.has(urlToDelete)) {
+                    try {
+                        console.log(`Deleting removed profile image: ${urlToDelete}`);
+                        await deleteFile(urlToDelete);
+                        console.log(`Deleted successfully: ${urlToDelete}`);
+                    } catch (deleteError) {
+                        console.error(`Failed to delete profile image ${urlToDelete}:`, deleteError);
+                    }
+                }
+            }
+        }
+        circle.images = finalMediaArray;
+        // --- End Handle 'images' array ---
 
         // Check if user is authorized to edit circle settings
         let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_about);

@@ -555,7 +555,7 @@ export const PostItem = ({
                         <UserPicture
                             name={post.author?.name}
                             picture={post.author?.picture?.url}
-                            cover={post.author?.cover?.url}
+                            // cover={post.author?.cover?.url} // Removed cover prop
                             circleType={post.author?.circleType}
                             onClick={(e) => {
                                 e.stopPropagation();
@@ -1123,7 +1123,7 @@ const CommentItem = ({
                         <UserPicture
                             name={comment.author.name}
                             picture={comment.author.picture?.url}
-                            cover={comment.author.cover?.url}
+                            // cover={comment.author.cover?.url} // Removed cover prop
                             circleType={comment.author.circleType}
                             onClick={() => handleAuthorClick(comment.author)}
                             size="32px"

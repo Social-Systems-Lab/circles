@@ -378,7 +378,7 @@ export const circleSchema = z.object({
     email: z.string().email().optional(),
     handle: handleSchema.optional(),
     picture: fileInfoSchema.optional(),
-    cover: fileInfoSchema.optional(),
+    images: z.array(mediaSchema).optional(), // Replaced cover with images array
     description: z.string().optional(),
     content: z.string().optional(),
     mission: z.string().optional(),

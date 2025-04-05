@@ -185,7 +185,8 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
                             >
                                 <div className="relative h-[150px] w-full overflow-hidden">
                                     <Image
-                                        src={circle.cover?.url ?? "/images/default-cover.png"}
+                                        // Use the first image from the 'images' array, fallback to default
+                                        src={circle.images?.[0]?.fileInfo?.url ?? "/images/default-cover.png"}
                                         alt="Cover"
                                         className="bg-white object-cover"
                                         fill

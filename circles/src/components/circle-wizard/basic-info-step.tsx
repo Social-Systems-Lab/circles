@@ -88,7 +88,8 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
                         _id: circle._id,
                         // Also update any other fields that might have been set by the server
                         picture: circle.picture?.url || prev.picture,
-                        cover: circle.cover?.url || prev.cover,
+                        // cover: circle.cover?.url || prev.cover, // Removed cover update
+                        // Note: Images are handled in a separate step, so no need to update images here
                     }));
                 }
                 nextStep();

@@ -10,9 +10,10 @@ import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { Loader2, Camera, ImageIcon } from "lucide-react";
 import { saveProfileAction } from "./actions";
-import { updateCircleField } from "../modules/home/actions";
+import { updateCircleField } from "../modules/home/actions"; // Keep for profile picture for now
 import { useToast } from "@/components/ui/use-toast";
 import Image from "next/image";
+import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader"; // Import MultiImageUploader
 
 // Create a custom image upload component specifically for onboarding
 function OnboardingImageUpload({
@@ -109,7 +110,14 @@ export default function ProfileStep({ userData, setUserData, nextStep, prevStep 
     const [content, setContent] = useState(user?.content || "");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [profilePicture, setProfilePicture] = useState(user?.picture?.url || "/images/default-user-picture.png");
-    const [coverImage, setCoverImage] = useState(user?.cover?.url || "/images/default-cover.jpg");
+    // const [coverImage, setCoverImage] = useState(user?.cover?.url || "/images/default-cover.jpg"); // Remove coverImage state
+    const [imagesState, setImagesState] = useState<ImageItem[]>(
+        user?.images?.map((media) => ({
+            id: media.fileInfo.url,
+            preview: media.fileInfo.url,
+            existingMediaUrl: media.fileInfo.url,
+        })) || [],
+    );
 
     // Initialize local state values only once when component mounts
     useEffect(() => {
@@ -117,7 +125,14 @@ export default function ProfileStep({ userData, setUserData, nextStep, prevStep 
             setShortBio(user.description || "");
             setContent(user.content || "");
             setProfilePicture(user.picture?.url || "/images/default-user-picture.png");
-            setCoverImage(user.cover?.url || "/images/default-cover.jpg");
+            // setCoverImage(user.cover?.url || "/images/default-cover.jpg"); // Remove cover init
+            setImagesState(
+                user.images?.map((media) => ({
+                    id: media.fileInfo.url,
+                    preview: media.fileInfo.url,
+                    existingMediaUrl: media.fileInfo.url,
+                })) || [],
+            );
 
             // Initialize userData picture as well, if it exists
             if (setUserData && userData) {
@@ -142,8 +157,9 @@ export default function ProfileStep({ userData, setUserData, nextStep, prevStep 
 
         setIsSubmitting(true);
         try {
-            // Save profile and mark the step as completed
-            const result = await saveProfileAction(shortBio, content, user._id);
+            // TODO: Update saveProfileAction to handle the 'imagesState' array correctly
+            // For now, pass the imagesState array. The action needs modification.
+            const result = await saveProfileAction(shortBio, content, user._id, undefined, imagesState); // Pass imagesState
 
             if (result.success) {
                 // Update local user state with new values
@@ -157,9 +173,14 @@ export default function ProfileStep({ userData, setUserData, nextStep, prevStep 
                     description: shortBio,
                     content: content,
                     completedOnboardingSteps: updatedSteps,
-                    // Ensure images are explicitly included
                     picture: user.picture, // Keep existing picture data
-                    cover: user.cover, // Keep existing cover data
+                    // cover: user.cover, // Remove cover update
+                    images: imagesState.map((item) => ({
+                        // Reconstruct basic Media structure for local state update
+                        name: item.file?.name || "Existing Image",
+                        type: item.file?.type || "image/jpeg",
+                        fileInfo: { url: item.preview },
+                    })),
                 });
 
                 // Move to next step
@@ -204,24 +225,8 @@ export default function ProfileStep({ userData, setUserData, nextStep, prevStep 
         }
     };
 
-    // Function to handle cover image updates
-    const handleCoverImageUpdate = (newUrl: string) => {
-        setCoverImage(newUrl);
-
-        // Update user atom if the update isn't from a temporary URL
-        if (!newUrl.startsWith("blob:")) {
-            setUser((prev) => {
-                if (!prev) return prev;
-                return {
-                    ...prev,
-                    cover: {
-                        ...prev.cover,
-                        url: newUrl,
-                    },
-                };
-            });
-        }
-    };
+    // Remove handleCoverImageUpdate function
+    // const handleCoverImageUpdate = (newUrl: string) => { ... };
 
     return (
         <div className="space-y-6">
@@ -254,22 +259,20 @@ export default function ProfileStep({ userData, setUserData, nextStep, prevStep 
 
                     <div className="space-y-2">
                         <Label className="flex items-center gap-2">
-                            <ImageIcon className="h-4 w-4" /> Cover Image
+                            <ImageIcon className="h-4 w-4" /> Profile Images
                         </Label>
-                        <div className="relative mx-auto h-32 w-full overflow-hidden rounded-lg">
-                            {user?._id && (
-                                <OnboardingImageUpload
-                                    id="cover"
-                                    src={coverImage}
-                                    alt="Cover Image"
-                                    className="object-cover"
-                                    circleId={user._id}
-                                    onImageUpdate={handleCoverImageUpdate}
-                                />
-                            )}
-                        </div>
+                        {/* Replace OnboardingImageUpload for cover with MultiImageUploader */}
+                        <MultiImageUploader
+                            initialImages={user?.images || []}
+                            onChange={setImagesState} // Update local state
+                            previewMode="compact" // Use compact mode for onboarding
+                            enableReordering={true}
+                            maxImages={5} // Example limit for onboarding
+                            className="w-full"
+                            dropzoneClassName="h-32" // Adjust dropzone height
+                        />
                         <p className="text-center text-xs text-gray-500">
-                            This appears at the top of your profile page
+                            Add images for your profile. Drag to reorder.
                         </p>
                     </div>
                 </div>

@@ -10,8 +10,9 @@ import { Loader2, Camera, ImageIcon } from "lucide-react";
 import { saveProfileAction } from "./actions";
 import { useToast } from "@/components/ui/use-toast";
 import Image from "next/image";
+import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader"; // Import MultiImageUploader
 
-// Create a custom image upload component for the circle wizard
+// Create a custom image upload component for the circle wizard (KEEPING FOR PROFILE PICTURE FOR NOW)
 function CircleImageUpload({
     id,
     src,
@@ -122,7 +123,7 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
     const [isPending, startTransition] = useTransition();
     const [profileError, setProfileError] = useState("");
     const profilePictureRef = useRef<HTMLInputElement>(null);
-    const coverImageRef = useRef<HTMLInputElement>(null);
+    // const coverImageRef = useRef<HTMLInputElement>(null); // Remove cover ref
 
     const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -183,7 +184,7 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                             description: circle.description || prev.description,
                             content: circle.content || prev.content,
                             picture: circle.picture?.url || prev.picture,
-                            cover: circle.cover?.url || prev.cover,
+                            // cover: circle.cover?.url || prev.cover, // Removed cover update
                         }));
                     }
                 }
@@ -237,26 +238,36 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
 
                     <div className="space-y-2">
                         <Label className="flex items-center gap-2">
-                            <ImageIcon className="h-4 w-4" /> Cover Image
+                            <ImageIcon className="h-4 w-4" /> {circleData.isProjectsPage ? "Project" : "Circle"} Images
                         </Label>
-                        <div className="relative mx-auto h-32 w-full overflow-hidden rounded-lg">
-                            <CircleImageUpload
-                                id="cover"
-                                src={circleData.cover}
-                                alt="Cover Image"
-                                className="object-cover"
-                                circleData={circleData}
-                                onImageUpdate={(newUrl) => {
-                                    setCircleData((prev) => ({
-                                        ...prev,
-                                        cover: newUrl,
-                                    }));
-                                }}
-                            />
-                        </div>
+                        {/* Replace CircleImageUpload for cover with MultiImageUploader */}
+                        <MultiImageUploader
+                            // Pass images from circleData (parent state)
+                            initialImages={
+                                circleData.images
+                                    ?.filter((item) => item.existingMediaUrl) // Filter out potential non-Media items if needed
+                                    .map((item) => ({
+                                        // Reconstruct Media structure for initialImages prop
+                                        name: "Existing Image",
+                                        type: "image/jpeg",
+                                        fileInfo: { url: item.existingMediaUrl! },
+                                    })) || []
+                            }
+                            onChange={(newImageItems: ImageItem[]) => {
+                                // Directly update the parent state's images array
+                                setCircleData((prev) => ({
+                                    ...prev,
+                                    images: newImageItems,
+                                }));
+                            }}
+                            previewMode="compact" // Use compact mode for wizard
+                            enableReordering={true}
+                            maxImages={5} // Example limit
+                            className="w-full"
+                            dropzoneClassName="h-32" // Adjust dropzone height
+                        />
                         <p className="text-center text-xs text-gray-500">
-                            This appears at the top of your {circleData.isProjectsPage ? "project" : "circle"}&apos;s
-                            page
+                            Add images for your {circleData.isProjectsPage ? "project" : "circle"}. Drag to reorder.
                         </p>
                     </div>
                 </div>

@@ -59,14 +59,14 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
         <>
             <div className="relative h-[270px] w-full">
                 <Image
-                    src={circle?.cover?.url ?? "/images/default-cover.png"}
+                    src={circle.images?.[0]?.fileInfo?.url ?? "/images/default-cover.png"}
                     alt="Cover"
                     style={{
                         objectFit: "cover",
                     }}
                     sizes="100vw"
                     fill
-                    onClick={() => handleImageClick("Cover Image", circle?.cover)}
+                    onClick={() => handleImageClick("Cover Image", circle.images?.[0]?.fileInfo)}
                 />
 
                 {circle?.metrics && (

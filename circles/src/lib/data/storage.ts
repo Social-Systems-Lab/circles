@@ -133,3 +133,31 @@ export const saveFile = async (
         throw error;
     }
 };
+
+// Function to delete a file from MinIO based on its URL
+export const deleteFile = async (fileUrl: string): Promise<void> => {
+    try {
+        // Extract the object name from the URL
+        // Assuming URL format like: http://host/storage/circleId/fileNameTimestamp
+        // Or production format: https://circles.com/storage/circleId/fileNameTimestamp
+        const urlPrefix = "/storage/";
+        const objectNameIndex = fileUrl.indexOf(urlPrefix);
+        if (objectNameIndex === -1) {
+            throw new Error(`Invalid file URL format: ${fileUrl}`);
+        }
+        const objectName = fileUrl.substring(objectNameIndex + urlPrefix.length);
+
+        if (!objectName) {
+            throw new Error(`Could not extract object name from URL: ${fileUrl}`);
+        }
+
+        console.log(`Attempting to delete object: ${objectName} from bucket: ${bucketName}`);
+        await minioClient.removeObject(bucketName, objectName);
+        console.log(`Successfully deleted object: ${objectName}`);
+    } catch (error) {
+        console.error(`Error deleting file ${fileUrl}:`, error);
+        // Decide if we should throw the error or just log it
+        // For now, let's re-throw to indicate failure
+        throw error;
+    }
+};

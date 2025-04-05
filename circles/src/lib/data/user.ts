@@ -87,7 +87,7 @@ export const createNewUser = (
         circleType: "user",
         description: "",
         picture: { url: "/images/default-user-picture.png" },
-        cover: { url: "/images/default-user-cover.png" },
+        images: [{ name: "Default Cover", type: "image/png", fileInfo: { url: "/images/default-user-cover.png" } }], // Initialize with default image
         userGroups: defaultUserGroupsForUser,
         accessRules: getDefaultAccessRules(),
         enabledModules: getDefaultModules("user"),
@@ -130,9 +130,9 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
                             description: 1,
                             content: 1,
                             picture: 1,
-                            cover: 1,
-                            circleType: 1,
                             mission: 1,
+                            circleType: 1,
+                            images: 1, // Added images field
                             location: 1,
                             parentCircleId: 1,
                         },
@@ -156,7 +156,7 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
                     description: "$circle.description",
                     content: "$circle.content",
                     picture: "$circle.picture",
-                    cover: "$circle.cover",
+                    images: "$circle.images", // Use images field
                     mission: "$circle.mission",
                     location: "$circle.location",
                     circleType: "$circle.circleType",
@@ -291,7 +291,7 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
                         did: "$circle.did",
                         description: "$circle.description",
                         picture: "$circle.picture",
-                        cover: "$circle.cover",
+                        images: "$circle.images", // Use images field
                         mission: "$circle.mission",
                         location: "$circle.location",
                         circleType: "$circle.circleType",

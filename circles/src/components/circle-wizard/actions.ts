@@ -1,11 +1,13 @@
 "use server";
 
-import { createCircle, updateCircle } from "@/lib/data/circle";
-import { Circle, CircleType } from "@/models/models";
+import { createCircle, updateCircle, getCircleById, getCirclePath } from "@/lib/data/circle"; // Added getCirclePath
+import { Circle, CircleType, Media, FileInfo } from "@/models/models";
+import { ImageItem } from "@/components/forms/controls/multi-image-uploader";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
-import { isFile, saveFile } from "@/lib/data/storage";
+import { isFile, saveFile, deleteFile } from "@/lib/data/storage";
 import { addMember } from "@/lib/data/member";
+import { revalidatePath } from "next/cache"; // Added revalidatePath
 
 export async function createCircleAction(circleData: any, formData?: FormData, isProjectsPage?: boolean) {
     try {
@@ -42,105 +44,88 @@ export async function createCircleAction(circleData: any, formData?: FormData, i
         // Add the user as an admin member to the new circle
         await addMember(userDid, newCircle._id!, ["admins", "moderators", "members"]);
 
-        // Handle file uploads if needed
+        // Handle file uploads AFTER circle creation
         try {
+            let updatePayload: Partial<Circle> = { _id: newCircle._id };
             let needUpdate = false;
 
-            // Check if we have FormData with image files
-            try {
-                if (formData) {
-                    console.log("FormData entries:");
-                    try {
-                        for (const [key, value] of formData.entries()) {
-                            console.log(`- ${key}: ${typeof value}`);
-                        }
-                    } catch (error) {
-                        console.log("Error iterating FormData entries:", error);
-                    }
-
-                    // Handle picture file
-                    try {
-                        const pictureFile = formData.get("picture");
-                        if (pictureFile) {
-                            // Convert to Buffer if needed
-                            if (typeof Buffer !== "undefined" && pictureFile instanceof Buffer) {
-                                // Save the picture and get the file info
-                                newCircle.picture = await saveFile(pictureFile, "picture", newCircle._id, true);
-                                needUpdate = true;
-                            } else if (typeof Blob !== "undefined" && pictureFile instanceof Blob) {
-                                // Convert Blob to Buffer
-                                const arrayBuffer = await pictureFile.arrayBuffer();
-                                const buffer = Buffer.from(arrayBuffer);
-                                newCircle.picture = await saveFile(buffer, "picture", newCircle._id, true);
-                                needUpdate = true;
-                            } else {
-                                // Try to save it directly
-                                newCircle.picture = await saveFile(pictureFile, "picture", newCircle._id, true);
-                                needUpdate = true;
-                            }
-                        }
-                    } catch (error) {
-                        console.log("Error processing picture file:", error);
-                    }
-
-                    // Handle cover file
-                    try {
-                        const coverFile = formData.get("cover");
-                        if (coverFile) {
-                            // Convert to Buffer if needed
-                            if (typeof Buffer !== "undefined" && coverFile instanceof Buffer) {
-                                // Save the cover and get the file info
-                                newCircle.cover = await saveFile(coverFile, "cover", newCircle._id, true);
-                                needUpdate = true;
-                            } else if (typeof Blob !== "undefined" && coverFile instanceof Blob) {
-                                // Convert Blob to Buffer
-                                const arrayBuffer = await coverFile.arrayBuffer();
-                                const buffer = Buffer.from(arrayBuffer);
-                                newCircle.cover = await saveFile(buffer, "cover", newCircle._id, true);
-                                needUpdate = true;
-                            } else {
-                                // Try to save it directly
-                                newCircle.cover = await saveFile(coverFile, "cover", newCircle._id, true);
-                                needUpdate = true;
-                            }
-                        }
-                    } catch (error) {
-                        console.log("Error processing cover file:", error);
-                    }
+            // Handle Profile Picture (from circleData.pictureFile if present)
+            // Note: circleData.pictureFile is not standard, assuming it's set in the wizard state
+            if (circleData.pictureFile && isFile(circleData.pictureFile)) {
+                try {
+                    console.log("Uploading profile picture from circleData.pictureFile");
+                    updatePayload.picture = await saveFile(circleData.pictureFile, "picture", newCircle._id, true);
+                    needUpdate = true;
+                } catch (error) {
+                    console.error("Error saving picture from circleData:", error);
                 }
-
-                // Try the direct method as a fallback
-                if (circleData.pictureFile && !newCircle.picture) {
-                    try {
-                        // Save the picture and get the file info
-                        newCircle.picture = await saveFile(circleData.pictureFile, "picture", newCircle._id, true);
-                        needUpdate = true;
-                    } catch (error) {
-                        console.log("Error saving picture from circleData:", error);
-                    }
-                }
-
-                if (circleData.coverFile && !newCircle.cover) {
-                    try {
-                        // Save the cover and get the file info
-                        newCircle.cover = await saveFile(circleData.coverFile, "cover", newCircle._id, true);
-                        needUpdate = true;
-                    } catch (error) {
-                        console.log("Error saving cover from circleData:", error);
-                    }
-                }
-            } catch (error) {
-                console.log("Error in file processing section:", error);
             }
 
+            // Handle Images Array (from circleData.images)
+            const finalMediaArray: Media[] = [];
+            if (circleData.images && Array.isArray(circleData.images)) {
+                console.log(`Processing ${circleData.images.length} images from circleData`);
+                for (const imageItem of circleData.images as ImageItem[]) {
+                    if (imageItem.file && isFile(imageItem.file)) {
+                        // Check if it's a real file
+                        // New file to upload
+                        try {
+                            console.log(`Uploading new image: ${imageItem.file.name}`);
+                            const savedFileInfo: FileInfo = await saveFile(
+                                imageItem.file,
+                                "image",
+                                newCircle._id,
+                                true,
+                            );
+                            finalMediaArray.push({
+                                name: imageItem.file.name,
+                                type: imageItem.file.type,
+                                fileInfo: savedFileInfo,
+                            });
+                            needUpdate = true; // Mark for update if any image is processed
+                            console.log(`Uploaded successfully: ${savedFileInfo.url}`);
+                        } catch (uploadError) {
+                            console.error("Failed to upload new image:", uploadError);
+                        }
+                    } else if (imageItem.existingMediaUrl) {
+                        // This case shouldn't happen for a *new* circle, but handle defensively
+                        console.warn(`Found existingMediaUrl in new circle data: ${imageItem.existingMediaUrl}`);
+                        finalMediaArray.push({
+                            name: "Existing Image",
+                            type: "image/jpeg",
+                            fileInfo: { url: imageItem.existingMediaUrl },
+                        });
+                        // No need to set needUpdate=true if only existing images are present
+                    }
+                }
+                if (finalMediaArray.length > 0) {
+                    updatePayload.images = finalMediaArray;
+                    // Since we are *creating* a circle, any successfully uploaded image means we need an update.
+                    // The check against existingCircle was incorrect here.
+                    // needUpdate is already set to true if finalMediaArray has items from new uploads.
+                }
+            }
+
+            // If any files needed processing and resulted in changes, update the circle
             if (needUpdate) {
-                await updateCircle(newCircle);
+                console.log("Updating circle with uploaded file info:", updatePayload);
+                await updateCircle(updatePayload);
+                // Re-fetch the circle to return the fully updated object
+                const updatedCircle = await getCircleById(newCircle._id);
+                return { success: true, message: "Circle created successfully", data: { circle: updatedCircle } };
+            } else {
+                // No files needed updating, return the initially created circle
+                return { success: true, message: "Circle created successfully", data: { circle: newCircle } };
             }
         } catch (error) {
-            console.log("Failed to save circle files", error);
+            console.error("Failed to process/save circle files after creation:", error);
+            // Return the initially created circle but maybe indicate a warning?
+            return {
+                success: true,
+                message: "Circle created, but failed to save some images.",
+                data: { circle: newCircle },
+            };
         }
-
-        return { success: true, message: "Circle created successfully", data: { circle: newCircle } };
     } catch (error) {
         if (error instanceof Error) {
             return { success: false, message: error.message };
@@ -149,6 +134,8 @@ export async function createCircleAction(circleData: any, formData?: FormData, i
         }
     }
 }
+
+// --- Restored Actions ---
 
 export async function saveBasicInfoAction(
     name: string,
@@ -178,47 +165,14 @@ export async function saveBasicInfoAction(
                 handle,
                 isPublic,
             });
-            return { success: true, message: "Basic info updated successfully", data: { circle } };
+            // Note: Returning the result of updateCircle might not be the full circle object depending on implementation
+            // Re-fetch if the full object is needed by the caller
+            const updatedCircle = await getCircleById(circleId);
+            return { success: true, message: "Basic info updated successfully", data: { circle: updatedCircle } };
         } else {
-            // For new circles, create the circle in the database
-            const userDid = await getAuthenticatedUserDid();
-            if (!userDid) {
-                return { success: false, message: "You need to be logged in to create a circle" };
-            }
-
-            const authorized = await isAuthorized(userDid, parentCircleId ?? "", features.circles.create);
-            if (!authorized) {
-                return { success: false, message: "You are not authorized to create new circles" };
-            }
-
-            // Create a new circle with basic info
-            const circle: Circle = {
-                name,
-                handle,
-                isPublic,
-                description: "",
-                content: "",
-                mission: "",
-                circleType: circleType === "project" ? "project" : "circle",
-                createdBy: userDid,
-                parentCircleId,
-                picture: { url: "/images/default-picture.png" },
-                cover: { url: "/images/default-cover.png" },
-                causes: [],
-                skills: [],
-            };
-
-            // Create the circle in the database
-            const newCircle = await createCircle(circle);
-
-            // Add the user as an admin member to the new circle
-            await addMember(userDid, newCircle._id!, ["admins", "moderators", "members"]);
-
-            return {
-                success: true,
-                message: "Circle created successfully",
-                data: { circle: newCircle },
-            };
+            // This path should ideally not be hit if createCircleAction handles creation
+            console.warn("saveBasicInfoAction called without circleId - creation should happen in createCircleAction");
+            return { success: false, message: "Circle creation should be handled by createCircleAction" };
         }
     } catch (error) {
         if (error instanceof Error) {
@@ -243,15 +197,16 @@ export async function saveMissionAction(mission: string, circleId?: string) {
 
         if (circleId) {
             // If circleId exists, update the existing circle
-            const circle = await updateCircle({
+            await updateCircle({
                 _id: circleId,
                 mission,
             });
-            return { success: true, message: "Mission updated successfully", data: { circle } };
+            const updatedCircle = await getCircleById(circleId);
+            return { success: true, message: "Mission updated successfully", data: { circle: updatedCircle } };
         }
 
         // For new circles, we'll just return success as the actual creation happens at the end
-        return { success: true, message: "Mission saved" };
+        return { success: true, message: "Mission saved (no ID provided)" };
     } catch (error) {
         if (error instanceof Error) {
             return { success: false, message: error.message };
@@ -261,12 +216,13 @@ export async function saveMissionAction(mission: string, circleId?: string) {
     }
 }
 
+// Updated saveProfileAction to handle images array
 export async function saveProfileAction(
     description: string,
     content: string,
     circleId?: string,
-    picture?: any,
-    cover?: any,
+    picture?: any, // Keep picture for now
+    images?: ImageItem[], // Use ImageItem[]
 ) {
     try {
         if (circleId) {
@@ -281,33 +237,96 @@ export async function saveProfileAction(
             }
 
             // If circleId exists, update the existing circle
-            const updateData: any = {
+            const updateData: Partial<Circle> = {
                 _id: circleId,
                 description,
                 content,
             };
+            let needUpdate = false; // Flag to track if DB update is needed
 
-            // Handle file uploads if needed
-            try {
-                if (isFile(picture)) {
-                    // Save the picture and get the file info
+            // Handle profile picture upload
+            if (isFile(picture)) {
+                try {
                     updateData.picture = await saveFile(picture, "picture", circleId, true);
+                    needUpdate = true;
+                } catch (error) {
+                    console.error("Failed to save profile picture:", error);
                 }
-
-                if (isFile(cover)) {
-                    // Save the cover and get the file info
-                    updateData.cover = await saveFile(cover, "cover", circleId, true);
-                }
-            } catch (error) {
-                console.log("Failed to save circle files", error);
             }
 
-            const circle = await updateCircle(updateData);
-            return { success: true, message: "Profile updated successfully", data: { circle } };
+            // --- Handle 'images' array ---
+            const finalMediaArray: Media[] = [];
+            const finalImageUrls = new Set<string>();
+            const existingCircle = await getCircleById(circleId); // Fetch existing circle data
+
+            if (images && existingCircle) {
+                let imagesChanged = false; // Track if the images array itself changed
+                for (const imageItem of images) {
+                    if (imageItem.file && isFile(imageItem.file)) {
+                        // New file upload
+                        try {
+                            const savedFileInfo: FileInfo = await saveFile(imageItem.file, "image", circleId, true);
+                            finalMediaArray.push({
+                                name: imageItem.file.name,
+                                type: imageItem.file.type,
+                                fileInfo: savedFileInfo,
+                            });
+                            finalImageUrls.add(savedFileInfo.url);
+                            imagesChanged = true;
+                        } catch (uploadError) {
+                            console.error("Failed to upload new image:", uploadError);
+                        }
+                    } else if (imageItem.existingMediaUrl) {
+                        // Existing image
+                        const existingMedia = existingCircle.images?.find(
+                            (m) => m.fileInfo.url === imageItem.existingMediaUrl,
+                        );
+                        if (existingMedia) {
+                            finalMediaArray.push(existingMedia);
+                            finalImageUrls.add(existingMedia.fileInfo.url);
+                        } else {
+                            console.warn(`Existing image URL not found: ${imageItem.existingMediaUrl}`);
+                            finalMediaArray.push({
+                                name: "Existing Image",
+                                type: "image/jpeg",
+                                fileInfo: { url: imageItem.existingMediaUrl },
+                            });
+                            finalImageUrls.add(imageItem.existingMediaUrl);
+                        }
+                    }
+                }
+
+                // Handle deletion
+                const existingUrls = new Set(existingCircle.images?.map((m) => m.fileInfo.url) || []);
+                for (const urlToDelete of existingUrls) {
+                    if (!finalImageUrls.has(urlToDelete)) {
+                        try {
+                            await deleteFile(urlToDelete);
+                            imagesChanged = true;
+                        } catch (deleteError) {
+                            console.error(`Failed to delete image ${urlToDelete}:`, deleteError);
+                        }
+                    }
+                }
+
+                // Only include images in update if they actually changed
+                if (imagesChanged || finalMediaArray.length !== (existingCircle.images?.length || 0)) {
+                    updateData.images = finalMediaArray;
+                    needUpdate = true;
+                }
+            }
+            // --- End Handle 'images' array ---
+
+            if (needUpdate) {
+                await updateCircle(updateData);
+            }
+            const updatedCircle = await getCircleById(circleId); // Fetch potentially updated circle
+            return { success: true, message: "Profile updated successfully", data: { circle: updatedCircle } };
         }
 
-        // For new circles, we'll just return success as the actual creation happens at the end
-        return { success: true, message: "Profile saved" };
+        // For new circles (this path shouldn't be hit if createCircleAction is used)
+        console.warn("saveProfileAction called without circleId");
+        return { success: true, message: "Profile saved (no ID provided)" };
     } catch (error) {
         if (error instanceof Error) {
             return { success: false, message: error.message };
@@ -331,15 +350,16 @@ export async function saveLocationAction(location: any, circleId?: string) {
             }
 
             // If circleId exists, update the existing circle
-            const circle = await updateCircle({
+            await updateCircle({
                 _id: circleId,
                 location,
             });
-            return { success: true, message: "Location updated successfully", data: { circle } };
+            const updatedCircle = await getCircleById(circleId);
+            return { success: true, message: "Location updated successfully", data: { circle: updatedCircle } };
         }
 
-        // For new circles, we'll just return success as the actual creation happens at the end
-        return { success: true, message: "Location saved" };
+        // For new circles
+        return { success: true, message: "Location saved (no ID provided)" };
     } catch (error) {
         if (error instanceof Error) {
             return { success: false, message: error.message };
@@ -363,15 +383,16 @@ export async function saveCausesAction(causes: string[], circleId?: string) {
             }
 
             // If circleId exists, update the existing circle
-            const circle = await updateCircle({
+            await updateCircle({
                 _id: circleId,
                 causes,
             });
-            return { success: true, message: "Causes updated successfully", data: { circle } };
+            const updatedCircle = await getCircleById(circleId);
+            return { success: true, message: "Causes updated successfully", data: { circle: updatedCircle } };
         }
 
-        // For new circles, we'll just return success as the actual creation happens at the end
-        return { success: true, message: "Causes saved" };
+        // For new circles
+        return { success: true, message: "Causes saved (no ID provided)" };
     } catch (error) {
         if (error instanceof Error) {
             return { success: false, message: error.message };
@@ -395,15 +416,16 @@ export async function saveSkillsAction(skills: string[], circleId?: string) {
             }
 
             // If circleId exists, update the existing circle
-            const circle = await updateCircle({
+            await updateCircle({
                 _id: circleId,
                 skills,
             });
-            return { success: true, message: "Skills updated successfully", data: { circle } };
+            const updatedCircle = await getCircleById(circleId);
+            return { success: true, message: "Skills updated successfully", data: { circle: updatedCircle } };
         }
 
-        // For new circles, we'll just return success as the actual creation happens at the end
-        return { success: true, message: "Skills saved" };
+        // For new circles
+        return { success: true, message: "Skills saved (no ID provided)" };
     } catch (error) {
         if (error instanceof Error) {
             return { success: false, message: error.message };
