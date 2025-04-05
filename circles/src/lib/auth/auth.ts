@@ -265,35 +265,81 @@ export const getAuthenticatedUserDid = async (): Promise<string | undefined> => 
 export const isAuthorized = async (
     userDid: string | undefined,
     circleId: string,
-    feature: Feature,
+    featureInput: Feature | string, // Renamed for clarity
 ): Promise<boolean> => {
-    // lookup access rules in circle for the features
     let circle = await Circles.findOne({ _id: new ObjectId(circleId) });
     if (!circle) return false;
 
-    let featureHandle = feature.handle;
-    let allowedUserGroups = circle?.accessRules?.[feature.module]?.[featureHandle];
+    let feature: Feature;
+    let featureHandle: string;
+    let moduleHandle: string;
 
-    // If feature not found in access rules, get default user groups
-    if (!allowedUserGroups) {
-        const featureObj = feature;
-        allowedUserGroups = featureObj?.defaultUserGroups ?? [];
+    if (typeof featureInput === "string") {
+        featureHandle = featureInput;
+        // Find the feature object and its module handle
+        let foundFeature: Feature | undefined;
+        let foundModuleHandle: string | undefined;
+        for (const modKey in features) {
+            const moduleFeatures = features[modKey as keyof typeof features];
+            // Check if moduleFeatures is an object and has the featureHandle property
+            if (moduleFeatures && typeof moduleFeatures === "object" && moduleFeatures.hasOwnProperty(featureHandle)) {
+                const potentialFeature = (moduleFeatures as any)[featureHandle];
+                // Check if it looks like a Feature object (has name, handle, module)
+                if (
+                    potentialFeature &&
+                    typeof potentialFeature === "object" &&
+                    "handle" in potentialFeature &&
+                    "module" in potentialFeature
+                ) {
+                    foundFeature = potentialFeature as Feature;
+                    foundModuleHandle = modKey;
+                    break; // Found the feature, exit loop
+                }
+            }
+        }
+
+        if (!foundFeature || !foundModuleHandle) {
+            // console.warn(`Feature with handle "${featureHandle}" not found in constants.`);
+            return false; // Feature definition not found
+        }
+        feature = foundFeature;
+        moduleHandle = foundModuleHandle; // Use the found module handle
+    } else {
+        // featureInput is a Feature object
+        feature = featureInput;
+        featureHandle = feature.handle;
+        moduleHandle = feature.module; // Use module handle from the object
     }
 
+    // Lookup access rules using moduleHandle and featureHandle from the potentially nested structure
+    let allowedUserGroups: string[] | undefined = circle?.accessRules?.[moduleHandle]?.[featureHandle];
+
+    // If feature not found in access rules (is undefined), get default user groups from the feature object
+    if (allowedUserGroups === undefined) {
+        allowedUserGroups = feature.defaultUserGroups ?? [];
+    }
+
+    // Now allowedUserGroups is guaranteed to be string[]
     if (allowedUserGroups.includes("everyone")) return true;
+
+    // If user is not logged in and "everyone" is not allowed, deny access
+    if (!userDid) return false;
 
     // lookup user membership in circle
     let membership = await Members.findOne({ userDid: userDid, circleId: circleId });
     if (!membership) return false;
-    return allowedUserGroups.some((group) => membership?.userGroups?.includes(group));
+
+    // Ensure membership.userGroups is also an array before calling includes
+    const memberGroups = membership.userGroups ?? [];
+    return allowedUserGroups.some((group) => memberGroups.includes(group));
 };
 
-export const getAuthorizedMembers = async (circle: string | Circle, feature: Feature): Promise<Circle[]> => {
+export const getAuthorizedMembers = async (circle: string | Circle, feature: Feature | string): Promise<Circle[]> => {
     if (typeof circle === "string") {
         circle = await getCircleById(circle);
     }
-    let featureHandle = feature.handle;
-    let allowedUserGroups = circle?.accessRules?.[feature.module]?.[featureHandle];
+    let featureHandle = typeof feature === "string" ? feature : feature.handle;
+    let allowedUserGroups = circle?.accessRules?.[featureHandle];
 
     if (!allowedUserGroups) return [];
 

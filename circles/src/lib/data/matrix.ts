@@ -585,12 +585,6 @@ function deriveBody(
             return `${payload.user?.name} mentioned you in a post`;
         case "comment_mention":
             return `${payload.user?.name} mentioned you in a comment`;
-        case "project_comment":
-            return `${payload.user?.name} commented on your project "${payload.project?.name}"`;
-        case "project_comment_reply":
-            return `${payload.user?.name} replied to your comment on project "${payload.project?.name}"`;
-        case "project_mention":
-            return `${payload.user?.name} mentioned you in a comment on project "${payload.project?.name}"`;
         default:
             return "New notification";
     }

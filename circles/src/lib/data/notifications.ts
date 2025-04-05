@@ -51,91 +51,17 @@ export async function notifyPostComment(post: Post, comment: Comment, commenter:
         postAuthorDid: post.createdBy,
         commenterDid: comment.createdBy,
         commenterName: commenter?.name,
-        postType: post.postType || "post"
+        postType: post.postType || "post",
     });
 
     try {
-        // Check if this is a shadow post for a project
-        const isProjectComment = post.postType === "project";
-        
-        if (isProjectComment) {
-            // For project comments, notify all project followers
-            await notifyProjectComment(post, comment, commenter);
-        } else {
-            // For regular posts, only notify the post author
-            await notifyRegularPostComment(post, comment, commenter);
-        }
-        
+        await notifyRegularPostComment(post, comment, commenter);
+
         console.log("🔔 [NOTIFY] Notification sent successfully");
     } catch (error) {
         console.error("🔔 [NOTIFY] Error sending post comment notification:", error);
         // We don't re-throw the error because notification failures shouldn't break comment creation
     }
-}
-
-/**
- * Notifies project followers when someone comments on a project
- */
-async function notifyProjectComment(post: Post, comment: Comment, commenter: Circle): Promise<void> {
-    // If it's a project post, get the project details
-    const project = await findProjectByShadowPostId(post._id!.toString());
-    if (!project) {
-        console.log("🔔 [NOTIFY] Project not found for shadow post, skipping notification");
-        return;
-    }
-    
-    console.log("🔔 [NOTIFY] Project info:", {
-        projectId: project._id,
-        projectName: project.name,
-    });
-
-    // Get post circle (parent circle)
-    let feed = await getFeed(post.feedId);
-    if (!feed) {
-        console.log("🔔 [NOTIFY] Feed not found, skipping notification");
-        return;
-    }
-
-    let circle = await getCircleById(feed.circleId!);
-    if (!circle) {
-        console.log("🔔 [NOTIFY] Circle not found, using default values");
-        circle = { name: "Unknown Circle" } as Circle;
-    }
-    
-    // Get all project followers
-    const members = await getMembers(project._id!);
-    console.log(`🔔 [NOTIFY] Found ${members.length} project followers to notify`);
-    
-    if (members.length === 0) {
-        console.log("🔔 [NOTIFY] No followers to notify");
-        return;
-    }
-    
-    // Filter out the commenter to avoid self-notification
-    const otherMemberIds = members
-        .filter(member => member.userDid !== comment.createdBy)
-        .map(member => member.userDid);
-    
-    if (otherMemberIds.length === 0) {
-        console.log("🔔 [NOTIFY] Only the commenter follows this project, no notifications needed");
-        return;
-    }
-    
-    // Get the actual user objects for followers
-    const recipients = await getCirclesByDids(otherMemberIds);
-    
-    console.log(`🔔 [NOTIFY] Sending project_comment notification to ${recipients.length} followers`);
-    
-    // Send notification to all followers (except commenter)
-    await sendNotifications("project_comment", recipients, {
-        circle,
-        user: commenter,
-        post,
-        comment,
-        postId: post._id?.toString(),
-        project: project,
-        projectId: project._id?.toString(),
-    });
 }
 
 /**
@@ -198,89 +124,8 @@ export async function notifyCommentReply(
     reply: Comment,
     replier: Circle,
 ): Promise<void> {
-    // Check if this is a shadow post for a project using the postType field
-    const isProjectComment = post.postType === "project";
-    
-    if (isProjectComment) {
-        // For project comments, notify all project followers
-        await notifyProjectCommentReply(post, parentComment, reply, replier);
-    } else {
-        // For regular comments, only notify the comment author
-        await notifyRegularCommentReply(post, parentComment, reply, replier);
-    }
-}
-
-/**
- * Notifies all project followers when someone replies to a comment on a project
- */
-async function notifyProjectCommentReply(
-    post: Post,
-    parentComment: Comment,
-    reply: Comment, 
-    replier: Circle
-): Promise<void> {
-    // Get the project details
-    const project = await findProjectByShadowPostId(post._id!.toString());
-    if (!project) {
-        console.log("🔔 [NOTIFY] Project not found for shadow post, skipping notification");
-        return;
-    }
-    
-    console.log("🔔 [NOTIFY] Project comment reply info:", {
-        projectId: project._id,
-        projectName: project.name,
-        parentCommentId: parentComment._id,
-        replyId: reply._id
-    });
-
-    // Get post circle
-    let feed = await getFeed(post.feedId);
-    let circle = await getCircleById(feed?.circleId!);
-    
-    // Also notify the parent comment author
-    let recipients: Circle[] = [];
-    if (parentComment.createdBy !== reply.createdBy) {
-        // Get parent comment author
-        const commentAuthor = await getUser(parentComment.createdBy);
-        if (commentAuthor) {
-            recipients.push(commentAuthor);
-        }
-    }
-    
-    // Get all project followers
-    const members = await getMembers(project._id!);
-    
-    // Filter out the replier and the parent comment author (already added) to avoid duplicates
-    const otherMemberIds = members
-        .filter(member => 
-            member.userDid !== reply.createdBy && 
-            member.userDid !== parentComment.createdBy)
-        .map(member => member.userDid);
-    
-    if (otherMemberIds.length > 0) {
-        // Get the actual user objects for other followers
-        const otherRecipients = await getCirclesByDids(otherMemberIds);
-        recipients = [...recipients, ...otherRecipients];
-    }
-    
-    if (recipients.length === 0) {
-        console.log("🔔 [NOTIFY] No recipients for project comment reply notification");
-        return;
-    }
-    
-    console.log(`🔔 [NOTIFY] Sending project_comment_reply notification to ${recipients.length} recipients`);
-    
-    // Send notification to all relevant recipients
-    await sendNotifications("project_comment_reply", recipients, {
-        circle,
-        user: replier,
-        post,
-        comment: reply,
-        postId: post._id?.toString(),
-        commentId: parentComment._id?.toString(),
-        project: project,
-        projectId: project._id?.toString(),
-    });
+    // For regular comments, only notify the comment author
+    await notifyRegularCommentReply(post, parentComment, reply, replier);
 }
 
 /**
@@ -290,7 +135,7 @@ async function notifyRegularCommentReply(
     post: Post,
     parentComment: Comment,
     reply: Comment,
-    replier: Circle
+    replier: Circle,
 ): Promise<void> {
     // Don't notify if replier is the comment author
     if (parentComment.createdBy === reply.createdBy) return;
@@ -301,7 +146,7 @@ async function notifyRegularCommentReply(
         console.log("🔔 [NOTIFY] Comment author not found, skipping notification");
         return;
     }
-    
+
     const commentAuthorPrivate = await getUserPrivate(commentAuthor.did!);
 
     // Get post circle
@@ -435,7 +280,7 @@ export async function notifyCommentMentions(
     let circle = await getCircleById(feed?.circleId!);
 
     // Send notifications to all mentioned users
-    await sendNotifications(isProjectComment ? "project_mention" : "comment_mention", mentionedUsers, {
+    await sendNotifications("comment_mention", mentionedUsers, {
         circle,
         user: author,
         post,

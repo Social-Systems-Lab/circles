@@ -90,15 +90,6 @@ export const Notifications = () => {
                     case "comment_mention":
                         groupKey = `comment_mention_${msg.content?.commentId}`;
                         break;
-                    case "project_comment":
-                        groupKey = `project_comment_${msg.content?.projectId}`;
-                        break;
-                    case "project_comment_reply":
-                        groupKey = `project_comment_reply_${msg.content?.commentId}`;
-                        break;
-                    case "project_mention":
-                        groupKey = `project_mention_${msg.content?.projectId}`;
-                        break;
                     default:
                         // For non-groupable notifications, use unique ID
                         groupKey = msg.id;
@@ -257,20 +248,6 @@ export const Notifications = () => {
                     router.push(`/circles/${circleHandle}/post/${notification.postId}`);
                 }
                 break;
-                
-            // Project-related notifications
-            case "project_comment":
-            case "project_comment_reply":
-            case "project_mention":
-                if (notification.projectId) {
-                    // Navigate to the dedicated project page
-                    router.push(`/circles/${circleHandle}/project/${notification.projectId}`);
-                } else if (notification.postId) {
-                    // Fallback to post if projectId is not available
-                    console.log("Project notification missing projectId, falling back to postId");
-                    router.push(`/circles/${circleHandle}/post/${notification.postId}`);
-                }
-                break;
 
             default:
                 console.log("Unknown notification type:", notification.notificationType);
@@ -322,15 +299,6 @@ export const Notifications = () => {
 
             case "comment_mention":
                 return `${userList} mentioned you in a comment`;
-                
-            case "project_comment":
-                return `${userList} commented on your project "${groupedNotification.latestNotification.project?.name || ''}"`;
-
-            case "project_comment_reply":
-                return `${userList} replied to your comment on project "${groupedNotification.latestNotification.project?.name || ''}"`;
-
-            case "project_mention":
-                return `${userList} mentioned you in a comment on project "${groupedNotification.latestNotification.project?.name || ''}"`;
 
             default:
                 return groupedNotification.latestNotification.message;
@@ -364,33 +332,6 @@ export const Notifications = () => {
                                     <div className="absolute bottom-0 right-0 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-gray-100">
                                         <MdOutlineArticle size="14px" />
                                     </div>
-                                </>
-                            ) : ["project_comment", "project_comment_reply", "project_mention"].includes(
-                                groupedNotification.latestNotification.notificationType,
-                            ) ? (
-                                <>
-                                    {/* Show user picture in the center */}
-                                    {groupedNotification.latestNotification.user && (
-                                        <CirclePicture
-                                            circle={groupedNotification.latestNotification.user}
-                                            size="34px"
-                                        />
-                                    )}
-
-                                    {/* Project picture in bottom-right with hammer icon overlay */}
-                                    {groupedNotification.latestNotification.project && (
-                                        <div className="absolute bottom-0 right-0">
-                                            <CirclePicture
-                                                circle={{
-                                                    name: groupedNotification.latestNotification.project.name,
-                                                    cover: groupedNotification.latestNotification.project.cover,
-                                                    circleType: "project"
-                                                }}
-                                                size="20px"
-                                                showTypeIndicator={true}
-                                            />
-                                        </div>
-                                    )}
                                 </>
                             ) : ["post_like", "comment_like"].includes(
                                   groupedNotification.latestNotification.notificationType,

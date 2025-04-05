@@ -756,18 +756,15 @@ export type UserSettings = {
 };
 
 export type NotificationType =
-    | "follow_request"
-    | "new_follower"
-    | "follow_accepted"
-    | "post_comment" // Someone commented on your post
-    | "comment_reply" // Someone replied to your comment
-    | "post_like" // Someone liked your post
-    | "comment_like" // Someone liked your comment
-    | "post_mention" // Someone mentioned you in a post
-    | "comment_mention" // Someone mentioned you in a comment
-    | "project_comment" // Someone commented on your project
-    | "project_comment_reply" // Someone replied to your comment on a project
-    | "project_mention"; // Someone mentioned you in a project comment
+    | "follow_request" // Someone requests to follow a circle - sent to users with permissions to approve requests
+    | "new_follower" // A circle has a new follower - for non-user circles notifications are sent to all followers of the circle
+    | "follow_accepted" // Someone's request to follow a circle has been accepted - sent to user being accepted
+    | "post_comment" // Someone commented on a post - sent to post author
+    | "comment_reply" // Someone replied to a comment - sent to comment author and post author
+    | "post_like" // Someone liked a post - sent to post author
+    | "comment_like" // Someone liked a comment - sent to comment author
+    | "post_mention" // Someone mentioned a user in a post - sent to user mentioned
+    | "comment_mention"; // Someone mentioned as user in a comment - sent to user mentioned
 
 // Define all onboarding steps in a single place for consistency
 export const ONBOARDING_STEPS = [
