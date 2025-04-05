@@ -173,13 +173,15 @@ export function MultiImageUploader({
         const { active, over } = event;
 
         if (over && active.id !== over.id) {
-            setImages((items) => {
-                const oldIndex = items.findIndex((item) => item.id === active.id);
-                const newIndex = items.findIndex((item) => item.id === over.id);
-                const newArray = arrayMove(items, oldIndex, newIndex);
-                onChange(newArray); // Notify parent of the reordered array
-                return newArray;
-            });
+            const oldIndex = images.findIndex((item) => item.id === active.id);
+            const newIndex = images.findIndex((item) => item.id === over.id);
+
+            // Ensure indices are valid before proceeding
+            if (oldIndex !== -1 && newIndex !== -1) {
+                const newArray = arrayMove(images, oldIndex, newIndex);
+                setImages(newArray); // Update local state first
+                onChange(newArray); // Then notify the parent component
+            }
         }
     }
     // --- End Dnd-Kit Setup ---
