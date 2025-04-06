@@ -1,22 +1,17 @@
 "use client";
 
 import React, { useState, useTransition, useEffect } from "react"; // Added useEffect
-import { Circle, IssueDisplay, IssueStage, UserPrivate, MemberDisplay } from "@/models/models"; // Added MemberDisplay
+import { Circle, IssueDisplay, IssueStage, MemberDisplay } from "@/models/models"; // Added MemberDisplay
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Loader2, MoreHorizontal, Pencil, Trash2, MapPin, User, CheckCircle, Clock, Play, Edit } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { UserPicture } from "../members/user-picture";
 import { cn, getFullLocationName } from "@/lib/utils";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
-import { isAuthorized } from "@/lib/auth/client-auth";
-import { features } from "@/lib/data/constants";
 import {
     Dialog,
     DialogClose,
@@ -43,9 +38,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import RichText from "../feeds/RichText"; // Assuming RichText can be reused
 import ImageThumbnailCarousel from "@/components/ui/image-thumbnail-carousel";
-import { changeIssueStageAction, assignIssueAction, deleteIssueAction } from "@/app/circles/[handle]/issues/actions";
+import {
+    changeIssueStageAction,
+    assignIssueAction,
+    deleteIssueAction,
+    getMembersAction,
+} from "@/app/circles/[handle]/issues/actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // For assignee dropdown
-import { getMembers } from "@/lib/data/member"; // To fetch members for assignment
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Helper function for stage badge styling and icons (copied from issues-list)
@@ -101,7 +100,7 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
             const fetchMembers = async () => {
                 try {
                     // Assuming getMembers returns UserPrivate[] or similar
-                    const memberList = await getMembers(circle._id as string);
+                    const memberList = await getMembersAction(circle._id as string);
                     setMembers(memberList);
                 } catch (error) {
                     console.error("Failed to fetch members:", error);

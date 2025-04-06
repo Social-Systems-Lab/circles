@@ -265,7 +265,7 @@ export const getAuthenticatedUserDid = async (): Promise<string | undefined> => 
 export const isAuthorized = async (
     userDid: string | undefined,
     circleId: string,
-    featureInput: Feature | string, // Renamed for clarity
+    featureInput: Feature,
 ): Promise<boolean> => {
     let circle = await Circles.findOne({ _id: new ObjectId(circleId) });
     if (!circle) return false;
@@ -274,42 +274,10 @@ export const isAuthorized = async (
     let featureHandle: string;
     let moduleHandle: string;
 
-    if (typeof featureInput === "string") {
-        featureHandle = featureInput;
-        // Find the feature object and its module handle
-        let foundFeature: Feature | undefined;
-        let foundModuleHandle: string | undefined;
-        for (const modKey in features) {
-            const moduleFeatures = features[modKey as keyof typeof features];
-            // Check if moduleFeatures is an object and has the featureHandle property
-            if (moduleFeatures && typeof moduleFeatures === "object" && moduleFeatures.hasOwnProperty(featureHandle)) {
-                const potentialFeature = (moduleFeatures as any)[featureHandle];
-                // Check if it looks like a Feature object (has name, handle, module)
-                if (
-                    potentialFeature &&
-                    typeof potentialFeature === "object" &&
-                    "handle" in potentialFeature &&
-                    "module" in potentialFeature
-                ) {
-                    foundFeature = potentialFeature as Feature;
-                    foundModuleHandle = modKey;
-                    break; // Found the feature, exit loop
-                }
-            }
-        }
-
-        if (!foundFeature || !foundModuleHandle) {
-            // console.warn(`Feature with handle "${featureHandle}" not found in constants.`);
-            return false; // Feature definition not found
-        }
-        feature = foundFeature;
-        moduleHandle = foundModuleHandle; // Use the found module handle
-    } else {
-        // featureInput is a Feature object
-        feature = featureInput;
-        featureHandle = feature.handle;
-        moduleHandle = feature.module; // Use module handle from the object
-    }
+    // featureInput is a Feature object
+    feature = featureInput;
+    featureHandle = feature.handle;
+    moduleHandle = feature.module; // Use module handle from the object
 
     // Lookup access rules using moduleHandle and featureHandle from the potentially nested structure
     let allowedUserGroups: string[] | undefined = circle?.accessRules?.[moduleHandle]?.[featureHandle];

@@ -27,6 +27,7 @@ import {
     changeIssueStage,
     assignIssue,
 } from "@/lib/data/issue"; // Placeholder
+import { getMembers } from "@/lib/data/member";
 // Placeholder imports for issue notification functions (to be created in src/lib/data/notifications.ts)
 
 /**
@@ -95,12 +96,11 @@ export async function getIssueAction(circleHandle: string, issueId: string): Pro
         // We need the issue data to check its specific userGroups for visibility
         const issue = await getIssueById(issueId, userDid);
         if (!issue) {
-            // Issue doesn't exist
             return null;
         }
 
         // Check general permission to view any issues in the circle (Placeholder feature handle)
-        const canViewModule = await isAuthorized(userDid, circle._id as string, features.issues?.view || "issues_view"); // Use placeholder
+        const canViewModule = await isAuthorized(userDid, circle._id as string, features.issues?.view);
 
         // Check if the user belongs to any of the user groups allowed to see *this specific* issue
         // This requires comparing issue.userGroups with the user's groups in this circle
@@ -173,7 +173,7 @@ export async function createIssueAction(
             title: formData.get("title"),
             description: formData.get("description"),
             images: formData.getAll("images"),
-            location: formData.get("location"),
+            location: formData.get("location") ?? undefined,
             userGroups: formData.getAll("userGroups"), // Assuming multi-select or similar
         });
 
@@ -301,7 +301,7 @@ export async function updateIssueAction(
             title: formData.get("title"),
             description: formData.get("description"),
             images: formData.getAll("images"),
-            location: formData.get("location"),
+            location: formData.get("location") ?? undefined,
             userGroups: formData.getAll("userGroups"),
         });
 
@@ -649,7 +649,7 @@ export async function assignIssueAction(
         }
 
         // Check permission to assign (Placeholder feature handle)
-        const canAssign = await isAuthorized(userDid, circle._id as string, features.issues?.assign || "issues_assign"); // Placeholder
+        const canAssign = await isAuthorized(userDid, circle._id as string, features.issues?.assign);
         if (!canAssign) {
             return { success: false, message: "Not authorized to assign issues" };
         }
@@ -687,5 +687,21 @@ export async function assignIssueAction(
         return { success: false, message: "Failed to assign issue" };
     }
 }
+
+export const getMembersAction = async (circleId: string) => {
+    // Get the current user
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "User not authenticated" };
+    }
+    const user = await getUserByDid(userDid); // For notifications
+    if (!user) {
+        return { success: false, message: "User data not found" };
+    }
+
+    // get members of circle
+    let members = await getMembers(circleId);
+    return members;
+};
 
 // TODO: Add actions for comment handling if using shadow posts or a dedicated system.

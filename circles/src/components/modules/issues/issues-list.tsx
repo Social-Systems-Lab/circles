@@ -355,7 +355,7 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
                                                     : flexRender(header.column.columnDef.header, header.getContext())}
                                             </TableHead>
                                         ))}
-                                        <TableHead className="w-[40px]"></TableHead> {/* For actions menu */}
+                                        <TableHead className="w-[40px]"></TableHead>
                                     </TableRow>
                                 ))}
                             </TableHeader>
