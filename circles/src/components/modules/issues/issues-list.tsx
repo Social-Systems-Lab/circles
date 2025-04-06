@@ -13,8 +13,16 @@ import {
 } from "@tanstack/react-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Circle, IssueDisplay, IssueStage } from "@/models/models"; // Use Issue types
+import {
+    Select,
+    SelectContent,
+    SelectGroup,
+    SelectItem,
+    SelectLabel,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"; // Added SelectGroup, SelectLabel
+import { Circle, ContentPreviewData, IssueDisplay, IssueStage } from "@/models/models"; // Use Issue types, Added ContentPreviewData
 import { Button } from "@/components/ui/button";
 import {
     ArrowDown,
@@ -55,7 +63,7 @@ import { features } from "@/lib/data/constants"; // Added constants import
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { useAtom } from "jotai"; // Added jotai import
-import { userAtom } from "@/lib/data/atoms"; // Added userAtom import
+import { userAtom, contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms"; // Removed ContentPreviewData from here
 import Link from "next/link";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // For assignee tooltip
 
@@ -121,6 +129,8 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
     const router = useRouter();
     const { toast } = useToast();
     const [stageFilter, setStageFilter] = useState<IssueStage | "all">("all");
+    const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
+    const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     // Add assignee filter state if needed later
     // const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
 
@@ -182,10 +192,8 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
                                     <div
                                         className="flex cursor-pointer items-center gap-2"
                                         onClick={(e) => {
-                                            // TODO: Implement opening user profile preview/page
-                                            e.stopPropagation();
-                                            console.log("Open assignee profile:", assignee.handle);
-                                            // openAuthor(assignee); // Adapt or create this function
+                                            e.stopPropagation(); // Keep stopPropagation
+                                            openAssignee(assignee); // Call the correct handler
                                         }}
                                     >
                                         <UserPicture name={assignee.name} picture={assignee.picture?.url} size="32px" />
@@ -215,10 +223,8 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
                                     <div
                                         className="flex cursor-pointer items-center gap-2"
                                         onClick={(e) => {
-                                            // TODO: Implement opening user profile preview/page
-                                            e.stopPropagation();
-                                            console.log("Open author profile:", author.handle);
-                                            // openAuthor(author); // Adapt or create this function
+                                            e.stopPropagation(); // Keep stopPropagation
+                                            openAuthor(author); // Call the correct handler
                                         }}
                                     >
                                         <UserPicture name={author.name} picture={author.picture?.url} size="32px" />
@@ -297,9 +303,40 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
     };
 
     const handleRowClick = (issue: IssueDisplay) => {
-        // For now, always navigate to detail page
-        router.push(`/circles/${circle.handle}/issues/${issue._id}`);
-        // TODO: Implement side panel preview later if desired
+        if (isCompact) {
+            router.push(`/circles/${circle.handle}/issues/${issue._id}`);
+            return;
+        }
+
+        // Open content preview for non-compact mode
+        let contentPreviewData: ContentPreviewData = {
+            type: "issue", // Use the correct type
+            content: issue,
+        };
+        setContentPreview((x) => {
+            // Toggle behavior: if clicking the same issue again while preview is open, close it.
+            const isCurrentlyPreviewing =
+                x?.type === "issue" && x?.content._id === issue._id && sidePanelContentVisible === "content";
+            return isCurrentlyPreviewing ? undefined : contentPreviewData;
+        });
+    };
+
+    const openAuthor = (author: Circle) => {
+        if (isCompact) {
+            router.push(`/circles/${author.handle}`); // Navigate to user profile page on compact
+            return;
+        }
+        // Open user preview in side panel
+        let contentPreviewData: ContentPreviewData = { type: "user", content: author };
+        setContentPreview((x) => {
+            const isCurrentlyPreviewing =
+                x?.type === "user" && x?.content._id === author._id && sidePanelContentVisible === "content";
+            return isCurrentlyPreviewing ? undefined : contentPreviewData;
+        });
+    };
+
+    const openAssignee = (assignee: Circle) => {
+        openAuthor(assignee); // Reuse the same logic as opening author profile
     };
 
     // Check create permission for the button using the user object
@@ -376,7 +413,10 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
                                                 initial="hidden"
                                                 animate="visible"
                                                 variants={tableRowVariants}
-                                                className={`cursor-pointer ${row.getIsSelected() ? "bg-muted" : ""} hover:bg-gray-50`}
+                                                className={`cursor-pointer
+                                                    ${row.getIsSelected() ? "bg-muted" : ""}
+                                                    ${(contentPreview?.content as IssueDisplay)?._id === issue._id && sidePanelContentVisible === "content" ? "bg-gray-100" : "hover:bg-gray-50"}
+                                                `}
                                                 onClick={() => handleRowClick(issue)}
                                             >
                                                 {/* Start children immediately */}

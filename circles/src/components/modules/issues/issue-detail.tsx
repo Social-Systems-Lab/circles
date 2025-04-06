@@ -455,11 +455,19 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Assign Issue</DialogTitle>
-                        <DialogDescription>Select a member to assign this issue to.</DialogDescription>
+                        <DialogDescription>
+                            Select a member to assign this issue to, or assign it to yourself.
+                        </DialogDescription>{" "}
+                        {/* Updated description */}
                     </DialogHeader>
-                    <div className="py-4">
+                    {/* Wrap Select and Button in a flex container */}
+                    <div className="flex items-center gap-2 py-4">
+                        {" "}
+                        {/* Added flex container */}
                         <Select value={selectedAssigneeDid} onValueChange={setSelectedAssigneeDid}>
-                            <SelectTrigger>
+                            <SelectTrigger className="flex-grow">
+                                {" "}
+                                {/* Allow select to grow */}
                                 <SelectValue placeholder="Select member or Unassigned" />
                             </SelectTrigger>
                             <SelectContent>
@@ -475,6 +483,14 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
                                 ))}
                             </SelectContent>
                         </Select>
+                        {/* Add "Assign to me" button */}
+                        <Button
+                            variant="outline"
+                            onClick={() => setSelectedAssigneeDid(currentUserDid)}
+                            disabled={isPending || selectedAssigneeDid === currentUserDid} // Disable if pending or already selected
+                        >
+                            Assign to me
+                        </Button>
                     </div>
                     <DialogFooter>
                         <DialogClose asChild>

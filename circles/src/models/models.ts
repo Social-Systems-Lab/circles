@@ -455,7 +455,8 @@ export type ContentPreviewData =
     | { type: "circle"; content: Circle; props?: never }
     | { type: "project"; content: Circle; props?: never }
     | { type: "proposal"; content: ProposalDisplay; props?: Record<string, unknown> } // Use ProposalDisplay
-    | { type: "default"; content: Content | ProposalDisplay; props?: Record<string, unknown> };
+    | { type: "issue"; content: IssueDisplay; props?: Record<string, unknown> } // Added IssueDisplay
+    | { type: "default"; content: Content | ProposalDisplay | IssueDisplay; props?: Record<string, unknown> }; // Added IssueDisplay to default
 
 // server setup form wizard
 
