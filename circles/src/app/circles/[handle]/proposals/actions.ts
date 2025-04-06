@@ -6,7 +6,7 @@ import { Circle, Media, Proposal, ProposalDisplay, ProposalOutcome, ProposalStag
 import { getCircleByHandle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getUserByDid } from "@/lib/data/user";
-import { saveFile, deleteFile, FileInfo as StorageFileInfo } from "@/lib/data/storage"; // Correct storage functions and add FileInfo type alias
+import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage"; // Correct storage functions and add FileInfo type alias, import isFile
 import { features } from "@/lib/data/constants";
 import {
     getProposalsByCircleId,
@@ -172,7 +172,8 @@ export async function createProposalAction(
 
         // --- Handle Image Uploads ---
         let uploadedImages: Media[] = [];
-        const imageFiles = (data.images || []).filter((img): img is File => img instanceof File);
+        // Use the isFile helper function to identify file objects
+        const imageFiles = (data.images || []).filter(isFile);
 
         if (imageFiles.length > 0) {
             const uploadPromises = imageFiles.map(async (file) => {
@@ -405,7 +406,8 @@ export async function updateProposalAction(
         const submittedImageEntries = data.images || []; // These are Files or JSON strings
 
         // Separate new files from existing media identifiers (JSON strings)
-        const newImageFiles = submittedImageEntries.filter((entry): entry is File => entry instanceof File);
+        // Use the isFile helper function to identify file objects
+        const newImageFiles = submittedImageEntries.filter(isFile);
         const existingMediaJsonStrings = submittedImageEntries.filter(
             (entry): entry is string => typeof entry === "string",
         );
