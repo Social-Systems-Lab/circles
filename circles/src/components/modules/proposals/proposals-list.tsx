@@ -191,7 +191,13 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle }) => {
                 cell: (info) => {
                     const author = info.getValue() as Circle;
                     return (
-                        <div className="flex items-center gap-2">
+                        <div
+                            className="flex cursor-pointer items-center gap-2"
+                            onClick={(e) => {
+                                openAuthor(author);
+                                e.stopPropagation();
+                            }}
+                        >
                             <UserPicture name={author.name} picture={author.picture?.url} size="32px" />
                             <span>{author.name}</span>
                         </div>
@@ -306,6 +312,25 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle }) => {
                     variant: "destructive",
                 });
             }
+        });
+    };
+
+    const openAuthor = (author: Circle) => {
+        if (isCompact) {
+            router.push(`/circles/${author.handle}`);
+            return;
+        }
+
+        // Open content preview for non-compact mode
+        let contentPreviewData: ContentPreviewData = {
+            type: "user", // Use the correct type
+            content: author,
+        };
+        setContentPreview((x) => {
+            // Toggle behavior: if clicking the same proposal again while preview is open, close it.
+            const isCurrentlyPreviewing =
+                x?.type === "user" && x?.content._id === author._id && sidePanelContentVisible === "content";
+            return isCurrentlyPreviewing ? undefined : contentPreviewData;
         });
     };
 
