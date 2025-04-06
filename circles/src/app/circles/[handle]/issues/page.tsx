@@ -1,5 +1,5 @@
 import { getCircleByHandle } from "@/lib/data/circle";
-import IssuesModule from "@/components/modules/issues/Issues"; // Import the Issues module component
+import IssuesModule from "@/components/modules/issues/issues"; // Import the Issues module component
 import { notFound } from "next/navigation";
 
 type PageProps = {

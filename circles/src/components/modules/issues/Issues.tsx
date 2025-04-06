@@ -42,6 +42,8 @@ export default async function IssuesModule({ circle }: PageProps) {
     // Filter issues based on permissions (basic filtering, more in IssuesList)
     // Example: Hide 'review' stage issues if user cannot review/moderate
     const filteredIssues = issues.filter((issue) => {
+        if (issue.author.did === userDid) return true;
+
         if (issue.stage === "review" && !(canReviewIssue || canModerateIssue)) {
             return false; // Hide review items if user lacks permission
         }
