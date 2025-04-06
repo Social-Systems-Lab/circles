@@ -415,17 +415,19 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                 </div>
 
                 {/* Background & Images Section */}
-                <div className="mb-6">
-                    <h3 className="mb-2 text-lg font-semibold">Background & Rationale</h3>
-                    {proposal.images && proposal.images.length > 0 && (
-                        <div className="mb-4">
-                            <ImageThumbnailCarousel images={proposal.images} className="w-full" />
+                {((proposal.images && proposal.images.length > 0) || proposal.background) && (
+                    <div className="mb-6">
+                        <h3 className="mb-2 text-lg font-semibold">Background</h3>
+                        {proposal.images && proposal.images.length > 0 && (
+                            <div className="mb-4">
+                                <ImageThumbnailCarousel images={proposal.images} className="w-full" />
+                            </div>
+                        )}
+                        <div className="prose max-w-none">
+                            <RichText content={proposal.background} />
                         </div>
-                    )}
-                    <div className="prose max-w-none">
-                        <RichText content={proposal.background} />
                     </div>
-                </div>
+                )}
 
                 {proposal.stage === "voting" && (
                     <div className="mt-6">

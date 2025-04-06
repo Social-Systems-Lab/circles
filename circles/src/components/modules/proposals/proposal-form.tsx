@@ -248,7 +248,7 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({ circle, proposal, ci
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel className="flex items-center">
-                                            Background & Rationale
+                                            Background
                                             <TooltipProvider delayDuration={100}>
                                                 <Tooltip>
                                                     <TooltipTrigger className="ml-1 cursor-help">
