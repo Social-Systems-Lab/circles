@@ -9,16 +9,29 @@ import { FaUsers } from "react-icons/fa6";
 import { useRouter } from "next/navigation";
 import InviteButton from "../modules/home/invite-button";
 import FollowButton from "../modules/home/follow-button";
-import { Circle, FileInfo, Media, MemberDisplay, Post, PostItemProps, WithMetric } from "@/models/models";
+import {
+    Circle,
+    FileInfo,
+    Media,
+    MemberDisplay,
+    Post,
+    PostItemProps,
+    WithMetric,
+    ProposalDisplay,
+    ProposalStage,
+    IssueDisplay, // Import IssueDisplay
+    IssuePermissions, // Import IssuePermissions
+} from "@/models/models";
 import { PostItem } from "../modules/feeds/post-list";
 import Indicators from "../utils/indicators";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { MessageButton } from "../modules/home/message-button";
-import { ProposalDisplay, ProposalStage } from "@/models/models";
+// Removed duplicate ProposalDisplay, ProposalStage import
 import { Badge } from "@/components/ui/badge";
 import ImageCarousel from "@/components/ui/image-carousel"; // Import the carousel
-// Import ProposalItem
+// Import ProposalItem and IssueDetail
 import { ProposalItem } from "../modules/proposals/proposal-item";
+import IssueDetail from "../modules/issues/issue-detail"; // Import IssueDetail
 // Remove unused imports
 // import RichText from "../modules/feeds/RichText";
 // import { UserPicture } from "../modules/members/user-picture";
@@ -47,7 +60,7 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
     const router = useRouter();
     const memberCount = circle?.members ? (circleType === "user" ? circle.members - 1 : circle.members) : 0;
     const [, setImageGallery] = useAtom(imageGalleryAtom); // Keep for profile picture click
-    const [user] = useAtom(userAtom);
+    const [user] = useAtom(userAtom); // Keep user state here for CirclePreview specific logic if needed
 
     // Keep handleImageClick for the profile picture
     const handleProfilePicClick = (name: string, image?: FileInfo) => {
@@ -166,6 +179,7 @@ const getProposalStageBadgeColor = (stage: ProposalStage) => {
 
 export const ContentPreview: React.FC = () => {
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
+    const [user] = useAtom(userAtom); // Move user state here for broader access
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -189,14 +203,45 @@ export const ContentPreview: React.FC = () => {
             case "proposal": {
                 // Render ProposalItem in preview mode
                 const proposal = contentPreview!.content as ProposalDisplay;
-                // Ensure the circle data is available on the proposal object for ProposalItem
-                if (!proposal.circle) {
+                const props = contentPreview!.props as { circle: Circle }; // Get props
+                if (!props.circle) {
                     console.error("Proposal preview missing circle data:", proposal);
                     return <div className="p-4 text-red-500">Error: Missing circle data for proposal preview.</div>;
                 }
                 return (
                     <div className="custom-scrollbar h-full overflow-y-auto">
-                        <ProposalItem proposal={proposal} circle={proposal.circle} isPreview={true} />
+                        {/* Pass circle from props */}
+                        <ProposalItem proposal={proposal} circle={props.circle} isPreview={true} />
+                    </div>
+                );
+            }
+            case "issue": {
+                // Render IssueDetail in preview mode
+                const issue = contentPreview!.content as IssueDisplay;
+                const props = contentPreview!.props as { circle: Circle; permissions: IssuePermissions }; // Get props
+                if (!props.circle || !props.permissions) {
+                    console.error("Issue preview missing circle or permissions data:", issue, props);
+                    return (
+                        <div className="p-4 text-red-500">
+                            Error: Missing circle or permissions data for issue preview.
+                        </div>
+                    );
+                }
+                // Need currentUserDid for IssueDetail
+                const currentUserDid = user?.did; // Get from userAtom
+                if (!currentUserDid) {
+                    console.error("Issue preview missing currentUserDid");
+                    return <div className="p-4 text-red-500">Error: Missing user data for issue preview.</div>;
+                }
+                return (
+                    <div className="custom-scrollbar h-full overflow-y-auto">
+                        <IssueDetail
+                            issue={issue}
+                            circle={props.circle}
+                            permissions={props.permissions}
+                            currentUserDid={currentUserDid} // Pass the current user's DID
+                            isPreview={true} // Pass the isPreview flag
+                        />
                     </div>
                 );
             }

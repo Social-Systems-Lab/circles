@@ -312,6 +312,7 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
         let contentPreviewData: ContentPreviewData = {
             type: "issue", // Use the correct type
             content: issue,
+            props: { circle, permissions }, // Pass required props
         };
         setContentPreview((x) => {
             // Toggle behavior: if clicking the same issue again while preview is open, close it.

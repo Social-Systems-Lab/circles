@@ -433,6 +433,15 @@ export type ServerSettings = z.infer<typeof serverSettingsSchema>;
 
 export type Content = Circle | MemberDisplay | PostDisplay;
 
+// Define Permissions type based on what IssuesModule passes
+export type IssuePermissions = {
+    canModerate: boolean;
+    canReview: boolean;
+    canAssign: boolean;
+    canResolve: boolean;
+    canComment: boolean;
+};
+
 export type SortingOptions = "similarity" | "near" | "pop" | "new" | "top" | "custom";
 
 export type PostItemProps = {
@@ -454,8 +463,8 @@ export type ContentPreviewData =
     | { type: "user"; content: Circle; props?: never }
     | { type: "circle"; content: Circle; props?: never }
     | { type: "project"; content: Circle; props?: never }
-    | { type: "proposal"; content: ProposalDisplay; props?: Record<string, unknown> } // Use ProposalDisplay
-    | { type: "issue"; content: IssueDisplay; props?: Record<string, unknown> } // Added IssueDisplay
+    | { type: "proposal"; content: ProposalDisplay; props: { circle: Circle } } // Specify props for proposal
+    | { type: "issue"; content: IssueDisplay; props: { circle: Circle; permissions: IssuePermissions } } // Specify props for issue
     | { type: "default"; content: Content | ProposalDisplay | IssueDisplay; props?: Record<string, unknown> }; // Added IssueDisplay to default
 
 // server setup form wizard
