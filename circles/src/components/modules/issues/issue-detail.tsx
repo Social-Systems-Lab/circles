@@ -44,9 +44,10 @@ import {
     deleteIssueAction,
     getMembersAction,
 } from "@/app/circles/[handle]/issues/actions";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // For assignee dropdown
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import Link from "next/link";
+import { Separator } from "@/components/ui/separator"; // Import Separator
 
 // Helper function for stage badge styling and icons (copied from issues-list)
 const getStageInfo = (stage: IssueStage) => {
@@ -100,12 +101,28 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
         if (assignDialogOpen) {
             const fetchMembers = async () => {
                 try {
-                    // Assuming getMembers returns UserPrivate[] or similar
-                    const memberList = await getMembersAction(circle._id as string);
-                    setMembers(memberList);
+                    const result = await getMembersAction(circle._id as string);
+                    if (Array.isArray(result)) {
+                        setMembers(result);
+                    } else {
+                        // Handle potential error object returned by the action
+                        console.error("Failed to fetch members:", result.message);
+                        toast({
+                            title: "Error",
+                            description: result.message || "Could not load members list.",
+                            variant: "destructive",
+                        });
+                        setMembers([]); // Reset members list on error
+                    }
                 } catch (error) {
-                    console.error("Failed to fetch members:", error);
-                    toast({ title: "Error", description: "Could not load members list.", variant: "destructive" });
+                    // Catch unexpected errors during the fetch
+                    console.error("Failed to fetch members (catch block):", error);
+                    toast({
+                        title: "Error",
+                        description: "An unexpected error occurred while fetching members.",
+                        variant: "destructive",
+                    });
+                    setMembers([]); // Reset members list on error
                 }
             };
             fetchMembers();
@@ -209,6 +226,76 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
     const canEditIssue = (isAuthor && issue.stage === "review") || permissions.canModerate;
     const canDeleteIssue = isAuthor || permissions.canModerate;
 
+    // Function to render primary action buttons based on stage and permissions
+    const renderIssueActions = () => {
+        const actions = [];
+
+        // Stage change actions
+        if (permissions.canReview && issue.stage === "review") {
+            actions.push(
+                <Button key="approve" onClick={() => openStageChangeDialog("open")} disabled={isPending}>
+                    {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Approve (Open)
+                </Button>,
+            );
+        }
+        if ((permissions.canResolve || isAssignee) && issue.stage === "open") {
+            actions.push(
+                <Button key="start" onClick={() => openStageChangeDialog("inProgress")} disabled={isPending}>
+                    {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Start Progress
+                </Button>,
+            );
+        }
+        if ((permissions.canResolve || isAssignee) && issue.stage === "inProgress") {
+            actions.push(
+                <Button key="resolve" onClick={() => openStageChangeDialog("resolved")} disabled={isPending}>
+                    {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Mark Resolved
+                </Button>,
+            );
+        }
+        if (permissions.canResolve && (issue.stage === "resolved" || issue.stage === "inProgress")) {
+            actions.push(
+                <Button
+                    key="reopen"
+                    variant="outline"
+                    onClick={() => openStageChangeDialog("open")}
+                    disabled={isPending}
+                >
+                    {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Re-open Issue
+                </Button>,
+            );
+        }
+
+        // Assign action button
+        if (permissions.canAssign) {
+            actions.push(
+                <Button
+                    key="assign"
+                    variant="outline"
+                    onClick={() => setAssignDialogOpen(true)}
+                    disabled={isPending}
+                    className="flex items-center gap-2"
+                >
+                    <User className="h-4 w-4" />
+                    {issue.assignee ? (
+                        <>
+                            Assigned to:
+                            <UserPicture name={issue.assignee.name} picture={issue.assignee.picture?.url} size="20px" />
+                            {issue.assignee.name}
+                        </>
+                    ) : (
+                        "Assign Issue"
+                    )}
+                </Button>,
+            );
+        }
+
+        if (actions.length === 0) {
+            return null; // No actions available
+        }
+
+        return <div className="flex flex-wrap items-center gap-2">{actions}</div>;
+    };
+
     return (
         <TooltipProvider>
             <Card className="mb-6">
@@ -257,44 +344,28 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            {/* Stage Change Submenu */}
-                            {availableStageActions.length > 0 && (
-                                <DropdownMenuSub>
-                                    <DropdownMenuSubTrigger>Change Stage</DropdownMenuSubTrigger>
-                                    <DropdownMenuPortal>
-                                        <DropdownMenuSubContent>
-                                            {availableStageActions.map((action) => (
-                                                <DropdownMenuItem
-                                                    key={action.stage}
-                                                    onClick={() => openStageChangeDialog(action.stage)}
-                                                >
-                                                    {action.label}
-                                                </DropdownMenuItem>
-                                            ))}
-                                        </DropdownMenuSubContent>
-                                    </DropdownMenuPortal>
-                                </DropdownMenuSub>
-                            )}
-                            {/* Assign Action */}
-                            {permissions.canAssign && (
-                                <DropdownMenuItem onClick={() => setAssignDialogOpen(true)}>
-                                    {issue.assignedTo ? "Reassign" : "Assign"} Issue
-                                </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel>Options</DropdownMenuLabel>
                             {/* Edit Action */}
                             {canEditIssue && (
                                 <DropdownMenuItem onClick={handleEdit} disabled={issue.stage === "resolved"}>
-                                    <Edit className="mr-2 h-4 w-4" /> Edit Issue
+                                    <Pencil className="mr-2 h-4 w-4" /> Edit Issue
                                 </DropdownMenuItem>
                             )}
                             {/* Delete Action */}
                             {canDeleteIssue && (
-                                <DropdownMenuItem onClick={() => setDeleteDialogOpen(true)} className="text-red-600">
-                                    <Trash2 className="mr-2 h-4 w-4" /> Delete Issue
-                                </DropdownMenuItem>
+                                <>
+                                    {canEditIssue && <DropdownMenuSeparator />}
+                                    <DropdownMenuItem
+                                        onClick={() => setDeleteDialogOpen(true)}
+                                        className="text-red-600"
+                                    >
+                                        <Trash2 className="mr-2 h-4 w-4" /> Delete Issue
+                                    </DropdownMenuItem>
+                                </>
+                            )}
+                            {/* Show message if no actions */}
+                            {!canEditIssue && !canDeleteIssue && (
+                                <DropdownMenuItem disabled>No actions available</DropdownMenuItem>
                             )}
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -314,6 +385,14 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
                         <div className="mb-6">
                             <h3 className="mb-2 text-lg font-semibold">Images</h3>
                             <ImageThumbnailCarousel images={issue.images} className="w-full" />
+                        </div>
+                    )}
+
+                    {/* Action Buttons Section */}
+                    {renderIssueActions() && (
+                        <div className="mt-6 border-t pt-6">
+                            <h3 className="mb-4 text-lg font-semibold">Actions</h3>
+                            {renderIssueActions()}
                         </div>
                     )}
 

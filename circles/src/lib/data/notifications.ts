@@ -9,6 +9,8 @@ import {
     ProposalStage,
     ProposalOutcome,
     UserPrivate,
+    IssueDisplay, // Added IssueDisplay
+    IssueStage, // Added IssueStage
 } from "@/models/models";
 import { sendNotifications } from "./matrix";
 import { getUser, getUserPrivate } from "./user";
@@ -568,5 +570,184 @@ export async function notifyProposalVote(proposal: ProposalDisplay, voter: Circl
         });
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyProposalVote:", error);
+    }
+}
+
+// --- Issue Notifications ---
+
+/**
+ * Helper to get the circle for an issue notification
+ */
+async function getIssueCircle(issue: IssueDisplay): Promise<Circle | null> {
+    if (!issue?.circleId) {
+        console.error("🔔 [NOTIFY] Issue missing circleId");
+        return null;
+    }
+    const circle = await getCircleById(issue.circleId);
+    if (!circle) {
+        console.error("🔔 [NOTIFY] Circle not found for issue:", issue.circleId);
+    }
+    return circle;
+}
+
+/**
+ * Send notification when an issue is submitted for review
+ */
+export async function notifyIssueSubmittedForReview(issue: IssueDisplay, submitter: Circle): Promise<void> {
+    try {
+        console.log("🔔 [NOTIFY] notifyIssueSubmittedForReview called:", {
+            issueId: issue._id,
+            submitterDid: submitter.did,
+        });
+        const circle = await getIssueCircle(issue);
+        if (!circle) return;
+
+        // Find users with review permission (excluding the submitter)
+        const reviewers = (await getAuthorizedMembers(circle, features.issues?.review || "issues_review")).filter(
+            (user: Circle) => user.did !== submitter.did,
+        );
+
+        if (reviewers.length === 0) {
+            console.log("🔔 [NOTIFY] No reviewers found to notify for issue:", issue._id);
+            return;
+        }
+
+        console.log(`🔔 [NOTIFY] Sending issue_submitted_for_review to ${reviewers.length} reviewers`);
+        await sendNotifications("issue_submitted_for_review", reviewers, {
+            circle,
+            user: submitter, // The user who triggered the notification (submitter)
+            // Pass issue details directly, not nested under 'issue'
+            issueId: issue._id?.toString(),
+            issueTitle: issue.title,
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyIssueSubmittedForReview:", error);
+    }
+}
+
+/**
+ * Send notification to the author when their issue is approved (moved to Open)
+ */
+export async function notifyIssueApproved(issue: IssueDisplay, approver: Circle): Promise<void> {
+    try {
+        console.log("🔔 [NOTIFY] notifyIssueApproved called:", {
+            issueId: issue._id,
+            authorDid: issue.createdBy,
+            approverDid: approver.did,
+        });
+        // Don't notify if approver is the author
+        if (issue.createdBy === approver.did) {
+            console.log("🔔 [NOTIFY] Skipping notification - approver is author");
+            return;
+        }
+
+        const author = await getUserPrivate(issue.createdBy);
+        if (!author) {
+            console.error("🔔 [NOTIFY] Author not found for issue:", issue._id);
+            return;
+        }
+
+        const circle = await getIssueCircle(issue);
+        if (!circle) return;
+
+        console.log("🔔 [NOTIFY] Sending issue_approved to author:", author.name);
+        await sendNotifications("issue_approved", [author], {
+            circle,
+            user: approver, // The user who triggered the notification (approver)
+            // Pass issue details directly
+            issueId: issue._id?.toString(),
+            issueTitle: issue.title,
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyIssueApproved:", error);
+    }
+}
+
+/**
+ * Send notification when an issue is assigned to a user
+ */
+export async function notifyIssueAssigned(issue: IssueDisplay, assigner: Circle, assignee: UserPrivate): Promise<void> {
+    try {
+        console.log("🔔 [NOTIFY] notifyIssueAssigned called:", {
+            issueId: issue._id,
+            assignerDid: assigner.did,
+            assigneeDid: assignee.did,
+        });
+        // Don't notify if assigner is the assignee
+        if (assigner.did === assignee.did) {
+            console.log("🔔 [NOTIFY] Skipping notification - assigner is assignee");
+            return;
+        }
+
+        const circle = await getIssueCircle(issue);
+        if (!circle) return;
+
+        console.log("🔔 [NOTIFY] Sending issue_assigned to assignee:", assignee.name);
+        await sendNotifications("issue_assigned", [assignee], {
+            circle,
+            user: assigner, // The user who triggered the notification (assigner)
+            // Pass issue details directly
+            issueId: issue._id?.toString(),
+            issueTitle: issue.title,
+            assigneeName: assignee.name, // Add assignee name for context
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyIssueAssigned:", error);
+    }
+}
+
+/**
+ * Send notification when an issue's status changes (e.g., Open -> In Progress, In Progress -> Resolved)
+ */
+export async function notifyIssueStatusChanged(
+    issue: IssueDisplay,
+    changer: Circle,
+    oldStage: IssueStage,
+): Promise<void> {
+    try {
+        console.log("🔔 [NOTIFY] notifyIssueStatusChanged called:", {
+            issueId: issue._id,
+            changerDid: changer.did,
+            oldStage: oldStage,
+            newStage: issue.stage,
+        });
+
+        const circle = await getIssueCircle(issue);
+        if (!circle) return;
+
+        const recipients: UserPrivate[] = [];
+        const author = await getUserPrivate(issue.createdBy);
+        let assignee: UserPrivate | null = null;
+        if (issue.assignedTo) {
+            assignee = await getUserPrivate(issue.assignedTo);
+        }
+
+        // Add author if not the changer
+        if (author && author.did !== changer.did) {
+            recipients.push(author);
+        }
+
+        // Add assignee if exists, not the changer, and not already added (i.e., not the author)
+        if (assignee && assignee.did !== changer.did && assignee.did !== author?.did) {
+            recipients.push(assignee);
+        }
+
+        if (recipients.length === 0) {
+            console.log("🔔 [NOTIFY] No recipients found for issue status change:", issue._id);
+            return;
+        }
+
+        console.log(`🔔 [NOTIFY] Sending issue_status_changed to ${recipients.length} recipients`);
+        await sendNotifications("issue_status_changed", recipients, {
+            circle,
+            user: changer, // The user who triggered the notification (changer)
+            // Pass issue details directly
+            issueId: issue._id?.toString(),
+            issueTitle: issue.title,
+            issueOldStage: oldStage,
+            issueNewStage: issue.stage,
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyIssueStatusChanged:", error);
     }
 }

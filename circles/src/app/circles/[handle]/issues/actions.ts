@@ -26,9 +26,15 @@ import {
     deleteIssue,
     changeIssueStage,
     assignIssue,
-} from "@/lib/data/issue"; // Placeholder
+} from "@/lib/data/issue";
 import { getMembers } from "@/lib/data/member";
-// Placeholder imports for issue notification functions (to be created in src/lib/data/notifications.ts)
+// Import issue notification functions
+import {
+    notifyIssueSubmittedForReview,
+    notifyIssueApproved,
+    notifyIssueAssigned,
+    notifyIssueStatusChanged,
+} from "@/lib/data/notifications";
 
 /**
  * Get all issues for a circle
@@ -262,12 +268,16 @@ export async function createIssueAction(
         const createdIssue = await createIssue(newIssueData);
 
         // --- Trigger Notification ---
-        if (initialStage === "review") {
-            // Notify reviewers (Placeholder notification function)
-            //notifyIssueSubmittedForReview(createdIssue, user); // Placeholder
+        const fullCreatedIssue = await getIssueById(createdIssue._id as string, userDid); // Fetch full display data
+        if (fullCreatedIssue) {
+            if (initialStage === "review") {
+                notifyIssueSubmittedForReview(fullCreatedIssue, user);
+            } else {
+                // If skipping review (stage is 'open'), notify author it's approved/open
+                notifyIssueApproved(fullCreatedIssue, user); // Assuming 'user' is the creator here
+            }
         } else {
-            // If skipping review (stage is 'open'), notify creator differently?
-            // notifyIssueApproved(createdIssue, user); // Placeholder for direct open
+            console.error("🔔 [ACTION] Failed to fetch created issue for notification:", createdIssue._id);
         }
 
         // Revalidate the issues list page
@@ -577,21 +587,17 @@ export async function changeIssueStageAction(
             return { success: false, message: "Failed to change issue stage" };
         }
 
-        // --- Trigger Notifications --- (Placeholders)
+        // --- Trigger Notifications ---
         const updatedIssue = await getIssueById(issueId, userDid); // Get updated issue for context
         if (updatedIssue) {
             if (currentStage === "review" && newStage === "open") {
-                // TODO
-                //notifyIssueApproved(updatedIssue, user);
-            } else if (newStage === "resolved") {
-                // TODO
-                // Notify creator and assignee?
-                //notifyIssueStatusChanged(updatedIssue, user, currentStage);
-            } else {
-                // TODO
-                // General status change notification
-                //notifyIssueStatusChanged(updatedIssue, user, currentStage);
+                notifyIssueApproved(updatedIssue, user); // User is the approver here
+            } else if (newStage !== currentStage) {
+                // Notify for other status changes (Open -> InProgress, InProgress -> Resolved, etc.)
+                notifyIssueStatusChanged(updatedIssue, user, currentStage); // User is the changer
             }
+        } else {
+            console.error("🔔 [ACTION] Failed to fetch updated issue for notification:", issueId);
         }
 
         // Revalidate relevant pages
@@ -665,16 +671,17 @@ export async function assignIssueAction(
             return { success: false, message: "Failed to assign issue" };
         }
 
-        // --- Trigger Notification --- (Placeholder)
+        // --- Trigger Notification ---
         const updatedIssue = await getIssueById(issueId, userDid); // Get updated issue
-        if (updatedIssue && assigneeDid) {
+        if (updatedIssue && assigneeDid && assigneeDid !== "unassigned") {
             const assigneeUser = await getUserPrivate(assigneeDid); // Use getUserPrivate for UserPrivate type
             if (assigneeUser) {
-                // TODO
-                //notifyIssueAssigned(updatedIssue, assignerUser, assigneeUser);
+                notifyIssueAssigned(updatedIssue, assignerUser, assigneeUser);
+            } else {
+                console.error("🔔 [ACTION] Failed to fetch assignee user for notification:", assigneeDid);
             }
         }
-        // TODO: Handle notification for unassignment?
+        // TODO: Handle notification for unassignment? (Maybe notify previous assignee?)
 
         // Revalidate relevant pages
         revalidatePath(`/circles/${circleHandle}/issues`);
