@@ -13,7 +13,7 @@ import {
 import { UserPicture } from "../members/user-picture";
 import { CirclePicture } from "../circles/circle-picture";
 import { Button } from "@/components/ui/button";
-import { Edit, Heart, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Trash2 } from "lucide-react";
+import { Edit, Heart, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Trash2, Users } from "lucide-react"; // Added Users
 import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import React, {
     Dispatch,
@@ -242,6 +242,21 @@ export const PostItem = ({
     const router = useRouter();
 
     const [openDropdown, setOpenDropdown] = useState(false);
+
+    // Determine user group name if applicable
+    const userGroupName = useMemo(() => {
+        if (
+            circle?.userGroups &&
+            post.userGroups &&
+            post.userGroups.length > 0 &&
+            !post.userGroups.includes("everyone")
+        ) {
+            const groupHandle = post.userGroups[0]; // Assuming only one group for now
+            const group = circle.userGroups.find((ug) => ug.handle === groupHandle);
+            return group?.name;
+        }
+        return undefined;
+    }, [post.userGroups, circle?.userGroups]);
 
     // State for likes
     const initialLikes = post.reactions.like || 0;
@@ -605,6 +620,12 @@ export const PostItem = ({
                                     }}
                                 >
                                     {post.author.name} • {formattedDate}
+                                    {userGroupName && (
+                                        <>
+                                            &nbsp;•&nbsp;
+                                            {userGroupName}
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -630,7 +651,15 @@ export const PostItem = ({
                                 >
                                     {post.author?.name}
                                 </div>
-                                <div className="cursor-pointer text-sm text-gray-500">{formattedDate}</div>
+                                <div className="flex cursor-pointer items-center text-sm text-gray-500">
+                                    {formattedDate}
+                                    {userGroupName && (
+                                        <>
+                                            &nbsp;•&nbsp;
+                                            {userGroupName.toLocaleLowerCase()}
+                                        </>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}
