@@ -39,7 +39,7 @@ export const CirclePicture = ({
         return initials;
     };
 
-    const onOpenPreview = () => {
+    const onOpenPreview = (e: React.MouseEvent) => {
         if (isMobile) {
             router.push(`/circle/${circle?.handle}`);
             return;
@@ -53,6 +53,7 @@ export const CirclePicture = ({
         setContentPreview((x) =>
             x?.content === circle && sidePanelContentVisible === "content" ? undefined : contentPreviewData,
         );
+        e.stopPropagation();
     };
 
     return (

@@ -570,7 +570,7 @@ export const PostItem = ({
                 >
                     {isAggregateFeed && post.circle && post.circle._id !== post.author._id ? (
                         // New layout for aggregate feed posts in a different circle
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-4">
                             <div className="relative h-10 w-10">
                                 <CirclePicture circle={post.circle} size="40px" openPreview={true} />
                                 <div
@@ -630,13 +630,7 @@ export const PostItem = ({
                                 >
                                     {post.author?.name}
                                 </div>
-                                <div className="cursor-pointer text-sm text-gray-500">
-                                    {formattedDate}
-                                    {/* Display circle name only if it's an aggregate feed but NOT the stacked view */}
-                                    {isAggregateFeed && post.circle && post.circle._id === post.author._id && (
-                                        <span>&nbsp;• {post.circle.name}</span>
-                                    )}
-                                </div>
+                                <div className="cursor-pointer text-sm text-gray-500">{formattedDate}</div>
                             </div>
                         </div>
                     )}

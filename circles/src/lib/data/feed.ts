@@ -465,6 +465,7 @@ export async function getPostsFromMultipleFeeds(
                 },
 
                 author: {
+                    _id: { $toString: "$authorDetails._id" },
                     did: "$authorDetails.did",
                     name: "$authorDetails.name",
                     picture: "$authorDetails.picture",
@@ -840,6 +841,7 @@ export const getPosts = async (
                     },
                 },
                 author: {
+                    _id: { $toString: "$authorDetails._id" },
                     did: "$authorDetails.did",
                     name: "$authorDetails.name",
                     picture: "$authorDetails.picture",
