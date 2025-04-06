@@ -39,7 +39,8 @@ import { Badge } from "@/components/ui/badge";
 import RichText from "../feeds/RichText";
 import { CirclePicture } from "../circles/circle-picture";
 import { useIsCompact } from "@/components/utils/use-is-compact";
-import ImageCarousel from "@/components/ui/image-carousel"; // Correct: Use default import
+import ImageCarousel from "@/components/ui/image-carousel";
+import ImageThumbnailCarousel from "@/components/ui/image-thumbnail-carousel"; // Import the new thumbnail carousel
 import {
     changeProposalStageAction,
     deleteProposalAction,
@@ -406,13 +407,7 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                     <h3 className="mb-2 text-lg font-semibold">Background & Rationale</h3>
                     {proposal.images && proposal.images.length > 0 && (
                         <div className="mb-4">
-                            <ImageCarousel
-                                images={proposal.images} // Pass the Media[] array directly
-                                options={{ loop: true }}
-                                containerClassName="w-full" // Correct prop name
-                                showArrows={proposal.images.length > 1} // Show arrows only if multiple images
-                                showDots={proposal.images.length > 1} // Show dots only if multiple images
-                            />
+                            <ImageThumbnailCarousel images={proposal.images} className="w-full" />
                         </div>
                     )}
                     <div className="prose max-w-none">
@@ -460,7 +455,8 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
 
             {/* Conditionally render Card wrapper */}
             {isPreview ? (
-                <div>{MainContent}</div> // Add padding if needed for preview
+                // Added overflow-y-auto, max-h-[70vh], and custom-scrollbar class for preview scrolling
+                <div>{MainContent}</div>
             ) : (
                 <Card className="mb-6">{MainContent}</Card>
             )}

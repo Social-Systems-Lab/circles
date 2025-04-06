@@ -194,7 +194,11 @@ export const ContentPreview: React.FC = () => {
                     console.error("Proposal preview missing circle data:", proposal);
                     return <div className="p-4 text-red-500">Error: Missing circle data for proposal preview.</div>;
                 }
-                return <ProposalItem proposal={proposal} circle={proposal.circle} isPreview={true} />;
+                return (
+                    <div className="custom-scrollbar h-full overflow-y-auto">
+                        <ProposalItem proposal={proposal} circle={proposal.circle} isPreview={true} />
+                    </div>
+                );
             }
             case "post":
                 return (

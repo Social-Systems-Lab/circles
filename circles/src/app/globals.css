@@ -214,6 +214,36 @@ h1,
     }
 }
 
+/* Custom scrollbar styles */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 8px; /* Width of the scrollbar */
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent; /* Make track transparent */
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: transparent; /* Make thumb transparent by default */
+    border-radius: 10px;
+    border: 3px solid transparent; /* Add border to maintain layout space */
+}
+
+/* Show scrollbar thumb on hover */
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border)); /* Use border color for thumb on hover */
+}
+
+/* Optional: Style for Firefox */
+.custom-scrollbar {
+    scrollbar-width: thin; /* "auto" or "thin" */
+    scrollbar-color: transparent transparent; /* thumb and track color */
+}
+
+.custom-scrollbar:hover {
+    scrollbar-color: hsl(var(--border)) transparent; /* thumb and track color on hover */
+}
+
 /* shadcn/ui */
 @layer base {
     :root {
