@@ -11,6 +11,7 @@ import {
     MentionDisplay,
 } from "@/models/models";
 import { UserPicture } from "../members/user-picture";
+import { CirclePicture } from "../circles/circle-picture";
 import { Button } from "@/components/ui/button";
 import { Edit, Heart, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Trash2 } from "lucide-react";
 import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel";
@@ -311,6 +312,22 @@ export const PostItem = ({
         );
     };
 
+    const handleCircleClick = (targetCircle: Circle) => {
+        if (isMobile) {
+            // Otherwise use the standard route
+            router.push(`/circles/${targetCircle.handle}`);
+            return;
+        }
+
+        let contentPreviewData: ContentPreviewData = {
+            type: "circle", // Assuming 'circle' type exists or use 'user' if appropriate
+            content: targetCircle,
+        };
+        setContentPreview((x) =>
+            x?.content === targetCircle && sidePanelContentVisible === "content" ? undefined : contentPreviewData,
+        );
+    };
+
     const handleEditSubmit = async (formData: FormData) => {
         startTransition(async () => {
             const response = await updatePostAction(formData);
@@ -551,33 +568,78 @@ export const PostItem = ({
                         handlePostClick();
                     }}
                 >
-                    <div className="flex items-center gap-4">
-                        <UserPicture
-                            name={post.author?.name}
-                            picture={post.author?.picture?.url}
-                            circleType={post.author?.circleType}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handleAuthorClick(post.author);
-                            }}
-                        />
-                        <div className="flex flex-col">
-                            <div
-                                className="cursor-pointer font-semibold"
+                    {isAggregateFeed && post.circle && post.circle._id !== post.author._id ? (
+                        // New layout for aggregate feed posts in a different circle
+                        <div className="flex items-center gap-3">
+                            <div className="relative h-10 w-10">
+                                <CirclePicture circle={post.circle} size="40px" openPreview={true} />
+                                <div
+                                    className="absolute bottom-[-4px] right-[-4px] cursor-pointer rounded-full border-2 border-white"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAuthorClick(post.author);
+                                    }}
+                                >
+                                    <UserPicture
+                                        name={post.author.name}
+                                        picture={post.author.picture?.url}
+                                        size="24px"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex flex-col">
+                                <div
+                                    className="cursor-pointer font-semibold"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleCircleClick(post.circle!); // post.circle is checked in condition
+                                    }}
+                                >
+                                    {post.circle.name}
+                                </div>
+                                <div
+                                    className="cursor-pointer text-sm text-gray-500"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAuthorClick(post.author);
+                                    }}
+                                >
+                                    {post.author.name} • {formattedDate}
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        // Original layout
+                        <div className="flex items-center gap-4">
+                            <UserPicture
+                                name={post.author?.name}
+                                picture={post.author?.picture?.url}
+                                circleType={post.author?.circleType}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     handleAuthorClick(post.author);
                                 }}
-                            >
-                                {post.author?.name}
-                            </div>
-                            <div className="cursor-pointer text-sm text-gray-500">
-                                {formattedDate}
-
-                                {isAggregateFeed && post.circle && <span>&nbsp;• {post.circle.name}</span>}
+                            />
+                            <div className="flex flex-col">
+                                <div
+                                    className="cursor-pointer font-semibold"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAuthorClick(post.author);
+                                    }}
+                                >
+                                    {post.author?.name}
+                                </div>
+                                <div className="cursor-pointer text-sm text-gray-500">
+                                    {formattedDate}
+                                    {/* Display circle name only if it's an aggregate feed but NOT the stacked view */}
+                                    {isAggregateFeed && post.circle && post.circle._id === post.author._id && (
+                                        <span>&nbsp;• {post.circle.name}</span>
+                                    )}
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
 
                     <div className="flex items-center space-x-2">
                         {(isAuthor || canModerate) && (
