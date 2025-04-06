@@ -179,6 +179,57 @@ export const features = {
             module: "proposals",
         } as Feature,
     },
+    issues: {
+        view: {
+            name: "View Issues",
+            handle: "view",
+            description: "View the issues list and details",
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"], // Default: All can view
+            module: "issues",
+        } as Feature,
+        create: {
+            name: "Create Issues",
+            handle: "create",
+            description: "Submit a new issue",
+            defaultUserGroups: ["admins", "moderators", "members"], // Default: Members+ can create
+            module: "issues",
+        } as Feature,
+        review: {
+            name: "Review Issues",
+            handle: "review",
+            description: "Review submitted issues and move them to Open",
+            defaultUserGroups: ["admins", "moderators"], // Default: Mods+ can review
+            module: "issues",
+        } as Feature,
+        assign: {
+            name: "Assign Issues",
+            handle: "assign",
+            description: "Assign an issue to a user",
+            defaultUserGroups: ["admins", "moderators"], // Default: Mods+ can assign (can be opened up)
+            module: "issues",
+        } as Feature,
+        resolve: {
+            name: "Resolve Issues",
+            handle: "resolve",
+            description: "Mark issues as resolved or change their stage",
+            defaultUserGroups: ["admins", "moderators"], // Default: Mods+ can resolve (or assignee)
+            module: "issues",
+        } as Feature,
+        moderate: {
+            name: "Moderate Issues",
+            handle: "moderate",
+            description: "Edit or delete any issue",
+            defaultUserGroups: ["admins"], // Default: Admins only
+            module: "issues",
+        } as Feature,
+        comment: {
+            name: "Comment on Issues",
+            handle: "comment",
+            description: "Add comments to issues",
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"], // Default: All who can view can comment
+            module: "issues",
+        } as Feature,
+    },
     settings: {
         view: {
             name: "View Settings",
@@ -281,6 +332,12 @@ export const modules: ModuleInfo[] = [
             "A structured system for collecting and deciding on ideas or motions within the circle. Proposals move through stages from drafting to resolution, enabling transparent decision-making.",
     },
     {
+        name: "Issues",
+        handle: "issues",
+        description:
+            "Track and resolve issues within the circle. Users can submit problems, assign tasks, and monitor progress through stages like Review, Open, In Progress, and Resolved.",
+    },
+    {
         name: "Settings",
         handle: "settings",
         description:
@@ -291,7 +348,7 @@ export const modules: ModuleInfo[] = [
 
 export const defaultUserModules = ["feed", "followers", "circles", "projects", "settings"];
 export const defaultCircleModules = ["feed", "followers", "projects", "settings"];
-export const defaultProjectModules = ["feed", "followers", "proposals", "settings"];
+export const defaultProjectModules = ["feed", "followers", "proposals", "issues", "settings"];
 
 export const getDefaultModules = (circleType: CircleType) => {
     switch (circleType) {

@@ -7,11 +7,20 @@ import { useAtom } from "jotai";
 import { useRouter } from "next/navigation";
 import { timeSince } from "@/lib/utils";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
-import { Circle, NotificationType, Post, Comment, Proposal, ProposalDisplay } from "@/models/models"; // Add Proposal, ProposalDisplay
+import {
+    Circle,
+    NotificationType,
+    Post,
+    Comment,
+    Proposal,
+    ProposalDisplay,
+    IssueDisplay,
+    IssueStage,
+} from "@/models/models"; // Added Issue types
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { sendReadReceipt } from "@/lib/data/client-matrix";
 import { MdOutlineArticle } from "react-icons/md";
-import { Hammer } from "lucide-react"; // Gavel icon for proposals
+import { Hammer, AlertCircle } from "lucide-react"; // Gavel icon for proposals, AlertCircle for issues
 import { AiFillHeart } from "react-icons/ai";
 
 type Notification = {
@@ -34,6 +43,12 @@ type Notification = {
     proposal?: Proposal | ProposalDisplay;
     proposalId?: string;
     proposalName?: string;
+    // Issue fields
+    issue?: IssueDisplay;
+    issueId?: string;
+    issueTitle?: string;
+    previousStage?: IssueStage;
+    newStage?: IssueStage;
     // For grouping purposes
     key?: string;
 };
@@ -53,6 +68,10 @@ type GroupedNotification = {
     proposal?: Proposal | ProposalDisplay;
     proposalId?: string;
     proposalName?: string;
+    // Issue fields
+    issue?: IssueDisplay;
+    issueId?: string;
+    issueTitle?: string;
 };
 
 export const Notifications = () => {
@@ -126,6 +145,12 @@ export const Notifications = () => {
                     proposal: msg.content?.proposal,
                     proposalId: msg.content?.proposalId,
                     proposalName: msg.content?.proposalName,
+                    // Add issue fields
+                    issue: msg.content?.issue,
+                    issueId: msg.content?.issueId,
+                    issueTitle: msg.content?.issueTitle,
+                    previousStage: msg.content?.previousStage,
+                    newStage: msg.content?.newStage,
                     key: groupKey,
                 };
                 return notification;
@@ -179,6 +204,10 @@ export const Notifications = () => {
                     proposal: notification.proposal,
                     proposalId: notification.proposalId,
                     proposalName: notification.proposalName,
+                    // Add issue fields
+                    issue: notification.issue,
+                    issueId: notification.issueId,
+                    issueTitle: notification.issueTitle,
                 });
             }
         }
@@ -280,6 +309,16 @@ export const Notifications = () => {
                 }
                 break;
 
+            // Issue Notifications Navigation
+            case "issue_submitted_for_review":
+            case "issue_approved":
+            case "issue_assigned":
+            case "issue_status_changed":
+                if (notification.issueId) {
+                    router.push(`/circles/${circleHandle}/issues/${notification.issueId}`);
+                }
+                break;
+
             default:
                 // Ensure exhaustive check or provide a default behavior
                 const exhaustiveCheck: never = notification.notificationType;
@@ -338,7 +377,15 @@ export const Notifications = () => {
                 return `${userList} voted on your proposal "${groupedNotification.latestNotification.proposalName || "a proposal"}"`;
 
             // For non-grouped or single proposal notifications, use the original message
-            // (especially important for resolved notifications with specific reasons)
+            // Issue Grouped Messages (if needed - for now, use default)
+            case "issue_submitted_for_review":
+            case "issue_approved":
+            case "issue_assigned":
+            case "issue_status_changed":
+                // For now, issue notifications aren't grouped, so use original message
+                return groupedNotification.latestNotification.message;
+
+            // For non-grouped or single proposal/issue notifications, use the original message
             default:
                 return groupedNotification.latestNotification.message;
         }
@@ -358,10 +405,15 @@ export const Notifications = () => {
                             {["post_comment", "comment_reply", "post_mention", "comment_mention"].includes(
                                 groupedNotification.latestNotification.notificationType,
                             ) ||
-                            // Add proposal types that involve a user action
-                            ["proposal_vote", "proposal_submitted_for_review"].includes(
-                                groupedNotification.latestNotification.notificationType,
-                            ) ? (
+                            // Add proposal/issue types that involve a user action
+                            [
+                                "proposal_vote",
+                                "proposal_submitted_for_review",
+                                "issue_submitted_for_review", // Add issue types
+                                "issue_approved",
+                                "issue_assigned",
+                                "issue_status_changed",
+                            ].includes(groupedNotification.latestNotification.notificationType) ? (
                                 <>
                                     {/* Show triggering user picture in the center */}
                                     {groupedNotification.latestNotification.user && (
@@ -377,8 +429,12 @@ export const Notifications = () => {
                                             groupedNotification.latestNotification.notificationType,
                                         ) ? (
                                             <MdOutlineArticle size="14px" />
-                                        ) : (
+                                        ) : ["proposal_vote", "proposal_submitted_for_review"].includes(
+                                              groupedNotification.latestNotification.notificationType,
+                                          ) ? (
                                             <Hammer size="14px" /> // Gavel for proposals
+                                        ) : (
+                                            <AlertCircle size="14px" /> // Alert for issues
                                         )}
                                     </div>
                                 </>

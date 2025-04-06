@@ -9,7 +9,7 @@ import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { useMemo, useCallback, useEffect } from "react";
 import type { Circle } from "@/models/models";
-import { LOG_LEVEL_TRACE, logLevel, modules } from "@/lib/data/constants";
+import { features, getFeature, LOG_LEVEL_TRACE, logLevel, modules } from "@/lib/data/constants";
 
 type CircleTabsProps = {
     circle: Circle;
@@ -34,7 +34,8 @@ export function CircleTabs({ circle }: CircleTabsProps) {
     // Check if the user has access to a specific module
     const hasAccess = useCallback(
         (moduleHandle: string) => {
-            const allowedUserGroups = circle.accessRules?.[moduleHandle]?.view || [];
+            let allowedUserGroups =
+                circle.accessRules?.[moduleHandle]?.view || getFeature(moduleHandle, "view")?.defaultUserGroups || [];
             return (
                 allowedUserGroups.includes("everyone") || userGroups.some((group) => allowedUserGroups.includes(group))
             );

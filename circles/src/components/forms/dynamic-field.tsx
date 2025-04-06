@@ -28,7 +28,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { cn } from "@/lib/utils";
 import { FaLock } from "react-icons/fa6";
 import { FaCheck } from "react-icons/fa";
-import { features, causes, skills } from "@/lib/data/constants";
+import { features, causes, skills, modules } from "@/lib/data/constants";
 import { CheckCircle2, ChevronDown, ChevronUp, Loader2, Search, XCircle } from "lucide-react";
 import { getMemberAccessLevel, isAuthorized } from "@/lib/auth/client-auth";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
@@ -621,26 +621,7 @@ export const DynamicAccessRulesGrid: React.FC<DynamicAccessRulesGridProps> = ({
 
     // Get module name from module handle
     const getModuleName = (moduleHandle: string): string => {
-        switch (moduleHandle) {
-            case "general":
-                return "General";
-            case "feed":
-                return "Feed";
-            case "chat":
-                return "Chat";
-            case "followers":
-                return "Followers";
-            case "circles":
-                return "Circles";
-            case "projects":
-                return "Projects";
-            case "settings":
-                return "Settings";
-            case "home":
-                return "Home";
-            default:
-                return moduleHandle;
-        }
+        return modules.find((x) => x.handle == moduleHandle)?.name ?? moduleHandle;
     };
 
     // Get all enabled modules, always include general

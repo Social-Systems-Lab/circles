@@ -771,7 +771,12 @@ export type NotificationType =
     | "proposal_approved_for_voting" // Proposal approved for voting - sent to proposal author
     | "proposal_resolved" // Proposal resolved - sent to proposal author (message adapts to outcome/stage)
     | "proposal_resolved_voter" // Proposal resolved - sent to voters (message adapts to outcome/stage)
-    | "proposal_vote"; // Someone voted on a proposal - sent to proposal author
+    | "proposal_vote" // Someone voted on a proposal - sent to proposal author
+    // Issue Notifications
+    | "issue_submitted_for_review" // Issue submitted for review - sent to users with review permissions
+    | "issue_approved" // Issue approved (moved to Open) - sent to issue author
+    | "issue_assigned" // Issue assigned to a user - sent to the assignee
+    | "issue_status_changed"; // Issue status changed (e.g., Open -> In Progress, In Progress -> Resolved) - sent to author/assignee
 
 // Define all onboarding steps in a single place for consistency
 export const ONBOARDING_STEPS = [
@@ -833,4 +838,35 @@ export interface ProposalDisplay extends Proposal {
     userReaction?: string; // Current user's reaction
     circle?: Circle;
     location?: Location; // Added location field
+}
+
+// Issue stages
+export const issueStageSchema = z.enum(["review", "open", "inProgress", "resolved"]);
+export type IssueStage = z.infer<typeof issueStageSchema>;
+
+// Issue model
+export const issueSchema = z.object({
+    _id: z.any().optional(),
+    circleId: z.string(),
+    createdBy: didSchema,
+    createdAt: z.date(),
+    updatedAt: z.date().optional(), // Track updates
+    resolvedAt: z.date().optional(), // Track resolution time
+    title: z.string(),
+    description: z.string(),
+    stage: issueStageSchema.default("review"),
+    assignedTo: didSchema.optional(), // User DID of the assignee
+    userGroups: z.array(z.string()).default([]), // User groups that can see this issue
+    location: locationSchema.optional(),
+    commentPostId: z.string().optional(), // Optional link to a shadow post for comments
+    images: z.array(mediaSchema).optional(), // Optional images/media attached to the issue
+});
+
+export type Issue = z.infer<typeof issueSchema>;
+
+// Display type with author and assignee information
+export interface IssueDisplay extends Issue {
+    author: Circle; // Creator's details
+    assignee?: Circle; // Assignee's details (optional)
+    circle?: Circle; // Circle details
 }
