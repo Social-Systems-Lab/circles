@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { ProposalStageTimeline } from "./proposal-stage-timeline";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
+import Link from "next/link"; // Import Link
 import { Heart, Loader2, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { UserPicture } from "../members/user-picture";
@@ -48,6 +49,7 @@ import {
 interface ProposalItemProps {
     proposal: ProposalDisplay;
     circle: Circle;
+    isPreview?: boolean; // Add isPreview prop
 }
 
 const getStageBadgeColor = (stage: ProposalStage) => {
@@ -65,7 +67,7 @@ const getStageBadgeColor = (stage: ProposalStage) => {
     }
 };
 
-export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle }) => {
+export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, isPreview = false }) => {
     const [user] = useAtom(userAtom);
     const [isPending, startTransition] = useTransition();
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -321,320 +323,670 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle }) 
         }
     };
 
-    return (
+    const MainContent = (
         <>
-            <div className="mb-12 ml-4 mr-4">
-                {/* Pass outcome and resolvedAtStage to timeline */}
-                <ProposalStageTimeline
-                    currentStage={proposal.stage}
-                    outcome={proposal.outcome}
-                    resolvedAtStage={proposal.resolvedAtStage} // Pass the new prop
-                />
-            </div>
-
-            <Card className="mb-6">
-                <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-                    <div>
-                        <div className="flex items-center space-x-2">
-                            <div className="mb-1 text-2xl font-semibold">{proposal.name}</div>
-                            <Badge className={`${getStageBadgeColor(proposal.stage)}`}>
-                                {proposal.stage.charAt(0).toUpperCase() + proposal.stage.slice(1)}
-                            </Badge>
-                        </div>
-                        {/* <CardDescription className="mt-1">
+            <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+                <div>
+                    <div className="flex items-center space-x-2">
+                        {/* Link only if not in preview */}
+                        <Link
+                            href={`/circles/${circle.handle}/proposals/${proposal._id}`}
+                            onClick={(e: React.MouseEvent) => e.stopPropagation()} // Add type for event
+                            className="mb-1 text-2xl font-semibold hover:underline"
+                        >
+                            {proposal.name}
+                        </Link>
+                        <Badge className={`${getStageBadgeColor(proposal.stage)}`}>
+                            {proposal.stage.charAt(0).toUpperCase() + proposal.stage.slice(1)}
+                        </Badge>
+                    </div>
+                    {/* <CardDescription className="mt-1">
                             Created by {proposal.author.name}{" "}
                             {proposal.createdAt &&
                                 formatDistanceToNow(new Date(proposal.createdAt), { addSuffix: true })}
                         </CardDescription> */}
-                    </div>
+                </div>
 
-                    {canEdit && (
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-8 w-8 p-0">
-                                    <span className="sr-only">Open menu</span>
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={handleEdit}>
-                                    <Pencil className="mr-2 h-4 w-4" />
-                                    Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setDeleteDialogOpen(true)} className="text-red-600">
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    )}
-                </CardHeader>
+                {/* Hide dropdown menu in preview */}
+                {canEdit && (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                                <span className="sr-only">Open menu</span>
+                                <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={handleEdit}>
+                                <Pencil className="mr-2 h-4 w-4" />
+                                Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setDeleteDialogOpen(true)} className="text-red-600">
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                )}
+            </CardHeader>
 
-                <CardContent className="pt-4">
-                    {/* <div className="mb-6">
+            <CardContent className="pt-4">
+                {/* <div className="mb-6">
                     <ProposalStageTimeline currentStage={proposal.stage} />
                 </div> */}
 
-                    {proposal.outcome && proposal.outcomeReason && (
-                        <div
-                            className={cn(
-                                "mb-4 rounded-md p-3",
-                                proposal.outcome === "accepted"
-                                    ? "bg-green-50 text-green-800"
-                                    : "bg-red-50 text-red-800",
-                            )}
-                        >
-                            <span className="font-medium">
-                                {proposal.outcome === "accepted" ? "Accepted" : "Rejected"}
-                                {proposal.resolvedAtStage &&
-                                    ` during ${proposal.resolvedAtStage.charAt(0).toUpperCase() + proposal.resolvedAtStage.slice(1)} Stage`}
-                            </span>
-                            {proposal.outcomeReason && `: ${proposal.outcomeReason}`}
-                        </div>
-                    )}
-
-                    {/* Decision Text Section */}
-                    <div className="mb-6 rounded-md border border-blue-200 bg-blue-50 p-4">
-                        <h3 className="mb-2 text-lg font-semibold text-blue-800">Decision Text</h3>
-                        <div className="prose prose-sm max-w-none text-blue-900">
-                            <RichText content={proposal.decisionText} />
-                        </div>
-                    </div>
-
-                    {/* Background & Images Section */}
-                    <div className="mb-6">
-                        <h3 className="mb-2 text-lg font-semibold">Background & Rationale</h3>
-                        {proposal.images && proposal.images.length > 0 && (
-                            <div className="mb-4">
-                                <ImageCarousel
-                                    images={proposal.images} // Pass the Media[] array directly
-                                    options={{ loop: true }}
-                                    containerClassName="w-full" // Correct prop name
-                                    showArrows={proposal.images.length > 1} // Show arrows only if multiple images
-                                    showDots={proposal.images.length > 1} // Show dots only if multiple images
-                                />
-                            </div>
+                {proposal.outcome && proposal.outcomeReason && (
+                    <div
+                        className={cn(
+                            "mb-4 rounded-md p-3",
+                            proposal.outcome === "accepted" ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800",
                         )}
-                        <div className="prose max-w-none">
-                            <RichText content={proposal.background} />
-                        </div>
+                    >
+                        <span className="font-medium">
+                            {proposal.outcome === "accepted" ? "Accepted" : "Rejected"}
+                            {proposal.resolvedAtStage &&
+                                ` during ${proposal.resolvedAtStage.charAt(0).toUpperCase() + proposal.resolvedAtStage.slice(1)} Stage`}
+                        </span>
+                        {proposal.outcomeReason && `: ${proposal.outcomeReason}`}
                     </div>
+                )}
 
-                    {proposal.stage === "voting" && (
-                        <div className="mt-6">
-                            <h3 className="mb-2 text-lg font-medium">Voting Results</h3>
-                            <div className="flex items-center space-x-2">
-                                <Heart className="h-5 w-5 text-pink-500" />
-                                <span>
-                                    {voteCount} vote{voteCount !== 1 ? "s" : ""}
-                                </span>
-                            </div>
+                {/* Decision Text Section */}
+                <div className="mb-6 rounded-md border border-blue-200 bg-blue-50 p-4">
+                    <h3 className="mb-2 text-lg font-semibold text-blue-800">Decision Text</h3>
+                    <div className="prose prose-sm max-w-none text-blue-900">
+                        <RichText content={proposal.decisionText} />
+                    </div>
+                </div>
+
+                {/* Background & Images Section */}
+                <div className="mb-6">
+                    <h3 className="mb-2 text-lg font-semibold">Background & Rationale</h3>
+                    {proposal.images && proposal.images.length > 0 && (
+                        <div className="mb-4">
+                            <ImageCarousel
+                                images={proposal.images} // Pass the Media[] array directly
+                                options={{ loop: true }}
+                                containerClassName="w-full" // Correct prop name
+                                showArrows={proposal.images.length > 1} // Show arrows only if multiple images
+                                showDots={proposal.images.length > 1} // Show dots only if multiple images
+                            />
                         </div>
                     )}
-                </CardContent>
-
-                <CardFooter className="flex justify-between">
-                    <div className="flex cursor-pointer items-center" onClick={openCircle}>
-                        <UserPicture name={proposal.author.name} picture={proposal.author.picture?.url} size="32px" />
-                        <span className="ml-2">{proposal.author.name}</span>
+                    <div className="prose max-w-none">
+                        <RichText content={proposal.background} />
                     </div>
-                    {renderStageActions()}
-                </CardFooter>
+                </div>
 
-                <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Delete Proposal</DialogTitle>
-                            <DialogDescription>
-                                Are you sure you want to delete this proposal? This action cannot be undone.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <DialogFooter>
-                            <DialogClose asChild>
-                                <Button variant="outline">Cancel</Button>
-                            </DialogClose>
-                            <Button variant="destructive" onClick={handleDelete} disabled={isPending}>
-                                {isPending ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Deleting...
-                                    </>
-                                ) : (
-                                    <>Delete</>
-                                )}
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-
-                {/* Submit for Review Confirmation Dialog */}
-                <Dialog open={submitReviewDialogOpen} onOpenChange={setSubmitReviewDialogOpen}>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Submit for Review?</DialogTitle>
-                            <DialogDescription>
-                                Once submitted for review, the proposal can no longer be edited. Are you sure you want
-                                to proceed?
-                            </DialogDescription>
-                        </DialogHeader>
-                        <DialogFooter>
-                            <DialogClose asChild>
-                                <Button variant="outline">Cancel</Button>
-                            </DialogClose>
-                            <Button onClick={confirmSubmitForReview} disabled={isPending}>
-                                {isPending ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Submitting...
-                                    </>
-                                ) : (
-                                    <>Confirm Submit</>
-                                )}
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-
-                {/* Reject Review Confirmation Dialog */}
-                <Dialog open={rejectReviewDialogOpen} onOpenChange={setRejectReviewDialogOpen}>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Reject Proposal?</DialogTitle>
-                            <DialogDescription>
-                                Are you sure you want to reject this proposal? It will be moved to the Resolved stage.
-                                You can optionally provide a reason.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                            <Label htmlFor="resolution-reason-reject-review">Reason (Optional)</Label>
-                            <Textarea
-                                id="resolution-reason-reject-review"
-                                value={resolutionReason}
-                                onChange={(e) => setResolutionReason(e.target.value)}
-                                placeholder="Enter reason for rejection..."
-                            />
+                {proposal.stage === "voting" && (
+                    <div className="mt-6">
+                        <h3 className="mb-2 text-lg font-medium">Voting Results</h3>
+                        <div className="flex items-center space-x-2">
+                            <Heart className="h-5 w-5 text-pink-500" />
+                            <span>
+                                {voteCount} vote{voteCount !== 1 ? "s" : ""}
+                            </span>
                         </div>
-                        <DialogFooter>
-                            <DialogClose asChild>
-                                <Button variant="outline">Cancel</Button>
-                            </DialogClose>
-                            <Button variant="destructive" onClick={confirmRejectReview} disabled={isPending}>
-                                {isPending ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Rejecting...
-                                    </>
-                                ) : (
-                                    <>Confirm Reject</>
-                                )}
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
+                    </div>
+                )}
+            </CardContent>
 
-                {/* Approve for Voting Confirmation Dialog */}
-                <Dialog open={approveVotingDialogOpen} onOpenChange={setApproveVotingDialogOpen}>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Approve for Voting?</DialogTitle>
-                            <DialogDescription>
-                                This will move the proposal to the Voting stage. Are you sure?
-                            </DialogDescription>
-                        </DialogHeader>
-                        <DialogFooter>
-                            <DialogClose asChild>
-                                <Button variant="outline">Cancel</Button>
-                            </DialogClose>
-                            <Button onClick={confirmApproveVoting} disabled={isPending}>
-                                {isPending ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Approving...
-                                    </>
-                                ) : (
-                                    <>Confirm Approve</>
-                                )}
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-
-                {/* Reject Voting Confirmation Dialog */}
-                <Dialog open={rejectVotingDialogOpen} onOpenChange={setRejectVotingDialogOpen}>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Reject Proposal?</DialogTitle>
-                            <DialogDescription>
-                                Are you sure you want to reject this proposal after the voting period? It will be moved
-                                to the Resolved stage. You can optionally provide a reason.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                            <Label htmlFor="resolution-reason-reject">Reason (Optional)</Label>
-                            <Textarea
-                                id="resolution-reason-reject"
-                                value={resolutionReason}
-                                onChange={(e) => setResolutionReason(e.target.value)}
-                                placeholder="Enter reason for rejection..."
-                            />
-                        </div>
-                        <DialogFooter>
-                            <DialogClose asChild>
-                                <Button variant="outline">Cancel</Button>
-                            </DialogClose>
-                            <Button variant="destructive" onClick={confirmRejectVoting} disabled={isPending}>
-                                {isPending ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Rejecting...
-                                    </>
-                                ) : (
-                                    <>Confirm Reject</>
-                                )}
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-
-                {/* Accept Voting Confirmation Dialog */}
-                <Dialog open={acceptVotingDialogOpen} onOpenChange={setAcceptVotingDialogOpen}>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Accept Proposal?</DialogTitle>
-                            <DialogDescription>
-                                Are you sure you want to accept this proposal after the voting period? It will be moved
-                                to the Resolved stage. You can optionally provide a reason.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                            <Label htmlFor="resolution-reason-accept">Reason (Optional)</Label>
-                            <Textarea
-                                id="resolution-reason-accept"
-                                value={resolutionReason}
-                                onChange={(e) => setResolutionReason(e.target.value)}
-                                placeholder="Enter reason for acceptance..."
-                            />
-                        </div>
-                        <DialogFooter>
-                            <DialogClose asChild>
-                                <Button variant="outline">Cancel</Button>
-                            </DialogClose>
-                            <Button onClick={confirmAcceptVoting} disabled={isPending}>
-                                {isPending ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Accepting...
-                                    </>
-                                ) : (
-                                    <>Confirm Accept</>
-                                )}
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-            </Card>
+            <CardFooter className={`flex items-start justify-between ${isPreview ? "flex-col gap-4" : ""}`}>
+                <div className={`flex cursor-pointer items-center`} onClick={openCircle}>
+                    <UserPicture name={proposal.author.name} picture={proposal.author.picture?.url} size="32px" />
+                    <span className="ml-2">{proposal.author.name}</span>
+                </div>
+                {/* Hide stage actions in preview */}
+                {renderStageActions()}
+            </CardFooter>
+            {/* </Card> Rendered conditionally below */}
         </>
+    ); // End of MainContent definition
+
+    return (
+        <div className="formatted">
+            {/* Conditionally render timeline */}
+            {!isPreview && (
+                <div className="mb-12 ml-4 mr-4">
+                    <ProposalStageTimeline
+                        currentStage={proposal.stage}
+                        outcome={proposal.outcome}
+                        resolvedAtStage={proposal.resolvedAtStage}
+                    />
+                </div>
+            )}
+
+            {/* Conditionally render Card wrapper */}
+            {isPreview ? (
+                <div>{MainContent}</div> // Add padding if needed for preview
+            ) : (
+                <Card className="mb-6">{MainContent}</Card>
+            )}
+
+            {/* Render Dialogs here, outside MainContent but within the main return, only if not in preview */}
+            <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete Proposal</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete this proposal? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button variant="destructive" onClick={handleDelete} disabled={isPending}>
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Deleting...
+                                </>
+                            ) : (
+                                <>Delete</>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Submit for Review Confirmation Dialog */}
+            <Dialog open={submitReviewDialogOpen} onOpenChange={setSubmitReviewDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Submit for Review?</DialogTitle>
+                        <DialogDescription>
+                            Once submitted for review, the proposal can no longer be edited. Are you sure you want to
+                            proceed?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button onClick={confirmSubmitForReview} disabled={isPending}>
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Submitting...
+                                </>
+                            ) : (
+                                <>Confirm Submit</>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Reject Review Confirmation Dialog */}
+            <Dialog open={rejectReviewDialogOpen} onOpenChange={setRejectReviewDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Reject Proposal?</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to reject this proposal? It will be moved to the Resolved stage. You
+                            can optionally provide a reason.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <Label htmlFor="resolution-reason-reject-review">Reason (Optional)</Label>
+                        <Textarea
+                            id="resolution-reason-reject-review"
+                            value={resolutionReason}
+                            onChange={(e) => setResolutionReason(e.target.value)}
+                            placeholder="Enter reason for rejection..."
+                        />
+                    </div>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button variant="destructive" onClick={confirmRejectReview} disabled={isPending}>
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Rejecting...
+                                </>
+                            ) : (
+                                <>Confirm Reject</>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Approve for Voting Confirmation Dialog */}
+            <Dialog open={approveVotingDialogOpen} onOpenChange={setApproveVotingDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Approve for Voting?</DialogTitle>
+                        <DialogDescription>
+                            This will move the proposal to the Voting stage. Are you sure?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button onClick={confirmApproveVoting} disabled={isPending}>
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Approving...
+                                </>
+                            ) : (
+                                <>Confirm Approve</>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Reject Voting Confirmation Dialog */}
+            <Dialog open={rejectVotingDialogOpen} onOpenChange={setRejectVotingDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Reject Proposal?</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to reject this proposal after the voting period? It will be moved to
+                            the Resolved stage. You can optionally provide a reason.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <Label htmlFor="resolution-reason-reject">Reason (Optional)</Label>
+                        <Textarea
+                            id="resolution-reason-reject"
+                            value={resolutionReason}
+                            onChange={(e) => setResolutionReason(e.target.value)}
+                            placeholder="Enter reason for rejection..."
+                        />
+                    </div>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button variant="destructive" onClick={confirmRejectVoting} disabled={isPending}>
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Rejecting...
+                                </>
+                            ) : (
+                                <>Confirm Reject</>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Accept Voting Confirmation Dialog */}
+            <Dialog open={acceptVotingDialogOpen} onOpenChange={setAcceptVotingDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Accept Proposal?</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to accept this proposal after the voting period? It will be moved to
+                            the Resolved stage. You can optionally provide a reason.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <Label htmlFor="resolution-reason-accept">Reason (Optional)</Label>
+                        <Textarea
+                            id="resolution-reason-accept"
+                            value={resolutionReason}
+                            onChange={(e) => setResolutionReason(e.target.value)}
+                            placeholder="Enter reason for acceptance..."
+                        />
+                    </div>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button onClick={confirmAcceptVoting} disabled={isPending}>
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Accepting...
+                                </>
+                            ) : (
+                                <>Confirm Accept</>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            {/* Submit for Review Confirmation Dialog */}
+            <Dialog open={submitReviewDialogOpen} onOpenChange={setSubmitReviewDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Submit for Review?</DialogTitle>
+                        <DialogDescription>
+                            Once submitted for review, the proposal can no longer be edited. Are you sure you want to
+                            proceed?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button onClick={confirmSubmitForReview} disabled={isPending}>
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Submitting...
+                                </>
+                            ) : (
+                                <>Confirm Submit</>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Reject Review Confirmation Dialog */}
+            <Dialog open={rejectReviewDialogOpen} onOpenChange={setRejectReviewDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Reject Proposal?</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to reject this proposal? It will be moved to the Resolved stage. You
+                            can optionally provide a reason.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <Label htmlFor="resolution-reason-reject-review">Reason (Optional)</Label>
+                        <Textarea
+                            id="resolution-reason-reject-review"
+                            value={resolutionReason}
+                            onChange={(e) => setResolutionReason(e.target.value)}
+                            placeholder="Enter reason for rejection..."
+                        />
+                    </div>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button variant="destructive" onClick={confirmRejectReview} disabled={isPending}>
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Rejecting...
+                                </>
+                            ) : (
+                                <>Confirm Reject</>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Approve for Voting Confirmation Dialog */}
+            <Dialog open={approveVotingDialogOpen} onOpenChange={setApproveVotingDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Approve for Voting?</DialogTitle>
+                        <DialogDescription>
+                            This will move the proposal to the Voting stage. Are you sure?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button onClick={confirmApproveVoting} disabled={isPending}>
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Approving...
+                                </>
+                            ) : (
+                                <>Confirm Approve</>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Reject Voting Confirmation Dialog */}
+            <Dialog open={rejectVotingDialogOpen} onOpenChange={setRejectVotingDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Reject Proposal?</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to reject this proposal after the voting period? It will be moved to
+                            the Resolved stage. You can optionally provide a reason.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <Label htmlFor="resolution-reason-reject">Reason (Optional)</Label>
+                        <Textarea
+                            id="resolution-reason-reject"
+                            value={resolutionReason}
+                            onChange={(e) => setResolutionReason(e.target.value)}
+                            placeholder="Enter reason for rejection..."
+                        />
+                    </div>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button variant="destructive" onClick={confirmRejectVoting} disabled={isPending}>
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Rejecting...
+                                </>
+                            ) : (
+                                <>Confirm Reject</>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Accept Voting Confirmation Dialog */}
+            <Dialog open={acceptVotingDialogOpen} onOpenChange={setAcceptVotingDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Accept Proposal?</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to accept this proposal after the voting period? It will be moved to
+                            the Resolved stage. You can optionally provide a reason.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <Label htmlFor="resolution-reason-accept">Reason (Optional)</Label>
+                        <Textarea
+                            id="resolution-reason-accept"
+                            value={resolutionReason}
+                            onChange={(e) => setResolutionReason(e.target.value)}
+                            placeholder="Enter reason for acceptance..."
+                        />
+                    </div>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button onClick={confirmAcceptVoting} disabled={isPending}>
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Accepting...
+                                </>
+                            ) : (
+                                <>Confirm Accept</>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            {/* Submit for Review Confirmation Dialog */}
+            <Dialog open={submitReviewDialogOpen} onOpenChange={setSubmitReviewDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Submit for Review?</DialogTitle>
+                        <DialogDescription>
+                            Once submitted for review, the proposal can no longer be edited. Are you sure you want to
+                            proceed?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button onClick={confirmSubmitForReview} disabled={isPending}>
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Submitting...
+                                </>
+                            ) : (
+                                <>Confirm Submit</>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Reject Review Confirmation Dialog */}
+            <Dialog open={rejectReviewDialogOpen} onOpenChange={setRejectReviewDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Reject Proposal?</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to reject this proposal? It will be moved to the Resolved stage. You
+                            can optionally provide a reason.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <Label htmlFor="resolution-reason-reject-review">Reason (Optional)</Label>
+                        <Textarea
+                            id="resolution-reason-reject-review"
+                            value={resolutionReason}
+                            onChange={(e) => setResolutionReason(e.target.value)}
+                            placeholder="Enter reason for rejection..."
+                        />
+                    </div>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button variant="destructive" onClick={confirmRejectReview} disabled={isPending}>
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Rejecting...
+                                </>
+                            ) : (
+                                <>Confirm Reject</>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Approve for Voting Confirmation Dialog */}
+            <Dialog open={approveVotingDialogOpen} onOpenChange={setApproveVotingDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Approve for Voting?</DialogTitle>
+                        <DialogDescription>
+                            This will move the proposal to the Voting stage. Are you sure?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button onClick={confirmApproveVoting} disabled={isPending}>
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Approving...
+                                </>
+                            ) : (
+                                <>Confirm Approve</>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Reject Voting Confirmation Dialog */}
+            <Dialog open={rejectVotingDialogOpen} onOpenChange={setRejectVotingDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Reject Proposal?</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to reject this proposal after the voting period? It will be moved to
+                            the Resolved stage. You can optionally provide a reason.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <Label htmlFor="resolution-reason-reject">Reason (Optional)</Label>
+                        <Textarea
+                            id="resolution-reason-reject"
+                            value={resolutionReason}
+                            onChange={(e) => setResolutionReason(e.target.value)}
+                            placeholder="Enter reason for rejection..."
+                        />
+                    </div>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button variant="destructive" onClick={confirmRejectVoting} disabled={isPending}>
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Rejecting...
+                                </>
+                            ) : (
+                                <>Confirm Reject</>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Accept Voting Confirmation Dialog */}
+            <Dialog open={acceptVotingDialogOpen} onOpenChange={setAcceptVotingDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Accept Proposal?</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to accept this proposal after the voting period? It will be moved to
+                            the Resolved stage. You can optionally provide a reason.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <Label htmlFor="resolution-reason-accept">Reason (Optional)</Label>
+                        <Textarea
+                            id="resolution-reason-accept"
+                            value={resolutionReason}
+                            onChange={(e) => setResolutionReason(e.target.value)}
+                            placeholder="Enter reason for acceptance..."
+                        />
+                    </div>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button onClick={confirmAcceptVoting} disabled={isPending}>
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Accepting...
+                                </>
+                            ) : (
+                                <>Confirm Accept</>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </div>
     );
 };

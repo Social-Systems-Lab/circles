@@ -16,10 +16,13 @@ import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { MessageButton } from "../modules/home/message-button";
 import { ProposalDisplay, ProposalStage } from "@/models/models";
 import { Badge } from "@/components/ui/badge";
-import RichText from "../modules/feeds/RichText";
-import { UserPicture } from "../modules/members/user-picture";
-import { formatDistanceToNow } from "date-fns";
 import ImageCarousel from "@/components/ui/image-carousel"; // Import the carousel
+// Import ProposalItem
+import { ProposalItem } from "../modules/proposals/proposal-item";
+// Remove unused imports
+// import RichText from "../modules/feeds/RichText";
+// import { UserPicture } from "../modules/members/user-picture";
+// import { formatDistanceToNow } from "date-fns";
 
 export const PostPreview = ({ post, circle, feed, initialComments, initialShowAllComments }: PostItemProps) => {
     return (
@@ -159,62 +162,7 @@ const getProposalStageBadgeColor = (stage: ProposalStage) => {
     }
 };
 
-// Simple component to render Proposal preview
-type ProposalPreviewProps = {
-    proposal: ProposalDisplay;
-};
-const ProposalPreview: React.FC<ProposalPreviewProps> = ({ proposal }) => {
-    const router = useRouter();
-    const [, setContentPreview] = useAtom(contentPreviewAtom);
-
-    const navigateToProposal = () => {
-        if (proposal.circle?.handle && proposal._id) {
-            router.push(`/circles/${proposal.circle.handle}/proposals/${proposal._id}`);
-            setContentPreview(undefined); // Close preview on navigation
-        }
-    };
-
-    const navigateToAuthor = (e: React.MouseEvent) => {
-        e.stopPropagation(); // Prevent triggering proposal navigation
-        if (proposal.author?.handle) {
-            router.push(`/circles/${proposal.author.handle}`);
-            setContentPreview(undefined); // Close preview on navigation
-        }
-    };
-
-    return (
-        <div className="flex h-full flex-col overflow-y-auto p-4">
-            <div className="mb-2 flex items-start justify-between">
-                <h4 className="cursor-pointer pb-1 text-lg font-semibold hover:underline" onClick={navigateToProposal}>
-                    {proposal.name}{" "}
-                    <Badge className={`${getProposalStageBadgeColor(proposal.stage)} ml-1 translate-y-[-2px]`}>
-                        {proposal.stage.charAt(0).toUpperCase() + proposal.stage.slice(1)}
-                    </Badge>
-                </h4>
-            </div>
-            <div
-                className="mb-4 flex cursor-pointer items-center space-x-2 text-sm text-muted-foreground"
-                onClick={navigateToAuthor}
-            >
-                <UserPicture name={proposal.author.name} picture={proposal.author.picture?.url} size="24px" />
-                <span>{proposal.author.name}</span>
-                <span>•</span>
-                <span>{formatDistanceToNow(new Date(proposal.createdAt), { addSuffix: true })}</span>
-            </div>
-
-            {/* Show decisionText in preview */}
-            <div className="prose prose-sm mb-4 line-clamp-5 max-w-none flex-grow">
-                {" "}
-                {/* Added line-clamp */}
-                <RichText content={proposal.decisionText} />
-            </div>
-            {/* TODO: Add simplified action buttons if needed */}
-            <Button onClick={navigateToProposal} className="mt-auto">
-                View Full Proposal
-            </Button>
-        </div>
-    );
-};
+// Removed the old ProposalPreview component definition
 
 export const ContentPreview: React.FC = () => {
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
@@ -238,8 +186,16 @@ export const ContentPreview: React.FC = () => {
             case "circle":
             case "project":
                 return <CirclePreview circle={contentPreview!.content as Circle} circleType={contentPreview.type} />;
-            case "proposal":
-                return <ProposalPreview proposal={contentPreview!.content as ProposalDisplay} />;
+            case "proposal": {
+                // Render ProposalItem in preview mode
+                const proposal = contentPreview!.content as ProposalDisplay;
+                // Ensure the circle data is available on the proposal object for ProposalItem
+                if (!proposal.circle) {
+                    console.error("Proposal preview missing circle data:", proposal);
+                    return <div className="p-4 text-red-500">Error: Missing circle data for proposal preview.</div>;
+                }
+                return <ProposalItem proposal={proposal} circle={proposal.circle} isPreview={true} />;
+            }
             case "post":
                 return (
                     <PostPreview
