@@ -42,7 +42,7 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 // Import the new draft action
-import { createProposalDraftAction } from "@/app/circles/[handle]/proposals/actions";
+import { createProposalDraftAction, deleteProposalAction } from "@/app/circles/[handle]/proposals/actions";
 import { UserPicture } from "../members/user-picture";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -256,10 +256,10 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle }) => {
 
         startTransition(async () => {
             // TODO: Implement delete proposal action
-            // const result = await deleteProposalAction(selectedProposal._id);
+            const result = await deleteProposalAction(circle.handle!, selectedProposal._id);
 
             // Temporary mock implementation
-            const success = true;
+            const success = result.success;
             const message = "Proposal deleted successfully";
 
             if (success) {
