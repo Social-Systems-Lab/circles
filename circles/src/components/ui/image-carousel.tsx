@@ -88,7 +88,11 @@ const ImageCarousel: React.FC<PropType> = ({
         const media = images[0];
         return (
             <div
-                className={cn("relative h-full w-full cursor-pointer", containerClassName)}
+                className={cn(
+                    "relative h-full w-full",
+                    containerClassName,
+                    disableSwipe ? "pointer-events-none" : "cursor-pointer",
+                )}
                 onClick={() => handleImageClick(0)}
             >
                 <img
