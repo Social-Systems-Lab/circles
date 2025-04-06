@@ -15,7 +15,7 @@ import {
 import { getCircleByHandle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getUserByDid, getUserPrivate } from "@/lib/data/user"; // Added getUserPrivate
-import { saveFile, deleteFile, FileInfo as StorageFileInfo } from "@/lib/data/storage";
+import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage"; // Import isFile
 import { features } from "@/lib/data/constants"; // Assuming features.issues will be added here
 // Placeholder imports for issue data functions (to be created in src/lib/data/issue.ts)
 import {
@@ -216,7 +216,8 @@ export async function createIssueAction(
 
         // --- Handle Image Uploads ---
         let uploadedImages: Media[] = [];
-        const imageFiles = (data.images || []).filter((img): img is File => img instanceof File);
+        // Use isFile helper to identify file objects
+        const imageFiles = (data.images || []).filter(isFile);
 
         if (imageFiles.length > 0) {
             const uploadPromises = imageFiles.map(async (file) => {
@@ -359,7 +360,8 @@ export async function updateIssueAction(
         // --- Handle Image Updates (Similar logic to proposal update) ---
         const existingImages = issue.images || [];
         const submittedImageEntries = data.images || [];
-        const newImageFiles = submittedImageEntries.filter((entry): entry is File => entry instanceof File);
+        // Use isFile helper to identify file objects
+        const newImageFiles = submittedImageEntries.filter(isFile);
         const existingMediaJsonStrings = submittedImageEntries.filter(
             (entry): entry is string => typeof entry === "string",
         );

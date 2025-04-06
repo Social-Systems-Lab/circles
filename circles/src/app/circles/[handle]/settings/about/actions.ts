@@ -65,6 +65,7 @@ export async function saveAbout(values: {
 
         if (values.images) {
             for (const imageItem of values.images) {
+                // Check if it's a new file upload using isFile
                 if (imageItem.file) {
                     // New file upload
                     try {
