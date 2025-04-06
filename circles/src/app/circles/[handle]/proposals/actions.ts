@@ -366,14 +366,30 @@ export async function updateProposalAction(
 
         // --- Handle Image Updates ---
         const existingImages = proposal.images || [];
-        const submittedImages = data.images || [];
+        const submittedImageEntries = data.images || []; // These are Files or JSON strings
 
-        const newImageFiles = submittedImages.filter((img): img is File => img instanceof File);
-        const remainingExistingMediaUrls = submittedImages
-            .filter((img): img is Media => !(img instanceof File)) // Filter for existing Media objects passed from form
-            .map((media) => media.fileInfo.url); // Get their URLs
+        // Separate new files from existing media identifiers (JSON strings)
+        const newImageFiles = submittedImageEntries.filter((entry): entry is File => entry instanceof File);
+        const existingMediaJsonStrings = submittedImageEntries.filter(
+            (entry): entry is string => typeof entry === "string",
+        );
 
-        // Identify images to delete
+        // Parse the JSON strings back into Media objects
+        let parsedExistingMedia: Media[] = [];
+        try {
+            parsedExistingMedia = existingMediaJsonStrings.map((jsonString) => JSON.parse(jsonString) as Media);
+        } catch (e) {
+            console.error("Failed to parse existing media JSON:", e);
+            // Handle error appropriately, maybe return failure or proceed without existing images
+            return { success: false, message: "Failed to process existing image data." };
+        }
+
+        // Safely map to URLs, filtering out any malformed entries
+        const remainingExistingMediaUrls = parsedExistingMedia
+            .map((media) => media?.fileInfo?.url) // Safely access nested property
+            .filter((url): url is string => typeof url === "string"); // Filter out undefined/null URLs
+
+        // Identify images to delete (compare original existing images with the URLs of those submitted back)
         const imagesToDelete = existingImages.filter(
             (existing) => !remainingExistingMediaUrls.includes(existing.fileInfo.url),
         );
@@ -415,7 +431,7 @@ export async function updateProposalAction(
 
         // Combine remaining existing images and newly uploaded images
         const finalImages: Media[] = [
-            ...existingImages.filter((existing) => remainingExistingMediaUrls.includes(existing.fileInfo.url)),
+            ...parsedExistingMedia, // Use the parsed Media objects
             ...newlyUploadedImages,
         ];
         // --- End Image Updates ---

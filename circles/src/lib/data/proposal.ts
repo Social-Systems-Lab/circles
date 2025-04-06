@@ -249,9 +249,9 @@ export const getProposalById = async (proposalId: string, userDid?: string): Pro
                     _id: { $toString: "$_id" },
                     circleId: 1,
                     name: 1,
-                    background: 1, // Add background
-                    decisionText: 1, // Add decisionText
-                    images: 1, // Add images
+                    background: 1,
+                    decisionText: 1,
+                    images: 1,
                     createdBy: 1,
                     createdAt: 1,
                     editedAt: 1,
