@@ -480,7 +480,6 @@ export async function sendNotifications(
         project?: Circle;
         projectId?: string;
         // Proposal fields
-        proposal?: Proposal | ProposalDisplay;
         proposalId?: string;
         proposalName?: string;
         proposalOutcome?: string;
@@ -523,7 +522,6 @@ export async function sendNotifications(
             project: payload.project ? sanitizeCircle(payload.project) : undefined,
             projectId: payload.projectId?.toString(),
             // Sanitize proposal fields
-            proposal: payload.proposal ? sanitizeProposal(payload.proposal) : undefined, // Use sanitizeContent for proposal
             proposalId: payload.proposalId?.toString(),
             proposalName: payload.proposalName,
             proposalOutcome: payload.proposalOutcome,
@@ -645,7 +643,7 @@ function deriveBody(
 ): string {
     const userName = payload.user?.name || "Someone";
     const circleName = payload.circle?.name || "a circle";
-    const proposalName = payload.proposalName || payload.proposal?.name || "a proposal";
+    const proposalName = payload.proposalName || "a proposal";
     const issueTitle = payload.issueTitle || "an issue"; // Use provided title or fallback
     const assigneeName = payload.assigneeName || "someone";
     const oldStage = payload.issueOldStage || "previous stage";

@@ -40,7 +40,6 @@ type Notification = {
     project?: Circle;
     projectId?: string;
     // Proposal fields
-    proposal?: Proposal | ProposalDisplay;
     proposalId?: string;
     proposalName?: string;
     // Issue fields
@@ -142,7 +141,6 @@ export const Notifications = () => {
                     project: msg.content?.project,
                     projectId: msg.content?.projectId,
                     // Add proposal fields
-                    proposal: msg.content?.proposal,
                     proposalId: msg.content?.proposalId,
                     proposalName: msg.content?.proposalName,
                     // Add issue fields
@@ -201,7 +199,6 @@ export const Notifications = () => {
                     project: notification.project,
                     projectId: notification.projectId,
                     // Add proposal fields
-                    proposal: notification.proposal,
                     proposalId: notification.proposalId,
                     proposalName: notification.proposalName,
                     // Add issue fields

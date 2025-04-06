@@ -350,7 +350,6 @@ export async function notifyProposalSubmittedForReview(proposal: ProposalDisplay
         await sendNotifications("proposal_submitted_for_review", reviewers, {
             circle,
             user: submitter, // The user who triggered the notification (submitter)
-            proposal, // Pass the full proposal object
             proposalId: proposal._id?.toString(),
             proposalName: proposal.name,
         });
