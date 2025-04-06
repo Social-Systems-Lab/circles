@@ -822,6 +822,7 @@ export const proposalSchema = z.object({
     votingDeadline: z.date().optional(),
     reactions: z.record(z.string(), z.number()).default({}), // For "likes" in voting stage
     userGroups: z.array(z.string()).default([]), // User groups that can see this proposal
+    location: locationSchema.optional(), // Added location field
 });
 
 export type Proposal = z.infer<typeof proposalSchema>;
@@ -831,4 +832,5 @@ export interface ProposalDisplay extends Proposal {
     author: Circle;
     userReaction?: string; // Current user's reaction
     circle?: Circle;
+    location?: Location; // Added location field
 }

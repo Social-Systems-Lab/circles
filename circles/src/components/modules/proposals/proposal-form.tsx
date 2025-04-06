@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react"; // Added useEffect
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8,12 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Circle, Media, Proposal, ProposalStage } from "@/models/models";
+import { Circle, Media, Proposal, ProposalStage, Location } from "@/models/models"; // Added Location
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, Info } from "lucide-react";
+import { Loader2, Info, MapPinIcon, MapPin } from "lucide-react"; // Added MapPinIcon, MapPin
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader"; // Import ImageItem
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRouter } from "next/navigation";
+import LocationPicker from "@/components/forms/location-picker"; // Added LocationPicker
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"; // Added Dialog components
+import { getFullLocationName } from "@/lib/utils"; // Added getFullLocationName
 import { ProposalStageTimeline } from "./proposal-stage-timeline";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 // Import Server Actions
@@ -25,10 +28,12 @@ const proposalFormSchema = z.object({
     background: z.string().min(1, { message: "Background information is required" }),
     decisionText: z.string().min(1, { message: "Decision text is required" }),
     images: z.array(z.any()).optional(), // react-hook-form handles FileList/Media[]
+    location: z.any().optional(), // Added location field
 });
 
-type ProposalFormValues = Omit<z.infer<typeof proposalFormSchema>, "images"> & {
+type ProposalFormValues = Omit<z.infer<typeof proposalFormSchema>, "images" | "location"> & {
     images?: (File | Media)[]; // Allow both File (new uploads) and Media (existing)
+    location?: Location; // Added location field
 };
 
 interface ProposalFormProps {
@@ -40,8 +45,9 @@ interface ProposalFormProps {
 }
 
 export const ProposalForm: React.FC<ProposalFormProps> = ({ circle, proposal, circleHandle, proposalId }) => {
-    // Removed uploadedImages state, MultiImageUploader manages its internal state
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [location, setLocation] = useState<Location | undefined>(proposal?.location); // Added location state
+    const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false); // Added dialog state
     const { toast } = useToast();
     const router = useRouter();
     const isEditing = !!proposal;
@@ -54,8 +60,16 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({ circle, proposal, ci
             background: proposal?.background || "",
             decisionText: proposal?.decisionText || "",
             images: proposal?.images || [], // Pass existing images
+            location: proposal?.location, // Initialize location
         },
     });
+
+    // Initialize location state when proposal data is available (for edit mode)
+    useEffect(() => {
+        if (proposal?.location) {
+            setLocation(proposal.location);
+        }
+    }, [proposal?.location]);
 
     // Handle image updates from MultiImageUploader
     const handleImageChange = (items: ImageItem[]) => {
@@ -83,6 +97,11 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({ circle, proposal, ci
         formData.append("name", values.name);
         formData.append("background", values.background);
         formData.append("decisionText", values.decisionText);
+
+        // Append location if selected
+        if (location) {
+            formData.append("location", JSON.stringify(location));
+        }
 
         // Append images: both new Files and existing Media objects (as JSON strings) for update, only Files for create
         if (values.images) {
@@ -289,34 +308,98 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({ circle, proposal, ci
                                 )}
                             />
 
-                            <div className="flex justify-end space-x-4">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() =>
-                                        router.push(
-                                            `/circles/${circle.handle}/proposals${proposal?._id ? `/${proposal._id}` : ""}`,
-                                        )
-                                    }
-                                    disabled={isSubmitting}
-                                >
-                                    Cancel
-                                </Button>
-                                <Button type="submit" disabled={isSubmitting}>
-                                    {isSubmitting ? (
-                                        <>
-                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                            {isEditing ? "Updating..." : "Creating..."}
-                                        </>
-                                    ) : (
-                                        <>{isEditing ? "Update Proposal" : "Create Proposal"}</>
-                                    )}
-                                </Button>
+                            {/* Display Selected Location */}
+                            {location && (
+                                <div className="mt-4 flex flex-row items-center justify-start rounded-lg border bg-muted/40 p-3">
+                                    <MapPin className={`mr-2 h-4 w-4 text-primary`} />
+                                    <span className="text-sm text-muted-foreground">
+                                        {getFullLocationName(location)}
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Action Buttons */}
+                            <div className="flex items-center justify-between pt-4">
+                                {/* Left side: Icons */}
+                                <div className="flex space-x-1">
+                                    {/* Image Picker Trigger (already part of MultiImageUploader) */}
+                                    {/* Location Picker Trigger */}
+                                    <TooltipProvider delayDuration={100}>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="rounded-full"
+                                                    onClick={() => setIsLocationDialogOpen(true)}
+                                                    disabled={isSubmitting}
+                                                >
+                                                    <MapPinIcon className="h-5 w-5 text-gray-500" />
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p>Add Location</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                    {/* Add other icons here if needed */}
+                                </div>
+
+                                {/* Right side: Cancel/Submit */}
+                                <div className="flex space-x-4">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() =>
+                                            router.push(
+                                                `/circles/${circle.handle}/proposals${proposal?._id ? `/${proposal._id}` : ""}`,
+                                            )
+                                        }
+                                        disabled={isSubmitting}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button type="submit" disabled={isSubmitting}>
+                                        {isSubmitting ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                {isEditing ? "Updating..." : "Creating..."}
+                                            </>
+                                        ) : (
+                                            <>{isEditing ? "Update Proposal" : "Create Proposal"}</>
+                                        )}
+                                    </Button>
+                                </div>
                             </div>
                         </form>
                     </Form>
                 </CardContent>
             </Card>
+
+            {/* Location Dialog */}
+            <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Select Location</DialogTitle>
+                    </DialogHeader>
+                    <LocationPicker
+                        value={location!} // Pass current location
+                        onChange={(newLocation) => {
+                            setLocation(newLocation); // Update state
+                            form.setValue("location", newLocation, { shouldValidate: true }); // Update form value
+                        }}
+                    />
+                    <div className="mt-4 flex justify-end">
+                        <Button variant="secondary" onClick={() => setIsLocationDialogOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button variant="default" onClick={() => setIsLocationDialogOpen(false)} className="ml-2">
+                            Set Location
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

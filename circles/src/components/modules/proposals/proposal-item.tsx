@@ -8,10 +8,10 @@ import { ProposalStageTimeline } from "./proposal-stage-timeline";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link"; // Import Link
-import { Heart, Loader2, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Heart, Loader2, MoreHorizontal, Pencil, Trash2, MapPin } from "lucide-react"; // Added MapPin
 import { formatDistanceToNow } from "date-fns";
 import { UserPicture } from "../members/user-picture";
-import { cn } from "@/lib/utils";
+import { cn, getFullLocationName } from "@/lib/utils"; // Added getFullLocationName
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAtom } from "jotai";
@@ -341,11 +341,23 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                             {proposal.stage.charAt(0).toUpperCase() + proposal.stage.slice(1)}
                         </Badge>
                     </div>
-                    {/* <CardDescription className="mt-1">
+                    <CardDescription className="mt-1 flex items-center space-x-2 text-xs text-muted-foreground">
+                        <span>
                             Created by {proposal.author.name}{" "}
                             {proposal.createdAt &&
                                 formatDistanceToNow(new Date(proposal.createdAt), { addSuffix: true })}
-                        </CardDescription> */}
+                        </span>
+                        {/* Display Location if available */}
+                        {proposal.location && (
+                            <>
+                                <span>·</span>
+                                <div className="flex items-center">
+                                    <MapPin className="mr-1 h-3 w-3" />
+                                    <span>{getFullLocationName(proposal.location)}</span>
+                                </div>
+                            </>
+                        )}
+                    </CardDescription>
                 </div>
 
                 {/* Hide dropdown menu in preview */}
