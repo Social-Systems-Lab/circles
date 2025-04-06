@@ -58,7 +58,7 @@ export default async function SinglePostPage(props: SinglePostPageProps) {
         <div className="flex flex-1 flex-col">
             <div className="mb-4 mt-14 flex max-w-[1100px] flex-1 flex-col items-center justify-center md:ml-4 md:mr-4 md:mt-14">
                 <div className="w-full max-w-[600px]">
-                    <Link href={`/circles/${handle}/feeds/${feed.handle === "default" ? "" : feed.handle ?? ""}`}>
+                    <Link href={`/circles/${handle}/feed`}>
                         <Button variant="ghost" className="mb-4">
                             <ArrowLeft className="mr-2 h-4 w-4" />
                             Back to {feed.name || "feed"}

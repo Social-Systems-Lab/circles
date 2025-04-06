@@ -378,7 +378,7 @@ export const circleSchema = z.object({
     email: z.string().email().optional(),
     handle: handleSchema.optional(),
     picture: fileInfoSchema.optional(),
-    images: z.array(mediaSchema).optional(), // Replaced cover with images array
+    images: z.array(mediaSchema).optional(),
     description: z.string().optional(),
     content: z.string().optional(),
     mission: z.string().optional(),
@@ -820,8 +820,6 @@ export const proposalSchema = z.object({
     votingDeadline: z.date().optional(),
     reactions: z.record(z.string(), z.number()).default({}), // For "likes" in voting stage
     userGroups: z.array(z.string()).default([]), // User groups that can see this proposal
-    reviewers: z.array(z.string()).optional(), // Users who can review the proposal
-    media: z.array(mediaSchema).optional(), // For attached images
 });
 
 export type Proposal = z.infer<typeof proposalSchema>;

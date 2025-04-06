@@ -20,7 +20,6 @@ export const SAFE_PROPOSAL_PROJECTION = {
     votingDeadline: 1,
     reactions: 1,
     userGroups: 1,
-    reviewers: 1,
     media: 1,
     resolvedAtStage: 1, // Include the new field
 } as const;
@@ -108,7 +107,6 @@ export const getProposalsByCircleId = async (circleId: string, userDid?: string)
                     votingDeadline: 1,
                     reactions: 1,
                     userGroups: 1,
-                    reviewers: 1,
                     media: 1,
                     resolvedAtStage: 1, // Project the new field
                     author: {
@@ -259,7 +257,6 @@ export const getProposalById = async (proposalId: string, userDid?: string): Pro
                     votingDeadline: 1,
                     reactions: 1,
                     userGroups: 1,
-                    reviewers: 1,
                     media: 1,
                     resolvedAtStage: 1, // Project the new field
                     author: {
