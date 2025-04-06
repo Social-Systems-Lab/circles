@@ -384,7 +384,6 @@ export async function notifyProposalMovedToVoting(proposal: ProposalDisplay, app
         await sendNotifications("proposal_moved_to_voting", voters, {
             circle,
             user: approver, // The user who triggered the notification (approver)
-            proposal, // Pass the full proposal object
             proposalId: proposal._id?.toString(),
             proposalName: proposal.name,
         });
@@ -422,7 +421,6 @@ export async function notifyProposalApprovedForVoting(proposal: ProposalDisplay,
         await sendNotifications("proposal_approved_for_voting", [author], {
             circle,
             user: approver, // The user who triggered the notification (approver)
-            proposal, // Pass the full proposal object
             proposalId: proposal._id?.toString(),
             proposalName: proposal.name,
         });
@@ -482,7 +480,6 @@ export async function notifyProposalResolvedAuthor(proposal: ProposalDisplay, re
         await sendNotifications("proposal_resolved", [author], {
             circle,
             user: resolver, // The user who triggered the notification (resolver)
-            proposal, // Pass the full proposal object
             proposalId: proposal._id?.toString(),
             proposalName: proposal.name,
             proposalOutcome: proposal.outcome,
@@ -522,7 +519,6 @@ export async function notifyProposalResolvedVoters(proposal: ProposalDisplay, re
         await sendNotifications("proposal_resolved_voter", voters, {
             circle,
             user: resolver, // The user who triggered the notification (resolver)
-            proposal, // Pass the full proposal object
             proposalId: proposal._id?.toString(),
             proposalName: proposal.name,
             proposalOutcome: proposal.outcome,
@@ -563,7 +559,6 @@ export async function notifyProposalVote(proposal: ProposalDisplay, voter: Circl
         await sendNotifications("proposal_vote", [author], {
             circle,
             user: voter, // The user who triggered the notification (voter)
-            proposal, // Pass the full proposal object
             proposalId: proposal._id?.toString(),
             proposalName: proposal.name,
         });
