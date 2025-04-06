@@ -80,6 +80,7 @@ export const IssueForm: React.FC<IssueFormProps> = ({ circle, issue, circleHandl
 
     const handleSubmit = async (values: IssueFormValues) => {
         setIsSubmitting(true);
+        console.log("[IssueForm] handleSubmit called. isEditing:", isEditing, "issueId:", issueId); // Debug log
 
         const formData = new FormData();
         formData.append("title", values.title);
@@ -102,8 +103,10 @@ export const IssueForm: React.FC<IssueFormProps> = ({ circle, issue, circleHandl
         try {
             let result: { success: boolean; message?: string; issueId?: string };
             if (isEditing && issueId) {
+                console.log(`[IssueForm] Calling updateIssueAction with issueId: ${issueId}`); // Debug log
                 result = await updateIssueAction(circleHandle, issueId, formData);
             } else {
+                console.log("[IssueForm] Calling createIssueAction"); // Debug log
                 result = await createIssueAction(circleHandle, formData);
             }
 

@@ -72,7 +72,7 @@ export default async function EditIssuePage(props: PageProps) {
             </div>
 
             {/* Render IssueForm, passing circle, circleHandle, and the existing issue */}
-            <IssueForm circle={circle} circleHandle={circleHandle} issue={issue} />
+            <IssueForm circle={circle} circleHandle={circleHandle} issue={issue} issueId={issue._id} />
         </div>
     );
 }
