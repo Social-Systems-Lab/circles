@@ -341,12 +341,12 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                             {proposal.stage.charAt(0).toUpperCase() + proposal.stage.slice(1)}
                         </Badge>
                     </div>
-                    <CardDescription className="mt-1 flex items-center space-x-2 text-xs text-muted-foreground">
-                        <span>
+                    <div className="mt-1 flex items-center space-x-2 text-xs text-muted-foreground">
+                        <div>
                             Created by {proposal.author.name}{" "}
                             {proposal.createdAt &&
                                 formatDistanceToNow(new Date(proposal.createdAt), { addSuffix: true })}
-                        </span>
+                        </div>
                         {/* Display Location if available */}
                         {proposal.location && (
                             <>
@@ -357,7 +357,7 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                                 </div>
                             </>
                         )}
-                    </CardDescription>
+                    </div>
                 </div>
 
                 {/* Hide dropdown menu in preview */}

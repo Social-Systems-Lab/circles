@@ -109,6 +109,7 @@ const createProposalSchema = z.object({
     background: z.string().min(1),
     decisionText: z.string().min(1),
     images: z.array(z.any()).optional(), // Allow files or existing Media objects initially
+    location: z.string().optional(), // Added location (as JSON string)
 });
 
 export async function createProposalAction(
@@ -122,6 +123,7 @@ export async function createProposalAction(
             background: formData.get("background"),
             decisionText: formData.get("decisionText"),
             images: formData.getAll("images"), // Get all files/data associated with 'images'
+            location: formData.get("location"), // Get location string
         });
 
         if (!validatedData.success) {
@@ -154,6 +156,18 @@ export async function createProposalAction(
         const canCreateProposals = await isAuthorized(userDid, circle._id as string, features.proposals.create);
         if (!canCreateProposals) {
             return { success: false, message: "Not authorized to create proposals" };
+        }
+
+        // --- Parse Location ---
+        let locationData: Proposal["location"] = undefined;
+        if (data.location) {
+            try {
+                locationData = JSON.parse(data.location);
+                // Optional: Add more specific validation for the parsed location object if needed
+            } catch (e) {
+                console.error("Failed to parse location JSON:", e);
+                return { success: false, message: "Invalid location data format." };
+            }
         }
 
         // --- Handle Image Uploads ---
@@ -191,6 +205,7 @@ export async function createProposalAction(
             background: data.background,
             decisionText: data.decisionText,
             images: uploadedImages, // Use uploaded image data
+            location: locationData, // Use parsed location data
             circleId: circle._id as string,
             createdBy: userDid,
             createdAt: new Date(),
@@ -304,6 +319,7 @@ const updateProposalSchema = z.object({
     background: z.string().min(1),
     decisionText: z.string().min(1),
     images: z.array(z.any()).optional(), // Allow files or existing Media objects
+    location: z.string().optional(), // Added location (as JSON string)
 });
 
 export async function updateProposalAction(
@@ -318,6 +334,7 @@ export async function updateProposalAction(
             background: formData.get("background"),
             decisionText: formData.get("decisionText"),
             images: formData.getAll("images"), // Get all files/data associated with 'images'
+            location: formData.get("location"), // Get location string
         });
 
         if (!validatedData.success) {
@@ -366,6 +383,21 @@ export async function updateProposalAction(
 
         if (proposal.stage === "voting" || proposal.stage === "resolved") {
             return { success: false, message: "Proposals can not be edited beyond review stage" };
+        }
+
+        // --- Parse Location ---
+        let locationData: Proposal["location"] = undefined;
+        if (data.location) {
+            try {
+                locationData = JSON.parse(data.location);
+                // Optional: Add more specific validation for the parsed location object if needed
+            } catch (e) {
+                console.error("Failed to parse location JSON:", e);
+                return { success: false, message: "Invalid location data format." };
+            }
+        } else {
+            // If location string is empty or null, explicitly set it to undefined to remove it
+            locationData = undefined;
         }
 
         // --- Handle Image Updates ---
@@ -446,6 +478,7 @@ export async function updateProposalAction(
             background: data.background,
             decisionText: data.decisionText,
             images: finalImages,
+            location: locationData, // Use parsed location data (or undefined to remove)
             editedAt: new Date(),
         };
 

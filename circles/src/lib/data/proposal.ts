@@ -111,6 +111,7 @@ export const getProposalsByCircleId = async (circleId: string, userDid?: string)
                     reactions: 1,
                     userGroups: 1,
                     resolvedAtStage: 1,
+                    location: 1,
                     author: {
                         _id: { $toString: "$authorDetails._id" },
                         did: "$authorDetails.did",
@@ -262,6 +263,7 @@ export const getProposalById = async (proposalId: string, userDid?: string): Pro
                     reactions: 1,
                     userGroups: 1,
                     resolvedAtStage: 1,
+                    location: 1,
                     author: {
                         _id: { $toString: "$authorDetails._id" },
                         did: "$authorDetails.did",
