@@ -310,7 +310,10 @@ export const getAuthorizedMembers = async (circle: string | Circle, feature: Fea
     let moduleHandle = feature.module;
     let allowedUserGroups = circle?.accessRules?.[moduleHandle]?.[featureHandle];
 
-    if (!allowedUserGroups) return [];
+    // If feature not found in access rules (is undefined), get default user groups from the feature object
+    if (allowedUserGroups === undefined) {
+        allowedUserGroups = feature.defaultUserGroups ?? [];
+    }
 
     // get authenticated user IDs
     let members: Member[] = [];

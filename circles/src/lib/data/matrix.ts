@@ -8,6 +8,8 @@ import {
     Comment,
     Proposal,
     ProposalDisplay,
+    IssueDisplay, // Added IssueDisplay
+    IssueStage, // Added IssueStage
 } from "@/models/models";
 import crypto from "crypto";
 import { getCirclesByDids, updateCircle } from "./circle";
@@ -483,6 +485,12 @@ export async function sendNotifications(
         proposalName?: string;
         proposalOutcome?: string;
         proposalResolvedAtStage?: string;
+        // Issue fields
+        issueId?: string;
+        issueTitle?: string;
+        assigneeName?: string;
+        issueOldStage?: IssueStage;
+        issueNewStage?: IssueStage;
         messageBody?: string; // For pre-formatted messages like resolution
     },
 ): Promise<void> {
@@ -520,6 +528,12 @@ export async function sendNotifications(
             proposalName: payload.proposalName,
             proposalOutcome: payload.proposalOutcome,
             proposalResolvedAtStage: payload.proposalResolvedAtStage,
+            // Sanitize issue fields
+            issueId: payload.issueId?.toString(),
+            issueTitle: payload.issueTitle,
+            assigneeName: payload.assigneeName,
+            issueOldStage: payload.issueOldStage,
+            issueNewStage: payload.issueNewStage,
             messageBody: payload.messageBody,
         };
 
@@ -622,11 +636,20 @@ function deriveBody(
         // Proposal fields for fallback text generation
         proposal?: Proposal | ProposalDisplay;
         proposalName?: string;
+        // Issue fields for fallback text generation
+        issueTitle?: string;
+        assigneeName?: string;
+        issueOldStage?: IssueStage;
+        issueNewStage?: IssueStage;
     },
 ): string {
     const userName = payload.user?.name || "Someone";
     const circleName = payload.circle?.name || "a circle";
     const proposalName = payload.proposalName || payload.proposal?.name || "a proposal";
+    const issueTitle = payload.issueTitle || "an issue"; // Use provided title or fallback
+    const assigneeName = payload.assigneeName || "someone";
+    const oldStage = payload.issueOldStage || "previous stage";
+    const newStage = payload.issueNewStage || "new stage";
 
     switch (notificationType) {
         case "follow_request":
@@ -660,11 +683,20 @@ function deriveBody(
             return `Proposal "${proposalName}" in ${circleName} has been resolved`;
         case "proposal_vote":
             return `${userName} voted on your proposal "${proposalName}" in ${circleName}`;
+        // Issue Notifications Fallbacks
+        case "issue_submitted_for_review":
+            return `${userName} submitted issue "${issueTitle}" for review in ${circleName}`;
+        case "issue_approved":
+            return `Your issue "${issueTitle}" in ${circleName} was approved and is now Open`;
+        case "issue_assigned":
+            return `${userName} assigned issue "${issueTitle}" to you in ${circleName}`;
+        case "issue_status_changed":
+            return `Issue "${issueTitle}" in ${circleName} changed status from ${oldStage} to ${newStage}`;
         default:
             // Ensure exhaustive check or provide a generic default
             const exhaustiveCheck: never = notificationType;
             console.warn(`Unhandled notification type in deriveBody: ${exhaustiveCheck}`);
-            return "New notification";
+            return "Unknown notification";
     }
 }
 

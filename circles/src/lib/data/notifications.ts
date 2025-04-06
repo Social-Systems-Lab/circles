@@ -603,7 +603,7 @@ export async function notifyIssueSubmittedForReview(issue: IssueDisplay, submitt
         if (!circle) return;
 
         // Find users with review permission (excluding the submitter)
-        const reviewers = (await getAuthorizedMembers(circle, features.issues?.review || "issues_review")).filter(
+        const reviewers = (await getAuthorizedMembers(circle, features.issues?.review)).filter(
             (user: Circle) => user.did !== submitter.did,
         );
 
