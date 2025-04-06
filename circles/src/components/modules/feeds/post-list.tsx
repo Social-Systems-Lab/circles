@@ -14,6 +14,7 @@ import { UserPicture } from "../members/user-picture";
 import { CirclePicture } from "../circles/circle-picture";
 import { Button } from "@/components/ui/button";
 import { Edit, Heart, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Trash2, Users } from "lucide-react"; // Added Users
+import { Badge } from "@/components/ui/badge"; // Added Badge import
 import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import React, {
     Dispatch,
@@ -604,13 +605,18 @@ export const PostItem = ({
                             </div>
                             <div className="flex flex-col">
                                 <div
-                                    className="cursor-pointer font-semibold"
+                                    className="flex cursor-pointer flex-row items-center font-semibold"
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         handleCircleClick(post.circle!); // post.circle is checked in condition
                                     }}
                                 >
                                     {post.circle.name}
+                                    {userGroupName && (
+                                        <Badge variant="secondary" className="ml-2">
+                                            {userGroupName}
+                                        </Badge>
+                                    )}
                                 </div>
                                 <div
                                     className="cursor-pointer text-sm text-gray-500"
@@ -620,12 +626,6 @@ export const PostItem = ({
                                     }}
                                 >
                                     {post.author.name} • {formattedDate}
-                                    {userGroupName && (
-                                        <>
-                                            &nbsp;•&nbsp;
-                                            {userGroupName}
-                                        </>
-                                    )}
                                 </div>
                             </div>
                         </div>
@@ -643,22 +643,21 @@ export const PostItem = ({
                             />
                             <div className="flex flex-col">
                                 <div
-                                    className="cursor-pointer font-semibold"
+                                    className="flex cursor-pointer flex-row items-center font-semibold"
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         handleAuthorClick(post.author);
                                     }}
                                 >
                                     {post.author?.name}
+                                    {userGroupName && (
+                                        <Badge variant="secondary" className="ml-2">
+                                            {userGroupName}
+                                        </Badge>
+                                    )}
                                 </div>
                                 <div className="flex cursor-pointer items-center text-sm text-gray-500">
                                     {formattedDate}
-                                    {userGroupName && (
-                                        <>
-                                            &nbsp;•&nbsp;
-                                            {userGroupName.toLocaleLowerCase()}
-                                        </>
-                                    )}
                                 </div>
                             </div>
                         </div>
