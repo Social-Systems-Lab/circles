@@ -123,7 +123,7 @@ export async function createProposalAction(
             background: formData.get("background"),
             decisionText: formData.get("decisionText"),
             images: formData.getAll("images"), // Get all files/data associated with 'images'
-            location: formData.get("location"), // Get location string
+            location: formData.get("location") ?? undefined, // Convert null to undefined for Zod
         });
 
         if (!validatedData.success) {
@@ -334,7 +334,7 @@ export async function updateProposalAction(
             background: formData.get("background"),
             decisionText: formData.get("decisionText"),
             images: formData.getAll("images"), // Get all files/data associated with 'images'
-            location: formData.get("location"), // Get location string
+            location: formData.get("location") ?? undefined, // Convert null to undefined for Zod
         });
 
         if (!validatedData.success) {
