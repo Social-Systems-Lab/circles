@@ -41,7 +41,8 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "@/components/utils/use-is-compact";
-import { createProposalAction } from "@/app/circles/[handle]/proposals/actions";
+// Import the new draft action
+import { createProposalDraftAction } from "@/app/circles/[handle]/proposals/actions";
 import { UserPicture } from "../members/user-picture";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -285,17 +286,19 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle }) => {
         }
 
         startTransition(async () => {
-            const result = await createProposalAction(circle.handle!, { name: newProposalName, description: "" });
+            // Call the new draft action, passing only the name
+            const result = await createProposalDraftAction(circle.handle!, newProposalName.trim());
 
-            if (result.success && result.proposal) {
+            // Check for proposalId in the result
+            if (result.success && result.proposalId) {
                 toast({
                     title: "Success",
-                    description: "Proposal created. Redirecting to edit...",
+                    description: "Proposal draft created. Redirecting to edit...",
                 });
                 setCreateProposalDialogOpen(false);
                 setNewProposalName(""); // Clear input
-                // Redirect to the edit page of the new proposal
-                router.push(`/circles/${circle.handle}/proposals/${result.proposal._id}/edit`);
+                // Redirect to the edit page using the returned proposalId
+                router.push(`/circles/${circle.handle}/proposals/${result.proposalId}/edit`);
             } else {
                 toast({
                     title: "Error",

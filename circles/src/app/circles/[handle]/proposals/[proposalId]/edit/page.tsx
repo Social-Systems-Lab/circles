@@ -1,5 +1,5 @@
 import { getCircleByHandle } from "@/lib/data/circle";
-import { getProposalAction, updateProposalAction } from "../../actions";
+import { getProposalAction } from "../../actions"; // Remove updateProposalAction import
 import { ProposalForm } from "@/components/modules/proposals/proposal-form";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -7,6 +7,7 @@ import { ArrowLeft } from "lucide-react";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { redirect } from "next/navigation";
+import { Media } from "@/models/models"; // Import Media type
 
 type PageProps = {
     params: Promise<{ handle: string; proposalId: string }>;
@@ -79,6 +80,8 @@ export default async function EditProposalPage(props: PageProps) {
         );
     }
 
+    // Remove the handleSubmit wrapper
+
     return (
         <div className="formatted flex w-full flex-col">
             <div className="flex items-center p-4">
@@ -90,11 +93,8 @@ export default async function EditProposalPage(props: PageProps) {
                 </Button>
             </div>
 
-            <ProposalForm
-                circle={circle}
-                proposal={proposal}
-                onSubmit={updateProposalAction.bind(null, circleHandle, proposalId)}
-            />
+            {/* Remove onSubmit, pass circleHandle and proposalId */}
+            <ProposalForm circle={circle} proposal={proposal} circleHandle={circleHandle} proposalId={proposalId} />
         </div>
     );
 }

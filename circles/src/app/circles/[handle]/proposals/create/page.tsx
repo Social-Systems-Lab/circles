@@ -6,7 +6,8 @@ import { ArrowLeft } from "lucide-react";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { redirect } from "next/navigation";
-import { createProposalAction } from "../actions";
+// No longer need createProposalAction import here
+import { Media } from "@/models/models"; // Import Media type
 
 type PageProps = {
     params: Promise<{ handle: string }>;
@@ -56,6 +57,8 @@ export default async function CreateProposalPage(props: PageProps) {
         );
     }
 
+    // Remove the handleSubmit wrapper
+
     return (
         <div className="formatted flex h-full w-full flex-col">
             <div className="mb-4 flex items-center p-4">
@@ -68,7 +71,8 @@ export default async function CreateProposalPage(props: PageProps) {
                 <h1 className="text-2xl font-bold">Create New Proposal</h1>
             </div>
 
-            <ProposalForm circle={circle} onSubmit={createProposalAction.bind(null, circleHandle)} />
+            {/* Remove onSubmit, pass circleHandle */}
+            <ProposalForm circle={circle} circleHandle={circleHandle} />
         </div>
     );
 }

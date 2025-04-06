@@ -202,8 +202,11 @@ const ProposalPreview: React.FC<ProposalPreviewProps> = ({ proposal }) => {
                 <span>{formatDistanceToNow(new Date(proposal.createdAt), { addSuffix: true })}</span>
             </div>
 
-            <div className="prose prose-sm mb-4 max-w-none flex-grow">
-                <RichText content={proposal.description} />
+            {/* Show decisionText in preview */}
+            <div className="prose prose-sm mb-4 line-clamp-5 max-w-none flex-grow">
+                {" "}
+                {/* Added line-clamp */}
+                <RichText content={proposal.decisionText} />
             </div>
             {/* TODO: Add simplified action buttons if needed */}
             <Button onClick={navigateToProposal} className="mt-auto">

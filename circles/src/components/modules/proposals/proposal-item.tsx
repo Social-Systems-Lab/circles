@@ -38,6 +38,7 @@ import { Badge } from "@/components/ui/badge";
 import RichText from "../feeds/RichText";
 import { CirclePicture } from "../circles/circle-picture";
 import { useIsCompact } from "@/components/utils/use-is-compact";
+import ImageCarousel from "@/components/ui/image-carousel"; // Correct: Use default import
 import {
     changeProposalStageAction,
     deleteProposalAction,
@@ -394,8 +395,31 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle }) 
                         </div>
                     )}
 
-                    <div className="prose max-w-none">
-                        <RichText content={proposal.description}></RichText>
+                    {/* Decision Text Section */}
+                    <div className="mb-6 rounded-md border border-blue-200 bg-blue-50 p-4">
+                        <h3 className="mb-2 text-lg font-semibold text-blue-800">Decision Text</h3>
+                        <div className="prose prose-sm max-w-none text-blue-900">
+                            <RichText content={proposal.decisionText} />
+                        </div>
+                    </div>
+
+                    {/* Background & Images Section */}
+                    <div className="mb-6">
+                        <h3 className="mb-2 text-lg font-semibold">Background & Rationale</h3>
+                        {proposal.images && proposal.images.length > 0 && (
+                            <div className="mb-4">
+                                <ImageCarousel
+                                    images={proposal.images} // Pass the Media[] array directly
+                                    options={{ loop: true }}
+                                    containerClassName="w-full" // Correct prop name
+                                    showArrows={proposal.images.length > 1} // Show arrows only if multiple images
+                                    showDots={proposal.images.length > 1} // Show dots only if multiple images
+                                />
+                            </div>
+                        )}
+                        <div className="prose max-w-none">
+                            <RichText content={proposal.background} />
+                        </div>
                     </div>
 
                     {proposal.stage === "voting" && (

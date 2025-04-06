@@ -13,15 +13,16 @@ export const SAFE_PROPOSAL_PROJECTION = {
     createdAt: 1,
     editedAt: 1,
     name: 1,
-    description: 1,
+    background: 1, // Add background
+    decisionText: 1, // Add decisionText
+    images: 1, // Add images
     stage: 1,
     outcome: 1,
     outcomeReason: 1,
     votingDeadline: 1,
     reactions: 1,
     userGroups: 1,
-    media: 1,
-    resolvedAtStage: 1, // Include the new field
+    resolvedAtStage: 1,
 } as const;
 
 /**
@@ -97,7 +98,9 @@ export const getProposalsByCircleId = async (circleId: string, userDid?: string)
                     _id: { $toString: "$_id" },
                     circleId: 1,
                     name: 1,
-                    description: 1,
+                    background: 1, // Add background
+                    decisionText: 1, // Add decisionText
+                    images: 1, // Add images
                     createdBy: 1,
                     createdAt: 1,
                     editedAt: 1,
@@ -107,8 +110,7 @@ export const getProposalsByCircleId = async (circleId: string, userDid?: string)
                     votingDeadline: 1,
                     reactions: 1,
                     userGroups: 1,
-                    media: 1,
-                    resolvedAtStage: 1, // Project the new field
+                    resolvedAtStage: 1,
                     author: {
                         _id: { $toString: "$authorDetails._id" },
                         did: "$authorDetails.did",
@@ -247,7 +249,9 @@ export const getProposalById = async (proposalId: string, userDid?: string): Pro
                     _id: { $toString: "$_id" },
                     circleId: 1,
                     name: 1,
-                    description: 1,
+                    background: 1, // Add background
+                    decisionText: 1, // Add decisionText
+                    images: 1, // Add images
                     createdBy: 1,
                     createdAt: 1,
                     editedAt: 1,
@@ -257,8 +261,7 @@ export const getProposalById = async (proposalId: string, userDid?: string): Pro
                     votingDeadline: 1,
                     reactions: 1,
                     userGroups: 1,
-                    media: 1,
-                    resolvedAtStage: 1, // Project the new field
+                    resolvedAtStage: 1,
                     author: {
                         _id: { $toString: "$authorDetails._id" },
                         did: "$authorDetails.did",

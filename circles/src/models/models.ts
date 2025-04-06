@@ -812,7 +812,9 @@ export const proposalSchema = z.object({
     createdAt: z.date(),
     editedAt: z.date().optional(),
     name: z.string(),
-    description: z.string(),
+    background: z.string(), // Context, rationale, history
+    decisionText: z.string(), // The specific action/request being decided
+    images: z.array(mediaSchema).optional(), // Images for the background section
     stage: proposalStageSchema.default("draft"),
     outcome: proposalOutcomeSchema.optional(),
     outcomeReason: z.string().optional(),
