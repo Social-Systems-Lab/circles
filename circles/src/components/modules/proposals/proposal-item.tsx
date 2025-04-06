@@ -328,14 +328,13 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
         <>
             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                 <div>
-                    <div className="flex items-center space-x-2">
+                    <div className="mb-2 flex items-center space-x-2">
                         {/* Link only if not in preview */}
                         <Link
                             href={`/circles/${circle.handle}/proposals/${proposal._id}`}
                             onClick={(e: React.MouseEvent) => e.stopPropagation()} // Add type for event
-                            className="mb-1 text-2xl font-semibold hover:underline"
                         >
-                            {proposal.name}
+                            <h1>{proposal.name}</h1>
                         </Link>
                         <Badge className={`${getStageBadgeColor(proposal.stage)}`}>
                             {proposal.stage.charAt(0).toUpperCase() + proposal.stage.slice(1)}

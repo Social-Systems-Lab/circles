@@ -46,6 +46,7 @@ import {
 } from "@/app/circles/[handle]/issues/actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // For assignee dropdown
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import Link from "next/link";
 
 // Helper function for stage badge styling and icons (copied from issues-list)
 const getStageInfo = (stage: IssueStage) => {
@@ -213,8 +214,14 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
             <Card className="mb-6">
                 <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                     <div>
-                        <div className="flex items-center space-x-2">
-                            <h1 className="mb-1 text-2xl font-semibold">{issue.title}</h1>
+                        <div className="mb-2 flex items-center space-x-2">
+                            {/* Link only if not in preview */}
+                            <Link
+                                href={`/circles/${circle.handle}/issues/${issue._id}`}
+                                onClick={(e: React.MouseEvent) => e.stopPropagation()} // Add type for event
+                            >
+                                <h1>{issue.title}</h1>
+                            </Link>
                             <Badge className={`${stageColor} items-center gap-1`}>
                                 <StageIcon className="h-3 w-3" />
                                 {stageText}

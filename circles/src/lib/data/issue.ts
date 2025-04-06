@@ -32,80 +32,96 @@ export const SAFE_ISSUE_PROJECTION = {
  */
 export const getIssuesByCircleId = async (circleId: string, userDid: string): Promise<IssueDisplay[]> => {
     try {
-        // Get the user's membership details for this circle to check groups
-        const memberInfo = await Members.findOne({ userDid, circleId });
-        const userGroupsInCircle = memberInfo?.userGroups || [];
-        // Always include "everyone" as a group the user belongs to implicitly
-        const effectiveUserGroups = ["everyone", ...userGroupsInCircle];
-
         const issues = (await Issues.aggregate([
+            // 1) Match on circleId first
             { $match: { circleId } },
-            // Filter issues based on userGroups:
-            // - Show if issue.userGroups is empty/null (visible to all members)
-            // - Show if issue.userGroups includes "everyone"
-            // - Show if issue.userGroups has any overlap with the user's groups in this circle
-            {
-                $match: {
-                    $or: [
-                        { userGroups: { $exists: false } },
-                        { userGroups: { $size: 0 } },
-                        { userGroups: { $in: effectiveUserGroups } },
-                    ],
-                },
-            },
-            // Lookup author details
-            {
-                $lookup: {
-                    from: "circles", // Assuming users are stored in 'circles' collection
-                    localField: "createdBy",
-                    foreignField: "did",
-                    pipeline: [{ $project: SAFE_CIRCLE_PROJECTION }], // Use safe projection
-                    as: "authorDetails",
-                },
-            },
-            { $unwind: "$authorDetails" }, // Should always find an author
-            // Lookup assignee details (optional)
+
+            // 2) Lookup author details
             {
                 $lookup: {
                     from: "circles",
-                    localField: "assignedTo",
-                    foreignField: "did",
-                    pipeline: [{ $project: SAFE_CIRCLE_PROJECTION }],
+                    let: { authorDid: "$createdBy" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        // Only match if the circle's did == the issue's createdBy
+                                        { $eq: ["$did", "$$authorDid"] },
+                                        // Only match if circleType is "user" (or whatever type you want)
+                                        { $eq: ["$circleType", "user"] },
+                                        // Optional, ensure the authorDid itself is not null
+                                        { $ne: ["$$authorDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" }, // Convert circle _id to string
+                            },
+                        },
+                    ],
+                    as: "authorDetails",
+                },
+            },
+            // We expect exactly one author, but if no match was found, it just won't unwind
+            { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: false } },
+
+            // 3) Lookup assignee details
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { assigneeDid: "$assignedTo" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        // Only match if circle's did == issue's assignedTo
+                                        { $eq: ["$did", "$$assigneeDid"] },
+                                        // Only match if circleType is "user"
+                                        { $eq: ["$circleType", "user"] },
+                                        // Optional, ensure assignedTo is not null
+                                        { $ne: ["$$assigneeDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" }, // Convert circle _id to string
+                            },
+                        },
+                    ],
                     as: "assigneeDetails",
                 },
             },
-            // Use $unwind with preserveNullAndEmptyArrays for optional assignee
+            // Optional assignee => preserveNullAndEmptyArrays = true
             { $unwind: { path: "$assigneeDetails", preserveNullAndEmptyArrays: true } },
-            // Lookup circle details (optional, if needed - IssueDisplay doesn't strictly require it here)
-            // {
-            //     $lookup: {
-            //         from: "circles",
-            //         let: { cId: { $toObjectId: "$circleId" } },
-            //         pipeline: [
-            //             { $match: { $expr: { $eq: ["$_id", "$$cId"] } } },
-            //             { $project: { _id: { $toString: "$_id" }, name: 1, handle: 1, picture: 1 } }
-            //         ],
-            //         as: "circleDetails"
-            //     }
-            // },
-            // { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
-            // Final projection
+
+            // 4) Final projection
             {
                 $project: {
-                    ...SAFE_ISSUE_PROJECTION, // Include all safe fields
-                    _id: { $toString: "$_id" }, // Ensure _id is string
+                    // Include safe fields from the Issue
+                    ...SAFE_ISSUE_PROJECTION,
+                    // Convert the Issue _id to string
+                    _id: { $toString: "$_id" },
                     author: "$authorDetails",
-                    assignee: "$assigneeDetails", // Will be null if not assigned or assignee not found
-                    // circle: "$circleDetails" // Include if circle lookup is added
+                    assignee: "$assigneeDetails", // null if no match
                 },
             },
-            { $sort: { createdAt: -1 } }, // Sort by creation date
+
+            // 5) Sort by newest first
+            { $sort: { createdAt: -1 } },
         ]).toArray()) as IssueDisplay[];
 
         return issues;
     } catch (error) {
         console.error("Error getting issues by circle ID:", error);
-        throw error; // Re-throw to allow action layer to handle
+        throw error;
     }
 };
 
@@ -116,57 +132,109 @@ export const getIssuesByCircleId = async (circleId: string, userDid: string): Pr
  * @returns The issue display data or null if not found
  */
 export const getIssueById = async (issueId: string, userDid?: string): Promise<IssueDisplay | null> => {
-    // userDid is optional here, mainly for consistency, but visibility check happens in action
     try {
         if (!ObjectId.isValid(issueId)) {
             return null;
         }
 
         const issues = (await Issues.aggregate([
+            // 1) Match the specific Issue by _id
             { $match: { _id: new ObjectId(issueId) } },
-            // Lookup author details
+
+            // 2) Lookup author details, only match if circleType = "user" and did = createdBy
             {
                 $lookup: {
                     from: "circles",
-                    localField: "createdBy",
-                    foreignField: "did",
-                    pipeline: [{ $project: SAFE_CIRCLE_PROJECTION }],
+                    let: { authorDid: "$createdBy" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        // must match the author DID
+                                        { $eq: ["$did", "$$authorDid"] },
+                                        // ensure circleType is "user" for actual user circles
+                                        { $eq: ["$circleType", "user"] },
+                                        // optional: ignore null or missing did
+                                        { $ne: ["$$authorDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" }, // convert ObjectId -> string
+                            },
+                        },
+                    ],
                     as: "authorDetails",
                 },
             },
-            { $unwind: "$authorDetails" },
-            // Lookup assignee details (optional)
+            // expect exactly one author, but if none found, it won't unwind
+            { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: false } },
+
+            // 3) Lookup assignee details, also restricted to circleType="user"
             {
                 $lookup: {
                     from: "circles",
-                    localField: "assignedTo",
-                    foreignField: "did",
-                    pipeline: [{ $project: SAFE_CIRCLE_PROJECTION }],
+                    let: { assigneeDid: "$assignedTo" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$did", "$$assigneeDid"] },
+                                        { $eq: ["$circleType", "user"] },
+                                        { $ne: ["$$assigneeDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" },
+                            },
+                        },
+                    ],
                     as: "assigneeDetails",
                 },
             },
+            // optional assignee => preserveNullAndEmptyArrays = true
             { $unwind: { path: "$assigneeDetails", preserveNullAndEmptyArrays: true } },
-            // Lookup circle details (optional, if needed)
+
+            // 4) Lookup circle details (if the Issue is associated with some circle _id).
+            //    Typically you only have one circle doc with that _id, so no duplication.
             {
                 $lookup: {
                     from: "circles",
                     let: { cId: { $toObjectId: "$circleId" } },
                     pipeline: [
                         { $match: { $expr: { $eq: ["$_id", "$$cId"] } } },
-                        { $project: { _id: { $toString: "$_id" }, name: 1, handle: 1, picture: 1 } },
+                        {
+                            $project: {
+                                _id: { $toString: "$_id" },
+                                name: 1,
+                                handle: 1,
+                                picture: 1,
+                            },
+                        },
                     ],
                     as: "circleDetails",
                 },
             },
             { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
-            // Final projection
+
+            // 5) Final projection
             {
                 $project: {
+                    // Include safe fields from the Issue
                     ...SAFE_ISSUE_PROJECTION,
                     _id: { $toString: "$_id" },
                     author: "$authorDetails",
                     assignee: "$assigneeDetails",
-                    circle: "$circleDetails", // Include circle info
+                    circle: "$circleDetails",
                 },
             },
         ]).toArray()) as IssueDisplay[];

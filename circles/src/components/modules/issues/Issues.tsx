@@ -62,7 +62,7 @@ export default async function IssuesModule({ circle }: PageProps) {
     return (
         <div className="flex w-full flex-col">
             {/* Render IssuesList component (placeholder) */}
-            <IssuesList issues={filteredIssues} circle={circle} permissions={permissions} currentUserDid={userDid} />
+            <IssuesList issues={filteredIssues} circle={circle} permissions={permissions} />
         </div>
     );
 }

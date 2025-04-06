@@ -187,6 +187,13 @@ export const features = {
             defaultUserGroups: ["admins", "moderators", "members", "everyone"], // Default: All can view
             module: "issues",
         } as Feature,
+        update: {
+            name: "Update Issues",
+            handle: "update",
+            description: "Edit existing issues",
+            defaultUserGroups: ["admins", "moderators"], // Default: Mods+ can update (or creator?)
+            module: "issues",
+        } as Feature,
         create: {
             name: "Create Issues",
             handle: "create",
