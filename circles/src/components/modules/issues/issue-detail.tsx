@@ -437,7 +437,7 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
                     <DialogHeader>
                         <DialogTitle>Confirm Stage Change</DialogTitle>
                         <DialogDescription>
-                            Are you sure you want to move this issue to the "{targetStage}" stage?
+                            Are you sure you want to move this issue to the &quot;{targetStage}&quot; stage?
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>

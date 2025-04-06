@@ -38,7 +38,7 @@ export default async function IssueDetailPage(props: PageProps) {
             <div className="formatted flex h-full w-full flex-col items-center justify-center p-4 text-center">
                 <h2 className="mb-2 text-xl font-semibold">Issue Not Found</h2>
                 <p className="text-gray-600">
-                    The issue you're looking for doesn't exist or you don't have permission to view it.
+                    The issue you&apos;re looking for doesn&apos;t exist or you don&apos;t have permission to view it.
                 </p>
                 <Button asChild className="mt-4">
                     <Link href={`/circles/${circleHandle}/issues`}>

@@ -449,8 +449,8 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
                             <DialogHeader>
                                 <DialogTitle>Delete Issue</DialogTitle>
                                 <DialogDescription>
-                                    Are you sure you want to delete the issue "{selectedIssue?.title}"? This action
-                                    cannot be undone.
+                                    Are you sure you want to delete the issue &quot;{selectedIssue?.title}&quot;? This
+                                    action cannot be undone.
                                 </DialogDescription>
                             </DialogHeader>
                             <DialogFooter>
