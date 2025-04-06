@@ -541,6 +541,7 @@ export async function getPostsFromMultipleFeeds(
                     handle: "$circle.handle",
                     picture: "$circle.picture",
                     accessRules: "$circle.accessRules",
+                    userGroups: "$circle.userGroups",
                 },
             },
         },
