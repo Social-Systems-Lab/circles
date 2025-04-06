@@ -396,7 +396,7 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
 
                 {/* Decision Text Section */}
                 <div className="mb-6 rounded-md border border-blue-200 bg-blue-50 p-4">
-                    <h3 className="mb-2 text-lg font-semibold text-blue-800">Decision Text</h3>
+                    <div className="mb-2 text-lg font-semibold text-blue-800">Proposed Decision</div>
                     <div className="prose prose-sm max-w-none text-blue-900">
                         <RichText content={proposal.decisionText} />
                     </div>

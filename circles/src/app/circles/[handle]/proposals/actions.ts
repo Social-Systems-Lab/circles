@@ -364,6 +364,10 @@ export async function updateProposalAction(
             return { success: false, message: "Proposals can only be edited in draft stage" };
         }
 
+        if (proposal.stage === "voting" || proposal.stage === "resolved") {
+            return { success: false, message: "Proposals can not be edited beyond review stage" };
+        }
+
         // --- Handle Image Updates ---
         const existingImages = proposal.images || [];
         const submittedImageEntries = data.images || []; // These are Files or JSON strings
