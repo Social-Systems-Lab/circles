@@ -7,7 +7,8 @@ import Image from "next/image";
 import { CirclePicture } from "./circle-picture";
 import CircleTags from "./circle-tags";
 import { Button } from "@/components/ui/button";
-import { Check, X } from "lucide-react";
+// Removed duplicate Button import
+import { Check, ExternalLink, MapPin, Target, X } from "lucide-react"; // Keep ExternalLink
 import { useRouter } from "next/navigation";
 import { followCircle } from "../home/actions";
 import { useToast } from "@/components/ui/use-toast";
@@ -143,11 +144,14 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                 width: "calc(100% - 2rem)",
                 maxWidth: "400px",
             }}
-            className="h-[450px] rounded-xl border bg-white shadow-lg md:h-[500px]"
+            // Adjusted height for the card window
+            // Adjusted height slightly
+            className="formatted relative h-[550px] overflow-hidden rounded-xl border bg-white shadow-lg md:h-[580px]" // Added overflow-hidden and relative
         >
-            <div className="flex h-full flex-col overflow-hidden rounded-xl">
-                {/* Card Content */}
-                <div className="relative h-3/5 w-full overflow-hidden">
+            {/* Inner container for vertical scrolling with subtle scrollbar */}
+            <div className="scrollbar-thin scrollbar-thumb-rounded hover:scrollbar-thumb-gray-400 scrollbar-thumb-gray-300 scrollbar-track-transparent absolute inset-0 flex h-full flex-col overflow-y-auto">
+                {/* Card Content - Reduced Image Height */}
+                <div className="relative h-[280px] w-full flex-shrink-0 overflow-hidden md:h-[300px]">
                     <ImageCarousel
                         images={carouselImages}
                         options={{ loop: carouselImages.length > 1 }}
@@ -174,44 +178,105 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                     </div>
                 </div>
 
-                <div className="relative flex justify-center">
-                    <div className="absolute top-[-32px] flex justify-center">
+                {/* Content below image - now inside the scrollable container */}
+                <div className="relative flex flex-1 flex-col p-4 pt-2">
+                    {/* Picture positioned absolutely over the start of this section */}
+                    <div className="absolute left-1/2 top-[-32px] -translate-x-1/2 transform">
                         <div className="h-[64px] w-[64px]">
                             <CirclePicture circle={circle} size="64px" />
                         </div>
                     </div>
-                </div>
-
-                <div className="flex flex-1 flex-col p-4 pt-[40px]">
+                    {/* Spacer for the picture */}
+                    <div className="h-[32px]"></div>
                     <div className="flex justify-center">
                         <CircleTags tags={circle.interests || []} isCompact={true} />
                     </div>
+                    {/* Description and Mission are prioritized */}
+                    <div className="mt-3 space-y-3 px-1 pb-2">
+                        {circle.description && <p className="text-sm text-gray-600">{circle.description}</p>}
 
-                    {circle.description && (
-                        <p className="mt-2 line-clamp-3 text-sm text-gray-600">{circle.description}</p>
-                    )}
+                        {/* Highlighted Mission Box */}
+                        {circle.mission && (
+                            <div className="mt-3 rounded-md border bg-gray-50 p-3">
+                                <h3 className="mb-1 flex items-center text-sm font-semibold text-gray-800">
+                                    <Target className="mr-1.5 h-4 w-4 text-gray-600" /> Mission
+                                </h3>
+                                <p className="text-sm text-gray-700">{circle.mission}</p>
+                            </div>
+                        )}
 
-                    <div className="mt-auto flex justify-center gap-8 pb-4">
+                        {/* Other details appear further down in scroll */}
+                        {circle.location &&
+                            (circle.location.city || circle.location.region || circle.location.country) && (
+                                <div className="mt-3">
+                                    <h3 className="mb-1 flex items-center text-sm font-semibold text-gray-700">
+                                        <MapPin className="mr-1.5 h-4 w-4 text-gray-600" /> Location
+                                    </h3>
+                                    <p className="text-sm text-gray-700">
+                                        {[circle.location.city, circle.location.region, circle.location.country]
+                                            .filter(Boolean)
+                                            .join(", ")}
+                                    </p>
+                                </div>
+                            )}
+
+                        {circle.causes && circle.causes.length > 0 && (
+                            <div className="mt-3">
+                                <h3 className="mb-1 text-sm font-semibold text-gray-700">Causes</h3>
+                                <CircleTags tags={circle.causes} isCompact={true} />
+                            </div>
+                        )}
+
+                        {circle.skills && circle.skills.length > 0 && (
+                            <div className="mt-3">
+                                <h3 className="mb-1 text-sm font-semibold text-gray-700">Skills</h3>
+                                <CircleTags tags={circle.skills} isCompact={true} />
+                            </div>
+                        )}
+                    </div>
+                    {/* Add padding at the bottom of scrollable content to avoid being hidden by fixed buttons */}
+                    <div className="h-20 flex-shrink-0"></div> {/* Keep padding */}
+                </div>
+            </div>{" "}
+            {/* End of inner scrollable div */}
+            {/* --- Action Buttons --- */}
+            {/* Container for all bottom buttons, positioned absolutely within the main motion.div */}
+            <div className="pointer-events-none absolute bottom-4 left-0 right-0 px-4">
+                {/* Centered Ignore/Follow Buttons */}
+                <div className="pointer-events-auto flex justify-center gap-8">
+                    <Button
+                        onClick={() => handleButtonClick("left")}
+                        variant="outline"
+                        size="icon"
+                        className="h-14 w-14 rounded-full border-red-300 bg-white hover:bg-red-50 hover:text-red-600"
+                    >
+                        <X className="h-8 w-8" />
+                    </Button>
+                    <Button
+                        onClick={() => handleButtonClick("right")}
+                        variant="outline"
+                        size="icon"
+                        className="h-14 w-14 rounded-full border-green-300 bg-white hover:bg-green-50 hover:text-green-600"
+                    >
+                        <Check className="h-8 w-8" />
+                    </Button>
+                </div>
+
+                {/* Smaller Open Circle Button in Bottom Right */}
+                {circle.handle && (
+                    <div className="pointer-events-auto absolute bottom-0 right-4">
                         <Button
-                            onClick={() => handleButtonClick("left")}
+                            onClick={() => router.push(`/circles/${circle.handle}`)}
                             variant="outline"
                             size="icon"
-                            className="h-14 w-14 rounded-full border-red-300 hover:bg-red-50 hover:text-red-600"
+                            className="h-10 w-10 rounded-full border-blue-300 bg-white hover:bg-blue-50 hover:text-blue-600" // Smaller size
                         >
-                            <X className="h-8 w-8" />
-                        </Button>
-                        <Button
-                            onClick={() => handleButtonClick("right")}
-                            variant="outline"
-                            size="icon"
-                            className="h-14 w-14 rounded-full border-green-300 hover:bg-green-50 hover:text-green-600"
-                        >
-                            <Check className="h-8 w-8" />
+                            <ExternalLink className="h-5 w-5" /> {/* Smaller icon */}
                         </Button>
                     </div>
-                </div>
+                )}
             </div>
-        </motion.div>
+        </motion.div> // End of main motion.div
     );
 };
 
