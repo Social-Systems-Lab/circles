@@ -154,7 +154,7 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
             }}
             // Adjusted height for the card window
             // Adjusted height slightly
-            className="relative h-[550px] overflow-hidden rounded-xl border bg-white shadow-lg md:h-[580px]"
+            className="relative h-[450px] overflow-hidden rounded-xl border bg-white shadow-lg md:h-[560px]"
         >
             {/* Scroll container - Relying on globals.css to hide scrollbar */}
             <div className="custom-scrollbar absolute inset-0 flex h-full flex-col overflow-y-auto">
@@ -162,7 +162,7 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                 {/* Removed pr-2 */}
                 {/* Removed inner wrapper with negative margin */}
                 {/* Card Content - Reduced Image Height */}
-                <div className="relative h-[280px] w-full flex-shrink-0 overflow-hidden md:h-[300px]">
+                <div className="relative h-[220px] w-full flex-shrink-0 overflow-hidden md:h-[300px]">
                     <ImageCarousel
                         images={carouselImages}
                         options={{ loop: carouselImages.length > 1 }}

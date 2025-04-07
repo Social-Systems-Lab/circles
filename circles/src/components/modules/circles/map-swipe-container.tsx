@@ -192,11 +192,11 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
                                     {displayedCircles.slice(currentIndex + 1, currentIndex + 5).map((circle, index) => (
                                         <div
                                             key={circle._id}
-                                            className="absolute h-[450px] max-w-[400px] overflow-hidden rounded-xl border bg-white shadow-lg md:h-[500px]"
+                                            className="absolute h-[450px] max-w-[400px] overflow-hidden rounded-xl border bg-white shadow-lg md:h-[560px]"
                                             style={{
                                                 zIndex: 29 - index,
                                                 transform: `translateX(${(index + 1) * 3}px) translateY(${(index + 1) * -2}px)`,
-                                                opacity: 0.9 - index * 0.15,
+                                                opacity: 0.9,
                                                 pointerEvents: "none",
                                                 width: "calc(100% - 2rem)",
                                             }}
