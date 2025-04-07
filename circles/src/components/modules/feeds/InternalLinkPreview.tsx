@@ -62,6 +62,18 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url }) => {
         );
     }
 
+    const getCircleTypeName = (circleType: string) => {
+        switch (circleType) {
+            default:
+            case "circle":
+                return "Circle";
+            case "project":
+                return "Project";
+            case "user":
+                return "User";
+        }
+    };
+
     const renderPreviewContent = () => {
         switch (result.type) {
             case "circle":
@@ -75,7 +87,7 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url }) => {
                             </AvatarFallback>
                         </Avatar>
                         <div>
-                            <div className="text-xs text-gray-500">Circle</div>
+                            <div className="text-xs text-gray-500">{getCircleTypeName(circle.circleType!)}</div>
                             <div className="font-medium">{circle.name}</div>
                             {circle.description && (
                                 <p className="text-sm text-gray-600">{truncateText(circle.description, 100)}</p>
