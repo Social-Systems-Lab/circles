@@ -198,7 +198,8 @@ export const LikeButton = ({ isLiked, onClick }: LikeButtonProps) => {
 };
 
 const MemoizedPostContent = memo(({ content, mentions }: { content: string; mentions?: MentionDisplay[] }) => (
-    <div className="pl-4 pr-4 text-lg">
+    // Use break-words (overflow-wrap) and min-w-0
+    <div className="min-w-0 break-words pl-4 pr-4 text-lg">
         <RichText content={content} mentions={mentions} />
     </div>
 ));
@@ -232,12 +233,13 @@ const LinkPreviewCard = ({ url, title, description, imageUrl }: LinkPreviewCardP
         }
     }, [url]);
 
+    // Corrected JSX structure and added min-w-0 to the anchor tag
     return (
         <a
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 block" // Add margin-top
+            className="mt-3 block min-w-0" // Added min-w-0
             onClick={(e) => e.stopPropagation()} // Prevent post click handler
         >
             <Card className="overflow-hidden transition-colors hover:bg-gray-50">
@@ -253,7 +255,8 @@ const LinkPreviewCard = ({ url, title, description, imageUrl }: LinkPreviewCardP
                             />
                         </div>
                     )}
-                    <div className="flex flex-col justify-center p-3">
+                    {/* Added min-w-0 to allow text content to wrap/truncate within flex item */}
+                    <div className="flex min-w-0 flex-col justify-center p-3">
                         <div className="text-xs font-medium uppercase tracking-wide text-gray-500">{hostname}</div>
                         {title && <div className="mt-1 line-clamp-2 font-semibold">{title}</div>}
                         {description && <div className="mt-1 line-clamp-2 text-sm text-gray-500">{description}</div>}
@@ -639,8 +642,9 @@ export const PostItem = ({
     }
 
     return (
+        // Added min-w-0 and overflow-hidden to allow shrinking and clip content
         <div
-            className={`flex flex-col gap-4 ${
+            className={`flex min-w-0 flex-col gap-4 overflow-hidden ${
                 isCompact || inPreview || embedded ? "" : "rounded-[15px] border-0 shadow-lg"
             } ${embedded ? "" : "bg-white"}`}
         >

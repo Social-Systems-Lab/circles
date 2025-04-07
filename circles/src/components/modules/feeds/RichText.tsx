@@ -124,18 +124,23 @@ const RichText = memo(({ content, mentions }: RichTextProps) => {
             },
             // Ensure paragraphs and other block elements allow word breaks
             // Destructure node separately
+            // Use break-words (overflow-wrap)
             p: ({ node, ...props }: { node?: any; [key: string]: any }) => <p className="break-words" {...props} />,
             li: ({ node, ...props }: { node?: any; [key: string]: any }) => <li className="break-words" {...props} />,
             // Add other block elements as needed (e.g., blockquote, pre)
             blockquote: ({ node, ...props }: { node?: any; [key: string]: any }) => (
                 <blockquote className="break-words" {...props} />
             ),
+            // Add styling for preformatted text (code blocks)
+            pre: ({ node, ...props }: { node?: any; [key: string]: any }) => (
+                <pre className="overflow-x-auto rounded bg-gray-100 p-2" {...props} />
+            ),
         };
     }, [mentions, hasMentions]); // Include hasMentions
 
-    // Apply break-words to the main container for overall wrapping
+    // Keep min-w-0 on the root, break-words is handled by parent or specific elements
     return (
-        <div className="break-words">
+        <div className="min-w-0">
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
                 {content}
             </ReactMarkdown>
