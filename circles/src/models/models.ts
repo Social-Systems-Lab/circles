@@ -757,9 +757,6 @@ export type AccountAndPrivateKey = Partial<Account> & {
 
 export type AuthInfo = {
     authStatus: "loading" | "authenticated" | "unauthenticated" | "createAccount";
-    inSsiApp: boolean;
-    currentAccount?: Account;
-    challenge?: Challenge;
 };
 
 export type MatrixUserCache = {

@@ -1,13 +1,13 @@
 "use server";
 
 import { FormSubmitResponse, UserPrivate } from "../../../models/models";
-import { AuthenticationError, createUserSession, createUserTrad } from "@/lib/auth/auth";
+import { AuthenticationError, createUserSession, createUserAccount } from "@/lib/auth/auth";
 import { getUserPrivate, registerUser, updateUser } from "@/lib/data/user";
 
 export const submitSignupFormAction = async (values: Record<string, any>): Promise<FormSubmitResponse> => {
     try {
         //console.log("Signing up user with values", values);
-        let user = await createUserTrad(values.name, values.handle, values.type, values._email, values._password);
+        let user = await createUserAccount(values.name, values.handle, values.type, values._email, values._password);
         await createUserSession(user as UserPrivate);
 
         // register user in the circles registry

@@ -47,7 +47,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
-            console.log("useEffect.CreateAccountWizard.1");
+            console.log("useEffect.LocationPicker.1");
         }
     }, []);
 

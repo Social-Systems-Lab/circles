@@ -19,45 +19,7 @@ import { IoMdQrScanner } from "react-icons/io";
 import { MdQrCodeScanner, MdQrCode } from "react-icons/md";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import QRCode from "react-qr-code";
-import { createTestAccountAction } from "../auth/actions";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
-
-const QRCodePopover = () => {
-    const [authInfo, setAuthInfo] = useAtom(authInfoAtom);
-    const [user, setUser] = useAtom(userAtom);
-
-    const onCreateTestAccount = async () => {
-        const response = await createTestAccountAction();
-        if (response) {
-            setAuthInfo({
-                authStatus: "authenticated",
-                inSsiApp: false,
-                currentAccount: undefined,
-            });
-            setUser(response.user);
-        }
-    };
-
-    if (authInfo.inSsiApp) return null;
-
-    return (
-        <div className="flex items-center justify-center">
-            <div className="p-6">
-                <div className="mb-4 text-xl font-semibold">Sign in with the Circles App</div>
-                <QRCode value={JSON.stringify(authInfo.challenge)} size={200} />
-                <p className="mt-4 text-sm text-gray-600">
-                    Scan this code with your Circles app to authenticate. Download the app if you don&apos;t have it
-                    installed.
-                </p>
-                {/* Discrete icon button to log in with test account */}
-
-                <Button variant="ghost" size="sm" className="mt-4" onClick={onCreateTestAccount}>
-                    Log in with test account
-                </Button>
-            </div>
-        </div>
-    );
-};
 
 const ProfileMenuBar = () => {
     const router = useRouter();
@@ -112,14 +74,6 @@ const ProfileMenuBar = () => {
         setUserToolboxState({ tab: tab });
     };
 
-    const openQRScanner = () => {
-        window.ReactNativeWebView?.postMessage(
-            JSON.stringify({
-                type: "ScanQRCode",
-            }),
-        );
-    };
-
     const onLogInClick = () => {
         let redirectTo = searchParams.get("redirectTo") ?? "/";
         router.push("/login?redirectTo=" + redirectTo);
@@ -151,32 +105,6 @@ const ProfileMenuBar = () => {
         <div className="flex items-center justify-center gap-1 overflow-visible">
             <>
                 <div className="flex items-center space-x-2">
-                    {/* If outside SSI app and unauthenticated - show QR code to sign in */}
-                    {/* {authInfo.authStatus === "unauthenticated" && !authInfo.inSsiApp && (
-                        <Popover>
-                            <PopoverTrigger>
-                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f1f1f1] hover:bg-[#cecece]">
-                                    <MdQrCode size="20px" />
-                                </div>
-                            </PopoverTrigger>
-                            <PopoverContent className="mr-2">
-                                <QRCodePopover />
-                            </PopoverContent>
-                        </Popover>
-                    )} */}
-
-                    {/* If authenticated and in SSI app - show QR code scanner */}
-                    {authInfo.authStatus === "authenticated" && authInfo.inSsiApp && (
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
-                            onClick={() => openQRScanner()}
-                        >
-                            <MdQrCodeScanner size="20px" />
-                        </Button>
-                    )}
-
                     {authInfo.authStatus === "unauthenticated" && (
                         <div className="flex flex-row gap-2">
                             <Button

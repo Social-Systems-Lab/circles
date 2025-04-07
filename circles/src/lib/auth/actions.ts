@@ -17,7 +17,6 @@ import {
     PUBLIC_KEY_FILENAME,
     SALT_FILENAME,
     USERS_DIR,
-    getDid,
 } from "./auth"; // Import constants and getDid
 import {
     Members,
@@ -179,11 +178,12 @@ export async function resetPassword(token: string, email: string, password: stri
         // 5. Generate New Identity
         const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", {
             modulusLength: 2048,
-            publicKeyEncoding: { type: "spki", format: "pem" }, // Match createUserAccount format
-            privateKeyEncoding: { type: "pkcs8", format: "pem" }, // Match createUserAccount format
         });
-        const newDid = getDid(publicKey); // Use the existing getDid function
-        const newPublicKeyPem = publicKey; // Already in PEM format
+
+        const newDid = crypto
+            .createHash("sha256")
+            .update(publicKey.export({ type: "pkcs1", format: "pem" }) as string)
+            .digest("hex");
 
         // 6. Secure New Private Key
         const newSalt = crypto.randomBytes(16); // newSalt is Buffer
@@ -193,7 +193,11 @@ export async function resetPassword(token: string, email: string, password: stri
         const newEncryptionKey = crypto.pbkdf2Sync(password, newSalt, 100000, 32, "sha512");
         // Pass Buffers directly
         const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, newEncryptionKey, newIv);
-        let newEncryptedPrivateKey = cipher.update(privateKey, "utf8", "hex"); // privateKey is already PEM
+        let newEncryptedPrivateKey = cipher.update(
+            privateKey.export({ type: "pkcs1", format: "pem" }) as string,
+            "utf8",
+            "hex",
+        );
         newEncryptedPrivateKey += cipher.final("hex");
 
         // 7. Update Filesystem
@@ -219,7 +223,10 @@ export async function resetPassword(token: string, email: string, password: stri
             // Pass Buffers and strings directly to writeFile
             await fs.writeFile(path.join(newAccountPath, SALT_FILENAME), newSalt);
             await fs.writeFile(path.join(newAccountPath, IV_FILENAME), newIv);
-            await fs.writeFile(path.join(newAccountPath, PUBLIC_KEY_FILENAME), newPublicKeyPem);
+            await fs.writeFile(
+                path.join(newAccountPath, PUBLIC_KEY_FILENAME),
+                publicKey.export({ type: "pkcs1", format: "pem" }),
+            );
             await fs.writeFile(path.join(newAccountPath, ENCRYPTED_PRIVATE_KEY_FILENAME), newEncryptedPrivateKey);
         } catch (fsError) {
             console.error("Filesystem error during password reset:", fsError);
@@ -227,13 +234,14 @@ export async function resetPassword(token: string, email: string, password: stri
             return { success: false, error: "Failed to update user identity files." };
         }
 
+        let publicKeyPem = publicKey.export({ type: "pkcs1", format: "pem" });
         // 8. Update User Database Record (Primary)
         const userUpdateResult = await Circles.updateOne(
             { _id: user._id },
             {
                 $set: {
                     did: newDid,
-                    publicKey: newPublicKeyPem,
+                    publicKey: publicKeyPem as string,
                     passwordResetToken: null, // Clear the token
                     passwordResetTokenExpiry: null,
                 },

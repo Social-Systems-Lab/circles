@@ -17,7 +17,7 @@ import { atomWithStorage } from "jotai/utils";
 
 export const userAtom = atom<UserPrivate | undefined>(undefined);
 
-export const authInfoAtom = atom<AuthInfo>({ authStatus: "loading", inSsiApp: false });
+export const authInfoAtom = atom<AuthInfo>({ authStatus: "loading" });
 export const triggerMapOpenAtom = atom<boolean>(false);
 export const mapOpenAtom = atom<boolean>(false);
 export const mapboxKeyAtom = atom<string>("");
