@@ -125,7 +125,7 @@ export async function saveAbout(values: {
         // --- End Handle 'images' array ---
 
         // update the circle
-        await updateCircle(circleUpdateData);
+        await updateCircle(circleUpdateData, userDid);
 
         // clear page cache
         let circlePath = await getCirclePath(circleUpdateData);

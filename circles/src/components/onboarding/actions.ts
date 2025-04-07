@@ -51,7 +51,7 @@ export const saveMissionAction = async (mission: string, circleId: string): Prom
             circle.completedOnboardingSteps.push("mission");
         }
 
-        await updateCircle(circle);
+        await updateCircle(circle, userDid);
 
         // clear page cache so pages update
         let circlePath = await getCirclePath(circle);
@@ -106,7 +106,7 @@ export const saveCausesAction = async (
             circle.completedOnboardingSteps.push("causes");
         }
 
-        await updateCircle(circle);
+        await updateCircle(circle, userDid);
 
         // clear page cache so pages update
         let circlePath = await getCirclePath(circle);
@@ -151,7 +151,7 @@ export const saveSkillsAction = async (
             circle.completedOnboardingSteps.push("skills");
         }
 
-        await updateCircle(circle);
+        await updateCircle(circle, userDid);
 
         // clear page cache so pages update
         let circlePath = await getCirclePath(circle);
@@ -373,7 +373,7 @@ export const saveProfileAction = async (
             circle.completedOnboardingSteps.push("profile");
         }
 
-        await updateCircle(circle);
+        await updateCircle(circle, userDid);
 
         // Clear page cache so pages update
         let circlePath = await getCirclePath(circle);
@@ -416,7 +416,7 @@ export const saveLocationAction = async (location: any, circleId: string): Promi
             circle.completedOnboardingSteps.push("location");
         }
 
-        await updateCircle(circle);
+        await updateCircle(circle, userDid);
 
         // Clear page cache so pages update
         let circlePath = await getCirclePath(circle);
@@ -452,7 +452,7 @@ export const completeWelcomeStep = async (circleId: string): Promise<SaveMission
             circle.completedOnboardingSteps?.push("welcome");
         }
 
-        await updateCircle(circle);
+        await updateCircle(circle, userDid);
         return { success: true, message: "Welcome step completed" };
     } catch (error) {
         console.log("error", error);
@@ -479,7 +479,7 @@ export const completeFinalStep = async (circleId: string): Promise<SaveMissionAc
             circle.completedOnboardingSteps?.push("final");
         }
 
-        await updateCircle(circle);
+        await updateCircle(circle, userDid);
         return { success: true, message: "Final step completed" };
     } catch (error) {
         console.log("error", error);
@@ -512,7 +512,7 @@ export const saveTermsAgreementAction = async (
             circle.completedOnboardingSteps?.push("terms");
         }
 
-        await updateCircle(circle);
+        await updateCircle(circle, userDid);
 
         // clear page cache so pages update
         let circlePath = await getCirclePath(circle);

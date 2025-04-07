@@ -185,7 +185,7 @@ export const updateUser = async (userId: string, formData: FormData): Promise<Us
             }
         }
 
-        await updateCircle(updateData);
+        await updateCircle(updateData, userDid);
 
         // Revalidate the profile path
         revalidatePath(`/circles/${currentUser.handle}`);
@@ -230,7 +230,7 @@ export const updateCircleField = async (circleId: string, formData: FormData): P
             }
         }
 
-        await updateCircle(updateData);
+        await updateCircle(updateData, userDid);
 
         let circlePath = await getCirclePath({ _id: circleId } as Circle);
         revalidatePath(circlePath);

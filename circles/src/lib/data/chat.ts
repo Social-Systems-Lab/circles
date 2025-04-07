@@ -77,7 +77,7 @@ export const getChatRoomByHandle = async (
     return chatRoom;
 };
 
-export const createDefaultChatRooms = async (circleId: string): Promise<ChatRoom[] | null> => {
+export const createDefaultChatRooms = async (circleId: string, userDid: string): Promise<ChatRoom[] | null> => {
     let circle = await getCircleById(circleId);
     if (!circle) {
         return null;
@@ -110,7 +110,7 @@ export const createDefaultChatRooms = async (circleId: string): Promise<ChatRoom
 
     let existingChatRooms = await getChatRooms(circleId);
 
-    await updateCircle(circle);
+    await updateCircle(circle, userDid);
     return existingChatRooms;
 };
 

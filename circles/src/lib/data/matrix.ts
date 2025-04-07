@@ -113,7 +113,7 @@ export async function getAdminAccessToken(): Promise<string> {
     return loginData.access_token;
 }
 
-export async function registerOrLoginMatrixUser(user: UserPrivate): Promise<string> {
+export async function registerOrLoginMatrixUser(user: UserPrivate, userDid: string): Promise<string> {
     let username = user.matrixUsername;
     let password = user.matrixPassword;
 
@@ -131,11 +131,14 @@ export async function registerOrLoginMatrixUser(user: UserPrivate): Promise<stri
         }
         user.matrixUsername = username;
         user.fullMatrixName = `@${username}:${MATRIX_DOMAIN}`;
-        await updateCircle({
-            _id: user._id,
-            matrixUsername: username,
-            matrixPassword: password,
-        });
+        await updateCircle(
+            {
+                _id: user._id,
+                matrixUsername: username,
+                matrixPassword: password,
+            },
+            userDid,
+        );
     }
 
     // get admin access token
@@ -158,11 +161,14 @@ export async function registerOrLoginMatrixUser(user: UserPrivate): Promise<stri
             user.matrixNotificationsRoomId = await addUserNotificationsRoom(user);
         }
 
-        await updateCircle({
-            _id: user._id,
-            matrixAccessToken: access_token,
-            matrixNotificationsRoomId: user.matrixNotificationsRoomId,
-        });
+        await updateCircle(
+            {
+                _id: user._id,
+                matrixAccessToken: access_token,
+                matrixNotificationsRoomId: user.matrixNotificationsRoomId,
+            },
+            userDid,
+        );
         return access_token;
     }
 
@@ -190,11 +196,14 @@ export async function registerOrLoginMatrixUser(user: UserPrivate): Promise<stri
 
     user.matrixAccessToken = accessToken;
     user.matrixNotificationsRoomId = await addUserNotificationsRoom(user);
-    await updateCircle({
-        _id: user._id,
-        matrixAccessToken: accessToken,
-        matrixNotificationsRoomId: user.matrixNotificationsRoomId,
-    });
+    await updateCircle(
+        {
+            _id: user._id,
+            matrixAccessToken: accessToken,
+            matrixNotificationsRoomId: user.matrixNotificationsRoomId,
+        },
+        userDid,
+    );
 
     return accessToken;
 }

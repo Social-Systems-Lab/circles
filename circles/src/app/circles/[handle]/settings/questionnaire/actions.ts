@@ -33,7 +33,7 @@ export async function saveQuestionnaire(values: { _id: any; questionnaire: Quest
         }
 
         // update the circle
-        await updateCircle(circle);
+        await updateCircle(circle, userDid);
 
         // clear page cache
         let circlePath = await getCirclePath(circle);

@@ -44,7 +44,7 @@ export async function savePages(values: { _id: any; enabledModules: string[] }):
         circle.enabledModules = enabledModules.map((module) => module.handle);
 
         // update the circle
-        await updateCircle(circle);
+        await updateCircle(circle, userDid);
 
         // clear page cache
         let circlePath = await getCirclePath(circle);

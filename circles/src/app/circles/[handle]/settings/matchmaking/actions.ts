@@ -40,7 +40,7 @@ export async function saveMatchmaking(values: {
         }
 
         // update the circle
-        await updateCircle(circle);
+        await updateCircle(circle, userDid);
 
         // clear page cache
         let circlePath = await getCirclePath(circle);

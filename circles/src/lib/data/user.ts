@@ -13,7 +13,7 @@ import { ObjectId } from "mongodb";
 import { signRegisterUserChallenge } from "../auth/auth";
 import { getUserPendingMembershipRequests } from "./membership-requests";
 import { defaultUserGroupsForUser, getDefaultAccessRules, getDefaultModules } from "./constants";
-import { SAFE_CIRCLE_PROJECTION } from "./circle";
+import { SAFE_CIRCLE_PROJECTION, getCircleById } from "./circle"; // Added getCircleById import
 
 export const getAllUsers = async (): Promise<Circle[]> => {
     let circles: Circle[] = await Circles.find(
@@ -314,12 +314,45 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
 };
 
 // update user
-export const updateUser = async (user: Partial<UserPrivate>): Promise<void> => {
-    let { _id, ...userWithoutId } = user;
+export const updateUser = async (user: Partial<UserPrivate>, authenticatedUserDid: string): Promise<void> => {
+    const { _id, ...userWithoutId } = user;
+    if (!_id) {
+        throw new Error("User ID (_id) is required for update");
+    }
+
+    // Fetch the existing user circle to check ownership
+    const existingUserCircle = await getPrivateUserByDid(userWithoutId.did ?? ""); // Use did from update payload if available, otherwise fetch by _id first? Let's fetch by _id first for safety.
+    const existingCircleById = await getCircleById(_id); // Fetch by ID first
+
+    if (!existingCircleById) {
+        throw new Error("User circle not found");
+    }
+
+    // Authorization check: Ensure it's a user circle and the authenticated user owns it
+    if (existingCircleById.circleType !== "user") {
+        throw new Error("Attempting to update a non-user circle via updateUser function.");
+    }
+    if (!authenticatedUserDid || existingCircleById.did !== authenticatedUserDid) {
+        console.error(
+            `Unauthorized attempt to update user circle via updateUser. Circle DID: ${existingCircleById.did}, Authenticated DID: ${authenticatedUserDid}`,
+        );
+        throw new Error("Unauthorized: Cannot update another user's profile.");
+    }
+    // Also ensure the DID in the payload matches, if provided, to prevent changing the DID via this route
+    if (userWithoutId.did && userWithoutId.did !== authenticatedUserDid) {
+        throw new Error("Unauthorized: Cannot change user DID via update.");
+    }
+
+    // Proceed with the update
     let result = await Circles.updateOne({ _id: new ObjectId(_id) }, { $set: userWithoutId });
     if (result.matchedCount === 0) {
-        throw new Error("User not found");
+        // This should theoretically not happen due to the check above, but keep for safety
+        throw new Error("User not found during update operation");
     }
+
+    // Note: updateUser doesn't handle embedding updates like updateCircle does.
+    // This might be intentional if user profile updates don't need embedding updates,
+    // or it might be an oversight. Keeping it as is for now.
 };
 
 // registers a user in the circles registry

@@ -27,7 +27,7 @@ export async function checkAuth(): Promise<CheckAuthResponse> {
                 if (!user.matrixAccessToken) {
                     try {
                         // check if user has a matrix account
-                        await registerOrLoginMatrixUser(user);
+                        await registerOrLoginMatrixUser(user, payload.userDid as string);
                     } catch (error) {
                         console.error("Error creating matrix session", error);
                     }

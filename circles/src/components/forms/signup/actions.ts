@@ -8,7 +8,7 @@ export const submitSignupFormAction = async (values: Record<string, any>): Promi
     try {
         //console.log("Signing up user with values", values);
         let user = await createUserAccount(values.name, values.handle, values.type, values._email, values._password);
-        await createUserSession(user as UserPrivate);
+        await createUserSession(user as UserPrivate, user.did!);
 
         // register user in the circles registry
         //let currentServerSettings = await getServerSettings();

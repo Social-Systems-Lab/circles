@@ -30,7 +30,7 @@ export const completeSwipeOnboardingAction = async (): Promise<CompleteSwipeOnbo
             circle.completedOnboardingSteps?.push("swipe");
         }
 
-        await updateCircle(circle);
+        await updateCircle(circle, userDid);
 
         return { success: true, message: "Swipe onboarding completed" };
     } catch (error) {

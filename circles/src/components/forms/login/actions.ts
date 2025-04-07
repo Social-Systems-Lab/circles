@@ -19,7 +19,7 @@ export const submitLoginFormAction = async (values: Record<string, any>): Promis
         authenticateUser(user.did!, password);
 
         let privateUser = await getUserPrivate(user.did!);
-        await createUserSession(privateUser);
+        await createUserSession(privateUser, user.did!);
 
         return { success: true, message: "User authenticated successfully", data: { user: privateUser } };
     } catch (error) {

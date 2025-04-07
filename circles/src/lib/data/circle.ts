@@ -258,11 +258,34 @@ export const getCircleById = async (id: string | null, criteria?: any): Promise<
     return circle;
 };
 
-export const updateCircle = async (circle: Partial<Circle>): Promise<void> => {
-    let { _id, ...circleWithoutId } = circle;
+export const updateCircle = async (circle: Partial<Circle>, authenticatedUserDid: string): Promise<void> => {
+    const { _id, ...circleWithoutId } = circle;
+    if (!_id) {
+        throw new Error("Circle ID is required for update");
+    }
+
+    // Fetch the existing circle to check ownership for user circles
+    const existingCircle = await getCircleById(_id);
+    if (!existingCircle) {
+        throw new Error("Circle not found");
+    }
+
+    // Authorization check: If it's a user circle, ensure the authenticated user owns it
+    if (existingCircle.circleType === "user") {
+        if (!authenticatedUserDid || existingCircle.did !== authenticatedUserDid) {
+            console.error(
+                `Unauthorized attempt to update user circle. Circle DID: ${existingCircle.did}, Authenticated DID: ${authenticatedUserDid}`,
+            );
+            throw new Error("Unauthorized: Cannot update another user's circle profile.");
+        }
+    }
+    // Note: For non-user circles, authorization is assumed to be handled by the calling action using isAuthorized()
+
+    // Proceed with the update
     let result = await Circles.updateOne({ _id: new ObjectId(_id) }, { $set: circleWithoutId });
     if (result.matchedCount === 0) {
-        throw new Error("Circle not found");
+        // This should theoretically not happen due to the getCircleById check above, but keep for safety
+        throw new Error("Circle not found during update operation");
     }
 
     // update circle embedding

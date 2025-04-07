@@ -32,7 +32,7 @@ export async function saveBasicInfoAction(
                 return { success: false, message: "You are not authorized to update the circle" };
             }
 
-            await updateCircle({ _id: circleId, name, handle, isPublic });
+            await updateCircle({ _id: circleId, name, handle, isPublic }, userDid);
             const updatedCircle = await getCircleById(circleId); // Re-fetch to get latest data
             return { success: true, message: "Basic info updated successfully", data: { circle: updatedCircle } };
         } else {
@@ -86,7 +86,7 @@ export async function saveMissionAction(mission: string, circleId?: string) {
         }
 
         if (circleId) {
-            await updateCircle({ _id: circleId, mission });
+            await updateCircle({ _id: circleId, mission }, userDid);
             const updatedCircle = await getCircleById(circleId);
             return { success: true, message: "Mission updated successfully", data: { circle: updatedCircle } };
         }
@@ -201,7 +201,7 @@ export async function saveProfileAction(
         // --- End Handle 'images' array ---
 
         if (needUpdate) {
-            await updateCircle(updateData);
+            await updateCircle(updateData, userDid);
         }
 
         const updatedCircle = await getCircleById(circleId); // Fetch potentially updated circle
@@ -222,7 +222,7 @@ export async function saveLocationAction(location: any, circleId?: string) {
         const authorized = await isAuthorized(userDid, circleId, features.settings.edit_about);
         if (!authorized) return { success: false, message: "You are not authorized to update the circles" };
 
-        await updateCircle({ _id: circleId, location });
+        await updateCircle({ _id: circleId, location }, userDid);
         const updatedCircle = await getCircleById(circleId);
         return { success: true, message: "Location updated successfully", data: { circle: updatedCircle } };
     } catch (error) {
@@ -241,7 +241,7 @@ export async function saveCausesAction(causes: string[], circleId?: string) {
         const authorized = await isAuthorized(userDid, circleId, features.settings.edit_causes_and_skills);
         if (!authorized) return { success: false, message: "You are not authorized to update the circles" };
 
-        await updateCircle({ _id: circleId, causes });
+        await updateCircle({ _id: circleId, causes }, userDid);
         const updatedCircle = await getCircleById(circleId);
         return { success: true, message: "Causes updated successfully", data: { circle: updatedCircle } };
     } catch (error) {
@@ -260,7 +260,7 @@ export async function saveSkillsAction(skills: string[], circleId?: string) {
         const authorized = await isAuthorized(userDid, circleId, features.settings.edit_causes_and_skills);
         if (!authorized) return { success: false, message: "You are not authorized to update the circles" };
 
-        await updateCircle({ _id: circleId, skills });
+        await updateCircle({ _id: circleId, skills }, userDid);
         const updatedCircle = await getCircleById(circleId);
         return { success: true, message: "Skills updated successfully", data: { circle: updatedCircle } };
     } catch (error) {

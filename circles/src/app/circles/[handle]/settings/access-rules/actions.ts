@@ -36,7 +36,7 @@ export async function saveAccessRules(values: {
         }
 
         // update the circle
-        await updateCircle(circle);
+        await updateCircle(circle, userDid);
 
         // clear page cache
         let circlePath = await getCirclePath(circle);

@@ -332,13 +332,13 @@ export const getAuthorizedMembers = async (circle: string | Circle, feature: Fea
     return await getCirclesByDids(memberDids);
 };
 
-export async function createUserSession(user: UserPrivate): Promise<string> {
-    let token = await generateUserToken(user.did!);
+export async function createUserSession(user: UserPrivate, userDid: string): Promise<string> {
+    let token = await generateUserToken(userDid);
     await createSession(token);
 
     try {
         // check if user has a matrix account
-        await registerOrLoginMatrixUser(user);
+        await registerOrLoginMatrixUser(user, userDid);
     } catch (error) {
         console.error("Error creating matrix session", error);
     }
