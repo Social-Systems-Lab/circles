@@ -281,7 +281,7 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                         {/* Location (moved down, inline icon, no heading) */}
                         {circle.location &&
                             (circle.location.city || circle.location.region || circle.location.country) && (
-                                <div className="mt-6 flex items-center text-sm text-gray-600">
+                                <div className="flex items-center pt-2 text-sm text-gray-600">
                                     <MapPin className="mr-1.5 h-4 w-4 flex-shrink-0 text-gray-500" />
                                     <span>
                                         {[circle.location.city, circle.location.region, circle.location.country]
@@ -305,7 +305,7 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                         onClick={() => handleButtonClick("left")}
                         variant="outline"
                         size="icon"
-                        className="h-14 w-14 rounded-full border-red-300 bg-white hover:bg-red-50 hover:text-red-600"
+                        className="h-14 w-14 rounded-full border-red-300 bg-red-100 shadow-lg hover:bg-red-50 hover:text-red-600"
                     >
                         <X className="h-8 w-8" />
                     </Button>
@@ -313,7 +313,7 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                         onClick={() => handleButtonClick("right")}
                         variant="outline"
                         size="icon"
-                        className="h-14 w-14 rounded-full border-green-300 bg-white hover:bg-green-50 hover:text-green-600"
+                        className="h-14 w-14 rounded-full border-green-300 bg-green-100 shadow-lg hover:bg-green-200 hover:text-green-600"
                     >
                         <Check className="h-8 w-8" />
                     </Button>
