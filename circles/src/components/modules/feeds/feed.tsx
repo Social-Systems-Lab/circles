@@ -45,7 +45,7 @@ export const FeedComponent = ({ circle, posts, feed }: FeedComponentProps) => {
 
     return (
         <div
-            className={`flex h-full min-h-screen flex-1 items-start justify-center`}
+            className={`flex h-full min-h-screen w-full flex-1 items-start justify-center`}
             // `flex h-full min-h-screen flex-1 items-start justify-center bg-white ${isCompact ? "" : "mt-3 overflow-hidden rounded-t-[15px]"}`
             style={{
                 flexGrow: isCompact ? "1" : "3",

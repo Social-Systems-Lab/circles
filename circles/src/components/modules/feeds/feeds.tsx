@@ -26,9 +26,10 @@ export default async function FeedsModule(props: PageProps) {
     const posts = await getPostsAction(feed._id, circle._id, 20, 0, searchParams?.sort as SortingOptions);
 
     return (
-        <ContentDisplayWrapper content={posts}>
-            <FeedComponent posts={posts} feed={feed} circle={circle} />
-            <ThirdColumn />
-        </ContentDisplayWrapper>
+        <div className="flex flex-1 flex-row justify-center overflow-hidden">
+            <div className="mb-4 mt-2 flex max-w-[1100px] flex-1 flex-col items-center justify-center md:ml-4 md:mr-4">
+                <FeedComponent posts={posts} feed={feed} circle={circle} />;
+            </div>
+        </div>
     );
 }
