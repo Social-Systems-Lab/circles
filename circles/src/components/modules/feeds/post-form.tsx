@@ -1,7 +1,18 @@
 // post-form.tsx
-import React, { useState, useCallback, useEffect, useTransition } from "react";
+import React, { useState, useCallback, useEffect, useTransition, useRef } from "react"; // Added useRef
 import { Textarea } from "@/components/ui/textarea";
-import { ImageIcon, MapPinIcon, BarChartIcon, Trash2, Loader2, MapPin, ChevronDown, Users, Globe } from "lucide-react";
+import {
+    ImageIcon,
+    MapPinIcon,
+    BarChartIcon,
+    Trash2,
+    Loader2,
+    MapPin,
+    ChevronDown,
+    Users,
+    Globe,
+    X,
+} from "lucide-react"; // Added X
 import { UserPicture } from "../members/user-picture";
 import { Circle, Feed, Location, Media, PostDisplay, UserPrivate } from "@/models/models";
 import { CirclePicture } from "../circles/circle-picture";
@@ -31,6 +42,36 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { userAtom } from "@/lib/data/atoms";
+import { getLinkPreviewAction } from "./actions"; // Import the server action
+import { useToast } from "@/components/ui/use-toast"; // Import useToast
+import Image from "next/image"; // Import Next Image
+import { Card, CardContent } from "@/components/ui/card"; // Import Card components
+
+// Debounce function
+function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+
+    const debounced = (...args: Parameters<F>) => {
+        if (timeout !== null) {
+            clearTimeout(timeout);
+            timeout = null;
+        }
+        timeout = setTimeout(() => func(...args), waitFor);
+    };
+
+    return debounced as (...args: Parameters<F>) => ReturnType<F>;
+}
+
+// Type for the link preview data structure returned by the action
+type LinkPreviewData = {
+    url: string;
+    title?: string;
+    description?: string;
+    image?: string;
+    mediaType?: string;
+    contentType?: string;
+    favicons?: string[];
+};
 
 const postMentionsInputStyle = {
     control: {
@@ -102,6 +143,69 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
     const [userGroups, setUserGroups] = useState<string[]>(["everyone"]);
     const [isUserGroupsDialogOpen, setIsUserGroupsDialogOpen] = useState(false);
     const [availableCircles, setAvailableCircles] = useState<Circle[]>([]);
+    const { toast } = useToast(); // Initialize toast
+
+    // --- Re-insert Dropzone Logic ---
+    const onDrop = useCallback(
+        (acceptedFiles: File[]) => {
+            const newImages = acceptedFiles.map((file) => ({
+                file,
+                preview: URL.createObjectURL(file),
+            }));
+            setImages((prevImages) => [...prevImages, ...newImages]);
+            setDragging(false); // Ensure dragging state is reset
+
+            // Scroll to the end of the carousel after adding images
+            setTimeout(() => {
+                if (carouselApi) {
+                    carouselApi.scrollTo(images.length + newImages.length - 1);
+                }
+            }, 0);
+        },
+        [carouselApi, images.length, setImages], // Added setImages dependency
+    );
+
+    const removeImage = (index: number) => {
+        setImages((prevImages) => {
+            const newImages = [...prevImages];
+            const removedImage = newImages.splice(index, 1)[0];
+            if (removedImage.file) {
+                URL.revokeObjectURL(removedImage.preview); // Clean up object URL
+            }
+            // Adjust carousel scroll after removal if needed
+            if (carouselApi) {
+                // Small delay to allow state update before scrolling
+                setTimeout(() => carouselApi.scrollTo(Math.max(0, index - 1)), 0);
+            }
+            return newImages;
+        });
+    };
+
+    const { getRootProps, getInputProps, isDragActive } = useDropzone({
+        onDrop,
+        accept: { "image/*": [] },
+        onDragEnter: () => setDragging(true),
+        onDragLeave: () => setDragging(false),
+        onDropAccepted: () => setDragging(false), // Ensure reset on drop
+        noClick: true, // Prevent default click behavior if using custom button
+    });
+    // --- End Re-insert Dropzone Logic ---
+
+    // --- Link Preview State ---
+    const [linkPreview, setLinkPreview] = useState<LinkPreviewData | null>(
+        initialPost?.linkPreviewUrl
+            ? {
+                  url: initialPost.linkPreviewUrl,
+                  title: initialPost.linkPreviewTitle,
+                  description: initialPost.linkPreviewDescription,
+                  image: initialPost.linkPreviewImage?.url,
+              }
+            : null,
+    );
+    const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+    const [detectedUrl, setDetectedUrl] = useState<string | null>(initialPost?.linkPreviewUrl || null);
+    const fetchPreviewController = useRef<AbortController | null>(null);
+    // --- End Link Preview State ---
 
     // Get all circles the user is a member of
     useEffect(() => {
@@ -110,6 +214,93 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
             setAvailableCircles(circles);
         }
     }, [user]);
+
+    // --- Link Preview Logic ---
+    const extractFirstUrl = (text: string): string | null => {
+        // More robust URL regex (handles various protocols, domains, paths, queries, fragments)
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+        const matches = text.match(urlRegex);
+        return matches ? matches[0] : null;
+    };
+
+    const fetchLinkPreview = useCallback(
+        async (url: string) => {
+            if (fetchPreviewController.current) {
+                fetchPreviewController.current.abort(); // Abort previous request if any
+            }
+            const controller = new AbortController();
+            fetchPreviewController.current = controller;
+
+            setIsPreviewLoading(true);
+            setLinkPreview(null); // Clear previous preview
+
+            try {
+                const result = await getLinkPreviewAction(url);
+
+                // Check if the request was aborted
+                if (controller.signal.aborted) {
+                    console.log("Link preview fetch aborted for:", url);
+                    return;
+                }
+
+                if (result.success && result.preview) {
+                    setLinkPreview(result.preview);
+                    setDetectedUrl(result.preview.url); // Update detected URL to the final one after redirects
+                } else {
+                    console.warn("Failed to fetch link preview:", result.error);
+                    // Optionally show a toast message on failure
+                    // toast({ title: "Link Preview Failed", description: result.error, variant: "destructive" });
+                    setDetectedUrl(url); // Keep the originally detected URL so we don't retry immediately
+                    setLinkPreview(null); // Ensure preview is cleared on failure
+                }
+            } catch (error: any) {
+                if (error.name !== "AbortError") {
+                    console.error("Error calling getLinkPreviewAction:", error);
+                    // toast({ title: "Error", description: "Could not fetch link preview.", variant: "destructive" });
+                    setDetectedUrl(url);
+                    setLinkPreview(null);
+                }
+            } finally {
+                // Only set loading to false if this is the latest request
+                if (fetchPreviewController.current === controller) {
+                    setIsPreviewLoading(false);
+                    fetchPreviewController.current = null;
+                }
+            }
+        },
+        [toast],
+    ); // Added toast dependency
+
+    const debouncedFetchPreview = useCallback(debounce(fetchLinkPreview, 750), [fetchLinkPreview]);
+
+    useEffect(() => {
+        const urlInContent = extractFirstUrl(postContent);
+
+        // Fetch only if a new URL is found and it's different from the currently detected/previewed one
+        if (urlInContent && urlInContent !== detectedUrl) {
+            debouncedFetchPreview(urlInContent);
+        } else if (!urlInContent && detectedUrl) {
+            // If URL is removed from text, clear the preview state
+            // setDetectedUrl(null); // Keep detectedUrl to avoid re-fetching if user types it back
+            // setLinkPreview(null); // Keep preview until explicitly removed or replaced
+            // setIsPreviewLoading(false);
+            // if (fetchPreviewController.current) {
+            //     fetchPreviewController.current.abort();
+            //     fetchPreviewController.current = null;
+            // }
+        }
+    }, [postContent, detectedUrl, debouncedFetchPreview]);
+
+    const removeLinkPreview = () => {
+        setLinkPreview(null);
+        setDetectedUrl(null); // Allow re-detection if URL is added back
+        setIsPreviewLoading(false);
+        if (fetchPreviewController.current) {
+            fetchPreviewController.current.abort();
+            fetchPreviewController.current = null;
+        }
+    };
+    // --- End Link Preview Logic ---
 
     const getUserGroupName = (userGroup: string) => {
         if (!selectedCircle || !selectedCircle.userGroups) {
@@ -168,54 +359,11 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
 
     useEffect(() => {
         if (initialPost) {
-            setPostContent(initialPost.content);
-            const existingImages =
-                initialPost.media?.map((m) => ({
-                    preview: m.fileInfo.url,
-                    media: m,
-                })) || [];
-            setImages(existingImages);
-            setLocation(initialPost.location);
+            // State setting moved to useState initial values
         }
     }, [initialPost]);
 
-    const onDrop = useCallback(
-        (acceptedFiles: File[]) => {
-            const newImages = acceptedFiles.map((file) => ({
-                file,
-                preview: URL.createObjectURL(file),
-            }));
-            setImages((prevImages) => [...prevImages, ...newImages]);
-
-            setTimeout(() => {
-                if (carouselApi) {
-                    carouselApi.scrollTo(images.length);
-                }
-            }, 0);
-        },
-        [carouselApi, images.length],
-    );
-
-    const removeImage = (index: number) => {
-        setImages((prevImages) => {
-            const newImages = [...prevImages];
-            const removedImage = newImages.splice(index, 1)[0];
-            if (removedImage.file) {
-                URL.revokeObjectURL(removedImage.preview);
-            }
-            return newImages;
-        });
-    };
-
-    const { getRootProps, getInputProps, isDragActive } = useDropzone({
-        onDrop,
-        accept: { "image/*": [] },
-        onDragEnter: () => setDragging(true),
-        onDragLeave: () => setDragging(false),
-        onDropAccepted: () => setDragging(false),
-        noClick: true,
-    });
-
+    // Ensure carousel useEffect is present
     useEffect(() => {
         if (!carouselApi) return;
 
@@ -236,16 +384,11 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
         startTransition(async () => {
             const formData = new FormData();
             formData.append("content", postContent);
-
-            // Only pass the selected circle ID - the backend will find the default feed
             formData.append("circleId", selectedCircle._id);
-
-            // Add user groups
             userGroups.forEach((group) => {
                 formData.append("userGroups", group);
             });
 
-            // Add media
             images.forEach((image, index) => {
                 if (image.file) {
                     formData.append("media", image.file);
@@ -254,7 +397,6 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                 }
             });
 
-            // Add other data
             if (initialPost) {
                 formData.append("postId", initialPost._id);
             }
@@ -262,12 +404,23 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                 formData.append("location", JSON.stringify(location));
             }
 
+            // --- Append Link Preview Data ---
+            if (linkPreview) {
+                formData.append("linkPreviewUrl", linkPreview.url);
+                if (linkPreview.title) formData.append("linkPreviewTitle", linkPreview.title);
+                if (linkPreview.description) formData.append("linkPreviewDescription", linkPreview.description);
+                if (linkPreview.image) formData.append("linkPreviewImageUrl", linkPreview.image);
+            }
+            // --- End Append Link Preview Data ---
+
             await onSubmit(formData);
         });
     };
 
     return (
+        // Use getRootProps on the main div
         <div {...getRootProps()} className="p-4">
+            {/* ... (existing header with user/circle/group selectors) ... */}
             <div className="mb-[5px] flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                     <UserPicture name={user?.name} picture={user?.picture?.url} size="40px" />
@@ -324,10 +477,11 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                     </div>
                 </div>
             </div>
+
             <MentionsInput
                 value={postContent}
                 onChange={(e) => setPostContent(e.target.value)}
-                placeholder="Share your story..."
+                placeholder="Share your story... (links will generate previews)" // Updated placeholder
                 className="flex-grow"
                 autoFocus
                 style={postMentionsInputStyle}
@@ -339,17 +493,59 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                     displayTransform={(id, display) => `${display}`}
                     renderSuggestion={renderCircleSuggestion}
                     markup="[__display__](/circles/__id__)"
-                    // regex={/\[([^\]]+)\]\(\/circles\/([^)]+)\)/} // TODO probably not necessary let's see
                 />
             </MentionsInput>
 
-            {/* <Textarea
-                placeholder="Share your story"
-                value={postContent}
-                onChange={(e) => setPostContent(e.target.value)}
-                className="min-h-[150px] w-full resize-none border-0 p-0 pt-6 text-lg focus-visible:ring-0 focus-visible:ring-transparent focus-visible:ring-offset-0"
-                autoFocus
-            /> */}
+            {/* --- Link Preview Display --- */}
+            {isPreviewLoading && (
+                <div className="mt-4 flex items-center justify-center rounded-lg border p-4">
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin text-gray-500" />
+                    <span className="text-gray-500">Loading link preview...</span>
+                </div>
+            )}
+            {linkPreview && !isPreviewLoading && (
+                <Card className="relative mt-4 overflow-hidden">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1 z-10 h-6 w-6 rounded-full bg-gray-900/50 text-white hover:bg-gray-700/70 hover:text-white"
+                        onClick={removeLinkPreview}
+                        aria-label="Remove link preview"
+                    >
+                        <X className="h-4 w-4" />
+                    </Button>
+                    <a href={linkPreview.url} target="_blank" rel="noopener noreferrer" className="block">
+                        <CardContent className="flex flex-col gap-2 p-0 md:flex-row">
+                            {linkPreview.image && (
+                                <div className="relative h-32 w-full flex-shrink-0 md:h-auto md:w-40">
+                                    <Image
+                                        src={linkPreview.image}
+                                        alt={linkPreview.title || "Link preview image"}
+                                        fill
+                                        className="object-cover"
+                                        sizes="(max-width: 768px) 100vw, 160px" // Basic responsive sizes
+                                    />
+                                </div>
+                            )}
+                            <div className="flex flex-col justify-center p-3">
+                                <div className="text-sm font-semibold text-gray-600">
+                                    {new URL(linkPreview.url).hostname}
+                                </div>
+                                <div className="mt-1 line-clamp-2 font-medium">{linkPreview.title}</div>
+                                {linkPreview.description && (
+                                    <div className="mt-1 line-clamp-2 text-sm text-gray-500">
+                                        {linkPreview.description}
+                                    </div>
+                                )}
+                            </div>
+                        </CardContent>
+                    </a>
+                </Card>
+            )}
+            {/* --- End Link Preview Display --- */}
+
+            {/* ... (existing image carousel, location display, poll creator placeholder) ... */}
+            {/* Ensure removeImage is called correctly in the image carousel */}
             {images.length > 0 && (
                 <div className="relative mt-4">
                     <Carousel setApi={setCarouselApi}>
@@ -366,7 +562,11 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                                         variant="destructive"
                                         size="icon"
                                         className="absolute right-2 top-2 rounded-full"
-                                        onClick={() => removeImage(index)}
+                                        onClick={(e) => {
+                                            // Prevent dropzone activation on button click
+                                            e.stopPropagation();
+                                            removeImage(index);
+                                        }}
                                     >
                                         <Trash2 className="h-4 w-4" />
                                     </Button>
@@ -401,9 +601,12 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                     <p className="text-sm text-gray-600">📊 Poll creator placeholder</p>
                 </div>
             )}
+
+            {/* ... (existing action buttons, drag overlay, dialogs) ... */}
             <div className="mt-4 flex items-center justify-between">
                 <div className="flex space-x-2">
                     <div>
+                        {/* Ensure the image input uses getInputProps */}
                         <input {...getInputProps()} className="hidden" id="image-picker-input" />
                         <Button
                             variant="ghost"
@@ -424,7 +627,7 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                     >
                         <MapPinIcon className="h-5 w-5 text-gray-500" />
                     </Button>
-                    {/* 
+                    {/*
                     TODO - Implement Poll Creator
                     <Button
                         variant="ghost"
@@ -442,7 +645,7 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                     <Button
                         className="rounded-full bg-blue-500 px-6 text-white hover:bg-blue-600"
                         onClick={handleSubmit}
-                        disabled={isPending}
+                        disabled={isPending || isPreviewLoading} // Disable post button while loading preview
                     >
                         {isPending ? (
                             <>

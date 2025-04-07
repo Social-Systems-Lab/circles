@@ -39,9 +39,11 @@ import {
     CommentDisplay,
     SortingOptions,
     Feed,
+    FileInfo, // Added FileInfo
 } from "@/models/models";
 import { revalidatePath } from "next/cache";
 import { getCircleById, getCirclePath, getCirclesBySearchQuery } from "@/lib/data/circle";
+import { getLinkPreview } from "link-preview-js"; // Removed LinkPreview import
 import { getUserByDid, getUserById, getUserPrivate } from "@/lib/data/user";
 import { redirect } from "next/navigation";
 import {
@@ -111,6 +113,95 @@ export async function getAggregatePostsAction(
     return posts;
 }
 
+// --- Add Link Preview Action ---
+// Define a more specific type for the expected preview data
+type ExpectedPreview = {
+    url: string;
+    title?: string;
+    description?: string;
+    image?: string; // We'll extract the first image
+    mediaType?: string;
+    contentType?: string;
+    favicons?: string[];
+};
+
+export async function getLinkPreviewAction(url: string): Promise<{
+    success: boolean;
+    preview?: ExpectedPreview; // Use the refined type
+    error?: string;
+}> {
+    try {
+        // Basic URL validation before fetching
+        new URL(url); // Throws if invalid
+
+        const previewDataResponse = await getLinkPreview(url, {
+            timeout: 5000, // Set a timeout (e.g., 5 seconds)
+            headers: {
+                "User-Agent": "MakeCirclesBot/1.0 (+https://makecircles.com/bot)", // Identify the bot
+                "Accept-Language": "en-US,en;q=0.9", // Prefer English content
+            },
+            followRedirects: `follow`, // Follow redirects
+            handleRedirects: (baseURL: string, forwardedURL: string): boolean => {
+                // Optional: Add logic to control which redirects to follow
+                // console.log(`Redirecting from ${baseURL} to ${forwardedURL}`);
+                return true; // Follow all redirects by default
+            },
+        });
+
+        // Cast to 'any' to bypass strict type checking for this library
+        const previewData: any = previewDataResponse;
+
+        // Check if previewData is valid and has a URL
+        if (previewData?.url) {
+            let image = previewData.images?.[0]; // Take the first image
+
+            // Ensure image URL is absolute
+            if (image && !image.startsWith("http")) {
+                try {
+                    const baseUrl = new URL(previewData.url);
+                    image = new URL(image, baseUrl.origin).toString();
+                } catch (e) {
+                    console.warn("Could not resolve relative image URL:", image);
+                    image = undefined; // Remove invalid relative image
+                }
+            }
+
+            // Construct the result object safely checking each property
+            const resultPreview: ExpectedPreview = {
+                url: previewData.url,
+                title: typeof previewData.title === "string" ? previewData.title : undefined,
+                description: typeof previewData.description === "string" ? previewData.description : undefined,
+                image: image, // Use the potentially resolved absolute image URL
+                mediaType: typeof previewData.mediaType === "string" ? previewData.mediaType : undefined,
+                contentType: typeof previewData.contentType === "string" ? previewData.contentType : undefined,
+                favicons: Array.isArray(previewData.favicons) ? previewData.favicons : undefined,
+            };
+
+            // Ensure at least one core piece of metadata exists besides the URL
+            if (resultPreview.title || resultPreview.description || resultPreview.image) {
+                return { success: true, preview: resultPreview };
+            } else {
+                console.warn("Link preview incomplete (missing title, description, and image):", url, previewData);
+                return { success: false, error: "Could not fetch a valid link preview (missing metadata)." };
+            }
+        } else {
+            console.warn("Link preview incomplete or failed (missing URL):", url, previewData);
+            return { success: false, error: "Could not fetch a valid link preview (missing URL)." };
+        }
+    } catch (error: any) {
+        console.error("Error fetching link preview for:", url, error);
+        // Check for specific error types if needed
+        if (error.message?.includes("Invalid URL")) {
+            return { success: false, error: "Invalid URL provided." };
+        }
+        if (error.message?.includes("timeout")) {
+            return { success: false, error: "Fetching preview timed out." };
+        }
+        return { success: false, error: "Failed to fetch link preview." };
+    }
+}
+// --- End Link Preview Action ---
+
 export async function getPostsAction(
     feedId: string,
     circleId: string,
@@ -151,6 +242,13 @@ export async function createPostAction(
         // Get user groups from form data
         const userGroups = formData.getAll("userGroups") as string[];
 
+        // --- Add Link Preview Data Extraction ---
+        const linkPreviewUrl = formData.get("linkPreviewUrl") as string | undefined;
+        const linkPreviewTitle = formData.get("linkPreviewTitle") as string | undefined;
+        const linkPreviewDescription = formData.get("linkPreviewDescription") as string | undefined;
+        const linkPreviewImageUrl = formData.get("linkPreviewImageUrl") as string | undefined;
+        // --- End Link Preview Data Extraction ---
+
         // Get the default feed for this circle
         const feed = await getFeedByHandle(circleId, "default");
         if (!feed) {
@@ -172,9 +270,15 @@ export async function createPostAction(
             comments: 0,
             location,
             userGroups: userGroups.length > 0 ? userGroups : ["everyone"], // Use provided user groups or default to everyone
+            // --- Add Link Preview Fields ---
+            linkPreviewUrl: linkPreviewUrl || undefined,
+            linkPreviewTitle: linkPreviewTitle || undefined,
+            linkPreviewDescription: linkPreviewDescription || undefined,
+            linkPreviewImage: linkPreviewImageUrl ? { url: linkPreviewImageUrl } : undefined,
+            // --- End Link Preview Fields ---
         };
 
-        console.log("creating post", JSON.stringify(post.location));
+        // console.log("creating post", JSON.stringify(post.location)); // Reduced logging
         await postSchema.parseAsync(post);
 
         // parse mentions in the comment content
@@ -253,6 +357,14 @@ export async function updatePostAction(
         const circleId = formData.get("circleId") as string;
         const locationStr = formData.get("location") as string;
         const location = locationStr ? JSON.parse(locationStr) : undefined;
+
+        // --- Add Link Preview Data Extraction ---
+        const linkPreviewUrl = formData.get("linkPreviewUrl") as string | undefined;
+        const linkPreviewTitle = formData.get("linkPreviewTitle") as string | undefined;
+        const linkPreviewDescription = formData.get("linkPreviewDescription") as string | undefined;
+        const linkPreviewImageUrl = formData.get("linkPreviewImageUrl") as string | undefined;
+        // --- End Link Preview Data Extraction ---
+
         const post = await getPost(postId);
         if (!post) {
             return { success: false, message: "Post not found" };
@@ -267,9 +379,15 @@ export async function updatePostAction(
             content,
             editedAt: new Date(),
             location,
+            // --- Add Link Preview Fields ---
+            linkPreviewUrl: linkPreviewUrl || undefined,
+            linkPreviewTitle: linkPreviewTitle || undefined,
+            linkPreviewDescription: linkPreviewDescription || undefined,
+            linkPreviewImage: linkPreviewImageUrl ? { url: linkPreviewImageUrl } : undefined,
+            // --- End Link Preview Fields ---
         };
 
-        console.log("Updating post", JSON.stringify(updatedPost.location));
+        // console.log("Updating post", JSON.stringify(updatedPost.location)); // Reduced logging
         updatedPost.mentions = extractMentions(content);
         let existingMedia: Media[] = [];
         let mediaStr = formData.getAll("existingMedia") as string[];

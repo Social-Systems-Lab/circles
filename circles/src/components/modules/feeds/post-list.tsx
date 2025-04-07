@@ -86,6 +86,9 @@ import { motion } from "framer-motion";
 import { ListFilter } from "@/components/utils/list-filter";
 import { useRouter } from "next/navigation";
 import Indicators, { ProximityIndicator, SimilarityScore } from "@/components/utils/indicators";
+import Image from "next/image"; // Import Next Image
+import { Card, CardContent } from "@/components/ui/card"; // Import Card components
+import Link from "next/link"; // Import Next Link
 
 export const defaultMentionsInputStyle = {
     control: {
@@ -212,6 +215,56 @@ const MemoizedCommentContent = memo(({ content, mentions }: { content: string; m
 
 MemoizedCommentContent.displayName = "MemoizedCommentContent";
 
+// --- Link Preview Card Component (Defined Outside PostItem) ---
+type LinkPreviewCardProps = {
+    url: string;
+    title?: string;
+    description?: string;
+    imageUrl?: string;
+};
+
+const LinkPreviewCard = ({ url, title, description, imageUrl }: LinkPreviewCardProps) => {
+    const hostname = useMemo(() => {
+        try {
+            return new URL(url).hostname;
+        } catch (e) {
+            return "";
+        }
+    }, [url]);
+
+    return (
+        <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 block" // Add margin-top
+            onClick={(e) => e.stopPropagation()} // Prevent post click handler
+        >
+            <Card className="overflow-hidden transition-colors hover:bg-gray-50">
+                <CardContent className="flex flex-col gap-0 p-0 md:flex-row">
+                    {imageUrl && (
+                        <div className="relative h-32 w-full flex-shrink-0 md:h-auto md:w-40">
+                            <Image
+                                src={imageUrl}
+                                alt={title || "Link preview image"}
+                                fill
+                                className="object-cover"
+                                sizes="(max-width: 768px) 100vw, 160px"
+                            />
+                        </div>
+                    )}
+                    <div className="flex flex-col justify-center p-3">
+                        <div className="text-xs font-medium uppercase tracking-wide text-gray-500">{hostname}</div>
+                        {title && <div className="mt-1 line-clamp-2 font-semibold">{title}</div>}
+                        {description && <div className="mt-1 line-clamp-2 text-sm text-gray-500">{description}</div>}
+                    </div>
+                </CardContent>
+            </Card>
+        </a>
+    );
+};
+// --- End Link Preview Card Component ---
+
 export const PostItem = ({
     post,
     circle,
@@ -295,7 +348,7 @@ export const PostItem = ({
         );
 
         setFocusPost((x) => undefined);
-    }, [focusPost, setFocusPost]);
+    }, [focusPost, setFocusPost, post, circle, feed, comments, setContentPreview, sidePanelContentVisible]); // Added dependencies
 
     useEffect(() => {
         if (!carouselApi) return;
@@ -397,17 +450,33 @@ export const PostItem = ({
         startTransition(async () => {
             try {
                 if (isLiked) {
+                    // Check the state *before* the optimistic update
                     const result = await unlikeContentAction(post._id, "post");
                     if (!result.success) {
-                        // fail silently for now
+                        // Revert optimistic update on failure
+                        setLikes((prev) => prev + 1);
+                        setIsLiked(true);
+                        console.error("Failed to unlike post:", result.message);
                     }
                 } else {
                     const result = await likeContentAction(post._id, "post");
                     if (!result.success) {
-                        // fail silently for now
+                        // Revert optimistic update on failure
+                        setLikes((prev) => prev - 1);
+                        setIsLiked(false);
+                        console.error("Failed to like post:", result.message);
                     }
                 }
             } catch (error) {
+                // Revert optimistic update on error
+                if (isLiked) {
+                    // Check original state before optimistic update
+                    setLikes((prev) => prev + 1);
+                    setIsLiked(true);
+                } else {
+                    setLikes((prev) => prev - 1);
+                    setIsLiked(false);
+                }
                 console.error("Failed to like/unlike post", error);
             }
         });
@@ -547,7 +616,7 @@ export const PostItem = ({
                 }
             });
         }
-    }, [comments.length, post._id, post.comments]);
+    }, [comments.length, post._id, post.comments, startCommentsTransition]); // Added startCommentsTransition
 
     useEffect(() => {
         if (initialShowAllComments && (initialComments === undefined || initialComments.length < post.comments)) {
@@ -703,7 +772,7 @@ export const PostItem = ({
                                                 <PostForm
                                                     circle={circle}
                                                     feed={feed}
-                                                    user={user}
+                                                    user={user!} // Assert user is not null here
                                                     initialPost={post}
                                                     onSubmit={handleEditSubmit}
                                                     onCancel={() => setOpenDropdown(false)}
@@ -762,41 +831,54 @@ export const PostItem = ({
             {/* Post content */}
             {!hideContent && <MemoizedPostContent content={post.content} mentions={post.mentionsDisplay} />}
 
+            {/* --- Link Preview --- */}
+            {!hideContent && post.linkPreviewUrl && (
+                <div className="pl-4 pr-4">
+                    {/* Add padding consistent with content */}
+                    <LinkPreviewCard
+                        url={post.linkPreviewUrl}
+                        title={post.linkPreviewTitle}
+                        description={post.linkPreviewDescription}
+                        imageUrl={post.linkPreviewImage?.url}
+                    />
+                </div>
+            )}
+            {/* --- End Link Preview --- */}
+
             {/* Media carousel (if exists) */}
             {!hideContent && post.media && post.media.length > 0 && (
-                <>
-                    <div className="relative h-64 w-full rounded-lg pl-4 pr-4">
-                        <Carousel setApi={setCarouselApi}>
-                            <CarouselContent>
-                                {post.media.map((mediaItem, index) => (
-                                    <CarouselItem key={index}>
-                                        <img
-                                            src={mediaItem.fileInfo.url}
-                                            alt={mediaItem.name}
-                                            className="h-64 w-full rounded-lg object-cover"
-                                            onClick={() => handleImageClick(index)}
-                                        />
-                                    </CarouselItem>
+                <div className="relative h-64 w-full rounded-lg pl-4 pr-4">
+                    {/* Keep padding */}
+                    <Carousel setApi={setCarouselApi}>
+                        <CarouselContent>
+                            {post.media.map((mediaItem, index) => (
+                                <CarouselItem key={index}>
+                                    <img
+                                        src={mediaItem.fileInfo.url}
+                                        alt={mediaItem.name}
+                                        className="h-64 w-full rounded-lg object-cover"
+                                        onClick={() => handleImageClick(index)}
+                                    />
+                                </CarouselItem>
+                            ))}
+                        </CarouselContent>
+                    </Carousel>
+                    {post.media.length > 1 && (
+                        <div className="relative flex justify-center">
+                            <div className="absolute bottom-[7px] flex flex-row items-center justify-center">
+                                {post.media.map((_, index) => (
+                                    <button
+                                        key={index}
+                                        onClick={() => carouselApi?.scrollTo(index)}
+                                        className={`mx-1 h-1.5 w-1.5 rounded-full ${
+                                            index === currentImageIndex ? "bg-blue-500" : "bg-gray-300"
+                                        }`}
+                                    />
                                 ))}
-                            </CarouselContent>
-                        </Carousel>
-                        {post.media.length > 1 && (
-                            <div className="relative flex justify-center">
-                                <div className="absolute bottom-[7px] flex flex-row items-center justify-center">
-                                    {post.media.map((_, index) => (
-                                        <button
-                                            key={index}
-                                            onClick={() => carouselApi?.scrollTo(index)}
-                                            className={`mx-1 h-1.5 w-1.5 rounded-full ${
-                                                index === currentImageIndex ? "bg-blue-500" : "bg-gray-300"
-                                            }`}
-                                        />
-                                    ))}
-                                </div>
                             </div>
-                        )}
-                    </div>
-                </>
+                        </div>
+                    )}
+                </div>
             )}
 
             {/* Actions (like and comment) */}

@@ -8,9 +8,10 @@ import { HoverCard } from "@/components/ui/hover-card";
 import { HoverCardTrigger } from "@radix-ui/react-hover-card";
 import { contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
-import { memo, useMemo, useCallback } from "react";
+import { memo, useMemo, useCallback, ComponentProps } from "react"; // Added ComponentProps
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { useRouter } from "next/navigation";
+import Link from "next/link"; // Import Next Link
 
 const needsMarkdown = (content: string): boolean => {
     // Check for common markdown syntax
@@ -92,10 +93,26 @@ const RichText = memo(({ content, mentions }: RichTextProps) => {
                     }
                 }
 
-                return <a {...props} />;
+                // Check if it's an external link (starts with http/https)
+                if (href.startsWith("http://") || href.startsWith("https://")) {
+                    return (
+                        <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
+                            {props.children}
+                        </a>
+                    );
+                }
+
+                // Handle internal links (like mentions, potentially others)
+                // For now, assume internal links are handled by MentionHoverCard or default Next Link behavior
+                // If it's not a mention, render as a Next Link for internal navigation
+                return (
+                    <Link href={href} {...props}>
+                        {props.children}
+                    </Link>
+                );
             },
         };
-    }, [mentions]);
+    }, [mentions]); // Keep mentions dependency for MentionHoverCard
 
     // If no markdown or mentions, just render plain text
     if (!requiresMarkdown && !hasMentions) {
