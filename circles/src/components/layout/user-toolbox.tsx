@@ -153,14 +153,6 @@ export const UserToolbox = () => {
                         >
                             <Users className="h-5 w-5" />
                         </TabsTrigger>
-                        {!authInfo.inSsiApp && (
-                            <TabsTrigger
-                                value="account"
-                                className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
-                            >
-                                <MdOutlineLogout className="h-5 w-5" />
-                            </TabsTrigger>
-                        )}
 
                         {/* ... other tabs */}
                     </TabsList>
@@ -239,15 +231,14 @@ export const UserToolbox = () => {
                             </div>
                         )}
                     </TabsContent>
-                    {!authInfo.inSsiApp && (
-                        <TabsContent value="account" className="m-0 flex-grow overflow-auto pt-1">
-                            <div className="flex h-full items-center justify-center pt-4">
-                                <Button variant="outline" size="sm" onClick={signOut}>
-                                    Sign Out
-                                </Button>
-                            </div>
-                        </TabsContent>
-                    )}
+
+                    <TabsContent value="account" className="m-0 flex-grow overflow-auto pt-1">
+                        <div className="flex h-full items-center justify-center pt-4">
+                            <Button variant="outline" size="sm" onClick={signOut}>
+                                Sign Out
+                            </Button>
+                        </div>
+                    </TabsContent>
                 </Tabs>
             </CardContent>
         </Card>

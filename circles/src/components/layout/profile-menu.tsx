@@ -84,14 +84,6 @@ const ProfileMenuBar = () => {
         router.push("/signup?redirectTo=" + redirectTo);
     };
 
-    const toggleQRCode = () => {
-        window.ReactNativeWebView?.postMessage(
-            JSON.stringify({
-                type: "ScanQRCode",
-            }),
-        );
-    };
-
     // hide when in the welcome screen
     if (pathname === "/welcome" || pathname === "/signup" || pathname === "/login") {
         return null;

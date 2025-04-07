@@ -19,6 +19,16 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogClose,
+} from "@/components/ui/dialog"; // Import Dialog components
+import { Copy } from "lucide-react"; // Import Copy icon
 
 export default function UsersTab() {
     const [users, setUsers] = useState<Circle[]>([]);
@@ -26,6 +36,9 @@ export default function UsersTab() {
     const [searchTerm, setSearchTerm] = useState("");
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [userToDelete, setUserToDelete] = useState<Circle | null>(null);
+    const [resetLinkDialogOpen, setResetLinkDialogOpen] = useState(false); // State for reset link dialog
+    const [resetLink, setResetLink] = useState(""); // State to store the reset link
+    const [resettingUser, setResettingUser] = useState<Circle | null>(null); // State to store user being reset
     const [isResetting, startResetTransition] = useTransition(); // Transition for reset action
     const { toast } = useToast();
 
@@ -94,37 +107,38 @@ export default function UsersTab() {
                 const result = await initiatePasswordReset(user._id);
 
                 if (result.success) {
-                    const resetLink = `${window.location.origin}/reset-password?token=${result.token}`;
-                    // Display link in a toast - consider a dialog or copy-to-clipboard for better UX
-                    toast({
-                        title: "Password Reset Initiated",
-                        description: (
-                            <div>
-                                <p>Reset link for {user.name}:</p>
-                                <Input readOnly value={resetLink} className="mt-2" />
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                    Copy this link and send it to the user. It expires in 1 hour.
-                                </p>
-                            </div>
-                        ),
-                        duration: 15000, // Keep toast longer
-                    });
+                    const generatedLink = `${window.location.origin}/reset-password?token=${result.token}`;
+                    setResetLink(generatedLink); // Store the link in state
+                    setResettingUser(user); // Store the user for the dialog title
+                    setResetLinkDialogOpen(true); // Open the dialog
                 } else {
                     toast({
-                        title: "Error",
+                        title: "Error Initiating Reset",
                         description: result.error || "Failed to initiate password reset.",
                         variant: "destructive",
                     });
                 }
             } catch (error) {
-                console.error("Reset password error:", error);
+                console.error("Initiate reset password error:", error);
                 toast({
                     title: "Error",
-                    description: "An unexpected error occurred during password reset.",
+                    description: "An unexpected error occurred during password reset initiation.",
                     variant: "destructive",
                 });
             }
         });
+    };
+
+    const copyToClipboard = () => {
+        navigator.clipboard.writeText(resetLink).then(
+            () => {
+                toast({ title: "Success", description: "Reset link copied to clipboard." });
+            },
+            (err) => {
+                console.error("Failed to copy link: ", err);
+                toast({ title: "Error", description: "Failed to copy link.", variant: "destructive" });
+            },
+        );
     };
 
     const filteredUsers = users.filter(
@@ -257,6 +271,32 @@ export default function UsersTab() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Reset Link Dialog */}
+            <Dialog open={resetLinkDialogOpen} onOpenChange={setResetLinkDialogOpen}>
+                <DialogContent className="sm:max-w-[525px]">
+                    <DialogHeader>
+                        <DialogTitle>Password Reset Link for {resettingUser?.name}</DialogTitle>
+                        <DialogDescription>
+                            Copy the link below and send it to the user. This link is valid for 1 hour.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex items-center space-x-2 py-4">
+                        <Input id="reset-link" value={resetLink} readOnly className="flex-1" />
+                        <Button type="button" size="sm" onClick={copyToClipboard}>
+                            <span className="sr-only">Copy</span>
+                            <Copy className="h-4 w-4" />
+                        </Button>
+                    </div>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button type="button" variant="secondary">
+                                Close
+                            </Button>
+                        </DialogClose>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
