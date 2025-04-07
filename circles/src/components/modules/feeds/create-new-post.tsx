@@ -71,7 +71,7 @@ export function CreateNewPost({ circle, feed }: CreateNewPostProps) {
             </DialogTrigger>
 
             <DialogContent
-                className="rounded-[15px] bg-white p-0 sm:max-w-[425px] sm:rounded-[15px]"
+                className="z-[110] rounded-[15px] bg-white p-0 sm:max-w-[425px] sm:rounded-[15px]" // Added z-[110]
                 onInteractOutside={(e) => {
                     e.preventDefault();
                 }}
