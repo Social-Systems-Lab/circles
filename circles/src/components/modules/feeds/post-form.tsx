@@ -481,7 +481,7 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
             <MentionsInput
                 value={postContent}
                 onChange={(e) => setPostContent(e.target.value)}
-                placeholder="Share your story... (links will generate previews)" // Updated placeholder
+                placeholder="Share your story..."
                 className="flex-grow"
                 autoFocus
                 style={postMentionsInputStyle}
