@@ -156,8 +156,11 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
             // Adjusted height slightly
             className="relative h-[550px] overflow-hidden rounded-xl border bg-white shadow-lg md:h-[580px]"
         >
-            {/* Inner container using custom-scrollbar */}
+            {/* Scroll container - Relying on globals.css to hide scrollbar */}
             <div className="custom-scrollbar absolute inset-0 flex h-full flex-col overflow-y-auto">
+                {" "}
+                {/* Removed pr-2 */}
+                {/* Removed inner wrapper with negative margin */}
                 {/* Card Content - Reduced Image Height */}
                 <div className="relative h-[280px] w-full flex-shrink-0 overflow-hidden md:h-[300px]">
                     <ImageCarousel
@@ -185,7 +188,6 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                         </div>
                     </div>
                 </div>
-
                 {/* Content below image - now inside the scrollable container */}
                 <div className="relative flex flex-1 flex-col p-4 pt-2">
                     {/* Picture positioned absolutely over the start of this section */}
@@ -294,8 +296,9 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                     {/* Add padding at the bottom of scrollable content to avoid being hidden by fixed buttons */}
                     <div className="h-20 flex-shrink-0"></div> {/* Keep padding */}
                 </div>
+                {/* End of direct content within scroll container */}
             </div>{" "}
-            {/* End of inner scrollable div */}
+            {/* End of scroll container div */}
             {/* --- Action Buttons --- */}
             {/* Container for all bottom buttons, positioned absolutely within the main motion.div */}
             <div className="pointer-events-none absolute bottom-4 left-0 right-0 px-4">

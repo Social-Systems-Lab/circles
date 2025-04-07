@@ -214,35 +214,21 @@ h1,
     }
 }
 
-/* Custom scrollbar styles */
+/* Custom scrollbar styles - Hide Scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
-    width: 8px; /* Width of the scrollbar */
+    display: none !important; /* Force hide scrollbar for WebKit browsers */
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent; /* Make track transparent */
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-    background-color: transparent; /* Make thumb transparent by default */
-    border-radius: 10px;
-    border: 3px solid transparent; /* Add border to maintain layout space */
-}
-
-/* Show scrollbar thumb on hover */
-.custom-scrollbar:hover::-webkit-scrollbar-thumb {
-    background-color: hsl(var(--border)); /* Use border color for thumb on hover */
-}
-
-/* Optional: Style for Firefox */
+/* Hide scrollbar for IE, Edge and Firefox */
 .custom-scrollbar {
-    scrollbar-width: thin; /* "auto" or "thin" */
-    scrollbar-color: transparent transparent; /* thumb and track color */
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
 }
 
-.custom-scrollbar:hover {
-    scrollbar-color: hsl(var(--border)) transparent; /* thumb and track color on hover */
-}
+/* Keep hover effect for Firefox in case 'none' isn't fully supported or for future use */
+/* .custom-scrollbar:hover {
+    scrollbar-color: hsl(var(--border)) transparent;
+} */
 
 /* shadcn/ui */
 @layer base {
