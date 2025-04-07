@@ -9,13 +9,13 @@ import { Loader2, Search } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import SelectedItemBadge from "./selected-item-badge";
 import { OnboardingStepProps, OnboardingUserData } from "./onboarding";
-import { causes } from "@/lib/data/constants";
 import { fetchCausesMatchedToCircle, saveCausesAction } from "./actions";
 import { Cause } from "@/models/models";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { useIsMobile } from "../utils/use-is-mobile";
 import { ItemGrid, ItemList } from "./item-card";
+import { causes } from "@/lib/data/causes-skills";
 
 function CausesStep({ userData, setUserData, nextStep, prevStep }: OnboardingStepProps) {
     const [causeSearch, setCauseSearch] = useState("");

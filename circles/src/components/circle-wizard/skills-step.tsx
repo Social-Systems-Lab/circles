@@ -6,12 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Loader2, Search } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CircleWizardStepProps } from "./circle-wizard";
-import { skills } from "@/lib/data/constants";
 import { saveSkillsAction } from "./actions";
 import { Skill } from "@/models/models";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { ItemGrid, ItemList } from "./item-card";
 import SelectedItemBadge from "./selected-item-badge";
+import { skills } from "@/lib/data/causes-skills";
 
 export default function SkillsStep({
     circleData,

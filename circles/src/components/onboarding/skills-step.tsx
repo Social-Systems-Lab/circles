@@ -9,13 +9,13 @@ import { Loader2, Search } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import SelectedItemBadge from "./selected-item-badge";
 import { OnboardingStepProps, OnboardingUserData } from "./onboarding";
-import { skills } from "@/lib/data/constants";
 import { fetchSkillsMatchedToCircle, saveSkillsAction } from "./actions";
 import { Skill } from "@/models/models";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { ItemGrid, ItemList } from "./item-card";
 import { useIsMobile } from "../utils/use-is-mobile";
+import { skills } from "@/lib/data/causes-skills";
 
 function SkillsStep({ userData, setUserData, nextStep, prevStep }: OnboardingStepProps) {
     const [skillSearch, setSkillSearch] = useState("");
