@@ -4,9 +4,8 @@
 import { Card, CardContent } from "@/components/ui/card";
 import Image from "next/image";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Badge } from "@/components/ui/badge";
 import Indicators from "../utils/indicators";
-import { causes, skills } from "@/lib/data/constants";
+import { causes, skills } from "@/lib/data/causes-skills";
 
 type ItemGridCardProps = {
     item: any;

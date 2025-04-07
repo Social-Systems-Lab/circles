@@ -4,7 +4,7 @@ import { Circle, RegistryInfo, ServerSettings } from "@/models/models";
 import { createDefaultCircle } from "./circle";
 import { ObjectId } from "mongodb";
 import { createServerDid, getServerPublicKey, signRegisterServerChallenge } from "../auth/auth";
-import { causes, skills } from "./constants";
+import { causes, skills } from "@/lib/data/causes-skills";
 
 const ENV_TO_SETTINGS_MAP: Record<string, keyof ServerSettings> = {
     CIRCLES_INSTANCE_NAME: "name",

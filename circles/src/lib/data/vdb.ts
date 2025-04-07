@@ -4,7 +4,7 @@ import { ObjectId } from "mongodb";
 import { Causes, Circles, Posts, Skills } from "./db";
 import { getFullLocationName } from "../utils";
 import OpenAI from "openai";
-import { causes, skills } from "./constants";
+import { causes, skills } from "@/lib/data/causes-skills";
 import { getPostsForEmbedding } from "./feed";
 import { v5 as uuidv5 } from "uuid";
 

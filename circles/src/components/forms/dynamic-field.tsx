@@ -28,7 +28,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { cn } from "@/lib/utils";
 import { FaLock } from "react-icons/fa6";
 import { FaCheck } from "react-icons/fa";
-import { features, causes, skills, modules } from "@/lib/data/constants";
+import { features, modules } from "@/lib/data/constants";
+import { causes, skills } from "@/lib/data/causes-skills";
 import { CheckCircle2, ChevronDown, ChevronUp, Loader2, Search, XCircle } from "lucide-react";
 import { getMemberAccessLevel, isAuthorized } from "@/lib/auth/client-auth";
 import { FaEye, FaEyeSlash } from "react-icons/fa";

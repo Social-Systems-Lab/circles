@@ -17,7 +17,8 @@ import ProfileLocationStep from "./profile-location-step";
 import FinalStep from "./final-step";
 import ProfileSummary from "./profile-summary";
 import { Cause, ONBOARDING_STEPS, OnboardingStep, Skill } from "@/models/models";
-import { causes, LOG_LEVEL_TRACE, logLevel, skills } from "@/lib/data/constants";
+import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import { causes, skills } from "@/lib/data/causes-skills";
 
 export type Quest = {
     id: number;

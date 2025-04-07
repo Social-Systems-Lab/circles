@@ -3,10 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Progress } from "@/components/ui/progress";
-import { userAtom } from "@/lib/data/atoms";
-import { useAtom } from "jotai";
 import { Cause, CircleType, Skill } from "@/models/models";
-import { causes, skills } from "@/lib/data/constants";
 import { useRouter, useSearchParams } from "next/navigation";
 import BasicInfoStep from "./basic-info-step";
 import MissionStep from "./mission-step";
@@ -16,8 +13,7 @@ import CausesStep from "./causes-step";
 import SkillsStep from "./skills-step";
 import FinalStep from "./final-step";
 import CircleSummary from "./circle-summary";
-import { Location, Media } from "@/models/models"; // Added Media
-import { ImageItem } from "@/components/forms/controls/multi-image-uploader"; // Import ImageItem
+import { Location, Media } from "@/models/models";
 import { Card, CardContent } from "../ui/card";
 
 export type CircleData = {

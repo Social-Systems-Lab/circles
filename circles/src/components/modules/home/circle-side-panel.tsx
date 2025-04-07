@@ -1,8 +1,7 @@
 // CircleSidePanel.tsx
 import React from "react";
 import { Cause, Circle, Skill } from "@/models/models";
-import CircleTags from "../circles/circle-tags";
-import { causes, skills } from "@/lib/data/constants";
+import { causes, skills } from "@/lib/data/causes-skills";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import Image from "next/image";
 import { HoverCardArrow } from "@radix-ui/react-hover-card";

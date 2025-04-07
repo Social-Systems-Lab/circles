@@ -2,7 +2,8 @@
 
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { countCirclesAndUsers, getCirclePath, updateCircle, getCircleById } from "@/lib/data/circle"; // Added getCircleById
-import { causes, skills, features } from "@/lib/data/constants";
+import { features } from "@/lib/data/constants";
+import { causes, skills } from "@/lib/data/causes-skills";
 import { getUserByDid, getUserByHandle } from "@/lib/data/user";
 import { getQdrantClient, getVbdCircleById } from "@/lib/data/vdb";
 import {
