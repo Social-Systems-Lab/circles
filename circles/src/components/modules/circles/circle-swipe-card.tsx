@@ -7,8 +7,7 @@ import Image from "next/image";
 import { CirclePicture } from "./circle-picture";
 import CircleTags from "./circle-tags";
 import { Button } from "@/components/ui/button";
-// Removed duplicate Button import
-import { Check, ExternalLink, MapPin, Target, X } from "lucide-react"; // Keep ExternalLink
+import { Check, ExternalLink, MapPin, Quote, X } from "lucide-react"; // Removed Target
 import { useRouter } from "next/navigation";
 import { followCircle } from "../home/actions";
 import { useToast } from "@/components/ui/use-toast";
@@ -18,6 +17,13 @@ import { ignoreCircle } from "../home/ignore-actions";
 import CircleTypeIndicator from "@/components/utils/circle-type-indicator";
 import Indicators from "@/components/utils/indicators";
 import ImageCarousel from "@/components/ui/image-carousel";
+import { causes as allCauses, skills as allSkills } from "@/lib/data/causes-skills"; // Import causes and skills data
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // Import Tooltip
+import RichText from "../feeds/RichText";
+
+// Helper mappings for quick lookup
+const causeMap = new Map(allCauses.map((c) => [c.handle, c]));
+const skillMap = new Map(allSkills.map((s) => [s.handle, s]));
 
 interface CircleSwipeCardProps {
     circle: WithMetric<Circle>;
@@ -146,10 +152,10 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
             }}
             // Adjusted height for the card window
             // Adjusted height slightly
-            className="formatted relative h-[550px] overflow-hidden rounded-xl border bg-white shadow-lg md:h-[580px]" // Added overflow-hidden and relative
+            className="relative h-[550px] overflow-hidden rounded-xl border bg-white shadow-lg md:h-[580px]" // Keep class name consistent
         >
-            {/* Inner container for vertical scrolling with subtle scrollbar */}
-            <div className="scrollbar-thin scrollbar-thumb-rounded hover:scrollbar-thumb-gray-400 scrollbar-thumb-gray-300 scrollbar-track-transparent absolute inset-0 flex h-full flex-col overflow-y-auto">
+            {/* Inner container for vertical scrolling with subtle scrollbar (transparent thumb by default) */}
+            <div className="scrollbar-thin scrollbar-thumb-rounded scrollbar-track-transparent scrollbar-thumb-transparent hover:scrollbar-thumb-gray-400 absolute inset-0 flex h-full flex-col overflow-y-auto">
                 {/* Card Content - Reduced Image Height */}
                 <div className="relative h-[280px] w-full flex-shrink-0 overflow-hidden md:h-[300px]">
                     <ImageCarousel
@@ -192,47 +198,101 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                         <CircleTags tags={circle.interests || []} isCompact={true} />
                     </div>
                     {/* Description and Mission are prioritized */}
-                    <div className="mt-3 space-y-3 px-1 pb-2">
-                        {/* Highlighted Mission Box */}
+                    <div className="space-y-3 px-1 pb-2">
+                        {/* Mission Box with Quote Icon */}
                         {circle.mission && (
-                            <div className="mt-3 rounded-md border bg-gray-50 p-3">
-                                <h3 className="mb-1 flex items-center text-sm font-semibold text-gray-800">
-                                    <Target className="mr-1.5 h-4 w-4 text-gray-600" /> Mission
-                                </h3>
+                            <div className="relative mt-3 rounded-md border bg-gray-50/80 p-3 pl-8 shadow-sm">
+                                <Quote className="absolute left-2 top-2 h-4 w-4 text-gray-400" />
                                 <p className="text-sm text-gray-700">{circle.mission}</p>
                             </div>
                         )}
 
                         {circle.description && <p className="text-sm text-gray-600">{circle.description}</p>}
 
-                        {/* Other details appear further down in scroll */}
+                        {/* {circle.content && (
+                            <div className="min-w-0 break-words">
+                                <RichText content={circle.content} />
+                            </div>
+                        )} */}
+
+                        {/* Causes Icons */}
+                        {circle.causes && circle.causes.length > 0 && (
+                            <div className="mt-4">
+                                <h3 className="mb-1.5 text-xs font-medium uppercase text-gray-500">Causes</h3>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <TooltipProvider delayDuration={100}>
+                                        {circle.causes.slice(0, 10).map((handle) => {
+                                            // Limit displayed icons initially if needed
+                                            const cause = causeMap.get(handle);
+                                            if (!cause) return null;
+                                            return (
+                                                <Tooltip key={handle}>
+                                                    <TooltipTrigger asChild>
+                                                        <Image
+                                                            src={cause.picture.url}
+                                                            alt={cause.name}
+                                                            width={28} // Slightly larger icons
+                                                            height={28}
+                                                            className="h-7 w-7 rounded-full object-cover ring-1 ring-gray-200 hover:opacity-80"
+                                                        />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>{cause.name}</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            );
+                                        })}
+                                    </TooltipProvider>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Skills Icons */}
+                        {circle.skills && circle.skills.length > 0 && (
+                            <div className="mt-4">
+                                <h3 className="mb-1.5 text-xs font-medium uppercase text-gray-500">
+                                    {circle.circleType === "user" ? "Skills" : "Needs"}
+                                </h3>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <TooltipProvider delayDuration={100}>
+                                        {circle.skills.slice(0, 10).map((handle) => {
+                                            // Limit displayed icons
+                                            const skill = skillMap.get(handle);
+                                            if (!skill) return null;
+                                            return (
+                                                <Tooltip key={handle}>
+                                                    <TooltipTrigger asChild>
+                                                        <Image
+                                                            src={skill.picture.url}
+                                                            alt={skill.name}
+                                                            width={28} // Slightly larger icons
+                                                            height={28}
+                                                            className="h-7 w-7 rounded-full object-cover ring-1 ring-gray-200 hover:opacity-80"
+                                                        />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>{skill.name}</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            );
+                                        })}
+                                    </TooltipProvider>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Location (moved down, inline icon, no heading) */}
                         {circle.location &&
                             (circle.location.city || circle.location.region || circle.location.country) && (
-                                <div className="mt-3">
-                                    <h3 className="mb-1 flex items-center text-sm font-semibold text-gray-700">
-                                        <MapPin className="mr-1.5 h-4 w-4 text-gray-600" /> Location
-                                    </h3>
-                                    <p className="text-sm text-gray-700">
+                                <div className="mt-3 flex items-center text-sm text-gray-600">
+                                    <MapPin className="mr-1.5 h-4 w-4 flex-shrink-0 text-gray-500" />
+                                    <span>
                                         {[circle.location.city, circle.location.region, circle.location.country]
                                             .filter(Boolean)
                                             .join(", ")}
-                                    </p>
+                                    </span>
                                 </div>
                             )}
-
-                        {circle.causes && circle.causes.length > 0 && (
-                            <div className="mt-3">
-                                <h3 className="mb-1 text-sm font-semibold text-gray-700">Causes</h3>
-                                <CircleTags tags={circle.causes} isCompact={true} />
-                            </div>
-                        )}
-
-                        {circle.skills && circle.skills.length > 0 && (
-                            <div className="mt-3">
-                                <h3 className="mb-1 text-sm font-semibold text-gray-700">Skills</h3>
-                                <CircleTags tags={circle.skills} isCompact={true} />
-                            </div>
-                        )}
                     </div>
                     {/* Add padding at the bottom of scrollable content to avoid being hidden by fixed buttons */}
                     <div className="h-20 flex-shrink-0"></div> {/* Keep padding */}
