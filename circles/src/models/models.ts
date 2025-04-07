@@ -412,6 +412,9 @@ export const circleSchema = z.object({
     agreedToTos: z.boolean().optional(),
     agreedToEmailUpdates: z.boolean().optional(),
     metadata: z.record(z.string(), z.any()).optional(), // For storing additional data like commentPostId
+    // Password Reset Fields
+    passwordResetToken: z.string().nullable().optional(),
+    passwordResetTokenExpiry: z.date().nullable().optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react"; // Added useTransition
 import { getEntitiesByType, deleteEntity } from "../actions";
+import { initiatePasswordReset } from "@/lib/auth/actions"; // Import the new action
 import { Circle } from "@/models/models";
 import { Button } from "@/components/ui/button";
-import { Trash2, RefreshCw, Search } from "lucide-react";
+import { Trash2, RefreshCw, Search, KeyRound } from "lucide-react"; // Added KeyRound icon
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -25,6 +26,7 @@ export default function UsersTab() {
     const [searchTerm, setSearchTerm] = useState("");
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [userToDelete, setUserToDelete] = useState<Circle | null>(null);
+    const [isResetting, startResetTransition] = useTransition(); // Transition for reset action
     const { toast } = useToast();
 
     useEffect(() => {
@@ -82,6 +84,47 @@ export default function UsersTab() {
             setDeleteDialogOpen(false);
             setUserToDelete(null);
         }
+    };
+
+    const handleResetPasswordClick = async (user: Circle) => {
+        if (!user._id) return;
+
+        startResetTransition(async () => {
+            try {
+                const result = await initiatePasswordReset(user._id);
+
+                if (result.success) {
+                    const resetLink = `${window.location.origin}/reset-password?token=${result.token}`;
+                    // Display link in a toast - consider a dialog or copy-to-clipboard for better UX
+                    toast({
+                        title: "Password Reset Initiated",
+                        description: (
+                            <div>
+                                <p>Reset link for {user.name}:</p>
+                                <Input readOnly value={resetLink} className="mt-2" />
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    Copy this link and send it to the user. It expires in 1 hour.
+                                </p>
+                            </div>
+                        ),
+                        duration: 15000, // Keep toast longer
+                    });
+                } else {
+                    toast({
+                        title: "Error",
+                        description: result.error || "Failed to initiate password reset.",
+                        variant: "destructive",
+                    });
+                }
+            } catch (error) {
+                console.error("Reset password error:", error);
+                toast({
+                    title: "Error",
+                    description: "An unexpected error occurred during password reset.",
+                    variant: "destructive",
+                });
+            }
+        });
     };
 
     const filteredUsers = users.filter(
@@ -164,8 +207,28 @@ export default function UsersTab() {
                                         <TableCell>
                                             {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "Unknown"}
                                         </TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(user)}>
+                                        <TableCell className="space-x-1 text-right">
+                                            {/* Reset Password Button */}
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => handleResetPasswordClick(user)}
+                                                disabled={isResetting}
+                                                title="Reset Password"
+                                            >
+                                                {isResetting ? (
+                                                    <RefreshCw className="h-4 w-4 animate-spin" />
+                                                ) : (
+                                                    <KeyRound className="h-4 w-4 text-blue-500" />
+                                                )}
+                                            </Button>
+                                            {/* Delete Button */}
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => handleDeleteClick(user)}
+                                                title="Delete User"
+                                            >
                                                 <Trash2 className="h-4 w-4 text-red-500" />
                                             </Button>
                                         </TableCell>

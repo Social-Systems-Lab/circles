@@ -14,15 +14,15 @@ import { addMember, getMembers } from "../data/member";
 import { getCircleById, getCirclesByDids, getCirclesByIds, getDefaultCircle } from "../data/circle";
 import { registerOrLoginMatrixUser } from "../data/matrix";
 
-const SALT_FILENAME = "salt.bin";
-const IV_FILENAME = "iv.bin";
-const PUBLIC_KEY_FILENAME = "publicKey.pem";
-const PRIVATE_KEY_FILENAME = "privateKey.pem";
-const ENCRYPTED_PRIVATE_KEY_FILENAME = "privateKey.pem.enc";
-const ENCRYPTION_ALGORITHM = "aes-256-cbc";
+export const SALT_FILENAME = "salt.bin";
+export const IV_FILENAME = "iv.bin";
+export const PUBLIC_KEY_FILENAME = "publicKey.pem";
+export const PRIVATE_KEY_FILENAME = "privateKey.pem";
+export const ENCRYPTED_PRIVATE_KEY_FILENAME = "privateKey.pem.enc";
+export const ENCRYPTION_ALGORITHM = "aes-256-cbc";
 export const APP_DIR = "/circles";
 export const USERS_DIR = path.join(APP_DIR, "users");
-const SERVER_DIR = path.join(APP_DIR, "server");
+export const SERVER_DIR = path.join(APP_DIR, "server"); // Also export SERVER_DIR if needed elsewhere, otherwise keep as const
 
 export const createUserTrad = async (
     name: string,
@@ -104,7 +104,6 @@ export const createUserTrad = async (
 
     return user;
 };
-
 export type ServerDid = { did: string; publicKey: string };
 export const createServerDid = async (): Promise<ServerDid> => {
     // make sure account directory exists
@@ -185,17 +184,22 @@ export const getUserPrivateKey = (did: string, password: string): string => {
         throw new AuthenticationError("Account does not exist");
     }
 
-    const salt = fs.readFileSync(path.join(accountPath, SALT_FILENAME));
-    const iv = fs.readFileSync(path.join(accountPath, IV_FILENAME));
-    const privateKey = fs.readFileSync(path.join(accountPath, ENCRYPTED_PRIVATE_KEY_FILENAME), "utf8");
-    const encryptionKey = crypto.pbkdf2Sync(password, salt, 100000, 32, "sha512");
+    const salt: Buffer = fs.readFileSync(path.join(accountPath, SALT_FILENAME));
+    const iv: Buffer = fs.readFileSync(path.join(accountPath, IV_FILENAME));
+    const encryptedPrivateKeyStr: string = fs.readFileSync(
+        path.join(accountPath, ENCRYPTED_PRIVATE_KEY_FILENAME),
+        "utf8",
+    );
+    // Explicitly type encryptionKey as Buffer
+    const encryptionKey: Buffer = crypto.pbkdf2Sync(password, salt, 100000, 32, "sha512");
 
     // decrypt private key to authenticate user
+    // Pass Buffers directly
     const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, encryptionKey, iv);
 
     let decryptedPrivateKey;
     try {
-        decryptedPrivateKey = decipher.update(privateKey, "hex", "utf8");
+        decryptedPrivateKey = decipher.update(encryptedPrivateKeyStr, "hex", "utf8"); // Use the string variable
         decryptedPrivateKey += decipher.final("utf8");
     } catch (error) {
         throw new AuthenticationError("Incorrect password");
@@ -439,7 +443,7 @@ export const issueChallenge = async (publicKey?: string): Promise<Challenge> => 
 
 export const getChallenge = async (challengeStr: string): Promise<Challenge> => {
     // get the most recent challenge
-    let res = (await Challenges.findOne({ challenge: challengeStr }, { sort: { createdAt: -1 } })) as Challenge;
+    let res = (await Circles.findOne({ challenge: challengeStr }, { sort: { createdAt: -1 } })) as Challenge;
     return res;
 };
 
@@ -449,7 +453,7 @@ export const verifyChallengeSignature = async (
     challengeStr: string,
 ): Promise<boolean> => {
     // get the most recent challenge
-    let res = (await Challenges.findOne({ challenge: challengeStr }, { sort: { createdAt: -1 } })) as Challenge;
+    let res = (await Circles.findOne({ challenge: challengeStr }, { sort: { createdAt: -1 } })) as Challenge;
     if (!res) {
         console.log("Challenge not found");
         return false;
