@@ -132,7 +132,11 @@ export async function saveAbout(values: {
         revalidatePath(`${circlePath}settings/about`);
         revalidatePath(circlePath); // revalidate home page too
 
-        return { success: true, message: "Circle about saved successfully" };
+        // Check if handle was updated and return it for potential redirect
+        const handleChanged = values.handle && values.handle !== existingCircle.handle;
+        const newHandle = handleChanged ? values.handle : undefined;
+
+        return { success: true, message: "Circle about saved successfully", newHandle: newHandle };
     } catch (error) {
         if (error instanceof Error) {
             return { success: false, message: error.message };

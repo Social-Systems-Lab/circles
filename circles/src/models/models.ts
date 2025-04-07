@@ -680,6 +680,7 @@ export type FormSubmitResponse = {
     message?: string;
     success: boolean;
     data?: any;
+    newHandle?: string; // Added for redirect after handle change
 };
 
 export type FormAction = {

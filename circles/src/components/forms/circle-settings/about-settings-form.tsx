@@ -83,7 +83,15 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                 // fetch new user data
                 let userData = await getUserPrivateAction();
                 setUser(userData);
-                router.refresh();
+
+                // Check if handle was updated and redirect if necessary
+                if (result.newHandle) {
+                    const newPath = `/circles/${result.newHandle}/settings/about`;
+                    console.log(`Handle changed, redirecting to: ${newPath}`);
+                    router.push(newPath); // Use push to navigate to the new URL
+                } else {
+                    router.refresh(); // Refresh current page if handle didn't change
+                }
             } else {
                 toast({
                     title: "Error",

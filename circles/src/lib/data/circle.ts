@@ -290,6 +290,17 @@ export const updateCircle = async (circle: Partial<Circle>, authenticatedUserDid
     delete circleWithoutId.email; // Email should likely be updated via a separate, dedicated process if needed
     delete circleWithoutId.circleType; // CircleType should not change after creation
 
+    // Check for handle conflict if handle is being updated
+    if (circleWithoutId.handle && circleWithoutId.handle !== existingCircle.handle) {
+        const conflictingCircle = await Circles.findOne({
+            handle: circleWithoutId.handle,
+            _id: { $ne: new ObjectId(_id) }, // Exclude the current circle
+        });
+        if (conflictingCircle) {
+            throw new Error(`Handle "${circleWithoutId.handle}" is already in use.`);
+        }
+    }
+
     // Proceed with the update
     let result = await Circles.updateOne({ _id: new ObjectId(_id) }, { $set: circleWithoutId });
     if (result.matchedCount === 0) {
