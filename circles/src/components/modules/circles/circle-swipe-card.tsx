@@ -17,9 +17,11 @@ import { ignoreCircle } from "../home/ignore-actions";
 import CircleTypeIndicator from "@/components/utils/circle-type-indicator";
 import Indicators from "@/components/utils/indicators";
 import ImageCarousel from "@/components/ui/image-carousel";
-import { causes as allCauses, skills as allSkills } from "@/lib/data/causes-skills"; // Import causes and skills data
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // Import Tooltip
-import RichText from "../feeds/RichText";
+import { causes as allCauses, skills as allSkills } from "@/lib/data/causes-skills";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge"; // Import Badge for pills
+// Removed RichText import as it's commented out below
+// import RichText from "../feeds/RichText";
 
 // Helper mappings for quick lookup
 const causeMap = new Map(allCauses.map((c) => [c.handle, c]));
@@ -152,10 +154,10 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
             }}
             // Adjusted height for the card window
             // Adjusted height slightly
-            className="relative h-[550px] overflow-hidden rounded-xl border bg-white shadow-lg md:h-[580px]" // Keep class name consistent
+            className="relative h-[550px] overflow-hidden rounded-xl border bg-white shadow-lg md:h-[580px]"
         >
-            {/* Inner container for vertical scrolling with subtle scrollbar (transparent thumb by default) */}
-            <div className="scrollbar-thin scrollbar-thumb-rounded scrollbar-track-transparent scrollbar-thumb-transparent hover:scrollbar-thumb-gray-400 absolute inset-0 flex h-full flex-col overflow-y-auto">
+            {/* Inner container using custom-scrollbar */}
+            <div className="custom-scrollbar absolute inset-0 flex h-full flex-col overflow-y-auto">
                 {/* Card Content - Reduced Image Height */}
                 <div className="relative h-[280px] w-full flex-shrink-0 overflow-hidden md:h-[300px]">
                     <ImageCarousel
@@ -215,68 +217,63 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                             </div>
                         )} */}
 
-                        {/* Causes Icons */}
+                        {/* Causes Pills */}
                         {circle.causes && circle.causes.length > 0 && (
                             <div className="mt-4">
                                 <h3 className="mb-1.5 text-xs font-medium uppercase text-gray-500">Causes</h3>
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <TooltipProvider delayDuration={100}>
-                                        {circle.causes.slice(0, 10).map((handle) => {
-                                            // Limit displayed icons initially if needed
-                                            const cause = causeMap.get(handle);
-                                            if (!cause) return null;
-                                            return (
-                                                <Tooltip key={handle}>
-                                                    <TooltipTrigger asChild>
-                                                        <Image
-                                                            src={cause.picture.url}
-                                                            alt={cause.name}
-                                                            width={28} // Slightly larger icons
-                                                            height={28}
-                                                            className="h-7 w-7 rounded-full object-cover ring-1 ring-gray-200 hover:opacity-80"
-                                                        />
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
-                                                        <p>{cause.name}</p>
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            );
-                                        })}
-                                    </TooltipProvider>
+                                    {circle.causes.slice(0, 8).map((handle) => {
+                                        // Limit pills shown
+                                        const cause = causeMap.get(handle);
+                                        if (!cause) return null;
+                                        return (
+                                            <Badge
+                                                key={handle}
+                                                variant="outline"
+                                                className="flex items-center gap-1.5 px-2 py-1"
+                                            >
+                                                <Image
+                                                    src={cause.picture.url}
+                                                    alt="" // Alt handled by text
+                                                    width={16}
+                                                    height={16}
+                                                    className="h-4 w-4 rounded-full object-cover"
+                                                />
+                                                <span className="text-xs font-medium">{cause.name}</span>
+                                            </Badge>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}
 
-                        {/* Skills Icons */}
+                        {/* Skills/Needs Pills */}
                         {circle.skills && circle.skills.length > 0 && (
                             <div className="mt-4">
                                 <h3 className="mb-1.5 text-xs font-medium uppercase text-gray-500">
                                     {circle.circleType === "user" ? "Skills" : "Needs"}
                                 </h3>
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <TooltipProvider delayDuration={100}>
-                                        {circle.skills.slice(0, 10).map((handle) => {
-                                            // Limit displayed icons
-                                            const skill = skillMap.get(handle);
-                                            if (!skill) return null;
-                                            return (
-                                                <Tooltip key={handle}>
-                                                    <TooltipTrigger asChild>
-                                                        <Image
-                                                            src={skill.picture.url}
-                                                            alt={skill.name}
-                                                            width={28} // Slightly larger icons
-                                                            height={28}
-                                                            className="h-7 w-7 rounded-full object-cover ring-1 ring-gray-200 hover:opacity-80"
-                                                        />
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
-                                                        <p>{skill.name}</p>
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            );
-                                        })}
-                                    </TooltipProvider>
+                                    {circle.skills!.slice(0, 8).map((handle) => {
+                                        const skill = skillMap.get(handle);
+                                        if (!skill) return null;
+                                        return (
+                                            <Badge
+                                                key={handle}
+                                                variant="outline"
+                                                className="flex items-center gap-1.5 px-2 py-1"
+                                            >
+                                                <Image
+                                                    src={skill.picture.url}
+                                                    alt="" // Alt handled by text
+                                                    width={16}
+                                                    height={16}
+                                                    className="h-4 w-4 rounded-full object-cover"
+                                                />
+                                                <span className="text-xs font-medium">{skill.name}</span>
+                                            </Badge>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}
@@ -284,7 +281,7 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                         {/* Location (moved down, inline icon, no heading) */}
                         {circle.location &&
                             (circle.location.city || circle.location.region || circle.location.country) && (
-                                <div className="mt-3 flex items-center text-sm text-gray-600">
+                                <div className="mt-6 flex items-center text-sm text-gray-600">
                                     <MapPin className="mr-1.5 h-4 w-4 flex-shrink-0 text-gray-500" />
                                     <span>
                                         {[circle.location.city, circle.location.region, circle.location.country]
