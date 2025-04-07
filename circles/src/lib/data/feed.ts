@@ -1,11 +1,24 @@
 // feed.ts - Feed data access functions
-import { Feeds, Posts, Comments, Reactions, Circles, Members } from "./db";
+import { Feeds, Posts, Comments, Reactions, Circles, Members, Proposals, Issues } from "./db"; // Added Proposals, Issues
 import { ObjectId } from "mongodb";
-import { Feed, Post, PostDisplay, Comment, CommentDisplay, Circle, Mention, SortingOptions } from "@/models/models";
-import { getCircleById, SAFE_CIRCLE_PROJECTION, updateCircle } from "./circle";
+import {
+    Feed,
+    Post,
+    PostDisplay,
+    Comment,
+    CommentDisplay,
+    Circle,
+    Mention,
+    SortingOptions,
+    ProposalDisplay, // Added
+    IssueDisplay, // Added
+} from "@/models/models";
+import { getCircleById, SAFE_CIRCLE_PROJECTION, updateCircle, getCircleByHandle } from "./circle"; // Added getCircleByHandle
 import { getUserByDid } from "./user";
 import { getMetrics } from "../utils/metrics";
 import { deleteVbdPost, upsertVbdPosts } from "./vdb";
+import { getProposalById } from "./proposal"; // Added
+import { getIssueById } from "./issue"; // Added
 
 export const getFeedsByCircleId = async (circleId: string): Promise<Feed[]> => {
     const feeds = await Feeds.find({
@@ -595,13 +608,23 @@ export async function getPostsFromMultipleFeeds(
             );
         });
 
+        // --- Fetch Internal Preview Data (Post-Processing for logged-in user) ---
+        await fetchAndAttachInternalPreviewData(filteredPosts);
+        // --- End Fetch Internal Preview Data ---
+
         return filteredPosts;
     }
 
     // If no user is specified, only return posts with "everyone" user group
-    return posts.filter(
+    const publicPosts = posts.filter(
         (post) => !post.userGroups || post.userGroups.length === 0 || post.userGroups.includes("everyone"),
     );
+
+    // --- Fetch Internal Preview Data (Post-Processing) ---
+    await fetchAndAttachInternalPreviewData(publicPosts);
+    // --- End Fetch Internal Preview Data ---
+
+    return publicPosts; // Restored return statement
 }
 
 export async function getPostsFromMultipleFeedsWithMetrics(
@@ -966,14 +989,125 @@ export const getPosts = async (
             );
         });
 
+        // --- Fetch Internal Preview Data (Post-Processing for logged-in user) ---
+        await fetchAndAttachInternalPreviewData(filteredPosts);
+        // --- End Fetch Internal Preview Data ---
+
         return filteredPosts;
     }
 
     // If no user is specified, only return posts with "everyone" user group
-    return posts.filter(
+    const publicPostsForFeed = posts.filter(
         (post) => !post.userGroups || post.userGroups.length === 0 || post.userGroups.includes("everyone"),
     );
+
+    // --- Fetch Internal Preview Data (Post-Processing) ---
+    await fetchAndAttachInternalPreviewData(publicPostsForFeed); // Fetch for the correct list
+    // --- End Fetch Internal Preview Data ---
+
+    return publicPostsForFeed; // Return the correct list
 };
+
+// Helper function to fetch and attach internal preview data
+async function fetchAndAttachInternalPreviewData(posts: PostDisplay[]): Promise<void> {
+    const postsWithInternalLinks = posts.filter((p) => p.internalPreviewType && p.internalPreviewId);
+    if (postsWithInternalLinks.length === 0) return;
+
+    const previewDataMap = new Map<string, Circle | PostDisplay | ProposalDisplay | IssueDisplay>();
+
+    // Group IDs by type
+    const idsByType = postsWithInternalLinks.reduce(
+        (acc, post) => {
+            const type = post.internalPreviewType!;
+            const id = post.internalPreviewId!;
+            if (!acc[type]) acc[type] = new Set();
+            acc[type].add(id);
+            return acc;
+        },
+        {} as Record<string, Set<string>>,
+    );
+
+    // Fetch data for each type
+    const promises = Object.entries(idsByType).map(async ([type, idsSet]) => {
+        const ids = Array.from(idsSet);
+        try {
+            switch (type) {
+                case "circle":
+                    const circles = await Circles.find(
+                        { handle: { $in: ids } },
+                        { projection: SAFE_CIRCLE_PROJECTION }, // Fetch only necessary fields
+                    ).toArray();
+                    circles.forEach((c) => previewDataMap.set(`circle-${c.handle}`, c as Circle));
+                    break;
+                case "post":
+                    // Optimized post fetching using find and $in operator
+                    const postObjectIds = ids.map((id) => new ObjectId(id));
+                    const postsCursor = Posts.find(
+                        { _id: { $in: postObjectIds } },
+                        {
+                            projection: {
+                                // Project only necessary fields for preview
+                                _id: 1,
+                                content: 1, // Keep content for truncation
+                                createdBy: 1,
+                                // Add other minimal fields if needed by preview component
+                            },
+                        },
+                    );
+
+                    // Fetch author details separately for efficiency if needed, or adjust projection
+                    // For simplicity now, we'll fetch authors after getting posts
+                    const postPreviewsData = await postsCursor.toArray();
+                    const authorDids = postPreviewsData.map((p) => p.createdBy);
+                    const authors = await Circles.find(
+                        { did: { $in: authorDids } },
+                        { projection: SAFE_CIRCLE_PROJECTION },
+                    ).toArray();
+                    const authorMap = new Map(authors.map((a) => [a.did, a]));
+
+                    postPreviewsData.forEach((p) => {
+                        const author = authorMap.get(p.createdBy);
+                        const postDisplay: Partial<PostDisplay> = {
+                            ...p,
+                            _id: p._id.toString(), // Ensure ID is string
+                            author: author ? (author as Circle) : undefined, // Attach author
+                            circleType: "post",
+                        };
+                        previewDataMap.set(`post-${p._id.toString()}`, postDisplay as PostDisplay);
+                    });
+                    break;
+                case "proposal":
+                    // Assuming getProposalById fetches necessary display data
+                    const proposals = await Proposals.find(
+                        { _id: { $in: ids.map((id) => new ObjectId(id)) } },
+                        // Add projection if needed
+                    ).toArray();
+                    // TODO: Populate author/circle if needed, similar to getProposalById
+                    proposals.forEach((p) => previewDataMap.set(`proposal-${p._id.toString()}`, p as ProposalDisplay));
+                    break;
+                case "issue":
+                    // Assuming getIssueById fetches necessary display data
+                    const issues = await Issues.find(
+                        { _id: { $in: ids.map((id) => new ObjectId(id)) } },
+                        // Add projection if needed
+                    ).toArray();
+                    // TODO: Populate author/assignee/circle if needed, similar to getIssueById
+                    issues.forEach((i) => previewDataMap.set(`issue-${i._id.toString()}`, i as IssueDisplay));
+                    break;
+            }
+        } catch (error) {
+            console.error(`Error fetching internal preview data for type ${type}:`, error);
+        }
+    });
+
+    await Promise.all(promises);
+
+    // Attach fetched data to posts
+    postsWithInternalLinks.forEach((post) => {
+        const key = `${post.internalPreviewType}-${post.internalPreviewId}`;
+        post.internalPreviewData = previewDataMap.get(key) || null; // Set to null if not found
+    });
+}
 
 export const updatePost = async (post: Partial<Post>): Promise<void> => {
     const { _id, ...postWithoutId } = post;

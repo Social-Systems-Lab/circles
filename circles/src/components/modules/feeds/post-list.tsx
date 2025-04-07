@@ -833,15 +833,17 @@ export const PostItem = ({
                 </div>
             )}
 
+            {JSON.stringify(post.internalPreviewData, null, 2)}
+
             {/* Post content */}
             {!hideContent && <MemoizedPostContent content={post.content} mentions={post.mentionsDisplay} />}
 
             {/* --- Link Preview --- */}
             {!hideContent && (post.internalPreviewUrl || post.linkPreviewUrl) && (
                 <div className="pl-4 pr-4">
-                    {/* Render Internal Preview if URL exists */}
+                    {/* Render Internal Preview if URL exists, passing pre-fetched data */}
                     {post.internalPreviewUrl ? (
-                        <InternalLinkPreview url={post.internalPreviewUrl} />
+                        <InternalLinkPreview url={post.internalPreviewUrl} initialData={post.internalPreviewData} />
                     ) : // Otherwise, render External Preview if URL exists
                     post.linkPreviewUrl ? (
                         <LinkPreviewCard

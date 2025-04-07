@@ -9,58 +9,37 @@ import { Circle, PostDisplay, ProposalDisplay, IssueDisplay } from "@/models/mod
 import { truncateText } from "@/lib/utils"; // Assuming a utility for text truncation exists
 import { FileText, MessageSquare, Users, CheckSquare, AlertCircle, CircleDotDashed, CircleHelp } from "lucide-react"; // Example icons
 
+// Define the type for the data prop more explicitly
+type PreviewData = Circle | PostDisplay | ProposalDisplay | IssueDisplay;
+
 type InternalLinkPreviewProps = {
-    url: string;
+    url: string; // Keep URL for the link itself
+    initialData?: PreviewData | null; // Accept pre-fetched data
 };
 
-const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url }) => {
-    const [result, setResult] = useState<InternalLinkPreviewResult | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url, initialData }) => {
+    // Removed useState and useEffect for fetching data
 
-    useEffect(() => {
-        let isMounted = true;
-        setIsLoading(true);
-
-        getInternalLinkPreviewData(url)
-            .then((data) => {
-                if (isMounted) {
-                    setResult(data);
-                    setIsLoading(false);
-                }
-            })
-            .catch((error) => {
-                console.error("Error fetching internal link preview:", error);
-                if (isMounted) {
-                    setResult({ error: "Failed to load preview" });
-                    setIsLoading(false);
-                }
-            });
-
-        return () => {
-            isMounted = false;
-        };
-    }, [url]);
-
-    if (isLoading) {
+    // If no initial data, render a simple link (or potentially a loading state/fetch later if needed)
+    if (!initialData) {
         return (
-            <div className="my-2 flex items-center space-x-3 rounded-md border p-3">
-                <Skeleton className="h-10 w-10 rounded-md" />
-                <div className="space-y-2">
-                    <Skeleton className="h-4 w-[250px]" />
-                    <Skeleton className="h-4 w-[200px]" />
-                </div>
-            </div>
-        );
-    }
-
-    if (!result || "error" in result) {
-        // Render as a simple link if error or no data
-        return (
-            <Link href={url} className="text-blue-600 hover:underline">
+            <Link href={url} className="my-2 block text-blue-600 hover:underline">
                 {url}
             </Link>
         );
     }
+
+    // Determine the type based on the structure of initialData
+    // This is a basic check; more robust type guards might be needed if structures overlap significantly
+    const getDataType = (data: PreviewData): "circle" | "post" | "proposal" | "issue" | null => {
+        if ("circleType" in data && data.circleType === "post") return "post";
+        if ("stage" in data && "decisionText" in data) return "proposal"; // Check for proposal-specific fields
+        if ("stage" in data && "title" in data && !("decisionText" in data)) return "issue"; // Check for issue-specific fields
+        if ("handle" in data && "members" in data) return "circle"; // Check for circle-specific fields
+        return null; // Unknown type
+    };
+
+    const dataType = getDataType(initialData);
 
     const getCircleTypeName = (circleType: string) => {
         switch (circleType) {
@@ -75,9 +54,18 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url }) => {
     };
 
     const renderPreviewContent = () => {
-        switch (result.type) {
+        if (!dataType) {
+            // Fallback if type couldn't be determined
+            return (
+                <Link href={url} className="text-blue-600 hover:underline">
+                    {url}
+                </Link>
+            );
+        }
+
+        switch (dataType) {
             case "circle":
-                const circle = result.data as Circle;
+                const circle = initialData as Circle;
                 return (
                     <>
                         <Avatar className="h-10 w-10 rounded-md">
@@ -96,7 +84,7 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url }) => {
                     </>
                 );
             case "post":
-                const post = result.data as PostDisplay;
+                const post = initialData as PostDisplay;
                 return (
                     <>
                         <Avatar className="h-10 w-10 rounded-full">
@@ -110,7 +98,7 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url }) => {
                     </>
                 );
             case "proposal":
-                const proposal = result.data as ProposalDisplay;
+                const proposal = initialData as ProposalDisplay;
                 return (
                     <>
                         <Avatar className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-100 text-blue-700">
@@ -129,7 +117,7 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url }) => {
                     </>
                 );
             case "issue":
-                const issue = result.data as IssueDisplay;
+                const issue = initialData as IssueDisplay;
                 return (
                     <>
                         <Avatar className="flex h-10 w-10 items-center justify-center rounded-md bg-orange-100 text-orange-700">
