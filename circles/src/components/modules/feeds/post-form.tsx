@@ -1,5 +1,5 @@
 // post-form.tsx
-import React, { useState, useCallback, useEffect, useTransition, useRef } from "react"; // Added useRef
+import React, { useState, useCallback, useEffect, useTransition, useRef, useMemo } from "react"; // Added useMemo
 import { Textarea } from "@/components/ui/textarea";
 import {
     ImageIcon,
@@ -61,18 +61,33 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AlertCircle, CircleHelp } from "lucide-react"; // Removed duplicate Users import
 
 // Debounce function
-function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
-    let timeout: ReturnType<typeof setTimeout> | null = null;
+// Updated debounce to return a cancel function
+function debounce<F extends (...args: any[]) => any>(
+    func: F,
+    waitFor: number,
+): [(...args: Parameters<F>) => ReturnType<F>, () => void] {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-    const debounced = (...args: Parameters<F>) => {
-        if (timeout !== null) {
-            clearTimeout(timeout);
-            timeout = null;
+    const debounced = (...args: Parameters<F>): ReturnType<F> => {
+        if (timeoutId !== null) {
+            clearTimeout(timeoutId);
         }
-        timeout = setTimeout(() => func(...args), waitFor);
+        timeoutId = setTimeout(() => {
+            func(...args);
+        }, waitFor);
+        // Debounce doesn't typically return the function's result directly
+        // If needed, this structure would need adjustment (e.g., Promises)
+        return undefined as ReturnType<F>; // Adjust if return value is needed
     };
 
-    return debounced as (...args: Parameters<F>) => ReturnType<F>;
+    const cancel = () => {
+        if (timeoutId !== null) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+        }
+    };
+
+    return [debounced, cancel];
 }
 
 // Type for the link preview data structure returned by the action
@@ -238,6 +253,9 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
     const [internalPreview, setInternalPreview] = useState<InternalPreviewDisplayData | null>(null);
     const [isInternalPreviewLoading, setIsInternalPreviewLoading] = useState(false);
     const fetchInternalPreviewController = useRef<AbortController | null>(null);
+    const [previewRemovedManually, setPreviewRemovedManually] = useState(false); // State to track manual removal
+    const cancelExternalFetchRef = useRef<() => void>(() => {}); // Ref for cancel function
+    const cancelInternalFetchRef = useRef<() => void>(() => {}); // Ref for cancel function
     // --- End Internal Link Preview State ---
 
     // Get all circles the user is a member of
@@ -337,10 +355,11 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                 setInternalPreview({
                     type: result.type,
                     id: result.type === "circle" ? result.data.handle! : result.data._id.toString(),
-                    url: url, // Store the original matched URL
+                    // Construct full URL for internal links
+                    url: window.location.origin + url,
                     data: result.data,
                 });
-                setDetectedUrl(url); // Update detected URL
+                setDetectedUrl(url); // Update detected URL (keep relative for detection)
             }
         } catch (error: any) {
             if (error.name !== "AbortError") {
@@ -356,27 +375,44 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
         }
     }, []);
 
-    const debouncedFetchExternalPreview = useCallback(debounce(fetchExternalLinkPreview, 750), [
-        fetchExternalLinkPreview,
-    ]);
-    const debouncedFetchInternalPreview = useCallback(debounce(fetchInternalLinkPreview, 750), [
-        fetchInternalLinkPreview,
-    ]);
+    // Create debounced functions and store cancel methods in refs
+    const debouncedFetchExternalPreview = useMemo(() => {
+        const [debounced, cancel] = debounce(fetchExternalLinkPreview, 750);
+        cancelExternalFetchRef.current = cancel;
+        return debounced;
+    }, [fetchExternalLinkPreview]);
+
+    const debouncedFetchInternalPreview = useMemo(() => {
+        const [debounced, cancel] = debounce(fetchInternalLinkPreview, 750);
+        cancelInternalFetchRef.current = cancel;
+        return debounced;
+    }, [fetchInternalLinkPreview]);
 
     useEffect(() => {
         const urlInfo = extractFirstUrl(postContent);
 
-        if (urlInfo && urlInfo.url !== detectedUrl) {
-            if (urlInfo.isInternal) {
-                debouncedFetchInternalPreview(urlInfo.url);
-            } else {
-                debouncedFetchExternalPreview(urlInfo.url);
+        if (urlInfo) {
+            // If a URL is detected and it's different from the current one, or if preview was manually removed
+            if (urlInfo.url !== detectedUrl || previewRemovedManually) {
+                setPreviewRemovedManually(false); // Reset manual removal flag
+                if (urlInfo.isInternal) {
+                    debouncedFetchInternalPreview(urlInfo.url);
+                } else {
+                    debouncedFetchExternalPreview(urlInfo.url);
+                }
             }
-        } else if (!urlInfo && detectedUrl) {
-            // Optional: Clear preview if URL is removed? Or keep it until explicitly removed?
-            // Let's keep it for now unless explicitly removed.
+        } else if (detectedUrl) {
+            // If no URL is detected anymore, but there was one, remove the preview
+            removeLinkPreview();
         }
-    }, [postContent, detectedUrl, debouncedFetchExternalPreview, debouncedFetchInternalPreview]);
+        // Only re-run when postContent changes significantly enough to potentially change the URL
+    }, [
+        postContent,
+        detectedUrl,
+        debouncedFetchExternalPreview,
+        debouncedFetchInternalPreview,
+        previewRemovedManually,
+    ]); // Added previewRemovedManually
 
     const removeLinkPreview = () => {
         setLinkPreview(null);
@@ -386,6 +422,10 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
         setIsInternalPreviewLoading(false); // Clear internal loading
         if (fetchPreviewController.current) fetchPreviewController.current.abort();
         if (fetchInternalPreviewController.current) fetchInternalPreviewController.current.abort();
+        // Cancel any pending debounced fetches using refs
+        cancelExternalFetchRef.current();
+        cancelInternalFetchRef.current();
+        setPreviewRemovedManually(true); // Set flag indicating manual removal
     };
     // --- End Combined Link Preview Logic ---
 

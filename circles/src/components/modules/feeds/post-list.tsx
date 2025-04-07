@@ -833,6 +833,8 @@ export const PostItem = ({
                 </div>
             )}
 
+            <pre>{JSON.stringify(post.internalPreviewId, null, 2)}</pre>
+
             {/* Post content */}
             {!hideContent && <MemoizedPostContent content={post.content} mentions={post.mentionsDisplay} />}
 
