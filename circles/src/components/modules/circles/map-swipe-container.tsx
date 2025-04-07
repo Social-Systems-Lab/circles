@@ -8,13 +8,14 @@ import { motion } from "framer-motion";
 import CircleSwipeCard from "./circle-swipe-card";
 import { MapDisplay } from "@/components/map/map";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Binoculars, X, Hand } from "lucide-react";
+import { RefreshCw, Binoculars, X, Hand, Home } from "lucide-react";
 import { useAtom } from "jotai";
 import { userAtom, zoomContentAtom } from "@/lib/data/atoms";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { completeSwipeOnboardingAction } from "./swipe-actions";
+import { useRouter } from "next/navigation";
 
 interface MapSwipeContainerProps {
     circles: WithMetric<Circle>[];
@@ -29,6 +30,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
     const isMobile = useIsMobile();
     const { windowWidth, windowHeight } = useWindowDimensions();
     const [showCards, setShowCards] = useState(true); // State to toggle card visibility
+    const router = useRouter();
 
     // Filter out circles the user already follows or has ignored
     useEffect(() => {
@@ -72,6 +74,10 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
 
     const handleRefresh = () => {
         window.location.reload();
+    };
+
+    const goToFeed = () => {
+        router.push("/foryou");
     };
 
     // Initial focus on first circle when loaded
@@ -202,7 +208,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
                                             }}
                                         >
                                             {/* Simplified preview of card content */}
-                                            <div className="relative h-3/5 w-full overflow-hidden">
+                                            <div className="relative h-[220px] w-full overflow-hidden md:h-[300px]">
                                                 <Image
                                                     src={
                                                         circle.images?.[0]?.fileInfo?.url ?? "/images/default-cover.png"
@@ -222,16 +228,22 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
                                 <motion.div
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
-                                    className="flex flex-col items-center gap-4 rounded-xl border bg-white p-8 shadow-lg"
+                                    className="flex max-w-[400px] flex-col items-center gap-4 rounded-xl border bg-white p-8 shadow-lg"
                                 >
                                     <div className="text-xl font-semibold">You&apos;ve seen all circles!</div>
                                     <p className="text-center text-gray-600">
                                         Check back later for more recommendations
                                     </p>
-                                    <Button onClick={handleRefresh} className="mt-4 gap-2">
-                                        <RefreshCw className="h-4 w-4" />
-                                        Refresh
-                                    </Button>
+                                    <div className="flex flex-row gap-2">
+                                        <Button onClick={handleRefresh} className="mt-4 gap-2">
+                                            <RefreshCw className="h-4 w-4" />
+                                            Refresh
+                                        </Button>
+                                        <Button onClick={goToFeed} className="mt-4 gap-2">
+                                            <Home className="h-4 w-4" />
+                                            Go to feed
+                                        </Button>
+                                    </div>
                                 </motion.div>
                             )}
                         </div>
@@ -239,14 +251,20 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
-                            className="flex flex-col items-center gap-4 rounded-xl border bg-white p-8 shadow-lg"
+                            className="ml-2 flex max-w-[400px] flex-col items-center gap-4 rounded-xl border bg-white p-8 shadow-lg"
                         >
                             <div className="text-xl font-semibold">You&apos;ve seen all circles!</div>
                             <p className="text-center text-gray-600">Check back later for more recommendations</p>
-                            <Button onClick={handleRefresh} className="mt-4 gap-2">
-                                <RefreshCw className="h-4 w-4" />
-                                Refresh
-                            </Button>
+                            <div className="flex flex-row gap-2">
+                                <Button onClick={handleRefresh} className="mt-4 gap-2">
+                                    <RefreshCw className="h-4 w-4" />
+                                    Refresh
+                                </Button>
+                                <Button onClick={goToFeed} className="mt-4 gap-2">
+                                    <Home className="h-4 w-4" />
+                                    Go to feed
+                                </Button>
+                            </div>
                         </motion.div>
                     )}
                 </div>

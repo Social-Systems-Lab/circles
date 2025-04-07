@@ -20,8 +20,6 @@ import ImageCarousel from "@/components/ui/image-carousel";
 import { causes as allCauses, skills as allSkills } from "@/lib/data/causes-skills";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge"; // Import Badge for pills
-// Removed RichText import as it's commented out below
-// import RichText from "../feeds/RichText";
 
 // Helper mappings for quick lookup
 const causeMap = new Map(allCauses.map((c) => [c.handle, c]));
@@ -152,16 +150,10 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                 width: "calc(100% - 2rem)",
                 maxWidth: "400px",
             }}
-            // Adjusted height for the card window
-            // Adjusted height slightly
             className="relative h-[450px] overflow-hidden rounded-xl border bg-white shadow-lg md:h-[560px]"
         >
             {/* Scroll container - Relying on globals.css to hide scrollbar */}
             <div className="custom-scrollbar absolute inset-0 flex h-full flex-col overflow-y-auto">
-                {" "}
-                {/* Removed pr-2 */}
-                {/* Removed inner wrapper with negative margin */}
-                {/* Card Content - Reduced Image Height */}
                 <div className="relative h-[220px] w-full flex-shrink-0 overflow-hidden md:h-[300px]">
                     <ImageCarousel
                         images={carouselImages}
@@ -191,9 +183,9 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                 {/* Content below image - now inside the scrollable container */}
                 <div className="relative flex flex-1 flex-col p-4 pt-2">
                     {/* Picture positioned absolutely over the start of this section */}
-                    <div className="absolute left-1/2 top-[-32px] -translate-x-1/2 transform">
-                        <div className="h-[64px] w-[64px]">
-                            <CirclePicture circle={circle} size="64px" />
+                    <div className="absolute left-1/2 top-[-45px] -translate-x-1/2 transform">
+                        <div className="h-[90px] w-[90px]">
+                            <CirclePicture circle={circle} size="90px" />
                         </div>
                     </div>
                     {/* Spacer for the picture */}

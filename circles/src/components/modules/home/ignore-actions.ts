@@ -33,7 +33,7 @@ export async function ignoreCircle(circleId: string): Promise<IgnoreCircleResult
         ignoredCircles.push(circleId);
 
         // Update user with new ignoredCircles list
-        await updateUser({ _id: user._id, ignoredCircles });
+        await updateUser({ _id: user._id, ignoredCircles }, userDid);
 
         return { success: true };
     } catch (error) {
@@ -66,7 +66,7 @@ export async function unignoreCircle(circleId: string): Promise<IgnoreCircleResu
         const updatedIgnoredCircles = user.ignoredCircles.filter((id) => id !== circleId);
 
         // Update user with new ignoredCircles list
-        await updateUser({ _id: user._id, ignoredCircles: updatedIgnoredCircles });
+        await updateUser({ _id: user._id, ignoredCircles: updatedIgnoredCircles }, userDid);
 
         revalidatePath("/");
 
