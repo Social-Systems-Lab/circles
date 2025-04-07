@@ -481,133 +481,136 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                     </div>
                 </div>
             </div>
-
-            <MentionsInput
-                value={postContent}
-                onChange={(e) => setPostContent(e.target.value)}
-                placeholder="Share your story..."
-                className="flex-grow"
-                autoFocus
-                style={postMentionsInputStyle}
-            >
-                <Mention
-                    trigger="@"
-                    data={handleMentionQuery}
-                    style={defaultMentionStyle}
-                    displayTransform={(id, display) => `${display}`}
-                    renderSuggestion={renderCircleSuggestion}
-                    markup="[__display__](/circles/__id__)"
-                />
-            </MentionsInput>
-
-            {/* --- Link Preview Display --- */}
-            {isPreviewLoading && (
-                <div className="mt-4 flex items-center justify-center rounded-lg border p-4">
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin text-gray-500" />
-                    <span className="text-gray-500">Loading link preview...</span>
-                </div>
-            )}
-            {linkPreview && !isPreviewLoading && (
-                <Card className="relative mt-4 overflow-hidden">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-1 top-1 z-10 h-6 w-6 rounded-full bg-gray-900/50 text-white hover:bg-gray-700/70 hover:text-white"
-                        onClick={removeLinkPreview}
-                        aria-label="Remove link preview"
-                    >
-                        <X className="h-4 w-4" />
-                    </Button>
-                    <a href={linkPreview.url} target="_blank" rel="noopener noreferrer" className="block">
-                        <CardContent className="flex flex-col gap-2 p-0 md:flex-row">
-                            {linkPreview.image && (
-                                <div className="relative h-32 w-full flex-shrink-0 md:h-auto md:w-40">
-                                    <Image
-                                        src={linkPreview.image}
-                                        alt={linkPreview.title || "Link preview image"}
-                                        fill
-                                        className="object-cover"
-                                        sizes="(max-width: 768px) 100vw, 160px" // Basic responsive sizes
-                                    />
-                                </div>
-                            )}
-                            <div className="flex flex-col justify-center p-3">
-                                <div className="text-sm font-semibold text-gray-600">
-                                    {new URL(linkPreview.url).hostname}
-                                </div>
-                                <div className="mt-1 line-clamp-2 font-medium">{linkPreview.title}</div>
-                                {linkPreview.description && (
-                                    <div className="mt-1 line-clamp-2 text-sm text-gray-500">
-                                        {linkPreview.description}
+            {/* Scrollable Content Area */}
+            <div className="max-h-[60vh] flex-grow overflow-y-auto pr-2">
+                {" "}
+                {/* Added pr-2 for scrollbar spacing */}
+                <MentionsInput
+                    value={postContent}
+                    onChange={(e) => setPostContent(e.target.value)}
+                    placeholder="Share your story..."
+                    className="flex-grow"
+                    autoFocus
+                    style={postMentionsInputStyle}
+                >
+                    <Mention
+                        trigger="@"
+                        data={handleMentionQuery}
+                        style={defaultMentionStyle}
+                        displayTransform={(id, display) => `${display}`}
+                        renderSuggestion={renderCircleSuggestion}
+                        markup="[__display__](/circles/__id__)"
+                    />
+                </MentionsInput>
+                {/* --- Link Preview Display --- */}
+                {isPreviewLoading && (
+                    <div className="mt-4 flex items-center justify-center rounded-lg border p-4">
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin text-gray-500" />
+                        <span className="text-gray-500">Loading link preview...</span>
+                    </div>
+                )}
+                {linkPreview && !isPreviewLoading && (
+                    <Card className="relative mt-4 overflow-hidden">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-1 top-1 z-10 h-6 w-6 rounded-full bg-gray-900/50 text-white hover:bg-gray-700/70 hover:text-white"
+                            onClick={removeLinkPreview}
+                            aria-label="Remove link preview"
+                        >
+                            <X className="h-4 w-4" />
+                        </Button>
+                        <a href={linkPreview.url} target="_blank" rel="noopener noreferrer" className="block">
+                            <CardContent className="flex flex-col gap-2 p-0 md:flex-row">
+                                {linkPreview.image && (
+                                    <div className="relative h-32 w-full flex-shrink-0 md:h-auto md:w-40">
+                                        <Image
+                                            src={linkPreview.image}
+                                            alt={linkPreview.title || "Link preview image"}
+                                            fill
+                                            className="object-cover"
+                                            sizes="(max-width: 768px) 100vw, 160px" // Basic responsive sizes
+                                        />
                                     </div>
                                 )}
-                            </div>
-                        </CardContent>
-                    </a>
-                </Card>
-            )}
-            {/* --- End Link Preview Display --- */}
-
-            {/* ... (existing image carousel, location display, poll creator placeholder) ... */}
-            {/* Ensure removeImage is called correctly in the image carousel */}
-            {images.length > 0 && (
-                <div className="relative mt-4">
-                    <Carousel setApi={setCarouselApi}>
-                        <CarouselContent>
-                            {images.map((image, index) => (
-                                <CarouselItem key={index} className="relative">
-                                    {/* eslint-disable-next-line */}
-                                    <img
-                                        src={image.preview}
-                                        alt={`Uploaded image ${index + 1}`}
-                                        className="h-48 w-full rounded-lg object-cover"
-                                    />
-                                    <Button
-                                        variant="destructive"
-                                        size="icon"
-                                        className="absolute right-2 top-2 rounded-full"
-                                        onClick={(e) => {
-                                            // Prevent dropzone activation on button click
-                                            e.stopPropagation();
-                                            removeImage(index);
-                                        }}
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                </CarouselItem>
+                                <div className="flex flex-col justify-center p-3">
+                                    <div className="text-sm font-semibold text-gray-600">
+                                        {new URL(linkPreview.url).hostname}
+                                    </div>
+                                    <div className="mt-1 line-clamp-2 font-medium">{linkPreview.title}</div>
+                                    {linkPreview.description && (
+                                        <div className="mt-1 line-clamp-2 text-sm text-gray-500">
+                                            {linkPreview.description}
+                                        </div>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </a>
+                    </Card>
+                )}
+                {/* --- End Link Preview Display --- */}
+                {/* ... (existing image carousel, location display, poll creator placeholder) ... */}
+                {/* Ensure removeImage is called correctly in the image carousel */}
+                {images.length > 0 && (
+                    <div className="relative mt-4">
+                        <Carousel setApi={setCarouselApi}>
+                            <CarouselContent>
+                                {images.map((image, index) => (
+                                    <CarouselItem key={index} className="relative">
+                                        {/* eslint-disable-next-line */}
+                                        <img
+                                            src={image.preview}
+                                            alt={`Uploaded image ${index + 1}`}
+                                            className="h-48 w-full rounded-lg object-cover"
+                                        />
+                                        <Button
+                                            variant="destructive"
+                                            size="icon"
+                                            className="absolute right-2 top-2 rounded-full"
+                                            onClick={(e) => {
+                                                // Prevent dropzone activation on button click
+                                                e.stopPropagation();
+                                                removeImage(index);
+                                            }}
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </CarouselItem>
+                                ))}
+                            </CarouselContent>
+                            <CarouselPrevious />
+                            <CarouselNext />
+                        </Carousel>
+                        <div className="mt-2 flex justify-center">
+                            {images.map((_, index) => (
+                                <button
+                                    key={index}
+                                    onClick={() => carouselApi?.scrollTo(index)}
+                                    className={`mx-1 h-2 w-2 rounded-full ${
+                                        index === currentImageIndex ? "bg-blue-500" : "bg-gray-300"
+                                    }`}
+                                />
                             ))}
-                        </CarouselContent>
-                        <CarouselPrevious />
-                        <CarouselNext />
-                    </Carousel>
-                    <div className="mt-2 flex justify-center">
-                        {images.map((_, index) => (
-                            <button
-                                key={index}
-                                onClick={() => carouselApi?.scrollTo(index)}
-                                className={`mx-1 h-2 w-2 rounded-full ${
-                                    index === currentImageIndex ? "bg-blue-500" : "bg-gray-300"
-                                }`}
-                            />
-                        ))}
+                        </div>
                     </div>
-                </div>
-            )}
-            {location && (
-                <div className="mt-4 flex flex-row items-center justify-center rounded-lg bg-gray-100 p-4 pl-3">
-                    <MapPin className={`mr-3 h-5 w-5`} style={{ color: "#c3224d" }} />
-                    {getFullLocationName(location)}
-                </div>
-            )}
-
-            {showPollCreator && (
-                <div className="mt-4 rounded-lg bg-gray-100 p-4">
-                    <p className="text-sm text-gray-600">📊 Poll creator placeholder</p>
-                </div>
-            )}
-
-            {/* ... (existing action buttons, drag overlay, dialogs) ... */}
-            <div className="mt-4 flex items-center justify-between">
+                )}
+                {location && (
+                    <div className="mt-4 flex flex-row items-center justify-center rounded-lg bg-gray-100 p-4 pl-3">
+                        <MapPin className={`mr-3 h-5 w-5`} style={{ color: "#c3224d" }} />
+                        {getFullLocationName(location)}
+                    </div>
+                )}
+                {showPollCreator && (
+                    <div className="mt-4 rounded-lg bg-gray-100 p-4">
+                        <p className="text-sm text-gray-600">📊 Poll creator placeholder</p>
+                    </div>
+                )}
+            </div>{" "}
+            {/* End Scrollable Content Area */}
+            {/* Action Buttons - Kept outside scrollable area */}
+            <div className="mt-4 flex items-center justify-between border-t pt-4">
+                {" "}
+                {/* Added border-t and pt-4 */}
                 <div className="flex space-x-2">
                     <div>
                         {/* Ensure the image input uses getInputProps */}
@@ -667,7 +670,6 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                     <p className="text-lg font-semibold text-gray-700">Drop images here</p>
                 </div>
             )}
-
             {/* Location Dialog */}
             <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
                 <DialogContent>
@@ -685,7 +687,6 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                     </div>
                 </DialogContent>
             </Dialog>
-
             {/* User Groups Dialog */}
             <Dialog open={isUserGroupsDialogOpen} onOpenChange={setIsUserGroupsDialogOpen}>
                 <DialogContent className="max-w-md">
