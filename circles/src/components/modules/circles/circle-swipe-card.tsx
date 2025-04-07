@@ -193,8 +193,6 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                     </div>
                     {/* Description and Mission are prioritized */}
                     <div className="mt-3 space-y-3 px-1 pb-2">
-                        {circle.description && <p className="text-sm text-gray-600">{circle.description}</p>}
-
                         {/* Highlighted Mission Box */}
                         {circle.mission && (
                             <div className="mt-3 rounded-md border bg-gray-50 p-3">
@@ -204,6 +202,8 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                                 <p className="text-sm text-gray-700">{circle.mission}</p>
                             </div>
                         )}
+
+                        {circle.description && <p className="text-sm text-gray-600">{circle.description}</p>}
 
                         {/* Other details appear further down in scroll */}
                         {circle.location &&
