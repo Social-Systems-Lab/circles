@@ -1037,7 +1037,10 @@ async function fetchAndAttachInternalPreviewData(posts: PostDisplay[]): Promise<
                         { handle: { $in: ids } },
                         { projection: SAFE_CIRCLE_PROJECTION }, // Fetch only necessary fields
                     ).toArray();
-                    circles.forEach((c) => previewDataMap.set(`circle-${c.handle}`, c as Circle));
+                    circles.forEach((c) => {
+                        const circleWithStringId = { ...c, _id: c._id.toString() };
+                        previewDataMap.set(`circle-${c.handle}`, circleWithStringId as Circle);
+                    });
                     break;
                 case "post":
                     // Optimized post fetching using find and $in operator
@@ -1069,8 +1072,8 @@ async function fetchAndAttachInternalPreviewData(posts: PostDisplay[]): Promise<
                         const author = authorMap.get(p.createdBy);
                         const postDisplay: Partial<PostDisplay> = {
                             ...p,
-                            _id: p._id.toString(), // Ensure ID is string
-                            author: author ? (author as Circle) : undefined, // Attach author
+                            _id: p._id.toString(), // ID is already string here
+                            author: author ? { ...author, _id: author._id.toString() } : undefined, // Convert author _id
                             circleType: "post",
                         };
                         previewDataMap.set(`post-${p._id.toString()}`, postDisplay as PostDisplay);
@@ -1083,7 +1086,11 @@ async function fetchAndAttachInternalPreviewData(posts: PostDisplay[]): Promise<
                         // Add projection if needed
                     ).toArray();
                     // TODO: Populate author/circle if needed, similar to getProposalById
-                    proposals.forEach((p) => previewDataMap.set(`proposal-${p._id.toString()}`, p as ProposalDisplay));
+                    proposals.forEach((p) => {
+                        const proposalWithStringId = { ...p, _id: p._id.toString() };
+                        // TODO: Also convert author/circle _id if populated here
+                        previewDataMap.set(`proposal-${p._id.toString()}`, proposalWithStringId as ProposalDisplay);
+                    });
                     break;
                 case "issue":
                     // Assuming getIssueById fetches necessary display data
@@ -1092,7 +1099,11 @@ async function fetchAndAttachInternalPreviewData(posts: PostDisplay[]): Promise<
                         // Add projection if needed
                     ).toArray();
                     // TODO: Populate author/assignee/circle if needed, similar to getIssueById
-                    issues.forEach((i) => previewDataMap.set(`issue-${i._id.toString()}`, i as IssueDisplay));
+                    issues.forEach((i) => {
+                        const issueWithStringId = { ...i, _id: i._id.toString() };
+                        // TODO: Also convert author/assignee/circle _id if populated here
+                        previewDataMap.set(`issue-${i._id.toString()}`, issueWithStringId as IssueDisplay);
+                    });
                     break;
             }
         } catch (error) {
