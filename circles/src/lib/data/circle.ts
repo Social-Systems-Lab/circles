@@ -186,9 +186,13 @@ export const createDefaultCircle = (): Circle => {
     return circle;
 };
 
-export const createCircle = async (circle: Circle): Promise<Circle> => {
+export const createCircle = async (circle: Circle, authenticatedUserDid: string): Promise<Circle> => {
     if (!circle?.name || !circle?.handle) {
         throw new Error("Missing required fields");
+    }
+    if (!authenticatedUserDid) {
+        // Ensure we have the creator's DID
+        throw new Error("Authenticated user DID is required to create a circle.");
     }
 
     // check if handle is already in use
@@ -221,9 +225,9 @@ export const createCircle = async (circle: Circle): Promise<Circle> => {
         console.error("Failed to upsert circle embedding", e);
     }
 
-    // create circle chat room
+    // create circle chat room, passing the creator's DID
     try {
-        await createDefaultChatRooms(circle._id);
+        await createDefaultChatRooms(circle._id, authenticatedUserDid);
     } catch (e) {
         console.error("Failed to create chat rooms", e);
     }
@@ -280,6 +284,11 @@ export const updateCircle = async (circle: Partial<Circle>, authenticatedUserDid
         }
     }
     // Note: For non-user circles, authorization is assumed to be handled by the calling action using isAuthorized()
+
+    // Prevent critical fields from being overwritten
+    delete circleWithoutId.did; // DID should never change
+    delete circleWithoutId.email; // Email should likely be updated via a separate, dedicated process if needed
+    delete circleWithoutId.circleType; // CircleType should not change after creation
 
     // Proceed with the update
     let result = await Circles.updateOne({ _id: new ObjectId(_id) }, { $set: circleWithoutId });

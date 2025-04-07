@@ -57,7 +57,7 @@ export async function saveBasicInfoAction(
                 causes: [],
                 skills: [],
             };
-            const newCircle = await createCircle(initialCircleData);
+            const newCircle = await createCircle(initialCircleData, userDid); // Pass userDid here
 
             // 2. Add user as admin member
             await addMember(userDid, newCircle._id!, ["admins", "moderators", "members"]);

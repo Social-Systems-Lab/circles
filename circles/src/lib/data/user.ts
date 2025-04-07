@@ -343,6 +343,10 @@ export const updateUser = async (user: Partial<UserPrivate>, authenticatedUserDi
         throw new Error("Unauthorized: Cannot change user DID via update.");
     }
 
+    // Prevent other critical fields from being overwritten via this general update function
+    delete userWithoutId.email; // Email should likely be updated via a separate, dedicated process if needed
+    delete userWithoutId.circleType; // User circle type should not change
+
     // Proceed with the update
     let result = await Circles.updateOne({ _id: new ObjectId(_id) }, { $set: userWithoutId });
     if (result.matchedCount === 0) {
