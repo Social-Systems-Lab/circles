@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link"; // Import Next Link
 import { useAtom } from "jotai";
 import { contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
+import InternalLinkPreview from "./InternalLinkPreview"; // Import the new component
 
 // MentionHoverCard remains the same
 type MentionHoverCardProps = {
@@ -98,8 +99,30 @@ const RichText = memo(({ content, mentions }: RichTextProps) => {
                     }
                 }
 
+                // --- Internal Link Preview Logic ---
+                // Define regex patterns for internal links
+                const postRegex = /^\/circles\/[a-zA-Z0-9\-]+\/post\/[a-zA-Z0-9]+$/;
+                const proposalRegex = /^\/circles\/[a-zA-Z0-9\-]+\/proposals\/[a-zA-Z0-9]+$/;
+                const issueRegex = /^\/circles\/[a-zA-Z0-9\-]+\/issues\/[a-zA-Z0-9]+$/;
+                // Match base circle URL, but avoid matching mentions again if possible
+                // (Mentions are handled above, this is for direct links to circle pages)
+                const circleRegex = /^\/circles\/[a-zA-Z0-9\-]+(?:\/(?!post|proposals|issues).*)?$/;
+
+                if (
+                    postRegex.test(href) ||
+                    proposalRegex.test(href) ||
+                    issueRegex.test(href) ||
+                    circleRegex.test(href)
+                ) {
+                    // Render the preview component for matched internal links
+                    // We don't need props here as the component fetches its own data based on URL
+                    return <InternalLinkPreview url={href} />;
+                }
+                // --- End Internal Link Preview Logic ---
+
                 // Check if it's an external link
                 if (href.startsWith("http://") || href.startsWith("https://")) {
+                    // Existing external link rendering logic...
                     return (
                         <a
                             href={href}

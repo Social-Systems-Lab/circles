@@ -14,7 +14,16 @@ import {
     X,
 } from "lucide-react"; // Added X
 import { UserPicture } from "../members/user-picture";
-import { Circle, Feed, Location, Media, PostDisplay, UserPrivate } from "@/models/models";
+import {
+    Circle,
+    Feed,
+    Location,
+    Media,
+    PostDisplay,
+    UserPrivate,
+    ProposalDisplay,
+    IssueDisplay,
+} from "@/models/models"; // Added ProposalDisplay, IssueDisplay
 import { CirclePicture } from "../circles/circle-picture";
 import {
     Carousel,
@@ -42,10 +51,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { userAtom } from "@/lib/data/atoms";
-import { getLinkPreviewAction } from "./actions"; // Import the server action
+import { getLinkPreviewAction, getInternalLinkPreviewData, InternalLinkPreviewResult } from "./actions"; // Import server actions
 import { useToast } from "@/components/ui/use-toast"; // Import useToast
 import Image from "next/image"; // Import Next Image
 import { Card, CardContent } from "@/components/ui/card"; // Import Card components
+import InternalLinkPreview from "./InternalLinkPreview"; // Reuse for display logic structure
+import { truncateText } from "@/lib/utils";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AlertCircle, CircleHelp } from "lucide-react"; // Removed duplicate Users import
 
 // Debounce function
 function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
@@ -71,6 +84,14 @@ type LinkPreviewData = {
     mediaType?: string;
     contentType?: string;
     favicons?: string[];
+};
+
+// Simplified internal preview structure for display within the form
+type InternalPreviewDisplayData = {
+    type: "circle" | "post" | "proposal" | "issue";
+    id: string; // handle or ID
+    url: string;
+    data: Circle | PostDisplay | ProposalDisplay | IssueDisplay;
 };
 
 const postMentionsInputStyle = {
@@ -144,7 +165,7 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
 
     // State for circle selection and user groups
     const [selectedCircle, setSelectedCircle] = useState<Circle>(circle);
-    const [userGroups, setUserGroups] = useState<string[]>(["everyone"]);
+    const [userGroups, setUserGroups] = useState<string[]>(initialPost?.userGroups || ["everyone"]); // Use initial post groups if available
     const [isUserGroupsDialogOpen, setIsUserGroupsDialogOpen] = useState(false);
     const [availableCircles, setAvailableCircles] = useState<Circle[]>([]);
     const { toast } = useToast(); // Initialize toast
@@ -207,9 +228,17 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
             : null,
     );
     const [isPreviewLoading, setIsPreviewLoading] = useState(false);
-    const [detectedUrl, setDetectedUrl] = useState<string | null>(initialPost?.linkPreviewUrl || null);
+    const [detectedUrl, setDetectedUrl] = useState<string | null>(
+        initialPost?.linkPreviewUrl || initialPost?.internalPreviewUrl || null,
+    );
     const fetchPreviewController = useRef<AbortController | null>(null);
     // --- End Link Preview State ---
+
+    // --- Internal Link Preview State ---
+    const [internalPreview, setInternalPreview] = useState<InternalPreviewDisplayData | null>(null);
+    const [isInternalPreviewLoading, setIsInternalPreviewLoading] = useState(false);
+    const fetchInternalPreviewController = useRef<AbortController | null>(null);
+    // --- End Internal Link Preview State ---
 
     // Get all circles the user is a member of
     useEffect(() => {
@@ -219,13 +248,149 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
         }
     }, [user]);
 
-    // --- Link Preview Logic ---
-    const extractFirstUrl = (text: string): string | null => {
-        // More robust URL regex (handles various protocols, domains, paths, queries, fragments)
-        const urlRegex = /(https?:\/\/[^\s]+)/g;
-        const matches = text.match(urlRegex);
-        return matches ? matches[0] : null;
+    // --- Combined Link Preview Logic (External & Internal) ---
+    const extractFirstUrl = (text: string): { url: string; isInternal: boolean } | null => {
+        // Regex for absolute URLs (external)
+        const externalUrlRegex = /(https?:\/\/[^\s]+)/g;
+        // Regex for internal paths (relative or absolute starting with /circles/)
+        const internalUrlRegex = /(\/circles\/[a-zA-Z0-9\-\/]+)/g;
+
+        // Prioritize internal links if both exist? Or just first match? Let's try first match.
+        // Combine regex carefully or check sequentially. Let's check internal first.
+        const internalMatches = text.match(internalUrlRegex); // Use the 'text' parameter
+        if (internalMatches) {
+            // Validate if it matches specific internal patterns
+            const url = internalMatches[0];
+            const postRegex = /^\/circles\/[a-zA-Z0-9\-]+\/post\/[a-zA-Z0-9]+$/;
+            const proposalRegex = /^\/circles\/[a-zA-Z0-9\-]+\/proposals\/[a-zA-Z0-9]+$/;
+            const issueRegex = /^\/circles\/[a-zA-Z0-9\-]+\/issues\/[a-zA-Z0-9]+$/;
+            const circleRegex = /^\/circles\/[a-zA-Z0-9\-]+(?:\/(?!post|proposals|issues).*)?$/;
+            if (postRegex.test(url) || proposalRegex.test(url) || issueRegex.test(url) || circleRegex.test(url)) {
+                return { url: url, isInternal: true };
+            }
+        }
+
+        // Check for external URLs if no internal match found or if external comes first (adjust logic if needed)
+        const externalMatches = text.match(externalUrlRegex);
+        if (externalMatches) {
+            return { url: externalMatches[0], isInternal: false };
+        }
+
+        return null;
     };
+
+    // Fetch External Link Preview
+    const fetchExternalLinkPreview = useCallback(
+        async (url: string) => {
+            if (fetchPreviewController.current) fetchPreviewController.current.abort();
+            const controller = new AbortController();
+            fetchPreviewController.current = controller;
+
+            setIsPreviewLoading(true);
+            setLinkPreview(null);
+            setInternalPreview(null); // Clear internal preview if fetching external
+
+            try {
+                const result = await getLinkPreviewAction(url);
+                if (controller.signal.aborted) return;
+                if (result.success && result.preview) {
+                    setLinkPreview(result.preview);
+                    setDetectedUrl(result.preview.url);
+                } else {
+                    setDetectedUrl(url);
+                    setLinkPreview(null);
+                }
+            } catch (error: any) {
+                if (error.name !== "AbortError") {
+                    setDetectedUrl(url);
+                    setLinkPreview(null);
+                }
+            } finally {
+                if (fetchPreviewController.current === controller) {
+                    setIsPreviewLoading(false);
+                    fetchPreviewController.current = null;
+                }
+            }
+        },
+        [toast], // Keep toast dependency if used for errors
+    );
+
+    // Fetch Internal Link Preview
+    const fetchInternalLinkPreview = useCallback(async (url: string) => {
+        if (fetchInternalPreviewController.current) fetchInternalPreviewController.current.abort();
+        const controller = new AbortController();
+        fetchInternalPreviewController.current = controller;
+
+        setIsInternalPreviewLoading(true);
+        setInternalPreview(null);
+        setLinkPreview(null); // Clear external preview if fetching internal
+
+        try {
+            const result = await getInternalLinkPreviewData(url);
+            if (controller.signal.aborted) return;
+
+            if ("error" in result) {
+                console.warn("Failed to fetch internal link preview:", result.error);
+                setDetectedUrl(url);
+                setInternalPreview(null);
+            } else {
+                setInternalPreview({
+                    type: result.type,
+                    id: result.type === "circle" ? result.data.handle! : result.data._id.toString(),
+                    url: url, // Store the original matched URL
+                    data: result.data,
+                });
+                setDetectedUrl(url); // Update detected URL
+            }
+        } catch (error: any) {
+            if (error.name !== "AbortError") {
+                console.error("Error calling getInternalLinkPreviewData:", error);
+                setDetectedUrl(url);
+                setInternalPreview(null);
+            }
+        } finally {
+            if (fetchInternalPreviewController.current === controller) {
+                setIsInternalPreviewLoading(false);
+                fetchInternalPreviewController.current = null;
+            }
+        }
+    }, []);
+
+    const debouncedFetchExternalPreview = useCallback(debounce(fetchExternalLinkPreview, 750), [
+        fetchExternalLinkPreview,
+    ]);
+    const debouncedFetchInternalPreview = useCallback(debounce(fetchInternalLinkPreview, 750), [
+        fetchInternalLinkPreview,
+    ]);
+
+    useEffect(() => {
+        const urlInfo = extractFirstUrl(postContent);
+
+        if (urlInfo && urlInfo.url !== detectedUrl) {
+            if (urlInfo.isInternal) {
+                debouncedFetchInternalPreview(urlInfo.url);
+            } else {
+                debouncedFetchExternalPreview(urlInfo.url);
+            }
+        } else if (!urlInfo && detectedUrl) {
+            // Optional: Clear preview if URL is removed? Or keep it until explicitly removed?
+            // Let's keep it for now unless explicitly removed.
+        }
+    }, [postContent, detectedUrl, debouncedFetchExternalPreview, debouncedFetchInternalPreview]);
+
+    const removeLinkPreview = () => {
+        setLinkPreview(null);
+        setInternalPreview(null); // Clear internal as well
+        setDetectedUrl(null);
+        setIsPreviewLoading(false);
+        setIsInternalPreviewLoading(false); // Clear internal loading
+        if (fetchPreviewController.current) fetchPreviewController.current.abort();
+        if (fetchInternalPreviewController.current) fetchInternalPreviewController.current.abort();
+    };
+    // --- End Combined Link Preview Logic ---
+
+    // Removed the misplaced useEffect block that caused syntax errors and referred to 'text' incorrectly.
+    // The correct useEffect for fetching circles is already present earlier in the code.
 
     const fetchLinkPreview = useCallback(
         async (url: string) => {
@@ -274,37 +439,6 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
         },
         [toast],
     ); // Added toast dependency
-
-    const debouncedFetchPreview = useCallback(debounce(fetchLinkPreview, 750), [fetchLinkPreview]);
-
-    useEffect(() => {
-        const urlInContent = extractFirstUrl(postContent);
-
-        // Fetch only if a new URL is found and it's different from the currently detected/previewed one
-        if (urlInContent && urlInContent !== detectedUrl) {
-            debouncedFetchPreview(urlInContent);
-        } else if (!urlInContent && detectedUrl) {
-            // If URL is removed from text, clear the preview state
-            // setDetectedUrl(null); // Keep detectedUrl to avoid re-fetching if user types it back
-            // setLinkPreview(null); // Keep preview until explicitly removed or replaced
-            // setIsPreviewLoading(false);
-            // if (fetchPreviewController.current) {
-            //     fetchPreviewController.current.abort();
-            //     fetchPreviewController.current = null;
-            // }
-        }
-    }, [postContent, detectedUrl, debouncedFetchPreview]);
-
-    const removeLinkPreview = () => {
-        setLinkPreview(null);
-        setDetectedUrl(null); // Allow re-detection if URL is added back
-        setIsPreviewLoading(false);
-        if (fetchPreviewController.current) {
-            fetchPreviewController.current.abort();
-            fetchPreviewController.current = null;
-        }
-    };
-    // --- End Link Preview Logic ---
 
     const getUserGroupName = (userGroup: string) => {
         if (!selectedCircle || !selectedCircle.userGroups) {
@@ -410,10 +544,16 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
 
             // --- Append Link Preview Data ---
             if (linkPreview) {
+                // Append external link preview data
                 formData.append("linkPreviewUrl", linkPreview.url);
                 if (linkPreview.title) formData.append("linkPreviewTitle", linkPreview.title);
                 if (linkPreview.description) formData.append("linkPreviewDescription", linkPreview.description);
                 if (linkPreview.image) formData.append("linkPreviewImageUrl", linkPreview.image);
+            } else if (internalPreview) {
+                // Append internal link preview data
+                formData.append("internalPreviewType", internalPreview.type);
+                formData.append("internalPreviewId", internalPreview.id);
+                formData.append("internalPreviewUrl", internalPreview.url);
             }
             // --- End Append Link Preview Data ---
 
@@ -506,10 +646,11 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                 {isPreviewLoading && (
                     <div className="mt-4 flex items-center justify-center rounded-lg border p-4">
                         <Loader2 className="mr-2 h-5 w-5 animate-spin text-gray-500" />
-                        <span className="text-gray-500">Loading link preview...</span>
+                        <span className="text-gray-500">Loading preview...</span>
                     </div>
                 )}
-                {linkPreview && !isPreviewLoading && (
+                {/* External Link Preview */}
+                {linkPreview && !isPreviewLoading && !internalPreview && (
                     <Card className="relative mt-4 overflow-hidden">
                         <Button
                             variant="ghost"
@@ -548,9 +689,103 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                         </a>
                     </Card>
                 )}
+                {/* Internal Link Preview */}
+                {internalPreview && !isInternalPreviewLoading && !linkPreview && (
+                    <Card className="relative mt-4 overflow-hidden">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-1 top-1 z-10 h-6 w-6 rounded-full bg-gray-900/50 text-white hover:bg-gray-700/70 hover:text-white"
+                            onClick={removeLinkPreview} // Use the same remove function
+                            aria-label="Remove link preview"
+                        >
+                            <X className="h-4 w-4" />
+                        </Button>
+                        {/* Use a simplified display, maybe adapt InternalLinkPreview component later */}
+                        <div className="flex items-center space-x-3 p-3">
+                            {internalPreview.type === "circle" && (
+                                <>
+                                    <Avatar className="h-10 w-10 rounded-md">
+                                        <AvatarImage
+                                            src={(internalPreview.data as Circle).picture?.url} // Cast to Circle
+                                            alt={(internalPreview.data as Circle).name} // Cast to Circle
+                                        />
+                                        <AvatarFallback>
+                                            <Users className="h-5 w-5" />
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <div>
+                                        <div className="text-xs text-gray-500">Circle</div>
+                                        <div className="font-medium">{(internalPreview.data as Circle).name}</div>{" "}
+                                        {/* Cast to Circle */}
+                                    </div>
+                                </>
+                            )}
+                            {internalPreview.type === "post" && (
+                                <>
+                                    <Avatar className="h-10 w-10 rounded-full">
+                                        <AvatarImage
+                                            src={(internalPreview.data as PostDisplay).author?.picture?.url}
+                                            alt={(internalPreview.data as PostDisplay).author?.name}
+                                        />
+                                        <AvatarFallback>
+                                            {(internalPreview.data as PostDisplay).author?.name?.charAt(0) || "?"}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <div>
+                                        <div className="text-xs text-gray-500">
+                                            Post by {(internalPreview.data as PostDisplay).author?.name}
+                                        </div>
+                                        <p className="text-sm text-gray-800">
+                                            {truncateText((internalPreview.data as PostDisplay).content!, 100)}{" "}
+                                            {/* Cast to PostDisplay */}
+                                        </p>
+                                    </div>
+                                </>
+                            )}
+                            {internalPreview.type === "proposal" && (
+                                <>
+                                    <Avatar className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-100 text-blue-700">
+                                        <CircleHelp className="h-5 w-5" />
+                                    </Avatar>
+                                    <div>
+                                        <div className="text-xs text-gray-500">Proposal</div>
+                                        <div className="font-medium">
+                                            {(internalPreview.data as ProposalDisplay).name}
+                                        </div>
+                                        <p className="text-sm text-gray-600">
+                                            Status:{" "}
+                                            <span className="font-semibold">
+                                                {(internalPreview.data as ProposalDisplay).stage}
+                                            </span>
+                                        </p>
+                                    </div>
+                                </>
+                            )}
+                            {internalPreview.type === "issue" && (
+                                <>
+                                    <Avatar className="flex h-10 w-10 items-center justify-center rounded-md bg-orange-100 text-orange-700">
+                                        <AlertCircle className="h-5 w-5" />
+                                    </Avatar>
+                                    <div>
+                                        <div className="text-xs text-gray-500">Issue</div>
+                                        <div className="font-medium">
+                                            {(internalPreview.data as IssueDisplay).title}
+                                        </div>
+                                        <p className="text-sm text-gray-600">
+                                            Status:{" "}
+                                            <span className="font-semibold">
+                                                {(internalPreview.data as IssueDisplay).stage}
+                                            </span>
+                                        </p>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </Card>
+                )}
                 {/* --- End Link Preview Display --- */}
-                {/* ... (existing image carousel, location display, poll creator placeholder) ... */}
-                {/* Ensure removeImage is called correctly in the image carousel */}
+                {/* Image Carousel */}
                 {images.length > 0 && (
                     <div className="relative mt-4">
                         <Carousel setApi={setCarouselApi}>
@@ -652,7 +887,7 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                     <Button
                         className="rounded-full bg-blue-500 px-6 text-white hover:bg-blue-600"
                         onClick={handleSubmit}
-                        disabled={isPending || isPreviewLoading} // Disable post button while loading preview
+                        disabled={isPending || isPreviewLoading || isInternalPreviewLoading} // Disable if any preview is loading
                     >
                         {isPending ? (
                             <>

@@ -89,6 +89,7 @@ import Indicators, { ProximityIndicator, SimilarityScore } from "@/components/ut
 import Image from "next/image"; // Import Next Image
 import { Card, CardContent } from "@/components/ui/card"; // Import Card components
 import Link from "next/link"; // Import Next Link
+import InternalLinkPreview from "./InternalLinkPreview"; // Import InternalLinkPreview
 
 export const defaultMentionsInputStyle = {
     control: {
@@ -836,15 +837,20 @@ export const PostItem = ({
             {!hideContent && <MemoizedPostContent content={post.content} mentions={post.mentionsDisplay} />}
 
             {/* --- Link Preview --- */}
-            {!hideContent && post.linkPreviewUrl && (
+            {!hideContent && (post.internalPreviewUrl || post.linkPreviewUrl) && (
                 <div className="pl-4 pr-4">
-                    {/* Add padding consistent with content */}
-                    <LinkPreviewCard
-                        url={post.linkPreviewUrl}
-                        title={post.linkPreviewTitle}
-                        description={post.linkPreviewDescription}
-                        imageUrl={post.linkPreviewImage?.url}
-                    />
+                    {/* Render Internal Preview if URL exists */}
+                    {post.internalPreviewUrl ? (
+                        <InternalLinkPreview url={post.internalPreviewUrl} />
+                    ) : // Otherwise, render External Preview if URL exists
+                    post.linkPreviewUrl ? (
+                        <LinkPreviewCard
+                            url={post.linkPreviewUrl}
+                            title={post.linkPreviewTitle}
+                            description={post.linkPreviewDescription}
+                            imageUrl={post.linkPreviewImage?.url}
+                        />
+                    ) : null}
                 </div>
             )}
             {/* --- End Link Preview --- */}

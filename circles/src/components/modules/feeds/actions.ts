@@ -28,8 +28,12 @@ import {
 import { saveFile, isFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
+import { getProposalById } from "@/lib/data/proposal";
+import { getIssueById } from "@/lib/data/issue";
 import {
     Media,
+    ProposalDisplay,
+    IssueDisplay,
     Post,
     postSchema,
     Comment,
@@ -42,7 +46,7 @@ import {
     FileInfo, // Added FileInfo
 } from "@/models/models";
 import { revalidatePath } from "next/cache";
-import { getCircleById, getCirclePath, getCirclesBySearchQuery } from "@/lib/data/circle";
+import { getCircleById, getCirclePath, getCirclesBySearchQuery, getCircleByHandle } from "@/lib/data/circle"; // Added getCircleByHandle
 import { getLinkPreview } from "link-preview-js"; // Removed LinkPreview import
 import { getUserByDid, getUserById, getUserPrivate } from "@/lib/data/user";
 import { redirect } from "next/navigation";
@@ -202,6 +206,110 @@ export async function getLinkPreviewAction(url: string): Promise<{
 }
 // --- End Link Preview Action ---
 
+// --- Internal Link Preview Action ---
+
+export type InternalLinkPreviewResult =
+    | { type: "circle"; data: Circle }
+    | { type: "post"; data: PostDisplay }
+    | { type: "proposal"; data: ProposalDisplay }
+    | { type: "issue"; data: IssueDisplay }
+    | { error: string }; // For not found, unauthorized, or other errors
+
+export async function getInternalLinkPreviewData(url: string): Promise<InternalLinkPreviewResult> {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { error: "Unauthorized" };
+    }
+
+    try {
+        const parsedUrl = new URL(url, "http://dummybase"); // Use a dummy base for relative URLs
+        const pathname = parsedUrl.pathname;
+
+        // Regex patterns for internal links
+        const postRegex = /^\/circles\/([a-zA-Z0-9\-]+)\/post\/([a-zA-Z0-9]+)$/;
+        const proposalRegex = /^\/circles\/([a-zA-Z0-9\-]+)\/proposals\/([a-zA-Z0-9]+)$/;
+        const issueRegex = /^\/circles\/([a-zA-Z0-9\-]+)\/issues\/([a-zA-Z0-9]+)$/;
+        const circleRegex = /^\/circles\/([a-zA-Z0-9\-]+)(?:\/.*)?$/; // Matches base circle URL and subpaths
+
+        const postMatch = pathname.match(postRegex);
+        const proposalMatch = pathname.match(proposalRegex);
+        const issueMatch = pathname.match(issueRegex);
+        const circleMatch = pathname.match(circleRegex);
+
+        if (postMatch) {
+            const [, handle, postId] = postMatch;
+            const circle = await getCircleByHandle(handle);
+            if (!circle) return { error: "Circle not found" };
+            const authorized = await isAuthorized(userDid, circle._id.toString(), features.feed.view);
+            if (!authorized) return { error: "Unauthorized" };
+            const post = await getPost(postId); // Assuming getPost fetches PostDisplay or similar
+            if (!post) return { error: "Post not found" };
+            // Ensure getPost returns PostDisplay or adapt as needed
+            // This might require a new function like getPostDisplay(postId, userDid)
+            // For now, assuming getPost is sufficient and we manually add author etc. if needed
+            const author = await getUserByDid(post.createdBy);
+            const feed = await getFeed(post.feedId);
+            const postDisplay: PostDisplay = {
+                ...post,
+                author: author!, // Assuming author is found
+                circleType: "post",
+                circle: circle,
+                feed: feed!, // Assuming feed is found
+            };
+            return { type: "post", data: postDisplay };
+        } else if (proposalMatch) {
+            const [, handle, proposalId] = proposalMatch;
+            const circle = await getCircleByHandle(handle);
+            if (!circle) return { error: "Circle not found" };
+            // Assuming proposals module has a 'view' feature
+            const authorized = await isAuthorized(
+                userDid,
+                circle._id.toString(),
+                features.proposals.view, // Use correct feature path
+            );
+            if (!authorized) return { error: "Unauthorized" };
+            const proposal = await getProposalById(proposalId); // Correct function call
+            if (!proposal) return { error: "Proposal not found" };
+            // Add author/circle if getProposalById doesn't return ProposalDisplay (it should based on the file content)
+            // if (!proposal.author) proposal.author = (await getUserByDid(proposal.createdBy))!; // Likely not needed anymore
+            if (!proposal.circle) proposal.circle = circle;
+            return { type: "proposal", data: proposal };
+        } else if (issueMatch) {
+            const [, handle, issueId] = issueMatch;
+            const circle = await getCircleByHandle(handle);
+            if (!circle) return { error: "Circle not found" };
+            // Assuming issues module has a 'view' feature
+            const authorized = await isAuthorized(
+                userDid,
+                circle._id.toString(),
+                features.issues.view, // Use correct feature path
+            );
+            if (!authorized) return { error: "Unauthorized" };
+            const issue = await getIssueById(issueId); // Correct function call
+            if (!issue) return { error: "Issue not found" };
+            // Add author/assignee/circle if getIssueById doesn't return IssueDisplay (it should based on the file content)
+            // if (!issue.author) issue.author = (await getUserByDid(issue.createdBy))!; // Likely not needed anymore
+            // if (issue.assignedTo && !issue.assignee) issue.assignee = await getUserByDid(issue.assignedTo); // Likely not needed anymore
+            if (!issue.circle) issue.circle = circle;
+            return { type: "issue", data: issue };
+        } else if (circleMatch) {
+            const [, handle] = circleMatch;
+            const circle = await getCircleByHandle(handle);
+            if (!circle) return { error: "Circle not found" };
+            // Basic authorization check for viewing a circle profile
+            const authorized = await isAuthorized(userDid, circle._id.toString(), features.circles.view); // Corrected feature path
+            if (!authorized && !circle.isPublic) return { error: "Unauthorized" }; // Allow public circles
+            return { type: "circle", data: circle };
+        } else {
+            return { error: "Invalid internal link" };
+        }
+    } catch (error: any) {
+        console.error("Error fetching internal link preview data:", url, error);
+        return { error: "Failed to fetch preview data" };
+    }
+}
+// --- End Internal Link Preview Action ---
+
 export async function getPostsAction(
     feedId: string,
     circleId: string,
@@ -248,6 +356,16 @@ export async function createPostAction(
         const linkPreviewDescription = formData.get("linkPreviewDescription") as string | undefined;
         const linkPreviewImageUrl = formData.get("linkPreviewImageUrl") as string | undefined;
         // --- End Link Preview Data Extraction ---
+        // +++ Internal Link Preview Data Extraction +++
+        const internalPreviewType = formData.get("internalPreviewType") as
+            | "circle"
+            | "post"
+            | "proposal"
+            | "issue"
+            | undefined;
+        const internalPreviewId = formData.get("internalPreviewId") as string | undefined;
+        const internalPreviewUrl = formData.get("internalPreviewUrl") as string | undefined;
+        // +++ End Internal Link Preview Data Extraction +++
 
         // Get the default feed for this circle
         const feed = await getFeedByHandle(circleId, "default");
@@ -276,6 +394,11 @@ export async function createPostAction(
             linkPreviewDescription: linkPreviewDescription || undefined,
             linkPreviewImage: linkPreviewImageUrl ? { url: linkPreviewImageUrl } : undefined,
             // --- End Link Preview Fields ---
+            // +++ Add Internal Link Preview Fields +++
+            internalPreviewType: internalPreviewType || undefined,
+            internalPreviewId: internalPreviewId || undefined,
+            internalPreviewUrl: internalPreviewUrl || undefined,
+            // +++ End Internal Link Preview Fields +++
         };
 
         // console.log("creating post", JSON.stringify(post.location)); // Reduced logging
@@ -364,6 +487,16 @@ export async function updatePostAction(
         const linkPreviewDescription = formData.get("linkPreviewDescription") as string | undefined;
         const linkPreviewImageUrl = formData.get("linkPreviewImageUrl") as string | undefined;
         // --- End Link Preview Data Extraction ---
+        // +++ Internal Link Preview Data Extraction +++
+        const internalPreviewType = formData.get("internalPreviewType") as
+            | "circle"
+            | "post"
+            | "proposal"
+            | "issue"
+            | undefined;
+        const internalPreviewId = formData.get("internalPreviewId") as string | undefined;
+        const internalPreviewUrl = formData.get("internalPreviewUrl") as string | undefined;
+        // +++ End Internal Link Preview Data Extraction +++
 
         const post = await getPost(postId);
         if (!post) {
@@ -385,6 +518,11 @@ export async function updatePostAction(
             linkPreviewDescription: linkPreviewDescription || undefined,
             linkPreviewImage: linkPreviewImageUrl ? { url: linkPreviewImageUrl } : undefined,
             // --- End Link Preview Fields ---
+            // +++ Add Internal Link Preview Fields +++
+            internalPreviewType: internalPreviewType || undefined,
+            internalPreviewId: internalPreviewId || undefined,
+            internalPreviewUrl: internalPreviewUrl || undefined,
+            // +++ End Internal Link Preview Fields +++
         };
 
         // console.log("Updating post", JSON.stringify(updatedPost.location)); // Reduced logging

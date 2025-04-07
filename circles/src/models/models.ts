@@ -217,6 +217,10 @@ export const postSchema = z.object({
     linkPreviewTitle: z.string().optional(),
     linkPreviewDescription: z.string().optional(),
     linkPreviewImage: fileInfoSchema.optional(),
+    // Internal Link Preview Fields
+    internalPreviewType: z.enum(["circle", "post", "proposal", "issue"]).optional(),
+    internalPreviewId: z.string().optional(), // Handle for circle, ID for others
+    internalPreviewUrl: z.string().url().optional(),
 });
 
 export type Post = z.infer<typeof postSchema>;
@@ -230,6 +234,8 @@ export interface PostDisplay extends WithMetric<Post> {
     handle?: string;
     circle?: Circle;
     feed?: Feed;
+    // Populated internal preview data
+    internalPreviewData?: Circle | PostDisplay | ProposalDisplay | IssueDisplay | null;
 }
 
 export const commentSchema = z.object({
