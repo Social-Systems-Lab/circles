@@ -622,7 +622,7 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                                             <span>{selectedCircle.name}</span>
                                         </div>
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent className="z-[111]">
                                         {availableCircles.map((c) => (
                                             <SelectItem key={c._id} value={c._id}>
                                                 <div className="flex items-center gap-2">
@@ -947,7 +947,7 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
             )}
             {/* Location Dialog */}
             <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
-                <DialogContent>
+                <DialogContent className="z-[111]">
                     <DialogHeader>
                         <DialogTitle>Select Location</DialogTitle>
                     </DialogHeader>
@@ -964,7 +964,7 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
             </Dialog>
             {/* User Groups Dialog */}
             <Dialog open={isUserGroupsDialogOpen} onOpenChange={setIsUserGroupsDialogOpen}>
-                <DialogContent className="max-w-md">
+                <DialogContent className="z-[111] max-w-md">
                     <DialogHeader>
                         <DialogTitle className="text-center text-xl font-bold">Who can see your post?</DialogTitle>
                     </DialogHeader>
