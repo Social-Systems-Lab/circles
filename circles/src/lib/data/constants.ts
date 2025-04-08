@@ -308,11 +308,17 @@ export const features = {
 
 export const modules: ModuleInfo[] = [
     {
+        name: "Home",
+        handle: "home",
+        description:
+            "The main landing page for the circle, showcasing its purpose and recent activity. Provides an introduction for non-members and an overview for members.",
+        readOnly: true, // Admins cannot disable this module
+    },
+    {
         name: "Feed",
         handle: "feed",
         description:
             "A shared space for circle members to post updates, share ideas, and engage in discussions. Serves as the central communication hub to foster transparent collaboration and community engagement.",
-        readOnly: true,
     },
     {
         name: "Followers",
@@ -353,11 +359,11 @@ export const modules: ModuleInfo[] = [
     },
 ];
 
-export const defaultUserModules = ["feed", "followers", "circles", "projects", "settings"];
-export const defaultCircleModules = ["feed", "followers", "projects", "settings"];
-export const defaultProjectModules = ["feed", "followers", "proposals", "issues", "settings"];
+export const defaultUserModules = ["home", "feed", "followers", "circles", "projects", "settings"];
+export const defaultCircleModules = ["home", "feed", "followers", "projects", "settings"];
+export const defaultProjectModules = ["home", "feed", "followers", "proposals", "issues", "settings"];
 
-export const getDefaultModules = (circleType: CircleType) => {
+export const getDefaultModules = (circleType: CircleType): string[] => {
     switch (circleType) {
         case "user":
             return defaultUserModules;
@@ -366,6 +372,7 @@ export const getDefaultModules = (circleType: CircleType) => {
         case "project":
             return defaultProjectModules;
         default:
+            // Default to user modules if type is unknown or not specified
             return defaultUserModules;
     }
 };
