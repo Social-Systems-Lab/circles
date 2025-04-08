@@ -1,6 +1,8 @@
 import { getCircleByHandle } from "@/lib/data/circle";
 import FeedsModule from "@/components/modules/feeds/feeds";
 import { notFound } from "next/navigation";
+import { createDefaultFeeds } from "@/lib/data/feed";
+import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 
 type PageProps = {
     params: Promise<{ handle: string }>;
@@ -13,6 +15,12 @@ export default async function FeedPage(props: PageProps) {
 
     if (!circle) {
         notFound();
+    }
+
+    // ensure it has a default feed
+    let userDid = await getAuthenticatedUserDid();
+    if (userDid) {
+        await createDefaultFeeds(circle._id, userDid);
     }
 
     // Pass circle and original props down to FeedsModule
