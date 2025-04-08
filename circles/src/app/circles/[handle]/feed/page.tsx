@@ -1,7 +1,7 @@
 import { getCircleByHandle } from "@/lib/data/circle";
 import FeedsModule from "@/components/modules/feeds/feeds";
 import { notFound } from "next/navigation";
-import { createDefaultFeeds } from "@/lib/data/feed";
+import { createDefaultFeed } from "@/lib/data/feed";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 
 type PageProps = {
@@ -20,7 +20,7 @@ export default async function FeedPage(props: PageProps) {
     // ensure it has a default feed
     let userDid = await getAuthenticatedUserDid();
     if (userDid) {
-        await createDefaultFeeds(circle._id, userDid);
+        await createDefaultFeed(circle._id);
     }
 
     // Pass circle and original props down to FeedsModule

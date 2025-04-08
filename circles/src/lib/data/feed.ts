@@ -104,10 +104,10 @@ export const getFeeds = async (circleId: string): Promise<Feed[]> => {
     return feeds;
 };
 
-export const createDefaultFeeds = async (circleId: string, authenticatedUserDid: string): Promise<Feed[] | null> => {
+export const createDefaultFeed = async (circleId: string): Promise<void> => {
     let circle = await getCircleById(circleId);
     if (!circle) {
-        return null;
+        return;
     }
 
     // Only create a single default feed per circle
@@ -122,15 +122,6 @@ export const createDefaultFeeds = async (circleId: string, authenticatedUserDid:
         };
         defaultFeed = await createFeed(defaultFeed);
     }
-
-    // Get all feeds (should only be the default feed now)
-    let existingFeeds = await getFeeds(circleId);
-
-    // Update the circle (passing the required authenticatedUserDid)
-    // Note: The updateCircle function itself will check if the circle is a 'user' type
-    // and if the authenticatedUserDid matches the circle's did.
-    await updateCircle(circle, authenticatedUserDid);
-    return existingFeeds;
 };
 
 export const createPost = async (post: Post): Promise<Post> => {
