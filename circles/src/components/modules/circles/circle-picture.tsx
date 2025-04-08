@@ -1,3 +1,5 @@
+"use client";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
