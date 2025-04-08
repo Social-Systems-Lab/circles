@@ -137,16 +137,17 @@ export function CircleTabs({ circle }: CircleTabsProps) {
         calculateVisibleTabs(); // Initial calculation
 
         const resizeObserver = new ResizeObserver(calculateVisibleTabs);
-        if (tabsContainerRef.current) {
-            resizeObserver.observe(tabsContainerRef.current);
+        let tabRefsContainerRefCurrent = tabsContainerRef.current;
+        if (tabRefsContainerRefCurrent) {
+            resizeObserver.observe(tabRefsContainerRefCurrent);
         }
 
         // Recalculate when modules change
         calculateVisibleTabs();
 
         return () => {
-            if (tabsContainerRef.current) {
-                resizeObserver.unobserve(tabsContainerRef.current);
+            if (tabRefsContainerRefCurrent) {
+                resizeObserver.unobserve(tabRefsContainerRefCurrent);
             }
             resizeObserver.disconnect();
         };
