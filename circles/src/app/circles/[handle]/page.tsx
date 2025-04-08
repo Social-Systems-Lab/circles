@@ -1,7 +1,5 @@
 import { getCircleByHandle } from "@/lib/data/circle";
-import HomeModule from "@/components/modules/home/home";
 import { redirect } from "next/navigation";
-import FeedsModule from "@/components/modules/feeds/feeds";
 
 type HomeProps = {
     params: Promise<{ handle: string }>;
@@ -15,5 +13,8 @@ export default async function Home(props: HomeProps) {
         redirect("/not-found");
     }
 
-    redirect(`/circles/${params.handle}/feed`);
+    // redirect to first module in circle
+    let defaultModule = circle?.enabledModules?.[0] ?? "home";
+
+    redirect(`/circles/${params.handle}/${defaultModule}`);
 }
