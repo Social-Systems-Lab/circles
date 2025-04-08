@@ -100,33 +100,51 @@ export function CircleTabs({ circle }: CircleTabsProps) {
             let currentWidth = 0;
             const newVisibleTabs: Module[] = [];
             const newHiddenTabs: Module[] = [];
-            const moreButtonWidthEstimate = moreButtonRef.current?.offsetWidth || 100; // Estimate width if not rendered yet
+            // Get the actual width if possible, otherwise estimate
+            const moreButtonWidth = moreButtonRef.current?.offsetWidth || 100;
 
             tabRefs.current = tabRefs.current.slice(0, visibleModules.length); // Ensure refs array matches modules
 
-            visibleModules.forEach((module, index) => {
-                const tabElement = tabRefs.current[index];
-                const tabWidth = tabElement?.offsetWidth || 100; // Estimate if not measured yet
+            // Determine which tabs fit
+            for (let i = 0; i < visibleModules.length; i++) {
+                const tabModule = visibleModules[i];
+                const tabElement = tabRefs.current[i];
+                // Use offsetWidth if available, otherwise estimate
+                const tabWidth = tabElement?.offsetWidth || 100;
 
-                // Check if adding the next tab OR the more button would exceed width
-                const potentialWidthWithMore =
-                    currentWidth + tabWidth + (newHiddenTabs.length > 0 ? 0 : moreButtonWidthEstimate);
+                // Calculate width needed *if* this tab is added AND a "More" button is potentially needed later
+                // A "More" button is needed if this isn't the last tab OR if we already decided previous tabs must be hidden
+                const requiresMoreButton = i < visibleModules.length - 1 || newHiddenTabs.length > 0;
+                // Calculate the potential total width IF this tab remains visible
+                // Add the 'more' button width only if we anticipate needing it (i.e., if this isn't the last possible visible tab)
+                const potentialTotalWidth = currentWidth + tabWidth + (requiresMoreButton ? moreButtonWidth : 0);
 
-                if (potentialWidthWithMore <= containerWidth || newVisibleTabs.length === 0) {
-                    // Always show at least one tab if possible
-                    newVisibleTabs.push(module);
+                if (potentialTotalWidth <= containerWidth || newVisibleTabs.length === 0) {
+                    // Ensure at least one tab is visible if possible
+                    newVisibleTabs.push(tabModule);
                     currentWidth += tabWidth;
                 } else {
-                    newHiddenTabs.push(module);
+                    // This tab and all remaining tabs go into the hidden list
+                    newHiddenTabs.push(...visibleModules.slice(i));
+                    break; // No need to check further tabs
                 }
-            });
+            }
 
-            // If all tabs fit initially, but adding the 'More' button would cause overflow later
-            if (newHiddenTabs.length === 0 && currentWidth > containerWidth) {
-                // Move the last visible tab to hidden
+            // Final check: If we have hidden tabs, ensure the visible tabs + More button fit.
+            // If not, move visible tabs to hidden until it fits.
+            while (
+                newHiddenTabs.length > 0 &&
+                newVisibleTabs.length > 0 && // Keep at least one visible tab if possible
+                currentWidth + moreButtonWidth > containerWidth
+            ) {
                 const lastVisible = newVisibleTabs.pop();
                 if (lastVisible) {
-                    newHiddenTabs.unshift(lastVisible); // Add to beginning of hidden
+                    const lastVisibleElement = tabRefs.current[newVisibleTabs.length]; // Get ref of the moved tab
+                    const lastVisibleWidth = lastVisibleElement?.offsetWidth || 100;
+                    currentWidth -= lastVisibleWidth; // Subtract its width
+                    newHiddenTabs.unshift(lastVisible); // Add to the beginning of hidden tabs
+                } else {
+                    break; // Should not happen if newVisibleTabs.length > 0
                 }
             }
 
@@ -136,22 +154,26 @@ export function CircleTabs({ circle }: CircleTabsProps) {
 
         calculateVisibleTabs(); // Initial calculation
 
-        const resizeObserver = new ResizeObserver(calculateVisibleTabs);
-        let tabRefsContainerRefCurrent = tabsContainerRef.current;
-        if (tabRefsContainerRefCurrent) {
-            resizeObserver.observe(tabRefsContainerRefCurrent);
+        const resizeObserver = new ResizeObserver(() => {
+            // Debounce or throttle might be good here in a real app
+            calculateVisibleTabs();
+        });
+        let observedElement = tabsContainerRef.current; // Capture the value for cleanup
+
+        if (observedElement) {
+            resizeObserver.observe(observedElement);
         }
 
-        // Recalculate when modules change
-        calculateVisibleTabs();
+        // Also recalculate when modules change (e.g., permissions change)
+        // No need to call calculateVisibleTabs() again here, ResizeObserver handles initial size
 
         return () => {
-            if (tabRefsContainerRefCurrent) {
-                resizeObserver.unobserve(tabRefsContainerRefCurrent);
+            if (observedElement) {
+                resizeObserver.unobserve(observedElement);
             }
             resizeObserver.disconnect();
         };
-    }, [visibleModules, pathname]); // Rerun when modules or path changes
+    }, [visibleModules, getPath]); // Rerun when modules list changes or getPath changes (circle handle)
 
     const activeTabInMore = hiddenTabs.find((module) => pathname.startsWith(getPath(module.handle)));
 
@@ -159,13 +181,13 @@ export function CircleTabs({ circle }: CircleTabsProps) {
         <div>
             <div className="mx-auto max-w-6xl px-4 pt-2">
                 <nav ref={tabsContainerRef} className="flex items-center gap-1 overflow-hidden" aria-label="Tabs">
-                    {visibleTabs.map((module, index) => {
-                        const modulePath = getPath(module.handle);
+                    {visibleTabs.map((tabModule, index) => {
+                        const modulePath = getPath(tabModule.handle);
                         const isActive = pathname.startsWith(modulePath);
 
                         return (
                             <Link
-                                key={module.handle}
+                                key={tabModule.handle}
                                 ref={(el) => {
                                     tabRefs.current[index] = el;
                                 }}
@@ -177,7 +199,7 @@ export function CircleTabs({ circle }: CircleTabsProps) {
                                         : "text-muted-foreground hover:bg-muted hover:text-foreground",
                                 )}
                             >
-                                {module.name}
+                                {tabModule.name}
                             </Link>
                         );
                     })}
@@ -204,16 +226,16 @@ export function CircleTabs({ circle }: CircleTabsProps) {
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                {hiddenTabs.map((module) => {
-                                    const modulePath = getPath(module.handle);
+                                {hiddenTabs.map((tabModule) => {
+                                    const modulePath = getPath(tabModule.handle);
                                     const isActive = pathname.startsWith(modulePath);
                                     return (
-                                        <DropdownMenuItem key={module.handle} asChild>
+                                        <DropdownMenuItem key={tabModule.handle} asChild>
                                             <Link
                                                 href={modulePath}
                                                 className={cn("w-full", isActive && "font-semibold text-primary")}
                                             >
-                                                {module.name}
+                                                {tabModule.name}
                                             </Link>
                                         </DropdownMenuItem>
                                     );
