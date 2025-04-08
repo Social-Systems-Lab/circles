@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { motion, PanInfo, useAnimation } from "framer-motion";
+import React, { useState, useRef, useEffect } from "react"; // Added useRef, useEffect
+import { motion, PanInfo, useAnimation, useMotionValue, useTransform, animate } from "framer-motion"; // Added motionValue, useTransform, animate
 import { Circle, Media, WithMetric } from "@/models/models";
 import Image from "next/image";
 import { CirclePicture } from "./circle-picture";
@@ -32,31 +32,82 @@ interface CircleSwipeCardProps {
 }
 
 export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwiped, zIndex }) => {
-    const controls = useAnimation();
-    const [exitX, setExitX] = useState(0);
+    const controls = useAnimation(); // Still used for button clicks/programmatic animation
     const router = useRouter();
     const { toast } = useToast();
     const [user, setUser] = useAtom(userAtom);
 
-    const handleDragEnd = async (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-        const threshold = 100;
+    // Manual gesture handling state
+    const x = useMotionValue(0); // Card horizontal position
+    const rotate = useTransform(x, [-200, 0, 200], [-10, 0, 10], { clamp: false }); // Rotation based on x
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const [lockedDirection, setLockedDirection] = useState<"x" | "y" | null>(null);
+    const startScrollTop = useRef(0); // Store scroll position at pan start
 
-        if (info.offset.x > threshold) {
-            // Swiped right - follow
-            setExitX(200);
-            await controls.start({ x: 200, opacity: 0 });
-            onSwiped(circle, "right");
-            await processFollowRequest();
-        } else if (info.offset.x < -threshold) {
-            // Swiped left - ignore
-            setExitX(-200);
-            await controls.start({ x: -200, opacity: 0 });
-            onSwiped(circle, "left");
-            await processIgnoreRequest();
-        } else {
-            // Return to center if not beyond threshold
-            controls.start({ x: 0, opacity: 1 });
+    const handlePanStart = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+        setLockedDirection(null); // Reset lock on new pan
+        if (scrollContainerRef.current) {
+            startScrollTop.current = scrollContainerRef.current.scrollTop; // Record initial scroll
         }
+    };
+
+    const handlePan = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+        let currentDirection = lockedDirection;
+
+        // Lock direction based on initial movement
+        if (!currentDirection) {
+            const absDeltaX = Math.abs(info.delta.x);
+            const absDeltaY = Math.abs(info.delta.y);
+            const lockThreshold = 5; // Pixels before locking direction
+
+            if (absDeltaX > lockThreshold || absDeltaY > lockThreshold) {
+                currentDirection = absDeltaX > absDeltaY ? "x" : "y";
+                setLockedDirection(currentDirection);
+            }
+        }
+
+        // Apply movement based on locked direction
+        if (currentDirection === "x") {
+            x.set(x.get() + info.delta.x);
+        } else if (currentDirection === "y" && scrollContainerRef.current) {
+            const newScrollTop = startScrollTop.current - info.offset.y; // Invert offset for scroll
+            const maxScroll = scrollContainerRef.current.scrollHeight - scrollContainerRef.current.clientHeight;
+            scrollContainerRef.current.scrollTop = Math.max(0, Math.min(maxScroll, newScrollTop));
+        }
+    };
+
+    const handlePanEnd = async (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+        const swipeThreshold = 100;
+        const finalX = x.get();
+        let swipeDirection: "left" | "right" | null = null;
+
+        if (lockedDirection === "x") {
+            if (finalX > swipeThreshold) {
+                swipeDirection = "right";
+            } else if (finalX < -swipeThreshold) {
+                swipeDirection = "left";
+            }
+        }
+
+        if (swipeDirection) {
+            const exitTarget = swipeDirection === "right" ? 300 : -300;
+            await animate(x, exitTarget, { type: "spring", stiffness: 300, damping: 30 });
+            onSwiped(circle, swipeDirection);
+            if (swipeDirection === "right") {
+                await processFollowRequest();
+            } else {
+                await processIgnoreRequest();
+            }
+        } else if (lockedDirection === "x") {
+            // Animate back to center if not swiped
+            animate(x, 0, { type: "spring", stiffness: 300, damping: 30 });
+        }
+
+        // Reset scroll position tracking after pan ends
+        if (scrollContainerRef.current) {
+            startScrollTop.current = scrollContainerRef.current.scrollTop;
+        }
+        setLockedDirection(null); // Always reset lock at the end
     };
 
     const processFollowRequest = async () => {
@@ -112,17 +163,22 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
 
     const handleButtonClick = async (direction: "left" | "right") => {
         if (direction === "right") {
-            setExitX(200);
-            await controls.start({ x: 200, opacity: 0 });
+            // Animate out using motion value
+            await animate(x, 300, { type: "spring", stiffness: 300, damping: 30 });
             onSwiped(circle, "right");
             await processFollowRequest();
         } else {
-            setExitX(-200);
-            await controls.start({ x: -200, opacity: 0 });
+            // Animate out using motion value
+            await animate(x, -300, { type: "spring", stiffness: 300, damping: 30 });
             onSwiped(circle, "left");
             await processIgnoreRequest();
         }
     };
+
+    // Effect to reset x if the circle prop changes (e.g., parent component reorders)
+    useEffect(() => {
+        x.set(0);
+    }, [circle._id, x]);
 
     // Prepare images for the carousel, providing a default if none exist
     const carouselImages: Media[] =
@@ -138,45 +194,57 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
 
     return (
         <motion.div
-            drag="x"
-            dragConstraints={{ left: 0, right: 0 }}
-            onDragEnd={handleDragEnd}
-            animate={controls}
-            initial={{ x: 0, opacity: 1 }}
+            // Removed drag props
+            onPanStart={handlePanStart}
+            onPan={handlePan}
+            onPanEnd={handlePanEnd}
+            // Removed animate={controls} - now driven by x motion value or animate()
+            initial={{ opacity: 1 }} // Keep initial opacity
             style={{
+                x, // Bind horizontal position to motion value
+                rotate, // Bind rotation to transformed motion value
                 zIndex,
-                rotateZ: exitX * 0.05, // Add some rotation during exit
                 position: "absolute",
                 width: "calc(100% - 2rem)",
                 maxWidth: "400px",
+                touchAction: "none", // Disable browser default touch actions as we handle manually
             }}
-            className="relative h-[450px] overflow-hidden rounded-xl border bg-white shadow-lg md:h-[560px]"
+            className="relative h-[450px] cursor-grab overflow-hidden rounded-xl border bg-white shadow-lg active:cursor-grabbing md:h-[560px]"
         >
-            {/* Scroll container - Relying on globals.css to hide scrollbar */}
-            <div className="custom-scrollbar absolute inset-0 flex h-full flex-col overflow-y-auto">
-                <div className="relative h-[220px] w-full flex-shrink-0 overflow-hidden md:h-[300px]">
-                    <ImageCarousel
-                        images={carouselImages}
-                        options={{ loop: carouselImages.length > 1 }}
-                        containerClassName="h-full"
-                        imageClassName="object-cover"
-                        disableSwipe={true}
-                    />
-                    <div className="absolute right-2 top-2">
-                        <CircleTypeIndicator circleType={circle.circleType || "circle"} size="36px" />
-                    </div>
-                    {circle.metrics && (
-                        <Indicators
-                            metrics={circle.metrics}
-                            className="absolute left-2 top-2"
-                            content={circle}
-                            tooltipAlign={"start"}
+            {/* Scroll container - Now overflow-hidden, controlled manually */}
+            <div
+                ref={scrollContainerRef}
+                className="custom-scrollbar absolute inset-0 flex h-full flex-col overflow-hidden" // Changed to overflow-hidden
+                style={{ touchAction: "pan-y" }} // Allow vertical pan only on this element
+            >
+                {/* Content that can scroll */}
+                <div className="flex-shrink-0">
+                    {" "}
+                    {/* Wrap scrollable content */}
+                    <div className="relative h-[220px] w-full flex-shrink-0 overflow-hidden md:h-[300px]">
+                        <ImageCarousel
+                            images={carouselImages} // Use the variable defined earlier
+                            options={{ loop: carouselImages.length > 1 }}
+                            containerClassName="h-full"
+                            imageClassName="object-cover"
+                            disableSwipe={true}
                         />
-                    )}
-                    <div className="pointer-events-none absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4 text-white">
-                        <h2 className="text-2xl font-bold">{circle.name}</h2>
-                        <div className="flex items-center text-sm">
-                            {circle.members} {circle?.members !== 1 ? "followers" : "follower"}
+                        <div className="absolute right-2 top-2">
+                            <CircleTypeIndicator circleType={circle.circleType || "circle"} size="36px" />
+                        </div>
+                        {circle.metrics && (
+                            <Indicators
+                                metrics={circle.metrics}
+                                className="absolute left-2 top-2"
+                                content={circle}
+                                tooltipAlign={"start"}
+                            />
+                        )}
+                        <div className="pointer-events-none absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4 text-white">
+                            <h2 className="text-2xl font-bold">{circle.name}</h2>
+                            <div className="flex items-center text-sm">
+                                {circle.members} {circle?.members !== 1 ? "followers" : "follower"}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -284,12 +352,12 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                                     </span>
                                 </div>
                             )}
+                        {/* Removed stray closing tag '/>' */}
                     </div>
-                    {/* Add padding at the bottom of scrollable content to avoid being hidden by fixed buttons */}
-                    <div className="h-20 flex-shrink-0"></div> {/* Keep padding */}
-                </div>
-                {/* End of direct content within scroll container */}
-            </div>{" "}
+                    {/* End of direct content within scroll container */}
+                </div>{" "}
+                {/* End of scrollable content wrapper */}
+            </div>
             {/* End of scroll container div */}
             {/* --- Action Buttons --- */}
             {/* Container for all bottom buttons, positioned absolutely within the main motion.div */}
