@@ -8,8 +8,12 @@ import AboutPage from "@/components/modules/home/AboutPage";
 
 // TODO: Add error handling and loading states more robustly
 
-export default async function CircleHomePage({ params }: { params: { handle: string } }) {
-    const { handle } = params;
+type PageProps = {
+    params: Promise<{ handle: string }>;
+};
+
+export default async function CircleHomePage(props: PageProps) {
+    const { handle } = await props.params;
     // const userDid = await getAuthenticatedUserDid(); // Not needed for this simplified version
 
     // Fetch circle data

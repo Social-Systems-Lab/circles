@@ -30,32 +30,34 @@ export default function AboutPage({ circle }: AboutPageProps) {
                 <div className="md:col-span-2">
                     <div className={`bg-white p-6 ${isCompact ? "rounded-none" : "rounded-[15px] border-0 shadow-lg"}`}>
                         {/* Mission */}
-                        {circle.mission && (
-                            <div className="relative mb-6 rounded-md border bg-muted/50 p-4 pl-10 shadow-sm">
-                                <Quote className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                                <p className="text-base italic text-foreground">{circle.mission}</p>
-                            </div>
-                        )}
-
-                        {/* Description */}
-                        {circle.description && <p className="mb-6 text-base">{circle.description}</p>}
 
                         {/* Main Content */}
-                        {circle.content && <RichText content={circle.content} />}
+                        {(circle.content || circle.description) && (
+                            <>
+                                <h1>About</h1>
+                                {circle.content ? (
+                                    <RichText content={circle.content} />
+                                ) : (
+                                    <p className="mb-6 text-base">{circle.description}</p>
+                                )}
+                            </>
+                        )}
                     </div>
                 </div>
 
                 {/* --- Sidebar Column --- */}
                 <div className="md:col-span-1">
                     <div
-                        className={`flex flex-col items-center bg-white p-6 pt-10
+                        className={`flex flex-col items-center bg-white p-6
                         ${isCompact ? "rounded-none" : "rounded-[15px] border-0 shadow-lg"}
                         `}
                     >
-                        {/* Interests */}
-                        {circle.interests && circle.interests.length > 0 && (
-                            <div className="mb-4 w-full">
-                                <CircleTags tags={circle.interests} isCompact={false} />
+                        {circle.mission && (
+                            <div className="mb-4 flex w-full flex-col text-sm text-muted-foreground">
+                                <div className="mb-1.5 text-xs font-medium uppercase text-muted-foreground">
+                                    Mission
+                                </div>
+                                <div className="text-base text-foreground">{circle.mission}</div>
                             </div>
                         )}
 

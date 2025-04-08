@@ -200,7 +200,7 @@ export const LikeButton = ({ isLiked, onClick }: LikeButtonProps) => {
 
 const MemoizedPostContent = memo(({ content, mentions }: { content: string; mentions?: MentionDisplay[] }) => (
     // Use break-words (overflow-wrap) and min-w-0
-    <div className="min-w-0 break-words pl-4 pr-4 text-lg">
+    <div className="formatted min-w-0 break-words pl-4 pr-4 text-lg">
         <RichText content={content} mentions={mentions} />
     </div>
 ));
