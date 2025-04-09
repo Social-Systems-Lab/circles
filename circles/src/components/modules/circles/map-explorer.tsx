@@ -543,105 +543,99 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             {/* Desktop Search Results Panel */}
             {viewMode === "explore" && hasSearched && !isMobile && (
                 <div className="formatted absolute left-4 top-20 z-40 max-h-[calc(100vh-120px)] w-[300px] overflow-y-auto rounded-lg bg-white shadow-lg">
-                    <div className="formatted absolute left-4 top-20 z-40 max-h-[calc(100vh-120px)] w-[300px] overflow-y-auto rounded-lg bg-white shadow-lg">
-                        <div className="p-4">
-                            <h3 className="mb-2 font-semibold">Search Results</h3>
-                            {isSearching && <p>Loading...</p>}
-                            {!isSearching &&
-                                allSearchResults.length > 0 &&
-                                filteredSearchResults.length === 0 &&
-                                selectedCategory && (
-                                    <p className="text-sm text-gray-500">
-                                        No results found for category &quot;{selectedCategory}&quot;.
-                                    </p>
-                                )}
-                            {!isSearching && allSearchResults.length === 0 && hasSearched && (
-                                <p className="text-sm text-gray-500">No results found for &quot;{searchQuery}&quot;.</p>
+                    <div className="p-4">
+                        <h3 className="mb-2 font-semibold">Search Results</h3>
+                        {isSearching && <p>Loading...</p>}
+                        {!isSearching &&
+                            allSearchResults.length > 0 &&
+                            filteredSearchResults.length === 0 &&
+                            selectedCategory && (
+                                <p className="text-sm text-gray-500">
+                                    No results found for category &quot;{selectedCategory}&quot;.
+                                </p>
                             )}
-                        </div>
-                        {!isSearching && displayedContent.length > 0 && (
-                            <ul className="space-y-2">
-                                {/* Filter displayedContent to only include CircleLike items before mapping */}
-                                {displayedContent
-                                    .filter(
-                                        (
-                                            item,
-                                        ): item is Circle | MemberDisplay => // Type guard to filter out PostDisplay
-                                            item.circleType === "user" ||
-                                            item.circleType === "circle" ||
-                                            item.circleType === "project" ||
-                                            !item.circleType, // Handle cases where circleType might be undefined but it's still CircleLike
-                                    )
-                                    .map((item) => (
-                                        <li
-                                            key={item._id} // Use MongoDB _id
-                                            className="flex cursor-pointer items-center gap-2 rounded pb-2 pl-3 pt-1 hover:bg-gray-100"
-                                            onClick={(e) => {
-                                                // Zoom map
-                                                if (item.location?.lngLat) {
-                                                    // Cast item to any for handleSetZoomContent call site
-                                                    handleSetZoomContent(item as any);
-                                                }
-                                                // Open preview or navigate
-                                                if (isMobile) {
-                                                    return; // no preview
-                                                } else {
-                                                    // Open preview panel
-                                                    // Cast content to any to resolve userGroups mismatch from MemberDisplay
-                                                    const contentPreviewData: ContentPreviewData = {
-                                                        type: (item.circleType || "circle") as any, // Cast type as well for safety
-                                                        content: item as any,
-                                                    };
-                                                    setContentPreview((prev) =>
-                                                        prev?.content?._id === item._id
-                                                            ? undefined
-                                                            : contentPreviewData,
-                                                    );
-                                                    e.stopPropagation(); // Prevent potential map click through
-                                                }
-                                            }}
-                                            title={
-                                                item.location?.lngLat
-                                                    ? "Click to focus map and view details"
-                                                    : "Click to view details (no location)"
-                                            }
-                                        >
-                                            <div className="relative">
-                                                {/* Pass item directly, CirclePicture now accepts CircleLike */}
-                                                <CirclePicture circle={item} size="40px" showTypeIndicator={true} />
-                                            </div>
-                                            <div className="relative flex-1 overflow-hidden pl-2">
-                                                <div className="truncate p-0 text-sm font-medium">
-                                                    {/* Handle name based on type */}
-                                                    {"name" in item && item.name ? item.name : "Post"}
-                                                </div>
-                                                <div className="mt-1 line-clamp-2 p-0 text-xs text-gray-500">
-                                                    {/* Handle description/content/mission based on type */}
-                                                    {"description" in item
-                                                        ? item.description ??
-                                                          ("mission" in item ? item.mission : "") ??
-                                                          ""
-                                                        : "content" in item && typeof item.content === "string"
-                                                          ? item.content.substring(0, 70) +
-                                                            (item.content.length > 70 ? "..." : "")
-                                                          : ""}
-                                                </div>
-                                                {/* Ensure metrics check is robust */}
-                                                {"metrics" in item && item.metrics && (
-                                                    <div className="flex flex-row pt-1">
-                                                        <Indicators
-                                                            className="pointer-events-none"
-                                                            metrics={item.metrics}
-                                                        />
-                                                        <div className="flex-1" />
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </li>
-                                    ))}
-                            </ul>
+                        {!isSearching && allSearchResults.length === 0 && hasSearched && (
+                            <p className="text-sm text-gray-500">No results found for &quot;{searchQuery}&quot;.</p>
                         )}
                     </div>
+                    {!isSearching && displayedContent.length > 0 && (
+                        <ul className="space-y-2">
+                            {/* Filter displayedContent to only include CircleLike items before mapping */}
+                            {displayedContent
+                                .filter(
+                                    (
+                                        item,
+                                    ): item is Circle | MemberDisplay => // Type guard to filter out PostDisplay
+                                        item.circleType === "user" ||
+                                        item.circleType === "circle" ||
+                                        item.circleType === "project" ||
+                                        !item.circleType, // Handle cases where circleType might be undefined but it's still CircleLike
+                                )
+                                .map((item) => (
+                                    <li
+                                        key={item._id} // Use MongoDB _id
+                                        className="flex cursor-pointer items-center gap-2 rounded pb-2 pl-3 pt-1 hover:bg-gray-100"
+                                        onClick={(e) => {
+                                            // Zoom map
+                                            if (item.location?.lngLat) {
+                                                // Cast item to any for handleSetZoomContent call site
+                                                handleSetZoomContent(item as any);
+                                            }
+                                            // Open preview or navigate
+                                            if (isMobile) {
+                                                return; // no preview
+                                            } else {
+                                                // Open preview panel
+                                                // Cast content to any to resolve userGroups mismatch from MemberDisplay
+                                                const contentPreviewData: ContentPreviewData = {
+                                                    type: (item.circleType || "circle") as any, // Cast type as well for safety
+                                                    content: item as any,
+                                                };
+                                                setContentPreview((prev) =>
+                                                    prev?.content?._id === item._id ? undefined : contentPreviewData,
+                                                );
+                                                e.stopPropagation(); // Prevent potential map click through
+                                            }
+                                        }}
+                                        title={
+                                            item.location?.lngLat
+                                                ? "Click to focus map and view details"
+                                                : "Click to view details (no location)"
+                                        }
+                                    >
+                                        <div className="relative">
+                                            {/* Pass item directly, CirclePicture now accepts CircleLike */}
+                                            <CirclePicture circle={item} size="40px" showTypeIndicator={true} />
+                                        </div>
+                                        <div className="relative flex-1 overflow-hidden pl-2">
+                                            <div className="truncate p-0 text-sm font-medium">
+                                                {/* Handle name based on type */}
+                                                {"name" in item && item.name ? item.name : "Post"}
+                                            </div>
+                                            <div className="mt-1 line-clamp-2 p-0 text-xs text-gray-500">
+                                                {/* Handle description/content/mission based on type */}
+                                                {"description" in item
+                                                    ? item.description ?? ("mission" in item ? item.mission : "") ?? ""
+                                                    : "content" in item && typeof item.content === "string"
+                                                      ? item.content.substring(0, 70) +
+                                                        (item.content.length > 70 ? "..." : "")
+                                                      : ""}
+                                            </div>
+                                            {/* Ensure metrics check is robust */}
+                                            {"metrics" in item && item.metrics && (
+                                                <div className="flex flex-row pt-1">
+                                                    <Indicators
+                                                        className="pointer-events-none"
+                                                        metrics={item.metrics}
+                                                    />
+                                                    <div className="flex-1" />
+                                                </div>
+                                            )}
+                                        </div>
+                                    </li>
+                                ))}
+                        </ul>
+                    )}
                 </div>
             )}
 
