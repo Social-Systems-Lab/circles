@@ -388,14 +388,14 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscove
                         <div className="absolute flex items-center gap-2 rounded-full bg-white p-1 px-2 shadow-md">
                             {/* Search Input */}
                             <div className="flex items-center">
-                                <Search className="ml-1 mr-1 h-5 w-5 text-gray-500" />
+                                {/* <Search className="ml-1 mr-1 h-5 w-5 text-gray-500" /> */}
                                 <input
                                     type="text"
                                     placeholder="Search..." // Shortened placeholder
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     onKeyDown={(e) => e.key === "Enter" && handleSearchTrigger()}
-                                    className="w-32 border-none bg-transparent outline-none focus:ring-0 sm:w-48" // Responsive width
+                                    className="w-32 border-none bg-transparent pl-1 outline-none focus:ring-0 sm:w-48" // Responsive width
                                 />
                                 {/* Clear Search Button */}
                                 {searchQuery && (
@@ -541,7 +541,9 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscove
 
             {/* Search Results Panel (Only in Explore Mode and after search initiated) */}
             {viewMode === "explore" && hasSearched && (
-                <div className="formatted absolute left-4 top-20 z-40 max-h-[calc(100vh-120px)] w-[300px] overflow-y-auto rounded-lg bg-white shadow-lg">
+                <div
+                    className={`formatted absolute left-4 z-[101] ${isMobile ? "top-[120px] max-h-[calc(100vh-200px)] w-[240px]" : "top-20 max-h-[calc(100vh-120px)] w-[300px]"} overflow-y-auto rounded-lg bg-white shadow-lg`}
+                >
                     <div className="p-4">
                         <h3 className="mb-2 font-semibold">Search Results</h3>
                         {isSearching && <p>Loading...</p>}
