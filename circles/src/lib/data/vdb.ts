@@ -32,6 +32,7 @@ export const getOpenAiClient = () => {
     return openAiClient;
 };
 
+export type VbdCategories = "circles" | "causes" | "skills" | "posts";
 const vdbCollections = ["circles", "causes", "skills", "posts"];
 
 const getEmbeddings = async (textArray: string[]) => {

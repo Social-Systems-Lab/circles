@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState, useMemo } from "react";
-import { Circle, WithMetric, Content } from "@/models/models"; // Added Content
+import { Circle, WithMetric, Content } from "@/models/models"; // Content is needed for atoms
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import useWindowDimensions from "@/components/utils/use-window-dimensions";
 import { motion } from "framer-motion";
@@ -80,8 +80,8 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
     const [viewMode, setViewMode] = useState<ViewMode>("cards");
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCategories, setSelectedCategories] = useState<string[]>(["circles", "projects", "users", "posts"]); // Default categories
-    // Store enriched Content with metrics after fetching
-    const [searchResults, setSearchResults] = useState<WithMetric<Content>[]>([]);
+    // Store enriched Circle data with metrics after fetching
+    const [searchResults, setSearchResults] = useState<WithMetric<Circle>[]>([]); // Changed type
     const [isSearching, setIsSearching] = useState(false);
     const [hasSearched, setHasSearched] = useState(false); // Track if a search has been initiated
 
@@ -114,7 +114,8 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
     // Helper to set zoom content with mapping
     // Helper to set zoom content using the simplified mapping function
     const handleSetZoomContent = useCallback(
-        (item: WithMetric<Content> | Circle | undefined) => {
+        (item: WithMetric<Circle> | Circle | undefined) => {
+            // Changed type here
             if (!item) {
                 setZoomContent(undefined);
                 return;
@@ -172,11 +173,14 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
     useEffect(() => {
         if (viewMode === "explore") {
             console.log("Updating map display with enriched search results:", searchResults.length);
-            // searchResults are now WithMetric<Content>[], which should be compatible with displayedContentAtom
-            // No extra mapping needed here if Content type includes metrics or if MapDisplay handles WithMetric<Content>
-            setDisplayedContent(searchResults); // Update atom directly
+            // Map searchResults (WithMetric<Circle>[]) to Content[] for the atom
+            // Assuming Circle is directly assignable to Content for map display purposes
+            const mapData = searchResults
+                .map((circle) => mapItemToContent(circle))
+                .filter((c): c is Content => c !== null);
+            setDisplayedContent(mapData); // Update atom with mapped data
         }
-    }, [searchResults, viewMode, setDisplayedContent]);
+    }, [searchResults, viewMode, setDisplayedContent]); // Added mapItemToContent dependency if it changes
 
     // Handle view mode changes
     useEffect(() => {
@@ -225,7 +229,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                 setTimeout(() => handleSetZoomContent(firstCircle), 300); // Use helper
             }
         }
-    }, [displayedSwipeCircles, viewMode, handleSetZoomContent, setDisplayedContent]); // Use helper, Removed currentIndex dependency
+    }, [displayedSwipeCircles, viewMode, handleSetZoomContent, setDisplayedContent, currentIndex]); // Use helper, Removed currentIndex dependency
 
     // Fixes hydration errors & Onboarding
     const [isMounted, setIsMounted] = useState(false);
@@ -272,8 +276,6 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
 
             {/* Top Bar Controls */}
             <div className="absolute left-4 top-4 z-50 flex flex-wrap items-center gap-2">
-                {" "}
-                {/* Added flex-wrap */}
                 {/* View Mode Toggle */}
                 <ToggleGroup
                     type="single"
@@ -291,7 +293,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                                     aria-label="Toggle cards view"
                                     className="rounded-full data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
                                 >
-                                    <HiMiniSquare2Stack className="h-6 w-6" /> {/* Updated Icon */}
+                                    <HiMiniSquare2Stack className="h-5 w-5" /> {/* Updated Icon */}
                                 </ToggleGroupItem>
                             </TooltipTrigger>
                             <TooltipContent>
@@ -305,7 +307,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                                     aria-label="Toggle explore view"
                                     className="rounded-full data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
                                 >
-                                    <MdOutlineTravelExplore className="h-6 w-6" /> {/* Updated Icon */}
+                                    <MdOutlineTravelExplore className="h-5 w-5" /> {/* Updated Icon */}
                                 </ToggleGroupItem>
                             </TooltipTrigger>
                             <TooltipContent>
@@ -359,7 +361,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                         isMobile ? "w-full" : "w-[400px]",
                     )}
                     style={{
-                        top: isMobile ? "80px" : "100px", // Adjusted top position slightly
+                        top: isMobile ? "80px" : "110px", // Adjusted top position slightly
                         height: `calc(${windowHeight}px - 150px)`,
                     }}
                 >
@@ -413,7 +415,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                                         animate={{ opacity: 1 }}
                                         className="flex max-w-[400px] flex-col items-center gap-4 rounded-xl border bg-white p-8 shadow-lg"
                                     >
-                                        <div className="text-xl font-semibold">You've seen all circles!</div>{" "}
+                                        <div className="text-xl font-semibold">You&apos;ve seen all circles!</div>{" "}
                                         {/* Re-escaped ' */}
                                         <p className="text-center text-gray-600">
                                             Check back later for more recommendations
@@ -456,7 +458,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
 
             {/* Search Results Panel (Only in Explore Mode and after search initiated) */}
             {viewMode === "explore" && hasSearched && (
-                <div className="absolute left-4 top-20 z-40 max-h-[calc(100vh-120px)] w-[300px] overflow-y-auto rounded-lg bg-white p-4 shadow-lg">
+                <div className="formatted absolute left-4 top-20 z-40 max-h-[calc(100vh-120px)] w-[300px] overflow-y-auto rounded-lg bg-white p-4 shadow-lg">
                     <h3 className="mb-2 font-semibold">Search Results</h3>
                     {isSearching && <p>Loading...</p>}
                     {!isSearching && searchResults.length === 0 && (
@@ -468,21 +470,18 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                     {!isSearching && searchResults.length > 0 && (
                         <ul>
                             {searchResults.map(
-                                (
-                                    item, // item is now WithMetric<Content>
-                                ) => (
+                                // item is now WithMetric<Circle>
+                                (item) => (
                                     <li
-                                        key={item._id} // Use MongoDB _id as key
+                                        key={item._id} // Use MongoDB _id
                                         className="mb-1 cursor-pointer rounded border-b p-1 text-sm hover:bg-gray-100"
                                         onClick={() => item.location?.lngLat && handleSetZoomContent(item)} // Use helper, check location
                                         title={item.location?.lngLat ? "Click to focus map" : "No location data"}
                                     >
                                         <span className={!item.location?.lngLat ? "text-gray-400" : ""}>
-                                            {/* Display name for circles/users/projects, content for posts */}
-                                            {(item.circleType !== "post"
-                                                ? item.name
-                                                : item.content?.substring(0, 50) + "...") || "Untitled"}{" "}
-                                            ({item.circleType}) {/* Show type */}
+                                            {/* Display name (item is always a Circle type now) */}
+                                            {item.name || "Untitled"} ({item.circleType || "N/A"}){" "}
+                                            {/* Show type, handle undefined */}
                                             {/* Optionally display search rank */}
                                             {item.metrics?.searchRank != null && ( // Check for null/undefined explicitly
                                                 <span className="ml-1 text-xs text-blue-500">

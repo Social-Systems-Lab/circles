@@ -1,75 +1,94 @@
 "use server";
 
 import { semanticSearchContent, SearchResultItem } from "@/lib/data/vdb";
-import { getCirclesWithMetrics } from "@/lib/data/circle"; // Import function to fetch full data
-import { Content, WithMetric } from "@/models/models"; // Import necessary types
+import { getCirclesByIds, getMetricsForCircles } from "@/lib/data/circle"; // Corrected function name
+import { Circle, WithMetric, Metrics } from "@/models/models"; // Import necessary types
+import { getAuthenticatedUserDid } from "@/lib/auth/auth"; // Corrected import: Import function to get user DID
 import { revalidatePath } from "next/cache";
 
 /**
- * Server action to perform semantic search and fetch full content details.
+ * Server action to perform semantic search for Circles/Projects/Users and fetch full details with metrics.
  * @param query The search query string.
- * @param categories An array of categories (collections) to search within (e.g., ['circles', 'posts']).
- * @returns A promise that resolves to an array of enriched Content items with metrics (including searchRank).
+ * @param categories An array of categories (collections) to search within (e.g., ['circles', 'projects', 'users']).
+ * @returns A promise that resolves to an array of enriched Circle items with metrics (including searchRank).
  */
-export async function searchContentAction(query: string, categories: string[]): Promise<WithMetric<Content>[]> {
-    console.log(`Executing searchContentAction with query: "${query}", categories: [${categories.join(", ")}]`);
+export async function searchContentAction(query: string, categories: string[]): Promise<WithMetric<Circle>[]> {
+    // Filter categories to only include circle types for now
+    const circleCategories = categories.filter((cat) => ["circles", "projects", "users"].includes(cat));
+    console.log(
+        `Executing searchContentAction with query: "${query}", filtered categories: [${circleCategories.join(", ")}]`,
+    );
 
-    if (!query || categories.length === 0) {
-        console.log("Search query or categories empty, returning empty results.");
+    if (!query || circleCategories.length === 0) {
+        console.log("Search query or relevant categories empty, returning empty results.");
         return [];
     }
 
     try {
-        // 1. Perform Semantic Search
-        const semanticResults = await semanticSearchContent({ query, categories });
+        // 1. Perform Semantic Search for relevant types
+        const semanticResults = await semanticSearchContent({ query, categories: circleCategories });
         console.log(`Semantic search returned ${semanticResults.length} results.`);
 
-        if (semanticResults.length === 0) {
-            return []; // No results from semantic search
+        // Filter results to ensure they are of the expected types (double-check)
+        const circleTypeResults = semanticResults.filter((r) => ["circle", "project", "user"].includes(r.type));
+
+        if (circleTypeResults.length === 0) {
+            console.log("No results of type circle, project, or user found.");
+            return [];
         }
 
-        // 2. Extract IDs and Scores
-        const resultIds = semanticResults.map((r) => r._id);
-        const scoresMap = new Map(semanticResults.map((r) => [r._id, r.score]));
+        // 2. Extract IDs and Scores for the filtered results
+        const resultIds = circleTypeResults.map((r) => r._id);
+        const scoresMap = new Map(circleTypeResults.map((r) => [r._id, r.score]));
 
-        // 3. Fetch Full Data for each ID
-        console.log("Fetching full data for IDs individually:", resultIds);
-        const fetchPromises = resultIds.map(async (id) => {
-            try {
-                // Assuming getCirclesWithMetrics returns an array even for a single ID
-                const contentItemsArray = await getCirclesWithMetrics(id);
-                if (!contentItemsArray || contentItemsArray.length === 0) {
-                    console.warn(`No content found for ID ${id} during full data fetch.`);
-                    return null;
-                }
-                const contentItem = contentItemsArray[0]; // Take the first item
+        // 3. Fetch Base Circle Data
+        console.log("Fetching base circle data for IDs:", resultIds);
+        const baseCircles = await getCirclesByIds(resultIds);
+        console.log(`Fetched ${baseCircles.length} base circles.`);
 
-                // 4. Merge Search Rank (Score)
-                const searchRank = scoresMap.get(id) ?? 0;
-                return {
-                    ...contentItem,
-                    metrics: {
-                        ...(contentItem.metrics ?? {}), // Safely spread existing metrics
-                        searchRank: searchRank,
-                        similarity: searchRank, // Also store as similarity
-                    },
-                } as WithMetric<Content>; // Assert the final type
-            } catch (fetchError) {
-                console.error(`Failed to fetch full data for ID ${id}:`, fetchError);
-                return null;
-            }
+        if (baseCircles.length === 0) {
+            console.log("No base circles found for the retrieved IDs.");
+            return [];
+        }
+
+        // 4. Fetch Metrics for the Circles
+        // 4. Prepare circles with initial search rank metric for getMetricsForCircles
+        let circlesWithSearchRank: WithMetric<Circle>[] = baseCircles.map((circle) => {
+            const searchRank = scoresMap.get(circle._id) ?? 0;
+            return {
+                ...circle,
+                metrics: {
+                    // Initialize metrics object
+                    searchRank: searchRank,
+                    similarity: searchRank, // Also store score as similarity
+                },
+            };
         });
 
-        const enrichedResultsNullable = await Promise.all(fetchPromises);
-        const enrichedResults = enrichedResultsNullable.filter((item): item is WithMetric<Content> => item !== null);
+        // 5. Fetch and Add Other Metrics using getMetricsForCircles
+        const userDid = await getAuthenticatedUserDid(); // Corrected function call
+        if (!userDid) {
+            console.warn("User not authenticated, cannot fetch personalized metrics.");
+            // Proceed without personalized metrics, keeping only searchRank/similarity
+        } else {
+            console.log("Fetching additional metrics for circles...");
+            // getMetricsForCircles mutates the array and sorts it by its internal rank
+            await getMetricsForCircles(circlesWithSearchRank, userDid); // Pass userDid
+            console.log("Additional metrics added and sorted by internal rank.");
+            // Note: circlesWithSearchRank is now potentially sorted differently
+        }
 
-        // 5. Sort Results by Search Rank
-        enrichedResults.sort((a, b) => (b.metrics?.searchRank ?? 0) - (a.metrics?.searchRank ?? 0));
+        // 6. Re-sort by the original Search Rank (from semantic search)
+        // If the semantic relevance is the primary sort key desired.
+        circlesWithSearchRank.sort((a, b) => (b.metrics?.searchRank ?? 0) - (a.metrics?.searchRank ?? 0));
 
-        console.log(`Returning ${enrichedResults.length} enriched and sorted results.`);
-        return enrichedResults;
+        console.log(`Returning ${circlesWithSearchRank.length} enriched circles, sorted by search rank.`);
+        // Ensure the final return type matches the promise
+        const finalResults: WithMetric<Circle>[] = circlesWithSearchRank;
+        return finalResults;
     } catch (error) {
         console.error("Error in searchContentAction:", error);
+        // Removed duplicate catch block and incorrect variable reference
         return [];
     }
 }
