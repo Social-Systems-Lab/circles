@@ -8,7 +8,7 @@ import { motion } from "framer-motion";
 import CircleSwipeCard from "./circle-swipe-card";
 import { MapDisplay } from "@/components/map/map";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Hand, Home, Search } from "lucide-react"; // Updated icons
+import { RefreshCw, Hand, Home, Search, X } from "lucide-react"; // Added X icon
 import { MdOutlineTravelExplore } from "react-icons/md"; // Added Explore icon
 import { HiMiniSquare2Stack } from "react-icons/hi2"; // Added Card Stack icon
 import { useAtom } from "jotai";
@@ -165,9 +165,17 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
             console.error("Search action failed:", error);
             setSearchResults([]); // Clear results on error
         } finally {
-            setIsSearching(false);
+            setIsSearching(false); // Correct finally block content
         }
     }, [searchQuery, selectedCategories, setDisplayedContent]);
+
+    // Add the clear search handler
+    const handleClearSearch = useCallback(() => {
+        setSearchQuery("");
+        setSearchResults([]);
+        setDisplayedContent([]); // Clear map markers as well
+        setHasSearched(false); // Reset search state
+    }, [setDisplayedContent]);
 
     // Update map markers when enriched search results change (only in explore mode)
     useEffect(() => {
@@ -291,9 +299,9 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                                 <ToggleGroupItem
                                     value="cards"
                                     aria-label="Toggle cards view"
-                                    className="rounded-full data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                                    className="rounded-full p-1.5 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground" // Keep padding
                                 >
-                                    <HiMiniSquare2Stack className="h-5 w-5" /> {/* Updated Icon */}
+                                    <HiMiniSquare2Stack className="h-6 w-6" /> {/* Keep increased size */}
                                 </ToggleGroupItem>
                             </TooltipTrigger>
                             <TooltipContent>
@@ -305,9 +313,9 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                                 <ToggleGroupItem
                                     value="explore"
                                     aria-label="Toggle explore view"
-                                    className="rounded-full data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                                    className="rounded-full p-1.5 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground" // Keep padding
                                 >
-                                    <MdOutlineTravelExplore className="h-5 w-5" /> {/* Updated Icon */}
+                                    <MdOutlineTravelExplore className="h-6 w-6" /> {/* Keep increased size */}
                                 </ToggleGroupItem>
                             </TooltipTrigger>
                             <TooltipContent>
@@ -332,6 +340,19 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                                 onKeyDown={(e) => e.key === "Enter" && handleSearchTrigger()}
                                 className="w-32 border-none bg-transparent outline-none focus:ring-0 sm:w-48" // Responsive width
                             />
+                            {/* Clear Search Button */}
+                            {searchQuery && (
+                                <Button
+                                    onClick={handleClearSearch} // Use the handler
+                                    size="sm"
+                                    variant="ghost"
+                                    className="ml-1 p-1" // Added padding for easier clicking
+                                    aria-label="Clear search"
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            )}
+                            {/* Search Trigger Button */}
                             <Button
                                 onClick={handleSearchTrigger}
                                 size="sm"
@@ -464,7 +485,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                     {!isSearching && searchResults.length === 0 && (
                         <p className="text-sm text-gray-500">
                             No results found for "{searchQuery}".
-                        </p> /* Re-escaped " */
+                        </p> /* Escaped " again */
                     )}
                     {/* Removed the "Enter a query" message here, as panel only shows after search */}
                     {!isSearching && searchResults.length > 0 && (

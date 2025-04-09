@@ -173,6 +173,7 @@ export const upsertVbdCircles = async (circles: Circle[]) => {
             id: uuidv5(circle._id.toString(), circleNs),
             vector: embeddings[i],
             payload: {
+                mongoId: circle._id.toString(), // Add MongoDB _id here
                 name: circle.name,
                 description: circle.description,
                 content: circle.content ?? "",
@@ -216,6 +217,7 @@ export const upsertVbdPosts = async (posts: PostDisplay[]) => {
         id: uuidv5(post._id.toString(), postNs), // Ensure `_id` is stringified
         vector: embeddings[i], // Ensure embedding is a valid number[]
         payload: {
+            mongoId: post._id.toString(), // Add MongoDB _id here
             content: post.content,
             createdAt: post.createdAt.toISOString(),
             createdBy: post.createdBy,
@@ -413,20 +415,7 @@ export interface SearchResultItem {
     _id: string; // Original MongoDB ObjectId as string
     qdrantId: string; // Qdrant UUID
     type: "circle" | "project" | "user" | "post"; // Type of content
-    name?: string; // Name (for circles, projects, users)
-    content?: string; // Content (for posts)
-    description?: string; // Description (for circles, projects, users)
     score: number; // Similarity score from Qdrant
-    location?: {
-        lngLat: {
-            lng: number;
-            lat: number;
-        };
-        name?: string; // Optional location name
-    };
-    // Add other relevant fields as needed, e.g., images, author for posts
-    images?: { fileInfo?: { url?: string } }[];
-    author?: { _id: string; name?: string; pictureUrl?: string };
 }
 
 // Function for semantic search across specified collections
@@ -485,29 +474,14 @@ export const semanticSearchContent = async (options: {
                 const payload = hit.payload;
                 const type = collectionName === "posts" ? "post" : payload?.circleType || "circle"; // Determine type
 
+                console.log("Search hit:", hit);
+
                 // Map payload to SearchResultItem structure
                 const resultItem: SearchResultItem = {
-                    _id: payload?.mongoId || hit.id, // Prefer original mongoId if stored, fallback to Qdrant ID
+                    _id: payload?.mongoId, // Use the stored mongoId
                     qdrantId: hit.id,
                     type: type,
                     score: hit.score,
-                    name: payload?.name,
-                    content: payload?.content,
-                    description: payload?.description,
-                    // Map location if available
-                    location:
-                        payload?.location?.latitude && payload?.location?.longitude
-                            ? {
-                                  lngLat: {
-                                      lng: payload.location.longitude,
-                                      lat: payload.location.latitude,
-                                  },
-                                  name: payload?.locationName,
-                              }
-                            : undefined,
-                    // Add other fields as needed
-                    images: payload?.images, // Assuming images are stored directly in payload
-                    // author: payload?.author // Assuming author info is stored
                 };
                 combinedResults.push(resultItem);
             });
