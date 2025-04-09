@@ -651,25 +651,31 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscove
                         <Drawer.Content className="fixed bottom-0 left-0 right-0 z-[101] mt-24 flex h-full max-h-[96%] flex-col rounded-t-[10px] bg-zinc-100">
                             {/* Only render content if the drawer should be open (i.e., a search has happened) */}
                             {hasSearched && (
-                                <div className="flex-1 rounded-t-[10px] bg-white p-4">
-                                    <div className="mx-auto mb-8 h-1.5 w-12 flex-shrink-0 rounded-full bg-zinc-300" />
-                                    <div className="mx-auto max-w-md">
-                                        <Drawer.Title className="mb-4 font-medium">Search Results</Drawer.Title>
-                                        {/* Loading and No Results Messages */}
-                                        {isSearching && <p>Loading...</p>}
-                                        {!isSearching &&
-                                            allSearchResults.length > 0 &&
-                                            filteredSearchResults.length === 0 &&
-                                            selectedCategory && (
+                                <div className="flex-1 rounded-t-[10px] bg-white pt-4">
+                                    <div className="mx-auto mb-4 h-1.5 w-12 flex-shrink-0 rounded-full bg-zinc-300" />
+                                    <div className="mx-0 max-w-md">
+                                        <div className="hidden">
+                                            <Drawer.Title className="formatted mb-4 ml-4 mr-4 font-medium">
+                                                Search Results
+                                            </Drawer.Title>
+                                        </div>
+                                        <div className="pl-4">
+                                            {/* Loading and No Results Messages */}
+                                            {isSearching && <p>Loading...</p>}
+                                            {!isSearching &&
+                                                allSearchResults.length > 0 &&
+                                                filteredSearchResults.length === 0 &&
+                                                selectedCategory && (
+                                                    <p className="text-sm text-gray-500">
+                                                        No results found for category "{selectedCategory}".
+                                                    </p>
+                                                )}
+                                            {!isSearching && allSearchResults.length === 0 && hasSearched && (
                                                 <p className="text-sm text-gray-500">
-                                                    No results found for category "{selectedCategory}".
+                                                    No results found for "{searchQuery}".
                                                 </p>
                                             )}
-                                        {!isSearching && allSearchResults.length === 0 && hasSearched && (
-                                            <p className="text-sm text-gray-500">
-                                                No results found for "{searchQuery}".
-                                            </p>
-                                        )}
+                                        </div>
                                         {/* Results List */}
                                         {!isSearching && filteredSearchResults.length > 0 && (
                                             <ul className="space-y-2">
@@ -693,15 +699,15 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscove
                                                         <div className="relative">
                                                             <CirclePicture
                                                                 circle={item}
-                                                                size="40px"
+                                                                size="60px"
                                                                 showTypeIndicator={true}
                                                             />
                                                         </div>
-                                                        <div className="relative flex-1 overflow-hidden pl-2">
-                                                            <div className="truncate p-0 text-sm font-medium">
+                                                        <div className="relative flex-1 overflow-hidden pl-4">
+                                                            <div className="truncate p-0 text-xl font-medium">
                                                                 {item.name || "Untitled"}
                                                             </div>
-                                                            <div className="mt-1 line-clamp-2 p-0 text-xs text-gray-500">
+                                                            <div className="text-md mt-1 line-clamp-2 p-0 text-gray-500">
                                                                 {item.description || item.mission || ""}
                                                             </div>
                                                             {item.metrics && (
