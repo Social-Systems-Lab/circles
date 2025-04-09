@@ -12,6 +12,9 @@ interface ResizingDrawerProps {
     animationConfig?: object;
     activeSnapIndex?: number;
     onSnapChange?: (index: number) => void;
+
+    triggerSnapIndex?: number; // New: Index to trigger animation to (-1 or undefined means no trigger)
+    onTriggerConsumed?: () => void;
 }
 
 const ResizingDrawer = ({
@@ -23,6 +26,8 @@ const ResizingDrawer = ({
     animationConfig = config.stiff,
     activeSnapIndex,
     onSnapChange,
+    triggerSnapIndex, // New
+    onTriggerConsumed, // New
 }: ResizingDrawerProps) => {
     const AnimatedComponent = animated.div as React.ElementType;
     const drawerRef = useRef<HTMLDivElement>(null);
@@ -156,6 +161,57 @@ const ResizingDrawer = ({
             }
         }
     }, [activeSnapIndex, sortedSnapPoints, isMounted, api, minSnap]); // Removed onSnapChange dependency here as it's not directly used
+
+    useEffect(() => {
+        if (
+            isMounted &&
+            triggerSnapIndex !== undefined &&
+            triggerSnapIndex >= 0 && // Check for valid trigger index (not -1)
+            triggerSnapIndex < sortedSnapPoints.length
+        ) {
+            const targetHeight = sortedSnapPoints[triggerSnapIndex];
+            if (targetHeight !== undefined && targetHeight >= minSnap) {
+                const currentHeight = animatedHeight.get();
+                // Only trigger if the target height is different from the current height
+                if (Math.abs(currentHeight - targetHeight) > 1) {
+                    console.log(`Trigger received for index ${triggerSnapIndex}. Animating to height ${targetHeight}.`);
+                    api.start({
+                        height: targetHeight,
+                        immediate: false, // Ensure animation
+                        // config: animationConfig, // Use default or specific config
+                        // onRest is already defined globally for the spring
+                    });
+                } else {
+                    console.log(
+                        `Trigger received for index ${triggerSnapIndex}, but already at target height ${targetHeight}.`,
+                    );
+                    // Even if not animating, update internal ref if needed and consume trigger
+                    if (currentSnapIndexRef.current !== triggerSnapIndex) {
+                        currentSnapIndexRef.current = triggerSnapIndex;
+                        onSnapChange?.(triggerSnapIndex);
+                    }
+                }
+                // Consume the trigger immediately after processing it
+                onTriggerConsumed?.();
+            } else {
+                console.warn(
+                    `Trigger received for index ${triggerSnapIndex}, but target height ${targetHeight} is invalid. Consuming trigger.`,
+                );
+                // Consume trigger even if target height is invalid
+                onTriggerConsumed?.();
+            }
+        }
+        // Only react when triggerSnapIndex actually changes
+    }, [
+        triggerSnapIndex,
+        isMounted,
+        sortedSnapPoints,
+        minSnap,
+        api,
+        onTriggerConsumed,
+        animatedHeight,
+        onSnapChange, // Added onSnapChange dependency
+    ]);
 
     // --- Drag Handling --- (Simplified version from previous step)
     const dragHandler = useCallback(

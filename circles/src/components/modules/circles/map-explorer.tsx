@@ -83,9 +83,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const [isSearching, setIsSearching] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
     // State to control the drawer's active snap index
-    const [drawerSnapIndex, setDrawerSnapIndex] = useState(SNAP_INDEX_PEEK); // Start at peek height
     const [isMounted, setIsMounted] = useState(false);
     const [showSwipeInstructions, setShowSwipeInstructions] = useState(false);
+    const [triggerSnapIndex, setTriggerSnapIndex] = useState<number>(-1);
 
     // --- Memos ---
     const snapPoints = useMemo(() => [100, windowHeight * 0.4, windowHeight * 0.8, windowHeight], [windowHeight]);
@@ -180,7 +180,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                     .filter((c): c is Content => c !== null),
             );
             setHasSearched(false);
-            setDrawerSnapIndex(SNAP_INDEX_PEEK); // Reset drawer to peek
+            setTriggerSnapIndex(SNAP_INDEX_PEEK); // Reset drawer to peek
             setContentPreview(undefined); // Clear preview
             return;
         }
@@ -194,11 +194,11 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             const results = await searchContentAction(searchQuery, searchCategoriesForBackend);
             setAllSearchResults(results);
             // Requirement 1: Jump to half-open state after search
-            setDrawerSnapIndex(SNAP_INDEX_HALF);
+            setTriggerSnapIndex(SNAP_INDEX_HALF);
         } catch (error) {
             console.error("Search action failed:", error);
             setAllSearchResults([]);
-            setDrawerSnapIndex(SNAP_INDEX_PEEK); // Reset drawer on error
+            setTriggerSnapIndex(SNAP_INDEX_PEEK); // Reset drawer on error
         } finally {
             setIsSearching(false);
         }
@@ -220,7 +220,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             .map((circle) => mapItemToContent(circle))
             .filter((c): c is Content => c !== null);
         setDisplayedContent(resetMapData);
-        setDrawerSnapIndex(SNAP_INDEX_PEEK); // Reset drawer to peek
+        setTriggerSnapIndex(SNAP_INDEX_PEEK); // Reset drawer to peek
         setContentPreview(undefined); // Clear preview
         console.log("Search cleared, resetting map to all discoverable circles:", resetMapData.length);
     }, [
@@ -229,6 +229,11 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         filterCirclesByCategory,
         setContentPreview, // Add dependency
     ]);
+
+    const handleTriggerConsumed = useCallback(() => {
+        console.log("Drawer consumed trigger, resetting triggerSnapIndex to -1");
+        setTriggerSnapIndex(-1);
+    }, []);
 
     const handleExplore = () => {
         setViewMode("explore");
@@ -294,10 +299,10 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         if (isMobile && viewMode === "explore") {
             if (contentPreview) {
                 // Requirement 4: Expand drawer when preview is shown
-                setDrawerSnapIndex(SNAP_INDEX_OPEN);
+                setTriggerSnapIndex(SNAP_INDEX_OPEN);
             } else {
                 // When preview is closed, return to half if search active, else peek
-                setDrawerSnapIndex(hasSearched ? SNAP_INDEX_HALF : SNAP_INDEX_PEEK);
+                setTriggerSnapIndex(hasSearched ? SNAP_INDEX_HALF : SNAP_INDEX_PEEK);
             }
         }
         // Add dependencies that should trigger this logic
@@ -306,7 +311,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     // Reset drawer and preview when switching view modes or leaving mobile explore
     useEffect(() => {
         if (!isMobile || viewMode !== "explore") {
-            setDrawerSnapIndex(SNAP_INDEX_PEEK); // Reset to base state
+            setTriggerSnapIndex(SNAP_INDEX_PEEK); // Reset to base state
             setContentPreview(undefined); // Clear preview if leaving explore mode
         }
     }, [isMobile, viewMode, setContentPreview]);
@@ -644,7 +649,8 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 <ResizingDrawer
                     snapPoints={snapPoints}
                     initialSnapPointIndex={SNAP_INDEX_PEEK} // Start at peek
-                    activeSnapIndex={drawerSnapIndex} // Control snap index externally
+                    triggerSnapIndex={triggerSnapIndex}
+                    onTriggerConsumed={handleTriggerConsumed}
                     moveThreshold={60} // Adjust as needed
                     // Optional: Get notified when drawer snaps internally
                     // onSnapChange={(index) => setDrawerSnapIndex(index)}
