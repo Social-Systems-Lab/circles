@@ -10,11 +10,10 @@ interface ResizingDrawerProps {
     containerRef?: React.RefObject<HTMLElement>;
     moveThreshold?: number;
     animationConfig?: object;
-    activeSnapIndex?: number; // New prop to control snap index externally
-    onSnapChange?: (index: number) => void; // Optional: Notify parent on snap change
+    activeSnapIndex?: number;
+    onSnapChange?: (index: number) => void;
 }
 
-// Remove React.FC type and define props directly in the function signature
 const ResizingDrawer = ({
     children,
     snapPoints: rawSnapPoints,
@@ -22,14 +21,13 @@ const ResizingDrawer = ({
     containerRef,
     moveThreshold = 50,
     animationConfig = config.stiff,
-    activeSnapIndex, // Use this prop
-    onSnapChange, // Use this callback
+    activeSnapIndex,
+    onSnapChange,
 }: ResizingDrawerProps) => {
-    // Cast animated.div to React.ElementType to help with type inference
     const AnimatedComponent = animated.div as React.ElementType;
     const drawerRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
-    const handleRef = useRef<HTMLDivElement>(null);
+    const touchTargetRef = useRef<HTMLDivElement>(null);
 
     const [containerHeight, setContainerHeight] = useState<number>(
         typeof window !== "undefined" ? window.innerHeight : 0,
@@ -38,7 +36,6 @@ const ResizingDrawer = ({
 
     // --- Container Height Calculation --- (remains the same)
     useEffect(() => {
-        // ... (no changes needed here) ...
         setIsMounted(true);
         let targetElement = containerRef?.current ?? window;
         let initialHeight = targetElement instanceof Window ? targetElement.innerHeight : targetElement.clientHeight;
@@ -72,7 +69,6 @@ const ResizingDrawer = ({
 
     // --- Snap Point Calculation --- (remains the same)
     const sortedSnapPoints = useMemo(() => {
-        // ... (no changes needed here) ...
         if (containerHeight <= 0) return [];
         return (
             rawSnapPoints
@@ -104,24 +100,21 @@ const ResizingDrawer = ({
         return Math.max(minSnap, sortedSnapPoints[safeInitialIndex] ?? minSnap);
     }, [sortedSnapPoints, safeInitialIndex, minSnap]);
 
-    // Ref to track the CURRENT snap index based on animation/props
     const currentSnapIndexRef = useRef<number>(safeInitialIndex);
     const dragStartSnapHeightRef = useRef<number>(initialSnapHeight);
     const dragStartSnapIndexRef = useRef<number>(safeInitialIndex);
 
-    // --- Spring Animation ---
+    // --- Spring Animation --- (remains the same)
     const [{ height: animatedHeight }, api] = useSpring(() => ({
         height: initialSnapHeight > 0 ? initialSnapHeight : 0,
         config: animationConfig,
         onRest: (result) => {
-            // When animation finishes, determine the new current index
             if (!result.cancelled) {
                 const finalHeight = result.value.height;
                 let closestIndex = 0;
                 let minDist = Infinity;
                 sortedSnapPoints?.forEach((snapH, index) => {
                     const dist = Math.abs(finalHeight - snapH);
-                    // Add a small tolerance for floating point comparisons
                     if (dist < minDist && dist < 1) {
                         minDist = dist;
                         closestIndex = index;
@@ -129,7 +122,7 @@ const ResizingDrawer = ({
                 });
                 if (currentSnapIndexRef.current !== closestIndex) {
                     currentSnapIndexRef.current = closestIndex;
-                    onSnapChange?.(closestIndex); // Notify parent if index changed
+                    onSnapChange?.(closestIndex);
                 }
             }
         },
@@ -140,46 +133,40 @@ const ResizingDrawer = ({
         if (isMounted && initialSnapHeight > 0) {
             api.start({ height: initialSnapHeight, immediate: false });
             dragStartSnapHeightRef.current = initialSnapHeight;
-            currentSnapIndexRef.current = safeInitialIndex; // Set initial current index
+            currentSnapIndexRef.current = safeInitialIndex;
             dragStartSnapIndexRef.current = safeInitialIndex;
         }
     }, [initialSnapHeight, isMounted, api, safeInitialIndex]);
 
-    // --- Effect to handle external activeSnapIndex changes ---
+    // --- Effect to handle external activeSnapIndex changes --- (remains the same)
     useEffect(() => {
         if (
             isMounted &&
             activeSnapIndex !== undefined &&
             activeSnapIndex >= 0 &&
             activeSnapIndex < sortedSnapPoints.length &&
-            activeSnapIndex !== currentSnapIndexRef.current // Only trigger if different
+            activeSnapIndex !== currentSnapIndexRef.current
         ) {
             const targetHeight = sortedSnapPoints[activeSnapIndex];
-            // Check if targetHeight is valid before animating
             if (targetHeight !== undefined && targetHeight >= minSnap) {
                 api.start({
                     height: targetHeight,
-                    immediate: false, // Animate the change
-                    // onRest callback will update currentSnapIndexRef
+                    immediate: false,
                 });
             }
         }
-        // Depend on activeSnapIndex and sortedSnapPoints (as they determine targetHeight)
-    }, [activeSnapIndex, sortedSnapPoints, isMounted, api, minSnap, onSnapChange]); // Added onSnapChange dependency based on usage
+    }, [activeSnapIndex, sortedSnapPoints, isMounted, api, minSnap]); // Removed onSnapChange dependency here as it's not directly used
 
-    // --- Drag Handling ---
+    // --- Drag Handling --- (Simplified version from previous step)
     const dragHandler = useCallback(
         (state: DragState) => {
-            // ... (drag logic remains the same as previous correct version) ...
             const {
                 first,
                 last,
                 memo,
                 movement: [, my],
                 velocity: [, vy],
-                direction: [, dy],
                 cancel,
-                event,
                 active,
             } = state;
 
@@ -213,8 +200,7 @@ const ResizingDrawer = ({
                     }
                 });
                 dragStartSnapHeightRef.current = currentClosestSnapHeight;
-                dragStartSnapIndexRef.current = currentClosestSnapIndex; // Use the calculated index
-
+                dragStartSnapIndexRef.current = currentClosestSnapIndex;
                 return { startHeight };
             }
 
@@ -232,38 +218,29 @@ const ResizingDrawer = ({
             } else {
                 const distanceMoved = Math.abs(my);
                 const startSnapHeight = dragStartSnapHeightRef.current;
-                const startIndex = dragStartSnapIndexRef.current; // Use the stored start index
+                const startIndex = dragStartSnapIndexRef.current;
 
                 let finalTargetHeight: number;
-                let finalTargetIndex: number = startIndex; // Keep track of target index
+                let finalTargetIndex: number = startIndex;
 
                 if (distanceMoved > moveThreshold) {
                     if (my < 0 && startIndex < sortedSnapPoints.length - 1) {
                         finalTargetIndex = startIndex + 1;
-                        finalTargetHeight = sortedSnapPoints[finalTargetIndex];
                     } else if (my > 0 && startIndex > 0) {
                         finalTargetIndex = startIndex - 1;
-                        finalTargetHeight = sortedSnapPoints[finalTargetIndex];
-                    } else {
-                        finalTargetHeight = startSnapHeight;
-                        // finalTargetIndex remains startIndex
                     }
+                    // Use index to get height, default to start height if no move
+                    finalTargetHeight = sortedSnapPoints[finalTargetIndex] ?? startSnapHeight;
                 } else {
                     finalTargetHeight = startSnapHeight;
-                    // finalTargetIndex remains startIndex
                 }
 
                 finalTargetHeight = Math.max(minSnap, finalTargetHeight);
-
-                // Update ref immediately for next potential external change check
-                // currentSnapIndexRef.current = finalTargetIndex;
-                // Let onRest handle the final index update
 
                 api.start({
                     height: finalTargetHeight,
                     immediate: false,
                     config: { ...animationConfig, velocity: -vy },
-                    // onRest callback will update currentSnapIndexRef and call onSnapChange
                 });
             }
         },
@@ -276,19 +253,20 @@ const ResizingDrawer = ({
             minSnap,
             moveThreshold,
             sortedSnapPoints,
-            onSnapChange,
+            // onSnapChange, // onSnapChange is called via onRest, not directly needed here
         ],
     );
 
+    // --- Update useDrag target ---
     useDrag(dragHandler, {
         filterTaps: true,
-        axis: "y",
+        //axis: "y",
         preventScroll: true,
         pointer: { touch: true },
-        target: handleRef,
+        target: touchTargetRef, // <-- Use the new touch target ref
     });
 
-    // --- Render --- (remains the same)
+    // --- Render ---
     if (!isMounted || sortedSnapPoints?.length === 0) {
         return null;
     }
@@ -297,32 +275,53 @@ const ResizingDrawer = ({
         ? { position: "absolute", bottom: 0, left: 0, right: 0 }
         : { position: "fixed", bottom: 0, left: 0, right: 0 };
 
-    // Use the explicitly casted AnimatedComponent
     return (
         <AnimatedComponent
             ref={drawerRef}
-            className="z-50 flex flex-col overflow-hidden rounded-t-lg border-t border-gray-200 bg-white shadow-lg"
+            className="z-50 flex flex-col rounded-t-lg border-t border-gray-200 bg-white shadow-lg"
             style={{
                 ...positionStyle,
                 height: animatedHeight,
+                // Add touchAction none here to be safe, although useDrag preventScroll should handle it
+                touchAction: "none",
             }}
         >
             {/* Wrapper div to ensure animated.div has a single child */}
-            <div className="flex h-full flex-col overflow-hidden">
-                {/* Handle */}
-                <div ref={handleRef} className="flex cursor-grab touch-none justify-center py-3 active:cursor-grabbing">
-                    <div className="h-1.5 w-10 rounded-full bg-gray-300" />
+            <div className="flex h-full flex-col">
+                {/* Handle Area */}
+                {/* Add relative positioning context for the absolute touch target */}
+                <div className="relative flex-shrink-0">
+                    {/* Larger Invisible Touch Target */}
+                    <div
+                        ref={touchTargetRef}
+                        className="absolute left-0 right-0 cursor-grab touch-none active:cursor-grabbing"
+                        style={{
+                            top: "-10px", // Extend 16px upwards from the visual handle's container top
+                            height: "45px", // Make it 50px tall (adjust as needed)
+                            zIndex: 20, // Ensure it's on top within this context
+                            // For debugging: Make it visible
+                            // backgroundColor: "rgba(255, 0, 0, 0.1)",
+                        }}
+                        aria-hidden="true" // Hide from accessibility tree
+                    />
+
+                    {/* Visual Handle (No interaction needed here) */}
+                    {/* Removed ref={handleRef} unless needed elsewhere */}
+                    <div className="pointer-events-none flex justify-center py-3">
+                        <div className="h-1.5 w-10 rounded-full bg-gray-300" />
+                    </div>
                 </div>
 
                 {/* Content Area */}
                 <div
                     ref={contentRef}
-                    className="flex-1 overflow-y-auto"
+                    className="mb-[72px] flex-1 overflow-y-auto"
                     style={{
-                        touchAction: "pan-y", // Keep touch action for scrolling
+                        // Allow vertical scrolling within the content area itself
+                        touchAction: "pan-y",
                     }}
                 >
-                    {children} {/* Render children inside the scrollable content div */}
+                    {children}
                 </div>
             </div>
         </AnimatedComponent>
