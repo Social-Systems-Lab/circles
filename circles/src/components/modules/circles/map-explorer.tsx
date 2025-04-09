@@ -230,7 +230,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         setContentPreview, // Add dependency
     ]);
 
-    const handleRefresh = () => {
+    const handleExplore = () => {
         setViewMode("explore");
     };
     const goToFeed = () => router.push("/foryou");
@@ -506,8 +506,8 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                             Check back later for more recommendations
                                         </p>
                                         <div className="flex flex-row gap-2">
-                                            <Button onClick={handleRefresh} className="mt-4 gap-2">
-                                                <RefreshCw className="h-4 w-4" /> Explore
+                                            <Button onClick={handleExplore} className="mt-4 gap-2">
+                                                <MdOutlineTravelExplore className="h-4 w-4" /> Explore
                                             </Button>
                                             <Button onClick={goToFeed} className="mt-4 gap-2">
                                                 <Home className="h-4 w-4" /> Go to feed
@@ -527,8 +527,8 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                     You might have seen, followed, or ignored all available circles.
                                 </p>
                                 <div className="flex flex-row gap-2">
-                                    <Button onClick={handleRefresh} className="mt-4 gap-2">
-                                        <RefreshCw className="h-4 w-4" /> Refresh
+                                    <Button onClick={handleExplore} className="mt-4 gap-2">
+                                        <MdOutlineTravelExplore className="h-4 w-4" /> Explore
                                     </Button>
                                     <Button onClick={goToFeed} className="mt-4 gap-2">
                                         <Home className="h-4 w-4" /> Go to feed
