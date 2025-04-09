@@ -172,7 +172,12 @@ export function SignupForm(): React.ReactElement {
                         <FormItem>
                             <FormLabel>Password</FormLabel>
                             <FormControl>
-                                <Input type="password" placeholder="********" {...field} autoComplete="new-password" />
+                                <Input
+                                    type="password"
+                                    placeholder="Enter password"
+                                    {...field}
+                                    autoComplete="new-password"
+                                />
                             </FormControl>
                             <FormMessage />
                         </FormItem>

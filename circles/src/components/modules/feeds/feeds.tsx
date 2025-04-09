@@ -28,7 +28,7 @@ export default async function FeedsModule(props: PageProps) {
     return (
         <div className="flex flex-1 justify-center overflow-hidden">
             <div className="mb-4 mt-2 flex w-full max-w-[1100px] flex-col items-center md:ml-4 md:mr-4">
-                <FeedComponent posts={posts} feed={feed} circle={circle} />;{/* </div> */}
+                <FeedComponent posts={posts} feed={feed} circle={circle} />
             </div>
         </div>
     );

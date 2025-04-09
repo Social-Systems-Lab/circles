@@ -12,7 +12,6 @@ import ImageGallery from "@/components/layout/image-gallery";
 import Onboarding from "@/components/onboarding/onboarding";
 import Script from "next/script";
 import { MatrixSync } from "@/components/modules/chat/matrix-sync";
-import MapAndContentWrapper from "@/components/map/map";
 import { getServerSettings } from "@/lib/data/server-settings";
 import { SidePanel } from "@/components/layout/side-panel";
 import { Metadata } from "next";

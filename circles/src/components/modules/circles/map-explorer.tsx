@@ -175,7 +175,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             // If clearing search via empty query, reset state
             setAllSearchResults([]);
             setDisplayedContent(
-                filterCirclesByCategory(allDiscoverableCircles, selectedCategory).map(mapItemToContent),
+                filterCirclesByCategory(allDiscoverableCircles, selectedCategory)
+                    .map(mapItemToContent)
+                    .filter((c): c is Content => c !== null),
             );
             setHasSearched(false);
             setDrawerSnapIndex(SNAP_INDEX_PEEK); // Reset drawer to peek
@@ -497,7 +499,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                         animate={{ opacity: 1 }}
                                         className="flex max-w-[400px] flex-col items-center gap-4 rounded-xl border bg-white p-8 shadow-lg"
                                     >
-                                        <div className="text-xl font-semibold">You've seen all circles!</div>
+                                        <div className="text-xl font-semibold">You&apos;ve seen all circles!</div>
                                         <p className="text-center text-gray-600">
                                             Check back later for more recommendations
                                         </p>
@@ -548,11 +550,11 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                 filteredSearchResults.length === 0 &&
                                 selectedCategory && (
                                     <p className="text-sm text-gray-500">
-                                        No results found for category "{selectedCategory}".
+                                        No results found for category &quot;{selectedCategory}&quot;.
                                     </p>
                                 )}
                             {!isSearching && allSearchResults.length === 0 && hasSearched && (
-                                <p className="text-sm text-gray-500">No results found for "{searchQuery}".</p>
+                                <p className="text-sm text-gray-500">No results found for &quot;{searchQuery}&quot;.</p>
                             )}
                         </div>
                         {!isSearching && displayedContent.length > 0 && (
