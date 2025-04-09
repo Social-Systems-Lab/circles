@@ -356,6 +356,7 @@ export type Metrics = {
     proximity?: number;
     popularity?: number;
     recentness?: number;
+    searchRank?: number; // Added for search results
 };
 
 export type Weights = {

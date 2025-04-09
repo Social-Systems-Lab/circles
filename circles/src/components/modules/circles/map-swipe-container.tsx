@@ -8,7 +8,9 @@ import { motion } from "framer-motion";
 import CircleSwipeCard from "./circle-swipe-card";
 import { MapDisplay } from "@/components/map/map";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Hand, Home, Search, LayoutGrid, MapPin } from "lucide-react"; // Updated icons
+import { RefreshCw, Hand, Home, Search } from "lucide-react"; // Updated icons
+import { MdOutlineTravelExplore } from "react-icons/md"; // Added Explore icon
+import { HiMiniSquare2Stack } from "react-icons/hi2"; // Added Card Stack icon
 import { useAtom } from "jotai";
 import { userAtom, zoomContentAtom, displayedContentAtom } from "@/lib/data/atoms"; // Added displayedContentAtom
 import Image from "next/image";
@@ -16,68 +18,45 @@ import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { completeSwipeOnboardingAction } from "./swipe-actions";
 import { useRouter } from "next/navigation";
-import { SearchResultItem } from "@/lib/data/vdb"; // Import search result type
+// SearchResultItem might not be needed here anymore if actions.ts returns WithMetric<Content>
+// import { SearchResultItem } from "@/lib/data/vdb";
 import { searchContentAction } from "../search/actions"; // Import server action
+// No longer need getCirclesWithMetrics here
+// import { getCirclesWithMetrics } from "@/lib/data/circle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"; // Import ToggleGroup
 import CategoryFilter from "../search/category-filter"; // Import CategoryFilter
 // Placeholder import for SearchResultsPanel (if needed later)
 // import SearchResultsPanel from "../search/search-results-panel";
 
-// Helper function to map SearchResultItem to Content type for Jotai atoms
-const mapSearchResultToContent = (item: SearchResultItem): Content | null => {
+// Helper function to map enriched Content or Circle to Content type for Jotai atoms
+// Primarily used for setting zoomContent
+const mapItemToContent = (item: WithMetric<Content> | Circle | undefined): Content | null => {
     if (!item) return null;
 
-    // Basic mapping structure - might need refinement based on exact Content definition needs
-    const baseContent: Partial<Content> = {
-        _id: item._id, // Assuming SearchResultItem._id is the MongoDB ObjectId string
-        name: item.name,
-        description: item.description,
-        location: item.location
-            ? {
-                  // Map SearchResultItem location to Content location
-                  lngLat: item.location.lngLat,
-                  // Assuming precision/country/region/city aren't directly available in SearchResultItem payload
-                  // We might need to fetch full Circle/Post data later if these are needed
-                  precision: item.location.lngLat ? 10 : 0, // Example precision
-                  city: item.location.name?.split(",")[0].trim(), // Crude extraction
-              }
-            : undefined,
-        images: item.images,
-        // Map metrics if available/needed
-        metrics: {
-            similarity: item.score,
-        },
-    };
-
-    if (item.type === "post") {
-        // Attempt to create a valid PostDisplay structure
-        // Note: Many fields are missing from SearchResultItem and need placeholders or fetching
+    // If it's already enriched content (WithMetric<Content>)
+    if ("metrics" in item && item.metrics) {
+        // Ensure the returned object matches the Content type definition
+        // Keep relevant metrics if needed by downstream components (like MapDisplay or ContentDisplayWrapper)
+        const { metrics, ...contentData } = item;
         return {
-            ...baseContent,
-            content: item.content,
-            circleType: "post", // Required for PostDisplay union type
-            author: item.author ? { _id: item.author._id, name: item.author.name } : ({} as Circle), // Placeholder/Partial
-            createdAt: new Date(), // Placeholder
-            feedId: "", // Placeholder - Needs actual data
-            createdBy: item.author?._id || "", // Placeholder - Needs actual data
-            comments: 0, // Default
-            reactions: {}, // Default
-            // Add other required fields from PostDisplay if necessary, with defaults/placeholders
-        } as Content; // Cast needed due to potential missing fields
-    } else if (item.type === "user" || item.type === "circle" || item.type === "project") {
-        // Attempt to create a valid Circle structure
-        return {
-            ...baseContent,
-            circleType: item.type, // 'user', 'circle', or 'project'
-            // Map 'type' based on Content's Circle definition ('user' or 'organization')
-            type: item.type === "user" ? "user" : "organization", // Map 'circle'/'project' to 'organization'
-            // Add other required fields from Circle if necessary, with defaults/placeholders
-            members: 0, // Default
-        } as Content; // Cast needed due to potential missing fields
+            ...contentData,
+            metrics: {
+                similarity: metrics.similarity,
+                searchRank: metrics.searchRank,
+                // Add other metrics if needed by consumers
+            },
+        } as Content; // Cast might be needed depending on exact Content definition vs. WithMetric<Content>
     }
 
-    console.warn("Unmappable search result type:", item.type);
-    return null; // Return null for unmappable types
+    // If it's a plain Circle (e.g., from initial swipe cards)
+    if ("circleType" in item || "type" in item) {
+        // It's likely a Circle or PostDisplay etc. (already compatible with Content union)
+        // Add default/empty metrics if needed by consumers
+        return { ...item, metrics: {} } as Content;
+    }
+
+    console.warn("Unmappable item type in mapItemToContent:", item);
+    return null;
 };
 
 interface MapSwipeContainerProps {
@@ -101,8 +80,10 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
     const [viewMode, setViewMode] = useState<ViewMode>("cards");
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCategories, setSelectedCategories] = useState<string[]>(["circles", "projects", "users", "posts"]); // Default categories
-    const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
+    // Store enriched Content with metrics after fetching
+    const [searchResults, setSearchResults] = useState<WithMetric<Content>[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [hasSearched, setHasSearched] = useState(false); // Track if a search has been initiated
 
     // Memoize the filtered initial circles for swiping
     const displayedSwipeCircles = useMemo(() => {
@@ -131,25 +112,20 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
     }, []);
 
     // Helper to set zoom content with mapping
+    // Helper to set zoom content using the simplified mapping function
     const handleSetZoomContent = useCallback(
-        (item: SearchResultItem | Circle | undefined) => {
+        (item: WithMetric<Content> | Circle | undefined) => {
             if (!item) {
                 setZoomContent(undefined);
                 return;
             }
-            // Check if it's SearchResultItem (has qdrantId or score) vs already Content compatible
-            if ("qdrantId" in item || "score" in item) {
-                // It's likely a SearchResultItem, map it
-                const mappedItem = mapSearchResultToContent(item as SearchResultItem);
-                if (mappedItem) {
-                    setZoomContent(mappedItem);
-                } else {
-                    console.warn("Could not map search result item for zooming:", item);
-                }
+            // Use the unified mapping function
+            const mappedItem = mapItemToContent(item);
+            if (mappedItem) {
+                setZoomContent(mappedItem);
             } else {
-                // Assume it's already a Content compatible object (Circle, PostDisplay, etc.)
-                // We might need more specific checks if Content union type expands further
-                setZoomContent(item as Content);
+                console.warn("Could not map item for zooming:", item);
+                setZoomContent(undefined); // Clear zoom if mapping fails
             }
         },
         [setZoomContent],
@@ -166,32 +142,39 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
     }, [currentIndex, displayedSwipeCircles, viewMode, handleSetZoomContent]); // Use helper
 
     // --- Search Logic ---
+    // --- Search Logic ---
     const handleSearchTrigger = useCallback(async () => {
         if (!searchQuery.trim() || selectedCategories.length === 0) {
             setSearchResults([]);
-            setDisplayedContent([]); // Clear map too
+            setDisplayedContent([]); // Clear map
+            setHasSearched(false); // Reset search initiated flag
             return;
         }
         setIsSearching(true);
+        setHasSearched(true); // Mark that a search has been initiated
+        setSearchResults([]); // Clear previous results immediately
+        setDisplayedContent([]); // Clear map immediately
         try {
-            console.log("Triggering search with query:", searchQuery, "categories:", selectedCategories);
+            console.log("Calling searchContentAction with query:", searchQuery, "categories:", selectedCategories);
+            // Call the server action which now returns enriched results
             const results = await searchContentAction(searchQuery, selectedCategories);
-            console.log("Search results received:", results.length);
-            setSearchResults(results);
+            console.log("Received enriched results from server action:", results.length);
+            setSearchResults(results); // Update state directly with the enriched results
         } catch (error) {
-            console.error("Search failed:", error);
+            console.error("Search action failed:", error);
             setSearchResults([]); // Clear results on error
         } finally {
             setIsSearching(false);
         }
     }, [searchQuery, selectedCategories, setDisplayedContent]);
 
-    // Update map markers when search results change (only in explore mode)
+    // Update map markers when enriched search results change (only in explore mode)
     useEffect(() => {
         if (viewMode === "explore") {
-            console.log("Updating map display with search results:", searchResults.length);
-            const mappedResults = searchResults.map(mapSearchResultToContent).filter((c): c is Content => c !== null);
-            setDisplayedContent(mappedResults); // Update atom with mapped results
+            console.log("Updating map display with enriched search results:", searchResults.length);
+            // searchResults are now WithMetric<Content>[], which should be compatible with displayedContentAtom
+            // No extra mapping needed here if Content type includes metrics or if MapDisplay handles WithMetric<Content>
+            setDisplayedContent(searchResults); // Update atom directly
         }
     }, [searchResults, viewMode, setDisplayedContent]);
 
@@ -215,8 +198,8 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
         } else {
             // When switching to explore, update map with current search results
             console.log("Switching to explore view, showing search results on map:", searchResults.length);
-            const mappedResults = searchResults.map(mapSearchResultToContent).filter((c): c is Content => c !== null);
-            setDisplayedContent(mappedResults); // Use mapped results
+            // searchResults are already enriched, update map directly
+            setDisplayedContent(searchResults);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [viewMode]); // Intentionally simplified: Only run when viewMode changes. Read other state inside.
@@ -308,7 +291,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                                     aria-label="Toggle cards view"
                                     className="rounded-full data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
                                 >
-                                    <LayoutGrid className="h-5 w-5" />
+                                    <HiMiniSquare2Stack className="h-6 w-6" /> {/* Updated Icon */}
                                 </ToggleGroupItem>
                             </TooltipTrigger>
                             <TooltipContent>
@@ -322,7 +305,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                                     aria-label="Toggle explore view"
                                     className="rounded-full data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
                                 >
-                                    <MapPin className="h-5 w-5" />
+                                    <MdOutlineTravelExplore className="h-6 w-6" /> {/* Updated Icon */}
                                 </ToggleGroupItem>
                             </TooltipTrigger>
                             <TooltipContent>
@@ -430,7 +413,8 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                                         animate={{ opacity: 1 }}
                                         className="flex max-w-[400px] flex-col items-center gap-4 rounded-xl border bg-white p-8 shadow-lg"
                                     >
-                                        <div className="text-xl font-semibold">You've seen all circles!</div>
+                                        <div className="text-xl font-semibold">You've seen all circles!</div>{" "}
+                                        {/* Re-escaped ' */}
                                         <p className="text-center text-gray-600">
                                             Check back later for more recommendations
                                         </p>
@@ -470,34 +454,48 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                 </div>
             )}
 
-            {viewMode === "explore" && (
-                // SearchResultsPanel (Placeholder implementation)
+            {/* Search Results Panel (Only in Explore Mode and after search initiated) */}
+            {viewMode === "explore" && hasSearched && (
                 <div className="absolute left-4 top-20 z-40 max-h-[calc(100vh-120px)] w-[300px] overflow-y-auto rounded-lg bg-white p-4 shadow-lg">
                     <h3 className="mb-2 font-semibold">Search Results</h3>
                     {isSearching && <p>Loading...</p>}
-                    {!isSearching && searchResults.length === 0 && searchQuery.trim() && (
-                        <p className="text-sm text-gray-500">No results found for "{searchQuery}".</p>
+                    {!isSearching && searchResults.length === 0 && (
+                        <p className="text-sm text-gray-500">
+                            No results found for "{searchQuery}".
+                        </p> /* Re-escaped " */
                     )}
-                    {!isSearching && searchResults.length === 0 && !searchQuery.trim() && (
-                        <p className="text-sm text-gray-500">Enter a query to search.</p>
-                    )}
+                    {/* Removed the "Enter a query" message here, as panel only shows after search */}
                     {!isSearching && searchResults.length > 0 && (
                         <ul>
-                            {searchResults.map((item) => (
-                                <li
-                                    key={item.qdrantId}
-                                    className="mb-1 cursor-pointer rounded border-b p-1 text-sm hover:bg-gray-100"
-                                    onClick={() => item.location?.lngLat && handleSetZoomContent(item)} // Use helper, Only zoom if location exists
-                                    title={item.location?.lngLat ? "Click to focus map" : "No location data"}
-                                >
-                                    <span className={!item.location?.lngLat ? "text-gray-400" : ""}>
-                                        {item.name || item.content?.substring(0, 50) + "..."} ({item.type})
-                                    </span>
-                                    {!item.location?.lngLat && (
-                                        <span className="ml-1 text-xs text-gray-400">(No location)</span>
-                                    )}
-                                </li>
-                            ))}
+                            {searchResults.map(
+                                (
+                                    item, // item is now WithMetric<Content>
+                                ) => (
+                                    <li
+                                        key={item._id} // Use MongoDB _id as key
+                                        className="mb-1 cursor-pointer rounded border-b p-1 text-sm hover:bg-gray-100"
+                                        onClick={() => item.location?.lngLat && handleSetZoomContent(item)} // Use helper, check location
+                                        title={item.location?.lngLat ? "Click to focus map" : "No location data"}
+                                    >
+                                        <span className={!item.location?.lngLat ? "text-gray-400" : ""}>
+                                            {/* Display name for circles/users/projects, content for posts */}
+                                            {(item.circleType !== "post"
+                                                ? item.name
+                                                : item.content?.substring(0, 50) + "...") || "Untitled"}{" "}
+                                            ({item.circleType}) {/* Show type */}
+                                            {/* Optionally display search rank */}
+                                            {item.metrics?.searchRank != null && ( // Check for null/undefined explicitly
+                                                <span className="ml-1 text-xs text-blue-500">
+                                                    (Rank: {item.metrics.searchRank.toFixed(2)})
+                                                </span>
+                                            )}
+                                        </span>
+                                        {!item.location?.lngLat && (
+                                            <span className="ml-1 text-xs text-gray-400">(No location)</span>
+                                        )}
+                                    </li>
+                                ),
+                            )}
                         </ul>
                     )}
                 </div>
