@@ -17,7 +17,8 @@ import {
     userAtom,
     zoomContentAtom,
     displayedContentAtom,
-    contentPreviewAtom, // Import contentPreviewAtom
+    contentPreviewAtom,
+    sidePanelContentVisibleAtom, // Import contentPreviewAtom
 } from "@/lib/data/atoms";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
@@ -86,6 +87,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const [isMounted, setIsMounted] = useState(false);
     const [showSwipeInstructions, setShowSwipeInstructions] = useState(false);
     const [triggerSnapIndex, setTriggerSnapIndex] = useState<number>(-1);
+    const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
 
     // --- Memos ---
     const snapPoints = useMemo(() => [100, windowHeight * 0.4, windowHeight * 0.8, windowHeight], [windowHeight]);
@@ -360,43 +362,46 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 className={`absolute ${isMobile ? "flex-col" : "flex-row"} left-4 top-4 z-[60] flex gap-2`} // Increased z-index
             >
                 {/* View Mode Toggle */}
-                <div className={`flex flex-row gap-1 rounded-full bg-white p-[4px] shadow-md`}>
-                    <TooltipProvider delayDuration={100}>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className={`relative h-9 w-9 rounded-full ${viewMode === "cards" ? "bg-[#f1f1f1]" : "bg-white"} hover:bg-[#cecece]`}
-                                    onClick={() => setViewMode("cards")}
-                                >
-                                    <HiMiniSquare2Stack className="h-5 w-5" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Cards View</p>
-                            </TooltipContent>
-                        </Tooltip>
+                {!(sidePanelContentVisible === "toolbox" && isMobile) && (
+                    <div className={`flex flex-row gap-1 rounded-full bg-white p-[4px] shadow-md`}>
+                        <TooltipProvider delayDuration={100}>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className={`relative h-9 w-9 rounded-full ${viewMode === "cards" ? "bg-[#f1f1f1]" : "bg-white"} hover:bg-[#cecece]`}
+                                        onClick={() => setViewMode("cards")}
+                                    >
+                                        <HiMiniSquare2Stack className="h-5 w-5" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Cards View</p>
+                                </TooltipContent>
+                            </Tooltip>
 
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className={`relative h-9 w-9 rounded-full  ${viewMode === "explore" ? "bg-[#f1f1f1]" : "bg-white"} hover:bg-[#cecece]`}
-                                    onClick={() => setViewMode("explore")}
-                                >
-                                    <MdOutlineTravelExplore className="h-5 w-5" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Explore View</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                </div>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className={`relative h-9 w-9 rounded-full  ${viewMode === "explore" ? "bg-[#f1f1f1]" : "bg-white"} hover:bg-[#cecece]`}
+                                        onClick={() => setViewMode("explore")}
+                                    >
+                                        <MdOutlineTravelExplore className="h-5 w-5" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Explore View</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    </div>
+                )}
+
                 {/* Search Bar & Filters (Only in Explore Mode) */}
-                {viewMode === "explore" && (
+                {viewMode === "explore" && !(sidePanelContentVisible === "toolbox" && isMobile) && (
                     <div className="relative">
                         <div className="absolute flex items-center gap-2 rounded-full bg-white p-1 px-2 shadow-md">
                             {/* Search Input */}

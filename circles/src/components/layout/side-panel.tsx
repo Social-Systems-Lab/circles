@@ -48,7 +48,7 @@ export const SidePanel: React.FC = () => {
         }
     }, [userToolbox]);
 
-    if (isMobile) {
+    if (isMobile && sidePanelContentVisible !== "toolbox") {
         return null;
     }
 
