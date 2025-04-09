@@ -291,6 +291,19 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscove
         }
     }, [viewMode, isMobile, hasSearched]);
 
+    // Custom handler for drawer open change to prevent closing while search is active
+    const handleDrawerOpenChange = useCallback(
+        (open: boolean) => {
+            // Prevent closing via onOpenChange if search is still active
+            if (!open && hasSearched) {
+                return;
+            }
+            // Allow closing if search is not active, or allow opening
+            setIsDrawerOpen(open);
+        },
+        [hasSearched], // Only depends on hasSearched
+    );
+
     const handleRefresh = () => {
         // Consider resetting state instead of full reload if possible
         window.location.reload();
@@ -628,12 +641,13 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscove
             {viewMode === "explore" && isMobile && (
                 <Drawer.Root
                     open={isDrawerOpen} // Control open state
-                    onOpenChange={setIsDrawerOpen} // Allow vaul to close it
+                    onOpenChange={handleDrawerOpenChange} // Use custom handler
                     shouldScaleBackground
+                    // dismissible={false} // Remove dismissible
                     snapPoints={[0.25, 0.8]}
                 >
                     <Drawer.Portal>
-                        <Drawer.Overlay className="fixed inset-0 z-[500] bg-black/40" />
+                        <Drawer.Overlay className="fixed inset-0 z-[100] bg-black/40" /> {/* Corrected z-index */}
                         <Drawer.Content className="fixed bottom-0 left-0 right-0 z-[101] mt-24 flex h-full max-h-[96%] flex-col rounded-t-[10px] bg-zinc-100">
                             {/* Only render content if the drawer should be open (i.e., a search has happened) */}
                             {hasSearched && (
