@@ -74,28 +74,30 @@ const ResizingDrawer = ({
     const sortedSnapPoints = useMemo(() => {
         // ... (no changes needed here) ...
         if (containerHeight <= 0) return [];
-        return rawSnapPoints
-            .map((p) => {
-                if (typeof p === "string" && p.endsWith("%")) {
-                    const percentage = parseFloat(p) / 100;
-                    return containerHeight * percentage;
-                }
-                if (typeof p === "number") {
-                    return p;
-                }
-                return -1;
-            })
-            .filter((p): p is number => p >= 0)
-            .sort((a, b) => a - b);
+        return (
+            rawSnapPoints
+                ?.map((p) => {
+                    if (typeof p === "string" && p.endsWith("%")) {
+                        const percentage = parseFloat(p) / 100;
+                        return containerHeight * percentage;
+                    }
+                    if (typeof p === "number") {
+                        return p;
+                    }
+                    return -1;
+                })
+                .filter((p): p is number => p >= 0)
+                .sort((a, b) => a - b) ?? []
+        );
     }, [rawSnapPoints, containerHeight]);
 
-    const minSnap = sortedSnapPoints[0] ?? 0;
-    const maxSnap = sortedSnapPoints[sortedSnapPoints.length - 1] ?? 0;
+    const minSnap = sortedSnapPoints?.[0] ?? 0;
+    const maxSnap = sortedSnapPoints?.[sortedSnapPoints.length - 1] ?? 0;
 
     const safeInitialIndex = useMemo(() => {
-        if (sortedSnapPoints.length === 0) return 0;
-        return Math.max(0, Math.min(initialSnapPointIndex, sortedSnapPoints.length - 1));
-    }, [initialSnapPointIndex, sortedSnapPoints.length]);
+        if (sortedSnapPoints?.length === 0) return 0;
+        return Math.max(0, Math.min(initialSnapPointIndex, sortedSnapPoints?.length - 1));
+    }, [initialSnapPointIndex, sortedSnapPoints?.length]);
 
     const initialSnapHeight = useMemo(() => {
         if (sortedSnapPoints.length === 0) return 0;
@@ -117,7 +119,7 @@ const ResizingDrawer = ({
                 const finalHeight = result.value.height;
                 let closestIndex = 0;
                 let minDist = Infinity;
-                sortedSnapPoints.forEach((snapH, index) => {
+                sortedSnapPoints?.forEach((snapH, index) => {
                     const dist = Math.abs(finalHeight - snapH);
                     // Add a small tolerance for floating point comparisons
                     if (dist < minDist && dist < 1) {
@@ -202,7 +204,7 @@ const ResizingDrawer = ({
                 let currentClosestSnapIndex = 0;
                 let currentClosestSnapHeight = minSnap;
                 let minDist = Infinity;
-                sortedSnapPoints.forEach((snapH, index) => {
+                sortedSnapPoints?.forEach((snapH, index) => {
                     const dist = Math.abs(startHeight - snapH);
                     if (dist < minDist) {
                         minDist = dist;
@@ -305,7 +307,7 @@ const ResizingDrawer = ({
     });
 
     // --- Render --- (remains the same)
-    if (!isMounted || sortedSnapPoints.length === 0) {
+    if (!isMounted || sortedSnapPoints?.length === 0) {
         return null;
     }
 

@@ -126,7 +126,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             projects: 0,
             users: 0,
         };
-        allSearchResults.forEach((result) => {
+        allSearchResults?.forEach((result) => {
             if (result.circleType === "circle") counts.circles++;
             else if (result.circleType === "project") counts.projects++;
             else if (result.circleType === "user") counts.users++;
