@@ -102,7 +102,7 @@ export function LoginForm(): React.ReactElement {
                             <FormControl>
                                 <Input
                                     type="password"
-                                    placeholder="********"
+                                    placeholder="Enter your password"
                                     {...field}
                                     autoComplete="current-password"
                                 />
