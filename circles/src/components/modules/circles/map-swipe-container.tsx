@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState, useMemo } from "react";
-import { Circle, WithMetric, Content } from "@/models/models"; // Content is needed for atoms
+import { Circle, WithMetric, Content, ContentPreviewData } from "@/models/models"; // Content is needed for atoms
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import useWindowDimensions from "@/components/utils/use-window-dimensions";
 import { motion } from "framer-motion";
@@ -12,13 +12,7 @@ import { RefreshCw, Hand, Home, Search, X } from "lucide-react"; // Added X icon
 import { MdOutlineTravelExplore } from "react-icons/md"; // Added Explore icon
 import { HiMiniSquare2Stack } from "react-icons/hi2"; // Added Card Stack icon
 import { useAtom } from "jotai";
-import {
-    userAtom,
-    zoomContentAtom,
-    displayedContentAtom,
-    contentPreviewAtom,
-    ContentPreviewData,
-} from "@/lib/data/atoms"; // Added displayedContentAtom and contentPreviewAtom
+import { userAtom, zoomContentAtom, displayedContentAtom, contentPreviewAtom } from "@/lib/data/atoms"; // Added displayedContentAtom and contentPreviewAtom
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -320,50 +314,44 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
             {/* Top Bar Controls */}
             <div className="absolute left-4 top-4 z-50 flex flex-wrap items-center gap-2">
                 {/* View Mode Toggle */}
-                <ToggleGroup
-                    type="single"
-                    value={viewMode}
-                    onValueChange={(value: ViewMode) => {
-                        if (value) setViewMode(value);
-                    }}
-                    className="rounded-full bg-white p-1 shadow-md"
-                >
+                <div className="flex flex-row gap-1 rounded-full bg-white p-[4px] shadow-md">
                     <TooltipProvider delayDuration={100}>
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <ToggleGroupItem
-                                    value="cards"
-                                    aria-label="Toggle cards view"
-                                    className="rounded-full p-1.5 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground" // Keep padding
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className={`relative h-9 w-9 rounded-full ${viewMode === "cards" ? "bg-[#f1f1f1]" : "bg-white"} hover:bg-[#cecece]`}
+                                    onClick={() => setViewMode("cards")}
                                 >
-                                    <HiMiniSquare2Stack className="h-6 w-6" /> {/* Keep increased size */}
-                                </ToggleGroupItem>
+                                    <HiMiniSquare2Stack className="h-5 w-5" />
+                                </Button>
                             </TooltipTrigger>
                             <TooltipContent>
                                 <p>Cards View</p>
                             </TooltipContent>
                         </Tooltip>
+
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <ToggleGroupItem
-                                    value="explore"
-                                    aria-label="Toggle explore view"
-                                    className="rounded-full p-1.5 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground" // Keep padding
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className={`relative h-9 w-9 rounded-full  ${viewMode === "explore" ? "bg-[#f1f1f1]" : "bg-white"} hover:bg-[#cecece]`}
+                                    onClick={() => setViewMode("explore")}
                                 >
-                                    <MdOutlineTravelExplore className="h-6 w-6" /> {/* Keep increased size */}
-                                </ToggleGroupItem>
+                                    <MdOutlineTravelExplore className="h-5 w-5" />
+                                </Button>
                             </TooltipTrigger>
                             <TooltipContent>
                                 <p>Explore View</p>
                             </TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
-                </ToggleGroup>
+                </div>
                 {/* Search Bar & Filters (Only in Explore Mode) */}
                 {viewMode === "explore" && (
                     <div className="flex flex-wrap items-center gap-2 rounded-full bg-white p-1 px-2 shadow-md">
-                        {" "}
-                        {/* Added flex-wrap */}
                         {/* Search Input */}
                         <div className="flex items-center">
                             <Search className="ml-1 mr-1 h-5 w-5 text-gray-500" />
@@ -404,6 +392,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                             categoryCounts={categoryCounts} // Pass calculated counts
                             selectedCategory={selectedCategory} // Pass single selected category state
                             onSelectionChange={setSelectedCategory} // Pass state setter
+                            hasSearched={hasSearched}
                         />
                     </div>
                 )}
@@ -515,24 +504,28 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
 
             {/* Search Results Panel (Only in Explore Mode and after search initiated) */}
             {viewMode === "explore" && hasSearched && (
-                <div className="formatted absolute left-4 top-20 z-40 max-h-[calc(100vh-120px)] w-[300px] overflow-y-auto rounded-lg bg-white p-4 shadow-lg">
-                    <h3 className="mb-2 font-semibold">Search Results</h3>
-                    {isSearching && <p>Loading...</p>}
-                    {!isSearching &&
-                        allSearchResults.length > 0 &&
-                        filteredSearchResults.length === 0 &&
-                        selectedCategory && (
-                            <p className="text-sm text-gray-500">No results found for category "{selectedCategory}".</p>
+                <div className="formatted absolute left-4 top-20 z-40 max-h-[calc(100vh-120px)] w-[300px] overflow-y-auto rounded-lg bg-white shadow-lg">
+                    <div className="p-4">
+                        <h3 className="mb-2 font-semibold">Search Results</h3>
+                        {isSearching && <p>Loading...</p>}
+                        {!isSearching &&
+                            allSearchResults.length > 0 &&
+                            filteredSearchResults.length === 0 &&
+                            selectedCategory && (
+                                <p className="text-sm text-gray-500">
+                                    No results found for category &quot;{selectedCategory}&quot;.
+                                </p>
+                            )}
+                        {!isSearching && allSearchResults.length === 0 && hasSearched && (
+                            <p className="text-sm text-gray-500">No results found for &quot;{searchQuery}&quot;.</p>
                         )}
-                    {!isSearching && allSearchResults.length === 0 && hasSearched && (
-                        <p className="text-sm text-gray-500">No results found for "{searchQuery}".</p>
-                    )}
+                    </div>
                     {!isSearching && filteredSearchResults.length > 0 && (
                         <ul className="space-y-2">
                             {filteredSearchResults.map((item) => (
                                 <li
                                     key={item._id} // Use MongoDB _id
-                                    className="flex cursor-pointer items-start gap-2 rounded p-1.5 hover:bg-gray-100"
+                                    className="flex cursor-pointer items-start gap-2 rounded pb-2 pl-3 pt-1 hover:bg-gray-100"
                                     onClick={(e) => {
                                         // Zoom map
                                         if (item.location?.lngLat) {
@@ -564,20 +557,16 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                                             : "Click to view details (no location)"
                                     }
                                 >
-                                    <CirclePicture circle={item} size="sm" />
-                                    <div className="flex-1 overflow-hidden">
-                                        <p className="truncate text-sm font-medium">
-                                            {item.name || "Untitled"} ({item.circleType || "N/A"})
-                                        </p>
-                                        <p className="line-clamp-2 text-xs text-gray-500">
+                                    <div className="relative">
+                                        <CirclePicture circle={item} size="40px" showTypeIndicator={true} />
+                                    </div>
+                                    <div className="flex-1 overflow-hidden pl-2">
+                                        <div className="truncate p-0 text-sm font-medium">
+                                            {item.name || "Untitled"}
+                                        </div>
+                                        <div className="mt-1 line-clamp-2 p-0 text-xs text-gray-500">
                                             {item.description || item.mission || ""}
-                                        </p>
-                                        {/* Optionally display search rank */}
-                                        {item.metrics?.searchRank != null && (
-                                            <span className="ml-1 text-xs text-blue-500">
-                                                (Rank: {item.metrics.searchRank.toFixed(2)})
-                                            </span>
-                                        )}
+                                        </div>
                                         {!item.location?.lngLat && (
                                             <span className="ml-1 text-xs text-gray-400">(No location)</span>
                                         )}

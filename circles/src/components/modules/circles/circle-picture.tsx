@@ -81,7 +81,7 @@ export const CirclePicture = ({
                 >
                     <CircleTypeIndicator
                         circleType={circle?.circleType || "circle"}
-                        size={`${parseInt(size || "40") / 3}px`}
+                        size={`${parseInt(size || "40") / 2.5}px`}
                     />
                 </div>
             )}

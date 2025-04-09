@@ -10,6 +10,7 @@ interface CategoryFilterProps {
     categoryCounts: { [key: string]: number }; // Counts for each category
     selectedCategory: string | null; // Single selected category or null
     onSelectionChange: (selected: string | null) => void; // Callback for single selection
+    hasSearched: boolean;
 }
 
 const CategoryFilter: React.FC<CategoryFilterProps> = ({
@@ -17,6 +18,7 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
     categoryCounts,
     selectedCategory,
     onSelectionChange,
+    hasSearched,
 }) => {
     // Handle ToggleGroup value change
     const handleValueChange = (value: string) => {
@@ -45,9 +47,11 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
                     aria-label={`Filter by ${category}`}
                 >
                     {category}
-                    <Badge variant="secondary" className="ml-1.5 rounded-full px-1.5 py-0 text-xs">
-                        {categoryCounts[category] ?? 0}
-                    </Badge>
+                    {hasSearched && (
+                        <Badge variant="secondary" className="ml-1.5 rounded-full px-1.5 py-0 text-xs">
+                            {categoryCounts[category] ?? 0}
+                        </Badge>
+                    )}
                 </ToggleGroupItem>
             ))}
         </ToggleGroup>
