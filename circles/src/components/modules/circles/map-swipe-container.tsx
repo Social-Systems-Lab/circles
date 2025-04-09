@@ -130,34 +130,32 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ circles, m
     return (
         <div className="relative flex h-full w-full flex-row overflow-hidden">
             {/* Map container */}
-            {!isMobile && mapboxKey && (
+            {mapboxKey && (
                 <div className="relative flex-1">
                     <MapDisplay mapboxKey={mapboxKey} />
                 </div>
             )}
 
             {/* Toggle button for cards */}
-            {!isMobile && (
-                <div className="absolute left-4 top-4 z-50">
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    onClick={() => setShowCards(!showCards)}
-                                    className="flex h-10 w-10 items-center justify-center rounded-full bg-white p-2 shadow-md hover:bg-gray-100"
-                                    variant="ghost"
-                                    size="icon"
-                                >
-                                    {showCards ? <X className="h-5 w-5" /> : <Binoculars className="h-5 w-5" />}
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>{showCards ? "Hide cards" : "Show cards"}</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                </div>
-            )}
+            <div className="absolute left-4 top-4 z-50">
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                onClick={() => setShowCards(!showCards)}
+                                className="flex h-10 w-10 items-center justify-center rounded-full bg-white p-2 shadow-md hover:bg-gray-100"
+                                variant="ghost"
+                                size="icon"
+                            >
+                                {showCards ? <X className="h-5 w-5" /> : <Binoculars className="h-5 w-5" />}
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>{showCards ? "Hide cards" : "Show cards"}</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+            </div>
 
             {/* Cards container - positioned on the left for desktop or full-width for mobile */}
             <div
