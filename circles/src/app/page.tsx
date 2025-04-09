@@ -3,7 +3,7 @@ import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getCirclesWithMetrics, getMetricsForCircles, getSwipeCircles } from "@/lib/data/circle";
 import { getServerSettings } from "@/lib/data/server-settings";
 import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
-import MapSwipeContainer from "@/components/modules/circles/map-swipe-container";
+import MapExplorer from "@/components/modules/circles/map-explorer";
 import { redirect } from "next/navigation";
 import { SortingOptions } from "@/models/models";
 
@@ -30,7 +30,7 @@ export default async function Home(props: HomeProps) {
 
     return (
         <ContentDisplayWrapper content={circlesWithMetrics}>
-            <MapSwipeContainer allDiscoverableCircles={circlesWithMetrics} mapboxKey={serverConfig?.mapboxKey ?? ""} />
+            <MapExplorer allDiscoverableCircles={circlesWithMetrics} mapboxKey={serverConfig?.mapboxKey ?? ""} />
         </ContentDisplayWrapper>
     );
 }

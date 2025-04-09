@@ -239,36 +239,3 @@ export function MapDisplay({ mapboxKey }: { mapboxKey: string }) {
         </div>
     );
 }
-
-export default function MapAndContentWrapper({
-    mapboxKey,
-    children,
-}: {
-    mapboxKey: string;
-    children: React.ReactNode;
-}) {
-    // Fixes hydration errors
-    const [isMounted, setIsMounted] = useState(false);
-
-    useEffect(() => {
-        if (logLevel >= LOG_LEVEL_TRACE) {
-            console.log("useEffect.MapAndContentWrapper.1");
-        }
-    }, []);
-
-    useEffect(() => {
-        setIsMounted(true);
-    }, []);
-
-    if (!isMounted) {
-        return null;
-    }
-
-    return (
-        <div className="relative flex w-full flex-row overflow-hidden bg-[#2e4c6b]">
-            <div className="relative min-h-screen overflow-x-hidden bg-[#fbfbfb]">{children}</div>
-
-            <SidePanel />
-        </div>
-    );
-}

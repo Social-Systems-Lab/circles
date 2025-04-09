@@ -48,6 +48,10 @@ export const SidePanel: React.FC = () => {
         }
     }, [userToolbox]);
 
+    if (isMobile) {
+        return null;
+    }
+
     return (
         <>
             <AnimatePresence>
