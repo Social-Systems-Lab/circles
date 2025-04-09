@@ -119,7 +119,7 @@ export function SignupForm(): React.ReactElement {
                                 rawValue = valueOrEvent.target.value;
                             }
                             // Transform the value: replace spaces with hyphens and convert to lowercase
-                            const transformedValue = rawValue.replace(/\s+/g, "-").toLowerCase();
+                            const transformedValue = rawValue.replace(/\s+/g, "-").replace("_", "-").toLowerCase();
                             // Call the original onChange with the transformed value
                             originalOnChange(transformedValue);
                         };
@@ -152,27 +152,6 @@ export function SignupForm(): React.ReactElement {
                         );
                     }}
                 />
-                {/* <Controller
-                    name="handle"
-                    control={form.control as unknown as Control}
-                    render={({ field }) => (
-                        <DynamicAutoHandleField
-                            field={{
-                                name: "handle",
-                                type: "text",
-                                label: "Handle",
-                                placeholder: "handle",
-                                description: {
-                                    circle: "Choose a unique handle that will identify the circle on the platform.",
-                                    user: "Choose a unique handle that will identify you on the platform.",
-                                },
-                                required: true,
-                            }}
-                            formField={field}
-                            control={form.control as unknown as Control}
-                        />
-                    )}
-                /> */}
                 <FormField
                     control={form.control}
                     name="_email"
