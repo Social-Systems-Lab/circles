@@ -23,6 +23,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"; // 
 import { searchContentAction } from "../search/actions"; // Import server action
 import CategoryFilter from "../search/category-filter"; // Import CategoryFilter
 import Indicators from "@/components/utils/indicators";
+import { Drawer } from "vaul"; // Import vaul drawer
 
 // Helper function to map enriched Content or Circle to Content type for Jotai atoms
 // Primarily used for setting zoomContent
@@ -79,6 +80,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscove
     const [allSearchResults, setAllSearchResults] = useState<WithMetric<Circle>[]>([]); // Store ALL results from backend
     const [isSearching, setIsSearching] = useState(false);
     const [hasSearched, setHasSearched] = useState(false); // Track if a search has been initiated
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false); // State to control drawer visibility
     const [, setContentPreview] = useAtom(contentPreviewAtom); // Atom for content preview panel
 
     // Memoize the filtered initial circles for swiping
@@ -279,6 +281,15 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscove
         filterCirclesByCategory,
         setDisplayedContent,
     ]);
+
+    // Effect to control drawer open state based on search status and view mode on mobile
+    useEffect(() => {
+        if (viewMode === "explore" && isMobile && hasSearched) {
+            setIsDrawerOpen(true);
+        } else {
+            setIsDrawerOpen(false); // Close drawer if not in explore mode, not mobile, or search cleared
+        }
+    }, [viewMode, isMobile, hasSearched]);
 
     const handleRefresh = () => {
         // Consider resetting state instead of full reload if possible
@@ -498,8 +509,8 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscove
                                         animate={{ opacity: 1 }}
                                         className="flex max-w-[400px] flex-col items-center gap-4 rounded-xl border bg-white p-8 shadow-lg"
                                     >
-                                        <div className="text-xl font-semibold">You&apos;ve seen all circles!</div>{" "}
-                                        {/* Re-escaped ' */}
+                                        <div className="text-xl font-semibold">You've seen all circles!</div>{" "}
+                                        {/* Fixed apostrophe escape */}
                                         <p className="text-center text-gray-600">
                                             Check back later for more recommendations
                                         </p>
@@ -539,11 +550,9 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscove
                 </div>
             )}
 
-            {/* Search Results Panel (Only in Explore Mode and after search initiated) */}
-            {viewMode === "explore" && hasSearched && (
-                <div
-                    className={`formatted absolute left-4 z-[101] ${isMobile ? "top-[120px] max-h-[calc(100vh-200px)] w-[240px]" : "top-20 max-h-[calc(100vh-120px)] w-[300px]"} overflow-y-auto rounded-lg bg-white shadow-lg`}
-                >
+            {/* Search Results Panel (Desktop - Only in Explore Mode and after search initiated) */}
+            {viewMode === "explore" && hasSearched && !isMobile && (
+                <div className="formatted absolute left-4 top-20 z-40 max-h-[calc(100vh-120px)] w-[300px] overflow-y-auto rounded-lg bg-white shadow-lg">
                     <div className="p-4">
                         <h3 className="mb-2 font-semibold">Search Results</h3>
                         {isSearching && <p>Loading...</p>}
@@ -552,11 +561,11 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscove
                             filteredSearchResults.length === 0 &&
                             selectedCategory && (
                                 <p className="text-sm text-gray-500">
-                                    No results found for category &quot;{selectedCategory}&quot;.
+                                    No results found for category "{selectedCategory}".
                                 </p>
                             )}
                         {!isSearching && allSearchResults.length === 0 && hasSearched && (
-                            <p className="text-sm text-gray-500">No results found for &quot;{searchQuery}&quot;.</p>
+                            <p className="text-sm text-gray-500">No results found for "{searchQuery}".</p>
                         )}
                     </div>
                     {!isSearching && filteredSearchResults.length > 0 && (
@@ -613,6 +622,94 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscove
                         </ul>
                     )}
                 </div>
+            )}
+
+            {/* Search Results Drawer (Mobile - Only in Explore Mode) */}
+            {viewMode === "explore" && isMobile && (
+                <Drawer.Root
+                    open={isDrawerOpen} // Control open state
+                    onOpenChange={setIsDrawerOpen} // Allow vaul to close it
+                    shouldScaleBackground
+                    snapPoints={[0.25, 0.8]}
+                >
+                    <Drawer.Portal>
+                        <Drawer.Overlay className="fixed inset-0 z-[500] bg-black/40" />
+                        <Drawer.Content className="fixed bottom-0 left-0 right-0 z-[101] mt-24 flex h-full max-h-[96%] flex-col rounded-t-[10px] bg-zinc-100">
+                            {/* Only render content if the drawer should be open (i.e., a search has happened) */}
+                            {hasSearched && (
+                                <div className="flex-1 rounded-t-[10px] bg-white p-4">
+                                    <div className="mx-auto mb-8 h-1.5 w-12 flex-shrink-0 rounded-full bg-zinc-300" />
+                                    <div className="mx-auto max-w-md">
+                                        <Drawer.Title className="mb-4 font-medium">Search Results</Drawer.Title>
+                                        {/* Loading and No Results Messages */}
+                                        {isSearching && <p>Loading...</p>}
+                                        {!isSearching &&
+                                            allSearchResults.length > 0 &&
+                                            filteredSearchResults.length === 0 &&
+                                            selectedCategory && (
+                                                <p className="text-sm text-gray-500">
+                                                    No results found for category "{selectedCategory}".
+                                                </p>
+                                            )}
+                                        {!isSearching && allSearchResults.length === 0 && hasSearched && (
+                                            <p className="text-sm text-gray-500">
+                                                No results found for "{searchQuery}".
+                                            </p>
+                                        )}
+                                        {/* Results List */}
+                                        {!isSearching && filteredSearchResults.length > 0 && (
+                                            <ul className="space-y-2">
+                                                {filteredSearchResults.map((item) => (
+                                                    <li
+                                                        key={item._id} // Use MongoDB _id
+                                                        className="flex cursor-pointer items-center gap-2 rounded pb-2 pl-3 pt-1 hover:bg-gray-100"
+                                                        onClick={(e) => {
+                                                            // Zoom map
+                                                            if (item.location?.lngLat) {
+                                                                handleSetZoomContent(item);
+                                                            }
+                                                            // Mobile: No preview panel, just zoom
+                                                        }}
+                                                        title={
+                                                            item.location?.lngLat
+                                                                ? "Click to focus map"
+                                                                : "No location available"
+                                                        }
+                                                    >
+                                                        <div className="relative">
+                                                            <CirclePicture
+                                                                circle={item}
+                                                                size="40px"
+                                                                showTypeIndicator={true}
+                                                            />
+                                                        </div>
+                                                        <div className="relative flex-1 overflow-hidden pl-2">
+                                                            <div className="truncate p-0 text-sm font-medium">
+                                                                {item.name || "Untitled"}
+                                                            </div>
+                                                            <div className="mt-1 line-clamp-2 p-0 text-xs text-gray-500">
+                                                                {item.description || item.mission || ""}
+                                                            </div>
+                                                            {item.metrics && (
+                                                                <div className="flex flex-row pt-1">
+                                                                    <Indicators
+                                                                        className="pointer-events-none"
+                                                                        metrics={item.metrics}
+                                                                    />
+                                                                    <div className="flex-1" />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </Drawer.Content>
+                    </Drawer.Portal>
+                </Drawer.Root>
             )}
 
             {/* Swipe instructions popup (only in cards mode) */}
