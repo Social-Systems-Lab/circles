@@ -8,10 +8,10 @@ import Image from "next/image";
 
 export const SupportButton = () => {
     return (
-        <div className="fixed bottom-[90px] right-6 z-40">
+        <div className="fixed bottom-[150px] right-6 z-40 md:bottom-[90px]">
             <Popover>
                 <PopoverTrigger asChild>
-                    <div className="z-[50] cursor-pointer rounded-full bg-[#2d37c2] p-[2px] hover:bg-[#304678e6] md:bottom-[40px]">
+                    <div className="z-[50] cursor-pointer rounded-full bg-[#2d37c2] p-[2px] hover:bg-[#304678e6]">
                         <MdOutlineContactSupport className="m-[4px] text-white group-hover:text-white" size="30px" />
                     </div>
 

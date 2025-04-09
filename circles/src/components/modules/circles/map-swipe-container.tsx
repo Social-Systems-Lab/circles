@@ -1,3 +1,4 @@
+// map-swipe-container.tsx
 "use client";
 
 import React, { useCallback, useEffect, useState, useMemo } from "react";
@@ -74,7 +75,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscove
     const router = useRouter();
 
     // New state for search and view mode
-    const [viewMode, setViewMode] = useState<ViewMode>("cards");
+    const [viewMode, setViewMode] = useState<ViewMode>("explore");
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null); // State for single selected category
     const [allSearchResults, setAllSearchResults] = useState<WithMetric<Circle>[]>([]); // Store ALL results from backend
@@ -84,7 +85,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscove
     const [, setContentPreview] = useAtom(contentPreviewAtom); // Atom for content preview panel
 
     // Calculate snap points unconditionally
-    const snapPoints = useMemo(() => [windowHeight * 0.3, windowHeight * 0.8], [windowHeight]);
+    const snapPoints = useMemo(() => [370, windowHeight * 0.3 - 72, windowHeight * 0.8 - 72], [windowHeight]);
 
     // Memoize the filtered initial circles for swiping
     const displayedSwipeCircles = useMemo(() => {
@@ -363,7 +364,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscove
     }
 
     return (
-        <div className="relative flex h-full w-full flex-row overflow-hidden">
+        <div className="relative flex w-full flex-row overflow-hidden md:h-full">
             {/* Map container */}
             {mapboxKey && (
                 <div className="relative flex-1">
@@ -669,9 +670,13 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscove
             {viewMode === "explore" && isMobile && (
                 <CustomDrawer
                     open={isDrawerOpen}
-                    onOpenChange={handleDrawerOpenChange}
-                    snapPoints={snapPoints} // Use the pre-calculated value
-                    modal={true} // Explicitly set modal (though it's default)
+                    onOpenChange={handleDrawerOpenChange} // Your existing handler
+                    snapPoints={snapPoints} // Pass the calculated snap points
+                    initialSnapPointIndex={0} // Open initially to the first snap point
+                    snapThreshold={160}
+                    modal={true} // Keep the overlay
+                    // fadeFromIndex={0} // Overlay fades from the first snap point (default)
+                    // animationConfig={{ tension: 210, friction: 20 }} // Optional custom spring
                 >
                     <div className="flex-1 rounded-t-[10px] bg-white pt-0">
                         <div className="mx-0 px-4 pb-4">

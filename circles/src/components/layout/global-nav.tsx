@@ -31,10 +31,10 @@ export default function GlobalNav() {
                             <div className="relative">
                                 {/* <div className="animate-pulse-slow absolute -inset-0 rounded-full bg-primary/30"></div> */}
                                 {/* First ripple ring */}
-                                <div className="animate-ripple absolute -inset-1 z-[-1] rounded-full border-8 border-primary/20"></div>
+                                <div className="absolute -inset-1 z-[-1] animate-ripple rounded-full border-8 border-primary/20"></div>
                                 {/* Second ripple ring with delay */}
-                                <div className="animate-ripple-delay absolute -inset-1 z-[-1] rounded-full border-8 border-primary/20"></div>
-                                <div className="animate-ripple-delay-2 absolute -inset-1 z-[-1] rounded-full border-8 border-primary/20"></div>
+                                <div className="absolute -inset-1 z-[-1] animate-ripple-delay rounded-full border-8 border-primary/20"></div>
+                                <div className="absolute -inset-1 z-[-1] animate-ripple-delay-2 rounded-full border-8 border-primary/20"></div>
 
                                 <div className="relative h-[40px] w-[40px] transform cursor-pointer transition-all duration-300 hover:scale-110">
                                     <Image

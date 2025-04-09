@@ -148,11 +148,11 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
         if (location?.lngLat) {
             // Get the zoom level based on precision
             let calculatedZoom = precisionLevels[location.precision].zoom ?? 14;
-            
+
             // Limit maximum zoom to city level (12), regardless of the precision setting
             const maxZoom = 12; // City level zoom
             const finalZoom = Math.min(calculatedZoom, maxZoom);
-            
+
             map.current?.flyTo({
                 center: location.lngLat,
                 zoom: finalZoom,
@@ -223,8 +223,14 @@ export function MapDisplay({ mapboxKey }: { mapboxKey: string }) {
         <div className="relative flex w-full flex-row overflow-hidden bg-[#2e4c6b]">
             {mapboxKey && (
                 <>
-                    <div className="relative" style={{ width: mapWidth, height: windowHeight + "px" }}></div>
-                    <div className={"fixed right-0 z-30"} style={{ width: mapWidth, height: windowHeight + "px" }}>
+                    <div
+                        className="relative"
+                        style={{ width: mapWidth, height: windowHeight - (isMobile ? 72 : 0) + "px" }}
+                    ></div>
+                    <div
+                        className={"fixed right-0 z-30"}
+                        style={{ width: mapWidth, height: windowHeight - (isMobile ? 72 : 0) + "px" }}
+                    >
                         <MapBox mapboxKey={mapboxKey} />
                     </div>
                 </>
