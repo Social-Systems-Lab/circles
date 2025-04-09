@@ -56,13 +56,13 @@ const mapItemToContent = (item: WithMetric<Content> | Circle | undefined): Conte
 };
 
 interface MapSwipeContainerProps {
-    initialCircles: WithMetric<Circle>[]; // Renamed prop
+    allDiscoverableCircles: WithMetric<Circle>[]; // Renamed prop for clarity
     mapboxKey: string;
 }
 
 type ViewMode = "cards" | "explore";
 
-export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCircles, mapboxKey }) => {
+export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscoverableCircles, mapboxKey }) => {
     // Existing state
     const [currentIndex, setCurrentIndex] = useState(0);
     const [user, setUser] = useAtom(userAtom);
@@ -87,8 +87,8 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
         const userFollowedIds = (user.memberships || []).map((m) => m.circleId);
         const userPendingIds = (user.pendingRequests || []).map((r) => r.circleId);
         const userIgnoredIds = user.ignoredCircles || [];
-        console.log("Filtering initial circles. Count:", initialCircles.length);
-        const filtered = initialCircles.filter(
+        console.log("Filtering discoverable circles for swipe. Count:", allDiscoverableCircles.length);
+        const filtered = allDiscoverableCircles.filter(
             (circle) =>
                 !userFollowedIds.includes(circle._id) &&
                 !userPendingIds.includes(circle._id) &&
@@ -96,7 +96,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
         );
         console.log("Filtered swipe circles count:", filtered.length);
         return filtered;
-    }, [initialCircles, user]); // Dependencies: initialCircles and user
+    }, [allDiscoverableCircles, user]); // Dependencies: allDiscoverableCircles and user
 
     // Reset index when swipe circles change
     useEffect(() => {
@@ -194,35 +194,41 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
     }, [allSearchResults]);
 
     // Add the clear search handler
+    // Helper function to filter circles by category
+    const filterCirclesByCategory = useCallback((circles: WithMetric<Circle>[], category: string | null) => {
+        if (!category) return circles;
+        const typeToFilter = category === "circles" ? "circle" : category === "projects" ? "project" : "user";
+        return circles.filter((c) => c.circleType === typeToFilter);
+    }, []);
+
+    // Add the clear search handler
     const handleClearSearch = useCallback(() => {
         setSearchQuery("");
         setAllSearchResults([]); // Clear all results
-        setDisplayedContent([]); // Clear map markers as well
         setHasSearched(false); // Reset search state
         setSelectedCategory(null); // Reset category filter
-    }, [setDisplayedContent]);
+        // Reset map to show all discoverable circles (filtered by the now null category)
+        const resetMapData = filterCirclesByCategory(allDiscoverableCircles, null)
+            .map((circle) => mapItemToContent(circle))
+            .filter((c): c is Content => c !== null);
+        setDisplayedContent(resetMapData);
+        console.log("Search cleared, resetting map to all discoverable circles:", resetMapData.length);
+    }, [setDisplayedContent, allDiscoverableCircles, filterCirclesByCategory]);
 
-    // Update map markers based on FILTERED search results (only in explore mode)
-    useEffect(() => {
-        if (viewMode === "explore") {
-            console.log("Updating map display with FILTERED search results:", filteredSearchResults.length);
-            const mapData = filteredSearchResults
-                .map((circle) => mapItemToContent(circle))
-                .filter((c): c is Content => c !== null);
-            setDisplayedContent(mapData); // Update atom with mapped data
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filteredSearchResults, viewMode]); // Depend on filtered results now
+    // --- End Search Logic ---
 
-    // Handle view mode changes
+    // Handle switching TO cards view
     useEffect(() => {
-        console.log("View mode changed to:", viewMode);
         if (viewMode === "cards") {
             // When switching to cards, show the current swipe circle on map
             if (currentIndex < displayedSwipeCircles.length) {
                 const currentCircle = displayedSwipeCircles[currentIndex];
                 console.log("Switching to cards view, showing current card on map:", currentCircle?._id);
-                setDisplayedContent([currentCircle].filter(Boolean)); // Show only current card marker
+                const cardMapData = [currentCircle]
+                    .filter(Boolean)
+                    .map(mapItemToContent)
+                    .filter((c): c is Content => c !== null);
+                setDisplayedContent(cardMapData); // Show only current card marker
                 if (currentCircle?.location?.lngLat) {
                     setTimeout(() => handleSetZoomContent(currentCircle), 100); // Use helper
                 }
@@ -230,23 +236,49 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                 console.log("Switching to cards view, no cards left, clearing map.");
                 setDisplayedContent([]); // Clear map if no cards left
             }
-            setAllSearchResults([]); // Fix typo: Clear ALL search results state
-        } else {
-            // When switching to explore, update map with current search results
-            console.log(
-                "Switching to explore view, showing FILTERED search results on map:",
-                filteredSearchResults.length,
-            );
-            // Update map with filtered results
-            const mapData = filteredSearchResults
-                .map((circle) => mapItemToContent(circle))
-                .filter((c): c is Content => c !== null);
+        }
+        // Logic for explore view map updates is handled in the effect below
+    }, [viewMode, displayedSwipeCircles, currentIndex, handleSetZoomContent, setDisplayedContent]); // Dependencies for cards view logic
+
+    // Update map markers when in Explore mode based on search state and category
+    useEffect(() => {
+        if (viewMode === "explore") {
+            let mapData: Content[] = [];
+            if (hasSearched) {
+                // If a search is active, use filtered search results
+                console.log(
+                    "Explore View: Updating map with FILTERED search results (Category:",
+                    selectedCategory || "All",
+                    ") Count:",
+                    filteredSearchResults.length,
+                );
+                mapData = filteredSearchResults
+                    .map((circle) => mapItemToContent(circle))
+                    .filter((c): c is Content => c !== null);
+            } else {
+                // If no search is active, use all discoverable circles filtered by category
+                console.log(
+                    "Explore View: Updating map with discoverable circles (Category:",
+                    selectedCategory || "All",
+                    ")",
+                );
+                mapData = filterCirclesByCategory(allDiscoverableCircles, selectedCategory)
+                    .map((circle) => mapItemToContent(circle))
+                    .filter((c): c is Content => c !== null);
+                console.log("Discoverable map data count:", mapData.length);
+            }
             setDisplayedContent(mapData);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [viewMode]); // Intentionally simplified: Only run when viewMode changes. Read other state inside.
-
-    // --- End Search Logic ---
+        // This effect runs whenever the inputs determining explore map content change
+    }, [
+        viewMode,
+        hasSearched,
+        filteredSearchResults,
+        allDiscoverableCircles,
+        selectedCategory,
+        filterCirclesByCategory,
+        setDisplayedContent,
+    ]);
 
     const handleRefresh = () => {
         // Consider resetting state instead of full reload if possible

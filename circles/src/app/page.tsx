@@ -30,7 +30,7 @@ export default async function Home(props: HomeProps) {
 
     return (
         <ContentDisplayWrapper content={circlesWithMetrics}>
-            <MapSwipeContainer initialCircles={circlesWithMetrics} mapboxKey={serverConfig?.mapboxKey ?? ""} />
+            <MapSwipeContainer allDiscoverableCircles={circlesWithMetrics} mapboxKey={serverConfig?.mapboxKey ?? ""} />
         </ContentDisplayWrapper>
     );
 }
