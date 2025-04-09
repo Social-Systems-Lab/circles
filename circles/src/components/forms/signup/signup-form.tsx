@@ -105,6 +105,56 @@ export function SignupForm(): React.ReactElement {
                 <Controller
                     name="handle"
                     control={form.control as unknown as Control}
+                    render={({ field, fieldState }) => {
+                        // Store the original onChange handler
+                        const originalOnChange = field.onChange;
+
+                        // Create the modified onChange handler
+                        // It might receive an event or just the value, handle both cases
+                        const handleOnChange = (valueOrEvent: string | React.ChangeEvent<HTMLInputElement>) => {
+                            let rawValue = "";
+                            if (typeof valueOrEvent === "string") {
+                                rawValue = valueOrEvent;
+                            } else if (valueOrEvent && valueOrEvent.target) {
+                                rawValue = valueOrEvent.target.value;
+                            }
+                            // Transform the value: replace spaces with hyphens and convert to lowercase
+                            const transformedValue = rawValue.replace(/\s+/g, "-").toLowerCase();
+                            // Call the original onChange with the transformed value
+                            originalOnChange(transformedValue);
+                        };
+
+                        return (
+                            // We need FormItem, FormLabel etc. if DynamicAutoHandleField doesn't render them
+                            // Assuming DynamicAutoHandleField handles its own label and input rendering
+                            // but we add FormDescription and FormMessage here.
+                            <FormItem>
+                                <DynamicAutoHandleField
+                                    field={{
+                                        name: "handle",
+                                        type: "text",
+                                        label: "Handle", // DynamicAutoHandleField likely uses this
+                                        placeholder: "your-unique-handle",
+                                        description: {
+                                            // Updated description for user, added back circle for type compatibility
+                                            user: "Choose a unique handle (lowercase, numbers, hyphens). Spaces automatically become hyphens.",
+                                            circle: "Choose a unique handle for the circle.", // Generic circle description
+                                        },
+                                        required: true,
+                                    }}
+                                    // Pass the modified field object including the new onChange
+                                    formField={{ ...field, onChange: handleOnChange }}
+                                    control={form.control as unknown as Control}
+                                />
+                                {/* Display validation errors using FormMessage */}
+                                <FormMessage>{fieldState.error?.message}</FormMessage>
+                            </FormItem>
+                        );
+                    }}
+                />
+                {/* <Controller
+                    name="handle"
+                    control={form.control as unknown as Control}
                     render={({ field }) => (
                         <DynamicAutoHandleField
                             field={{
@@ -122,7 +172,7 @@ export function SignupForm(): React.ReactElement {
                             control={form.control as unknown as Control}
                         />
                     )}
-                />
+                /> */}
                 <FormField
                     control={form.control}
                     name="_email"
