@@ -4,13 +4,22 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
 import { cn } from "@/lib/utils";
-import { Circle, ContentPreviewData } from "@/models/models";
+import { Circle, ContentPreviewData, FileInfo, CircleType } from "@/models/models"; // Import needed types
 import { useAtom } from "jotai";
 import { useRouter } from "next/navigation";
 import CircleTypeIndicator from "@/components/utils/circle-type-indicator";
 
+// Define a more flexible type for the prop
+interface CircleLike {
+    _id?: any;
+    name?: string;
+    picture?: FileInfo;
+    handle?: string;
+    circleType?: CircleType;
+}
+
 type CirclePictureProps = {
-    circle: Circle;
+    circle: CircleLike; // Use the flexible type
     size?: string;
     className?: string;
     openPreview?: boolean;
@@ -48,12 +57,16 @@ export const CirclePicture = ({
         }
 
         // Open preview
+        // Cast back to Circle if ContentPreviewData requires the full type
         let contentPreviewData: ContentPreviewData = {
-            type: "user",
-            content: circle,
+            type: "user", // Assuming preview is for user/circle types mainly
+            content: circle as Circle,
         };
-        setContentPreview((x) =>
-            x?.content === circle && sidePanelContentVisible === "content" ? undefined : contentPreviewData,
+        setContentPreview(
+            (x) =>
+                x?.content?._id === circle._id && sidePanelContentVisible === "content"
+                    ? undefined
+                    : contentPreviewData, // Compare by _id
         );
         e.stopPropagation();
     };

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState, useMemo } from "react";
-import { Circle, WithMetric, Content, ContentPreviewData } from "@/models/models"; // Content is needed for atoms
+import { Circle, WithMetric, Content, ContentPreviewData, MemberDisplay } from "@/models/models"; // Added MemberDisplay import
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import useWindowDimensions from "@/components/utils/use-window-dimensions";
 import { motion } from "framer-motion";
@@ -23,7 +23,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"; // 
 import { searchContentAction } from "../search/actions"; // Import server action
 import CategoryFilter from "../search/category-filter"; // Import CategoryFilter
 import Indicators from "@/components/utils/indicators";
-import { Drawer } from "vaul"; // Import vaul drawer
+import CustomDrawer from "@/components/ui/custom-drawer"; // Import CustomDrawer
 
 // Helper function to map enriched Content or Circle to Content type for Jotai atoms
 // Primarily used for setting zoomContent
@@ -68,7 +68,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscove
     const [currentIndex, setCurrentIndex] = useState(0);
     const [user, setUser] = useAtom(userAtom);
     const [, setZoomContent] = useAtom(zoomContentAtom);
-    const [, setDisplayedContent] = useAtom(displayedContentAtom); // Atom for map markers
+    const [displayedContent, setDisplayedContent] = useAtom(displayedContentAtom); // Atom for map markers
     const isMobile = useIsMobile();
     const { windowWidth, windowHeight } = useWindowDimensions();
     const router = useRouter();
@@ -82,6 +82,9 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscove
     const [hasSearched, setHasSearched] = useState(false); // Track if a search has been initiated
     const [isDrawerOpen, setIsDrawerOpen] = useState(false); // State to control drawer visibility
     const [, setContentPreview] = useAtom(contentPreviewAtom); // Atom for content preview panel
+
+    // Calculate snap points unconditionally
+    const snapPoints = useMemo(() => [windowHeight * 0.3, windowHeight * 0.8], [windowHeight]);
 
     // Memoize the filtered initial circles for swiping
     const displayedSwipeCircles = useMemo(() => {
@@ -284,12 +287,12 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscove
 
     // Effect to control drawer open state based on search status and view mode on mobile
     useEffect(() => {
-        if (viewMode === "explore" && isMobile && hasSearched) {
+        if (viewMode === "explore" && isMobile) {
             setIsDrawerOpen(true);
         } else {
             setIsDrawerOpen(false); // Close drawer if not in explore mode, not mobile, or search cleared
         }
-    }, [viewMode, isMobile, hasSearched]);
+    }, [viewMode, isMobile]);
 
     // Custom handler for drawer open change to prevent closing while search is active
     const handleDrawerOpenChange = useCallback(
@@ -581,57 +584,82 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscove
                             <p className="text-sm text-gray-500">No results found for "{searchQuery}".</p>
                         )}
                     </div>
-                    {!isSearching && filteredSearchResults.length > 0 && (
+                    {!isSearching && displayedContent.length > 0 && (
                         <ul className="space-y-2">
-                            {filteredSearchResults.map((item) => (
-                                <li
-                                    key={item._id} // Use MongoDB _id
-                                    className="flex cursor-pointer items-center gap-2 rounded pb-2 pl-3 pt-1 hover:bg-gray-100"
-                                    onClick={(e) => {
-                                        // Zoom map
-                                        if (item.location?.lngLat) {
-                                            handleSetZoomContent(item);
+                            {/* Filter displayedContent to only include CircleLike items before mapping */}
+                            {displayedContent
+                                .filter(
+                                    (
+                                        item,
+                                    ): item is Circle | MemberDisplay => // Type guard to filter out PostDisplay
+                                        item.circleType === "user" ||
+                                        item.circleType === "circle" ||
+                                        item.circleType === "project" ||
+                                        !item.circleType, // Handle cases where circleType might be undefined but it's still CircleLike
+                                )
+                                .map((item) => (
+                                    <li
+                                        key={item._id} // Use MongoDB _id
+                                        className="flex cursor-pointer items-center gap-2 rounded pb-2 pl-3 pt-1 hover:bg-gray-100"
+                                        onClick={(e) => {
+                                            // Zoom map
+                                            if (item.location?.lngLat) {
+                                                // Cast item to any for handleSetZoomContent call site
+                                                handleSetZoomContent(item as any);
+                                            }
+                                            // Open preview or navigate
+                                            if (isMobile) {
+                                                return; // no preview
+                                            } else {
+                                                // Open preview panel
+                                                // Cast content to any to resolve userGroups mismatch from MemberDisplay
+                                                const contentPreviewData: ContentPreviewData = {
+                                                    type: (item.circleType || "circle") as any, // Cast type as well for safety
+                                                    content: item as any,
+                                                };
+                                                setContentPreview((prev) =>
+                                                    prev?.content?._id === item._id ? undefined : contentPreviewData,
+                                                );
+                                                e.stopPropagation(); // Prevent potential map click through
+                                            }
+                                        }}
+                                        title={
+                                            item.location?.lngLat
+                                                ? "Click to focus map and view details"
+                                                : "Click to view details (no location)"
                                         }
-                                        // Open preview or navigate
-                                        if (isMobile) {
-                                            return; // no preview
-                                        } else {
-                                            // Open preview panel
-                                            const contentPreviewData: ContentPreviewData = {
-                                                type: item.circleType || "circle", // Use actual type
-                                                content: item, // Pass the full item data
-                                            };
-                                            setContentPreview((prev) =>
-                                                prev?.content?._id === item._id ? undefined : contentPreviewData,
-                                            );
-                                            e.stopPropagation(); // Prevent potential map click through
-                                        }
-                                    }}
-                                    title={
-                                        item.location?.lngLat
-                                            ? "Click to focus map and view details"
-                                            : "Click to view details (no location)"
-                                    }
-                                >
-                                    <div className="relative">
-                                        <CirclePicture circle={item} size="40px" showTypeIndicator={true} />
-                                    </div>
-                                    <div className="relative flex-1 overflow-hidden pl-2">
-                                        <div className="truncate p-0 text-sm font-medium">
-                                            {item.name || "Untitled"}
+                                    >
+                                        <div className="relative">
+                                            {/* Pass item directly, CirclePicture now accepts CircleLike */}
+                                            <CirclePicture circle={item} size="40px" showTypeIndicator={true} />
                                         </div>
-                                        <div className="mt-1 line-clamp-2 p-0 text-xs text-gray-500">
-                                            {item.description || item.mission || ""}
-                                        </div>
-                                        {item.metrics && (
-                                            <div className="flex flex-row pt-1">
-                                                <Indicators className="pointer-events-none" metrics={item.metrics} />
-                                                <div className="flex-1" />
+                                        <div className="relative flex-1 overflow-hidden pl-2">
+                                            <div className="truncate p-0 text-sm font-medium">
+                                                {/* Handle name based on type */}
+                                                {"name" in item && item.name ? item.name : "Post"}
                                             </div>
-                                        )}
-                                    </div>
-                                </li>
-                            ))}
+                                            <div className="mt-1 line-clamp-2 p-0 text-xs text-gray-500">
+                                                {/* Handle description/content/mission based on type */}
+                                                {"description" in item
+                                                    ? item.description ?? ("mission" in item ? item.mission : "") ?? ""
+                                                    : "content" in item && typeof item.content === "string"
+                                                      ? item.content.substring(0, 70) +
+                                                        (item.content.length > 70 ? "..." : "")
+                                                      : ""}
+                                            </div>
+                                            {/* Ensure metrics check is robust */}
+                                            {"metrics" in item && item.metrics && (
+                                                <div className="flex flex-row pt-1">
+                                                    <Indicators
+                                                        className="pointer-events-none"
+                                                        metrics={item.metrics}
+                                                    />
+                                                    <div className="flex-1" />
+                                                </div>
+                                            )}
+                                        </div>
+                                    </li>
+                                ))}
                         </ul>
                     )}
                 </div>
@@ -639,97 +667,90 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ allDiscove
 
             {/* Search Results Drawer (Mobile - Only in Explore Mode) */}
             {viewMode === "explore" && isMobile && (
-                <Drawer.Root
-                    open={isDrawerOpen} // Control open state
-                    onOpenChange={handleDrawerOpenChange} // Use custom handler
-                    shouldScaleBackground
-                    // dismissible={false} // Remove dismissible
-                    snapPoints={[0.25, 0.8]}
+                <CustomDrawer
+                    open={isDrawerOpen}
+                    onOpenChange={handleDrawerOpenChange}
+                    snapPoints={snapPoints} // Use the pre-calculated value
+                    modal={true} // Explicitly set modal (though it's default)
                 >
-                    <Drawer.Portal>
-                        <Drawer.Overlay className="fixed inset-0 z-[100] bg-black/40" /> {/* Corrected z-index */}
-                        <Drawer.Content className="fixed bottom-0 left-0 right-0 z-[101] mt-24 flex h-full max-h-[96%] flex-col rounded-t-[10px] bg-zinc-100">
-                            {/* Only render content if the drawer should be open (i.e., a search has happened) */}
-                            {hasSearched && (
-                                <div className="flex-1 rounded-t-[10px] bg-white pt-4">
-                                    <div className="mx-auto mb-4 h-1.5 w-12 flex-shrink-0 rounded-full bg-zinc-300" />
-                                    <div className="mx-0 max-w-md">
-                                        <div className="hidden">
-                                            <Drawer.Title className="formatted mb-4 ml-4 mr-4 font-medium">
-                                                Search Results
-                                            </Drawer.Title>
-                                        </div>
-                                        <div className="pl-4">
-                                            {/* Loading and No Results Messages */}
-                                            {isSearching && <p>Loading...</p>}
-                                            {!isSearching &&
-                                                allSearchResults.length > 0 &&
-                                                filteredSearchResults.length === 0 &&
-                                                selectedCategory && (
-                                                    <p className="text-sm text-gray-500">
-                                                        No results found for category "{selectedCategory}".
-                                                    </p>
-                                                )}
-                                            {!isSearching && allSearchResults.length === 0 && hasSearched && (
-                                                <p className="text-sm text-gray-500">
-                                                    No results found for "{searchQuery}".
-                                                </p>
-                                            )}
-                                        </div>
-                                        {/* Results List */}
-                                        {!isSearching && filteredSearchResults.length > 0 && (
-                                            <ul className="space-y-2">
-                                                {filteredSearchResults.map((item) => (
-                                                    <li
-                                                        key={item._id} // Use MongoDB _id
-                                                        className="flex cursor-pointer items-center gap-2 rounded pb-2 pl-3 pt-1 hover:bg-gray-100"
-                                                        onClick={(e) => {
-                                                            // Zoom map
-                                                            if (item.location?.lngLat) {
-                                                                handleSetZoomContent(item);
-                                                            }
-                                                            // Mobile: No preview panel, just zoom
-                                                        }}
-                                                        title={
-                                                            item.location?.lngLat
-                                                                ? "Click to focus map"
-                                                                : "No location available"
-                                                        }
-                                                    >
-                                                        <div className="relative">
-                                                            <CirclePicture
-                                                                circle={item}
-                                                                size="60px"
-                                                                showTypeIndicator={true}
-                                                            />
-                                                        </div>
-                                                        <div className="relative flex-1 overflow-hidden pl-4">
-                                                            <div className="truncate p-0 text-xl font-medium">
-                                                                {item.name || "Untitled"}
-                                                            </div>
-                                                            <div className="text-md mt-1 line-clamp-2 p-0 text-gray-500">
-                                                                {item.description || item.mission || ""}
-                                                            </div>
-                                                            {item.metrics && (
-                                                                <div className="flex flex-row pt-1">
-                                                                    <Indicators
-                                                                        className="pointer-events-none"
-                                                                        metrics={item.metrics}
-                                                                    />
-                                                                    <div className="flex-1" />
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        )}
-                                    </div>
-                                </div>
+                    <div className="flex-1 rounded-t-[10px] bg-white pt-0">
+                        <div className="mx-0 px-4 pb-4">
+                            <div className="hidden">
+                                <h2 className="formatted mb-4 font-medium">Search Results</h2>
+                            </div>
+                            {/* Loading and No Results Messages */}
+                            {isSearching && <p>Loading...</p>}
+                            {!isSearching &&
+                                allSearchResults.length > 0 &&
+                                filteredSearchResults.length === 0 &&
+                                selectedCategory && (
+                                    <p className="text-sm text-gray-500">
+                                        No results found for category "{selectedCategory}".
+                                    </p>
+                                )}
+                            {!isSearching && allSearchResults.length === 0 && hasSearched && (
+                                <p className="text-sm text-gray-500">No results found for "{searchQuery}".</p>
                             )}
-                        </Drawer.Content>
-                    </Drawer.Portal>
-                </Drawer.Root>
+                            {/* Results List */}
+                            {!isSearching && filteredSearchResults.length > 0 && (
+                                <ul className="space-y-2">
+                                    {/* Filter filteredSearchResults to only include CircleLike items before mapping */}
+                                    {filteredSearchResults
+                                        .filter(
+                                            (
+                                                item, // Removed incorrect type predicate
+                                            ) =>
+                                                item.circleType === "user" ||
+                                                item.circleType === "circle" ||
+                                                item.circleType === "project" ||
+                                                !item.circleType,
+                                        )
+                                        .map((item) => (
+                                            <li
+                                                key={item._id} // Use MongoDB _id
+                                                className="flex cursor-pointer items-center gap-2 rounded pb-2 pt-1 hover:bg-gray-100"
+                                                onClick={(e) => {
+                                                    // Zoom map
+                                                    if (item.location?.lngLat) {
+                                                        handleSetZoomContent(item);
+                                                    }
+                                                    // Mobile: No preview panel, just zoom
+                                                }}
+                                                title={
+                                                    item.location?.lngLat
+                                                        ? "Click to focus map"
+                                                        : "No location available"
+                                                }
+                                            >
+                                                <div className="relative">
+                                                    {/* Pass item directly, CirclePicture now accepts CircleLike */}
+                                                    <CirclePicture circle={item} size="60px" showTypeIndicator={true} />
+                                                </div>
+                                                <div className="relative flex-1 overflow-hidden pl-4">
+                                                    <div className="truncate p-0 text-xl font-medium">
+                                                        {item.name || "Untitled"}
+                                                    </div>
+                                                    <div className="text-md mt-1 line-clamp-2 p-0 text-gray-500">
+                                                        {item.description || item.mission || ""}
+                                                    </div>
+                                                    {/* Conditionally render Indicators based on item.metrics */}
+                                                    {item.metrics && (
+                                                        <div className="flex flex-row pt-1">
+                                                            <Indicators
+                                                                className="pointer-events-none"
+                                                                metrics={item.metrics}
+                                                            />
+                                                            <div className="flex-1" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </li>
+                                        ))}
+                                </ul>
+                            )}
+                        </div>
+                    </div>
+                </CustomDrawer>
             )}
 
             {/* Swipe instructions popup (only in cards mode) */}
