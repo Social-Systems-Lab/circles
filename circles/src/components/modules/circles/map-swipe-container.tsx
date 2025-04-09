@@ -12,21 +12,22 @@ import { RefreshCw, Hand, Home, Search, X } from "lucide-react"; // Added X icon
 import { MdOutlineTravelExplore } from "react-icons/md"; // Added Explore icon
 import { HiMiniSquare2Stack } from "react-icons/hi2"; // Added Card Stack icon
 import { useAtom } from "jotai";
-import { userAtom, zoomContentAtom, displayedContentAtom } from "@/lib/data/atoms"; // Added displayedContentAtom
+import {
+    userAtom,
+    zoomContentAtom,
+    displayedContentAtom,
+    contentPreviewAtom,
+    ContentPreviewData,
+} from "@/lib/data/atoms"; // Added displayedContentAtom and contentPreviewAtom
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { CirclePicture } from "./circle-picture"; // Correct named import
 import { completeSwipeOnboardingAction } from "./swipe-actions";
 import { useRouter } from "next/navigation";
-// SearchResultItem might not be needed here anymore if actions.ts returns WithMetric<Content>
-// import { SearchResultItem } from "@/lib/data/vdb";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"; // Re-add ToggleGroup imports
 import { searchContentAction } from "../search/actions"; // Import server action
-// No longer need getCirclesWithMetrics here
-// import { getCirclesWithMetrics } from "@/lib/data/circle";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"; // Import ToggleGroup
 import CategoryFilter from "../search/category-filter"; // Import CategoryFilter
-// Placeholder import for SearchResultsPanel (if needed later)
-// import SearchResultsPanel from "../search/search-results-panel";
 
 // Helper function to map enriched Content or Circle to Content type for Jotai atoms
 // Primarily used for setting zoomContent
@@ -79,11 +80,11 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
     // New state for search and view mode
     const [viewMode, setViewMode] = useState<ViewMode>("cards");
     const [searchQuery, setSearchQuery] = useState("");
-    const [selectedCategories, setSelectedCategories] = useState<string[]>(["circles", "projects", "users", "posts"]); // Default categories
-    // Store enriched Circle data with metrics after fetching
-    const [searchResults, setSearchResults] = useState<WithMetric<Circle>[]>([]); // Changed type
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null); // State for single selected category
+    const [allSearchResults, setAllSearchResults] = useState<WithMetric<Circle>[]>([]); // Store ALL results from backend
     const [isSearching, setIsSearching] = useState(false);
     const [hasSearched, setHasSearched] = useState(false); // Track if a search has been initiated
+    const [, setContentPreview] = useAtom(contentPreviewAtom); // Atom for content preview panel
 
     // Memoize the filtered initial circles for swiping
     const displayedSwipeCircles = useMemo(() => {
@@ -143,52 +144,80 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
     }, [currentIndex, displayedSwipeCircles, viewMode, handleSetZoomContent]); // Use helper
 
     // --- Search Logic ---
-    // --- Search Logic ---
     const handleSearchTrigger = useCallback(async () => {
-        if (!searchQuery.trim() || selectedCategories.length === 0) {
-            setSearchResults([]);
+        // Always search for all relevant types (circles, projects, users)
+        const searchCategoriesForBackend = ["circles", "projects", "users"];
+        if (!searchQuery.trim()) {
+            setAllSearchResults([]);
             setDisplayedContent([]); // Clear map
             setHasSearched(false); // Reset search initiated flag
             return;
         }
         setIsSearching(true);
         setHasSearched(true); // Mark that a search has been initiated
-        setSearchResults([]); // Clear previous results immediately
+        setAllSearchResults([]); // Clear previous results immediately
         setDisplayedContent([]); // Clear map immediately
         try {
-            console.log("Calling searchContentAction with query:", searchQuery, "categories:", selectedCategories);
-            // Call the server action which now returns enriched results
-            const results = await searchContentAction(searchQuery, selectedCategories);
-            console.log("Received enriched results from server action:", results.length);
-            setSearchResults(results); // Update state directly with the enriched results
+            console.log(
+                "Calling searchContentAction with query:",
+                searchQuery,
+                "categories:",
+                searchCategoriesForBackend,
+            );
+            // Call the server action - it should ignore categories and search all 'circles' VDB
+            const results = await searchContentAction(searchQuery, searchCategoriesForBackend);
+            console.log("Received ALL enriched results from server action:", results.length);
+            setAllSearchResults(results); // Store all results
         } catch (error) {
             console.error("Search action failed:", error);
-            setSearchResults([]); // Clear results on error
+            setAllSearchResults([]); // Clear results on error
         } finally {
-            setIsSearching(false); // Correct finally block content
+            setIsSearching(false);
         }
-    }, [searchQuery, selectedCategories, setDisplayedContent]);
+    }, [searchQuery, setDisplayedContent]); // Removed selectedCategories dependency
+
+    // Memoize filtered results for display based on selectedCategory
+    const filteredSearchResults = useMemo(() => {
+        if (!selectedCategory) {
+            return allSearchResults; // Show all if no category is selected
+        }
+        // Map UI category name (plural) to circleType (singular)
+        const typeToFilter =
+            selectedCategory === "circles" ? "circle" : selectedCategory === "projects" ? "project" : "user";
+        return allSearchResults.filter((result) => result.circleType === typeToFilter);
+    }, [allSearchResults, selectedCategory]);
+
+    // Calculate category counts from ALL search results
+    const categoryCounts = useMemo(() => {
+        const counts: { [key: string]: number } = { circles: 0, projects: 0, users: 0 };
+        allSearchResults.forEach((result) => {
+            if (result.circleType === "circle") counts.circles++;
+            else if (result.circleType === "project") counts.projects++;
+            else if (result.circleType === "user") counts.users++;
+        });
+        return counts;
+    }, [allSearchResults]);
 
     // Add the clear search handler
     const handleClearSearch = useCallback(() => {
         setSearchQuery("");
-        setSearchResults([]);
+        setAllSearchResults([]); // Clear all results
         setDisplayedContent([]); // Clear map markers as well
         setHasSearched(false); // Reset search state
+        setSelectedCategory(null); // Reset category filter
     }, [setDisplayedContent]);
 
-    // Update map markers when enriched search results change (only in explore mode)
+    // Update map markers based on FILTERED search results (only in explore mode)
     useEffect(() => {
         if (viewMode === "explore") {
-            console.log("Updating map display with enriched search results:", searchResults.length);
-            // Map searchResults (WithMetric<Circle>[]) to Content[] for the atom
-            // Assuming Circle is directly assignable to Content for map display purposes
-            const mapData = searchResults
+            console.log("Updating map display with FILTERED search results:", filteredSearchResults.length);
+            const mapData = filteredSearchResults
                 .map((circle) => mapItemToContent(circle))
                 .filter((c): c is Content => c !== null);
             setDisplayedContent(mapData); // Update atom with mapped data
         }
-    }, [searchResults, viewMode, setDisplayedContent]); // Added mapItemToContent dependency if it changes
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filteredSearchResults, viewMode]); // Depend on filtered results now
 
     // Handle view mode changes
     useEffect(() => {
@@ -206,12 +235,18 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                 console.log("Switching to cards view, no cards left, clearing map.");
                 setDisplayedContent([]); // Clear map if no cards left
             }
-            setSearchResults([]); // Clear search results state
+            setAllSearchResults([]); // Fix typo: Clear ALL search results state
         } else {
             // When switching to explore, update map with current search results
-            console.log("Switching to explore view, showing search results on map:", searchResults.length);
-            // searchResults are already enriched, update map directly
-            setDisplayedContent(searchResults);
+            console.log(
+                "Switching to explore view, showing FILTERED search results on map:",
+                filteredSearchResults.length,
+            );
+            // Update map with filtered results
+            const mapData = filteredSearchResults
+                .map((circle) => mapItemToContent(circle))
+                .filter((c): c is Content => c !== null);
+            setDisplayedContent(mapData);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [viewMode]); // Intentionally simplified: Only run when viewMode changes. Read other state inside.
@@ -363,11 +398,12 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                                 {isSearching ? "..." : <Search className="h-4 w-4" />}
                             </Button>
                         </div>
-                        {/* Category Filter */}
+                        {/* Category Filter - Use updated props */}
                         <CategoryFilter
-                            categories={["circles", "projects", "users", "posts"]} // Define available categories
-                            selectedCategories={selectedCategories}
-                            onSelectionChange={setSelectedCategories}
+                            categories={["circles", "projects", "users"]} // Only relevant categories
+                            categoryCounts={categoryCounts} // Pass calculated counts
+                            selectedCategory={selectedCategory} // Pass single selected category state
+                            onSelectionChange={setSelectedCategory} // Pass state setter
                         />
                     </div>
                 )}
@@ -482,40 +518,72 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                 <div className="formatted absolute left-4 top-20 z-40 max-h-[calc(100vh-120px)] w-[300px] overflow-y-auto rounded-lg bg-white p-4 shadow-lg">
                     <h3 className="mb-2 font-semibold">Search Results</h3>
                     {isSearching && <p>Loading...</p>}
-                    {!isSearching && searchResults.length === 0 && (
-                        <p className="text-sm text-gray-500">
-                            No results found for "{searchQuery}".
-                        </p> /* Escaped " again */
+                    {!isSearching &&
+                        allSearchResults.length > 0 &&
+                        filteredSearchResults.length === 0 &&
+                        selectedCategory && (
+                            <p className="text-sm text-gray-500">No results found for category "{selectedCategory}".</p>
+                        )}
+                    {!isSearching && allSearchResults.length === 0 && hasSearched && (
+                        <p className="text-sm text-gray-500">No results found for "{searchQuery}".</p>
                     )}
-                    {/* Removed the "Enter a query" message here, as panel only shows after search */}
-                    {!isSearching && searchResults.length > 0 && (
-                        <ul>
-                            {searchResults.map(
-                                // item is now WithMetric<Circle>
-                                (item) => (
-                                    <li
-                                        key={item._id} // Use MongoDB _id
-                                        className="mb-1 cursor-pointer rounded border-b p-1 text-sm hover:bg-gray-100"
-                                        onClick={() => item.location?.lngLat && handleSetZoomContent(item)} // Use helper, check location
-                                        title={item.location?.lngLat ? "Click to focus map" : "No location data"}
-                                    >
-                                        <span className={!item.location?.lngLat ? "text-gray-400" : ""}>
-                                            {/* Display name (item is always a Circle type now) */}
-                                            {item.name || "Untitled"} ({item.circleType || "N/A"}){" "}
-                                            {/* Show type, handle undefined */}
-                                            {/* Optionally display search rank */}
-                                            {item.metrics?.searchRank != null && ( // Check for null/undefined explicitly
-                                                <span className="ml-1 text-xs text-blue-500">
-                                                    (Rank: {item.metrics.searchRank.toFixed(2)})
-                                                </span>
-                                            )}
-                                        </span>
+                    {!isSearching && filteredSearchResults.length > 0 && (
+                        <ul className="space-y-2">
+                            {filteredSearchResults.map((item) => (
+                                <li
+                                    key={item._id} // Use MongoDB _id
+                                    className="flex cursor-pointer items-start gap-2 rounded p-1.5 hover:bg-gray-100"
+                                    onClick={(e) => {
+                                        // Zoom map
+                                        if (item.location?.lngLat) {
+                                            handleSetZoomContent(item);
+                                        }
+                                        // Open preview or navigate
+                                        if (isMobile) {
+                                            // Determine path based on type
+                                            const path =
+                                                item.circleType === "user"
+                                                    ? `/users/${item.handle}` // Assuming user profile path
+                                                    : `/circles/${item.handle}`; // Circle/Project path
+                                            router.push(path);
+                                        } else {
+                                            // Open preview panel
+                                            const contentPreviewData: ContentPreviewData = {
+                                                type: item.circleType || "circle", // Use actual type
+                                                content: item, // Pass the full item data
+                                            };
+                                            setContentPreview((prev) =>
+                                                prev?.content?._id === item._id ? undefined : contentPreviewData,
+                                            );
+                                            e.stopPropagation(); // Prevent potential map click through
+                                        }
+                                    }}
+                                    title={
+                                        item.location?.lngLat
+                                            ? "Click to focus map and view details"
+                                            : "Click to view details (no location)"
+                                    }
+                                >
+                                    <CirclePicture circle={item} size="sm" />
+                                    <div className="flex-1 overflow-hidden">
+                                        <p className="truncate text-sm font-medium">
+                                            {item.name || "Untitled"} ({item.circleType || "N/A"})
+                                        </p>
+                                        <p className="line-clamp-2 text-xs text-gray-500">
+                                            {item.description || item.mission || ""}
+                                        </p>
+                                        {/* Optionally display search rank */}
+                                        {item.metrics?.searchRank != null && (
+                                            <span className="ml-1 text-xs text-blue-500">
+                                                (Rank: {item.metrics.searchRank.toFixed(2)})
+                                            </span>
+                                        )}
                                         {!item.location?.lngLat && (
                                             <span className="ml-1 text-xs text-gray-400">(No location)</span>
                                         )}
-                                    </li>
-                                ),
-                            )}
+                                    </div>
+                                </li>
+                            ))}
                         </ul>
                     )}
                 </div>

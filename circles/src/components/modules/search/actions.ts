@@ -12,60 +12,41 @@ import { revalidatePath } from "next/cache";
  * @param categories An array of categories (collections) to search within (e.g., ['circles', 'projects', 'users']).
  * @returns A promise that resolves to an array of enriched Circle items with metrics (including searchRank).
  */
-export async function searchContentAction(query: string, selectedCategories: string[]): Promise<WithMetric<Circle>[]> {
-    // Map selected categories to VDB categories
-    // "circles", "projects", "users" map to VDB "circles"
-    // "posts" maps to VDB "posts" (though we ignore posts for now)
-    const vdbSearchCategories: VbdCategories[] = [];
-    if (selectedCategories.some((cat) => ["circles", "projects", "users"].includes(cat))) {
-        vdbSearchCategories.push("circles");
-    }
-    // Add other mappings here if needed in the future (e.g., posts)
-    // if (selectedCategories.includes("posts")) {
-    //     vdbSearchCategories.push("posts");
-    // }
+export async function searchContentAction(
+    query: string,
+    selectedCategories: string[], // Keep param for compatibility, but ignore it
+): Promise<WithMetric<Circle>[]> {
+    // Always search the 'circles' VDB collection which contains circles, projects, and users
+    const vdbSearchCategories: VbdCategories[] = ["circles"];
 
     console.log(
-        `Executing searchContentAction with query: "${query}", selected UI categories: [${selectedCategories.join(", ")}], VDB categories: [${vdbSearchCategories.join(", ")}]`,
+        `Executing searchContentAction with query: "${query}", searching VDB categories: [${vdbSearchCategories.join(", ")}]`,
     );
 
-    if (!query || vdbSearchCategories.length === 0) {
-        console.log("Search query or relevant VDB categories empty, returning empty results.");
+    if (!query) {
+        console.log("Search query empty, returning empty results.");
         return [];
     }
 
     try {
-        // 1. Perform Semantic Search using VDB categories
+        // 1. Perform Semantic Search using VDB 'circles' category
         const semanticResults = await semanticSearchContent({ query, categories: vdbSearchCategories });
-        console.log(`Semantic search returned ${semanticResults.length} results.`);
+        console.log(`Semantic search returned ${semanticResults.length} raw results.`);
 
-        // 2. Filter results based on the original selectedCategories (specifically for 'circles' VDB results)
-        const filteredResults = semanticResults.filter((result) => {
-            if (result.type === "circle" || result.type === "project" || result.type === "user") {
-                // Check if the specific type ('circle', 'project', 'user') was selected by the user
-                // Map the result type back to the UI category name convention if needed (e.g., 'circle' -> 'circles')
-                const uiCategory =
-                    result.type === "circle" ? "circles" : result.type === "project" ? "projects" : "users";
-                return selectedCategories.includes(uiCategory);
-            }
-            // Include results from other VDB categories directly if they were searched (e.g., posts - but ignored for now)
-            // return selectedCategories.includes(result.type); // Example if posts were included
-            return false; // Ignore non-circle types for now
-        });
+        // Client-side filtering is now done in MapSwipeContainer
+        // Remove server-side filtering step
 
-        console.log(`Filtered results based on UI selection: ${filteredResults.length}`);
-
-        if (filteredResults.length === 0) {
-            console.log("No results matched the specific UI category selection.");
+        if (semanticResults.length === 0) {
+            console.log("Semantic search returned no results.");
             return [];
         }
 
-        // 3. Extract IDs and Scores for the filtered results
-        const resultIds = filteredResults.map((r) => r._id);
-        const scoresMap = new Map(filteredResults.map((r) => [r._id, r.score]));
+        // 2. Extract IDs and Scores for ALL semantic results
+        const resultIds = semanticResults.map((r) => r._id);
+        const scoresMap = new Map(semanticResults.map((r) => [r._id, r.score]));
 
-        // 4. Fetch Base Circle Data
-        console.log("Fetching base circle data for filtered IDs:", resultIds);
+        // 3. Fetch Base Circle Data for ALL results
+        console.log("Fetching base circle data for ALL semantic result IDs:", resultIds);
         const baseCircles = await getCirclesByIds(resultIds);
         console.log(`Fetched ${baseCircles.length} base circles.`);
 
@@ -74,12 +55,11 @@ export async function searchContentAction(query: string, selectedCategories: str
             return [];
         }
 
-        // 4. Fetch Metrics for the Circles
-        // 4. Prepare circles with initial search rank metric for getMetricsForCircles
+        // 4. Prepare circles with initial search rank metric
         let circlesWithSearchRank: WithMetric<Circle>[] = baseCircles.map((circle) => {
-            const searchRank = scoresMap.get(circle._id) ?? 0;
+            const searchRank = scoresMap.get(circle._id) ?? 0; // Get score using MongoDB _id
             return {
-                ...circle,
+                ...circle, // Spread the fetched circle data
                 metrics: {
                     // Initialize metrics object
                     searchRank: searchRank,
