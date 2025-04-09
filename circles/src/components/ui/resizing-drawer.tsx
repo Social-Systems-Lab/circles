@@ -260,8 +260,7 @@ const ResizingDrawer = ({
     // --- Update useDrag target ---
     useDrag(dragHandler, {
         filterTaps: true,
-        //axis: "y",
-        preventScroll: true,
+        preventScroll: false,
         pointer: { touch: true },
         target: touchTargetRef, // <-- Use the new touch target ref
     });
@@ -282,8 +281,6 @@ const ResizingDrawer = ({
             style={{
                 ...positionStyle,
                 height: animatedHeight,
-                // Add touchAction none here to be safe, although useDrag preventScroll should handle it
-                touchAction: "none",
             }}
         >
             {/* Wrapper div to ensure animated.div has a single child */}
@@ -315,7 +312,7 @@ const ResizingDrawer = ({
                 {/* Content Area */}
                 <div
                     ref={contentRef}
-                    className="mb-[72px] flex-1 overflow-y-auto"
+                    className="mb-[72px] mt-[10px] flex-1 overflow-y-auto"
                     style={{
                         // Allow vertical scrolling within the content area itself
                         touchAction: "pan-y",
