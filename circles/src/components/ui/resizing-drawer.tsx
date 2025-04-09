@@ -215,24 +215,6 @@ const ResizingDrawer = ({
                 dragStartSnapHeightRef.current = currentClosestSnapHeight;
                 dragStartSnapIndexRef.current = currentClosestSnapIndex; // Use the calculated index
 
-                const target = event?.target as HTMLElement;
-                const contentEl = contentRef.current;
-                let cancelDrag = false;
-                if (target && contentEl && contentEl.contains(target)) {
-                    const isScrollable = contentEl.scrollHeight > contentEl.clientHeight;
-                    if (isScrollable) {
-                        const isAtTop = contentEl.scrollTop <= 0;
-                        const isAtBottom = contentEl.scrollTop >= contentEl.scrollHeight - contentEl.clientHeight - 1;
-                        if (!handleRef.current?.contains(target)) {
-                            if (dy > 0 && !isAtTop) cancelDrag = true;
-                            if (dy < 0 && !isAtBottom) cancelDrag = true;
-                        }
-                    }
-                }
-                if (cancelDrag) {
-                    cancel();
-                    return { startHeight };
-                }
                 return { startHeight };
             }
 
