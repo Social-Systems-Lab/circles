@@ -9,9 +9,9 @@ import { motion } from "framer-motion";
 import CircleSwipeCard from "./circle-swipe-card";
 import { MapDisplay } from "@/components/map/map";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Hand, Home, Search, X, ArrowLeft } from "lucide-react"; // Added ArrowLeft
+import { RefreshCw, Hand, Home, Search, X, ArrowLeft, ChevronRight } from "lucide-react"; // Added ArrowLeft
 import { MdOutlineTravelExplore } from "react-icons/md";
-import { HiMiniSquare2Stack } from "react-icons/hi2";
+import { HiChevronRight, HiMiniSquare2Stack } from "react-icons/hi2";
 import { useAtom } from "jotai";
 import {
     userAtom,
@@ -76,7 +76,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const isMobile = useIsMobile();
     const { windowWidth, windowHeight } = useWindowDimensions();
     const router = useRouter();
-    const [viewMode, setViewMode] = useState<ViewMode>("explore");
+    const [viewMode, setViewMode] = useState<ViewMode>("cards");
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [allSearchResults, setAllSearchResults] = useState<WithMetric<Circle>[]>([]);
@@ -230,7 +230,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         setContentPreview, // Add dependency
     ]);
 
-    const handleRefresh = () => window.location.reload();
+    const handleRefresh = () => {
+        setViewMode("explore");
+    };
     const goToFeed = () => router.push("/foryou");
     const handleGotIt = async () => {
         // ... (no changes) ...
@@ -505,7 +507,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                         </p>
                                         <div className="flex flex-row gap-2">
                                             <Button onClick={handleRefresh} className="mt-4 gap-2">
-                                                <RefreshCw className="h-4 w-4" /> Refresh
+                                                <RefreshCw className="h-4 w-4" /> Explore
                                             </Button>
                                             <Button onClick={goToFeed} className="mt-4 gap-2">
                                                 <Home className="h-4 w-4" /> Go to feed
@@ -734,6 +736,10 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                                         </div>
                                                     )}
                                                 </div>
+                                                <div className="relative">
+                                                    {/* <ChevronRight className="h-4 w-4" /> */}
+                                                    <HiChevronRight className="h-4 w-4" />
+                                                </div>
                                             </li>
                                         ))}
                                     </ul>
@@ -748,12 +754,34 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             {showSwipeInstructions && viewMode === "cards" && (
                 // ... (no changes needed here) ...
                 <motion.div
-                    className="absolute bottom-0 left-0 right-0 top-0 z-[70] flex items-center justify-center bg-black/50" // Ensure z-index is high
+                    className="absolute bottom-0 left-0 right-0 top-0 z-[60] flex items-center justify-center bg-black/50" // Increased z-index
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.3 }}
                 >
-                    {/* ... */}
+                    <div className="max-w-[350px] rounded-lg bg-white p-6 text-center shadow-xl">
+                        <h3 className="mb-3 text-xl font-semibold">How to Discover</h3>
+                        {/* Hand animation */}
+                        <div className="relative mb-6 h-20 w-full">
+                            <motion.div
+                                className="absolute flex h-full w-full items-center justify-center"
+                                animate={{ x: [0, -40, 0, 40, 0] }}
+                                transition={{ repeat: Infinity, duration: 4, times: [0, 0.25, 0.5, 0.75, 1] }}
+                            >
+                                <Hand className="h-16 w-16 text-gray-600" />
+                            </motion.div>
+                            <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-red-500">
+                                Ignore
+                            </div>
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-green-500">
+                                Follow
+                            </div>
+                        </div>
+                        <p className="mb-6 text-gray-600">Swipe card right to follow, left to ignore.</p>
+                        <Button onClick={handleGotIt} className="w-full">
+                            Got it
+                        </Button>
+                    </div>
                 </motion.div>
             )}
         </div>

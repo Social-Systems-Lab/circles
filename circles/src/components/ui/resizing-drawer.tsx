@@ -14,7 +14,8 @@ interface ResizingDrawerProps {
     onSnapChange?: (index: number) => void; // Optional: Notify parent on snap change
 }
 
-const ResizingDrawer: React.FC<ResizingDrawerProps> = ({
+// Remove React.FC type and define props directly in the function signature
+const ResizingDrawer = ({
     children,
     snapPoints: rawSnapPoints,
     initialSnapPointIndex = 0,
@@ -23,8 +24,9 @@ const ResizingDrawer: React.FC<ResizingDrawerProps> = ({
     animationConfig = config.stiff,
     activeSnapIndex, // Use this prop
     onSnapChange, // Use this callback
-}) => {
-    const AnimatedDiv = animated.div;
+}: ResizingDrawerProps) => {
+    // Cast animated.div to React.ElementType to help with type inference
+    const AnimatedComponent = animated.div as React.ElementType;
     const drawerRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
     const handleRef = useRef<HTMLDivElement>(null);
@@ -161,7 +163,7 @@ const ResizingDrawer: React.FC<ResizingDrawerProps> = ({
             }
         }
         // Depend on activeSnapIndex and sortedSnapPoints (as they determine targetHeight)
-    }, [activeSnapIndex, sortedSnapPoints, isMounted, api, minSnap]);
+    }, [activeSnapIndex, sortedSnapPoints, isMounted, api, minSnap, onSnapChange]); // Added onSnapChange dependency based on usage
 
     // --- Drag Handling ---
     const dragHandler = useCallback(
@@ -290,7 +292,7 @@ const ResizingDrawer: React.FC<ResizingDrawerProps> = ({
             minSnap,
             moveThreshold,
             sortedSnapPoints,
-            onSnapChange, // Add callback to dependencies
+            onSnapChange,
         ],
     );
 
@@ -311,8 +313,9 @@ const ResizingDrawer: React.FC<ResizingDrawerProps> = ({
         ? { position: "absolute", bottom: 0, left: 0, right: 0 }
         : { position: "fixed", bottom: 0, left: 0, right: 0 };
 
+    // Use the explicitly casted AnimatedComponent
     return (
-        <AnimatedDiv
+        <AnimatedComponent
             ref={drawerRef}
             className="z-50 flex flex-col overflow-hidden rounded-t-lg border-t border-gray-200 bg-white shadow-lg"
             style={{
@@ -320,22 +323,25 @@ const ResizingDrawer: React.FC<ResizingDrawerProps> = ({
                 height: animatedHeight,
             }}
         >
-            {/* Handle */}
-            <div ref={handleRef} className="flex cursor-grab touch-none justify-center py-3 active:cursor-grabbing">
-                <div className="h-1.5 w-10 rounded-full bg-gray-300" />
-            </div>
+            {/* Wrapper div to ensure animated.div has a single child */}
+            <div className="flex h-full flex-col overflow-hidden">
+                {/* Handle */}
+                <div ref={handleRef} className="flex cursor-grab touch-none justify-center py-3 active:cursor-grabbing">
+                    <div className="h-1.5 w-10 rounded-full bg-gray-300" />
+                </div>
 
-            {/* Content Area */}
-            <div
-                ref={contentRef}
-                className="flex-1 overflow-y-auto"
-                style={{
-                    touchAction: "pan-y",
-                }}
-            >
-                {children}
+                {/* Content Area */}
+                <div
+                    ref={contentRef}
+                    className="flex-1 overflow-y-auto"
+                    style={{
+                        touchAction: "pan-y", // Keep touch action for scrolling
+                    }}
+                >
+                    {children} {/* Render children inside the scrollable content div */}
+                </div>
             </div>
-        </AnimatedDiv>
+        </AnimatedComponent>
     );
 };
 
