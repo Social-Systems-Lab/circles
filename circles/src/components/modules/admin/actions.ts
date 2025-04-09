@@ -10,6 +10,7 @@ import { getUserPrivate } from "@/lib/data/user";
 import { GlobalServerSettingsFormData, globalServerSettingsValidationSchema } from "./global-server-settings-schema";
 import { getServerSettings, registerServer, updateServerSettings, urlIsLocal } from "@/lib/data/server-settings";
 import { ServerSettings } from "@/models/models";
+import { upsertVdbCollections } from "@/lib/data/vdb"; // Import the re-indexing function
 
 // Get all circles of a specific type
 export async function getEntitiesByType(type: "circle" | "user" | "project") {
@@ -48,6 +49,34 @@ export async function getEntitiesByType(type: "circle" | "user" | "project") {
     } catch (error) {
         console.error(`Error fetching ${type}s:`, error);
         throw new Error(`Failed to fetch ${type}s`);
+    }
+}
+
+// Trigger re-indexing of all VDB collections
+export async function triggerReindexAction() {
+    // Check if user is admin
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "Unauthorized: You must be logged in." };
+    }
+    const user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        return { success: false, message: "Unauthorized: You do not have permission." };
+    }
+
+    console.log("Admin triggered re-indexing...");
+
+    try {
+        // Call the function to upsert all collections
+        await upsertVdbCollections();
+        console.log("Re-indexing process completed successfully via admin action.");
+        return { success: true, message: "Re-indexing process completed successfully." };
+    } catch (error) {
+        console.error("Error during admin-triggered re-indexing:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to complete re-indexing process.",
+        };
     }
 }
 
