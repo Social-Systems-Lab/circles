@@ -31,7 +31,7 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
             type="single"
             value={selectedCategory ?? ""} // Provide empty string if null for controlled component
             onValueChange={handleValueChange}
-            className="flex flex-wrap items-center gap-2"
+            className="flex items-center gap-2"
         >
             {categories.map((category) => (
                 <ToggleGroupItem

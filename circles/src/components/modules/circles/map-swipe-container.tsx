@@ -22,6 +22,7 @@ import { useRouter } from "next/navigation";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"; // Re-add ToggleGroup imports
 import { searchContentAction } from "../search/actions"; // Import server action
 import CategoryFilter from "../search/category-filter"; // Import CategoryFilter
+import Indicators from "@/components/utils/indicators";
 
 // Helper function to map enriched Content or Circle to Content type for Jotai atoms
 // Primarily used for setting zoomContent
@@ -312,9 +313,9 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
             )}
 
             {/* Top Bar Controls */}
-            <div className="absolute left-4 top-4 z-50 flex flex-wrap items-center gap-2">
+            <div className={`absolute ${isMobile ? "flex-col" : "flex-row"} left-4 top-4 z-50 flex gap-2`}>
                 {/* View Mode Toggle */}
-                <div className="flex flex-row gap-1 rounded-full bg-white p-[4px] shadow-md">
+                <div className={`flex flex-row gap-1 rounded-full bg-white p-[4px] shadow-md`}>
                     <TooltipProvider delayDuration={100}>
                         <Tooltip>
                             <TooltipTrigger asChild>
@@ -351,49 +352,53 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                 </div>
                 {/* Search Bar & Filters (Only in Explore Mode) */}
                 {viewMode === "explore" && (
-                    <div className="flex flex-wrap items-center gap-2 rounded-full bg-white p-1 px-2 shadow-md">
-                        {/* Search Input */}
-                        <div className="flex items-center">
-                            <Search className="ml-1 mr-1 h-5 w-5 text-gray-500" />
-                            <input
-                                type="text"
-                                placeholder="Search..." // Shortened placeholder
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                onKeyDown={(e) => e.key === "Enter" && handleSearchTrigger()}
-                                className="w-32 border-none bg-transparent outline-none focus:ring-0 sm:w-48" // Responsive width
-                            />
-                            {/* Clear Search Button */}
-                            {searchQuery && (
+                    <div className="relative">
+                        <div className="absolute flex items-center gap-2 rounded-full bg-white p-1 px-2 shadow-md">
+                            {/* Search Input */}
+                            <div className="flex items-center">
+                                <Search className="ml-1 mr-1 h-5 w-5 text-gray-500" />
+                                <input
+                                    type="text"
+                                    placeholder="Search..." // Shortened placeholder
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    onKeyDown={(e) => e.key === "Enter" && handleSearchTrigger()}
+                                    className="w-32 border-none bg-transparent outline-none focus:ring-0 sm:w-48" // Responsive width
+                                />
+                                {/* Clear Search Button */}
+                                {searchQuery && (
+                                    <Button
+                                        onClick={handleClearSearch} // Use the handler
+                                        size="sm"
+                                        variant="ghost"
+                                        className="ml-1 p-1" // Added padding for easier clicking
+                                        aria-label="Clear search"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                )}
+                                {/* Search Trigger Button */}
                                 <Button
-                                    onClick={handleClearSearch} // Use the handler
+                                    onClick={handleSearchTrigger}
                                     size="sm"
                                     variant="ghost"
-                                    className="ml-1 p-1" // Added padding for easier clicking
-                                    aria-label="Clear search"
+                                    disabled={isSearching || !searchQuery.trim()}
+                                    aria-label="Search"
                                 >
-                                    <X className="h-4 w-4" />
+                                    {isSearching ? "..." : <Search className="h-4 w-4" />}
                                 </Button>
+                            </div>
+                            {/* Category Filter - Use updated props */}
+                            {!isMobile && (
+                                <CategoryFilter
+                                    categories={["circles", "projects", "users"]} // Only relevant categories
+                                    categoryCounts={categoryCounts} // Pass calculated counts
+                                    selectedCategory={selectedCategory} // Pass single selected category state
+                                    onSelectionChange={setSelectedCategory} // Pass state setter
+                                    hasSearched={hasSearched}
+                                />
                             )}
-                            {/* Search Trigger Button */}
-                            <Button
-                                onClick={handleSearchTrigger}
-                                size="sm"
-                                variant="ghost"
-                                disabled={isSearching || !searchQuery.trim()}
-                                aria-label="Search"
-                            >
-                                {isSearching ? "..." : <Search className="h-4 w-4" />}
-                            </Button>
                         </div>
-                        {/* Category Filter - Use updated props */}
-                        <CategoryFilter
-                            categories={["circles", "projects", "users"]} // Only relevant categories
-                            categoryCounts={categoryCounts} // Pass calculated counts
-                            selectedCategory={selectedCategory} // Pass single selected category state
-                            onSelectionChange={setSelectedCategory} // Pass state setter
-                            hasSearched={hasSearched}
-                        />
                     </div>
                 )}
             </div>
@@ -525,7 +530,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                             {filteredSearchResults.map((item) => (
                                 <li
                                     key={item._id} // Use MongoDB _id
-                                    className="flex cursor-pointer items-start gap-2 rounded pb-2 pl-3 pt-1 hover:bg-gray-100"
+                                    className="flex cursor-pointer items-center gap-2 rounded pb-2 pl-3 pt-1 hover:bg-gray-100"
                                     onClick={(e) => {
                                         // Zoom map
                                         if (item.location?.lngLat) {
@@ -533,12 +538,7 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                                         }
                                         // Open preview or navigate
                                         if (isMobile) {
-                                            // Determine path based on type
-                                            const path =
-                                                item.circleType === "user"
-                                                    ? `/users/${item.handle}` // Assuming user profile path
-                                                    : `/circles/${item.handle}`; // Circle/Project path
-                                            router.push(path);
+                                            return; // no preview
                                         } else {
                                             // Open preview panel
                                             const contentPreviewData: ContentPreviewData = {
@@ -560,15 +560,18 @@ export const MapSwipeContainer: React.FC<MapSwipeContainerProps> = ({ initialCir
                                     <div className="relative">
                                         <CirclePicture circle={item} size="40px" showTypeIndicator={true} />
                                     </div>
-                                    <div className="flex-1 overflow-hidden pl-2">
+                                    <div className="relative flex-1 overflow-hidden pl-2">
                                         <div className="truncate p-0 text-sm font-medium">
                                             {item.name || "Untitled"}
                                         </div>
                                         <div className="mt-1 line-clamp-2 p-0 text-xs text-gray-500">
                                             {item.description || item.mission || ""}
                                         </div>
-                                        {!item.location?.lngLat && (
-                                            <span className="ml-1 text-xs text-gray-400">(No location)</span>
+                                        {item.metrics && (
+                                            <div className="flex flex-row pt-1">
+                                                <Indicators className="pointer-events-none" metrics={item.metrics} />
+                                                <div className="flex-1" />
+                                            </div>
                                         )}
                                     </div>
                                 </li>
