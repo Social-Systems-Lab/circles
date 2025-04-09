@@ -153,7 +153,12 @@ export const UserToolbox = () => {
                         >
                             <Users className="h-5 w-5" />
                         </TabsTrigger>
-
+                        <TabsTrigger
+                            value="account"
+                            className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
+                        >
+                            <MdOutlineLogout className="h-5 w-5" />
+                        </TabsTrigger>
                         {/* ... other tabs */}
                     </TabsList>
                     <TabsContent value="chat" className="m-0 flex-grow overflow-auto pt-1">
