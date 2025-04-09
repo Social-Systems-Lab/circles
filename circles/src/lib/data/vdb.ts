@@ -406,3 +406,119 @@ const calculateCosineSimilarity = (vecA: number[], vecB: number[]): number => {
     const magnitudeB = Math.sqrt(vecB.reduce((sum, val) => sum + val * val, 0));
     return dotProduct / (magnitudeA * magnitudeB);
 };
+
+// Define the structure for search results
+export interface SearchResultItem {
+    _id: string; // Original MongoDB ObjectId as string
+    qdrantId: string; // Qdrant UUID
+    type: "circle" | "project" | "user" | "post"; // Type of content
+    name?: string; // Name (for circles, projects, users)
+    content?: string; // Content (for posts)
+    description?: string; // Description (for circles, projects, users)
+    score: number; // Similarity score from Qdrant
+    location?: {
+        lngLat: {
+            lng: number;
+            lat: number;
+        };
+        name?: string; // Optional location name
+    };
+    // Add other relevant fields as needed, e.g., images, author for posts
+    images?: { fileInfo?: { url?: string } }[];
+    author?: { _id: string; name?: string; pictureUrl?: string };
+}
+
+// Function for semantic search across specified collections
+export const semanticSearchContent = async (options: {
+    query: string;
+    categories: string[]; // e.g., ['circles', 'posts']
+    limit?: number;
+}): Promise<SearchResultItem[]> => {
+    const { query, categories, limit = 20 } = options;
+
+    if (!query || categories.length === 0) {
+        return [];
+    }
+
+    const client = await getQdrantClient();
+    const openai = getOpenAiClient();
+
+    try {
+        // 1. Get embedding for the search query
+        const queryEmbeddingResponse = await openai.embeddings.create({
+            input: [query],
+            model: "text-embedding-3-small",
+        });
+        const queryVector = queryEmbeddingResponse.data[0]?.embedding;
+
+        if (!queryVector) {
+            console.error("Failed to generate embedding for the query.");
+            return [];
+        }
+
+        // 2. Prepare search requests for each category (collection)
+        const searchPromises = categories.map((collectionName) => {
+            // Ensure collection name is valid
+            if (!vdbCollections.includes(collectionName)) {
+                console.warn(`Invalid collection name provided: ${collectionName}`);
+                return Promise.resolve([]); // Return empty results for invalid collections
+            }
+
+            return client.search(collectionName, {
+                vector: queryVector,
+                limit: limit,
+                with_payload: true, // We need the payload data
+                // Add filters here if needed in the future (e.g., based on location bounds)
+            });
+        });
+
+        // 3. Execute searches in parallel
+        const searchResults = await Promise.all(searchPromises);
+
+        // 4. Combine and process results
+        let combinedResults: SearchResultItem[] = [];
+        searchResults.forEach((resultSet, index) => {
+            const collectionName = categories[index]; // Get the corresponding collection name
+
+            resultSet.forEach((hit: any) => {
+                const payload = hit.payload;
+                const type = collectionName === "posts" ? "post" : payload?.circleType || "circle"; // Determine type
+
+                // Map payload to SearchResultItem structure
+                const resultItem: SearchResultItem = {
+                    _id: payload?.mongoId || hit.id, // Prefer original mongoId if stored, fallback to Qdrant ID
+                    qdrantId: hit.id,
+                    type: type,
+                    score: hit.score,
+                    name: payload?.name,
+                    content: payload?.content,
+                    description: payload?.description,
+                    // Map location if available
+                    location:
+                        payload?.location?.latitude && payload?.location?.longitude
+                            ? {
+                                  lngLat: {
+                                      lng: payload.location.longitude,
+                                      lat: payload.location.latitude,
+                                  },
+                                  name: payload?.locationName,
+                              }
+                            : undefined,
+                    // Add other fields as needed
+                    images: payload?.images, // Assuming images are stored directly in payload
+                    // author: payload?.author // Assuming author info is stored
+                };
+                combinedResults.push(resultItem);
+            });
+        });
+
+        // 5. Sort combined results by score (descending) and take top N
+        combinedResults.sort((a, b) => b.score - a.score);
+        combinedResults = combinedResults.slice(0, limit);
+
+        return combinedResults;
+    } catch (error) {
+        console.error("Error during semantic search:", error);
+        return [];
+    }
+};
