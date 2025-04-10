@@ -185,3 +185,53 @@ async function autoRemoveFromMemberChats(userDid: string, circleId: string) {
     if (!user?.matrixUsername) return;
     await removeUserFromRoom(user.matrixUsername, membersChat.matrixRoomId);
 }
+
+/**
+ * Get the user IDs (_id from circles collection) of members belonging to a specific user group within a circle.
+ * @param circleId The ID of the circle
+ * @param userGroupHandle The handle of the user group (e.g., "moderators")
+ * @returns Array of user IDs (strings)
+ */
+export const getMemberIdsByUserGroup = async (circleId: string, userGroupHandle: string): Promise<string[]> => {
+    try {
+        const members = await Members.aggregate([
+            // 1. Match members of the specific circle and user group
+            {
+                $match: {
+                    circleId: circleId,
+                    userGroups: userGroupHandle,
+                },
+            },
+            // 2. Lookup the user's details from the 'circles' collection using userDid
+            {
+                $lookup: {
+                    from: "circles",
+                    localField: "userDid",
+                    foreignField: "did",
+                    pipeline: [
+                        // Ensure we only get user documents
+                        { $match: { circleType: "user" } },
+                        // Project only the _id
+                        { $project: { _id: 1 } },
+                    ],
+                    as: "userDetails",
+                },
+            },
+            // 3. Unwind the userDetails array (should usually be one)
+            { $unwind: { path: "$userDetails", preserveNullAndEmptyArrays: false } },
+            // 4. Project just the user's _id as a string
+            {
+                $project: {
+                    _id: 0, // Exclude the member _id
+                    userId: { $toString: "$userDetails._id" },
+                },
+            },
+        ]).toArray();
+
+        // Extract the user IDs into a simple array
+        return members.map((m) => m.userId);
+    } catch (error) {
+        console.error(`Error getting member IDs for group ${userGroupHandle} in circle ${circleId}:`, error);
+        throw error; // Re-throw error to be handled by the caller
+    }
+};

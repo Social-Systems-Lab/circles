@@ -1,8 +1,9 @@
 "use server";
 
+import React from "react"; // Added React import
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
-import { getIssuesAction } from "@/app/circles/[handle]/issues/actions"; // Use issues action
+import { getIssuesAction } from "@/app/circles/[handle]/issues/actions"; // Corrected path to issues actions
 import { redirect } from "next/navigation";
 import { Circle, IssueDisplay } from "@/models/models"; // Use IssueDisplay
 import IssuesList from "./issues-list";

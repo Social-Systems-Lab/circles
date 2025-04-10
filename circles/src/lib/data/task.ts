@@ -129,6 +129,107 @@ export const getTasksByCircleId = async (circleId: string, userDid: string): Pro
 };
 
 /**
+ * Get active tasks (open or inProgress) for a circle, including author and assignee details.
+ * Filters results based on the user's group membership and the task's userGroups.
+ * @param circleId The ID of the circle
+ * @param userDid The DID of the user requesting the tasks (for visibility checks)
+ * @returns Array of active tasks the user is allowed to see
+ */
+export const getActiveTasksByCircleId = async (circleId: string, userDid?: string): Promise<TaskDisplay[]> => {
+    // Added userDid as optional for potential system calls
+    try {
+        const tasks = (await Tasks.aggregate([
+            // 1) Match on circleId and active stages first
+            {
+                $match: {
+                    circleId,
+                    stage: { $in: ["open", "inProgress"] }, // Filter for active stages
+                },
+            },
+
+            // 2) Lookup author details (same as getTasksByCircleId)
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { authorDid: "$createdBy" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$did", "$$authorDid"] },
+                                        { $eq: ["$circleType", "user"] },
+                                        { $ne: ["$$authorDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" },
+                            },
+                        },
+                    ],
+                    as: "authorDetails",
+                },
+            },
+            { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: false } },
+
+            // 3) Lookup assignee details (same as getTasksByCircleId)
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { assigneeDid: "$assignedTo" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$did", "$$assigneeDid"] },
+                                        { $eq: ["$circleType", "user"] },
+                                        { $ne: ["$$assigneeDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" },
+                            },
+                        },
+                    ],
+                    as: "assigneeDetails",
+                },
+            },
+            { $unwind: { path: "$assigneeDetails", preserveNullAndEmptyArrays: true } },
+
+            // 4) Final projection (same as getTasksByCircleId)
+            {
+                $project: {
+                    ...SAFE_TASK_PROJECTION,
+                    _id: { $toString: "$_id" },
+                    author: "$authorDetails",
+                    assignee: "$assigneeDetails",
+                },
+            },
+
+            // 5) Sort by newest first (optional, might be overridden by ranking later)
+            { $sort: { createdAt: -1 } },
+        ]).toArray()) as TaskDisplay[];
+
+        // TODO: Add fine-grained visibility filtering based on userDid and task.userGroups if needed
+        // This might involve fetching user's memberships for the circle
+
+        return tasks;
+    } catch (error) {
+        console.error("Error getting active tasks by circle ID:", error);
+        throw error;
+    }
+};
+
+/**
  * Get a single task by ID, including author and assignee details.
  * Does NOT perform visibility checks here, assumes calling action does.
  * @param taskId The ID of the task

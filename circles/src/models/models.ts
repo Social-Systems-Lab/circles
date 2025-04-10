@@ -913,6 +913,20 @@ export interface IssueDisplay extends Issue {
     circle?: Circle; // Circle details
 }
 
+// Ranked List for prioritization
+export const rankedListSchema = z.object({
+    _id: z.any().optional(),
+    entityId: z.string(), // ID of the circle (for tasks) or other entity (e.g., poll)
+    type: z.enum(["tasks", "poll"]), // Type of entity being ranked - add more as needed
+    userId: z.string(), // User's _id who submitted this ranking
+    list: z.array(z.string()), // Ordered array of item IDs (task IDs in this case)
+    createdAt: z.date(),
+    updatedAt: z.date(),
+    isValid: z.boolean().default(true), // Flag to mark if the list is current and usable for aggregation
+});
+
+export type RankedList = z.infer<typeof rankedListSchema>;
+
 // Task stages (mirroring Issue stages for now)
 export const taskStageSchema = z.enum(["review", "open", "inProgress", "resolved"]);
 export type TaskStage = z.infer<typeof taskStageSchema>;
