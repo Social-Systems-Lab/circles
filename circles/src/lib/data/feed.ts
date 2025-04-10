@@ -1,5 +1,5 @@
 // feed.ts - Feed data access functions
-import { Feeds, Posts, Comments, Reactions, Circles, Members, Proposals, Issues } from "./db"; // Added Proposals, Issues
+import { Feeds, Posts, Comments, Reactions, Circles, Members, Proposals, Issues, Tasks } from "./db"; // Added Tasks
 import { ObjectId } from "mongodb";
 import {
     Feed,
@@ -10,15 +10,17 @@ import {
     Circle,
     Mention,
     SortingOptions,
-    ProposalDisplay, // Added
-    IssueDisplay, // Added
+    ProposalDisplay,
+    IssueDisplay,
+    TaskDisplay, // Added TaskDisplay
 } from "@/models/models";
-import { getCircleById, SAFE_CIRCLE_PROJECTION, updateCircle, getCircleByHandle } from "./circle"; // Added getCircleByHandle
+import { getCircleById, SAFE_CIRCLE_PROJECTION, updateCircle, getCircleByHandle } from "./circle";
 import { getUserByDid } from "./user";
 import { getMetrics } from "../utils/metrics";
 import { deleteVbdPost, upsertVbdPosts } from "./vdb";
-import { getProposalById } from "./proposal"; // Added
-import { getIssueById } from "./issue"; // Added
+import { getProposalById } from "./proposal";
+import { getIssueById } from "./issue";
+import { getTaskById } from "./task"; // Added getTaskById
 
 export const getFeedsByCircleId = async (circleId: string): Promise<Feed[]> => {
     const feeds = await Feeds.find({
@@ -1006,7 +1008,7 @@ async function fetchAndAttachInternalPreviewData(posts: PostDisplay[]): Promise<
     const postsWithInternalLinks = posts.filter((p) => p.internalPreviewType && p.internalPreviewId);
     if (postsWithInternalLinks.length === 0) return;
 
-    const previewDataMap = new Map<string, Circle | PostDisplay | ProposalDisplay | IssueDisplay>();
+    const previewDataMap = new Map<string, Circle | PostDisplay | ProposalDisplay | IssueDisplay | TaskDisplay>(); // Added TaskDisplay
 
     // Group IDs by type
     const idsByType = postsWithInternalLinks.reduce(
@@ -1096,6 +1098,19 @@ async function fetchAndAttachInternalPreviewData(posts: PostDisplay[]): Promise<
                         const issueWithStringId = { ...i, _id: i._id.toString() };
                         // TODO: Also convert author/assignee/circle _id if populated here
                         previewDataMap.set(`issue-${i._id.toString()}`, issueWithStringId as IssueDisplay);
+                    });
+                    break;
+                case "task":
+                    // Assuming getTaskById fetches necessary display data
+                    const tasks = await Tasks.find(
+                        { _id: { $in: ids.map((id) => new ObjectId(id)) } },
+                        // Add projection if needed
+                    ).toArray();
+                    // TODO: Populate author/assignee/circle if needed, similar to getTaskById
+                    tasks.forEach((t) => {
+                        const taskWithStringId = { ...t, _id: t._id.toString() };
+                        // TODO: Also convert author/assignee/circle _id if populated here
+                        previewDataMap.set(`task-${t._id.toString()}`, taskWithStringId as TaskDisplay);
                     });
                     break;
             }

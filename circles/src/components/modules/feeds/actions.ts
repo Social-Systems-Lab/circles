@@ -362,6 +362,7 @@ export async function createPostAction(
             | "post"
             | "proposal"
             | "issue"
+            | "task" // Added task type
             | undefined;
         const internalPreviewId = formData.get("internalPreviewId") as string | undefined;
         const internalPreviewUrl = formData.get("internalPreviewUrl") as string | undefined;
@@ -493,6 +494,7 @@ export async function updatePostAction(
             | "post"
             | "proposal"
             | "issue"
+            | "task" // Added task type
             | undefined;
         const internalPreviewId = formData.get("internalPreviewId") as string | undefined;
         const internalPreviewUrl = formData.get("internalPreviewUrl") as string | undefined;

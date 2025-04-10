@@ -5,12 +5,21 @@ import Link from "next/link";
 import { getInternalLinkPreviewData, InternalLinkPreviewResult } from "./actions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Circle, PostDisplay, ProposalDisplay, IssueDisplay } from "@/models/models";
-import { truncateText } from "@/lib/utils"; // Assuming a utility for text truncation exists
-import { FileText, MessageSquare, Users, CheckSquare, AlertCircle, CircleDotDashed, CircleHelp } from "lucide-react"; // Example icons
+import { Circle, PostDisplay, ProposalDisplay, IssueDisplay, TaskDisplay } from "@/models/models"; // Added TaskDisplay
+import { truncateText } from "@/lib/utils";
+import {
+    FileText,
+    MessageSquare,
+    Users,
+    CheckSquare,
+    AlertCircle,
+    CircleDotDashed,
+    CircleHelp,
+    ListTodo,
+} from "lucide-react"; // Added ListTodo for tasks
 
 // Define the type for the data prop more explicitly
-type PreviewData = Circle | PostDisplay | ProposalDisplay | IssueDisplay;
+type PreviewData = Circle | PostDisplay | ProposalDisplay | IssueDisplay | TaskDisplay; // Added TaskDisplay
 
 type InternalLinkPreviewProps = {
     url: string; // Keep URL for the link itself
@@ -31,12 +40,23 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url, initialD
 
     // Determine the type based on the structure of initialData
     // This is a basic check; more robust type guards might be needed if structures overlap significantly
-    const getDataType = (data: PreviewData): "circle" | "post" | "proposal" | "issue" | null => {
+    const getDataType = (data: PreviewData): "circle" | "post" | "proposal" | "issue" | "task" | null => {
+        // Added "task"
         if ("circleType" in data && data.circleType === "post") return "post";
-        if ("stage" in data && "decisionText" in data) return "proposal"; // Check for proposal-specific fields
-        if ("stage" in data && "title" in data && !("decisionText" in data)) return "issue"; // Check for issue-specific fields
-        if ("handle" in data && "members" in data) return "circle"; // Check for circle-specific fields
-        return null; // Unknown type
+        if ("stage" in data && "decisionText" in data) return "proposal";
+        // Check for task before issue, assuming tasks might have similar fields but maybe a unique one later?
+        // For now, rely on the order or add a specific task field check if needed.
+        // Let's assume for now that if it has 'stage' and 'title' but not 'decisionText', it could be issue OR task.
+        // We'll differentiate based on how the data is passed or add a specific field later.
+        // For now, let's add a placeholder check or rely on the order in the switch.
+        // A better approach would be to add a distinguishing property in the model if needed.
+        // Let's refine the issue check slightly and add task check
+        if ("stage" in data && "title" in data && !("decisionText" in data) && !("taskSpecificField" in data))
+            return "issue"; // Placeholder
+        if ("stage" in data && "title" in data && !("decisionText" in data) /* && "taskSpecificField" in data */)
+            return "task"; // Placeholder for task check
+        if ("handle" in data && "members" in data) return "circle";
+        return null;
     };
 
     const dataType = getDataType(initialData);
@@ -129,6 +149,23 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url, initialD
                             <p className="text-sm text-gray-600">
                                 Status: <span className="font-semibold">{issue.stage}</span>
                                 {issue.assignee && ` | Assigned to: ${issue.assignee.name}`}
+                            </p>
+                        </div>
+                    </>
+                );
+            case "task":
+                const task = initialData as TaskDisplay;
+                return (
+                    <>
+                        <Avatar className="flex h-10 w-10 items-center justify-center rounded-md bg-green-100 text-green-700">
+                            <ListTodo className="h-5 w-5" /> {/* Task icon */}
+                        </Avatar>
+                        <div>
+                            <div className="text-xs text-gray-500">Task</div>
+                            <div className="font-medium">{task.title}</div>
+                            <p className="text-sm text-gray-600">
+                                Status: <span className="font-semibold">{task.stage}</span>
+                                {task.assignee && ` | Assigned to: ${task.assignee.name}`}
                             </p>
                         </div>
                     </>

@@ -23,7 +23,8 @@ import {
     UserPrivate,
     ProposalDisplay,
     IssueDisplay,
-} from "@/models/models"; // Added ProposalDisplay, IssueDisplay
+    TaskDisplay, // Added TaskDisplay
+} from "@/models/models";
 import { CirclePicture } from "../circles/circle-picture";
 import {
     Carousel,
@@ -103,10 +104,10 @@ type LinkPreviewData = {
 
 // Simplified internal preview structure for display within the form
 type InternalPreviewDisplayData = {
-    type: "circle" | "post" | "proposal" | "issue";
+    type: "circle" | "post" | "proposal" | "issue" | "task"; // Added task
     id: string; // handle or ID
     url: string;
-    data: Circle | PostDisplay | ProposalDisplay | IssueDisplay;
+    data: Circle | PostDisplay | ProposalDisplay | IssueDisplay | TaskDisplay; // Added TaskDisplay
 };
 
 const postMentionsInputStyle = {

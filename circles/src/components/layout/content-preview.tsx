@@ -21,6 +21,8 @@ import {
     ProposalStage,
     IssueDisplay,
     IssuePermissions,
+    TaskDisplay, // Added TaskDisplay
+    TaskPermissions, // Added TaskPermissions
 } from "@/models/models";
 import { PostItem } from "../modules/feeds/post-list";
 import Indicators from "../utils/indicators";
@@ -30,6 +32,7 @@ import { Badge } from "@/components/ui/badge";
 import ImageCarousel from "@/components/ui/image-carousel";
 import { ProposalItem } from "../modules/proposals/proposal-item";
 import IssueDetail from "../modules/issues/issue-detail";
+import TaskDetail from "../modules/tasks/task-detail"; // Added TaskDetail import
 
 export const PostPreview = ({ post, circle, feed, initialComments, initialShowAllComments }: PostItemProps) => {
     return (
@@ -235,6 +238,35 @@ export const ContentPreview: React.FC = () => {
                             permissions={props.permissions}
                             currentUserDid={currentUserDid} // Pass the current user's DID
                             isPreview={true} // Pass the isPreview flag
+                        />
+                    </div>
+                );
+            }
+            case "task": {
+                // Render TaskDetail in preview mode
+                const task = contentPreview!.content as TaskDisplay;
+                const props = contentPreview!.props as { circle: Circle; permissions: TaskPermissions }; // Get props
+                if (!props.circle || !props.permissions) {
+                    console.error("Task preview missing circle or permissions data:", task, props);
+                    return (
+                        <div className="p-4 text-red-500">
+                            Error: Missing circle or permissions data for task preview.
+                        </div>
+                    );
+                }
+                const currentUserDid = user?.did;
+                if (!currentUserDid) {
+                    console.error("Task preview missing currentUserDid");
+                    return <div className="p-4 text-red-500">Error: Missing user data for task preview.</div>;
+                }
+                return (
+                    <div className="custom-scrollbar h-full overflow-y-auto">
+                        <TaskDetail
+                            task={task}
+                            circle={props.circle}
+                            permissions={props.permissions}
+                            currentUserDid={currentUserDid}
+                            isPreview={true}
                         />
                     </div>
                 );

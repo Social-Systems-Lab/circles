@@ -16,7 +16,9 @@ import {
     ProposalDisplay,
     IssueDisplay,
     IssueStage,
-} from "@/models/models"; // Added Issue types
+    TaskDisplay, // Added TaskDisplay
+    TaskStage, // Added TaskStage
+} from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { sendReadReceipt } from "@/lib/data/client-matrix";
 import { MdOutlineArticle } from "react-icons/md";
@@ -46,8 +48,14 @@ type Notification = {
     issue?: IssueDisplay;
     issueId?: string;
     issueTitle?: string;
-    previousStage?: IssueStage;
-    newStage?: IssueStage;
+    previousStage?: IssueStage; // Keep for issues
+    newStage?: IssueStage; // Keep for issues
+    // Task fields (mirroring Issue fields)
+    task?: TaskDisplay;
+    taskId?: string;
+    taskTitle?: string;
+    previousTaskStage?: TaskStage;
+    newTaskStage?: TaskStage;
     // For grouping purposes
     key?: string;
 };
@@ -71,6 +79,10 @@ type GroupedNotification = {
     issue?: IssueDisplay;
     issueId?: string;
     issueTitle?: string;
+    // Task fields (mirroring Issue fields)
+    task?: TaskDisplay;
+    taskId?: string;
+    taskTitle?: string;
 };
 
 export const Notifications = () => {
@@ -205,6 +217,10 @@ export const Notifications = () => {
                     issue: notification.issue,
                     issueId: notification.issueId,
                     issueTitle: notification.issueTitle,
+                    // Add task fields
+                    task: notification.task,
+                    taskId: notification.taskId,
+                    taskTitle: notification.taskTitle,
                 });
             }
         }
@@ -313,6 +329,16 @@ export const Notifications = () => {
             case "issue_status_changed":
                 if (notification.issueId) {
                     router.push(`/circles/${circleHandle}/issues/${notification.issueId}`);
+                }
+                break;
+
+            // Task Notifications Navigation
+            case "task_submitted_for_review":
+            case "task_approved":
+            case "task_assigned":
+            case "task_status_changed":
+                if (notification.taskId) {
+                    router.push(`/circles/${circleHandle}/tasks/${notification.taskId}`);
                 }
                 break;
 
