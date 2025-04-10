@@ -591,10 +591,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
                         </Table>
                     </div>
 
-                    {/* <TaskPrioritizationModal isOpen={true} circle={circle} onClose={() => {}} /> */}
-
                     <Dialog open={deleteTaskDialogOpen} onOpenChange={setDeleteTaskDialogOpen}>
-                        {" "}
                         {/* Renamed state */}
                         <DialogContent>
                             <DialogHeader>
@@ -620,11 +617,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
                     </Dialog>
                     {/* Render Prioritization Modal */}
                     {showPrioritizeModal && (
-                        <TaskPrioritizationModal
-                            circle={circle}
-                            isOpen={showPrioritizeModal}
-                            onClose={() => setShowPrioritizeModal(false)}
-                        />
+                        <TaskPrioritizationModal circle={circle} onClose={() => setShowPrioritizeModal(false)} />
                     )}
                 </div>
             </div>

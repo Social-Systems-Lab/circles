@@ -12,7 +12,6 @@ import {
     DragOverlay,
     DragStartEvent,
     UniqueIdentifier,
-    // Removed useDraggable as we now use Sortable for both lists
     useDroppable,
 } from "@dnd-kit/core";
 import {
@@ -24,7 +23,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
-import { Loader2, GripVertical, X, CheckCircle2 } from "lucide-react"; // Added X and CheckCircle2
+import { Loader2, GripVertical, X } from "lucide-react"; // Removed CheckCircle2
 import { Circle, TaskDisplay } from "@/models/models";
 import {
     getTasksForPrioritizationAction,
@@ -35,22 +34,20 @@ import { useToast } from "@/components/ui/use-toast";
 
 // --- Child Components ---
 
-// 1. TaskItemDisplay (Simplified: Renders the item's look, shows handle only in overlay)
-const TaskItemDisplay = ({ task, isOverlay = false }: { task: TaskDisplay; isOverlay?: boolean }) => (
+// 1. TaskItemDisplay (Simplified: Always shows handle, consistent styling)
+// Removed isOverlay prop
+const TaskItemDisplay = ({ task }: { task: TaskDisplay }) => (
     <div
-        className={`flex touch-none items-center rounded border bg-white p-3 shadow-sm ${
-            isOverlay ? "opacity-90 shadow-lg" : "cursor-grab" // Keep cursor-grab for non-overlay
-        }`}
+        // Removed conditional styling based on isOverlay
+        // Added cursor-grab here as it's always the same look
+        className="flex cursor-grab touch-none items-center"
     >
-        {/* Handle only shown in overlay */}
-        {isOverlay && <GripVertical className="mr-2 h-5 w-5 flex-shrink-0 text-gray-400" />}
-        {/* Spacer for alignment when handle is not shown */}
-        {!isOverlay && <div className="mr-2 h-5 w-5 flex-shrink-0"></div>}
+        {/* Handle always shown */}
         <span className="flex-grow">{task.title}</span>
     </div>
 );
 
-// 2. SortableTaskItem (Used for BOTH lists now)
+// 2. SortableTaskItem (Handles combined look for ranked items)
 interface SortableTaskItemProps {
     task: TaskDisplay;
     id: string;
@@ -61,7 +58,7 @@ interface SortableTaskItemProps {
 const SortableTaskItem = ({ task, id, rank, isRanked }: SortableTaskItemProps) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: id,
-        data: { task, type: isRanked ? "ranked" : "unranked" }, // Set type based on list
+        data: { task, type: isRanked ? "ranked" : "unranked" },
     });
 
     const style = {
@@ -72,43 +69,60 @@ const SortableTaskItem = ({ task, id, rank, isRanked }: SortableTaskItemProps) =
     };
 
     return (
-        // Outer div handles sorting logic and applies transform/transition
+        // Outer div handles sorting logic, applies transform/transition, AND visual styling
         <div
             ref={setNodeRef}
             style={style}
             {...attributes}
             {...listeners} // Apply listeners here for the whole item
-            className="mb-2 flex items-center" // Use flex to align rank number and item
+            // Combined styling for the item "box" (Req 2)
+            className={`mb-2 flex items-center rounded border bg-white p-3 shadow-sm`}
         >
-            {/* 3. Conditionally render rank number */}
+            {/* Conditionally render rank number (Req 2) */}
             {isRanked && rank !== undefined && (
-                <span className="mr-2 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded bg-muted text-xs font-semibold text-muted-foreground">
+                <span
+                    // Adjusted styling for rank within the box
+                    className="mr-3 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded bg-muted text-xs font-semibold text-muted-foreground"
+                >
                     {rank}
                 </span>
             )}
-            {/* Add spacer for unranked items for alignment consistency */}
-            {!isRanked && <div className="mr-2 h-5 w-5 flex-shrink-0"></div>}
-            {/* Inner div contains the visual representation */}
+            {/* Removed spacer for unranked items (Req 3) */}
+            {/* Inner div contains the visual representation (now just the TaskItemDisplay) */}
             <div className="flex-grow">
+                {/* Pass task, no isOverlay needed (Req 4) */}
                 <TaskItemDisplay task={task} />
             </div>
         </div>
     );
 };
 
-// 3. DroppableContainer (No changes needed here, highlighting should improve with SortableContext)
-const DroppableContainer = ({ id, children, type }: { id: string; children: React.ReactNode; type: string }) => {
+// 3. DroppableContainer (Added conditional styling for ranked "complete" state)
+const DroppableContainer = ({
+    id,
+    children,
+    type,
+    isComplete = false, // Added prop for complete state styling
+}: {
+    id: string;
+    children: React.ReactNode;
+    type: string;
+    isComplete?: boolean; // Optional prop
+}) => {
     const { setNodeRef, isOver } = useDroppable({
         id: id,
         data: { type: type },
     });
+
+    // Conditional classes for "complete" state (Req 6)
+    const completeClasses = isComplete && type === "ranked-container" ? "border-green-300 bg-green-50" : "";
+    const highlightClass = isOver ? "border-blue-500 bg-blue-50" : "border-transparent";
+
     return (
         <div
             ref={setNodeRef}
-            // 1. Highlight should now work more consistently when dragging over items
-            // because both lists use SortableContext, improving dnd-kit's detection.
             className={`h-full rounded border p-2 transition-colors duration-150 ${
-                isOver ? "border-blue-500 bg-blue-50" : "border-transparent"
+                isComplete ? completeClasses : highlightClass // Apply complete or highlight styles
             }`}
         >
             {children}
@@ -120,18 +134,19 @@ const DroppableContainer = ({ id, children, type }: { id: string; children: Reac
 
 interface TaskPrioritizationModalProps {
     circle: Circle;
-    isOpen: boolean;
     onClose: () => void;
 }
 
-const TaskPrioritizationModal: React.FC<TaskPrioritizationModalProps> = ({ circle, isOpen, onClose }) => {
+const TaskPrioritizationModal: React.FC<TaskPrioritizationModalProps> = ({ circle, onClose }) => {
     const [rankedTasks, setRankedTasks] = useState<TaskDisplay[]>([]);
     const [unrankedTasks, setUnrankedTasks] = useState<TaskDisplay[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
     const [activeTask, setActiveTask] = useState<TaskDisplay | null>(null);
-    const [activeType, setActiveType] = useState<string | null>(null); // 'ranked' or 'unranked'
+    const [activeType, setActiveType] = useState<string | null>(null);
+    // State for showing unranked warning (Req 7)
+    const [showUnrankedWarning, setShowUnrankedWarning] = useState(false);
     const { toast } = useToast();
 
     const sensors = useSensors(
@@ -148,30 +163,21 @@ const TaskPrioritizationModal: React.FC<TaskPrioritizationModalProps> = ({ circl
                 onClose();
             }
         };
-        if (isOpen) {
-            document.addEventListener("keydown", handleKeyDown);
-            document.body.style.overflow = "hidden";
-            fetchData(); // Fetch data when opened
-        } else {
-            document.removeEventListener("keydown", handleKeyDown);
-            document.body.style.overflow = "";
-            // Reset state when closed
-            setIsLoading(true);
-            setRankedTasks([]);
-            setUnrankedTasks([]);
-            setActiveId(null);
-            setActiveTask(null);
-            setActiveType(null);
-        }
+        document.addEventListener("keydown", handleKeyDown);
+        document.body.style.overflow = "hidden";
+        fetchData();
+
         return () => {
             document.removeEventListener("keydown", handleKeyDown);
             document.body.style.overflow = "";
         };
-    }, [isOpen, onClose]); // Removed circle.handle dependency to avoid refetch on minor prop change if only isOpen matters
+        // Dependency array remains the same. Ensure `onClose` is stable in parent (See Req 1 notes).
+    }, [onClose]);
 
-    // Fetch data function (no changes needed)
     const fetchData = async () => {
+        // Reset loading and warning state on fetch start
         setIsLoading(true);
+        setShowUnrankedWarning(false);
         try {
             const [allActiveTasksResult, userRankingResult] = await Promise.all([
                 getTasksForPrioritizationAction(circle.handle!),
@@ -215,13 +221,12 @@ const TaskPrioritizationModal: React.FC<TaskPrioritizationModalProps> = ({ circl
         const { active } = event;
         setActiveId(active.id);
         setActiveTask(active.data.current?.task || null);
-        setActiveType(active.data.current?.type || null); // Type is 'ranked' or 'unranked'
+        setActiveType(active.data.current?.type || null);
     };
 
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
 
-        // Reset active state immediately
         setActiveId(null);
         setActiveTask(null);
         setActiveType(null);
@@ -231,16 +236,11 @@ const TaskPrioritizationModal: React.FC<TaskPrioritizationModalProps> = ({ circl
         const activeIdStr = active.id.toString();
         const overIdStr = over.id.toString();
         const taskToMove = active.data.current.task as TaskDisplay;
-        const typeOfActive = active.data.current.type; // 'ranked' or 'unranked'
-        // Determine the type of the target (item or container)
-        const typeOfOverItem = over.data.current?.type; // 'ranked', 'unranked'
-        const typeOfOverContainer = over.data.current?.type?.includes("container") ? over.data.current?.type : null; // 'ranked-container', 'unranked-container'
+        const typeOfActive = active.data.current.type;
+        const typeOfOverItem = over.data.current?.type;
+        const typeOfOverContainer = over.data.current?.type?.includes("container") ? over.data.current?.type : null;
 
-        // Prevent dropping onto self unless it's the only way to target a container
-        if (
-            activeIdStr === overIdStr &&
-            !typeOfOverContainer // Allow dropping on container even if ID matches (e.g., last item)
-        ) {
+        if (activeIdStr === overIdStr && !typeOfOverContainer) {
             return;
         }
 
@@ -249,67 +249,68 @@ const TaskPrioritizationModal: React.FC<TaskPrioritizationModalProps> = ({ circl
         const isOverRankedContainer = typeOfOverContainer === "ranked-container";
         const isOverUnrankedContainer = typeOfOverContainer === "unranked-container";
 
-        // Find current indices
         const activeIndexRanked = rankedTasks.findIndex((t) => t._id!.toString() === activeIdStr);
         const activeIndexUnranked = unrankedTasks.findIndex((t) => t._id!.toString() === activeIdStr);
 
-        // Scenario 1: Moving within Ranked list
+        let movedToRanked = false; // Flag to check if warning should potentially be cleared
+
+        // Moving within Ranked
         if (typeOfActive === "ranked" && (isOverRankedItem || isOverRankedContainer)) {
-            if (activeIndexRanked === -1) return; // Should not happen
+            if (activeIndexRanked === -1) return;
             setRankedTasks((items) => {
                 const overIndex = items.findIndex((item) => item._id!.toString() === overIdStr);
-                // If dropped on container or non-existent item, move to end
                 const newIndex = overIndex !== -1 ? overIndex : items.length;
                 return arrayMove(items, activeIndexRanked, newIndex);
             });
         }
-        // 5. Scenario 2: Moving within Unranked list
+        // Moving within Unranked
         else if (typeOfActive === "unranked" && (isOverUnrankedItem || isOverUnrankedContainer)) {
-            if (activeIndexUnranked === -1) return; // Should not happen
+            if (activeIndexUnranked === -1) return;
             setUnrankedTasks((items) => {
                 const overIndex = items.findIndex((item) => item._id!.toString() === overIdStr);
                 const newIndex = overIndex !== -1 ? overIndex : items.length;
                 return arrayMove(items, activeIndexUnranked, newIndex);
             });
         }
-        // Scenario 3: Moving Unranked -> Ranked
+        // Moving Unranked -> Ranked
         else if (typeOfActive === "unranked" && (isOverRankedItem || isOverRankedContainer)) {
-            // Remove from unranked
             setUnrankedTasks((items) => items.filter((item) => item._id!.toString() !== activeIdStr));
-            // Add to ranked
             setRankedTasks((items) => {
                 const overIndex = items.findIndex((item) => item._id!.toString() === overIdStr);
                 const newIndex = overIndex !== -1 ? overIndex : items.length;
                 return [...items.slice(0, newIndex), taskToMove, ...items.slice(newIndex)];
             });
+            movedToRanked = true;
         }
-        // Scenario 4: Moving Ranked -> Unranked
+        // Moving Ranked -> Unranked
         else if (typeOfActive === "ranked" && (isOverUnrankedItem || isOverUnrankedContainer)) {
-            // Remove from ranked
             setRankedTasks((items) => items.filter((item) => item._id!.toString() !== activeIdStr));
-            // Add to unranked
             setUnrankedTasks((items) => {
                 const overIndex = items.findIndex((item) => item._id!.toString() === overIdStr);
                 const newIndex = overIndex !== -1 ? overIndex : items.length;
                 return [...items.slice(0, newIndex), taskToMove, ...items.slice(newIndex)];
             });
         }
+
+        // If an item was moved to ranked, check if the warning should be cleared (Req 7 logic)
+        // We check the *next* state by simulating the removal of the moved item
+        if (movedToRanked && unrankedTasks.length - 1 === 0) {
+            setShowUnrankedWarning(false);
+        }
     };
 
     // --- Save Handler ---
     const handleSave = async () => {
-        // 6. Check moved inside, show toast if needed
+        // Check for unranked items and show warning instead of toast (Req 7)
         if (unrankedTasks.length > 0) {
-            toast({
-                title: "Incomplete Ranking",
-                description: `Please rank the remaining ${unrankedTasks.length} task${
-                    unrankedTasks.length > 1 ? "s" : ""
-                } before saving.`,
-                variant: "destructive", // Use warning variant
-            });
+            setShowUnrankedWarning(true);
+            // Optionally, scroll the warning into view if needed, e.g.:
+            // document.getElementById('unranked-warning')?.scrollIntoView({ behavior: 'smooth' });
             return; // Stop execution
         }
 
+        // Hide warning if save proceeds
+        setShowUnrankedWarning(false);
         setIsSaving(true);
         try {
             const rankedItemIds = rankedTasks.map((task) => task._id!.toString());
@@ -318,7 +319,7 @@ const TaskPrioritizationModal: React.FC<TaskPrioritizationModalProps> = ({ circl
             const result = await saveUserRankedListAction(circle.handle!, formData);
             if (result.success) {
                 toast({ title: "Success", description: "Task ranking saved." });
-                onClose();
+                onClose(); // Close modal on successful save
             } else {
                 toast({
                     title: "Error",
@@ -342,24 +343,25 @@ const TaskPrioritizationModal: React.FC<TaskPrioritizationModalProps> = ({ circl
     const rankedTaskIds = useMemo(() => rankedTasks.map((t) => t._id!.toString()), [rankedTasks]);
     const unrankedTaskIds = useMemo(() => unrankedTasks.map((t) => t._id!.toString()), [unrankedTasks]);
 
-    // --- Render Logic ---
-    if (!isOpen) {
-        return null;
-    }
-
+    // Determine if the ranked list is "complete" (Req 6)
+    const isComplete = !isLoading && unrankedTasks.length === 0 && rankedTasks.length > 0;
     return (
         <div
-            className="formatted fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
+            className="formatted fixed inset-0 z-40 flex items-start justify-center bg-black/60 p-4 md:items-center"
             role="presentation"
+            // Add onClick handler to the backdrop to close the modal
+            // onClick={onClose}
         >
             <div
-                className="relative z-50 flex max-h-[90vh] w-full max-w-3xl flex-col rounded-lg bg-background shadow-xl"
+                className="relative z-50 mt-[50px] flex max-h-[calc(100vh-152px)] w-full max-w-3xl flex-col rounded-lg bg-background shadow-xl md:pt-0"
+                // Prevent clicks inside the modal from closing it
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="modal-title"
                 aria-describedby="modal-description"
             >
+                {/* Header */}
                 <div className="relative flex items-start justify-between rounded-t p-4">
                     <div>
                         <div id="modal-title" className="header text-2xl font-semibold text-foreground">
@@ -374,14 +376,14 @@ const TaskPrioritizationModal: React.FC<TaskPrioritizationModalProps> = ({ circl
                         variant="ghost"
                         size="sm"
                         onClick={onClose}
-                        className="absolute right-2 top-1 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground" // Positioned top-right
+                        className="absolute right-2 top-1 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                         aria-label="Close modal"
                     >
-                        <X className="h-4 w-4" /> {/* Smaller icon */}
+                        <X className="h-4 w-4" />
                     </Button>
                 </div>
 
-                {/* 4. Body (Scrollable) */}
+                {/* Body (Scrollable) */}
                 <div className="flex-grow overflow-y-auto p-4">
                     {isLoading ? (
                         <div className="flex h-40 items-center justify-center">
@@ -399,29 +401,33 @@ const TaskPrioritizationModal: React.FC<TaskPrioritizationModalProps> = ({ circl
                                 <DroppableContainer id="unranked-column-droppable" type="unranked-container">
                                     <h3 className="sticky top-0 z-10 mb-2 flex items-center border-b bg-background/95 pb-1 font-semibold backdrop-blur supports-[backdrop-filter]:bg-background/60">
                                         <span>Unranked</span>
-                                        {/* 4. Badge for count */}
-                                        <span className="ml-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-muted px-1 text-xs font-semibold text-muted-foreground">
+                                        {/* Unranked Badge (Req 5: Centering check, Req 7: Warning style) */}
+                                        <span
+                                            className={`ml-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1 text-xs font-semibold transition-colors ${
+                                                showUnrankedWarning
+                                                    ? "border-2 border-red-500 bg-red-100 text-red-700" // Warning style (Req 7)
+                                                    : "bg-muted text-muted-foreground" // Default style
+                                            }`}
+                                        >
                                             {unrankedTasks.length}
                                         </span>
                                     </h3>
                                     <div className="min-h-[100px] pt-1">
-                                        {/* 5. Use SortableContext for Unranked */}
                                         <SortableContext items={unrankedTaskIds} strategy={verticalListSortingStrategy}>
-                                            {unrankedTasks.length === 0 &&
-                                                activeType !== "unranked" && ( // Show placeholder only if not dragging from unranked
-                                                    <p className="p-4 text-center text-sm italic text-muted-foreground">
-                                                        Drag ranked tasks here to unrank.
-                                                    </p>
-                                                )}
+                                            {unrankedTasks.length === 0 && activeType !== "ranked" && (
+                                                <p className="p-4 text-center text-sm italic text-muted-foreground">
+                                                    Drag ranked tasks here to unrank.
+                                                </p>
+                                            )}
                                             {unrankedTasks.map((task) => (
                                                 <SortableTaskItem
                                                     key={task._id!.toString()}
                                                     id={task._id!.toString()}
                                                     task={task}
-                                                    isRanked={false} // Indicate it's unranked
+                                                    isRanked={false}
+                                                    activeId={activeId}
                                                 />
                                             ))}
-                                            {/* Placeholder when dragging ranked item over empty unranked list */}
                                             {unrankedTasks.length === 0 && activeType === "ranked" && (
                                                 <div className="flex h-20 items-center justify-center rounded border border-dashed border-gray-300 text-sm text-muted-foreground">
                                                     Drop here to unrank
@@ -432,36 +438,42 @@ const TaskPrioritizationModal: React.FC<TaskPrioritizationModalProps> = ({ circl
                                 </DroppableContainer>
 
                                 {/* Ranked Column */}
-                                <DroppableContainer id="ranked-column-droppable" type="ranked-container">
+                                {/* Pass isComplete prop for styling (Req 6) */}
+                                <DroppableContainer
+                                    id="ranked-column-droppable"
+                                    type="ranked-container"
+                                    isComplete={isComplete}
+                                >
                                     <h3 className="sticky top-0 z-10 mb-2 flex items-center border-b bg-background/95 pb-1 font-semibold backdrop-blur supports-[backdrop-filter]:bg-background/60">
                                         <span>Ranked</span>
-                                        {/* 4. Badge for count */}
-                                        <span className="ml-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1 text-xs font-semibold text-primary-foreground">
+                                        {/* Ranked Badge (Req 5: Centering check, Req 6: Complete style) */}
+                                        <span
+                                            className={`ml-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1 text-xs font-semibold transition-colors ${
+                                                isComplete
+                                                    ? "bg-green-600 text-white" // Complete style (Req 6)
+                                                    : "bg-muted text-muted-foreground" // Default style
+                                            }`}
+                                        >
                                             {rankedTasks.length}
                                         </span>
-                                        {/* 8. Green checkmark when all ranked */}
-                                        {unrankedTasks.length === 0 && rankedTasks.length > 0 && !isLoading && (
-                                            <CheckCircle2 className="ml-2 h-5 w-5 text-green-600" />
-                                        )}
+                                        {/* Removed CheckCircle2 icon (Req 6) */}
                                     </h3>
                                     <div className="min-h-[100px] pt-1">
                                         <SortableContext items={rankedTaskIds} strategy={verticalListSortingStrategy}>
-                                            {rankedTasks.length === 0 &&
-                                                activeType !== "ranked" && ( // Show placeholder only if not dragging from ranked
-                                                    <p className="p-4 text-center text-sm italic text-muted-foreground">
-                                                        Drag unranked tasks here.
-                                                    </p>
-                                                )}
+                                            {rankedTasks.length === 0 && activeType !== "unranked" && (
+                                                <p className="p-4 text-center text-sm italic text-muted-foreground">
+                                                    Drag unranked tasks here.
+                                                </p>
+                                            )}
                                             {rankedTasks.map((task, index) => (
                                                 <SortableTaskItem
                                                     key={task._id!.toString()}
                                                     id={task._id!.toString()}
                                                     task={task}
-                                                    rank={index + 1} // Pass rank
-                                                    isRanked={true} // Indicate it's ranked
+                                                    rank={index + 1}
+                                                    isRanked={true}
                                                 />
                                             ))}
-                                            {/* Placeholder when dragging unranked item over empty ranked list */}
                                             {rankedTasks.length === 0 && activeType === "unranked" && (
                                                 <div className="flex h-20 items-center justify-center rounded border border-dashed border-gray-300 text-sm text-muted-foreground">
                                                     Drop here to rank
@@ -471,24 +483,37 @@ const TaskPrioritizationModal: React.FC<TaskPrioritizationModalProps> = ({ circl
                                     </div>
                                 </DroppableContainer>
                             </div>
-                            {/* DragOverlay now uses the simplified TaskItemDisplay */}
+                            {/* DragOverlay uses TaskItemDisplay without isOverlay (Req 4) */}
                             <DragOverlay dropAnimation={null}>
-                                {activeId && activeTask ? <TaskItemDisplay task={activeTask} isOverlay /> : null}
+                                {activeId && activeTask ? (
+                                    <div className="flex items-center rounded border bg-white p-3 opacity-90 shadow-lg">
+                                        <div className="flex-grow">
+                                            <TaskItemDisplay task={activeTask} />
+                                        </div>
+                                    </div>
+                                ) : null}
                             </DragOverlay>
                         </DndContext>
                     )}
                 </div>
 
-                {/* 5. Footer */}
-                <div className="flex items-center justify-end space-x-2 rounded-b p-4">
-                    <Button variant="outline" onClick={onClose} disabled={isSaving}>
-                        Cancel
-                    </Button>
-                    {/* 6. Save button always enabled unless loading/saving */}
-                    <Button onClick={handleSave} disabled={isLoading || isSaving}>
-                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        Save Ranking
-                    </Button>
+                {/* Footer */}
+                <div className="rounded-b p-4">
+                    {/* Unranked Warning Text (Req 7) */}
+                    {showUnrankedWarning && (
+                        <p id="unranked-warning" className="mb-2 text-center text-sm font-medium text-red-600">
+                            Please rank all tasks before saving. Drag remaining tasks to the 'Ranked' list.
+                        </p>
+                    )}
+                    <div className="flex items-center justify-end space-x-2">
+                        <Button variant="outline" onClick={onClose} disabled={isSaving}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleSave} disabled={isLoading || isSaving}>
+                            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            Save Ranking
+                        </Button>
+                    </div>
                 </div>
             </div>
         </div>
