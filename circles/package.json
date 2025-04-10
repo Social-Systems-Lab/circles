@@ -1,6 +1,6 @@
 {
     "name": "circles",
-    "version": "0.5.30",
+    "version": "0.5.31",
     "private": true,
     "scripts": {
         "dev": "next dev --turbopack",

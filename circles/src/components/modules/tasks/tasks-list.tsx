@@ -57,7 +57,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "@/components/utils/use-is-compact";
-import { deleteTaskAction, getAggregatedTaskRankingAction } from "@/app/circles/[handle]/tasks/actions"; // Use task delete action, Added getAggregatedTaskRankingAction
+import { deleteTaskAction } from "@/app/circles/[handle]/tasks/actions";
 import { UserPicture } from "../members/user-picture";
 import { motion } from "framer-motion";
 import { isAuthorized } from "@/lib/auth/client-auth";
@@ -119,8 +119,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
     // Renamed component, props
     const data = React.useMemo(() => tasks, [tasks]); // Renamed variable, dependency
     const [user] = useAtom(userAtom);
-    // Default sort by createdAt, allow sorting by 'priority'
-    const [sorting, setSorting] = React.useState<SortingState>([{ id: "createdAt", desc: true }]);
+    const [sorting, setSorting] = React.useState<SortingState>([{ id: "priority", desc: false }]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
     const [deleteTaskDialogOpen, setDeleteTaskDialogOpen] = useState<boolean>(false); // Renamed state
     const [selectedTask, setSelectedTask] = useState<TaskDisplay | null>(null); // Renamed state, updated type
@@ -132,12 +131,6 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [showPrioritizeModal, setShowPrioritizeModal] = useState(false); // State for modal
-    // Add assignee filter state if needed later
-    // const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
-    // State for aggregated ranking data
-    const [aggregatedRanking, setAggregatedRanking] = useState<{ taskId: string; score: number; rank: number }[]>([]);
-    const [isPrioritySortActive, setIsPrioritySortActive] = useState(false);
-    const [isFetchingRanking, setIsFetchingRanking] = useState(false); // Loading state for ranking fetch
 
     const openAuthor = useCallback(
         (author: Circle) => {
@@ -165,54 +158,43 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
 
     const columns = React.useMemo<ColumnDef<TaskDisplay>[]>( // Updated type
         () => [
-            // Add a hidden column for priority score/rank if needed for sorting
-            // {
-            //     accessorKey: "priorityRank", // Or use a function accessor based on aggregatedRanking
-            //     header: "Rank",
-            //     cell: info => {
-            //         const rank = aggregatedRanking.find(r => r.taskId === info.row.original._id)?.rank;
-            //         return rank ?? "-";
-            //     },
-            //     enableSorting: true, // Enable sorting by this column
-            // },
-
-            // Add a virtual column header for sorting by priority
             {
-                id: "priority", // Unique ID for this column
-                header: ({ column }) => (
+                accessorKey: "priority",
+                header: (
+                    { column }, // Use the column object provided by react-table
+                ) => (
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <Button
                                     variant="ghost"
-                                    className="m-0 p-0"
-                                    onClick={() => setSorting([{ id: "priority", desc: false }])}
+                                    // Use column.toggleSorting to integrate with react-table's state
+                                    onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                                    // Add padding if needed, or keep p-0 for tight icon look
+                                    className="p-1" // Example padding
                                 >
+                                    {/* Display the ListOrdered icon for the header */}
                                     <ListOrdered className="h-4 w-4" />
+                                    {/* Display the sort direction icon (up/down arrow) */}
+                                    <SortIcon sortDir={column.getIsSorted()} />
                                 </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Task Priority</TooltipContent>
+                            {/* Update tooltip text */}
+                            <TooltipContent>Sort by Priority</TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
                 ),
                 cell: (info) => {
-                    const task = info.row.original;
-                    {
-                        /* Conditionally display rank */
-                    }
-                    // {isPrioritySortActive && (
-                    //     <span className="mr-2 inline-block min-w-[20px] rounded bg-gray-200 px-1.5 py-0.5 text-xs font-semibold text-gray-700">
-                    //         {aggregatedRanking.find((r) => r.taskId === task._id)?.rank ?? "-"}
-                    //     </span>
-                    // )}
-
-                    return task?.priority ? (
-                        <span className="mr-2 inline-block min-w-[20px] rounded bg-gray-200 px-1.5 py-0.5 text-xs font-semibold text-gray-700">
-                            {task.priority}
+                    const priority = info.getValue() as number | undefined;
+                    return priority !== undefined ? (
+                        <span className="inline-block min-w-[20px] rounded bg-gray-200 px-1.5 py-0.5 text-center text-xs font-semibold text-gray-700">
+                            {priority}
                         </span>
-                    ) : null;
+                    ) : (
+                        <span className="text-gray-400">-</span>
+                    );
                 },
-                // No cell needed as rank is shown in the title column
+                enableSorting: true, // Correctly enabled
             },
             {
                 accessorKey: "title",
@@ -327,58 +309,11 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
                 cell: (info) => new Date(info.getValue() as Date).toLocaleDateString(),
             },
         ],
-        [isCompact, circle.handle, aggregatedRanking, isPrioritySortActive, sorting, openAssignee, openAuthor], // Add dependencies
+        [isCompact, circle.handle, openAssignee, openAuthor], // Add dependencies
     );
 
-    // Fetch aggregated ranking when sorting changes to 'priority'
-    useEffect(() => {
-        const prioritySort = sorting.find((s) => s.id === "priority"); // Use 'priority' as the sort key
-        const shouldBeActive = !!prioritySort;
-        setIsPrioritySortActive(shouldBeActive);
-
-        if (shouldBeActive) {
-            setIsFetchingRanking(true);
-            getAggregatedTaskRankingAction(circle.handle!)
-                .then((ranking: { taskId: string; score: number; rank: number }[]) => {
-                    // Added type for ranking
-                    setAggregatedRanking(ranking || []); // Ensure it's an array
-                })
-                .catch((err: Error) => {
-                    // Added type for err
-                    console.error("Failed to fetch priority ranking", err);
-                    toast({
-                        title: "Error",
-                        description: err.message || "Could not load priority ranking.",
-                        variant: "destructive",
-                    });
-                    setAggregatedRanking([]); // Clear on error
-                })
-                .finally(() => setIsFetchingRanking(false));
-        } else {
-            // Clear ranking data if not sorting by priority
-            setIsFetchingRanking(false);
-            setAggregatedRanking([]);
-        }
-    }, [sorting, circle.handle, toast]); // Added toast dependency
-
-    // Memoize sorted data based on current sorting state and fetched ranking
-    const sortedData = React.useMemo(() => {
-        if (isPrioritySortActive && aggregatedRanking.length > 0) {
-            const rankMap = new Map(aggregatedRanking.map((r) => [r.taskId, r.rank]));
-            // Sort the original tasks array based on the rank map
-            return [...data].sort((a, b) => {
-                const rankA = rankMap.get(a._id!.toString()) ?? Infinity;
-                const rankB = rankMap.get(b._id!.toString()) ?? Infinity;
-                return rankA - rankB; // Sort ascending by rank number
-            });
-        }
-        // If not sorting by priority or ranking not loaded, return original data
-        // The table will handle other sorting based on its state
-        return data;
-    }, [data, isPrioritySortActive, aggregatedRanking]);
-
     const table = useReactTable({
-        data: sortedData, // Use the memoized sorted data
+        data,
         columns,
         onSortingChange: setSorting,
         onColumnFiltersChange: setColumnFilters,
@@ -389,16 +324,14 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
             sorting,
             columnFilters,
             columnVisibility: {
+                priority: true,
                 title: true,
                 stage: true,
                 assignee: true,
                 author: !isCompact,
                 createdAt: !isCompact,
-                // priorityRank: isPrioritySortActive, // Conditionally show rank column?
             },
         },
-        // Manual sorting is needed if data isn't pre-sorted by priority
-        manualSorting: true, // Let server/client handle sorting based on 'sorting' state
     });
 
     useEffect(() => {
@@ -453,7 +386,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
     };
 
     // Check create permission for the button using the user object
-    const canCreateTask = isAuthorized(user, circle, features.tasks.create); // Renamed variable, updated feature
+    const canCreateTask = isAuthorized(user, circle, features.tasks.create);
 
     return (
         <TooltipProvider>

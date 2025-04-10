@@ -1,9 +1,14 @@
 // task.ts - Task data access functions
-import { Tasks, Circles, Members, Reactions } from "./db"; // Changed Issues to Tasks
+import { Tasks, Circles, Members, Reactions, RankedLists } from "./db"; // Changed Issues to Tasks
 import { ObjectId } from "mongodb";
-import { Task, TaskDisplay, TaskStage, Circle, Member } from "@/models/models"; // Changed Issue types to Task types
+import { Task, TaskDisplay, TaskStage, Circle, Member, RankedList } from "@/models/models"; // Changed Issue types to Task types
 import { getCircleById, SAFE_CIRCLE_PROJECTION } from "./circle";
+import { getMemberIdsByUserGroup } from "./member";
+import { isAuthorized } from "../auth/auth";
+import { features } from "./constants";
 // No longer need getUserByDid if we use $lookup consistently
+
+const RANKING_STALENESS_DAYS = 30; // How many days before a ranking becomes stale
 
 // Safe projection for task queries, similar to proposals
 export const SAFE_TASK_PROJECTION = {
@@ -135,7 +140,7 @@ export const getTasksByCircleId = async (circleId: string, userDid: string): Pro
  * @param userDid The DID of the user requesting the tasks (for visibility checks)
  * @returns Array of active tasks the user is allowed to see
  */
-export const getActiveTasksByCircleId = async (circleId: string, userDid?: string): Promise<TaskDisplay[]> => {
+export const getActiveTasksByCircleId = async (circleId: string): Promise<TaskDisplay[]> => {
     // Added userDid as optional for potential system calls
     try {
         const tasks = (await Tasks.aggregate([
@@ -498,6 +503,121 @@ export const assignTask = async (taskId: string, assigneeDid: string | undefined
     } catch (error) {
         console.error(`Error assigning task (${taskId}):`, error); // Updated error message and param
         return false;
+    }
+};
+
+export const getTaskRanking = async (
+    circleId: string,
+    filterUserGroupHandle?: string,
+): Promise<Map<string, number>> => {
+    try {
+        // Use imported db instance
+        // 1. Fetch all potentially relevant ranked lists for this circle
+        const allRankedLists = await RankedLists.find({
+            entityId: circleId,
+            type: "tasks",
+        }).toArray();
+
+        // 2. Get the set of currently active task IDs
+        const activeTasks = await getActiveTasksByCircleId(circleId);
+        const activeTaskIds = new Set(activeTasks.map((t: TaskDisplay) => t._id?.toString())); // Added type TaskDisplay
+        const N = activeTaskIds.size; // Total number of items being ranked
+
+        if (N === 0) return new Map(); // No active tasks to rank
+
+        // 3. Filter lists and prepare user IDs for permission/group checks
+        const userIdsToCheck = new Set<string>();
+        const validLists: RankedList[] = [];
+        const stalenessThreshold = new Date();
+        stalenessThreshold.setDate(stalenessThreshold.getDate() - RANKING_STALENESS_DAYS);
+
+        for (const list of allRankedLists) {
+            // Basic validity check
+            if (!list.isValid) continue;
+            // Staleness check
+            if (list.updatedAt < stalenessThreshold) continue;
+            // Check if list content matches current active tasks (could be done here or later)
+            const listTaskIds = new Set(list.list);
+            if (
+                listTaskIds.size !== activeTaskIds.size ||
+                ![...listTaskIds].every((id: string) => activeTaskIds.has(id)) // Added type string
+            ) {
+                // Mark as invalid in DB? Or just skip for this aggregation? Let's skip for now.
+                // Consider adding a background job or trigger to mark lists invalid.
+                // For now, we can mark it invalid here if we want immediate effect.
+                // await db.collection<RankedList>('rankedLists').updateOne({ _id: list._id }, { $set: { isValid: false } });
+                continue;
+            }
+
+            userIdsToCheck.add(list.userId);
+            validLists.push(list);
+        }
+
+        if (validLists.length === 0) return new Map(); // No valid rankings found
+
+        // 4. Fetch user data and perform permission/group filtering
+        const users = await Circles.find({ _id: { $in: Array.from(userIdsToCheck).map((id) => new ObjectId(id)) } })
+            .project<{ _id: ObjectId; did?: string }>({ _id: 1, did: 1 }) // Fetch only necessary fields, added type projection
+            .toArray();
+        const userMap = new Map(users.map((u: { _id: ObjectId; did?: string }) => [u._id.toString(), u.did])); // Added explicit type for u
+
+        let userIdsToInclude = new Set<string>();
+
+        // Filter by User Group if specified
+        let groupMemberIds: Set<string> | null = null;
+        if (filterUserGroupHandle) {
+            groupMemberIds = new Set(await getMemberIdsByUserGroup(circleId, filterUserGroupHandle));
+        }
+
+        // Check permissions for each user who submitted a valid list
+        const permissionChecks = Array.from(userIdsToCheck).map(async (userId) => {
+            const userDid = userMap.get(userId);
+            if (!userDid) return false; // User not found
+
+            // Check if user is in the filtered group (if applicable)
+            if (groupMemberIds && !groupMemberIds.has(userId)) {
+                return false;
+            }
+
+            // Check if user still has permission to prioritize
+            const hasPermission = await isAuthorized(userDid, circleId, features.tasks.prioritize);
+            return hasPermission ? userId : false;
+        });
+
+        const results = await Promise.all(permissionChecks);
+        userIdsToInclude = new Set(results.filter((result): result is string => result !== false));
+
+        // Filter the validLists again based on included users
+        const finalFilteredLists = validLists.filter((list) => userIdsToInclude.has(list.userId));
+
+        if (finalFilteredLists.length === 0) return new Map(); // No rankings left after filtering
+
+        // 5. Aggregate scores (Borda Count variation)
+        const taskScores = new Map<string, number>();
+        for (const list of finalFilteredLists) {
+            list.list.forEach((taskId, index) => {
+                if (activeTaskIds.has(taskId)) {
+                    // Ensure task is still active
+                    const points = N - index; // Rank 1 gets N points, Rank 2 gets N-1, etc.
+                    taskScores.set(taskId, (taskScores.get(taskId) || 0) + points);
+                }
+            });
+        }
+
+        // 6. Convert to array, sort, and create rank map
+        const rankedResults = Array.from(taskScores.entries())
+            .map(([taskId, score]) => ({ taskId, score }))
+            .sort((a, b) => b.score - a.score); // Sort descending by score
+
+        const rankMap = new Map<string, number>();
+        rankedResults.forEach((item, index) => {
+            rankMap.set(item.taskId, index + 1); // Rank starts at 1
+        });
+
+        return rankMap;
+    } catch (error) {
+        console.error("Error calculating task ranking:", error);
+        return new Map(); // Return empty map on error
     }
 };
 

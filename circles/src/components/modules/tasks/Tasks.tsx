@@ -33,7 +33,7 @@ export default async function TasksModule({ circle }: PageProps) {
     }
 
     // Get tasks for this circle
-    const tasks: TaskDisplay[] = await getTasksAction(circle.handle as string); // Renamed function call, variable, type
+    const tasks: TaskDisplay[] = await getTasksAction(circle.handle as string, true);
 
     // Perform permission checks for different actions within the tasks module
     const canModerateTask = await isAuthorized(userDid, circle._id as string, features.tasks.moderate); // Renamed variable, updated feature
