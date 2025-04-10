@@ -298,6 +298,9 @@ export async function createTaskAction( // Renamed function
             console.error("🔔 [ACTION] Failed to fetch created task for notification:", createdTask._id); // Updated message, variable
         }
 
+        // Invalidate rankings as a new task was added
+        await invalidateUserRankingsIfNeededAction(circle._id!.toString());
+
         // Revalidate the tasks list page
         revalidatePath(`/circles/${circleHandle}/tasks`); // Updated path
 
@@ -523,6 +526,9 @@ export async function deleteTaskAction( // Renamed function
             return { success: false, message: "Failed to delete task" }; // Updated message
         }
 
+        // Invalidate rankings as a task was deleted
+        await invalidateUserRankingsIfNeededAction(circle._id!.toString());
+
         // Revalidate the tasks list page
         revalidatePath(`/circles/${circleHandle}/tasks`); // Updated path
 
@@ -623,6 +629,13 @@ export async function changeTaskStageAction( // Renamed function
             }
         } else {
             console.error("🔔 [ACTION] Failed to fetch updated task for notification:", taskId); // Updated message, param
+        }
+
+        // Invalidate rankings if the task's active status changed
+        const wasActive = ["open", "inProgress"].includes(currentStage);
+        const isActive = ["open", "inProgress"].includes(newStage);
+        if (wasActive !== isActive) {
+            await invalidateUserRankingsIfNeededAction(circle._id!.toString());
         }
 
         // Revalidate relevant pages

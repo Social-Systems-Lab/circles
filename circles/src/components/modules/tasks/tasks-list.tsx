@@ -305,12 +305,18 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
         if (shouldBeActive) {
             setIsFetchingRanking(true);
             getAggregatedTaskRankingAction(circle.handle!)
-                .then((ranking) => {
+                .then((ranking: { taskId: string; score: number; rank: number }[]) => {
+                    // Added type for ranking
                     setAggregatedRanking(ranking || []); // Ensure it's an array
                 })
-                .catch((err) => {
+                .catch((err: Error) => {
+                    // Added type for err
                     console.error("Failed to fetch priority ranking", err);
-                    toast({ title: "Error", description: "Could not load priority ranking.", variant: "destructive" });
+                    toast({
+                        title: "Error",
+                        description: err.message || "Could not load priority ranking.",
+                        variant: "destructive",
+                    });
                     setAggregatedRanking([]); // Clear on error
                 })
                 .finally(() => setIsFetchingRanking(false));
