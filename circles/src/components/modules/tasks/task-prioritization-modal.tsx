@@ -501,7 +501,7 @@ const TaskPrioritizationModal: React.FC<TaskPrioritizationModalProps> = ({ circl
                     {/* Unranked Warning Text (Req 7) */}
                     {showUnrankedWarning && (
                         <p id="unranked-warning" className="mb-2 text-center text-sm font-medium text-red-600">
-                            Please rank all tasks before saving. Drag remaining tasks to the 'Ranked' list.
+                            Please rank all tasks before saving. Drag remaining tasks to the Ranked list.
                         </p>
                     )}
                     <div className="flex items-center justify-end space-x-2">

@@ -40,7 +40,7 @@ export default async function TaskDetailPage(props: PageProps) {
             <div className="formatted flex h-full w-full flex-col items-center justify-center p-4 text-center">
                 <h2 className="mb-2 text-xl font-semibold">Task Not Found</h2> {/* Updated text */}
                 <p className="text-gray-600">
-                    The task you're looking for doesn't exist or you don't have permission to view it.{" "}
+                    The task you&apos;re looking for doesn&apos;t exist or you don&apos;t have permission to view it.{" "}
                     {/* Updated text & fixed quotes */}
                 </p>
                 <Button asChild className="mt-4">

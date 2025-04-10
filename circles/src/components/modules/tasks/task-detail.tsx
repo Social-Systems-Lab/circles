@@ -459,7 +459,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                     <DialogHeader>
                         <DialogTitle>Confirm Stage Change</DialogTitle>
                         <DialogDescription>
-                            Are you sure you want to move this task to the "{targetStage}" stage?{" "}
+                            Are you sure you want to move this task to the &quot;{targetStage}&quot; stage?{" "}
                             {/* Updated text & fixed quotes */}
                         </DialogDescription>
                     </DialogHeader>

@@ -790,7 +790,7 @@ export async function getTasksForPrioritizationAction(circleHandle: string): Pro
         }
 
         // Get active tasks (open, inProgress)
-        const activeTasks = await getActiveTasksByCircleId(circle._id!.toString(), userDid); // Use toString()
+        const activeTasks = await getActiveTasksByCircleId(circle._id!.toString());
         return activeTasks;
     } catch (error) {
         console.error("Error getting tasks for prioritization:", error);
@@ -889,7 +889,7 @@ export async function saveUserRankedListAction(
         }
 
         // Get all currently active tasks to validate the submitted list
-        const activeTasks = await getActiveTasksByCircleId(circle._id!.toString(), userDid); // Use toString()
+        const activeTasks = await getActiveTasksByCircleId(circle._id!.toString()); // Use toString()
         const activeTaskIds = new Set(activeTasks.map((t: TaskDisplay) => t._id?.toString())); // Added type TaskDisplay
         const submittedTaskIds = new Set(rankedItemIds);
 
