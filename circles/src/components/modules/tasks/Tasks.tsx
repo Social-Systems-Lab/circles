@@ -2,10 +2,10 @@
 
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
-import { getTasksAction } from "@/app/circles/[handle]/tasks/actions"; // Use tasks action
+import { getTasksAction } from "@/app/circles/[handle]/tasks/actions";
 import { redirect } from "next/navigation";
-import { Circle, TaskDisplay, TaskPermissions } from "@/models/models"; // Use TaskDisplay, TaskPermissions
-import TasksList from "./tasks-list"; // Renamed import
+import { Circle, TaskDisplay, TaskPermissions } from "@/models/models";
+import TasksList from "./tasks-list";
 
 type PageProps = {
     circle: Circle;
@@ -26,7 +26,7 @@ export default async function TasksModule({ circle }: PageProps) {
         return (
             <div className="flex h-full w-full flex-col items-center justify-center p-4 text-center">
                 <h2 className="mb-2 text-xl font-semibold">Access Denied</h2>
-                <p className="text-gray-600">You don't have permission to view tasks in this circle.</p>{" "}
+                <p className="text-gray-600">You don&apos;t have permission to view tasks in this circle.</p>{" "}
                 {/* Updated text & fixed apostrophe */}
             </div>
         );
@@ -57,21 +57,17 @@ export default async function TasksModule({ circle }: PageProps) {
         return true;
     });
 
-    // Pass necessary permissions down to the list component
     const permissions: TaskPermissions = {
-        // Updated type
-        canModerate: canModerateTask, // Renamed variable
-        canReview: canReviewTask, // Renamed variable
-        canAssign: canAssignTask, // Renamed variable
-        canResolve: canResolveTask, // Renamed variable
-        canComment: canCommentOnTask, // Renamed variable
+        canModerate: canModerateTask,
+        canReview: canReviewTask,
+        canAssign: canAssignTask,
+        canResolve: canResolveTask,
+        canComment: canCommentOnTask,
     };
 
     return (
         <div className="flex w-full flex-col">
-            {/* Render TasksList component */}
-            <TasksList tasks={filteredTasks} circle={circle} permissions={permissions} />{" "}
-            {/* Renamed component, prop */}
+            <TasksList tasks={filteredTasks} circle={circle} permissions={permissions} />
         </div>
     );
 }

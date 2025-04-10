@@ -959,4 +959,5 @@ export interface TaskDisplay extends Task {
     author: Circle; // Creator's details
     assignee?: Circle; // Assignee's details (optional)
     circle?: Circle; // Circle details
+    priority?: number; // Aggregated task priority
 }

@@ -396,7 +396,7 @@ const TaskPrioritizationModal: React.FC<TaskPrioritizationModalProps> = ({ circl
                             onDragStart={handleDragStart}
                             onDragEnd={handleDragEnd}
                         >
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <div className="grid grid-cols-2 gap-4 md:grid-cols-2">
                                 {/* Unranked Column */}
                                 <DroppableContainer id="unranked-column-droppable" type="unranked-container">
                                     <h3 className="sticky top-0 z-10 mb-2 flex items-center border-b bg-background/95 pb-1 font-semibold backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -425,7 +425,6 @@ const TaskPrioritizationModal: React.FC<TaskPrioritizationModalProps> = ({ circl
                                                     id={task._id!.toString()}
                                                     task={task}
                                                     isRanked={false}
-                                                    activeId={activeId}
                                                 />
                                             ))}
                                             {unrankedTasks.length === 0 && activeType === "ranked" && (

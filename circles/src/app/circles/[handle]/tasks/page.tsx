@@ -1,4 +1,4 @@
-import TasksModule from "@/components/modules/tasks/Tasks"; // Updated import path and name
+import TasksModule from "@/components/modules/tasks/tasks";
 import { getCircleByHandle } from "@/lib/data/circle";
 import { notFound } from "next/navigation";
 

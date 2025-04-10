@@ -1,6 +1,7 @@
+//task-list.tsx
 "use client";
 
-import React, { useEffect, useState, useTransition, ChangeEvent } from "react";
+import React, { useEffect, useState, useTransition, ChangeEvent, useCallback } from "react";
 import {
     ColumnDef,
     ColumnFiltersState,
@@ -68,6 +69,8 @@ import { userAtom, contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib
 import Link from "next/link";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import TaskPrioritizationModal from "./task-prioritization-modal"; // Import the modal
+import { MdLowPriority } from "react-icons/md";
+import { FaSortNumericDown } from "react-icons/fa";
 
 // Permissions type is imported from models
 
@@ -136,6 +139,30 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
     const [isPrioritySortActive, setIsPrioritySortActive] = useState(false);
     const [isFetchingRanking, setIsFetchingRanking] = useState(false); // Loading state for ranking fetch
 
+    const openAuthor = useCallback(
+        (author: Circle) => {
+            if (isCompact) {
+                router.push(`/circles/${author.handle}`); // Navigate to user profile page on compact
+                return;
+            }
+            // Open user preview in side panel
+            let contentPreviewData: ContentPreviewData = { type: "user", content: author };
+            setContentPreview((x) => {
+                const isCurrentlyPreviewing =
+                    x?.type === "user" && x?.content._id === author._id && sidePanelContentVisible === "content";
+                return isCurrentlyPreviewing ? undefined : contentPreviewData;
+            });
+        },
+        [isCompact, router, setContentPreview, sidePanelContentVisible],
+    );
+
+    const openAssignee = useCallback(
+        (assignee: Circle) => {
+            openAuthor(assignee); // Reuse the same logic as opening author profile
+        },
+        [openAuthor],
+    );
+
     const columns = React.useMemo<ColumnDef<TaskDisplay>[]>( // Updated type
         () => [
             // Add a hidden column for priority score/rank if needed for sorting
@@ -148,6 +175,45 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
             //     },
             //     enableSorting: true, // Enable sorting by this column
             // },
+
+            // Add a virtual column header for sorting by priority
+            {
+                id: "priority", // Unique ID for this column
+                header: ({ column }) => (
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    className="m-0 p-0"
+                                    onClick={() => setSorting([{ id: "priority", desc: false }])}
+                                >
+                                    <ListOrdered className="h-4 w-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Task Priority</TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                ),
+                cell: (info) => {
+                    const task = info.row.original;
+                    {
+                        /* Conditionally display rank */
+                    }
+                    // {isPrioritySortActive && (
+                    //     <span className="mr-2 inline-block min-w-[20px] rounded bg-gray-200 px-1.5 py-0.5 text-xs font-semibold text-gray-700">
+                    //         {aggregatedRanking.find((r) => r.taskId === task._id)?.rank ?? "-"}
+                    //     </span>
+                    // )}
+
+                    return task?.priority ? (
+                        <span className="mr-2 inline-block min-w-[20px] rounded bg-gray-200 px-1.5 py-0.5 text-xs font-semibold text-gray-700">
+                            {task.priority}
+                        </span>
+                    ) : null;
+                },
+                // No cell needed as rank is shown in the title column
+            },
             {
                 accessorKey: "title",
                 header: ({ column }) => (
@@ -164,12 +230,6 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
                             onClick={(e) => e.stopPropagation()}
                             className="flex items-center font-medium text-blue-600 hover:underline" // Added flex
                         >
-                            {/* Conditionally display rank */}
-                            {isPrioritySortActive && (
-                                <span className="mr-2 inline-block min-w-[20px] rounded bg-gray-200 px-1.5 py-0.5 text-xs font-semibold text-gray-700">
-                                    {aggregatedRanking.find((r) => r.taskId === task._id)?.rank ?? "-"}
-                                </span>
-                            )}
                             {info.getValue() as string}
                         </Link>
                     );
@@ -266,34 +326,8 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
                 ),
                 cell: (info) => new Date(info.getValue() as Date).toLocaleDateString(),
             },
-            // Add a virtual column header for sorting by priority
-            {
-                id: "priority", // Unique ID for this column
-                header: ({ column }) => (
-                    <Button variant="ghost" onClick={() => setSorting([{ id: "priority", desc: false }])}>
-                        {" "}
-                        {/* Set sorting state */}
-                        Priority
-                        {/* Show loading spinner or sort icon */}
-                        {isFetchingRanking ? (
-                            <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                        ) : (
-                            <SortIcon
-                                sortDir={
-                                    sorting.find((s) => s.id === "priority")?.desc === false
-                                        ? "asc"
-                                        : sorting.find((s) => s.id === "priority")
-                                          ? "desc"
-                                          : false
-                                }
-                            />
-                        )}
-                    </Button>
-                ),
-                // No cell needed as rank is shown in the title column
-            },
         ],
-        [isCompact, circle.handle, aggregatedRanking, isPrioritySortActive, sorting, isFetchingRanking], // Add dependencies
+        [isCompact, circle.handle, aggregatedRanking, isPrioritySortActive, sorting, openAssignee, openAuthor], // Add dependencies
     );
 
     // Fetch aggregated ranking when sorting changes to 'priority'
@@ -416,24 +450,6 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
                 x?.type === "task" && x?.content._id === task._id && sidePanelContentVisible === "content"; // Updated type, param
             return isCurrentlyPreviewing ? undefined : contentPreviewData;
         });
-    };
-
-    const openAuthor = (author: Circle) => {
-        if (isCompact) {
-            router.push(`/circles/${author.handle}`); // Navigate to user profile page on compact
-            return;
-        }
-        // Open user preview in side panel
-        let contentPreviewData: ContentPreviewData = { type: "user", content: author };
-        setContentPreview((x) => {
-            const isCurrentlyPreviewing =
-                x?.type === "user" && x?.content._id === author._id && sidePanelContentVisible === "content";
-            return isCurrentlyPreviewing ? undefined : contentPreviewData;
-        });
-    };
-
-    const openAssignee = (assignee: Circle) => {
-        openAuthor(assignee); // Reuse the same logic as opening author profile
     };
 
     // Check create permission for the button using the user object
@@ -597,8 +613,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
                             <DialogHeader>
                                 <DialogTitle>Delete Task</DialogTitle> {/* Updated text */}
                                 <DialogDescription>
-                                    Are you sure you want to delete the task "{selectedTask?.title}"? This{" "}
-                                    {/* Renamed state & fixed quotes */}
+                                    Are you sure you want to delete the task &quot;{selectedTask?.title}&quot;? This
                                     action cannot be undone.
                                 </DialogDescription>
                             </DialogHeader>
