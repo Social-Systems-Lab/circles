@@ -8,8 +8,10 @@ import {
     Comment,
     Proposal,
     ProposalDisplay,
-    IssueDisplay, // Added IssueDisplay
-    IssueStage, // Added IssueStage
+    IssueDisplay,
+    IssueStage,
+    TaskDisplay, // Added TaskDisplay
+    TaskStage, // Added TaskStage
 } from "@/models/models";
 import crypto from "crypto";
 import { getCirclesByDids, updateCircle } from "./circle";
@@ -499,6 +501,12 @@ export async function sendNotifications(
         assigneeName?: string;
         issueOldStage?: IssueStage;
         issueNewStage?: IssueStage;
+        // Task fields (mirroring Issue fields)
+        taskId?: string;
+        taskTitle?: string;
+        // assigneeName is already covered
+        taskOldStage?: TaskStage;
+        taskNewStage?: TaskStage;
         messageBody?: string; // For pre-formatted messages like resolution
     },
 ): Promise<void> {
@@ -541,6 +549,12 @@ export async function sendNotifications(
             assigneeName: payload.assigneeName,
             issueOldStage: payload.issueOldStage,
             issueNewStage: payload.issueNewStage,
+            // Sanitize task fields
+            taskId: payload.taskId?.toString(),
+            taskTitle: payload.taskTitle,
+            // assigneeName is already covered
+            taskOldStage: payload.taskOldStage,
+            taskNewStage: payload.taskNewStage,
             messageBody: payload.messageBody,
         };
 
@@ -645,18 +659,25 @@ function deriveBody(
         proposalName?: string;
         // Issue fields for fallback text generation
         issueTitle?: string;
-        assigneeName?: string;
+        assigneeName?: string; // Added missing assigneeName here
         issueOldStage?: IssueStage;
         issueNewStage?: IssueStage;
+        // Task fields for fallback text generation
+        taskTitle?: string;
+        taskOldStage?: TaskStage;
+        taskNewStage?: TaskStage;
     },
 ): string {
     const userName = payload.user?.name || "Someone";
     const circleName = payload.circle?.name || "a circle";
     const proposalName = payload.proposalName || "a proposal";
-    const issueTitle = payload.issueTitle || "an issue"; // Use provided title or fallback
+    const issueTitle = payload.issueTitle || "an issue";
+    const taskTitle = payload.taskTitle || "a task"; // Use provided title or fallback
     const assigneeName = payload.assigneeName || "someone";
-    const oldStage = payload.issueOldStage || "previous stage";
-    const newStage = payload.issueNewStage || "new stage";
+    const oldIssueStage = payload.issueOldStage || "previous stage";
+    const newIssueStage = payload.issueNewStage || "new stage";
+    const oldTaskStage = payload.taskOldStage || "previous stage";
+    const newTaskStage = payload.taskNewStage || "new stage";
 
     switch (notificationType) {
         case "follow_request":
@@ -698,7 +719,16 @@ function deriveBody(
         case "issue_assigned":
             return `${userName} assigned issue "${issueTitle}" to you in ${circleName}`;
         case "issue_status_changed":
-            return `Issue "${issueTitle}" in ${circleName} changed status from ${oldStage} to ${newStage}`;
+            return `Issue "${issueTitle}" in ${circleName} changed status from ${oldIssueStage} to ${newIssueStage}`;
+        // Task Notifications Fallbacks
+        case "task_submitted_for_review":
+            return `${userName} submitted task "${taskTitle}" for review in ${circleName}`;
+        case "task_approved":
+            return `Your task "${taskTitle}" in ${circleName} was approved and is now Open`;
+        case "task_assigned":
+            return `${userName} assigned task "${taskTitle}" to you in ${circleName}`;
+        case "task_status_changed":
+            return `Task "${taskTitle}" in ${circleName} changed status from ${oldTaskStage} to ${newTaskStage}`;
         default:
             // Ensure exhaustive check or provide a generic default
             const exhaustiveCheck: never = notificationType;

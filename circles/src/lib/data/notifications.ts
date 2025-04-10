@@ -9,8 +9,10 @@ import {
     ProposalStage,
     ProposalOutcome,
     UserPrivate,
-    IssueDisplay, // Added IssueDisplay
-    IssueStage, // Added IssueStage
+    IssueDisplay,
+    IssueStage,
+    TaskDisplay,
+    TaskStage,
 } from "@/models/models";
 import { sendNotifications } from "./matrix";
 import { getUser, getUserPrivate } from "./user";
@@ -585,6 +587,23 @@ async function getIssueCircle(issue: IssueDisplay): Promise<Circle | null> {
 }
 
 /**
+ * Helper to get the circle for a task notification
+ */
+async function getTaskCircle(task: TaskDisplay): Promise<Circle | null> {
+    // Renamed function, param type
+    if (!task?.circleId) {
+        // Renamed param
+        console.error("🔔 [NOTIFY] Task missing circleId"); // Updated message
+        return null;
+    }
+    const circle = await getCircleById(task.circleId); // Renamed param
+    if (!circle) {
+        console.error("🔔 [NOTIFY] Circle not found for task:", task.circleId); // Updated message, param
+    }
+    return circle;
+}
+
+/**
  * Send notification when an issue is submitted for review
  */
 export async function notifyIssueSubmittedForReview(issue: IssueDisplay, submitter: Circle): Promise<void> {
@@ -616,6 +635,45 @@ export async function notifyIssueSubmittedForReview(issue: IssueDisplay, submitt
         });
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyIssueSubmittedForReview:", error);
+    }
+}
+
+/**
+ * Send notification when a task is submitted for review
+ */
+export async function notifyTaskSubmittedForReview(task: TaskDisplay, submitter: Circle): Promise<void> {
+    // Renamed function, param type
+    try {
+        console.log("🔔 [NOTIFY] notifyTaskSubmittedForReview called:", {
+            // Updated message
+            taskId: task._id, // Renamed property
+            submitterDid: submitter.did,
+        });
+        const circle = await getTaskCircle(task); // Renamed helper function
+        if (!circle) return;
+
+        // Find users with review permission (excluding the submitter)
+        const reviewers = (await getAuthorizedMembers(circle, features.tasks?.review)).filter(
+            // Updated feature check
+            (user: Circle) => user.did !== submitter.did,
+        );
+
+        if (reviewers.length === 0) {
+            console.log("🔔 [NOTIFY] No reviewers found to notify for task:", task._id); // Updated message
+            return;
+        }
+
+        console.log(`🔔 [NOTIFY] Sending task_submitted_for_review to ${reviewers.length} reviewers`); // Updated message
+        await sendNotifications("task_submitted_for_review", reviewers, {
+            // Updated notification type
+            circle,
+            user: submitter, // The user who triggered the notification (submitter)
+            // Pass task details directly
+            taskId: task._id?.toString(), // Renamed property
+            taskTitle: task.title, // Renamed property
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskSubmittedForReview:", error); // Updated message
     }
 }
 
@@ -658,6 +716,47 @@ export async function notifyIssueApproved(issue: IssueDisplay, approver: Circle)
 }
 
 /**
+ * Send notification to the author when their task is approved (moved to Open)
+ */
+export async function notifyTaskApproved(task: TaskDisplay, approver: Circle): Promise<void> {
+    // Renamed function, param type
+    try {
+        console.log("🔔 [NOTIFY] notifyTaskApproved called:", {
+            // Updated message
+            taskId: task._id, // Renamed property
+            authorDid: task.createdBy,
+            approverDid: approver.did,
+        });
+        // Don't notify if approver is the author
+        if (task.createdBy === approver.did) {
+            console.log("🔔 [NOTIFY] Skipping notification - approver is author");
+            return;
+        }
+
+        const author = await getUserPrivate(task.createdBy);
+        if (!author) {
+            console.error("🔔 [NOTIFY] Author not found for task:", task._id); // Updated message
+            return;
+        }
+
+        const circle = await getTaskCircle(task); // Renamed helper function
+        if (!circle) return;
+
+        console.log("🔔 [NOTIFY] Sending task_approved to author:", author.name); // Updated message
+        await sendNotifications("task_approved", [author], {
+            // Updated notification type
+            circle,
+            user: approver, // The user who triggered the notification (approver)
+            // Pass task details directly
+            taskId: task._id?.toString(), // Renamed property
+            taskTitle: task.title, // Renamed property
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskApproved:", error); // Updated message
+    }
+}
+
+/**
  * Send notification when an issue is assigned to a user
  */
 export async function notifyIssueAssigned(issue: IssueDisplay, assigner: Circle, assignee: UserPrivate): Promise<void> {
@@ -687,6 +786,42 @@ export async function notifyIssueAssigned(issue: IssueDisplay, assigner: Circle,
         });
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyIssueAssigned:", error);
+    }
+}
+
+/**
+ * Send notification when a task is assigned to a user
+ */
+export async function notifyTaskAssigned(task: TaskDisplay, assigner: Circle, assignee: UserPrivate): Promise<void> {
+    // Renamed function, param type
+    try {
+        console.log("🔔 [NOTIFY] notifyTaskAssigned called:", {
+            // Updated message
+            taskId: task._id, // Renamed property
+            assignerDid: assigner.did,
+            assigneeDid: assignee.did,
+        });
+        // Don't notify if assigner is the assignee
+        if (assigner.did === assignee.did) {
+            console.log("🔔 [NOTIFY] Skipping notification - assigner is assignee");
+            return;
+        }
+
+        const circle = await getTaskCircle(task); // Renamed helper function
+        if (!circle) return;
+
+        console.log("🔔 [NOTIFY] Sending task_assigned to assignee:", assignee.name); // Updated message
+        await sendNotifications("task_assigned", [assignee], {
+            // Updated notification type
+            circle,
+            user: assigner, // The user who triggered the notification (assigner)
+            // Pass task details directly
+            taskId: task._id?.toString(), // Renamed property
+            taskTitle: task.title, // Renamed property
+            assigneeName: assignee.name, // Add assignee name for context
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskAssigned:", error); // Updated message
     }
 }
 
@@ -743,5 +878,63 @@ export async function notifyIssueStatusChanged(
         });
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyIssueStatusChanged:", error);
+    }
+}
+
+/**
+ * Send notification when a task's status changes (e.g., Open -> In Progress, In Progress -> Resolved)
+ */
+export async function notifyTaskStatusChanged( // Renamed function
+    task: TaskDisplay, // Renamed param type
+    changer: Circle,
+    oldStage: TaskStage, // Renamed param type
+): Promise<void> {
+    try {
+        console.log("🔔 [NOTIFY] notifyTaskStatusChanged called:", {
+            // Updated message
+            taskId: task._id, // Renamed property
+            changerDid: changer.did,
+            oldStage: oldStage,
+            newStage: task.stage,
+        });
+
+        const circle = await getTaskCircle(task); // Renamed helper function
+        if (!circle) return;
+
+        const recipients: UserPrivate[] = [];
+        const author = await getUserPrivate(task.createdBy);
+        let assignee: UserPrivate | null = null;
+        if (task.assignedTo) {
+            assignee = await getUserPrivate(task.assignedTo);
+        }
+
+        // Add author if not the changer
+        if (author && author.did !== changer.did) {
+            recipients.push(author);
+        }
+
+        // Add assignee if exists, not the changer, and not already added (i.e., not the author)
+        if (assignee && assignee.did !== changer.did && assignee.did !== author?.did) {
+            recipients.push(assignee);
+        }
+
+        if (recipients.length === 0) {
+            console.log("🔔 [NOTIFY] No recipients found for task status change:", task._id); // Updated message
+            return;
+        }
+
+        console.log(`🔔 [NOTIFY] Sending task_status_changed to ${recipients.length} recipients`); // Updated message
+        await sendNotifications("task_status_changed", recipients, {
+            // Updated notification type
+            circle,
+            user: changer, // The user who triggered the notification (changer)
+            // Pass task details directly
+            taskId: task._id?.toString(), // Renamed property
+            taskTitle: task.title, // Renamed property
+            taskOldStage: oldStage, // Renamed property
+            taskNewStage: task.stage, // Renamed property
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskStatusChanged:", error); // Updated message
     }
 }

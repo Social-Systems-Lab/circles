@@ -135,6 +135,65 @@ export const features = {
             module: "projects",
         } as Feature,
     },
+    tasks: {
+        // Added tasks module features, mirroring issues
+        view: {
+            name: "View Tasks",
+            handle: "view",
+            description: "View the tasks list and details",
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+            module: "tasks",
+        } as Feature,
+        update: {
+            name: "Update Tasks",
+            handle: "update",
+            description: "Edit existing tasks",
+            defaultUserGroups: ["admins", "moderators"],
+            module: "tasks",
+        } as Feature,
+        create: {
+            name: "Create Tasks",
+            handle: "create",
+            description: "Submit a new task",
+            defaultUserGroups: ["admins", "moderators"],
+            module: "tasks",
+        } as Feature,
+        review: {
+            name: "Review Tasks",
+            handle: "review",
+            description: "Review submitted tasks and move them to Open",
+            defaultUserGroups: ["admins", "moderators"],
+            module: "tasks",
+        } as Feature,
+        assign: {
+            name: "Assign Tasks",
+            handle: "assign",
+            description: "Assign a task to a user",
+            defaultUserGroups: ["admins", "moderators"],
+            module: "tasks",
+        } as Feature,
+        resolve: {
+            name: "Resolve Tasks",
+            handle: "resolve",
+            description: "Mark tasks as resolved or change their stage",
+            defaultUserGroups: ["admins", "moderators"],
+            module: "tasks",
+        } as Feature,
+        moderate: {
+            name: "Moderate Tasks",
+            handle: "moderate",
+            description: "Edit or delete any task",
+            defaultUserGroups: ["admins"],
+            module: "tasks",
+        } as Feature,
+        comment: {
+            name: "Comment on Tasks",
+            handle: "comment",
+            description: "Add comments to tasks",
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+            module: "tasks",
+        } as Feature,
+    },
     proposals: {
         view: {
             name: "View Proposals",
@@ -339,6 +398,12 @@ export const modules: ModuleInfo[] = [
             "Lists all projects the circle is working on or supporting. Offers a structured overview of ongoing initiatives, goals, and collaboration opportunities for members.",
     },
     {
+        name: "Tasks",
+        handle: "tasks",
+        description:
+            "Manage and track tasks within the circle. Users can create tasks, assign them, and monitor progress through various stages.",
+    },
+    {
         name: "Proposals",
         handle: "proposals",
         description:
@@ -361,7 +426,7 @@ export const modules: ModuleInfo[] = [
 
 export const defaultUserModules = ["home", "feed", "followers", "circles", "projects", "settings"];
 export const defaultCircleModules = ["home", "feed", "followers", "projects", "settings"];
-export const defaultProjectModules = ["home", "feed", "followers", "proposals", "issues", "settings"];
+export const defaultProjectModules = ["home", "feed", "followers", "tasks", "proposals", "issues", "settings"]; // Added 'tasks'
 
 export const getDefaultModules = (circleType: CircleType): string[] => {
     switch (circleType) {

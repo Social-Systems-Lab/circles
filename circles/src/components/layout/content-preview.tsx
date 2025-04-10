@@ -19,23 +19,17 @@ import {
     WithMetric,
     ProposalDisplay,
     ProposalStage,
-    IssueDisplay, // Import IssueDisplay
-    IssuePermissions, // Import IssuePermissions
+    IssueDisplay,
+    IssuePermissions,
 } from "@/models/models";
 import { PostItem } from "../modules/feeds/post-list";
 import Indicators from "../utils/indicators";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { MessageButton } from "../modules/home/message-button";
-// Removed duplicate ProposalDisplay, ProposalStage import
 import { Badge } from "@/components/ui/badge";
-import ImageCarousel from "@/components/ui/image-carousel"; // Import the carousel
-// Import ProposalItem and IssueDetail
+import ImageCarousel from "@/components/ui/image-carousel";
 import { ProposalItem } from "../modules/proposals/proposal-item";
-import IssueDetail from "../modules/issues/issue-detail"; // Import IssueDetail
-// Remove unused imports
-// import RichText from "../modules/feeds/RichText";
-// import { UserPicture } from "../modules/members/user-picture";
-// import { formatDistanceToNow } from "date-fns";
+import IssueDetail from "../modules/issues/issue-detail";
 
 export const PostPreview = ({ post, circle, feed, initialComments, initialShowAllComments }: PostItemProps) => {
     return (

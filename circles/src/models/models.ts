@@ -218,7 +218,7 @@ export const postSchema = z.object({
     linkPreviewDescription: z.string().optional(),
     linkPreviewImage: fileInfoSchema.optional(),
     // Internal Link Preview Fields
-    internalPreviewType: z.enum(["circle", "post", "proposal", "issue"]).optional(),
+    internalPreviewType: z.enum(["circle", "post", "proposal", "issue", "task"]).optional(), // Added task
     internalPreviewId: z.string().optional(), // Handle for circle, ID for others
     internalPreviewUrl: z.string().url().optional(),
 });
@@ -235,7 +235,7 @@ export interface PostDisplay extends WithMetric<Post> {
     circle?: Circle;
     feed?: Feed;
     // Populated internal preview data
-    internalPreviewData?: Circle | PostDisplay | ProposalDisplay | IssueDisplay | null;
+    internalPreviewData?: Circle | PostDisplay | TaskDisplay | ProposalDisplay | IssueDisplay | null;
 }
 
 export const commentSchema = z.object({
@@ -457,6 +457,15 @@ export type IssuePermissions = {
     canComment: boolean;
 };
 
+// Define Permissions type for Tasks (mirroring IssuePermissions)
+export type TaskPermissions = {
+    canModerate: boolean;
+    canReview: boolean;
+    canAssign: boolean;
+    canResolve: boolean;
+    canComment: boolean;
+};
+
 export type SortingOptions = "similarity" | "near" | "pop" | "new" | "top" | "custom";
 
 export type PostItemProps = {
@@ -478,9 +487,14 @@ export type ContentPreviewData =
     | { type: "user"; content: Circle; props?: never }
     | { type: "circle"; content: Circle; props?: never }
     | { type: "project"; content: Circle; props?: never }
-    | { type: "proposal"; content: ProposalDisplay; props: { circle: Circle } } // Specify props for proposal
-    | { type: "issue"; content: IssueDisplay; props: { circle: Circle; permissions: IssuePermissions } } // Specify props for issue
-    | { type: "default"; content: Content | ProposalDisplay | IssueDisplay; props?: Record<string, unknown> }; // Added IssueDisplay to default
+    | { type: "proposal"; content: ProposalDisplay; props: { circle: Circle } }
+    | { type: "issue"; content: IssueDisplay; props: { circle: Circle; permissions: IssuePermissions } }
+    | { type: "task"; content: TaskDisplay; props: { circle: Circle; permissions: TaskPermissions } } // Added Task
+    | {
+          type: "default";
+          content: Content | ProposalDisplay | IssueDisplay | TaskDisplay;
+          props?: Record<string, unknown>;
+      }; // Added TaskDisplay
 
 // server setup form wizard
 
@@ -799,7 +813,12 @@ export type NotificationType =
     | "issue_submitted_for_review" // Issue submitted for review - sent to users with review permissions
     | "issue_approved" // Issue approved (moved to Open) - sent to issue author
     | "issue_assigned" // Issue assigned to a user - sent to the assignee
-    | "issue_status_changed"; // Issue status changed (e.g., Open -> In Progress, In Progress -> Resolved) - sent to author/assignee
+    | "issue_status_changed" // Issue status changed (e.g., Open -> In Progress, In Progress -> Resolved) - sent to author/assignee
+    // Task Notifications (mirroring Issue Notifications)
+    | "task_submitted_for_review"
+    | "task_approved"
+    | "task_assigned"
+    | "task_status_changed";
 
 // Define all onboarding steps in a single place for consistency
 export const ONBOARDING_STEPS = [
@@ -889,6 +908,40 @@ export type Issue = z.infer<typeof issueSchema>;
 
 // Display type with author and assignee information
 export interface IssueDisplay extends Issue {
+    author: Circle; // Creator's details
+    assignee?: Circle; // Assignee's details (optional)
+    circle?: Circle; // Circle details
+}
+
+// Task stages (mirroring Issue stages for now)
+export const taskStageSchema = z.enum(["review", "open", "inProgress", "resolved"]);
+export type TaskStage = z.infer<typeof taskStageSchema>;
+
+// Task model (mirroring Issue model)
+export const taskSchema = z.object({
+    _id: z.any().optional(),
+    circleId: z.string(),
+    createdBy: didSchema,
+    createdAt: z.date(),
+    updatedAt: z.date().optional(), // Track updates
+    resolvedAt: z.date().optional(), // Track resolution time
+    title: z.string(),
+    description: z.string(),
+    stage: taskStageSchema.default("review"),
+    assignedTo: didSchema.optional(), // User DID of the assignee
+    userGroups: z.array(z.string()).default([]), // User groups that can see this task
+    location: locationSchema.optional(),
+    commentPostId: z.string().optional(), // Optional link to a shadow post for comments
+    images: z.array(mediaSchema).optional(), // Optional images/media attached to the task
+    // Task-specific fields can be added here later, e.g., priority, due date
+    // priority: z.enum(["low", "medium", "high"]).optional(),
+    // dueDate: z.date().optional(),
+});
+
+export type Task = z.infer<typeof taskSchema>;
+
+// Display type with author and assignee information (mirroring IssueDisplay)
+export interface TaskDisplay extends Task {
     author: Circle; // Creator's details
     assignee?: Circle; // Assignee's details (optional)
     circle?: Circle; // Circle details

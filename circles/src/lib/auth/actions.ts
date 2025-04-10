@@ -2,7 +2,7 @@
 
 import crypto from "crypto";
 import { z } from "zod";
-import { Circles } from "../data/db";
+import { Circles, Tasks } from "../data/db";
 import { getAuthenticatedUserDid } from "./auth";
 import { getUserById, getUserPrivate } from "../data/user";
 import { ObjectId } from "mongodb";
@@ -267,6 +267,9 @@ export async function resetPassword(token: string, email: string, password: stri
             // Issues have two fields
             Issues.updateMany({ createdBy: oldDid }, { $set: { createdBy: newDid } }),
             Issues.updateMany({ assignedTo: oldDid }, { $set: { assignedTo: newDid } }),
+            // Tasks have two fields
+            Tasks.updateMany({ createdBy: oldDid }, { $set: { createdBy: newDid } }),
+            Tasks.updateMany({ assignedTo: oldDid }, { $set: { assignedTo: newDid } }),
             // Update 'createdBy' in Circles if users can create circles/projects
             Circles.updateMany({ createdBy: oldDid }, { $set: { createdBy: newDid } }),
             // Add any other collections/fields that reference user DIDs here
