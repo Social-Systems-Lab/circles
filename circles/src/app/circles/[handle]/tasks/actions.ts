@@ -19,7 +19,7 @@ import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getUserByDid, getUserPrivate } from "@/lib/data/user";
 import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage";
 import { features } from "@/lib/data/constants";
-import { db } from "@/lib/data/db"; // Import db directly
+import { Circles, db, RankedLists } from "@/lib/data/db"; // Import db directly
 import { ObjectId } from "mongodb";
 // Placeholder imports for task data functions (from src/lib/data/task.ts)
 import {
@@ -820,11 +820,12 @@ export async function getUserRankedListAction(circleHandle: string): Promise<Ran
         }
 
         // Use imported db instance
-        const rankedList = await db.collection<RankedList>("rankedLists").findOne({
+        const rankedList = (await RankedLists.findOne({
             entityId: circle._id?.toString(),
             type: "tasks",
             userId: user._id?.toString(), // Use user's _id
-        });
+        })) as RankedList;
+        rankedList._id = rankedList?._id.toString();
 
         return rankedList;
     } catch (error) {
@@ -908,7 +909,7 @@ export async function saveUserRankedListAction(
         };
 
         // Use imported db instance
-        await db.collection<RankedList>("rankedLists").updateOne(
+        await RankedLists.updateOne(
             {
                 entityId: rankedListData.entityId,
                 type: rankedListData.type,
@@ -970,13 +971,10 @@ export async function getAggregatedTaskRankingAction(
         // Use imported db instance
 
         // 1. Fetch all potentially relevant ranked lists for this circle
-        const allRankedLists = await db
-            .collection<RankedList>("rankedLists")
-            .find({
-                entityId: circleId,
-                type: "tasks",
-            })
-            .toArray();
+        const allRankedLists = await RankedLists.find({
+            entityId: circleId,
+            type: "tasks",
+        }).toArray();
 
         // 2. Get the set of currently active task IDs
         const activeTasks = await getActiveTasksByCircleId(circleId, userDid); // Use admin/system context? userDid is fine for now.
@@ -1016,9 +1014,7 @@ export async function getAggregatedTaskRankingAction(
         if (validLists.length === 0) return []; // No valid rankings found
 
         // 4. Fetch user data and perform permission/group filtering
-        const users = await db
-            .collection<Circle>("circles")
-            .find({ _id: { $in: Array.from(userIdsToCheck).map((id) => new ObjectId(id)) } })
+        const users = await Circles.find({ _id: { $in: Array.from(userIdsToCheck).map((id) => new ObjectId(id)) } })
             .project<{ _id: ObjectId; did?: string }>({ _id: 1, did: 1 }) // Fetch only necessary fields, added type projection
             .toArray();
         const userMap = new Map(users.map((u: { _id: ObjectId; did?: string }) => [u._id.toString(), u.did])); // Added explicit type for u
@@ -1097,13 +1093,11 @@ async function invalidateUserRankingsIfNeededAction(circleId: string): Promise<v
         const activeTaskIds = new Set(activeTasks.map((t: TaskDisplay) => t._id?.toString())); // Added type TaskDisplay
 
         // Find lists for this circle
-        const listsToValidate = await db
-            .collection<RankedList>("rankedLists")
-            .find({
-                entityId: circleId,
-                type: "tasks",
-                isValid: true, // Only check lists currently marked as valid
-            })
+        const listsToValidate = await RankedLists.find({
+            entityId: circleId,
+            type: "tasks",
+            isValid: true, // Only check lists currently marked as valid
+        })
             .project({ _id: 1, list: 1 }) // Fetch only necessary fields
             .toArray();
 
@@ -1123,7 +1117,7 @@ async function invalidateUserRankingsIfNeededAction(circleId: string): Promise<v
         }
 
         if (listsToInvalidate.length > 0) {
-            await db.collection<RankedList>("rankedLists").updateMany(
+            await RankedLists.updateMany(
                 { _id: { $in: listsToInvalidate } },
                 { $set: { isValid: false, updatedAt: new Date() } }, // Mark invalid and update timestamp
             );

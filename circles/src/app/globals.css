@@ -39,6 +39,10 @@ body {
     overflow-x: hidden;
 }
 
+.header {
+    font-family: var(--font-wix-display);
+}
+
 .formatted h1:first-child {
     margin-top: 0px;
 }

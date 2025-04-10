@@ -197,7 +197,7 @@ export const features = {
             name: "Prioritize Tasks",
             handle: "prioritize",
             description: "Create and manage a prioritized ranking of tasks",
-            defaultUserGroups: ["admins", "moderators"], // Default: Mods+ can prioritize
+            defaultUserGroups: ["admins", "moderators", "members"],
             module: "tasks",
         } as Feature,
     },
