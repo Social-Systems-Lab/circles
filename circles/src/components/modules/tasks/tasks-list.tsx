@@ -462,7 +462,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
                         )}
                         {/* Add Prioritize Button */}
                         {isAuthorized(user, circle, features.tasks.prioritize) && (
-                            <Button variant="outline" onClick={() => setShowPrioritizeModal(true)}>
+                            <Button onClick={() => setShowPrioritizeModal(true)}>
                                 <ListOrdered className="mr-2 h-4 w-4" /> Prioritize
                             </Button>
                         )}
