@@ -33,6 +33,12 @@ import ImageCarousel from "@/components/ui/image-carousel";
 import { ProposalItem } from "../modules/proposals/proposal-item";
 import IssueDetail from "../modules/issues/issue-detail";
 import TaskDetail from "../modules/tasks/task-detail"; // Added TaskDetail import
+import { MapPin, Quote } from "lucide-react";
+import { CirclePicture } from "../modules/circles/circle-picture";
+import { causes, skills } from "@/lib/data/causes-skills";
+
+const causeMap = new Map(causes.map((c) => [c.handle, c]));
+const skillMap = new Map(skills.map((s) => [s.handle, s]));
 
 export const PostPreview = ({ post, circle, feed, initialComments, initialShowAllComments }: PostItemProps) => {
     return (
@@ -134,48 +140,113 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                         </div>
                     </div>
                 </div>
-
-                <div className="mb-8 mt-[44px] flex flex-col items-center justify-center overflow-y-auto">
-                    <h4>{circle.name}</h4>
-                    {(circle.description || circle.mission) && (
-                        <div className="pl-4 pr-4">{circle.description ?? circle.mission}</div>
-                    )}
-
+                <div className="mt-[44px] flex flex-col items-center justify-center overflow-y-auto">
+                    <div className="header pt-[30px] text-2xl">{circle.name}</div>
                     {memberCount > 0 && (
-                        <div className="flex flex-row items-center justify-center pt-4">
+                        <div className="flex flex-row items-center justify-center pt-2">
                             <FaUsers />
-                            <p className="m-0 ml-2">
+                            <p className="m-0 ml-2 text-sm">
                                 {memberCount} {memberCount !== 1 ? "Followers" : "Follower"}
                             </p>
                         </div>
                     )}
                 </div>
-                {/* <div>
-                    <pre>{JSON.stringify(circle, null, 2)}</pre>
-                </div> */}
+                {/* Content below image - now inside the scrollable container */}
+                <div className="relative flex flex-1 flex-col p-4 pt-2">
+                    {/* Description and Mission are prioritized */}
+                    <div className="space-y-3 px-1 pb-2">
+                        {/* Mission Box with Quote Icon */}
+                        {circle.mission && (
+                            <div className="relative mt-3 rounded-md border bg-gray-50/80 p-3 pl-8 shadow-sm">
+                                <Quote className="absolute left-2 top-2 h-4 w-4 text-gray-400" />
+                                <p className="text-sm text-gray-700">{circle.mission}</p>
+                            </div>
+                        )}
+
+                        {circle.description && <p className="text-sm text-gray-600">{circle.description}</p>}
+
+                        {/* Causes Pills */}
+                        {circle.causes && circle.causes.length > 0 && (
+                            <div className="mt-4">
+                                <h3 className="mb-1.5 text-xs font-medium uppercase text-gray-500">Causes</h3>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {circle.causes.slice(0, 8).map((handle) => {
+                                        // Limit pills shown
+                                        const cause = causeMap.get(handle);
+                                        if (!cause) return null;
+                                        return (
+                                            <Badge
+                                                key={handle}
+                                                variant="outline"
+                                                className="flex items-center gap-1.5 px-2 py-1"
+                                            >
+                                                <Image
+                                                    src={cause.picture.url}
+                                                    alt="" // Alt handled by text
+                                                    width={16}
+                                                    height={16}
+                                                    className="h-4 w-4 rounded-full object-cover"
+                                                />
+                                                <span className="text-xs font-medium">{cause.name}</span>
+                                            </Badge>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Skills/Needs Pills */}
+                        {circle.skills && circle.skills.length > 0 && (
+                            <div className="mt-4">
+                                <h3 className="mb-1.5 text-xs font-medium uppercase text-gray-500">
+                                    {circle.circleType === "user" ? "Skills" : "Needs"}
+                                </h3>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {circle.skills!.slice(0, 8).map((handle) => {
+                                        const skill = skillMap.get(handle);
+                                        if (!skill) return null;
+                                        return (
+                                            <Badge
+                                                key={handle}
+                                                variant="outline"
+                                                className="flex items-center gap-1.5 px-2 py-1"
+                                            >
+                                                <Image
+                                                    src={skill.picture.url}
+                                                    alt="" // Alt handled by text
+                                                    width={16}
+                                                    height={16}
+                                                    className="h-4 w-4 rounded-full object-cover"
+                                                />
+                                                <span className="text-xs font-medium">{skill.name}</span>
+                                            </Badge>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Location (moved down, inline icon, no heading) */}
+                        {circle.location &&
+                            (circle.location.city || circle.location.region || circle.location.country) && (
+                                <div className="flex items-center pt-2 text-sm text-gray-600">
+                                    <MapPin className="mr-1.5 h-4 w-4 flex-shrink-0 text-gray-500" />
+                                    <span>
+                                        {[circle.location.city, circle.location.region, circle.location.country]
+                                            .filter(Boolean)
+                                            .join(", ")}
+                                    </span>
+                                </div>
+                            )}
+                    </div>
+                    {/* End of direct content within scroll container */}
+                </div>{" "}
             </div>
         </>
     );
 };
 
-// Helper function for proposal stage badge color (copied from proposals-list)
-const getProposalStageBadgeColor = (stage: ProposalStage) => {
-    switch (stage) {
-        case "draft":
-            return "bg-gray-200 text-gray-800";
-        case "review":
-            return "bg-blue-200 text-blue-800";
-        case "voting":
-            return "bg-green-200 text-green-800";
-        case "resolved":
-            return "bg-purple-200 text-purple-800";
-        default:
-            return "bg-gray-200 text-gray-800";
-    }
-};
-
 // Removed the old ProposalPreview component definition
-
 export const ContentPreview: React.FC = () => {
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [user] = useAtom(userAtom); // Move user state here for broader access
@@ -194,11 +265,19 @@ export const ContentPreview: React.FC = () => {
             case "member":
                 let circle = { ...contentPreview!.content } as Circle;
                 circle._id = (contentPreview!.content as MemberDisplay).circleId;
-                return <CirclePreview circle={circle} circleType={"user"} />;
+                return (
+                    <div className="custom-scrollbar h-full overflow-y-auto">
+                        <CirclePreview circle={circle} circleType={"user"} />
+                    </div>
+                );
             case "user":
             case "circle":
             case "project":
-                return <CirclePreview circle={contentPreview!.content as Circle} circleType={contentPreview.type} />;
+                return (
+                    <div className="custom-scrollbar h-full overflow-y-auto">
+                        <CirclePreview circle={contentPreview!.content as Circle} circleType={contentPreview.type} />
+                    </div>
+                );
             case "proposal": {
                 // Render ProposalItem in preview mode
                 const proposal = contentPreview!.content as ProposalDisplay;

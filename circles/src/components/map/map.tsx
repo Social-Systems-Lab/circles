@@ -92,7 +92,7 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
             style: "mapbox://styles/mapbox/streets-v12",
             center: [lng, lat],
             zoom: zoom,
-            maxZoom: 12, // Limit maximum zoom to city level
+            //maxZoom: 12, // Limit maximum zoom to city level
         });
     }, [mapContainer, lat, lng, zoom, mapboxKey, displayedContent]);
 

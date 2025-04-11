@@ -352,7 +352,6 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                                     </span>
                                 </div>
                             )}
-                        {/* Removed stray closing tag '/>' */}
                     </div>
                     {/* End of direct content within scroll container */}
                 </div>{" "}
