@@ -70,6 +70,7 @@ import Link from "next/link";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import TaskPrioritizationModal from "./task-prioritization-modal"; // Import the modal
 import { PiRanking, PiRankingBold, PiUser, PiUsersThree } from "react-icons/pi";
+import { useIsMobile } from "@/components/utils/use-is-mobile";
 
 interface TasksListProps {
     tasksData: {
@@ -155,6 +156,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [showRankModal, setShowRankModal] = useState(false); // State for modal
+    const isMobile = useIsMobile();
 
     const openAuthor = useCallback(
         (author: Circle) => {
@@ -405,7 +407,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                 userRank: hasUserRanked,
                 title: true,
                 stage: true,
-                assignee: true,
+                assignee: !isCompact,
                 author: !isCompact,
                 createdAt: !isCompact,
             },
@@ -473,62 +475,45 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                     {/* --- START: Rank Stats and Nudge Boxes --- */}
                     {hasUserRanked && (
                         <div className="mb-3 rounded border bg-blue-50 p-3 text-sm text-blue-800 shadow-sm">
-                            {/* Use &nbsp; to keep numbers/words together */}
                             <p className="flex items-center">
                                 <PiUsersThree className="mr-2 h-5 w-5 flex-shrink-0" />
-                                You've ranked these tasks.&nbsp;Currently,&nbsp;
-                                <span className="font-semibold">{totalRankers}</span>&nbsp;
-                                {totalRankers === 1 ? "user" : "users"}&nbsp;contributed to the aggregated ranking.
+                                You've ranked these tasks.{" "}
+                                <span>
+                                    Currently, <span className="mx-1 font-semibold">{totalRankers}</span>{" "}
+                                    {totalRankers === 1 ? "user" : "users"} contributed to the aggregated ranking.
+                                </span>
                             </p>
                         </div>
                     )}
 
-                    {/* 1. Stale Warning (Within Grace Period) */}
-                    {hasUserRanked && unrankedCount > 0 && stalenessInfo.isStale && !stalenessInfo.isExpired && (
+                    {/* Show nudge only if user has ranked */}
+                    {hasUserRanked && unrankedCount > 0 && (
                         <div
                             className="mb-4 cursor-pointer rounded border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800 shadow-sm transition-colors hover:bg-yellow-100"
-                            onClick={() => setShowRankModal(true)}
-                            role="button" /* ... accessibility ... */
+                            onClick={() => setShowRankModal(true)} // Open rank modal on click
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => e.key === "Enter" && setShowRankModal(true)} // Accessibility
                         >
-                            {/* Use &nbsp; and whitespace-nowrap for the date */}
                             <p className="flex items-center">
                                 <TriangleAlert className="mr-2 h-5 w-5 flex-shrink-0 text-yellow-600" />
-                                You&nbsp;have&nbsp;
-                                <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
+                                You have{" "}
+                                <span className="mx-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
                                     {unrankedCount}
-                                </span>
-                                &nbsp;unranked&nbsp;task{unrankedCount !== 1 ? "s" : ""}.
-                                Please&nbsp;update&nbsp;by&nbsp;
-                                <span className="whitespace-nowrap font-semibold">
-                                    {stalenessInfo.expiryDateString}
-                                </span>
-                                &nbsp;to&nbsp;ensure your ranking continues to be counted.
-                                Click&nbsp;here&nbsp;to&nbsp;rank.
+                                </span>{" "}
+                                unranked task{unrankedCount !== 1 ? "s" : ""}.
+                                {!isMobile && (
+                                    <>
+                                        Please update by{" "}
+                                        <span className="mx-1 font-semibold">{stalenessInfo.expiryDateString}</span>
+                                        to ensure your ranking continues to be counted. Click here to rank.
+                                    </>
+                                )}
                             </p>
                         </div>
                     )}
 
-                    {/* 2. Simple Nudge (User has ranked, has unranked, but list is NOT stale yet) */}
-                    {hasUserRanked && unrankedCount > 0 && !stalenessInfo.isStale && (
-                        <div
-                            className="mb-4 cursor-pointer rounded border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800 shadow-sm transition-colors hover:bg-yellow-100"
-                            onClick={() => setShowRankModal(true)}
-                            role="button" /* ... accessibility ... */
-                        >
-                            {/* Use &nbsp; */}
-                            <p className="flex items-center">
-                                <TriangleAlert className="mr-2 h-5 w-5 flex-shrink-0 text-yellow-600" />
-                                You&nbsp;have&nbsp;
-                                <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
-                                    {unrankedCount}
-                                </span>
-                                &nbsp;unranked&nbsp;task{unrankedCount !== 1 ? "s" : ""}.
-                                Click&nbsp;here&nbsp;to&nbsp;rank&nbsp;them.
-                            </p>
-                        </div>
-                    )}
-
-                    {/* 3. Success Message (All tasks ranked) */}
+                    {/* Show success message only if user has ranked and count is 0 */}
                     {hasUserRanked && unrankedCount === 0 && (
                         <div className="mb-4 rounded border border-green-400 bg-green-50 p-3 text-sm text-green-800 shadow-sm">
                             <p className="flex items-center">
