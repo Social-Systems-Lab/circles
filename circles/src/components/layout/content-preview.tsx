@@ -137,7 +137,9 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
 
                 <div className="mb-8 mt-[44px] flex flex-col items-center justify-center overflow-y-auto">
                     <h4>{circle.name}</h4>
-                    {circle.description && <div className="pl-4 pr-4">{circle.description}</div>}
+                    {(circle.description || circle.mission) && (
+                        <div className="pl-4 pr-4">{circle.description ?? circle.mission}</div>
+                    )}
 
                     {memberCount > 0 && (
                         <div className="flex flex-row items-center justify-center pt-4">

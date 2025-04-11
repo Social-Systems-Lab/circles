@@ -479,6 +479,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                                 <PiUsersThree className="mr-2 h-5 w-5 flex-shrink-0" />
                                 You&apos;ve ranked these tasks.{" "}
                                 <span>
+                                    {" "}
                                     Currently, <span className="mx-1 font-semibold">{totalRankers}</span>{" "}
                                     {totalRankers === 1 ? "user" : "users"} contributed to the aggregated ranking.
                                 </span>
@@ -504,6 +505,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                                 unranked task{unrankedCount !== 1 ? "s" : ""}.
                                 {!isMobile && (
                                     <>
+                                        {" "}
                                         Please update by{" "}
                                         <span className="mx-1 font-semibold">{stalenessInfo.expiryDateString}</span>
                                         to ensure your ranking continues to be counted. Click here to rank.

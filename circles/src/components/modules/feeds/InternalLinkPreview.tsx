@@ -97,8 +97,10 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url, initialD
                         <div>
                             <div className="text-xs text-gray-500">{getCircleTypeName(circle.circleType!)}</div>
                             <div className="font-medium">{circle.name}</div>
-                            {circle.description && (
-                                <p className="text-sm text-gray-600">{truncateText(circle.description, 100)}</p>
+                            {(circle.description || circle.mission) && (
+                                <p className="text-sm text-gray-600">
+                                    {truncateText((circle.description ?? circle.mission)!, 100)}
+                                </p>
                             )}
                         </div>
                     </>

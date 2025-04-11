@@ -222,8 +222,10 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
                                         <CircleTags tags={circle.interests} isCompact={true} />
                                     </div>
 
-                                    {circle.description && (
-                                        <p className="line-clamp-2 pl-1 pr-1 pt-2 text-[15px]">{circle.description}</p>
+                                    {(circle.description || circle.mission) && (
+                                        <p className="line-clamp-2 pl-1 pr-1 pt-2 text-[15px]">
+                                            {circle.description ?? circle.mission}
+                                        </p>
                                     )}
                                 </div>
                                 <div className="mt-auto flex">

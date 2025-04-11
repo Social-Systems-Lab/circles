@@ -112,17 +112,17 @@ export default function HomeContent({ circle, authorizedToEdit }: HomeContentPro
                                 circle.name
                             )}
                         </h4>
-                        {circle.description && (
+                        {(circle.description || circle.mission) && (
                             <div className="line-clamp-1 pb-1 text-gray-600">
                                 {authorizedToEdit ? (
                                     <EditableField
-                                        id="description"
-                                        value={circle.description}
+                                        id={circle.description ? "description" : "mission"}
+                                        value={(circle.description ?? circle.mission)!}
                                         circleId={circle._id!}
                                         multiline
                                     />
                                 ) : (
-                                    circle.description
+                                    circle.description ?? circle.mission
                                 )}
                             </div>
                         )}

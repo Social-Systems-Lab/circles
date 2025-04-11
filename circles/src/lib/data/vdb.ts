@@ -106,6 +106,7 @@ export const formatCircleForEmbedding = (circle: Circle) => {
       Location: ${circle.location ? getFullLocationName(circle.location) : "N/A"}
       Causes: ${causeNames.length <= 0 ? "N/A" : causeNames.join(", ")}
       ${skillsLabel}: ${skillNames.length <= 0 ? "N/A" : skillNames.join(", ")}
+      Content: ${circle.content ?? "N/A"}
     `;
 };
 

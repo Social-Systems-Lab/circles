@@ -150,7 +150,7 @@ export default function CirclesTab() {
                                         </TableCell>
                                         <TableCell>{circle.handle}</TableCell>
                                         <TableCell className="max-w-xs truncate">
-                                            {circle.description || "No description"}
+                                            {circle.description ?? circle.mission}
                                         </TableCell>
                                         <TableCell>{circle.members || 0}</TableCell>
                                         <TableCell>

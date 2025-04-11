@@ -178,7 +178,9 @@ export const UserToolbox = () => {
                                     <CirclePicture circle={circle} size="40px" />
                                     <div className="flex-1">
                                         <p className="text-sm font-medium">{circle.name}</p>
-                                        <p className="text-xs text-muted-foreground">{circle.description}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {circle.description ?? circle.mission}
+                                        </p>
                                     </div>
                                 </div>
                             ))
