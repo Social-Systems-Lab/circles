@@ -48,6 +48,8 @@ type GetTasksActionResult = {
     hasUserRanked: boolean;
     totalRankers: number;
     unrankedCount: number;
+    userRankUpdatedAt: Date | null;
+    userRankBecameStaleAt: Date | null;
 };
 
 /**
@@ -62,12 +64,18 @@ export async function getTasksAction(circleHandle: string): Promise<GetTasksActi
         hasUserRanked: false,
         totalRankers: 0,
         unrankedCount: 0,
+        userRankUpdatedAt: null,
+        userRankBecameStaleAt: null,
     };
 
     try {
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) {
             throw new Error("User not authenticated");
+        }
+        const user = await getUserByDid(userDid); // Need user._id
+        if (!user) {
+            throw new Error("User not found");
         }
 
         const circle = await getCircleByHandle(circleHandle);
@@ -92,6 +100,15 @@ export async function getTasksAction(circleHandle: string): Promise<GetTasksActi
         const userRankedList = userRankingResult?.list || [];
         const userRankMap = new Map(userRankedList.map((taskId, index) => [taskId, index + 1]));
         const hasUserRanked = userRankedList.length > 0;
+
+        // get staleness info
+        const userRankingDoc = await RankedLists.findOne({
+            entityId: circleId,
+            type: "tasks",
+            userId: user._id,
+        });
+        const userRankUpdatedAt = userRankingDoc?.updatedAt || null;
+        const userRankBecameStaleAt = userRankingDoc?.becameStaleAt || null;
 
         // 4. Calculate unranked count for the user *based on active/rankable tasks*
         let unrankedCount = 0;
@@ -120,6 +137,8 @@ export async function getTasksAction(circleHandle: string): Promise<GetTasksActi
             hasUserRanked,
             totalRankers,
             unrankedCount,
+            userRankUpdatedAt,
+            userRankBecameStaleAt,
         };
     } catch (error) {
         console.error("Error getting tasks with ranking:", error);
@@ -868,7 +887,9 @@ export async function getUserRankedListAction(circleHandle: string): Promise<Ran
             type: "tasks",
             userId: user._id?.toString(), // Use user's _id
         })) as RankedList;
-        rankedList._id = rankedList?._id.toString();
+        if (rankedList) {
+            rankedList._id = rankedList?._id.toString();
+        }
 
         return rankedList;
     } catch (error) {

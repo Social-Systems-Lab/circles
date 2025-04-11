@@ -923,6 +923,7 @@ export const rankedListSchema = z.object({
     createdAt: z.date(),
     updatedAt: z.date(),
     isValid: z.boolean().default(true), // Flag to mark if the list is current and usable for aggregation
+    becameStaleAt: z.date().optional(),
 });
 
 export type RankedList = z.infer<typeof rankedListSchema>;

@@ -1,7 +1,7 @@
 //task-list.tsx
 "use client";
 
-import React, { useEffect, useState, useTransition, ChangeEvent, useCallback } from "react";
+import React, { useEffect, useState, useTransition, ChangeEvent, useCallback, useMemo } from "react";
 import {
     ColumnDef,
     ColumnFiltersState,
@@ -61,7 +61,7 @@ import { deleteTaskAction } from "@/app/circles/[handle]/tasks/actions";
 import { UserPicture } from "../members/user-picture";
 import { motion } from "framer-motion";
 import { isAuthorized } from "@/lib/auth/client-auth";
-import { features } from "@/lib/data/constants"; // Added constants import
+import { features, RANKING_STALENESS_DAYS } from "@/lib/data/constants"; // Added constants import
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { useAtom } from "jotai";
@@ -77,6 +77,7 @@ interface TasksListProps {
         hasUserRanked: boolean;
         totalRankers: number;
         unrankedCount: number;
+        userRankBecameStaleAt: Date | null;
     };
     circle: Circle;
     permissions: TaskPermissions;
@@ -99,6 +100,27 @@ const tableRowVariants = {
     }),
 };
 
+const formatExpiryDate = (expiryDate: Date): string => {
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Reset time part for accurate date comparison
+    today.setHours(0, 0, 0, 0);
+    tomorrow.setHours(0, 0, 0, 0);
+    const expiryDateOnly = new Date(expiryDate);
+    expiryDateOnly.setHours(0, 0, 0, 0);
+
+    if (expiryDateOnly.getTime() === today.getTime()) {
+        return "end of today";
+    }
+    if (expiryDateOnly.getTime() === tomorrow.getTime()) {
+        return "tomorrow";
+    }
+    // Example: "April 15th" - adjust formatting as needed
+    return expiryDate.toLocaleDateString(undefined, { month: "long", day: "numeric" });
+};
+
 // Helper function for stage badge styling and icons
 const getStageInfo = (stage: TaskStage) => {
     // Updated type
@@ -118,7 +140,7 @@ const getStageInfo = (stage: TaskStage) => {
 
 const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions }) => {
     // Renamed component, props
-    const { tasks, hasUserRanked, totalRankers, unrankedCount } = tasksData;
+    const { tasks, hasUserRanked, totalRankers, unrankedCount, userRankBecameStaleAt } = tasksData;
     const data = React.useMemo(() => tasks, [tasks]);
     const [user] = useAtom(userAtom);
     const [sorting, setSorting] = React.useState<SortingState>([{ id: "rank", desc: false }]);
@@ -157,6 +179,31 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
         },
         [openAuthor],
     );
+
+    const stalenessInfo = useMemo(() => {
+        if (!userRankBecameStaleAt || unrankedCount === 0) {
+            return { isStale: false, expiryDate: null, expiryDateString: "" };
+        }
+        const becameStaleDate = new Date(userRankBecameStaleAt); // Ensure it's a Date
+        const expiryDate = new Date(becameStaleDate);
+        expiryDate.setDate(expiryDate.getDate() + RANKING_STALENESS_DAYS);
+
+        const now = new Date();
+        // Check if grace period has actually expired already
+        if (now > expiryDate) {
+            // This case means the backend should have excluded it,
+            // but we handle it defensively in UI.
+            // You might show a different "expired" message here if needed.
+            return { isStale: true, expiryDate: expiryDate, expiryDateString: "past", isExpired: true };
+        }
+
+        return {
+            isStale: true,
+            expiryDate: expiryDate,
+            expiryDateString: formatExpiryDate(expiryDate),
+            isExpired: false,
+        };
+    }, [userRankBecameStaleAt, unrankedCount]);
 
     const columns = React.useMemo<ColumnDef<TaskDisplay>[]>( // Updated type
         () => [
@@ -426,36 +473,62 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                     {/* --- START: Rank Stats and Nudge Boxes --- */}
                     {hasUserRanked && (
                         <div className="mb-3 rounded border bg-blue-50 p-3 text-sm text-blue-800 shadow-sm">
+                            {/* Use &nbsp; to keep numbers/words together */}
                             <p className="flex items-center">
                                 <PiUsersThree className="mr-2 h-5 w-5 flex-shrink-0" />
-                                You've ranked these tasks. Currently,{" "}
-                                <span className="mx-1 font-semibold">{totalRankers}</span>{" "}
-                                {totalRankers === 1 ? "user" : "users"} contributed to the aggregated ranking.
+                                You've ranked these tasks.&nbsp;Currently,&nbsp;
+                                <span className="font-semibold">{totalRankers}</span>&nbsp;
+                                {totalRankers === 1 ? "user" : "users"}&nbsp;contributed to the aggregated ranking.
                             </p>
                         </div>
                     )}
 
-                    {/* Show nudge only if user has ranked */}
-                    {hasUserRanked && unrankedCount > 0 && (
+                    {/* 1. Stale Warning (Within Grace Period) */}
+                    {hasUserRanked && unrankedCount > 0 && stalenessInfo.isStale && !stalenessInfo.isExpired && (
                         <div
                             className="mb-4 cursor-pointer rounded border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800 shadow-sm transition-colors hover:bg-yellow-100"
-                            onClick={() => setShowRankModal(true)} // Open rank modal on click
-                            role="button"
-                            tabIndex={0}
-                            onKeyDown={(e) => e.key === "Enter" && setShowRankModal(true)} // Accessibility
+                            onClick={() => setShowRankModal(true)}
+                            role="button" /* ... accessibility ... */
                         >
+                            {/* Use &nbsp; and whitespace-nowrap for the date */}
                             <p className="flex items-center">
                                 <TriangleAlert className="mr-2 h-5 w-5 flex-shrink-0 text-yellow-600" />
-                                You have{" "}
-                                <span className="mx-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
+                                You&nbsp;have&nbsp;
+                                <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
                                     {unrankedCount}
-                                </span>{" "}
-                                unranked task{unrankedCount !== 1 ? "s" : ""}. Click here to rank them.
+                                </span>
+                                &nbsp;unranked&nbsp;task{unrankedCount !== 1 ? "s" : ""}.
+                                Please&nbsp;update&nbsp;by&nbsp;
+                                <span className="whitespace-nowrap font-semibold">
+                                    {stalenessInfo.expiryDateString}
+                                </span>
+                                &nbsp;to&nbsp;ensure your ranking continues to be counted.
+                                Click&nbsp;here&nbsp;to&nbsp;rank.
                             </p>
                         </div>
                     )}
 
-                    {/* Show success message only if user has ranked and count is 0 */}
+                    {/* 2. Simple Nudge (User has ranked, has unranked, but list is NOT stale yet) */}
+                    {hasUserRanked && unrankedCount > 0 && !stalenessInfo.isStale && (
+                        <div
+                            className="mb-4 cursor-pointer rounded border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800 shadow-sm transition-colors hover:bg-yellow-100"
+                            onClick={() => setShowRankModal(true)}
+                            role="button" /* ... accessibility ... */
+                        >
+                            {/* Use &nbsp; */}
+                            <p className="flex items-center">
+                                <TriangleAlert className="mr-2 h-5 w-5 flex-shrink-0 text-yellow-600" />
+                                You&nbsp;have&nbsp;
+                                <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
+                                    {unrankedCount}
+                                </span>
+                                &nbsp;unranked&nbsp;task{unrankedCount !== 1 ? "s" : ""}.
+                                Click&nbsp;here&nbsp;to&nbsp;rank&nbsp;them.
+                            </p>
+                        </div>
+                    )}
+
+                    {/* 3. Success Message (All tasks ranked) */}
                     {hasUserRanked && unrankedCount === 0 && (
                         <div className="mb-4 rounded border border-green-400 bg-green-50 p-3 text-sm text-green-800 shadow-sm">
                             <p className="flex items-center">

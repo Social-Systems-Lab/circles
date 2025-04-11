@@ -2,6 +2,7 @@ import { UserGroup, Module, Feature, Cause, Skill, ModuleInfo, CircleType } from
 
 export const logLevel = 5; // 0: none, 1: error, 2: warn, 3: info, 4: debug, 5: trace
 export const LOG_LEVEL_TRACE = 5;
+export const RANKING_STALENESS_DAYS = 30; // How many days before a ranking becomes stale
 
 export const features = {
     general: {
