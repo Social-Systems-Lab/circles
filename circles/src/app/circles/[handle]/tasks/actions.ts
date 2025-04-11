@@ -43,54 +43,89 @@ import {
     notifyTaskStatusChanged,
 } from "@/lib/data/notifications";
 
+type GetTasksActionResult = {
+    tasks: TaskDisplay[]; // Tasks with aggregated and user ranks
+    hasUserRanked: boolean;
+    totalRankers: number;
+    unrankedCount: number;
+};
+
 /**
  * Get all tasks for a circle
  * @param circleHandle The handle of the circle
  * @returns Array of tasks
  */
-export async function getTasksAction(circleHandle: string, getRank: boolean): Promise<TaskDisplay[]> {
-    // Renamed function, updated return type
+export async function getTasksAction(circleHandle: string): Promise<GetTasksActionResult> {
+    // Updated return type
+    const defaultResult: GetTasksActionResult = {
+        tasks: [],
+        hasUserRanked: false,
+        totalRankers: 0,
+        unrankedCount: 0,
+    };
+
     try {
-        // Get the current user
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) {
             throw new Error("User not authenticated");
         }
 
-        // Get the circle
         const circle = await getCircleByHandle(circleHandle);
         if (!circle) {
             throw new Error("Circle not found");
         }
-
         const circleId = circle._id!.toString();
 
-        // Check if user has permission to view tasks (Placeholder feature handle)
         const canViewTasks = await isAuthorized(userDid, circleId, features.tasks.view);
         if (!canViewTasks) {
-            return [];
+            return defaultResult;
         }
 
-        // Get tasks from the database (Data function)
-        const tasks = await getTasksByCircleId(circle._id as string, userDid);
+        // 1. Get all displayable tasks (might include non-rankable ones initially)
+        const allTasks = await getTasksByCircleId(circle._id as string, userDid);
 
-        // Add rank to each task object
-        const rankMap = await getTaskRanking(circleId);
-        const tasksWithRank = tasks.map((task) => ({
+        // 2. Get aggregated ranking and the set of *rankable* task IDs
+        const { rankMap: aggregatedRankMap, totalRankers, activeTaskIds } = await getTaskRanking(circleId);
+
+        // 3. Get the current user's ranked list
+        const userRankingResult = await getUserRankedListAction(circleHandle);
+        const userRankedList = userRankingResult?.list || [];
+        const userRankMap = new Map(userRankedList.map((taskId, index) => [taskId, index + 1]));
+        const hasUserRanked = userRankedList.length > 0;
+
+        // 4. Calculate unranked count for the user *based on active/rankable tasks*
+        let unrankedCount = 0;
+        if (hasUserRanked) {
+            // Only calculate if user has ranked at least once
+            // Count how many *active* tasks are NOT in the user's map
+            activeTaskIds.forEach((taskId) => {
+                if (!userRankMap.has(taskId)) {
+                    unrankedCount++;
+                }
+            });
+        } else {
+            // If user hasn't ranked, all active tasks are unranked for them
+            unrankedCount = activeTaskIds.size;
+        }
+
+        // 5. Add ranks to each task object
+        const tasksWithRanks = allTasks.map((task) => ({
             ...task,
-            // Look up the rank; active tasks will have a rank, others won't
-            rank: rankMap.get(task._id!.toString()),
+            rank: aggregatedRankMap.get(task._id!.toString()), // Aggregated rank
+            userRank: userRankMap.get(task._id!.toString()), // User's specific rank
         }));
 
-        return tasksWithRank;
+        return {
+            tasks: tasksWithRanks,
+            hasUserRanked,
+            totalRankers,
+            unrankedCount,
+        };
     } catch (error) {
-        console.error("Error getting tasks:", error); // Updated message
-        // Return empty array on error to avoid breaking the UI
-        return [];
-        // throw error; // Or re-throw if preferred
+        console.error("Error getting tasks with ranking:", error);
+        return defaultResult; // Return default structure on error
     }
 }
-
 /**
  * Get a single task by ID
  * @param circleHandle The handle of the circle
@@ -772,7 +807,7 @@ export const getMembersAction = async (circleId: string) => {
  * @param circleHandle The handle of the circle
  * @returns Array of active tasks (open or inProgress)
  */
-export async function getTasksForPrioritizationAction(circleHandle: string): Promise<TaskDisplay[]> {
+export async function getTasksForRankingAction(circleHandle: string): Promise<TaskDisplay[]> {
     try {
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) {

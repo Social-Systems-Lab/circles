@@ -1,3 +1,4 @@
+// task-prioritization-modal.tsx
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
@@ -26,7 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, GripVertical, X } from "lucide-react"; // Removed CheckCircle2
 import { Circle, TaskDisplay } from "@/models/models";
 import {
-    getTasksForPrioritizationAction,
+    getTasksForRankingAction,
     getUserRankedListAction,
     saveUserRankedListAction,
 } from "@/app/circles/[handle]/tasks/actions";
@@ -180,7 +181,7 @@ const TaskPrioritizationModal: React.FC<TaskPrioritizationModalProps> = ({ circl
         setShowUnrankedWarning(false);
         try {
             const [allActiveTasksResult, userRankingResult] = await Promise.all([
-                getTasksForPrioritizationAction(circle.handle!),
+                getTasksForRankingAction(circle.handle!),
                 getUserRankedListAction(circle.handle!),
             ]);
             const allActiveTasks = allActiveTasksResult || [];

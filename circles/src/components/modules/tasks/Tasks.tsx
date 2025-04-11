@@ -1,10 +1,13 @@
+// Tasks.tsx
 "use server";
 
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
+// Import the modified action
 import { getTasksAction } from "@/app/circles/[handle]/tasks/actions";
 import { redirect } from "next/navigation";
-import { Circle, TaskDisplay, TaskPermissions } from "@/models/models";
+// TaskPermissions is still needed for passing down to TasksList
+import { Circle, TaskPermissions } from "@/models/models";
 import TasksList from "./tasks-list";
 
 type PageProps = {
@@ -12,51 +15,56 @@ type PageProps = {
 };
 
 export default async function TasksModule({ circle }: PageProps) {
-    // Renamed component
     // Get the current user DID
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         redirect("/login");
     }
 
+    const circleId = circle._id as string; // Use consistent variable
+
     // Check if user has permission to view tasks
-    const canViewTasks = await isAuthorized(userDid, circle._id as string, features.tasks.view); // Updated feature check
+    const canViewTasks = await isAuthorized(userDid, circleId, features.tasks.view);
     if (!canViewTasks) {
-        // Updated variable
         return (
             <div className="flex h-full w-full flex-col items-center justify-center p-4 text-center">
                 <h2 className="mb-2 text-xl font-semibold">Access Denied</h2>
-                <p className="text-gray-600">You don&apos;t have permission to view tasks in this circle.</p>{" "}
-                {/* Updated text & fixed apostrophe */}
+                <p className="text-gray-600">You don&apos;t have permission to view tasks in this circle.</p>
             </div>
         );
     }
 
-    // Get tasks for this circle
-    const tasks: TaskDisplay[] = await getTasksAction(circle.handle as string, true);
+    // --- Updated Data Fetching ---
+    // Call the updated getTasksAction (no boolean argument needed)
+    // It now returns an object with tasks and ranking stats
+    const tasksData = await getTasksAction(circle.handle as string);
 
-    // Perform permission checks for different actions within the tasks module
-    const canModerateTask = await isAuthorized(userDid, circle._id as string, features.tasks.moderate); // Renamed variable, updated feature
-    const canReviewTask = await isAuthorized(userDid, circle._id as string, features.tasks.review); // Renamed variable, updated feature
-    const canAssignTask = await isAuthorized(userDid, circle._id as string, features.tasks.assign); // Renamed variable, updated feature
-    const canResolveTask = await isAuthorized(userDid, circle._id as string, features.tasks.resolve); // Renamed variable, updated feature
-    const canCommentOnTask = await isAuthorized(userDid, circle._id as string, features.tasks.comment); // Renamed variable, updated feature
+    // Perform permission checks needed by TasksList or for filtering here
+    const canModerateTask = await isAuthorized(userDid, circleId, features.tasks.moderate);
+    const canReviewTask = await isAuthorized(userDid, circleId, features.tasks.review);
+    const canAssignTask = await isAuthorized(userDid, circleId, features.tasks.assign);
+    const canResolveTask = await isAuthorized(userDid, circleId, features.tasks.resolve);
+    const canCommentOnTask = await isAuthorized(userDid, circleId, features.tasks.comment);
 
-    // Filter tasks based on permissions (basic filtering, more in TasksList)
-    // Example: Hide 'review' stage tasks if user cannot review/moderate
-    const filteredTasks = tasks.filter((task) => {
-        // Renamed variable, param
-        if (task.author.did === userDid) return true; // Renamed param
+    // --- Optional Filtering (Keep or Remove based on requirements) ---
+    // Filter tasks based on permissions before passing to the list component
+    // This example keeps the 'review' stage filtering
+    const filteredTasksData = {
+        ...tasksData, // Keep other stats like hasUserRanked, totalRankers, unrankedCount
+        tasks: tasksData.tasks.filter((task) => {
+            // Allow user to always see their own tasks
+            if (task.author.did === userDid) return true;
 
-        if (task.stage === "review" && !(canReviewTask || canModerateTask)) {
-            // Renamed param, variables
-            return false; // Hide review items if user lacks permission
-        }
-        // Add other permission-based filtering if needed (e.g., based on task.userGroups)
-        // Visibility based on task.userGroups should ideally be handled in the data fetching (getTasksByCircleId)
-        return true;
-    });
+            // Hide 'review' stage tasks if user cannot review or moderate
+            if (task.stage === "review" && !(canReviewTask || canModerateTask)) {
+                return false;
+            }
+            // Add other top-level filtering if needed
+            return true;
+        }),
+    };
 
+    // Prepare permissions object for TasksList
     const permissions: TaskPermissions = {
         canModerate: canModerateTask,
         canReview: canReviewTask,
@@ -67,7 +75,8 @@ export default async function TasksModule({ circle }: PageProps) {
 
     return (
         <div className="flex w-full flex-col">
-            <TasksList tasks={filteredTasks} circle={circle} permissions={permissions} />
+            {/* Pass the potentially filtered tasksData object and permissions */}
+            <TasksList tasksData={filteredTasksData} circle={circle} permissions={permissions} />
         </div>
     );
 }

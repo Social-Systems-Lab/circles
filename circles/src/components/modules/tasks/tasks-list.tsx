@@ -25,7 +25,19 @@ import {
 } from "@/components/ui/select";
 import { Circle, ContentPreviewData, TaskDisplay, TaskStage, TaskPermissions } from "@/models/models"; // Use Task types, Added ContentPreviewData, TaskPermissions
 import { Button } from "@/components/ui/button";
-import { ArrowDown, ArrowUp, Loader2, MoreHorizontal, Plus, CheckCircle, Clock, Play } from "lucide-react";
+import {
+    ArrowDown,
+    ArrowUp,
+    Loader2,
+    MoreHorizontal,
+    Plus,
+    CheckCircle,
+    Clock,
+    Play,
+    User,
+    TriangleAlert,
+    CheckCircle2,
+} from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -57,15 +69,17 @@ import { userAtom, contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib
 import Link from "next/link";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import TaskPrioritizationModal from "./task-prioritization-modal"; // Import the modal
-import { PiRanking, PiRankingBold } from "react-icons/pi";
-
-// Permissions type is imported from models
+import { PiRanking, PiRankingBold, PiUser, PiUsersThree } from "react-icons/pi";
 
 interface TasksListProps {
-    // Renamed interface
-    tasks: TaskDisplay[]; // Renamed prop, updated type
+    tasksData: {
+        tasks: TaskDisplay[];
+        hasUserRanked: boolean;
+        totalRankers: number;
+        unrankedCount: number;
+    };
     circle: Circle;
-    permissions: TaskPermissions; // Use imported type
+    permissions: TaskPermissions;
 }
 
 const SortIcon = ({ sortDir }: { sortDir: string | boolean }) => {
@@ -102,9 +116,10 @@ const getStageInfo = (stage: TaskStage) => {
     }
 };
 
-const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => {
+const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions }) => {
     // Renamed component, props
-    const data = React.useMemo(() => tasks, [tasks]); // Renamed variable, dependency
+    const { tasks, hasUserRanked, totalRankers, unrankedCount } = tasksData;
+    const data = React.useMemo(() => tasks, [tasks]);
     const [user] = useAtom(userAtom);
     const [sorting, setSorting] = React.useState<SortingState>([{ id: "rank", desc: false }]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -145,29 +160,24 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
 
     const columns = React.useMemo<ColumnDef<TaskDisplay>[]>( // Updated type
         () => [
+            // --- Column 1: Aggregated Rank ---
             {
                 accessorKey: "rank",
-                header: (
-                    { column }, // Use the column object provided by react-table
-                ) => (
+                header: ({ column }) => (
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <Button
                                     variant="ghost"
-                                    // Use column.toggleSorting to integrate with react-table's state
                                     onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-                                    // Add padding if needed, or keep p-0 for tight icon look
-                                    className="p-1" // Example padding
+                                    className="p-1"
                                 >
-                                    {/* Display the ListOrdered icon for the header */}
-                                    <PiRanking className="h-4 w-4" />
-                                    {/* Display the sort direction icon (up/down arrow) */}
+                                    {/* Icon for aggregated rank */}
+                                    <PiRankingBold className="h-4 w-4" />
                                     <SortIcon sortDir={column.getIsSorted()} />
                                 </Button>
                             </TooltipTrigger>
-                            {/* Update tooltip text */}
-                            <TooltipContent>Sort by Rank</TooltipContent>
+                            <TooltipContent>Sort by Aggregated Rank</TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
                 ),
@@ -181,7 +191,40 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
                         <span className="text-gray-400">-</span>
                     );
                 },
-                enableSorting: true, // Correctly enabled
+                enableSorting: true,
+            },
+            // --- Column 2: User's Rank (NEW) ---
+            {
+                accessorKey: "userRank", // Access the new data field
+                header: ({ column }) => (
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                                    className="p-1"
+                                >
+                                    {/* Icon indicating user-specific rank */}
+                                    <User className="h-4 w-4" />
+                                    <SortIcon sortDir={column.getIsSorted()} />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Sort by Your Rank</TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                ),
+                cell: (info) => {
+                    const userRank = info.getValue() as number | undefined;
+                    return userRank !== undefined ? (
+                        <span className="inline-block min-w-[20px] rounded border border-blue-300 bg-blue-100 px-1.5 py-0.5 text-center text-xs font-semibold text-blue-800">
+                            {userRank}
+                        </span>
+                    ) : (
+                        <span className="text-gray-400">-</span>
+                    );
+                },
+                enableSorting: true, // Allow sorting by user rank
             },
             {
                 accessorKey: "title",
@@ -312,6 +355,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
             columnFilters,
             columnVisibility: {
                 rank: true,
+                userRank: hasUserRanked,
                 title: true,
                 stage: true,
                 assignee: true,
@@ -379,6 +423,48 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
         <TooltipProvider>
             <div className="flex flex-1 flex-row justify-center">
                 <div className="mb-4 ml-2 mr-2 mt-4 flex max-w-[1100px] flex-1 flex-col">
+                    {/* --- START: Rank Stats and Nudge Boxes --- */}
+                    {hasUserRanked && (
+                        <div className="mb-3 rounded border bg-blue-50 p-3 text-sm text-blue-800 shadow-sm">
+                            <p className="flex items-center">
+                                <PiUsersThree className="mr-2 h-5 w-5 flex-shrink-0" />
+                                You've ranked these tasks. Currently,{" "}
+                                <span className="mx-1 font-semibold">{totalRankers}</span>{" "}
+                                {totalRankers === 1 ? "user" : "users"} contributed to the aggregated ranking.
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Show nudge only if user has ranked */}
+                    {hasUserRanked && unrankedCount > 0 && (
+                        <div
+                            className="mb-4 cursor-pointer rounded border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800 shadow-sm transition-colors hover:bg-yellow-100"
+                            onClick={() => setShowRankModal(true)} // Open rank modal on click
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => e.key === "Enter" && setShowRankModal(true)} // Accessibility
+                        >
+                            <p className="flex items-center">
+                                <TriangleAlert className="mr-2 h-5 w-5 flex-shrink-0 text-yellow-600" />
+                                You have{" "}
+                                <span className="mx-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
+                                    {unrankedCount}
+                                </span>{" "}
+                                unranked task{unrankedCount !== 1 ? "s" : ""}. Click here to rank them.
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Show success message only if user has ranked and count is 0 */}
+                    {hasUserRanked && unrankedCount === 0 && (
+                        <div className="mb-4 rounded border border-green-400 bg-green-50 p-3 text-sm text-green-800 shadow-sm">
+                            <p className="flex items-center">
+                                <CheckCircle2 className="mr-2 h-5 w-5 flex-shrink-0 text-green-600" />
+                                Nicely done! You've ranked all available tasks.
+                            </p>
+                        </div>
+                    )}
+
                     <div className="flex w-full flex-row items-center gap-2">
                         <div className="flex flex-1 flex-col">
                             <Input
