@@ -579,8 +579,8 @@ export const getTaskRanking = async (
                 return false;
             }
 
-            // Check if user still has permission to prioritize
-            const hasPermission = await isAuthorized(userDid, circleId, features.tasks.prioritize);
+            // Check if user still has permission to rank
+            const hasPermission = await isAuthorized(userDid, circleId, features.tasks.rank);
             return hasPermission ? userId : false;
         });
 

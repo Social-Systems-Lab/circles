@@ -25,19 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Circle, ContentPreviewData, TaskDisplay, TaskStage, TaskPermissions } from "@/models/models"; // Use Task types, Added ContentPreviewData, TaskPermissions
 import { Button } from "@/components/ui/button";
-import {
-    ArrowDown,
-    ArrowUp,
-    Loader2,
-    MoreHorizontal,
-    Plus,
-    CheckCircle,
-    XCircle,
-    Clock,
-    Play,
-    User,
-    ListOrdered, // Added for Prioritize button
-} from "lucide-react";
+import { ArrowDown, ArrowUp, Loader2, MoreHorizontal, Plus, CheckCircle, Clock, Play } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -69,8 +57,7 @@ import { userAtom, contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib
 import Link from "next/link";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import TaskPrioritizationModal from "./task-prioritization-modal"; // Import the modal
-import { MdLowPriority } from "react-icons/md";
-import { FaSortNumericDown } from "react-icons/fa";
+import { PiRanking, PiRankingBold } from "react-icons/pi";
 
 // Permissions type is imported from models
 
@@ -119,7 +106,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
     // Renamed component, props
     const data = React.useMemo(() => tasks, [tasks]); // Renamed variable, dependency
     const [user] = useAtom(userAtom);
-    const [sorting, setSorting] = React.useState<SortingState>([{ id: "priority", desc: false }]);
+    const [sorting, setSorting] = React.useState<SortingState>([{ id: "rank", desc: false }]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
     const [deleteTaskDialogOpen, setDeleteTaskDialogOpen] = useState<boolean>(false); // Renamed state
     const [selectedTask, setSelectedTask] = useState<TaskDisplay | null>(null); // Renamed state, updated type
@@ -130,7 +117,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
     const [stageFilter, setStageFilter] = useState<TaskStage | "all">("all"); // Updated type
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
-    const [showPrioritizeModal, setShowPrioritizeModal] = useState(false); // State for modal
+    const [showRankModal, setShowRankModal] = useState(false); // State for modal
 
     const openAuthor = useCallback(
         (author: Circle) => {
@@ -159,7 +146,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
     const columns = React.useMemo<ColumnDef<TaskDisplay>[]>( // Updated type
         () => [
             {
-                accessorKey: "priority",
+                accessorKey: "rank",
                 header: (
                     { column }, // Use the column object provided by react-table
                 ) => (
@@ -174,21 +161,21 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
                                     className="p-1" // Example padding
                                 >
                                     {/* Display the ListOrdered icon for the header */}
-                                    <ListOrdered className="h-4 w-4" />
+                                    <PiRanking className="h-4 w-4" />
                                     {/* Display the sort direction icon (up/down arrow) */}
                                     <SortIcon sortDir={column.getIsSorted()} />
                                 </Button>
                             </TooltipTrigger>
                             {/* Update tooltip text */}
-                            <TooltipContent>Sort by Priority</TooltipContent>
+                            <TooltipContent>Sort by Rank</TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
                 ),
                 cell: (info) => {
-                    const priority = info.getValue() as number | undefined;
-                    return priority !== undefined ? (
+                    const rank = info.getValue() as number | undefined;
+                    return rank !== undefined ? (
                         <span className="inline-block min-w-[20px] rounded bg-gray-200 px-1.5 py-0.5 text-center text-xs font-semibold text-gray-700">
-                            {priority}
+                            {rank}
                         </span>
                     ) : (
                         <span className="text-gray-400">-</span>
@@ -324,7 +311,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
             sorting,
             columnFilters,
             columnVisibility: {
-                priority: true,
+                rank: true,
                 title: true,
                 stage: true,
                 assignee: true,
@@ -409,10 +396,10 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
                                 </Link>
                             </Button>
                         )}
-                        {/* Add Prioritize Button */}
-                        {isAuthorized(user, circle, features.tasks.prioritize) && (
-                            <Button onClick={() => setShowPrioritizeModal(true)}>
-                                <ListOrdered className="mr-2 h-4 w-4" /> Prioritize
+                        {/* Add Rank Button */}
+                        {isAuthorized(user, circle, features.tasks.rank) && (
+                            <Button onClick={() => setShowRankModal(true)}>
+                                <PiRanking className="mr-2 h-4 w-4" /> Rank
                             </Button>
                         )}
                         <Select
@@ -446,7 +433,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
                                                     : flexRender(header.column.columnDef.header, header.getContext())}
                                             </TableHead>
                                         ))}
-                                        {/* Adjust colspan if priority header is added */}
+                                        {/* Adjust colspan if rank header is added */}
                                         <TableHead className="w-[40px]"></TableHead>
                                     </TableRow>
                                 ))}
@@ -564,8 +551,8 @@ const TasksList: React.FC<TasksListProps> = ({ tasks, circle, permissions }) => 
                         </DialogContent>
                     </Dialog>
                     {/* Render Prioritization Modal */}
-                    {showPrioritizeModal && (
-                        <TaskPrioritizationModal circle={circle} onClose={() => setShowPrioritizeModal(false)} />
+                    {showRankModal && (
+                        <TaskPrioritizationModal circle={circle} onClose={() => setShowRankModal(false)} />
                     )}
                 </div>
             </div>

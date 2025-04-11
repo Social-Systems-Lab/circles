@@ -74,15 +74,15 @@ export async function getTasksAction(circleHandle: string, getRank: boolean): Pr
         // Get tasks from the database (Data function)
         const tasks = await getTasksByCircleId(circle._id as string, userDid);
 
-        // Add priority rank to each task object
+        // Add rank to each task object
         const rankMap = await getTaskRanking(circleId);
-        const tasksWithPriority = tasks.map((task) => ({
+        const tasksWithRank = tasks.map((task) => ({
             ...task,
             // Look up the rank; active tasks will have a rank, others won't
-            priority: rankMap.get(task._id!.toString()),
+            rank: rankMap.get(task._id!.toString()),
         }));
 
-        return tasksWithPriority;
+        return tasksWithRank;
     } catch (error) {
         console.error("Error getting tasks:", error); // Updated message
         // Return empty array on error to avoid breaking the UI
@@ -768,7 +768,7 @@ export const getMembersAction = async (circleId: string) => {
 
 /**
  * Get active tasks eligible for prioritization for a circle.
- * Requires prioritize permission.
+ * Requires rank permission.
  * @param circleHandle The handle of the circle
  * @returns Array of active tasks (open or inProgress)
  */
@@ -783,10 +783,10 @@ export async function getTasksForPrioritizationAction(circleHandle: string): Pro
             throw new Error("Circle not found");
         }
 
-        // Check permission to prioritize tasks
-        const canPrioritize = await isAuthorized(userDid, circle._id as string, features.tasks.prioritize);
-        if (!canPrioritize) {
-            throw new Error("Not authorized to prioritize tasks");
+        // Check permission to rank tasks
+        const canRank = await isAuthorized(userDid, circle._id as string, features.tasks.rank);
+        if (!canRank) {
+            throw new Error("Not authorized to rank tasks");
         }
 
         // Get active tasks (open, inProgress)
@@ -800,7 +800,7 @@ export async function getTasksForPrioritizationAction(circleHandle: string): Pro
 
 /**
  * Get the current user's ranked list for tasks in a circle.
- * Requires prioritize permission.
+ * Requires rank permission.
  * @param circleHandle The handle of the circle
  * @returns The user's RankedList or null if not found/not authorized
  */
@@ -820,9 +820,9 @@ export async function getUserRankedListAction(circleHandle: string): Promise<Ran
             throw new Error("Circle not found");
         }
 
-        // Check permission to prioritize tasks
-        const canPrioritize = await isAuthorized(userDid, circle._id as string, features.tasks.prioritize);
-        if (!canPrioritize) {
+        // Check permission to rank tasks
+        const canRank = await isAuthorized(userDid, circle._id as string, features.tasks.rank);
+        if (!canRank) {
             // Don't throw error, just return null as they might not have a list anyway
             return null;
         }
@@ -848,7 +848,7 @@ const saveRankedListSchema = z.object({
 
 /**
  * Save the user's ranked list for tasks in a circle.
- * Requires prioritize permission and the list must contain all active tasks.
+ * Requires rank permission and the list must contain all active tasks.
  * @param circleHandle The handle of the circle
  * @param formData FormData containing rankedItemIds (array of task IDs in order)
  * @returns Success status and message
@@ -882,10 +882,10 @@ export async function saveUserRankedListAction(
             return { success: false, message: "Circle not found" };
         }
 
-        // Check permission to prioritize tasks
-        const canPrioritize = await isAuthorized(userDid, circle._id as string, features.tasks.prioritize);
-        if (!canPrioritize) {
-            return { success: false, message: "Not authorized to prioritize tasks" };
+        // Check permission to rank tasks
+        const canRank = await isAuthorized(userDid, circle._id as string, features.tasks.rank);
+        if (!canRank) {
+            return { success: false, message: "Not authorized to rank tasks" };
         }
 
         // Get all currently active tasks to validate the submitted list
@@ -936,7 +936,7 @@ export async function saveUserRankedListAction(
             { upsert: true },
         );
 
-        // Revalidate the tasks list page where priority sorting might be used
+        // Revalidate the tasks list page where rank sorting might be used
         revalidatePath(`/circles/${circleHandle}/tasks`);
 
         return { success: true, message: "Task ranking saved successfully." };

@@ -365,7 +365,7 @@ const TaskPrioritizationModal: React.FC<TaskPrioritizationModalProps> = ({ circl
                 <div className="relative flex items-start justify-between rounded-t p-4">
                     <div>
                         <div id="modal-title" className="header text-2xl font-semibold text-foreground">
-                            Prioritize Tasks for {circle.name}
+                            Rank Tasks for {circle.name}
                         </div>
                         <p id="modal-description" className="mt-1 text-sm text-muted-foreground">
                             Drag tasks between lists or reorder within lists. All tasks must be in the Ranked list to

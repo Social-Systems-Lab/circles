@@ -947,9 +947,6 @@ export const taskSchema = z.object({
     location: locationSchema.optional(),
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments
     images: z.array(mediaSchema).optional(), // Optional images/media attached to the task
-    // Task-specific fields can be added here later, e.g., priority, due date
-    // priority: z.enum(["low", "medium", "high"]).optional(),
-    // dueDate: z.date().optional(),
 });
 
 export type Task = z.infer<typeof taskSchema>;
@@ -959,5 +956,5 @@ export interface TaskDisplay extends Task {
     author: Circle; // Creator's details
     assignee?: Circle; // Assignee's details (optional)
     circle?: Circle; // Circle details
-    priority?: number; // Aggregated task priority
+    rank?: number; // Aggregated task rank
 }
