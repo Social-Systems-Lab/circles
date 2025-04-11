@@ -477,7 +477,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                         <div className="mb-3 rounded border bg-blue-50 p-3 text-sm text-blue-800 shadow-sm">
                             <p className="flex items-center">
                                 <PiUsersThree className="mr-2 h-5 w-5 flex-shrink-0" />
-                                You've ranked these tasks.{" "}
+                                You&apos;ve ranked these tasks.{" "}
                                 <span>
                                     Currently, <span className="mx-1 font-semibold">{totalRankers}</span>{" "}
                                     {totalRankers === 1 ? "user" : "users"} contributed to the aggregated ranking.
@@ -518,7 +518,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                         <div className="mb-4 rounded border border-green-400 bg-green-50 p-3 text-sm text-green-800 shadow-sm">
                             <p className="flex items-center">
                                 <CheckCircle2 className="mr-2 h-5 w-5 flex-shrink-0 text-green-600" />
-                                Nicely done! You've ranked all available tasks.
+                                Nicely done! You&apos;ve ranked all available tasks.
                             </p>
                         </div>
                     )}
