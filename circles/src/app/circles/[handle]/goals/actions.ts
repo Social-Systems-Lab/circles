@@ -3,52 +3,19 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import {
-    Circle,
-    Media,
-    RankedList, // Added
-    Goal,
-    GoalDisplay,
-    GoalStage,
-    mediaSchema,
-    locationSchema,
-    didSchema,
-    rankedListSchema, // Added
-} from "@/models/models";
+import { Media, Goal, GoalDisplay, GoalStage, locationSchema } from "@/models/models";
 import { getCircleByHandle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
-import { getUserByDid, getUserPrivate } from "@/lib/data/user";
+import { getUserByDid } from "@/lib/data/user";
 import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage";
 import { features } from "@/lib/data/constants";
-import { Circles, db, RankedLists } from "@/lib/data/db"; // Import db directly
-import { ObjectId } from "mongodb";
-// Placeholder imports for goal data functions (from src/lib/data/goal.ts)
-import {
-    getGoalsByCircleId, // Removed duplicate
-    getGoalById,
-    createGoal,
-    updateGoal,
-    deleteGoal,
-    changeGoalStage,
-    getActiveGoalsByCircleId,
-    getGoalRanking, // Will be created in goal.ts
-} from "@/lib/data/goal";
-import { getMembers, getMemberIdsByUserGroup } from "@/lib/data/member"; // Will be created in member.ts
-// Import goal notification functions (assuming they will be created)
-import {
-    notifyGoalSubmittedForReview,
-    notifyGoalApproved,
-    notifyGoalAssigned,
-    notifyGoalStatusChanged,
-} from "@/lib/data/notifications";
+import { getGoalsByCircleId, getGoalById, createGoal, updateGoal, deleteGoal, changeGoalStage } from "@/lib/data/goal";
+import { getMembers } from "@/lib/data/member";
+import { notifyGoalSubmittedForReview, notifyGoalApproved, notifyGoalStatusChanged } from "@/lib/data/notifications";
 
+// Removed ranking-related properties from result type
 type GetGoalsActionResult = {
-    goals: GoalDisplay[]; // Goals with aggregated and user ranks
-    hasUserRanked: boolean;
-    totalRankers: number;
-    unrankedCount: number;
-    userRankUpdatedAt: Date | null;
-    userRankBecameStaleAt: Date | null;
+    goals: GoalDisplay[];
 };
 
 /**
@@ -57,14 +24,8 @@ type GetGoalsActionResult = {
  * @returns Array of goals
  */
 export async function getGoalsAction(circleHandle: string): Promise<GetGoalsActionResult> {
-    // Updated return type
     const defaultResult: GetGoalsActionResult = {
         goals: [],
-        hasUserRanked: false,
-        totalRankers: 0,
-        unrankedCount: 0,
-        userRankUpdatedAt: null,
-        userRankBecameStaleAt: null,
     };
 
     try {
@@ -88,60 +49,17 @@ export async function getGoalsAction(circleHandle: string): Promise<GetGoalsActi
             return defaultResult;
         }
 
-        // 1. Get all displayable goals (might include non-rankable ones initially)
+        // Get all displayable goals
         const allGoals = await getGoalsByCircleId(circle._id as string, userDid);
 
-        // 2. Get aggregated ranking and the set of *rankable* goal IDs
-        const { rankMap: aggregatedRankMap, totalRankers, activeGoalIds } = await getGoalRanking(circleId);
-
-        // 3. Get the current user's ranked list
-        const userRankingResult = await getUserRankedListAction(circleHandle);
-        const userRankedList = userRankingResult?.list || [];
-        const userRankMap = new Map(userRankedList.map((goalId, index) => [goalId, index + 1]));
-        const hasUserRanked = userRankedList.length > 0;
-
-        // get staleness info
-        const userRankingDoc = await RankedLists.findOne({
-            entityId: circleId,
-            type: "goals",
-            userId: user._id,
-        });
-        const userRankUpdatedAt = userRankingDoc?.updatedAt || null;
-        const userRankBecameStaleAt = userRankingDoc?.becameStaleAt || null;
-
-        // 4. Calculate unranked count for the user *based on active/rankable goals*
-        let unrankedCount = 0;
-        if (hasUserRanked) {
-            // Only calculate if user has ranked at least once
-            // Count how many *active* goals are NOT in the user's map
-            activeGoalIds.forEach((goalId) => {
-                if (!userRankMap.has(goalId)) {
-                    unrankedCount++;
-                }
-            });
-        } else {
-            // If user hasn't ranked, all active goals are unranked for them
-            unrankedCount = activeGoalIds.size;
-        }
-
-        // 5. Add ranks to each goal object
-        const goalsWithRanks = allGoals.map((goal) => ({
-            ...goal,
-            rank: aggregatedRankMap.get(goal._id!.toString()), // Aggregated rank
-            userRank: userRankMap.get(goal._id!.toString()), // User's specific rank
-        }));
+        // Removed ranking logic
 
         return {
-            goals: goalsWithRanks,
-            hasUserRanked,
-            totalRankers,
-            unrankedCount,
-            userRankUpdatedAt,
-            userRankBecameStaleAt,
+            goals: allGoals, // Return goals directly without rank info
         };
     } catch (error) {
-        console.error("Error getting goals with ranking:", error);
-        return defaultResult; // Return default structure on error
+        console.error("Error getting goals:", error); // Updated message
+        return defaultResult;
     }
 }
 /**
@@ -151,6 +69,7 @@ export async function getGoalsAction(circleHandle: string): Promise<GetGoalsActi
  * @returns The goal or null if not found or not authorized
  */
 export async function getGoalAction(circleHandle: string, goalId: string): Promise<GoalDisplay | null> {
+    // Added type string to goalId
     // Renamed function, param, return type
     try {
         // Get the current user
@@ -224,6 +143,7 @@ const createGoalSchema = z.object({
             { message: "Invalid location data format" },
         ),
     userGroups: z.array(z.string()).optional(), // Optional: User groups for visibility
+    targetDate: z.string().datetime({ offset: true }).optional(), // Expect ISO string from form
 });
 
 const updateGoalSchema = createGoalSchema.extend({
@@ -253,6 +173,7 @@ export async function createGoalAction( // Renamed function
             images: formData.getAll("images"),
             location: formData.get("location") ?? undefined,
             userGroups: formData.getAll("userGroups"), // Assuming multi-select or similar
+            targetDate: formData.get("targetDate") ?? undefined, // Get targetDate string
         });
 
         if (!validatedData.success) {
@@ -290,6 +211,17 @@ export async function createGoalAction( // Renamed function
         let locationData: Goal["location"] = undefined; // Updated type
         if (data.location) {
             locationData = JSON.parse(data.location); // Already validated by Zod refine
+        }
+
+        // --- Parse Target Date ---
+        let targetDateData: Date | undefined = undefined;
+        if (data.targetDate) {
+            try {
+                targetDateData = new Date(data.targetDate); // Convert ISO string to Date
+            } catch (e) {
+                console.error("Invalid target date format received:", data.targetDate);
+                // Optionally return error or ignore invalid date
+            }
         }
 
         // --- Handle Image Uploads ---
@@ -330,6 +262,7 @@ export async function createGoalAction( // Renamed function
             description: data.description,
             images: uploadedImages,
             location: locationData,
+            targetDate: targetDateData, // Add parsed target date
             circleId: circle._id as string,
             createdBy: userDid,
             createdAt: new Date(),
@@ -354,8 +287,7 @@ export async function createGoalAction( // Renamed function
             console.error("🔔 [ACTION] Failed to fetch created goal for notification:", createdGoal._id); // Updated message, variable
         }
 
-        // Invalidate rankings as a new goal was added
-        await invalidateUserRankingsIfNeededAction(circle._id!.toString());
+        // Removed invalidate rankings call
 
         // Revalidate the goals list page
         revalidatePath(`/circles/${circleHandle}/goals`); // Updated path
@@ -392,6 +324,7 @@ export async function updateGoalAction( // Renamed function
             images: formData.getAll("images"),
             location: formData.get("location") ?? undefined,
             userGroups: formData.getAll("userGroups"),
+            targetDate: formData.get("targetDate") ?? undefined, // Get targetDate string
         });
 
         if (!validatedData.success) {
@@ -444,6 +377,20 @@ export async function updateGoalAction( // Renamed function
             locationData = JSON.parse(data.location); // Validated by Zod
         } else {
             locationData = undefined; // Explicitly remove if empty
+        }
+
+        // --- Parse Target Date ---
+        let targetDateData: Date | undefined | null = undefined; // Allow null to unset
+        if (data.targetDate) {
+            try {
+                targetDateData = new Date(data.targetDate); // Convert ISO string to Date
+            } catch (e) {
+                console.error("Invalid target date format received:", data.targetDate);
+                // Optionally return error or ignore invalid date
+            }
+        } else {
+            // If targetDate is not provided in form, explicitly set to null to unset in DB
+            targetDateData = null;
         }
 
         // --- Handle Image Updates (Similar logic to proposal update) ---
@@ -501,12 +448,20 @@ export async function updateGoalAction( // Renamed function
             description: data.description,
             images: finalImages,
             location: locationData,
+            targetDate: targetDateData === null ? undefined : targetDateData, // Pass Date or undefined
             userGroups: data.userGroups || goal.userGroups, // Keep existing if not provided, Renamed variable
             updatedAt: new Date(),
         };
 
+        // Prepare $unset operation if targetDateData is null
+        const updateOperation: any = { $set: updateData };
+        if (targetDateData === null) {
+            updateOperation.$unset = { targetDate: "" };
+        }
+
         // Update goal in DB (Data function)
-        const success = await updateGoal(goalId, updateData); // Renamed function call, param
+        // Pass the combined operation to updateGoal
+        const success = await updateGoal(goalId, updateOperation); // Pass the full operation
 
         if (!success) {
             return { success: false, message: "Failed to update goal" }; // Updated message
@@ -582,8 +537,7 @@ export async function deleteGoalAction( // Renamed function
             return { success: false, message: "Failed to delete goal" }; // Updated message
         }
 
-        // Invalidate rankings as a goal was deleted
-        await invalidateUserRankingsIfNeededAction(circle._id!.toString());
+        // Removed invalidate rankings call
 
         // Revalidate the goals list page
         revalidatePath(`/circles/${circleHandle}/goals`); // Updated path
@@ -650,16 +604,14 @@ export async function changeGoalStageAction( // Renamed function
             canChange = true; // Moderators can likely do any valid transition
         } else if (currentStage === "review" && newStage === "open") {
             canChange = canReview; // User needs review permission
-        } else if (currentStage === "open" && newStage === "inProgress") {
-            // Assignee or anyone with resolve perm? Let's say resolver.
+        } else if (currentStage === "open" && newStage === "resolved") {
+            // Changed target stage from inProgress to resolved
             canChange = canResolve;
-        } else if (currentStage === "inProgress" && newStage === "resolved") {
-            canChange = canResolve; // resolver can resolve
-        } else if (currentStage === "inProgress" && newStage === "open") {
-            // Allow moving back from In Progress to Open (e.g., unassigning work)
+        } else if (currentStage === "resolved" && newStage === "open") {
+            // Allow moving back from Resolved to Open
             canChange = canResolve;
         }
-        // Add other valid transitions as needed
+        // Removed transitions involving "inProgress"
 
         if (!canChange) {
             return { success: false, message: `Not authorized to move goal from ${currentStage} to ${newStage}` }; // Updated message
@@ -686,12 +638,7 @@ export async function changeGoalStageAction( // Renamed function
             console.error("🔔 [ACTION] Failed to fetch updated goal for notification:", goalId); // Updated message, param
         }
 
-        // Invalidate rankings if the goal's active status changed
-        const wasActive = ["open", "inProgress"].includes(currentStage);
-        const isActive = ["open", "inProgress"].includes(newStage);
-        if (wasActive !== isActive) {
-            await invalidateUserRankingsIfNeededAction(circle._id!.toString());
-        }
+        // Removed invalidate rankings call
 
         // Revalidate relevant pages
         revalidatePath(`/circles/${circleHandle}/goals`); // Updated path
@@ -722,253 +669,8 @@ export const getMembersAction = async (circleId: string) => {
 
 // TODO: Add actions for comment handling if using shadow posts or a dedicated system.
 
-// --- Goal Prioritization Actions ---
-
-/**
- * Get active goals eligible for prioritization for a circle.
- * Requires rank permission.
- * @param circleHandle The handle of the circle
- * @returns Array of active goals (open or inProgress)
- */
-export async function getGoalsForRankingAction(circleHandle: string): Promise<GoalDisplay[]> {
-    try {
-        const userDid = await getAuthenticatedUserDid();
-        if (!userDid) {
-            throw new Error("User not authenticated");
-        }
-        const circle = await getCircleByHandle(circleHandle);
-        if (!circle) {
-            throw new Error("Circle not found");
-        }
-
-        // Check permission to rank goals
-        const canRank = await isAuthorized(userDid, circle._id as string, features.goals.rank);
-        if (!canRank) {
-            throw new Error("Not authorized to rank goals");
-        }
-
-        // Get active goals (open, inProgress)
-        const activeGoals = await getActiveGoalsByCircleId(circle._id!.toString());
-        return activeGoals;
-    } catch (error) {
-        console.error("Error getting goals for prioritization:", error);
-        return []; // Return empty on error
-    }
-}
-
-/**
- * Get the current user's ranked list for goals in a circle.
- * Requires rank permission.
- * @param circleHandle The handle of the circle
- * @returns The user's RankedList or null if not found/not authorized
- */
-export async function getUserRankedListAction(circleHandle: string): Promise<RankedList | null> {
-    try {
-        const userDid = await getAuthenticatedUserDid();
-        if (!userDid) {
-            throw new Error("User not authenticated");
-        }
-        const user = await getUserByDid(userDid); // Need user._id
-        if (!user) {
-            throw new Error("User data not found");
-        }
-
-        const circle = await getCircleByHandle(circleHandle);
-        if (!circle) {
-            throw new Error("Circle not found");
-        }
-
-        // Check permission to rank goals
-        const canRank = await isAuthorized(userDid, circle._id as string, features.goals.rank);
-        if (!canRank) {
-            // Don't throw error, just return null as they might not have a list anyway
-            return null;
-        }
-
-        // Use imported db instance
-        const rankedList = (await RankedLists.findOne({
-            entityId: circle._id?.toString(),
-            type: "goals",
-            userId: user._id?.toString(), // Use user's _id
-        })) as RankedList;
-        if (rankedList) {
-            rankedList._id = rankedList?._id.toString();
-        }
-
-        return rankedList;
-    } catch (error) {
-        console.error("Error getting user ranked list:", error);
-        return null; // Return null on error
-    }
-}
-
-const saveRankedListSchema = z.object({
-    rankedItemIds: z.array(z.string()),
-});
-
-/**
- * Save the user's ranked list for goals in a circle.
- * Requires rank permission and the list must contain all active goals.
- * @param circleHandle The handle of the circle
- * @param formData FormData containing rankedItemIds (array of goal IDs in order)
- * @returns Success status and message
- */
-export async function saveUserRankedListAction(
-    circleHandle: string,
-    formData: FormData,
-): Promise<{ success: boolean; message?: string }> {
-    try {
-        // Validate input
-        const validatedData = saveRankedListSchema.safeParse({
-            rankedItemIds: formData.getAll("rankedItemIds"), // Assuming form sends multiple values for the same key
-        });
-
-        if (!validatedData.success) {
-            return { success: false, message: "Invalid input data for ranked list." };
-        }
-        const { rankedItemIds } = validatedData.data;
-
-        const userDid = await getAuthenticatedUserDid();
-        if (!userDid) {
-            return { success: false, message: "User not authenticated" };
-        }
-        const user = await getUserByDid(userDid); // Need user._id
-        if (!user) {
-            return { success: false, message: "User data not found" };
-        }
-
-        const circle = await getCircleByHandle(circleHandle);
-        if (!circle) {
-            return { success: false, message: "Circle not found" };
-        }
-
-        // Check permission to rank goals
-        const canRank = await isAuthorized(userDid, circle._id as string, features.goals.rank);
-        if (!canRank) {
-            return { success: false, message: "Not authorized to rank goals" };
-        }
-
-        // Get all currently active goals to validate the submitted list
-        const activeGoals = await getActiveGoalsByCircleId(circle._id!.toString()); // Use toString()
-        const activeGoalIds = new Set(activeGoals.map((t: GoalDisplay) => t._id?.toString())); // Added type GoalDisplay
-        const submittedGoalIds = new Set(rankedItemIds);
-
-        // Validate: Check if sets contain the same elements
-        if (
-            activeGoalIds.size !== submittedGoalIds.size ||
-            ![...activeGoalIds].every((id) => submittedGoalIds.has(id))
-        ) {
-            return {
-                success: false,
-                message: "Ranking is incomplete or contains invalid goals. Please rank all active goals.",
-            };
-        }
-
-        // Prepare data for upsert
-        const now = new Date();
-        const rankedListData: Omit<RankedList, "_id"> = {
-            entityId: circle._id!.toString(),
-            type: "goals",
-            userId: user._id!.toString(), // Use user's _id
-            list: rankedItemIds,
-            createdAt: now, // Will be set on insert only
-            updatedAt: now,
-            isValid: true, // Saving a new list makes it valid
-        };
-
-        // Use imported db instance
-        await RankedLists.updateOne(
-            {
-                entityId: rankedListData.entityId,
-                type: rankedListData.type,
-                userId: rankedListData.userId,
-            },
-            {
-                $set: {
-                    list: rankedListData.list,
-                    updatedAt: rankedListData.updatedAt,
-                    isValid: rankedListData.isValid,
-                },
-                $setOnInsert: {
-                    createdAt: rankedListData.createdAt, // Only set createdAt when inserting
-                },
-            },
-            { upsert: true },
-        );
-
-        // Revalidate the goals list page where rank sorting might be used
-        revalidatePath(`/circles/${circleHandle}/goals`);
-
-        return { success: true, message: "Goal ranking saved successfully." };
-    } catch (error) {
-        console.error("Error saving user ranked list:", error);
-        return { success: false, message: "Failed to save goal ranking." };
-    }
-}
-
-/**
- * Marks user rankings as potentially invalid if the set of active goals changes.
- * Should be called internally after goal creation, deletion, or status change affecting active state.
- * @param circleId The ID of the circle where goals changed
- */
-async function invalidateUserRankingsIfNeededAction(circleId: string): Promise<void> {
-    try {
-        // Use imported db instance
-        // Get current active goal IDs
-        const activeGoals = await getActiveGoalsByCircleId(circleId); // Assuming this fetches only active
-        const activeGoalIds = new Set(activeGoals.map((t: GoalDisplay) => t._id?.toString())); // Added type GoalDisplay
-
-        // Find lists for this circle
-        const listsToValidate = await RankedLists.find({
-            entityId: circleId,
-            type: "goals",
-            isValid: true, // Only check lists currently marked as valid
-        })
-            .project({ _id: 1, list: 1 }) // Fetch only necessary fields
-            .toArray();
-
-        const listsToInvalidate: ObjectId[] = [];
-
-        for (const list of listsToValidate) {
-            const listGoalIds = new Set(list.list);
-            if (
-                listGoalIds.size !== activeGoalIds.size ||
-                // Convert Set to string array using map(String) before calling every()
-                !Array.from(listGoalIds)
-                    .map(String)
-                    .every((id: string) => activeGoalIds.has(id))
-            ) {
-                listsToInvalidate.push(list._id);
-            }
-        }
-
-        if (listsToInvalidate.length > 0) {
-            await RankedLists.updateMany(
-                { _id: { $in: listsToInvalidate } },
-                { $set: { isValid: false, updatedAt: new Date() } }, // Mark invalid and update timestamp
-            );
-            console.log(`Invalidated ${listsToInvalidate.length} goal rankings for circle ${circleId}`);
-        }
-    } catch (error) {
-        console.error(`Error invalidating goal rankings for circle ${circleId}:`, error);
-        // Don't throw, as this is often a background/cleanup goal
-    }
-}
-
-// --- Modify existing actions to call invalidateUserRankingsIfNeededAction ---
-
-// Example: Add to createGoalAction (after successful creation)
-// ... inside createGoalAction try block, after successful createGoal call ...
-// await invalidateUserRankingsIfNeededAction(circle._id!.toString());
-
-// Example: Add to deleteGoalAction (after successful deletion)
-// ... inside deleteGoalAction try block, after successful deleteGoal call ...
-// await invalidateUserRankingsIfNeededAction(circle._id!.toString());
-
-// Example: Add to changeGoalStageAction (if stage changes to/from active state)
-// ... inside changeGoalStageAction try block, after successful changeGoalStage call ...
-// const wasActive = ["open", "inProgress"].includes(currentStage);
-// const isActive = ["open", "inProgress"].includes(newStage);
-// if (wasActive !== isActive) {
-//     await invalidateUserRankingsIfNeededAction(circle._id!.toString());
-// }
+// --- Removed Goal Prioritization Actions ---
+// Removed getGoalsForRankingAction
+// Removed getUserRankedListAction
+// Removed saveUserRankedListAction
+// Removed invalidateUserRankingsIfNeededAction

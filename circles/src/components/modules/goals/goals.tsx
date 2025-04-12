@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 // GoalPermissions is still needed for passing down to GoalsList
 import { Circle, GoalPermissions } from "@/models/models";
 import GoalsList from "./goal-list";
+import GoalTimeline from "./goal-timeline";
 
 type PageProps = {
     circle: Circle;
@@ -74,7 +75,12 @@ export default async function GoalsModule({ circle }: PageProps) {
     return (
         <div className="flex w-full flex-col">
             {/* Pass the potentially filtered goalsData object and permissions */}
-            <GoalsList goalsData={filteredGoalsData} circle={circle} permissions={permissions} />
+            <GoalTimeline
+                circle={circle}
+                permissions={permissions}
+                initialGoalsData={goalsData} // Pass fetched & filtered data
+            />
+            {/* <GoalsList goalsData={filteredGoalsData} circle={circle} permissions={permissions} /> */}
         </div>
     );
 }

@@ -25,19 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Circle, ContentPreviewData, GoalDisplay, GoalStage, GoalPermissions } from "@/models/models"; // Use Goal types, Added ContentPreviewData, GoalPermissions
 import { Button } from "@/components/ui/button";
-import {
-    ArrowDown,
-    ArrowUp,
-    Loader2,
-    MoreHorizontal,
-    Plus,
-    CheckCircle,
-    Clock,
-    Play,
-    User,
-    TriangleAlert,
-    CheckCircle2,
-} from "lucide-react";
+import { ArrowDown, ArrowUp, Loader2, MoreHorizontal, Plus, CheckCircle, Clock, Play } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -58,27 +46,21 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { deleteGoalAction } from "@/app/circles/[handle]/goals/actions";
-import { UserPicture } from "../members/user-picture";
 import { motion } from "framer-motion";
 import { isAuthorized } from "@/lib/auth/client-auth";
-import { features, RANKING_STALENESS_DAYS } from "@/lib/data/constants"; // Added constants import
+import { features } from "@/lib/data/constants";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { useAtom } from "jotai";
 import { userAtom, contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
 import Link from "next/link";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import GoalPrioritizationModal from "./goal-prioritization-modal"; // Import the modal
-import { PiRanking, PiRankingBold, PiUser, PiUsersThree } from "react-icons/pi";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 
 interface GoalsListProps {
     goalsData: {
+        // Simplified props
         goals: GoalDisplay[];
-        hasUserRanked: boolean;
-        totalRankers: number;
-        unrankedCount: number;
-        userRankBecameStaleAt: Date | null;
     };
     circle: Circle;
     permissions: GoalPermissions;
@@ -130,8 +112,7 @@ const getStageInfo = (stage: GoalStage) => {
             return { color: "bg-yellow-200 text-yellow-800", icon: Clock, text: "Review" };
         case "open":
             return { color: "bg-blue-200 text-blue-800", icon: Play, text: "Open" };
-        case "inProgress":
-            return { color: "bg-orange-200 text-orange-800", icon: Loader2, text: "In Progress" };
+        // Removed "inProgress" case
         case "resolved":
             return { color: "bg-green-200 text-green-800", icon: CheckCircle, text: "Resolved" };
         default:
@@ -140,14 +121,13 @@ const getStageInfo = (stage: GoalStage) => {
 };
 
 const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions }) => {
-    // Renamed component, props
-    const { goals, hasUserRanked, totalRankers, unrankedCount, userRankBecameStaleAt } = goalsData;
+    const { goals } = goalsData; // Simplified destructuring
     const data = React.useMemo(() => goals, [goals]);
     const [user] = useAtom(userAtom);
-    const [sorting, setSorting] = React.useState<SortingState>([{ id: "rank", desc: false }]);
+    const [sorting, setSorting] = React.useState<SortingState>([{ id: "createdAt", desc: true }]); // Default sort by createdAt
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-    const [deleteGoalDialogOpen, setDeleteGoalDialogOpen] = useState<boolean>(false); // Renamed state
-    const [selectedGoal, setSelectedGoal] = useState<GoalDisplay | null>(null); // Renamed state, updated type
+    const [deleteGoalDialogOpen, setDeleteGoalDialogOpen] = useState<boolean>(false);
+    const [selectedGoal, setSelectedGoal] = useState<GoalDisplay | null>(null);
     const [isPending, startTransition] = useTransition();
     const isCompact = useIsCompact();
     const router = useRouter();
@@ -155,7 +135,7 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
     const [stageFilter, setStageFilter] = useState<GoalStage | "all">("all"); // Updated type
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
-    const [showRankModal, setShowRankModal] = useState(false); // State for modal
+    // const [showRankModal, setShowRankModal] = useState(false); // Removed state for modal
     const isMobile = useIsMobile();
 
     const openAuthor = useCallback(
@@ -175,99 +155,11 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
         [isCompact, router, setContentPreview, sidePanelContentVisible],
     );
 
-    const stalenessInfo = useMemo(() => {
-        if (!userRankBecameStaleAt || unrankedCount === 0) {
-            return { isStale: false, expiryDate: null, expiryDateString: "" };
-        }
-        const becameStaleDate = new Date(userRankBecameStaleAt); // Ensure it's a Date
-        const expiryDate = new Date(becameStaleDate);
-        expiryDate.setDate(expiryDate.getDate() + RANKING_STALENESS_DAYS);
+    // Removed stalenessInfo useMemo block
 
-        const now = new Date();
-        // Check if grace period has actually expired already
-        if (now > expiryDate) {
-            // This case means the backend should have excluded it,
-            // but we handle it defensively in UI.
-            // You might show a different "expired" message here if needed.
-            return { isStale: true, expiryDate: expiryDate, expiryDateString: "past", isExpired: true };
-        }
-
-        return {
-            isStale: true,
-            expiryDate: expiryDate,
-            expiryDateString: formatExpiryDate(expiryDate),
-            isExpired: false,
-        };
-    }, [userRankBecameStaleAt, unrankedCount]);
-
-    const columns = React.useMemo<ColumnDef<GoalDisplay>[]>( // Updated type
+    const columns = React.useMemo<ColumnDef<GoalDisplay>[]>(
         () => [
-            // --- Column 1: Aggregated Rank ---
-            {
-                accessorKey: "rank",
-                header: ({ column }) => (
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-                                    className="p-1"
-                                >
-                                    {/* Icon for aggregated rank */}
-                                    <PiRankingBold className="h-4 w-4" />
-                                    <SortIcon sortDir={column.getIsSorted()} />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Sort by Aggregated Rank</TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                ),
-                cell: (info) => {
-                    const rank = info.getValue() as number | undefined;
-                    return rank !== undefined ? (
-                        <span className="inline-block min-w-[20px] rounded bg-gray-200 px-1.5 py-0.5 text-center text-xs font-semibold text-gray-700">
-                            {rank}
-                        </span>
-                    ) : (
-                        <span className="text-gray-400">-</span>
-                    );
-                },
-                enableSorting: true,
-            },
-            // --- Column 2: User's Rank (NEW) ---
-            {
-                accessorKey: "userRank", // Access the new data field
-                header: ({ column }) => (
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-                                    className="p-1"
-                                >
-                                    {/* Icon indicating user-specific rank */}
-                                    <User className="h-4 w-4" />
-                                    <SortIcon sortDir={column.getIsSorted()} />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Sort by Your Rank</TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                ),
-                cell: (info) => {
-                    const userRank = info.getValue() as number | undefined;
-                    return userRank !== undefined ? (
-                        <span className="inline-block min-w-[20px] rounded border border-blue-300 bg-blue-100 px-1.5 py-0.5 text-center text-xs font-semibold text-blue-800">
-                            {userRank}
-                        </span>
-                    ) : (
-                        <span className="text-gray-400">-</span>
-                    );
-                },
-                enableSorting: true, // Allow sorting by user rank
-            },
+            // Removed Rank columns
             {
                 accessorKey: "title",
                 header: ({ column }) => (
@@ -290,7 +182,21 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
                 },
             },
             {
-                accessorKey: "stage",
+                // Added Target Date column
+                accessorKey: "targetDate",
+                header: ({ column }) => (
+                    <Button variant="ghost" onClick={() => column.toggleSorting()}>
+                        Target Date
+                        <SortIcon sortDir={column.getIsSorted()} />
+                    </Button>
+                ),
+                cell: (info) => {
+                    const date = info.getValue() as Date | undefined;
+                    return date ? new Date(date).toLocaleDateString() : <span className="text-gray-400">-</span>;
+                },
+            },
+            {
+                accessorKey: "createdAt",
                 header: ({ column }) => (
                     <Button variant="ghost" onClick={() => column.toggleSorting()}>
                         Stage
@@ -335,10 +241,10 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
             sorting,
             columnFilters,
             columnVisibility: {
-                rank: true,
-                userRank: hasUserRanked,
+                // Removed rank columns
                 title: true,
                 stage: true,
+                targetDate: !isCompact, // Added targetDate visibility
                 createdAt: !isCompact,
             },
         },
@@ -402,58 +308,7 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
         <TooltipProvider>
             <div className="flex flex-1 flex-row justify-center">
                 <div className="mb-4 ml-2 mr-2 mt-4 flex max-w-[1100px] flex-1 flex-col">
-                    {/* --- START: Rank Stats and Nudge Boxes --- */}
-                    {hasUserRanked && (
-                        <div className="mb-3 rounded border bg-blue-50 p-3 text-sm text-blue-800 shadow-sm">
-                            <p className="flex items-center">
-                                <PiUsersThree className="mr-2 h-5 w-5 flex-shrink-0" />
-                                You&apos;ve ranked these goals.{" "}
-                                <span>
-                                    {" "}
-                                    Currently, <span className="mx-1 font-semibold">{totalRankers}</span>{" "}
-                                    {totalRankers === 1 ? "user" : "users"} contributed to the aggregated ranking.
-                                </span>
-                            </p>
-                        </div>
-                    )}
-
-                    {/* Show nudge only if user has ranked */}
-                    {hasUserRanked && unrankedCount > 0 && (
-                        <div
-                            className="mb-4 cursor-pointer rounded border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800 shadow-sm transition-colors hover:bg-yellow-100"
-                            onClick={() => setShowRankModal(true)} // Open rank modal on click
-                            role="button"
-                            tabIndex={0}
-                            onKeyDown={(e) => e.key === "Enter" && setShowRankModal(true)} // Accessibility
-                        >
-                            <p className="flex items-center">
-                                <TriangleAlert className="mr-2 h-5 w-5 flex-shrink-0 text-yellow-600" />
-                                You have{" "}
-                                <span className="mx-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
-                                    {unrankedCount}
-                                </span>{" "}
-                                unranked goal{unrankedCount !== 1 ? "s" : ""}.
-                                {!isMobile && (
-                                    <>
-                                        {" "}
-                                        Please update by{" "}
-                                        <span className="mx-1 font-semibold">{stalenessInfo.expiryDateString}</span>
-                                        to ensure your ranking continues to be counted. Click here to rank.
-                                    </>
-                                )}
-                            </p>
-                        </div>
-                    )}
-
-                    {/* Show success message only if user has ranked and count is 0 */}
-                    {hasUserRanked && unrankedCount === 0 && (
-                        <div className="mb-4 rounded border border-green-400 bg-green-50 p-3 text-sm text-green-800 shadow-sm">
-                            <p className="flex items-center">
-                                <CheckCircle2 className="mr-2 h-5 w-5 flex-shrink-0 text-green-600" />
-                                Nicely done! You&apos;ve ranked all available goals.
-                            </p>
-                        </div>
-                    )}
+                    {/* --- Removed Rank Stats and Nudge Boxes --- */}
 
                     <div className="flex w-full flex-row items-center gap-2">
                         <div className="flex flex-1 flex-col">
@@ -472,15 +327,10 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
                                 </Link>
                             </Button>
                         )}
-                        {/* Add Rank Button */}
-                        {isAuthorized(user, circle, features.goals.rank) && (
-                            <Button onClick={() => setShowRankModal(true)}>
-                                <PiRanking className="mr-2 h-4 w-4" /> Rank
-                            </Button>
-                        )}
+                        {/* Removed Rank Button */}
                         <Select
                             value={stageFilter}
-                            onValueChange={(value) => setStageFilter(value as GoalStage | "all")} // Updated type
+                            onValueChange={(value) => setStageFilter(value as GoalStage | "all")} // Type cast is correct now after schema change
                         >
                             <SelectTrigger className="w-[180px]">
                                 <SelectValue placeholder="Filter by stage" />
@@ -489,7 +339,7 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
                                 <SelectItem value="all">All Stages</SelectItem>
                                 <SelectItem value="review">Review</SelectItem>
                                 <SelectItem value="open">Open</SelectItem>
-                                <SelectItem value="inProgress">In Progress</SelectItem>
+                                {/* Removed In Progress SelectItem */}
                                 <SelectItem value="resolved">Resolved</SelectItem>
                             </SelectContent>
                         </Select>
@@ -624,10 +474,7 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
-                    {/* Render Prioritization Modal */}
-                    {showRankModal && (
-                        <GoalPrioritizationModal circle={circle} onClose={() => setShowRankModal(false)} />
-                    )}
+                    {/* Removed Prioritization Modal */}
                 </div>
             </div>
         </TooltipProvider>

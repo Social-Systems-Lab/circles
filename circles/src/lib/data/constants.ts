@@ -187,13 +187,6 @@ export const features = {
             defaultUserGroups: ["admins", "moderators", "members", "everyone"],
             module: "goals",
         } as Feature,
-        rank: {
-            name: "Rank Goals",
-            handle: "rank",
-            description: "Create and manage a ranking of goals",
-            defaultUserGroups: ["admins", "moderators", "members"],
-            module: "goals",
-        } as Feature,
     },
     tasks: {
         // Added tasks module features, mirroring issues

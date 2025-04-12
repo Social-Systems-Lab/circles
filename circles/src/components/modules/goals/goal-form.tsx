@@ -10,10 +10,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Circle, Media, Goal, Location } from "@/models/models"; // Use Goal types
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, MapPinIcon, MapPin } from "lucide-react";
+import { Loader2, MapPinIcon, MapPin, CalendarIcon } from "lucide-react"; // Added CalendarIcon
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRouter } from "next/navigation";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"; // Added Popover
+import { Calendar } from "@/components/ui/calendar"; // Added Calendar
+import { format } from "date-fns"; // Added date-fns format
+import { cn } from "@/lib/utils"; // Added cn for conditional classes
 import LocationPicker from "@/components/forms/location-picker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getFullLocationName } from "@/lib/utils";
@@ -28,12 +32,14 @@ const goalFormSchema = z.object({
     description: z.string().min(1, { message: "Description is required" }),
     images: z.array(z.any()).optional(),
     location: z.any().optional(),
+    targetDate: z.date().optional(), // Added targetDate
 });
 
-type GoalFormValues = Omit<z.infer<typeof goalFormSchema>, "images" | "location"> & {
-    // Renamed type
+type GoalFormValues = Omit<z.infer<typeof goalFormSchema>, "images" | "location" | "targetDate"> & {
+    // Renamed type, added targetDate
     images?: (File | Media)[];
     location?: Location;
+    targetDate?: Date; // Added targetDate
 };
 
 interface GoalFormProps {
@@ -61,6 +67,7 @@ export const GoalForm: React.FC<GoalFormProps> = ({ circle, goal, circleHandle, 
             description: goal?.description || "", // Use goal prop
             images: goal?.images || [], // Use goal prop
             location: goal?.location, // Use goal prop
+            targetDate: goal?.targetDate ? new Date(goal.targetDate) : undefined, // Added targetDate default
         },
     });
 
@@ -96,6 +103,11 @@ export const GoalForm: React.FC<GoalFormProps> = ({ circle, goal, circleHandle, 
 
         if (location) {
             formData.append("location", JSON.stringify(location));
+        }
+
+        if (values.targetDate) {
+            // Add targetDate to FormData if present
+            formData.append("targetDate", values.targetDate.toISOString());
         }
 
         if (values.images) {
@@ -226,6 +238,52 @@ export const GoalForm: React.FC<GoalFormProps> = ({ circle, goal, circleHandle, 
                                         <FormDescription>
                                             Upload images related to the goal (max 5 files, 5MB each).{" "}
                                             {/* Updated text */}
+                                        </FormDescription>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+
+                            <FormField
+                                control={form.control}
+                                name="targetDate"
+                                render={({ field }) => (
+                                    <FormItem className="flex flex-col">
+                                        <FormLabel>Target Date (Optional)</FormLabel>
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <FormControl>
+                                                    <Button
+                                                        variant={"outline"}
+                                                        className={cn(
+                                                            "w-[240px] pl-3 text-left font-normal",
+                                                            !field.value && "text-muted-foreground",
+                                                        )}
+                                                        disabled={isSubmitting}
+                                                    >
+                                                        {field.value ? (
+                                                            format(field.value, "PPP")
+                                                        ) : (
+                                                            <span>Pick a date</span>
+                                                        )}
+                                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                                    </Button>
+                                                </FormControl>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0" align="start">
+                                                <Calendar
+                                                    mode="single"
+                                                    selected={field.value}
+                                                    onSelect={field.onChange}
+                                                    disabled={(date: Date) =>
+                                                        date < new Date("1900-01-01") || isSubmitting
+                                                    } // Added type Date
+                                                    initialFocus
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
+                                        <FormDescription>
+                                            Set an optional target completion date for this goal.
                                         </FormDescription>
                                         <FormMessage />
                                     </FormItem>

@@ -1039,42 +1039,6 @@ export async function notifyGoalApproved(goal: GoalDisplay, approver: Circle): P
 }
 
 /**
- * Send notification when a goal is assigned to a user
- */
-export async function notifyGoalAssigned(goal: GoalDisplay, assigner: Circle, assignee: UserPrivate): Promise<void> {
-    // Renamed function, param type
-    try {
-        console.log("🔔 [NOTIFY] notifyGoalAssigned called:", {
-            // Updated message
-            goalId: goal._id, // Renamed property
-            assignerDid: assigner.did,
-            assigneeDid: assignee.did,
-        });
-        // Don't notify if assigner is the assignee
-        if (assigner.did === assignee.did) {
-            console.log("🔔 [NOTIFY] Skipping notification - assigner is assignee");
-            return;
-        }
-
-        const circle = await getGoalCircle(goal); // Renamed helper function
-        if (!circle) return;
-
-        console.log("🔔 [NOTIFY] Sending goal_assigned to assignee:", assignee.name); // Updated message
-        await sendNotifications("goal_assigned", [assignee], {
-            // Updated notification type
-            circle,
-            user: assigner, // The user who triggered the notification (assigner)
-            // Pass goal details directly
-            goalId: goal._id?.toString(), // Renamed property
-            goalTitle: goal.title, // Renamed property
-            assigneeName: assignee.name, // Add assignee name for context
-        });
-    } catch (error) {
-        console.error("🔔 [NOTIFY] Error in notifyGoalAssigned:", error); // Updated message
-    }
-}
-
-/**
  * Send notification when a goal's status changes (e.g., Open -> In Progress, In Progress -> Resolved)
  */
 export async function notifyGoalStatusChanged( // Renamed function

@@ -1,11 +1,10 @@
 // goal.ts - Goal data access functions
-import { Goals, Circles, Members, Reactions, RankedLists } from "./db"; // Changed Issues to Goals
+import { Goals, Circles, RankedLists } from "./db"; // Changed Issues to Goals
 import { ObjectId } from "mongodb";
-import { Goal, GoalDisplay, GoalStage, Circle, Member, RankedList } from "@/models/models"; // Changed Issue types to Goal types
-import { getCircleById, SAFE_CIRCLE_PROJECTION } from "./circle";
+import { Goal, GoalDisplay, GoalStage, RankedList } from "@/models/models"; // Changed Issue types to Goal types
+import { SAFE_CIRCLE_PROJECTION } from "./circle";
 import { getMemberIdsByUserGroup } from "./member";
-import { isAuthorized } from "../auth/auth";
-import { features, RANKING_STALENESS_DAYS } from "./constants";
+import { RANKING_STALENESS_DAYS } from "./constants";
 // No longer need getUserByDid if we use $lookup consistently
 
 // Safe projection for goal queries, similar to proposals
@@ -429,9 +428,11 @@ export const getGoalRanking = async (circleId: string, filterUserGroupHandle?: s
             const userDid = userMap.get(userId);
             if (!userDid) return false;
             if (groupMemberIds && !groupMemberIds.has(userId)) return false;
-            // Check if user still has permission to rank (important!)
-            const hasPermission = await isAuthorized(userDid, circleId, features.goals.rank);
-            return hasPermission ? userId : false;
+            // Removed rank permission check as the feature is removed
+            // const hasPermission = await isAuthorized(userDid, circleId, features.goals.rank);
+            // return hasPermission ? userId : false;
+            // Assume if they are in the group (if filtered), they are permitted for now
+            return userId; // Return userId directly if checks pass
         });
 
         const results = await Promise.all(permissionChecks);

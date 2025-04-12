@@ -26,12 +26,6 @@ import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { Loader2, GripVertical, X } from "lucide-react"; // Removed CheckCircle2
 import { Circle, GoalDisplay } from "@/models/models";
-import {
-    getGoalsForRankingAction,
-    getUserRankedListAction,
-    saveUserRankedListAction,
-} from "@/app/circles/[handle]/goals/actions";
-import { useToast } from "@/components/ui/use-toast";
 
 // --- Child Components ---
 
@@ -166,7 +160,7 @@ const GoalPrioritizationModal: React.FC<GoalPrioritizationModalProps> = ({ circl
         };
         document.addEventListener("keydown", handleKeyDown);
         document.body.style.overflow = "hidden";
-        fetchData();
+        // fetchData(); // Commented out as actions are removed
 
         return () => {
             document.removeEventListener("keydown", handleKeyDown);
@@ -176,45 +170,46 @@ const GoalPrioritizationModal: React.FC<GoalPrioritizationModalProps> = ({ circl
     }, [onClose]);
 
     const fetchData = async () => {
-        // Reset loading and warning state on fetch start
-        setIsLoading(true);
-        setShowUnrankedWarning(false);
-        try {
-            const [allActiveGoalsResult, userRankingResult] = await Promise.all([
-                getGoalsForRankingAction(circle.handle!),
-                getUserRankedListAction(circle.handle!),
-            ]);
-            const allActiveGoals = allActiveGoalsResult || [];
-            const userRanking = userRankingResult?.list || [];
-            const goalMap = new Map(allActiveGoals.map((goal) => [goal._id!.toString(), goal]));
-            const currentRanked: GoalDisplay[] = [];
-            const currentUnranked: GoalDisplay[] = [];
-            const rankedIds = new Set<string>();
-            userRanking.forEach((goalId) => {
-                const goal = goalMap.get(goalId);
-                if (goal) {
-                    currentRanked.push(goal);
-                    rankedIds.add(goalId);
-                }
-            });
-            allActiveGoals.forEach((goal) => {
-                if (!rankedIds.has(goal._id!.toString())) {
-                    currentUnranked.push(goal);
-                }
-            });
-            setRankedGoals(currentRanked);
-            setUnrankedGoals(currentUnranked);
-        } catch (error) {
-            console.error("Error fetching prioritization data:", error);
-            toast({
-                title: "Error",
-                description: "Could not load goals for prioritization.",
-                variant: "destructive",
-            });
-            onClose();
-        } finally {
-            setIsLoading(false);
-        }
+        // Commented out body as actions are removed
+        // // Reset loading and warning state on fetch start
+        // setIsLoading(true);
+        // setShowUnrankedWarning(false);
+        // try {
+        //     const [allActiveGoalsResult, userRankingResult] = await Promise.all([
+        //         getGoalsForRankingAction(circle.handle!),
+        //         getUserRankedListAction(circle.handle!),
+        //     ]);
+        //     const allActiveGoals = allActiveGoalsResult || [];
+        //     const userRanking = userRankingResult?.list || [];
+        //     const goalMap = new Map(allActiveGoals.map((goal) => [goal._id!.toString(), goal]));
+        //     const currentRanked: GoalDisplay[] = [];
+        //     const currentUnranked: GoalDisplay[] = [];
+        //     const rankedIds = new Set<string>();
+        //     userRanking.forEach((goalId) => {
+        //         const goal = goalMap.get(goalId);
+        //         if (goal) {
+        //             currentRanked.push(goal);
+        //             rankedIds.add(goalId);
+        //         }
+        //     });
+        //     allActiveGoals.forEach((goal) => {
+        //         if (!rankedIds.has(goal._id!.toString())) {
+        //             currentUnranked.push(goal);
+        //         }
+        //     });
+        //     setRankedGoals(currentRanked);
+        //     setUnrankedGoals(currentUnranked);
+        // } catch (error) {
+        //     console.error("Error fetching prioritization data:", error);
+        //     toast({
+        //         title: "Error",
+        //         description: "Could not load goals for prioritization.",
+        //         variant: "destructive",
+        //     });
+        //     onClose();
+        // } finally {
+        //     setIsLoading(false);
+        // }
     };
 
     // --- Drag and Drop Handlers ---
@@ -302,42 +297,42 @@ const GoalPrioritizationModal: React.FC<GoalPrioritizationModalProps> = ({ circl
 
     // --- Save Handler ---
     const handleSave = async () => {
-        // Check for unranked items and show warning instead of toast (Req 7)
-        if (unrankedGoals.length > 0) {
-            setShowUnrankedWarning(true);
-            // Optionally, scroll the warning into view if needed, e.g.:
-            // document.getElementById('unranked-warning')?.scrollIntoView({ behavior: 'smooth' });
-            return; // Stop execution
-        }
-
-        // Hide warning if save proceeds
-        setShowUnrankedWarning(false);
-        setIsSaving(true);
-        try {
-            const rankedItemIds = rankedGoals.map((goal) => goal._id!.toString());
-            const formData = new FormData();
-            rankedItemIds.forEach((id) => formData.append("rankedItemIds", id));
-            const result = await saveUserRankedListAction(circle.handle!, formData);
-            if (result.success) {
-                toast({ title: "Success", description: "Goal ranking saved." });
-                onClose(); // Close modal on successful save
-            } else {
-                toast({
-                    title: "Error",
-                    description: result.message || "Failed to save ranking.",
-                    variant: "destructive",
-                });
-            }
-        } catch (error) {
-            console.error("Error saving ranking:", error);
-            toast({
-                title: "Error",
-                description: "An unexpected error occurred.",
-                variant: "destructive",
-            });
-        } finally {
-            setIsSaving(false);
-        }
+        // Commented out body as actions are removed
+        // // Check for unranked items and show warning instead of toast (Req 7)
+        // if (unrankedGoals.length > 0) {
+        //     setShowUnrankedWarning(true);
+        //     // Optionally, scroll the warning into view if needed, e.g.:
+        //     // document.getElementById('unranked-warning')?.scrollIntoView({ behavior: 'smooth' });
+        //     return; // Stop execution
+        // }
+        // // Hide warning if save proceeds
+        // setShowUnrankedWarning(false);
+        // setIsSaving(true);
+        // try {
+        //     const rankedItemIds = rankedGoals.map((goal) => goal._id!.toString());
+        //     const formData = new FormData();
+        //     rankedItemIds.forEach((id) => formData.append("rankedItemIds", id));
+        //     const result = await saveUserRankedListAction(circle.handle!, formData);
+        //     if (result.success) {
+        //         toast({ title: "Success", description: "Goal ranking saved." });
+        //         onClose(); // Close modal on successful save
+        //     } else {
+        //         toast({
+        //             title: "Error",
+        //             description: result.message || "Failed to save ranking.",
+        //             variant: "destructive",
+        //         });
+        //     }
+        // } catch (error) {
+        //     console.error("Error saving ranking:", error);
+        //     toast({
+        //         title: "Error",
+        //         description: "An unexpected error occurred.",
+        //         variant: "destructive",
+        //     });
+        // } finally {
+        //     setIsSaving(false);
+        // }
     };
 
     // Memoize IDs for SortableContext

@@ -6,8 +6,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
-import { Loader2, MoreHorizontal, Pencil, Trash2, MapPin, User, CheckCircle, Clock, Play, Edit } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import {
+    Loader2,
+    MoreHorizontal,
+    Pencil,
+    Trash2,
+    MapPin,
+    User,
+    CheckCircle,
+    Clock,
+    Play,
+    Edit,
+    CalendarIcon,
+} from "lucide-react"; // Added CalendarIcon
+import { formatDistanceToNow, format } from "date-fns"; // Added format
 import { UserPicture } from "../members/user-picture";
 import { cn, getFullLocationName } from "@/lib/utils";
 import { useAtom } from "jotai";
@@ -56,8 +68,7 @@ const getStageInfo = (stage: GoalStage) => {
             return { color: "bg-yellow-200 text-yellow-800", icon: Clock, text: "Review" };
         case "open":
             return { color: "bg-blue-200 text-blue-800", icon: Play, text: "Open" };
-        case "inProgress":
-            return { color: "bg-orange-200 text-orange-800", icon: Loader2, text: "In Progress" };
+        // Removed "inProgress" case
         case "resolved":
             return { color: "bg-green-200 text-green-800", icon: CheckCircle, text: "Resolved" };
         default:
@@ -144,23 +155,19 @@ const GoalDetail: React.FC<GoalDetailProps> = ({ goal, circle, permissions, curr
         {
             label: "Approve (Open)",
             stage: "open" as GoalStage, // Updated type
-            allowed: permissions.canReview && goal.stage === "review", // Use goal prop
+            allowed: permissions.canReview && goal.stage === "review",
         },
-        {
-            label: "Start Progress",
-            stage: "inProgress" as GoalStage, // Updated type
-            allowed: permissions.canResolve && goal.stage === "open", // Use goal prop
-        },
+        // Removed "Start Progress" action
         {
             label: "Mark Resolved",
-            stage: "resolved" as GoalStage, // Updated type
-            allowed: permissions.canResolve && goal.stage === "inProgress", // Use goal prop
+            stage: "resolved" as GoalStage,
+            allowed: permissions.canResolve && goal.stage === "open", // Now allowed from "open"
         },
         {
             label: "Re-open",
-            stage: "open" as GoalStage, // Updated type
-            allowed: permissions.canResolve && (goal.stage === "resolved" || goal.stage === "inProgress"), // Use goal prop
-        }, // Allow re-opening
+            stage: "open" as GoalStage,
+            allowed: permissions.canResolve && goal.stage === "resolved", // Only allowed from "resolved" now
+        },
     ].filter((action) => action.allowed);
 
     const canEditGoal = (isAuthor && goal.stage === "review") || permissions.canModerate; // Renamed variable, use goal prop
@@ -180,24 +187,17 @@ const GoalDetail: React.FC<GoalDetailProps> = ({ goal, circle, permissions, curr
                 </Button>,
             );
         }
+        // Removed "Start Progress" button logic
         if (permissions.canResolve && goal.stage === "open") {
-            // Use goal prop
-            actions.push(
-                <Button key="start" onClick={() => openStageChangeDialog("inProgress")} disabled={isPending}>
-                    {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Start Progress
-                </Button>,
-            );
-        }
-        if (permissions.canResolve && goal.stage === "inProgress") {
-            // Use goal prop
+            // Changed condition from "inProgress" to "open"
             actions.push(
                 <Button key="resolve" onClick={() => openStageChangeDialog("resolved")} disabled={isPending}>
                     {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Mark Resolved
                 </Button>,
             );
         }
-        if (permissions.canResolve && (goal.stage === "resolved" || goal.stage === "inProgress")) {
-            // Use goal prop
+        if (permissions.canResolve && goal.stage === "resolved") {
+            // Changed condition to only check "resolved"
             actions.push(
                 <Button
                     key="reopen"
@@ -251,6 +251,12 @@ const GoalDetail: React.FC<GoalDetailProps> = ({ goal, circle, permissions, curr
                             <div className="flex items-center">
                                 <MapPin className="mr-1 h-3 w-3" />
                                 {getFullLocationName(goal.location)} {/* Use goal prop */}
+                            </div>
+                        )}
+                        {goal.targetDate && ( // Added Target Date display
+                            <div className="flex items-center">
+                                <CalendarIcon className="mr-1 h-3 w-3" />
+                                Target: {format(new Date(goal.targetDate), "PPP")}
                             </div>
                         )}
                     </div>

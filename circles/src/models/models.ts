@@ -828,7 +828,7 @@ export type NotificationType =
     | "task_approved"
     | "task_assigned"
     | "task_status_changed"
-    // Goal Notifications (mirroring Issue Notifications)
+    // Goal Notifications
     | "goal_submitted_for_review"
     | "goal_approved"
     | "goal_status_changed";
@@ -973,11 +973,11 @@ export interface TaskDisplay extends Task {
     rank?: number; // Aggregated task rank
 }
 
-// Task stages (mirroring Issue stages for now)
-export const goalStageSchema = z.enum(["review", "open", "inProgress", "resolved"]);
+// Goal stages
+export const goalStageSchema = z.enum(["review", "open", "resolved"]); // Removed "inProgress"
 export type GoalStage = z.infer<typeof goalStageSchema>;
 
-// Task model (mirroring Issue model)
+// Goal model
 export const goalSchema = z.object({
     _id: z.any().optional(),
     circleId: z.string(),
@@ -987,7 +987,8 @@ export const goalSchema = z.object({
     resolvedAt: z.date().optional(), // Track resolution time
     title: z.string(),
     description: z.string(),
-    stage: taskStageSchema.default("review"),
+    stage: goalStageSchema.default("review"), // Use goalStageSchema
+    targetDate: z.date().optional(), // Added targetDate
     userGroups: z.array(z.string()).default([]), // User groups that can see this goal
     location: locationSchema.optional(),
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments
@@ -1000,5 +1001,5 @@ export type Goal = z.infer<typeof goalSchema>;
 export interface GoalDisplay extends Goal {
     author: Circle; // Creator's details
     circle?: Circle; // Circle details
-    rank?: number; // Aggregated goal rank
+    // Removed rank?: number;
 }
