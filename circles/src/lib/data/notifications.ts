@@ -13,6 +13,8 @@ import {
     IssueStage,
     TaskDisplay,
     TaskStage,
+    GoalDisplay,
+    GoalStage,
 } from "@/models/models";
 import { sendNotifications } from "./matrix";
 import { getUser, getUserPrivate } from "./user";
@@ -604,6 +606,23 @@ async function getTaskCircle(task: TaskDisplay): Promise<Circle | null> {
 }
 
 /**
+ * Helper to get the circle for a goal notification
+ */
+async function getGoalCircle(goal: GoalDisplay): Promise<Circle | null> {
+    // Renamed function, param type
+    if (!goal?.circleId) {
+        // Renamed param
+        console.error("🔔 [NOTIFY] Goal missing circleId"); // Updated message
+        return null;
+    }
+    const circle = await getCircleById(goal.circleId); // Renamed param
+    if (!circle) {
+        console.error("🔔 [NOTIFY] Circle not found for goal:", goal.circleId); // Updated message, param
+    }
+    return circle;
+}
+
+/**
  * Send notification when an issue is submitted for review
  */
 export async function notifyIssueSubmittedForReview(issue: IssueDisplay, submitter: Circle): Promise<void> {
@@ -635,45 +654,6 @@ export async function notifyIssueSubmittedForReview(issue: IssueDisplay, submitt
         });
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyIssueSubmittedForReview:", error);
-    }
-}
-
-/**
- * Send notification when a task is submitted for review
- */
-export async function notifyTaskSubmittedForReview(task: TaskDisplay, submitter: Circle): Promise<void> {
-    // Renamed function, param type
-    try {
-        console.log("🔔 [NOTIFY] notifyTaskSubmittedForReview called:", {
-            // Updated message
-            taskId: task._id, // Renamed property
-            submitterDid: submitter.did,
-        });
-        const circle = await getTaskCircle(task); // Renamed helper function
-        if (!circle) return;
-
-        // Find users with review permission (excluding the submitter)
-        const reviewers = (await getAuthorizedMembers(circle, features.tasks?.review)).filter(
-            // Updated feature check
-            (user: Circle) => user.did !== submitter.did,
-        );
-
-        if (reviewers.length === 0) {
-            console.log("🔔 [NOTIFY] No reviewers found to notify for task:", task._id); // Updated message
-            return;
-        }
-
-        console.log(`🔔 [NOTIFY] Sending task_submitted_for_review to ${reviewers.length} reviewers`); // Updated message
-        await sendNotifications("task_submitted_for_review", reviewers, {
-            // Updated notification type
-            circle,
-            user: submitter, // The user who triggered the notification (submitter)
-            // Pass task details directly
-            taskId: task._id?.toString(), // Renamed property
-            taskTitle: task.title, // Renamed property
-        });
-    } catch (error) {
-        console.error("🔔 [NOTIFY] Error in notifyTaskSubmittedForReview:", error); // Updated message
     }
 }
 
@@ -716,47 +696,6 @@ export async function notifyIssueApproved(issue: IssueDisplay, approver: Circle)
 }
 
 /**
- * Send notification to the author when their task is approved (moved to Open)
- */
-export async function notifyTaskApproved(task: TaskDisplay, approver: Circle): Promise<void> {
-    // Renamed function, param type
-    try {
-        console.log("🔔 [NOTIFY] notifyTaskApproved called:", {
-            // Updated message
-            taskId: task._id, // Renamed property
-            authorDid: task.createdBy,
-            approverDid: approver.did,
-        });
-        // Don't notify if approver is the author
-        if (task.createdBy === approver.did) {
-            console.log("🔔 [NOTIFY] Skipping notification - approver is author");
-            return;
-        }
-
-        const author = await getUserPrivate(task.createdBy);
-        if (!author) {
-            console.error("🔔 [NOTIFY] Author not found for task:", task._id); // Updated message
-            return;
-        }
-
-        const circle = await getTaskCircle(task); // Renamed helper function
-        if (!circle) return;
-
-        console.log("🔔 [NOTIFY] Sending task_approved to author:", author.name); // Updated message
-        await sendNotifications("task_approved", [author], {
-            // Updated notification type
-            circle,
-            user: approver, // The user who triggered the notification (approver)
-            // Pass task details directly
-            taskId: task._id?.toString(), // Renamed property
-            taskTitle: task.title, // Renamed property
-        });
-    } catch (error) {
-        console.error("🔔 [NOTIFY] Error in notifyTaskApproved:", error); // Updated message
-    }
-}
-
-/**
  * Send notification when an issue is assigned to a user
  */
 export async function notifyIssueAssigned(issue: IssueDisplay, assigner: Circle, assignee: UserPrivate): Promise<void> {
@@ -786,42 +725,6 @@ export async function notifyIssueAssigned(issue: IssueDisplay, assigner: Circle,
         });
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyIssueAssigned:", error);
-    }
-}
-
-/**
- * Send notification when a task is assigned to a user
- */
-export async function notifyTaskAssigned(task: TaskDisplay, assigner: Circle, assignee: UserPrivate): Promise<void> {
-    // Renamed function, param type
-    try {
-        console.log("🔔 [NOTIFY] notifyTaskAssigned called:", {
-            // Updated message
-            taskId: task._id, // Renamed property
-            assignerDid: assigner.did,
-            assigneeDid: assignee.did,
-        });
-        // Don't notify if assigner is the assignee
-        if (assigner.did === assignee.did) {
-            console.log("🔔 [NOTIFY] Skipping notification - assigner is assignee");
-            return;
-        }
-
-        const circle = await getTaskCircle(task); // Renamed helper function
-        if (!circle) return;
-
-        console.log("🔔 [NOTIFY] Sending task_assigned to assignee:", assignee.name); // Updated message
-        await sendNotifications("task_assigned", [assignee], {
-            // Updated notification type
-            circle,
-            user: assigner, // The user who triggered the notification (assigner)
-            // Pass task details directly
-            taskId: task._id?.toString(), // Renamed property
-            taskTitle: task.title, // Renamed property
-            assigneeName: assignee.name, // Add assignee name for context
-        });
-    } catch (error) {
-        console.error("🔔 [NOTIFY] Error in notifyTaskAssigned:", error); // Updated message
     }
 }
 
@@ -882,6 +785,122 @@ export async function notifyIssueStatusChanged(
 }
 
 /**
+ * Send notification when a task is submitted for review
+ */
+export async function notifyTaskSubmittedForReview(task: TaskDisplay, submitter: Circle): Promise<void> {
+    // Renamed function, param type
+    try {
+        console.log("🔔 [NOTIFY] notifyTaskSubmittedForReview called:", {
+            // Updated message
+            taskId: task._id, // Renamed property
+            submitterDid: submitter.did,
+        });
+        const circle = await getTaskCircle(task); // Renamed helper function
+        if (!circle) return;
+
+        // Find users with review permission (excluding the submitter)
+        const reviewers = (await getAuthorizedMembers(circle, features.tasks?.review)).filter(
+            // Updated feature check
+            (user: Circle) => user.did !== submitter.did,
+        );
+
+        if (reviewers.length === 0) {
+            console.log("🔔 [NOTIFY] No reviewers found to notify for task:", task._id); // Updated message
+            return;
+        }
+
+        console.log(`🔔 [NOTIFY] Sending task_submitted_for_review to ${reviewers.length} reviewers`); // Updated message
+        await sendNotifications("task_submitted_for_review", reviewers, {
+            // Updated notification type
+            circle,
+            user: submitter, // The user who triggered the notification (submitter)
+            // Pass task details directly
+            taskId: task._id?.toString(), // Renamed property
+            taskTitle: task.title, // Renamed property
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskSubmittedForReview:", error); // Updated message
+    }
+}
+
+/**
+ * Send notification to the author when their task is approved (moved to Open)
+ */
+export async function notifyTaskApproved(task: TaskDisplay, approver: Circle): Promise<void> {
+    // Renamed function, param type
+    try {
+        console.log("🔔 [NOTIFY] notifyTaskApproved called:", {
+            // Updated message
+            taskId: task._id, // Renamed property
+            authorDid: task.createdBy,
+            approverDid: approver.did,
+        });
+        // Don't notify if approver is the author
+        if (task.createdBy === approver.did) {
+            console.log("🔔 [NOTIFY] Skipping notification - approver is author");
+            return;
+        }
+
+        const author = await getUserPrivate(task.createdBy);
+        if (!author) {
+            console.error("🔔 [NOTIFY] Author not found for task:", task._id); // Updated message
+            return;
+        }
+
+        const circle = await getTaskCircle(task); // Renamed helper function
+        if (!circle) return;
+
+        console.log("🔔 [NOTIFY] Sending task_approved to author:", author.name); // Updated message
+        await sendNotifications("task_approved", [author], {
+            // Updated notification type
+            circle,
+            user: approver, // The user who triggered the notification (approver)
+            // Pass task details directly
+            taskId: task._id?.toString(), // Renamed property
+            taskTitle: task.title, // Renamed property
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskApproved:", error); // Updated message
+    }
+}
+
+/**
+ * Send notification when a task is assigned to a user
+ */
+export async function notifyTaskAssigned(task: TaskDisplay, assigner: Circle, assignee: UserPrivate): Promise<void> {
+    // Renamed function, param type
+    try {
+        console.log("🔔 [NOTIFY] notifyTaskAssigned called:", {
+            // Updated message
+            taskId: task._id, // Renamed property
+            assignerDid: assigner.did,
+            assigneeDid: assignee.did,
+        });
+        // Don't notify if assigner is the assignee
+        if (assigner.did === assignee.did) {
+            console.log("🔔 [NOTIFY] Skipping notification - assigner is assignee");
+            return;
+        }
+
+        const circle = await getTaskCircle(task); // Renamed helper function
+        if (!circle) return;
+
+        console.log("🔔 [NOTIFY] Sending task_assigned to assignee:", assignee.name); // Updated message
+        await sendNotifications("task_assigned", [assignee], {
+            // Updated notification type
+            circle,
+            user: assigner, // The user who triggered the notification (assigner)
+            // Pass task details directly
+            taskId: task._id?.toString(), // Renamed property
+            taskTitle: task.title, // Renamed property
+            assigneeName: assignee.name, // Add assignee name for context
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskAssigned:", error); // Updated message
+    }
+}
+
+/**
  * Send notification when a task's status changes (e.g., Open -> In Progress, In Progress -> Resolved)
  */
 export async function notifyTaskStatusChanged( // Renamed function
@@ -936,5 +955,170 @@ export async function notifyTaskStatusChanged( // Renamed function
         });
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskStatusChanged:", error); // Updated message
+    }
+}
+
+/**
+ * Send notification when a goal is submitted for review
+ */
+export async function notifyGoalSubmittedForReview(goal: GoalDisplay, submitter: Circle): Promise<void> {
+    // Renamed function, param type
+    try {
+        console.log("🔔 [NOTIFY] notifyGoalSubmittedForReview called:", {
+            // Updated message
+            goalId: goal._id, // Renamed property
+            submitterDid: submitter.did,
+        });
+        const circle = await getGoalCircle(goal); // Renamed helper function
+        if (!circle) return;
+
+        // Find users with review permission (excluding the submitter)
+        const reviewers = (await getAuthorizedMembers(circle, features.goals?.review)).filter(
+            // Updated feature check
+            (user: Circle) => user.did !== submitter.did,
+        );
+
+        if (reviewers.length === 0) {
+            console.log("🔔 [NOTIFY] No reviewers found to notify for goal:", goal._id); // Updated message
+            return;
+        }
+
+        console.log(`🔔 [NOTIFY] Sending goal_submitted_for_review to ${reviewers.length} reviewers`); // Updated message
+        await sendNotifications("goal_submitted_for_review", reviewers, {
+            // Updated notification type
+            circle,
+            user: submitter, // The user who triggered the notification (submitter)
+            // Pass goal details directly
+            goalId: goal._id?.toString(), // Renamed property
+            goalTitle: goal.title, // Renamed property
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyGoalSubmittedForReview:", error); // Updated message
+    }
+}
+
+/**
+ * Send notification to the author when their goal is approved (moved to Open)
+ */
+export async function notifyGoalApproved(goal: GoalDisplay, approver: Circle): Promise<void> {
+    // Renamed function, param type
+    try {
+        console.log("🔔 [NOTIFY] notifyGoalApproved called:", {
+            // Updated message
+            goalId: goal._id, // Renamed property
+            authorDid: goal.createdBy,
+            approverDid: approver.did,
+        });
+        // Don't notify if approver is the author
+        if (goal.createdBy === approver.did) {
+            console.log("🔔 [NOTIFY] Skipping notification - approver is author");
+            return;
+        }
+
+        const author = await getUserPrivate(goal.createdBy);
+        if (!author) {
+            console.error("🔔 [NOTIFY] Author not found for goal:", goal._id); // Updated message
+            return;
+        }
+
+        const circle = await getGoalCircle(goal); // Renamed helper function
+        if (!circle) return;
+
+        console.log("🔔 [NOTIFY] Sending goal_approved to author:", author.name); // Updated message
+        await sendNotifications("goal_approved", [author], {
+            // Updated notification type
+            circle,
+            user: approver, // The user who triggered the notification (approver)
+            // Pass goal details directly
+            goalId: goal._id?.toString(), // Renamed property
+            goalTitle: goal.title, // Renamed property
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyGoalApproved:", error); // Updated message
+    }
+}
+
+/**
+ * Send notification when a goal is assigned to a user
+ */
+export async function notifyGoalAssigned(goal: GoalDisplay, assigner: Circle, assignee: UserPrivate): Promise<void> {
+    // Renamed function, param type
+    try {
+        console.log("🔔 [NOTIFY] notifyGoalAssigned called:", {
+            // Updated message
+            goalId: goal._id, // Renamed property
+            assignerDid: assigner.did,
+            assigneeDid: assignee.did,
+        });
+        // Don't notify if assigner is the assignee
+        if (assigner.did === assignee.did) {
+            console.log("🔔 [NOTIFY] Skipping notification - assigner is assignee");
+            return;
+        }
+
+        const circle = await getGoalCircle(goal); // Renamed helper function
+        if (!circle) return;
+
+        console.log("🔔 [NOTIFY] Sending goal_assigned to assignee:", assignee.name); // Updated message
+        await sendNotifications("goal_assigned", [assignee], {
+            // Updated notification type
+            circle,
+            user: assigner, // The user who triggered the notification (assigner)
+            // Pass goal details directly
+            goalId: goal._id?.toString(), // Renamed property
+            goalTitle: goal.title, // Renamed property
+            assigneeName: assignee.name, // Add assignee name for context
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyGoalAssigned:", error); // Updated message
+    }
+}
+
+/**
+ * Send notification when a goal's status changes (e.g., Open -> In Progress, In Progress -> Resolved)
+ */
+export async function notifyGoalStatusChanged( // Renamed function
+    goal: GoalDisplay, // Renamed param type
+    changer: Circle,
+    oldStage: GoalStage, // Renamed param type
+): Promise<void> {
+    try {
+        console.log("🔔 [NOTIFY] notifyGoalStatusChanged called:", {
+            // Updated message
+            goalId: goal._id, // Renamed property
+            changerDid: changer.did,
+            oldStage: oldStage,
+            newStage: goal.stage,
+        });
+
+        const circle = await getGoalCircle(goal); // Renamed helper function
+        if (!circle) return;
+
+        const recipients: UserPrivate[] = [];
+        const author = await getUserPrivate(goal.createdBy);
+
+        // Add author if not the changer
+        if (author && author.did !== changer.did) {
+            recipients.push(author);
+        }
+
+        if (recipients.length === 0) {
+            console.log("🔔 [NOTIFY] No recipients found for goal status change:", goal._id); // Updated message
+            return;
+        }
+
+        console.log(`🔔 [NOTIFY] Sending goal_status_changed to ${recipients.length} recipients`); // Updated message
+        await sendNotifications("goal_status_changed", recipients, {
+            // Updated notification type
+            circle,
+            user: changer, // The user who triggered the notification (changer)
+            // Pass goal details directly
+            goalId: goal._id?.toString(), // Renamed property
+            goalTitle: goal.title, // Renamed property
+            goalOldStage: oldStage, // Renamed property
+            goalNewStage: goal.stage, // Renamed property
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyGoalStatusChanged:", error); // Updated message
     }
 }

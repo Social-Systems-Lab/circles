@@ -17,7 +17,8 @@ import {
     Proposal,
     Issue,
     Task,
-    RankedList, // Added Task model
+    RankedList,
+    Goal, // Added Task model
 } from "@/models/models";
 
 const MONGO_HOST = process.env.MONGO_HOST || "127.0.0.1";
@@ -48,6 +49,7 @@ let Challenges: Collection<Challenge>;
 let Proposals: Collection<Proposal>;
 let Issues: Collection<Issue>;
 let Tasks: Collection<Task>;
+let Goals: Collection<Goal>;
 let RankedLists: Collection<RankedList>;
 
 // Only initialize the database connection if not in build mode
@@ -78,6 +80,7 @@ if (process.env.IS_BUILD !== "true") {
     Proposals = db.collection<Proposal>("proposals");
     Issues = db.collection<Issue>("issues");
     Tasks = db.collection<Task>("tasks");
+    Goals = db.collection<Goal>("goals");
     RankedLists = db.collection<RankedList>("rankedLists");
 }
 
@@ -101,5 +104,6 @@ export {
     Proposals,
     Issues,
     Tasks,
+    Goals,
     RankedLists,
 };

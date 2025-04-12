@@ -11,7 +11,8 @@ import {
     IssueDisplay,
     IssueStage,
     TaskDisplay, // Added TaskDisplay
-    TaskStage, // Added TaskStage
+    TaskStage,
+    GoalStage, // Added TaskStage
 } from "@/models/models";
 import crypto from "crypto";
 import { getCirclesByDids, updateCircle } from "./circle";
@@ -504,9 +505,13 @@ export async function sendNotifications(
         // Task fields (mirroring Issue fields)
         taskId?: string;
         taskTitle?: string;
-        // assigneeName is already covered
         taskOldStage?: TaskStage;
         taskNewStage?: TaskStage;
+        // Goal fields (mirroring Issue fields)
+        goalId?: string;
+        goalTitle?: string;
+        goalOldStage?: GoalStage;
+        goalNewStage?: GoalStage;
         messageBody?: string; // For pre-formatted messages like resolution
     },
 ): Promise<void> {
@@ -552,9 +557,13 @@ export async function sendNotifications(
             // Sanitize task fields
             taskId: payload.taskId?.toString(),
             taskTitle: payload.taskTitle,
-            // assigneeName is already covered
             taskOldStage: payload.taskOldStage,
             taskNewStage: payload.taskNewStage,
+            // Sanitize goal fields
+            goalId: payload.goalId?.toString(),
+            goalTitle: payload.goalTitle,
+            goalOldStage: payload.goalOldStage,
+            goalNewStage: payload.goalNewStage,
             messageBody: payload.messageBody,
         };
 
@@ -666,18 +675,27 @@ function deriveBody(
         taskTitle?: string;
         taskOldStage?: TaskStage;
         taskNewStage?: TaskStage;
+        // Task fields for fallback text generation
+        goalTitle?: string;
+        goalOldStage?: TaskStage;
+        goalNewStage?: TaskStage;
     },
 ): string {
     const userName = payload.user?.name || "Someone";
     const circleName = payload.circle?.name || "a circle";
     const proposalName = payload.proposalName || "a proposal";
     const issueTitle = payload.issueTitle || "an issue";
-    const taskTitle = payload.taskTitle || "a task"; // Use provided title or fallback
     const assigneeName = payload.assigneeName || "someone";
     const oldIssueStage = payload.issueOldStage || "previous stage";
     const newIssueStage = payload.issueNewStage || "new stage";
+
+    const taskTitle = payload.taskTitle || "a task"; // Use provided title or fallback
     const oldTaskStage = payload.taskOldStage || "previous stage";
     const newTaskStage = payload.taskNewStage || "new stage";
+
+    const goalTitle = payload.goalTitle || "a goal"; // Use provided title or fallback
+    const oldGoalStage = payload.goalOldStage || "previous stage";
+    const newGoalStage = payload.goalNewStage || "new stage";
 
     switch (notificationType) {
         case "follow_request":
@@ -729,6 +747,13 @@ function deriveBody(
             return `${userName} assigned task "${taskTitle}" to you in ${circleName}`;
         case "task_status_changed":
             return `Task "${taskTitle}" in ${circleName} changed status from ${oldTaskStage} to ${newTaskStage}`;
+        // Goal Notifications Fallbacks
+        case "goal_submitted_for_review":
+            return `${userName} submitted goal "${goalTitle}" for review in ${circleName}`;
+        case "goal_approved":
+            return `Your goal "${goalTitle}" in ${circleName} was approved and is now Open`;
+        case "goal_status_changed":
+            return `Goal "${goalTitle}" in ${circleName} changed status from ${oldGoalStage} to ${newGoalStage}`;
         default:
             // Ensure exhaustive check or provide a generic default
             const exhaustiveCheck: never = notificationType;

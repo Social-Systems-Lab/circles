@@ -136,6 +136,65 @@ export const features = {
             module: "projects",
         } as Feature,
     },
+    goals: {
+        // Added goals module features, mirroring issues
+        view: {
+            name: "View Goals",
+            handle: "view",
+            description: "View the goals list and details",
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+            module: "goals",
+        } as Feature,
+        update: {
+            name: "Update Goals",
+            handle: "update",
+            description: "Edit existing goals",
+            defaultUserGroups: ["admins", "moderators"],
+            module: "goals",
+        } as Feature,
+        create: {
+            name: "Create Goals",
+            handle: "create",
+            description: "Submit a new goal",
+            defaultUserGroups: ["admins", "moderators"],
+            module: "goals",
+        } as Feature,
+        review: {
+            name: "Review Goals",
+            handle: "review",
+            description: "Review submitted goals and move them to Open",
+            defaultUserGroups: ["admins", "moderators"],
+            module: "goals",
+        } as Feature,
+        resolve: {
+            name: "Resolve Goals",
+            handle: "resolve",
+            description: "Mark goals as resolved or change their stage",
+            defaultUserGroups: ["admins", "moderators"],
+            module: "goals",
+        } as Feature,
+        moderate: {
+            name: "Moderate Goals",
+            handle: "moderate",
+            description: "Edit or delete any goal",
+            defaultUserGroups: ["admins"],
+            module: "goals",
+        } as Feature,
+        comment: {
+            name: "Comment on Goals",
+            handle: "comment",
+            description: "Add comments to goals",
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+            module: "goals",
+        } as Feature,
+        rank: {
+            name: "Rank Goals",
+            handle: "rank",
+            description: "Create and manage a ranking of goals",
+            defaultUserGroups: ["admins", "moderators", "members"],
+            module: "goals",
+        } as Feature,
+    },
     tasks: {
         // Added tasks module features, mirroring issues
         view: {
@@ -406,6 +465,12 @@ export const modules: ModuleInfo[] = [
             "Lists all projects the circle is working on or supporting. Offers a structured overview of ongoing initiatives, goals, and collaboration opportunities for members.",
     },
     {
+        name: "Goals",
+        handle: "goals",
+        description:
+            "Define, track, and celebrate the specific, measurable achievements your circle or project is working towards. Goals provide clear targets with defined victory conditions, helping to focus effort and measure progress. Link tasks directly to goals to see how day-to-day activities contribute to the bigger picture.",
+    },
+    {
         name: "Tasks",
         handle: "tasks",
         description:
@@ -432,9 +497,9 @@ export const modules: ModuleInfo[] = [
     },
 ];
 
-export const defaultUserModules = ["home", "feed", "followers", "circles", "projects", "settings"];
-export const defaultCircleModules = ["home", "feed", "followers", "projects", "settings"];
-export const defaultProjectModules = ["home", "feed", "followers", "tasks", "proposals", "issues", "settings"]; // Added 'tasks'
+export const defaultUserModules = ["home", "feed", "followers", "circles", "projects", "goals", "settings"];
+export const defaultCircleModules = ["home", "feed", "followers", "projects", "goals", "settings"];
+export const defaultProjectModules = ["home", "feed", "followers", "goals", "tasks", "proposals", "issues", "settings"]; // Added 'tasks'
 
 export const getDefaultModules = (circleType: CircleType): string[] => {
     switch (circleType) {

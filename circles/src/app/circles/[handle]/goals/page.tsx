@@ -1,4 +1,4 @@
-import TasksModule from "@/components/modules/tasks/Tasks";
+import GoalsModule from "@/components/modules/goals/goals";
 import { getCircleByHandle } from "@/lib/data/circle";
 import { notFound } from "next/navigation";
 
@@ -7,7 +7,8 @@ type PageProps = {
     searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
-export default async function TasksPage(props: PageProps) {
+export default async function GoalsPage(props: PageProps) {
+    // Renamed function
     const params = await props.params;
     const circle = await getCircleByHandle(params.handle);
 
@@ -15,5 +16,7 @@ export default async function TasksPage(props: PageProps) {
         notFound(); // Show 404 if circle doesn't exist
     }
 
-    return <TasksModule circle={circle} />;
+    // Render the GoalsModule, passing the fetched circle data
+    // GoalsModule will handle fetching its own data (goals) and permissions
+    return <GoalsModule circle={circle} />; // Use renamed component
 }

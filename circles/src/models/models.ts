@@ -218,7 +218,7 @@ export const postSchema = z.object({
     linkPreviewDescription: z.string().optional(),
     linkPreviewImage: fileInfoSchema.optional(),
     // Internal Link Preview Fields
-    internalPreviewType: z.enum(["circle", "post", "proposal", "issue", "task"]).optional(), // Added task
+    internalPreviewType: z.enum(["circle", "post", "proposal", "issue", "task", "goal"]).optional(),
     internalPreviewId: z.string().optional(), // Handle for circle, ID for others
     internalPreviewUrl: z.string().url().optional(),
 });
@@ -466,6 +466,14 @@ export type TaskPermissions = {
     canComment: boolean;
 };
 
+// Define Permissions type for Goals (mirroring IssuePermissions)
+export type GoalPermissions = {
+    canModerate: boolean;
+    canReview: boolean;
+    canResolve: boolean;
+    canComment: boolean;
+};
+
 export type SortingOptions = "similarity" | "near" | "pop" | "new" | "top" | "custom";
 
 export type PostItemProps = {
@@ -489,7 +497,8 @@ export type ContentPreviewData =
     | { type: "project"; content: Circle; props?: never }
     | { type: "proposal"; content: ProposalDisplay; props: { circle: Circle } }
     | { type: "issue"; content: IssueDisplay; props: { circle: Circle; permissions: IssuePermissions } }
-    | { type: "task"; content: TaskDisplay; props: { circle: Circle; permissions: TaskPermissions } } // Added Task
+    | { type: "task"; content: TaskDisplay; props: { circle: Circle; permissions: TaskPermissions } }
+    | { type: "goal"; content: GoalDisplay; props: { circle: Circle; permissions: GoalPermissions } }
     | {
           type: "default";
           content: Content | ProposalDisplay | IssueDisplay | TaskDisplay;
@@ -818,7 +827,11 @@ export type NotificationType =
     | "task_submitted_for_review"
     | "task_approved"
     | "task_assigned"
-    | "task_status_changed";
+    | "task_status_changed"
+    // Goal Notifications (mirroring Issue Notifications)
+    | "goal_submitted_for_review"
+    | "goal_approved"
+    | "goal_status_changed";
 
 // Define all onboarding steps in a single place for consistency
 export const ONBOARDING_STEPS = [
@@ -917,7 +930,7 @@ export interface IssueDisplay extends Issue {
 export const rankedListSchema = z.object({
     _id: z.any().optional(),
     entityId: z.string(), // ID of the circle (for tasks) or other entity (e.g., poll)
-    type: z.enum(["tasks", "poll"]), // Type of entity being ranked - add more as needed
+    type: z.enum(["tasks", "goals", "poll"]), // Type of entity being ranked - add more as needed
     userId: z.string(), // User's _id who submitted this ranking
     list: z.array(z.string()), // Ordered array of item IDs (task IDs in this case)
     createdAt: z.date(),
@@ -958,4 +971,34 @@ export interface TaskDisplay extends Task {
     assignee?: Circle; // Assignee's details (optional)
     circle?: Circle; // Circle details
     rank?: number; // Aggregated task rank
+}
+
+// Task stages (mirroring Issue stages for now)
+export const goalStageSchema = z.enum(["review", "open", "inProgress", "resolved"]);
+export type GoalStage = z.infer<typeof goalStageSchema>;
+
+// Task model (mirroring Issue model)
+export const goalSchema = z.object({
+    _id: z.any().optional(),
+    circleId: z.string(),
+    createdBy: didSchema,
+    createdAt: z.date(),
+    updatedAt: z.date().optional(), // Track updates
+    resolvedAt: z.date().optional(), // Track resolution time
+    title: z.string(),
+    description: z.string(),
+    stage: taskStageSchema.default("review"),
+    userGroups: z.array(z.string()).default([]), // User groups that can see this goal
+    location: locationSchema.optional(),
+    commentPostId: z.string().optional(), // Optional link to a shadow post for comments
+    images: z.array(mediaSchema).optional(), // Optional images/media attached to the goal
+});
+
+export type Goal = z.infer<typeof goalSchema>;
+
+// Display type with author and assignee information (mirroring IssueDisplay)
+export interface GoalDisplay extends Goal {
+    author: Circle; // Creator's details
+    circle?: Circle; // Circle details
+    rank?: number; // Aggregated goal rank
 }

@@ -1,4 +1,4 @@
-//task-list.tsx
+//goal-list.tsx
 "use client";
 
 import React, { useEffect, useState, useTransition, ChangeEvent, useCallback, useMemo } from "react";
@@ -23,7 +23,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Circle, ContentPreviewData, TaskDisplay, TaskStage, TaskPermissions } from "@/models/models"; // Use Task types, Added ContentPreviewData, TaskPermissions
+import { Circle, ContentPreviewData, GoalDisplay, GoalStage, GoalPermissions } from "@/models/models"; // Use Goal types, Added ContentPreviewData, GoalPermissions
 import { Button } from "@/components/ui/button";
 import {
     ArrowDown,
@@ -57,7 +57,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "@/components/utils/use-is-compact";
-import { deleteTaskAction } from "@/app/circles/[handle]/tasks/actions";
+import { deleteGoalAction } from "@/app/circles/[handle]/goals/actions";
 import { UserPicture } from "../members/user-picture";
 import { motion } from "framer-motion";
 import { isAuthorized } from "@/lib/auth/client-auth";
@@ -68,20 +68,20 @@ import { useAtom } from "jotai";
 import { userAtom, contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
 import Link from "next/link";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import TaskPrioritizationModal from "./task-prioritization-modal"; // Import the modal
+import GoalPrioritizationModal from "./goal-prioritization-modal"; // Import the modal
 import { PiRanking, PiRankingBold, PiUser, PiUsersThree } from "react-icons/pi";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 
-interface TasksListProps {
-    tasksData: {
-        tasks: TaskDisplay[];
+interface GoalsListProps {
+    goalsData: {
+        goals: GoalDisplay[];
         hasUserRanked: boolean;
         totalRankers: number;
         unrankedCount: number;
         userRankBecameStaleAt: Date | null;
     };
     circle: Circle;
-    permissions: TaskPermissions;
+    permissions: GoalPermissions;
 }
 
 const SortIcon = ({ sortDir }: { sortDir: string | boolean }) => {
@@ -123,7 +123,7 @@ const formatExpiryDate = (expiryDate: Date): string => {
 };
 
 // Helper function for stage badge styling and icons
-const getStageInfo = (stage: TaskStage) => {
+const getStageInfo = (stage: GoalStage) => {
     // Updated type
     switch (stage) {
         case "review":
@@ -139,20 +139,20 @@ const getStageInfo = (stage: TaskStage) => {
     }
 };
 
-const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions }) => {
+const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions }) => {
     // Renamed component, props
-    const { tasks, hasUserRanked, totalRankers, unrankedCount, userRankBecameStaleAt } = tasksData;
-    const data = React.useMemo(() => tasks, [tasks]);
+    const { goals, hasUserRanked, totalRankers, unrankedCount, userRankBecameStaleAt } = goalsData;
+    const data = React.useMemo(() => goals, [goals]);
     const [user] = useAtom(userAtom);
     const [sorting, setSorting] = React.useState<SortingState>([{ id: "rank", desc: false }]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-    const [deleteTaskDialogOpen, setDeleteTaskDialogOpen] = useState<boolean>(false); // Renamed state
-    const [selectedTask, setSelectedTask] = useState<TaskDisplay | null>(null); // Renamed state, updated type
+    const [deleteGoalDialogOpen, setDeleteGoalDialogOpen] = useState<boolean>(false); // Renamed state
+    const [selectedGoal, setSelectedGoal] = useState<GoalDisplay | null>(null); // Renamed state, updated type
     const [isPending, startTransition] = useTransition();
     const isCompact = useIsCompact();
     const router = useRouter();
     const { toast } = useToast();
-    const [stageFilter, setStageFilter] = useState<TaskStage | "all">("all"); // Updated type
+    const [stageFilter, setStageFilter] = useState<GoalStage | "all">("all"); // Updated type
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [showRankModal, setShowRankModal] = useState(false); // State for modal
@@ -173,13 +173,6 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
             });
         },
         [isCompact, router, setContentPreview, sidePanelContentVisible],
-    );
-
-    const openAssignee = useCallback(
-        (assignee: Circle) => {
-            openAuthor(assignee); // Reuse the same logic as opening author profile
-        },
-        [openAuthor],
     );
 
     const stalenessInfo = useMemo(() => {
@@ -207,13 +200,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
         };
     }, [userRankBecameStaleAt, unrankedCount]);
 
-    // Fixes hydration errors
-    const [isMounted, setIsMounted] = useState(false);
-    useEffect(() => {
-        setIsMounted(true);
-    }, []);
-
-    const columns = React.useMemo<ColumnDef<TaskDisplay>[]>( // Updated type
+    const columns = React.useMemo<ColumnDef<GoalDisplay>[]>( // Updated type
         () => [
             // --- Column 1: Aggregated Rank ---
             {
@@ -290,10 +277,10 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                     </Button>
                 ),
                 cell: (info) => {
-                    const task = info.row.original; // Renamed variable
+                    const goal = info.row.original; // Renamed variable
                     return (
                         <Link
-                            href={`/circles/${circle.handle}/tasks/${task._id}`} // Updated path
+                            href={`/circles/${circle.handle}/goals/${goal._id}`} // Updated path
                             onClick={(e) => e.stopPropagation()}
                             className="flex items-center font-medium text-blue-600 hover:underline" // Added flex
                         >
@@ -311,7 +298,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                     </Button>
                 ),
                 cell: (info) => {
-                    const stage = info.getValue() as TaskStage; // Updated type
+                    const stage = info.getValue() as GoalStage; // Updated type
                     const { color, icon: Icon, text } = getStageInfo(stage);
                     return (
                         <Badge className={`${color} items-center gap-1`}>
@@ -321,67 +308,6 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                     );
                 },
                 filterFn: (row, id, value) => row.getValue(id) === value,
-            },
-            {
-                accessorKey: "assignee",
-                header: "Assigned To",
-                cell: (info) => {
-                    const assignee = info.getValue() as Circle | undefined;
-                    if (!assignee) {
-                        return <span className="text-gray-500">Unassigned</span>;
-                    }
-                    return (
-                        <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <div
-                                        className="flex cursor-pointer items-center gap-2"
-                                        onClick={(e) => {
-                                            e.stopPropagation(); // Keep stopPropagation
-                                            openAssignee(assignee); // Call the correct handler
-                                        }}
-                                    >
-                                        <UserPicture name={assignee.name} picture={assignee.picture?.url} size="32px" />
-                                        {!isCompact && <span>{assignee.name}</span>}
-                                    </div>
-                                </TooltipTrigger>
-                                <TooltipContent>{assignee.name}</TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                    );
-                },
-            },
-            {
-                accessorKey: "author", // Assuming 'author' is populated in TaskDisplay
-                header: ({ column }) => (
-                    <Button variant="ghost" onClick={() => column.toggleSorting()}>
-                        Created By
-                        <SortIcon sortDir={column.getIsSorted()} />
-                    </Button>
-                ),
-                cell: (info) => {
-                    const author = info.getValue() as Circle;
-                    return (
-                        <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <div
-                                        className="flex cursor-pointer items-center gap-2"
-                                        onClick={(e) => {
-                                            e.stopPropagation(); // Keep stopPropagation
-                                            openAuthor(author); // Call the correct handler
-                                        }}
-                                    >
-                                        <UserPicture name={author.name} picture={author.picture?.url} size="32px" />
-                                        {!isCompact && <span>{author.name}</span>}
-                                    </div>
-                                </TooltipTrigger>
-                                {isCompact && <TooltipContent>{author.name}</TooltipContent>}
-                            </Tooltip>
-                        </TooltipProvider>
-                    );
-                },
-                enableSorting: false, // Sorting by author object might be complex
             },
             {
                 accessorKey: "createdAt",
@@ -394,7 +320,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                 cell: (info) => new Date(info.getValue() as Date).toLocaleDateString(),
             },
         ],
-        [isCompact, circle.handle, openAssignee, openAuthor], // Add dependencies
+        [circle.handle], // Add dependencies
     );
 
     const table = useReactTable({
@@ -413,8 +339,6 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                 userRank: hasUserRanked,
                 title: true,
                 stage: true,
-                assignee: !isCompact,
-                author: !isCompact,
                 createdAt: !isCompact,
             },
         },
@@ -428,12 +352,12 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
         }
     }, [stageFilter, table]);
 
-    const onConfirmDeleteTask = async () => {
+    const onConfirmDeleteGoal = async () => {
         // Renamed function
-        if (!selectedTask) return; // Renamed state
+        if (!selectedGoal) return; // Renamed state
 
         startTransition(async () => {
-            const result = await deleteTaskAction(circle.handle!, selectedTask._id as string); // Renamed action, state
+            const result = await deleteGoalAction(circle.handle!, selectedGoal._id as string); // Renamed action, state
 
             if (result.success) {
                 toast({ title: "Success", description: result.message });
@@ -441,42 +365,38 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
             } else {
                 toast({
                     title: "Error",
-                    description: result.message || "Failed to delete task", // Updated message
+                    description: result.message || "Failed to delete goal", // Updated message
                     variant: "destructive",
                 });
             }
-            setDeleteTaskDialogOpen(false); // Renamed state setter
-            setSelectedTask(null); // Renamed state setter
+            setDeleteGoalDialogOpen(false); // Renamed state setter
+            setSelectedGoal(null); // Renamed state setter
         });
     };
 
-    const handleRowClick = (task: TaskDisplay) => {
+    const handleRowClick = (goal: GoalDisplay) => {
         // Renamed param, type
         if (isCompact) {
-            router.push(`/circles/${circle.handle}/tasks/${task._id}`); // Updated path
+            router.push(`/circles/${circle.handle}/goals/${goal._id}`); // Updated path
             return;
         }
 
         // Open content preview for non-compact mode
         let contentPreviewData: ContentPreviewData = {
-            type: "task", // Use the correct type
-            content: task, // Renamed param
+            type: "goal", // Use the correct type
+            content: goal, // Renamed param
             props: { circle, permissions }, // Pass required props
         };
         setContentPreview((x) => {
-            // Toggle behavior: if clicking the same task again while preview is open, close it.
+            // Toggle behavior: if clicking the same goal again while preview is open, close it.
             const isCurrentlyPreviewing =
-                x?.type === "task" && x?.content._id === task._id && sidePanelContentVisible === "content"; // Updated type, param
+                x?.type === "goal" && x?.content._id === goal._id && sidePanelContentVisible === "content"; // Updated type, param
             return isCurrentlyPreviewing ? undefined : contentPreviewData;
         });
     };
 
     // Check create permission for the button using the user object
-    const canCreateTask = isAuthorized(user, circle, features.tasks.create);
-
-    if (!isMounted) {
-        return null; // Prevent rendering until mounted
-    }
+    const canCreateGoal = isAuthorized(user, circle, features.goals.create);
 
     return (
         <TooltipProvider>
@@ -487,7 +407,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                         <div className="mb-3 rounded border bg-blue-50 p-3 text-sm text-blue-800 shadow-sm">
                             <p className="flex items-center">
                                 <PiUsersThree className="mr-2 h-5 w-5 flex-shrink-0" />
-                                You&apos;ve ranked these tasks.{" "}
+                                You&apos;ve ranked these goals.{" "}
                                 <span>
                                     {" "}
                                     Currently, <span className="mx-1 font-semibold">{totalRankers}</span>{" "}
@@ -512,7 +432,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                                 <span className="mx-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
                                     {unrankedCount}
                                 </span>{" "}
-                                unranked task{unrankedCount !== 1 ? "s" : ""}.
+                                unranked goal{unrankedCount !== 1 ? "s" : ""}.
                                 {!isMobile && (
                                     <>
                                         {" "}
@@ -530,7 +450,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                         <div className="mb-4 rounded border border-green-400 bg-green-50 p-3 text-sm text-green-800 shadow-sm">
                             <p className="flex items-center">
                                 <CheckCircle2 className="mr-2 h-5 w-5 flex-shrink-0 text-green-600" />
-                                Nicely done! You&apos;ve ranked all available tasks.
+                                Nicely done! You&apos;ve ranked all available goals.
                             </p>
                         </div>
                     )}
@@ -538,29 +458,29 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                     <div className="flex w-full flex-row items-center gap-2">
                         <div className="flex flex-1 flex-col">
                             <Input
-                                placeholder="Search tasks by title..." // Updated placeholder
+                                placeholder="Search goals by title..." // Updated placeholder
                                 value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
                                 onChange={(event) => table.getColumn("title")?.setFilterValue(event.target.value)}
                             />
                         </div>
-                        {canCreateTask && ( // Renamed variable
+                        {canCreateGoal && ( // Renamed variable
                             <Button asChild>
-                                <Link href={`/circles/${circle.handle}/tasks/create`}>
+                                <Link href={`/circles/${circle.handle}/goals/create`}>
                                     {" "}
                                     {/* Updated path */}
-                                    <Plus className="mr-2 h-4 w-4" /> Create Task {/* Updated text */}
+                                    <Plus className="mr-2 h-4 w-4" /> Create Goal {/* Updated text */}
                                 </Link>
                             </Button>
                         )}
                         {/* Add Rank Button */}
-                        {isAuthorized(user, circle, features.tasks.rank) && (
+                        {isAuthorized(user, circle, features.goals.rank) && (
                             <Button onClick={() => setShowRankModal(true)}>
                                 <PiRanking className="mr-2 h-4 w-4" /> Rank
                             </Button>
                         )}
                         <Select
                             value={stageFilter}
-                            onValueChange={(value) => setStageFilter(value as TaskStage | "all")} // Updated type
+                            onValueChange={(value) => setStageFilter(value as GoalStage | "all")} // Updated type
                         >
                             <SelectTrigger className="w-[180px]">
                                 <SelectValue placeholder="Filter by stage" />
@@ -573,8 +493,6 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                                 <SelectItem value="resolved">Resolved</SelectItem>
                             </SelectContent>
                         </Select>
-                        {/* Placeholder for Assignee Filter */}
-                        {/* <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>...</Select> */}
                     </div>
 
                     <div className="mt-3 overflow-hidden rounded-[15px] shadow-lg">
@@ -597,11 +515,11 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                             <TableBody className="bg-white">
                                 {table.getRowModel().rows?.length ? (
                                     table.getRowModel().rows.map((row, index) => {
-                                        const task = row.original; // Renamed variable
-                                        const isAuthor = user?.did === task.createdBy; // Renamed variable
+                                        const goal = row.original; // Renamed variable
+                                        const isAuthor = user?.did === goal.createdBy; // Renamed variable
                                         // Determine if edit/delete should be shown
                                         const canEdit =
-                                            (isAuthor && task.stage === "review") || permissions.canModerate; // Renamed variable
+                                            (isAuthor && goal.stage === "review") || permissions.canModerate; // Renamed variable
                                         const canDelete = isAuthor || permissions.canModerate;
 
                                         return (
@@ -613,9 +531,9 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                                                 variants={tableRowVariants}
                                                 className={`cursor-pointer
                                                     ${row.getIsSelected() ? "bg-muted" : ""}
-                                                    ${(contentPreview?.content as TaskDisplay)?._id === task._id && sidePanelContentVisible === "content" ? "bg-gray-100" : "hover:bg-gray-50"} // Updated type, variable
+                                                    ${(contentPreview?.content as GoalDisplay)?._id === goal._id && sidePanelContentVisible === "content" ? "bg-gray-100" : "hover:bg-gray-50"} // Updated type, variable
                                                 `}
-                                                onClick={() => handleRowClick(task)} // Renamed param
+                                                onClick={() => handleRowClick(goal)} // Renamed param
                                             >
                                                 {/* Start children immediately */}
                                                 {row.getVisibleCells().map((cell) => (
@@ -645,10 +563,10 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
                                                                             router.push(
-                                                                                `/circles/${circle.handle}/tasks/${task._id}/edit`, // Updated path
+                                                                                `/circles/${circle.handle}/goals/${goal._id}/edit`, // Updated path
                                                                             );
                                                                         }}
-                                                                        disabled={task.stage === "resolved"} // Can't edit resolved tasks, Renamed variable
+                                                                        disabled={goal.stage === "resolved"} // Can't edit resolved goals, Renamed variable
                                                                     >
                                                                         Edit
                                                                     </DropdownMenuItem>
@@ -658,8 +576,8 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                                                                         className="text-red-600"
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
-                                                                            setSelectedTask(task); // Renamed state setter, param
-                                                                            setDeleteTaskDialogOpen(true); // Renamed state setter
+                                                                            setSelectedGoal(goal); // Renamed state setter, param
+                                                                            setDeleteGoalDialogOpen(true); // Renamed state setter
                                                                         }}
                                                                     >
                                                                         Delete
@@ -675,7 +593,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                                 ) : (
                                     <TableRow>
                                         <TableCell colSpan={columns.length + 1} className="h-24 text-center">
-                                            No tasks found. {/* Updated text */}
+                                            No goals found. {/* Updated text */}
                                         </TableCell>
                                     </TableRow>
                                 )}
@@ -683,13 +601,13 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                         </Table>
                     </div>
 
-                    <Dialog open={deleteTaskDialogOpen} onOpenChange={setDeleteTaskDialogOpen}>
+                    <Dialog open={deleteGoalDialogOpen} onOpenChange={setDeleteGoalDialogOpen}>
                         {/* Renamed state */}
                         <DialogContent>
                             <DialogHeader>
-                                <DialogTitle>Delete Task</DialogTitle> {/* Updated text */}
+                                <DialogTitle>Delete Goal</DialogTitle> {/* Updated text */}
                                 <DialogDescription>
-                                    Are you sure you want to delete the task &quot;{selectedTask?.title}&quot;? This
+                                    Are you sure you want to delete the goal &quot;{selectedGoal?.title}&quot;? This
                                     action cannot be undone.
                                 </DialogDescription>
                             </DialogHeader>
@@ -697,7 +615,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                                 <DialogClose asChild>
                                     <Button variant="outline">Cancel</Button>
                                 </DialogClose>
-                                <Button variant="destructive" onClick={onConfirmDeleteTask} disabled={isPending}>
+                                <Button variant="destructive" onClick={onConfirmDeleteGoal} disabled={isPending}>
                                     {" "}
                                     {/* Renamed handler */}
                                     {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -708,7 +626,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                     </Dialog>
                     {/* Render Prioritization Modal */}
                     {showRankModal && (
-                        <TaskPrioritizationModal circle={circle} onClose={() => setShowRankModal(false)} />
+                        <GoalPrioritizationModal circle={circle} onClose={() => setShowRankModal(false)} />
                     )}
                 </div>
             </div>
@@ -716,4 +634,4 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
     );
 };
 
-export default TasksList; // Renamed export
+export default GoalsList; // Renamed export

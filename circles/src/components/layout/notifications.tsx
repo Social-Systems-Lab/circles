@@ -17,7 +17,9 @@ import {
     IssueDisplay,
     IssueStage,
     TaskDisplay, // Added TaskDisplay
-    TaskStage, // Added TaskStage
+    TaskStage,
+    GoalDisplay,
+    GoalStage, // Added TaskStage
 } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { sendReadReceipt } from "@/lib/data/client-matrix";
@@ -56,6 +58,12 @@ type Notification = {
     taskTitle?: string;
     previousTaskStage?: TaskStage;
     newTaskStage?: TaskStage;
+    // Goal fields (mirroring Issue fields)
+    goal?: GoalDisplay;
+    goalId?: string;
+    goalTitle?: string;
+    previousGoalStage?: GoalStage;
+    newGoalStage?: GoalStage;
     // For grouping purposes
     key?: string;
 };
@@ -83,6 +91,10 @@ type GroupedNotification = {
     task?: TaskDisplay;
     taskId?: string;
     taskTitle?: string;
+    // Goal fields (mirroring Issue fields)
+    goal?: GoalDisplay;
+    goalId?: string;
+    goalTitle?: string;
 };
 
 export const Notifications = () => {
@@ -221,6 +233,10 @@ export const Notifications = () => {
                     task: notification.task,
                     taskId: notification.taskId,
                     taskTitle: notification.taskTitle,
+                    // Add goal fields
+                    goal: notification.goal,
+                    goalId: notification.goalId,
+                    goalTitle: notification.goalTitle,
                 });
             }
         }
@@ -339,6 +355,15 @@ export const Notifications = () => {
             case "task_status_changed":
                 if (notification.taskId) {
                     router.push(`/circles/${circleHandle}/tasks/${notification.taskId}`);
+                }
+                break;
+
+            // Goal Notifications Navigation
+            case "goal_submitted_for_review":
+            case "goal_approved":
+            case "goal_status_changed":
+                if (notification.taskId) {
+                    router.push(`/circles/${circleHandle}/goals/${notification.goalId}`);
                 }
                 break;
 
