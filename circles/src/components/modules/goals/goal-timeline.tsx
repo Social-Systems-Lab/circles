@@ -249,8 +249,7 @@ const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initia
                 ))}
                 {/* Render Undated Goals Section */}
                 {hasUndatedGoals && (
-                    <div key={`${tab}-no_date_section`} className="relative mb-8 mt-12">
-                        <h3 className="mb-3 ml-12 text-lg font-semibold text-foreground">Goals without Target Date</h3>
+                    <div key={`${tab}-no_date_section`} className="relative mb-8 mt-8">
                         <div className="ml-12 grid grid-cols-1 gap-4 md:grid-cols-2">
                             {undatedGoals.map((goal) => (
                                 <GoalCard key={goal._id} goal={goal} circleHandle={circle.handle!} />
