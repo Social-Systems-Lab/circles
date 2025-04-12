@@ -239,20 +239,20 @@ export const getActiveTasksByCircleId = async (circleId: string): Promise<TaskDi
  * @param taskId The ID of the task
  * @returns The task display data or null if not found
  */
-export const getTaskById = async (taskId: string, userDid?: string): Promise<TaskDisplay | null> => {
-    // Renamed function, params, return type
+export const getTaskById = async (
+    taskId: string,
+    userDid?: string, // Keep userDid for potential future use
+): Promise<TaskDisplay | null> => {
     try {
         if (!ObjectId.isValid(taskId)) {
-            // Renamed param
             return null;
         }
 
         const tasks = (await Tasks.aggregate([
-            // Changed Issues to Tasks, variable issues to tasks
             // 1) Match the specific Task by _id
-            { $match: { _id: new ObjectId(taskId) } }, // Renamed param
+            { $match: { _id: new ObjectId(taskId) } },
 
-            // 2) Lookup author details, only match if circleType = "user" and did = createdBy
+            // 2) Lookup author details
             {
                 $lookup: {
                     from: "circles",
@@ -262,11 +262,8 @@ export const getTaskById = async (taskId: string, userDid?: string): Promise<Tas
                             $match: {
                                 $expr: {
                                     $and: [
-                                        // must match the author DID
                                         { $eq: ["$did", "$$authorDid"] },
-                                        // ensure circleType is "user" for actual user circles
                                         { $eq: ["$circleType", "user"] },
-                                        // optional: ignore null or missing did
                                         { $ne: ["$$authorDid", null] },
                                     ],
                                 },
@@ -275,17 +272,16 @@ export const getTaskById = async (taskId: string, userDid?: string): Promise<Tas
                         {
                             $project: {
                                 ...SAFE_CIRCLE_PROJECTION,
-                                _id: { $toString: "$_id" }, // convert ObjectId -> string
+                                _id: { $toString: "$_id" },
                             },
                         },
                     ],
                     as: "authorDetails",
                 },
             },
-            // expect exactly one author, but if none found, it won't unwind
             { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: false } },
 
-            // 3) Lookup assignee details, also restricted to circleType="user"
+            // 3) Lookup assignee details
             {
                 $lookup: {
                     from: "circles",
@@ -312,11 +308,9 @@ export const getTaskById = async (taskId: string, userDid?: string): Promise<Tas
                     as: "assigneeDetails",
                 },
             },
-            // optional assignee => preserveNullAndEmptyArrays = true
             { $unwind: { path: "$assigneeDetails", preserveNullAndEmptyArrays: true } },
 
-            // 4) Lookup circle details (if the Task is associated with some circle _id).
-            //    Typically you only have one circle doc with that _id, so no duplication.
+            // 4) Lookup circle details
             {
                 $lookup: {
                     from: "circles",
@@ -329,6 +323,7 @@ export const getTaskById = async (taskId: string, userDid?: string): Promise<Tas
                                 name: 1,
                                 handle: 1,
                                 picture: 1,
+                                enabledModules: 1, // Include enabledModules
                             },
                         },
                     ],
@@ -337,22 +332,62 @@ export const getTaskById = async (taskId: string, userDid?: string): Promise<Tas
             },
             { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
 
-            // 5) Final projection
+            // --- 5) Lookup Goal Details ---
+            {
+                $lookup: {
+                    from: "goals", // The collection name for goals
+                    let: { goalIdString: "$goalId" }, // goalId is likely stored as string
+                    pipeline: [
+                        // Match goal _id (which is ObjectId) with the string goalId from task
+                        // Convert goal _id to string for comparison
+                        {
+                            $match: {
+                                $expr: {
+                                    $eq: [{ $toString: "$_id" }, "$$goalIdString"],
+                                },
+                            },
+                        },
+                        // Project only needed goal fields
+                        {
+                            $project: {
+                                _id: { $toString: "$_id" }, // Ensure goal _id is string
+                                title: 1,
+                                // Add other goal fields if needed later
+                            },
+                        },
+                    ],
+                    as: "goalDetails",
+                },
+            },
+            // Goal is optional, so preserve if no match found
+            { $unwind: { path: "$goalDetails", preserveNullAndEmptyArrays: true } },
+            // --- End Lookup Goal Details ---
+
+            // 6) Final projection
             {
                 $project: {
-                    // Include safe fields from the Task
-                    ...SAFE_TASK_PROJECTION, // Renamed constant
+                    ...SAFE_TASK_PROJECTION, // Include safe fields from the Task
                     _id: { $toString: "$_id" },
                     author: "$authorDetails",
                     assignee: "$assigneeDetails",
                     circle: "$circleDetails",
+                    goal: "$goalDetails", // Add the looked-up goal data
                 },
             },
-        ]).toArray()) as TaskDisplay[]; // Updated type
+        ]).toArray()) as TaskDisplay[];
 
-        return tasks.length > 0 ? tasks[0] : null; // Renamed variable
+        // The aggregation returns an array, get the first element
+        const taskResult = tasks.length > 0 ? tasks[0] : null;
+
+        // Add circle.enabledModules to the top-level task object if needed by TaskDetail directly
+        // Although TaskDetail receives the full circle object anyway.
+        // if (taskResult && taskResult.circle?.enabledModules) {
+        //     taskResult.enabledModules = taskResult.circle.enabledModules;
+        // }
+
+        return taskResult;
     } catch (error) {
-        console.error(`Error getting task by ID (${taskId}):`, error); // Updated error message and param
+        console.error(`Error getting task by ID (${taskId}):`, error);
         throw error; // Re-throw
     }
 };
@@ -388,23 +423,41 @@ export const createTask = async (taskData: Omit<Task, "_id">): Promise<Task> => 
  * @returns Boolean indicating success (true) or failure (false)
  */
 export const updateTask = async (taskId: string, updates: Partial<Task>): Promise<boolean> => {
-    // Renamed function, params, type
     try {
         if (!ObjectId.isValid(taskId)) {
-            // Renamed param
-            console.error("Invalid taskId provided for update:", taskId); // Updated error message and param
+            console.error("Invalid taskId provided for update:", taskId);
             return false;
         }
-        // Ensure updatedAt is always set on update
-        const updateData = { ...updates, updatedAt: new Date() };
-        // Remove _id from updates if present, as it cannot be changed
-        delete updateData._id;
 
-        const result = await Tasks.updateOne({ _id: new ObjectId(taskId) }, { $set: updateData }); // Changed Issues to Tasks, param issueId to taskId
-        return result.matchedCount > 0;
+        const updateData: any = { ...updates, updatedAt: new Date() };
+        delete updateData._id; // Cannot update _id
+
+        const unsetFields: any = {};
+
+        // Check if goalId is explicitly being set to empty string (signal for removal)
+        if (updateData.hasOwnProperty("goalId") && updateData.goalId === "") {
+            delete updateData.goalId; // Remove from $set
+            unsetFields.goalId = ""; // Add to $unset
+        }
+
+        const updateOp: any = {};
+        if (Object.keys(updateData).length > 0) {
+            updateOp.$set = updateData;
+        }
+        if (Object.keys(unsetFields).length > 0) {
+            updateOp.$unset = unsetFields;
+        }
+
+        // Only perform update if there's something to $set or $unset
+        if (Object.keys(updateOp).length === 0) {
+            console.log("No update operation needed for task:", taskId);
+            return true; // No changes needed, consider it success
+        }
+
+        const result = await Tasks.updateOne({ _id: new ObjectId(taskId) }, updateOp);
+        return result.matchedCount > 0 || result.modifiedCount > 0; // Success if matched or modified
     } catch (error) {
-        console.error(`Error updating task (${taskId}):`, error); // Updated error message and param
-        // Do not re-throw, return false to indicate failure
+        console.error(`Error updating task (${taskId}):`, error);
         return false;
     }
 };
@@ -704,6 +757,108 @@ export const getTaskRanking = async (circleId: string, filterUserGroupHandle?: s
     } catch (error) {
         console.error("Error calculating task ranking:", error);
         return defaultResult; // Return default on error
+    }
+};
+
+/**
+ * Get all tasks linked to a specific goal ID, including author and assignee details.
+ * @param goalId The ID of the goal
+ * @param circleId The ID of the circle (for context and potential filtering)
+ * @returns Array of tasks linked to the goal
+ */
+export const getTasksByGoalId = async (goalId: string, circleId: string): Promise<TaskDisplay[]> => {
+    try {
+        // Basic validation
+        if (!goalId || !circleId) {
+            return [];
+        }
+
+        const tasks = (await Tasks.aggregate([
+            // 1) Match tasks by goalId and circleId
+            {
+                $match: {
+                    goalId: goalId, // Match the specific goal ID
+                    circleId: circleId, // Ensure task belongs to the correct circle
+                },
+            },
+
+            // 2) Lookup author details (same as getTasksByCircleId)
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { authorDid: "$createdBy" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$did", "$$authorDid"] },
+                                        { $eq: ["$circleType", "user"] },
+                                        { $ne: ["$$authorDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" },
+                            },
+                        },
+                    ],
+                    as: "authorDetails",
+                },
+            },
+            { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: false } },
+
+            // 3) Lookup assignee details (same as getTasksByCircleId)
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { assigneeDid: "$assignedTo" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$did", "$$assigneeDid"] },
+                                        { $eq: ["$circleType", "user"] },
+                                        { $ne: ["$$assigneeDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" },
+                            },
+                        },
+                    ],
+                    as: "assigneeDetails",
+                },
+            },
+            { $unwind: { path: "$assigneeDetails", preserveNullAndEmptyArrays: true } },
+
+            // 4) Final projection (similar to getTasksByCircleId, goal info not needed here)
+            {
+                $project: {
+                    ...SAFE_TASK_PROJECTION,
+                    _id: { $toString: "$_id" },
+                    author: "$authorDetails",
+                    assignee: "$assigneeDetails",
+                    // We don't need to lookup the goal again here
+                },
+            },
+
+            // 5) Sort by newest task first (optional)
+            { $sort: { createdAt: -1 } },
+        ]).toArray()) as TaskDisplay[];
+
+        return tasks;
+    } catch (error) {
+        console.error(`Error getting tasks by goal ID (${goalId}):`, error);
+        throw error;
     }
 };
 

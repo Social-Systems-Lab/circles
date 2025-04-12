@@ -231,6 +231,7 @@ const createTaskSchema = z.object({
 const updateTaskSchema = createTaskSchema.extend({
     // Renamed schema
     // Updates use the same base fields
+    goalId: z.string().optional().nullable(),
 });
 
 const assignTaskSchema = z.object({
@@ -387,24 +388,25 @@ export async function createTaskAction( // Renamed function
  * @param formData The form data containing updated details
  * @returns Success status and message
  */
-export async function updateTaskAction( // Renamed function
+export async function updateTaskAction(
     circleHandle: string,
-    taskId: string, // Renamed param
+    taskId: string,
     formData: FormData,
 ): Promise<{ success: boolean; message?: string }> {
     try {
         // Validate form data
         const validatedData = updateTaskSchema.safeParse({
-            // Renamed schema
             title: formData.get("title"),
             description: formData.get("description"),
             images: formData.getAll("images"),
             location: formData.get("location") ?? undefined,
             userGroups: formData.getAll("userGroups"),
-            goalId: formData.get("goalId") ?? undefined, // Optional goal ID
+            // Get goalId, treat empty string as intent to unset
+            goalId: formData.get("goalId") || "", // Default to empty string if null/undefined
         });
 
         if (!validatedData.success) {
+            // ... (error handling)
             console.error("Validation Error:", validatedData.error.errors);
             return {
                 success: false,
@@ -413,73 +415,63 @@ export async function updateTaskAction( // Renamed function
         }
         const data = validatedData.data;
 
-        // Get the current user
+        // ... (user/circle fetching, permission checks) ...
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) {
             return { success: false, message: "User not authenticated" };
         }
-
-        // Get the circle
         const circle = await getCircleByHandle(circleHandle);
         if (!circle) {
             return { success: false, message: "Circle not found" };
         }
-
-        // Get the existing task (Data function)
-        const task = await getTaskById(taskId, userDid); // Renamed function call, param, variable
+        const task = await getTaskById(taskId, userDid); // Fetch task
         if (!task) {
-            // Renamed variable
-            return { success: false, message: "Task not found" }; // Updated message
+            return { success: false, message: "Task not found" };
         }
-
-        // Check permissions: Author or Moderator? (Placeholder feature handle)
-        const isAuthor = userDid === task.createdBy; // Renamed variable
-        const canModerate = await isAuthorized(userDid, circle._id as string, features.tasks?.moderate); // Placeholder
-
-        // Define who can edit and when
-        // Example: Author can edit in 'review', Moderator can edit anytime before 'resolved'
-        const canEdit = (isAuthor && task.stage === "review") || (canModerate && task.stage !== "resolved"); // Renamed variable
-
+        const isAuthor = userDid === task.createdBy;
+        const canModerate = await isAuthorized(userDid, circle._id as string, features.tasks?.moderate);
+        const canEdit = (isAuthor && task.stage === "review") || (canModerate && task.stage !== "resolved");
         if (!canEdit) {
-            return { success: false, message: "Not authorized to update this task at its current stage" }; // Updated message
+            return {
+                success: false,
+                message: "Not authorized to update this task at its current stage",
+            };
         }
 
-        // --- Parse Location ---
-        let locationData: Task["location"] = undefined; // Updated type
+        // ... (location parsing) ...
+        let locationData: Task["location"] = undefined;
         if (data.location) {
-            locationData = JSON.parse(data.location); // Validated by Zod
-        } else {
-            locationData = undefined; // Explicitly remove if empty
+            try {
+                locationData = JSON.parse(data.location);
+            } catch {
+                /* ignore parse error, already validated by zod */
+            }
         }
 
-        // --- Handle Image Updates (Similar logic to proposal update) ---
-        const existingImages = task.images || []; // Renamed variable
+        // ... (image handling) ...
+        const existingImages = task.images || [];
         const submittedImageEntries = data.images || [];
-        // Use isFile helper to identify file objects
         const newImageFiles = submittedImageEntries.filter(isFile);
         const existingMediaJsonStrings = submittedImageEntries.filter(
             (entry): entry is string => typeof entry === "string",
         );
-
         let parsedExistingMedia: Media[] = [];
         try {
-            parsedExistingMedia = existingMediaJsonStrings.map((jsonString) => JSON.parse(jsonString) as Media);
+            parsedExistingMedia = existingMediaJsonStrings.map((jsonString) => JSON.parse(jsonString));
         } catch (e) {
-            return { success: false, message: "Failed to process existing image data." };
+            return {
+                success: false,
+                message: "Failed to process existing image data.",
+            };
         }
-
-        const remainingExistingMediaUrls = parsedExistingMedia
-            .map((media) => media?.fileInfo?.url)
-            .filter((url): url is string => typeof url === "string");
-
+        const remainingExistingMediaUrls = new Set(parsedExistingMedia.map((media) => media?.fileInfo?.url));
         const imagesToDelete = existingImages.filter(
-            (existing: Media) => !remainingExistingMediaUrls.includes(existing.fileInfo.url), // Added type Media
+            (existing) => !remainingExistingMediaUrls.has(existing.fileInfo.url),
         );
-
         let newlyUploadedImages: Media[] = [];
         if (newImageFiles.length > 0) {
             const uploadPromises = newImageFiles.map(async (file) => {
-                const fileNamePrefix = `task_image_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`; // Updated prefix
+                const fileNamePrefix = `task_image_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
                 return await saveFile(file, fileNamePrefix, circle._id as string, true);
             });
             const uploadResults = await Promise.all(uploadPromises);
@@ -487,46 +479,48 @@ export async function updateTaskAction( // Renamed function
                 (result: StorageFileInfo): Media => ({
                     name: result.originalName || "Uploaded Image",
                     type: newImageFiles.find((f) => f.name === result.originalName)?.type || "application/octet-stream",
-                    fileInfo: { url: result.url, fileName: result.fileName, originalName: result.originalName },
+                    fileInfo: {
+                        url: result.url,
+                        fileName: result.fileName,
+                        originalName: result.originalName,
+                    },
                 }),
             );
         }
-
         if (imagesToDelete.length > 0) {
-            const deletePromises = imagesToDelete.map((img: Media) => deleteFile(img.fileInfo.url)); // Added type Media
-            await Promise.all(deletePromises).catch((err) => console.error("Failed to delete some images:", err)); // Log errors but continue
+            const deletePromises = imagesToDelete.map((img) => deleteFile(img.fileInfo.url));
+            await Promise.all(deletePromises).catch((err) => console.error("Failed to delete some images:", err));
         }
-
         const finalImages: Media[] = [...parsedExistingMedia, ...newlyUploadedImages];
-        // --- End Image Updates ---
 
         // Prepare update data
-        const updateData: Partial<Task> = {
-            // Updated type
+        const updateData: Partial<Task> & { goalId?: string | null } = {
+            // Use intersection type
             title: data.title,
             description: data.description,
             images: finalImages,
             location: locationData,
-            userGroups: data.userGroups || task.userGroups, // Keep existing if not provided, Renamed variable
+            userGroups: data.userGroups || task.userGroups,
             updatedAt: new Date(),
-            goalId: data.goalId,
+            // Pass goalId directly (can be string or empty string for removal)
+            goalId: data.goalId ?? "",
         };
 
-        // Update task in DB (Data function)
-        const success = await updateTask(taskId, updateData); // Renamed function call, param
+        // Update task in DB (Data function handles $set/$unset logic)
+        const success = await updateTask(taskId, updateData);
 
         if (!success) {
-            return { success: false, message: "Failed to update task" }; // Updated message
+            return { success: false, message: "Failed to update task" };
         }
 
         // Revalidate relevant pages
-        revalidatePath(`/circles/${circleHandle}/tasks`); // Updated path
-        revalidatePath(`/circles/${circleHandle}/tasks/${taskId}`); // Updated path, param
+        revalidatePath(`/circles/${circleHandle}/tasks`);
+        revalidatePath(`/circles/${circleHandle}/tasks/${taskId}`);
 
-        return { success: true, message: "Task updated successfully" }; // Updated message
+        return { success: true, message: "Task updated successfully" };
     } catch (error) {
-        console.error("Error updating task:", error); // Updated message
-        return { success: false, message: "Failed to update task" }; // Updated message
+        console.error("Error updating task:", error);
+        return { success: false, message: "Failed to update task" };
     }
 }
 

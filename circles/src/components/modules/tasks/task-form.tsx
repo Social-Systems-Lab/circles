@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react"; // Added useMemo
+import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8,73 +8,75 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-// Import Select components
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Circle, Media, Task, Location, GoalDisplay } from "@/models/models"; // Use Task types, Added GoalDisplay
+import { Circle, Media, Task, Location, GoalDisplay } from "@/models/models";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, MapPinIcon, MapPin } from "lucide-react";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useRouter, useSearchParams } from "next/navigation"; // Added useSearchParams
+import { useRouter, useSearchParams } from "next/navigation";
 import LocationPicker from "@/components/forms/location-picker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getFullLocationName } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-// Import Task Server Actions
-import { createTaskAction, updateTaskAction } from "@/app/circles/[handle]/tasks/actions"; // Updated actions
-// Import the correct goals action
-import { getGoalsAction } from "@/app/circles/[handle]/goals/actions";
+import { createTaskAction, updateTaskAction } from "@/app/circles/[handle]/tasks/actions";
+// Removed goals action import
 
 // Form schema for creating/editing a task
 const taskFormSchema = z.object({
-    // Renamed schema
-    title: z.string().min(1, { message: "Task title is required" }), // Updated message
+    title: z.string().min(1, { message: "Task title is required" }),
     description: z.string().min(1, { message: "Description is required" }),
     images: z.array(z.any()).optional(),
     location: z.any().optional(),
-    goalId: z.string().optional(), // Added goalId
+    goalId: z.string().optional().nullable(), // Allow null or undefined
 });
 
 type TaskFormValues = Omit<z.infer<typeof taskFormSchema>, "images" | "location"> & {
-    // Renamed type
     images?: (File | Media)[];
     location?: Location;
-    goalId?: string; // Added goalId
+    goalId?: string | null; // Allow null
 };
 
 interface TaskFormProps {
-    // Renamed interface
     circle: Circle;
-    task?: Task; // Renamed prop, updated type
+    task?: Task; // Use Task type here (from DB)
     circleHandle: string;
-    taskId?: string; // Renamed prop
+    taskId?: string;
+    goals: GoalDisplay[]; // Receive goals as prop
+    goalsModuleEnabled: boolean; // Receive flag as prop
 }
 
-export const TaskForm: React.FC<TaskFormProps> = ({ circle, task, circleHandle, taskId }) => {
-    // Renamed component, props
+export const TaskForm: React.FC<TaskFormProps> = ({
+    circle,
+    task,
+    circleHandle,
+    taskId,
+    goals, // Destructure goals prop
+    goalsModuleEnabled, // Destructure flag
+}) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [location, setLocation] = useState<Location | undefined>(task?.location);
     const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
-    const [goals, setGoals] = useState<GoalDisplay[]>([]); // State for goals
-    const [isLoadingGoals, setIsLoadingGoals] = useState(false); // State for loading goals
+    // Removed goals state and loading state
+    // const [goals, setGoals] = useState<GoalDisplay[]>([]);
+    // const [isLoadingGoals, setIsLoadingGoals] = useState(false);
     const { toast } = useToast();
     const router = useRouter();
-    const searchParams = useSearchParams(); // Get search params
+    const searchParams = useSearchParams();
     const isEditing = !!task;
-    const preselectedGoalId = searchParams.get("goalId"); // Get preselected goal ID
+    const preselectedGoalId = searchParams.get("goalId");
 
-    // Check if goals module is enabled
-    const goalsModuleEnabled = useMemo(() => circle.enabledModules?.includes("goals"), [circle.enabledModules]);
+    // Removed goalsModuleEnabled useMemo, using prop directly
 
     const form = useForm<TaskFormValues>({
-        // Updated type
-        resolver: zodResolver(taskFormSchema), // Renamed schema
+        resolver: zodResolver(taskFormSchema),
         defaultValues: {
             title: task?.title || "",
             description: task?.description || "",
             images: task?.images || [],
             location: task?.location,
-            goalId: task?.goalId || preselectedGoalId || undefined, // Set default goalId
+            // Ensure goalId is set correctly: task's goalId > preselected > null
+            goalId: task?.goalId || preselectedGoalId || null,
         },
     });
 
@@ -84,39 +86,13 @@ export const TaskForm: React.FC<TaskFormProps> = ({ circle, task, circleHandle, 
         }
     }, [task?.location]);
 
-    // Fetch goals if module is enabled
-    useEffect(() => {
-        const fetchGoals = async () => {
-            if (goalsModuleEnabled) {
-                setIsLoadingGoals(true);
-                try {
-                    // Use the correct action name here
-                    const result = await getGoalsAction(circleHandle);
-                    // The result structure is { goals: GoalDisplay[] } directly
-                    if (result.goals) {
-                        // Filter for 'open' goals only? Or all? Let's assume all for now.
-                        setGoals(result.goals);
-                    } else {
-                        console.error("Failed to fetch goals: No goals array in result");
-                        // Optionally show a toast error here
-                    }
-                } catch (error) {
-                    console.error("Error fetching goals:", error);
-                    // Optionally show a toast error here
-                } finally {
-                    setIsLoadingGoals(false);
-                }
-            }
-        };
-        fetchGoals();
-    }, [goalsModuleEnabled, circleHandle]);
+    // Removed useEffect for fetching goals
 
     const handleImageChange = (items: ImageItem[]) => {
         const formImages: (File | Media)[] = items
             .map((item) => {
                 if (item.file) return item.file;
                 if (item.existingMediaUrl) {
-                    // Use task prop
                     return task?.images?.find((img) => img.fileInfo.url === item.existingMediaUrl) || null;
                 }
                 return null;
@@ -126,9 +102,8 @@ export const TaskForm: React.FC<TaskFormProps> = ({ circle, task, circleHandle, 
     };
 
     const handleSubmit = async (values: TaskFormValues) => {
-        // Updated type
         setIsSubmitting(true);
-        console.log("[TaskForm] handleSubmit called. isEditing:", isEditing, "taskId:", taskId); // Updated log
+        console.log("[TaskForm] handleSubmit called. isEditing:", isEditing, "taskId:", taskId);
 
         const formData = new FormData();
         formData.append("title", values.title);
@@ -138,45 +113,49 @@ export const TaskForm: React.FC<TaskFormProps> = ({ circle, task, circleHandle, 
             formData.append("location", JSON.stringify(location));
         }
 
-        // Add goalId if present
-        if (values.goalId) {
+        // Add goalId if present and not null/empty/none
+        if (values.goalId && values.goalId !== "none") {
             formData.append("goalId", values.goalId);
+        } else {
+            // Explicitly handle unsetting the goal
+            formData.append("goalId", ""); // Send empty string to indicate removal
         }
 
         if (values.images) {
             values.images.forEach((imgOrFile) => {
                 if (imgOrFile instanceof File) {
                     formData.append("images", imgOrFile);
-                } else if (isEditing) {
+                } else if (isEditing && imgOrFile?.fileInfo?.url) {
+                    // Ensure it's a valid Media object before stringifying
                     formData.append("images", JSON.stringify(imgOrFile));
                 }
             });
         }
 
         try {
-            let result: { success: boolean; message?: string; taskId?: string }; // Renamed property
+            let result: { success: boolean; message?: string; taskId?: string };
             if (isEditing && taskId) {
-                // Use taskId
-                console.log(`[TaskForm] Calling updateTaskAction with taskId: ${taskId}`); // Updated log
-                result = await updateTaskAction(circleHandle, taskId, formData); // Renamed action, use taskId
+                console.log(`[TaskForm] Calling updateTaskAction with taskId: ${taskId}`);
+                result = await updateTaskAction(circleHandle, taskId, formData);
             } else {
-                console.log("[TaskForm] Calling createTaskAction"); // Updated log
-                result = await createTaskAction(circleHandle, formData); // Renamed action
+                console.log("[TaskForm] Calling createTaskAction");
+                result = await createTaskAction(circleHandle, formData);
             }
 
             if (result.success) {
                 toast({
-                    title: isEditing ? "Task Updated" : "Task Submitted", // Updated text
+                    title: isEditing ? "Task Updated" : "Task Submitted",
                     description:
-                        result.message || (isEditing ? "Task successfully updated." : "Task successfully submitted."), // Updated text
+                        result.message || (isEditing ? "Task successfully updated." : "Task successfully submitted."),
                 });
 
-                const navigateToId = isEditing ? taskId : result.taskId; // Use taskId, result.taskId
+                const navigateToId = isEditing ? taskId : result.taskId;
                 if (navigateToId) {
-                    router.push(`/circles/${circleHandle}/tasks/${navigateToId}`); // Updated path
+                    router.push(`/circles/${circleHandle}/tasks/${navigateToId}`);
                 } else {
-                    router.push(`/circles/${circleHandle}/tasks`); // Updated path
+                    router.push(`/circles/${circleHandle}/tasks`);
                 }
+                router.refresh(); // Refresh data on the target page
             } else {
                 toast({
                     title: "Submission Error",
@@ -197,15 +176,11 @@ export const TaskForm: React.FC<TaskFormProps> = ({ circle, task, circleHandle, 
 
     return (
         <div className="formatted mx-auto max-w-[700px]">
-            {/* TODO: Add stage timeline if needed for editing */}
-            {/* {isEditing && task.stage && ( <TaskStageTimeline currentStage={task.stage} /> )} */}
-
             <Card className="mb-6">
                 <CardHeader>
-                    <CardTitle>{isEditing ? "Edit Task" : "Create New Task"}</CardTitle> {/* Updated text */}
+                    <CardTitle>{isEditing ? "Edit Task" : "Create New Task"}</CardTitle>
                     <CardDescription>
                         {isEditing ? "Update the task details below." : "Describe the task you want to create."}{" "}
-                        {/* Updated text */}
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -216,16 +191,15 @@ export const TaskForm: React.FC<TaskFormProps> = ({ circle, task, circleHandle, 
                                 name="title"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Task Title</FormLabel> {/* Updated text */}
+                                        <FormLabel>Task Title</FormLabel>
                                         <FormControl>
                                             <Input
-                                                placeholder="e.g., Organize team meeting" // Updated placeholder
+                                                placeholder="e.g., Organize team meeting"
                                                 {...field}
                                                 disabled={isSubmitting}
                                             />
                                         </FormControl>
-                                        <FormDescription>A short, clear title for the task.</FormDescription>{" "}
-                                        {/* Updated text */}
+                                        <FormDescription>A short, clear title for the task.</FormDescription>
                                         <FormMessage />
                                     </FormItem>
                                 )}
@@ -240,24 +214,25 @@ export const TaskForm: React.FC<TaskFormProps> = ({ circle, task, circleHandle, 
                                         <FormItem>
                                             <FormLabel>Assign to Goal (Optional)</FormLabel>
                                             <Select
+                                                // Use field.onChange provided by RHF
                                                 onValueChange={field.onChange}
-                                                defaultValue={field.value}
-                                                disabled={isSubmitting || isLoadingGoals || goals.length === 0}
+                                                // Use field.value which comes from defaultValues
+                                                value={field.value ?? "none"} // Handle null/undefined, default to "none" visually
+                                                disabled={isSubmitting || goals.length === 0}
                                             >
                                                 <FormControl>
                                                     <SelectTrigger>
                                                         <SelectValue
                                                             placeholder={
-                                                                isLoadingGoals
-                                                                    ? "Loading goals..."
-                                                                    : goals.length === 0
-                                                                      ? "No goals available"
-                                                                      : "Select a goal"
+                                                                goals.length === 0
+                                                                    ? "No goals available"
+                                                                    : "Select a goal"
                                                             }
                                                         />
                                                     </SelectTrigger>
                                                 </FormControl>
                                                 <SelectContent>
+                                                    {/* Add explicit "None" option */}
                                                     <SelectItem value="none">-- None --</SelectItem>
                                                     {goals.map((goal) => (
                                                         <SelectItem key={goal._id} value={goal._id}>
@@ -283,14 +258,13 @@ export const TaskForm: React.FC<TaskFormProps> = ({ circle, task, circleHandle, 
                                         <FormLabel>Description</FormLabel>
                                         <FormControl>
                                             <Textarea
-                                                placeholder="Provide details about the task, goals, and any relevant context..." // Updated placeholder
+                                                placeholder="Provide details about the task, goals, and any relevant context..."
                                                 className="min-h-[200px]"
                                                 {...field}
                                                 disabled={isSubmitting}
                                             />
                                         </FormControl>
-                                        <FormDescription>Explain the task in detail.</FormDescription>{" "}
-                                        {/* Updated text */}
+                                        <FormDescription>Explain the task in detail.</FormDescription>
                                         <FormMessage />
                                     </FormItem>
                                 )}
@@ -304,15 +278,14 @@ export const TaskForm: React.FC<TaskFormProps> = ({ circle, task, circleHandle, 
                                         <FormLabel>Attach Images (Optional)</FormLabel>
                                         <FormControl>
                                             <MultiImageUploader
-                                                initialImages={task?.images || []} // Use task prop
+                                                initialImages={task?.images || []}
                                                 onChange={handleImageChange}
                                                 maxImages={5}
                                                 previewMode="compact"
                                             />
                                         </FormControl>
                                         <FormDescription>
-                                            Upload images related to the task (max 5 files, 5MB each).{" "}
-                                            {/* Updated text */}
+                                            Upload images related to the task (max 5 files, 5MB each).
                                         </FormDescription>
                                         <FormMessage />
                                     </FormItem>
@@ -357,7 +330,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({ circle, task, circleHandle, 
                                         variant="outline"
                                         onClick={() =>
                                             router.push(
-                                                `/circles/${circle.handle}/tasks${task?._id ? `/${task._id}` : ""}`, // Updated path, use task prop
+                                                `/circles/${circle.handle}/tasks${task?._id ? `/${task._id}` : ""}`,
                                             )
                                         }
                                         disabled={isSubmitting}
@@ -366,7 +339,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({ circle, task, circleHandle, 
                                     </Button>
                                     <Button type="submit" disabled={isSubmitting}>
                                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                        {isEditing ? "Update Task" : "Create Task"} {/* Updated text */}
+                                        {isEditing ? "Update Task" : "Create Task"}
                                     </Button>
                                 </div>
                             </div>
@@ -384,7 +357,9 @@ export const TaskForm: React.FC<TaskFormProps> = ({ circle, task, circleHandle, 
                         value={location!}
                         onChange={(newLocation) => {
                             setLocation(newLocation);
-                            form.setValue("location", newLocation, { shouldValidate: true });
+                            form.setValue("location", newLocation, {
+                                shouldValidate: true,
+                            });
                         }}
                     />
                     <div className="mt-4 flex justify-end">

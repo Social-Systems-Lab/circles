@@ -82,6 +82,7 @@ interface TasksListProps {
     };
     circle: Circle;
     permissions: TaskPermissions;
+    hideRank?: boolean;
 }
 
 const SortIcon = ({ sortDir }: { sortDir: string | boolean }) => {
@@ -139,7 +140,7 @@ const getStageInfo = (stage: TaskStage) => {
     }
 };
 
-const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions }) => {
+const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, hideRank }) => {
     // Renamed component, props
     const { tasks, hasUserRanked, totalRankers, unrankedCount, userRankBecameStaleAt } = tasksData;
     const data = React.useMemo(() => tasks, [tasks]);
@@ -409,8 +410,8 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
             sorting,
             columnFilters,
             columnVisibility: {
-                rank: true,
-                userRank: hasUserRanked,
+                rank: !hideRank,
+                userRank: hasUserRanked && !hideRank,
                 title: true,
                 stage: true,
                 assignee: !isCompact,
@@ -483,7 +484,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
             <div className="flex flex-1 flex-row justify-center">
                 <div className="mb-4 ml-2 mr-2 mt-4 flex max-w-[1100px] flex-1 flex-col">
                     {/* --- START: Rank Stats and Nudge Boxes --- */}
-                    {hasUserRanked && (
+                    {hasUserRanked && !hideRank && (
                         <div className="mb-3 rounded border bg-blue-50 p-3 text-sm text-blue-800 shadow-sm">
                             <p className="flex items-center">
                                 <PiUsersThree className="mr-2 h-5 w-5 flex-shrink-0" />
@@ -498,7 +499,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                     )}
 
                     {/* Show nudge only if user has ranked */}
-                    {hasUserRanked && unrankedCount > 0 && (
+                    {hasUserRanked && unrankedCount > 0 && !hideRank && (
                         <div
                             className="mb-4 cursor-pointer rounded border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800 shadow-sm transition-colors hover:bg-yellow-100"
                             onClick={() => setShowRankModal(true)} // Open rank modal on click
@@ -526,7 +527,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                     )}
 
                     {/* Show success message only if user has ranked and count is 0 */}
-                    {hasUserRanked && unrankedCount === 0 && (
+                    {hasUserRanked && unrankedCount === 0 && !hideRank && (
                         <div className="mb-4 rounded border border-green-400 bg-green-50 p-3 text-sm text-green-800 shadow-sm">
                             <p className="flex items-center">
                                 <CheckCircle2 className="mr-2 h-5 w-5 flex-shrink-0 text-green-600" />
@@ -553,7 +554,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions })
                             </Button>
                         )}
                         {/* Add Rank Button */}
-                        {isAuthorized(user, circle, features.tasks.rank) && (
+                        {isAuthorized(user, circle, features.tasks.rank) && !hideRank && (
                             <Button onClick={() => setShowRankModal(true)}>
                                 <PiRanking className="mr-2 h-4 w-4" /> Rank
                             </Button>
