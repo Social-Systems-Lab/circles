@@ -45,7 +45,8 @@ export default async function GoalsModule({ circle }: PageProps) {
     const canReviewGoal = await isAuthorized(userDid, circleId, features.goals.review);
     const canResolveGoal = await isAuthorized(userDid, circleId, features.goals.resolve);
     const canCommentOnGoal = await isAuthorized(userDid, circleId, features.goals.comment);
-    const canCreateGoal = await isAuthorized(userDid, circleId, features.goals.create); // Fetch create permission
+    const canCreateGoal = await isAuthorized(userDid, circleId, features.goals.create);
+    const canCreateTask = await isAuthorized(userDid, circleId, features.tasks.create);
 
     // --- Optional Filtering (Keep or Remove based on requirements) ---
     // Filter goals based on permissions before passing to the list component
@@ -71,6 +72,7 @@ export default async function GoalsModule({ circle }: PageProps) {
         canReview: canReviewGoal,
         canResolve: canResolveGoal,
         canComment: canCommentOnGoal,
+        canCreateTask: canCreateTask,
     };
 
     return (

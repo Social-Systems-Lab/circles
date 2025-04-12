@@ -472,6 +472,7 @@ export type GoalPermissions = {
     canReview: boolean;
     canResolve: boolean;
     canComment: boolean;
+    canCreateTask: boolean;
 };
 
 export type SortingOptions = "similarity" | "near" | "pop" | "new" | "top" | "custom";
@@ -961,6 +962,7 @@ export const taskSchema = z.object({
     location: locationSchema.optional(),
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments
     images: z.array(mediaSchema).optional(), // Optional images/media attached to the task
+    goalId: z.string().optional(), // Optional link to a goal
 });
 
 export type Task = z.infer<typeof taskSchema>;
@@ -971,6 +973,7 @@ export interface TaskDisplay extends Task {
     assignee?: Circle; // Assignee's details (optional)
     circle?: Circle; // Circle details
     rank?: number; // Aggregated task rank
+    goal?: GoalDisplay; // Associated goal details
 }
 
 // Goal stages

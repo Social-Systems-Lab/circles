@@ -25,6 +25,7 @@ export const SAFE_TASK_PROJECTION = {
     location: 1,
     commentPostId: 1,
     images: 1,
+    goal: 1,
 } as const;
 
 /**

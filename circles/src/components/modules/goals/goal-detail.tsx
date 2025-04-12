@@ -1,7 +1,15 @@
 "use client";
 
-import React, { useState, useTransition, useEffect } from "react";
-import { Circle, GoalDisplay, GoalStage, MemberDisplay, GoalPermissions } from "@/models/models"; // Updated types
+import React, { useState, useTransition, useEffect, useMemo } from "react"; // Added useMemo
+import {
+    Circle,
+    GoalDisplay,
+    GoalStage,
+    MemberDisplay,
+    GoalPermissions,
+    TaskDisplay,
+    TaskPermissions,
+} from "@/models/models"; // Added TaskDisplay, TaskPermissions
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
@@ -19,11 +27,14 @@ import {
     Edit,
     CalendarIcon,
 } from "lucide-react"; // Added CalendarIcon
-import { formatDistanceToNow, format } from "date-fns"; // Added format
+import { formatDistanceToNow, format } from "date-fns";
 import { UserPicture } from "../members/user-picture";
 import { cn, getFullLocationName } from "@/lib/utils";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
+// Import auth and constants for permission checks
+import { isAuthorized } from "@/lib/auth/client-auth";
+import { features } from "@/lib/data/constants";
 import {
     Dialog,
     DialogClose,
@@ -55,6 +66,10 @@ import {
     deleteGoalAction, // Renamed action
     getMembersAction, // Keep this action (assuming it's generic)
 } from "@/app/circles/[handle]/goals/actions"; // Updated path
+// Import the correct task action to get all tasks
+import { getTasksAction } from "@/app/circles/[handle]/tasks/actions";
+// Import Task List component
+import TasksList from "@/components/modules/tasks/tasks-list"; // Assuming this path
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import Link from "next/link";
@@ -93,12 +108,76 @@ const GoalDetail: React.FC<GoalDetailProps> = ({ goal, circle, permissions, curr
     const [isPending, startTransition] = useTransition();
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [stageChangeDialogOpen, setStageChangeDialogOpen] = useState(false);
-    const [targetStage, setTargetStage] = useState<GoalStage | null>(null); // Updated type
+    const [targetStage, setTargetStage] = useState<GoalStage | null>(null);
     const [members, setMembers] = useState<MemberDisplay[]>([]);
+    const [associatedTasks, setAssociatedTasks] = useState<TaskDisplay[]>([]); // State for tasks
+    const [isLoadingTasks, setIsLoadingTasks] = useState(false); // Loading state for tasks
+    const [canViewTasks, setCanViewTasks] = useState(false); // Permission state
+    const [taskPermissions, setTaskPermissions] = useState<TaskPermissions | null>(null); // Full task permissions
     const { toast } = useToast();
     const router = useRouter();
 
-    const isAuthor = currentUserDid === goal.createdBy; // Use goal prop
+    const isAuthor = currentUserDid === goal.createdBy;
+
+    // Check if tasks module is enabled
+    const tasksModuleEnabled = useMemo(() => circle.enabledModules?.includes("tasks"), [circle.enabledModules]);
+
+    // Fetch associated tasks and check permissions
+    useEffect(() => {
+        const fetchTasksAndPermissions = async () => {
+            if (!tasksModuleEnabled || !user?.did) {
+                setCanViewTasks(false);
+                return;
+            }
+
+            setIsLoadingTasks(true);
+            try {
+                // Check view permission first
+                const hasViewPermission = await isAuthorized(user.did, circle._id!, features.tasks.view);
+                setCanViewTasks(hasViewPermission);
+
+                if (hasViewPermission) {
+                    // Fetch ALL tasks for the circle
+                    const allTasksResult = await getTasksAction(circle.handle!);
+                    // Filter tasks associated with this goal client-side
+                    const goalTasks = allTasksResult.tasks.filter((task) => task.goalId === goal._id);
+                    setAssociatedTasks(goalTasks);
+
+                    // Fetch detailed task permissions (needed for TasksList actions)
+                    const canModerateTasks = await isAuthorized(user.did, circle._id!, features.tasks.moderate);
+                    const canReviewTasks = await isAuthorized(user.did, circle._id!, features.tasks.review);
+                    const canAssignTasks = await isAuthorized(user.did, circle._id!, features.tasks.assign);
+                    const canResolveTasks = await isAuthorized(user.did, circle._id!, features.tasks.resolve);
+                    const canCommentTasks = await isAuthorized(user.did, circle._id!, features.tasks.comment); // Assuming comment feature exists
+                    setTaskPermissions({
+                        canModerate: canModerateTasks,
+                        canReview: canReviewTasks,
+                        canAssign: canAssignTasks,
+                        canResolve: canResolveTasks,
+                        canComment: canCommentTasks,
+                    });
+                } else {
+                    setAssociatedTasks([]);
+                    setTaskPermissions(null);
+                }
+            } catch (error) {
+                console.error("Error fetching tasks or permissions:", error);
+                setCanViewTasks(false);
+                setAssociatedTasks([]);
+                setTaskPermissions(null);
+                // Optionally show toast error
+            } finally {
+                setIsLoadingTasks(false);
+            }
+        };
+
+        fetchTasksAndPermissions();
+    }, [tasksModuleEnabled, user?.did, circle.handle, circle._id, goal._id]);
+
+    // Filter for active tasks
+    const activeTasks = useMemo(() => {
+        return associatedTasks.filter((task) => task.stage === "open" || task.stage === "inProgress");
+    }, [associatedTasks]);
 
     const handleEdit = () => {
         router.push(`/circles/${circle.handle}/goals/${goal._id}/edit`); // Updated path
@@ -321,6 +400,35 @@ const GoalDetail: React.FC<GoalDetailProps> = ({ goal, circle, permissions, curr
                     <div className="mt-6 border-t pt-6">
                         <h3 className="mb-4 text-lg font-semibold">Actions</h3>
                         {renderGoalActions()} {/* Renamed function */}
+                    </div>
+                )}
+
+                {/* Associated Tasks Section */}
+                {tasksModuleEnabled && canViewTasks && (
+                    <div className="mt-8 border-t pt-6">
+                        <h3 className="mb-4 text-lg font-semibold">Associated Tasks</h3>
+                        {isLoadingTasks ? (
+                            <div className="flex justify-center">
+                                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                            </div>
+                        ) : activeTasks.length > 0 && taskPermissions ? (
+                            <TasksList
+                                // Construct the tasksData prop
+                                tasksData={{
+                                    tasks: activeTasks,
+                                    // Provide default/dummy ranking info as it's not the focus here
+                                    hasUserRanked: false,
+                                    totalRankers: 0,
+                                    unrankedCount: 0,
+                                    userRankBecameStaleAt: null,
+                                }}
+                                circle={circle}
+                                permissions={taskPermissions} // Pass fetched task permissions
+                                // Removed currentUserDid and layout props
+                            />
+                        ) : (
+                            <div className="text-center text-gray-500">No active tasks associated with this goal.</div>
+                        )}
                     </div>
                 )}
 

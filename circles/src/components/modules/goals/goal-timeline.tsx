@@ -4,13 +4,14 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { GoalDisplay, Circle, GoalPermissions, GoalStage } from "@/models/models";
 import { getGoalsAction } from "@/app/circles/[handle]/goals/actions";
-import { Loader2, CalendarIcon, Plus, Clock } from "lucide-react";
+import { Loader2, CalendarIcon, Plus, Clock, Target } from "lucide-react"; // Added Target icon
 import { Card, CardContent } from "@/components/ui/card";
 import Image from "next/image";
 import Link from "next/link";
-import { format } from "date-fns"; // Removed 'parse' as it's no longer needed for month sorting
+import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
+import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime"; // Correct import path
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -26,16 +27,27 @@ interface GoalTimelineProps {
 interface GoalCardProps {
     goal: GoalDisplay;
     circleHandle: string;
+    canCreateTask: boolean; // New prop
+    tasksModuleEnabled: boolean; // New prop
+    router: AppRouterInstance; // New prop
 }
 
-const GoalCard: React.FC<GoalCardProps> = ({ goal, circleHandle }) => {
+const GoalCard: React.FC<GoalCardProps> = ({ goal, circleHandle, canCreateTask, tasksModuleEnabled, router }) => {
     const isReview = goal.stage === "review";
 
+    const handleCreateTaskClick = (e: React.MouseEvent) => {
+        e.preventDefault(); // Prevent link navigation
+        e.stopPropagation(); // Prevent card click event bubbling
+        router.push(`/circles/${circleHandle}/tasks/create?goalId=${goal._id}`);
+    };
+
     return (
-        <Link key={goal._id} href={`/circles/${circleHandle}/goals/${goal._id}`} className="group block">
+        <Link key={goal._id} href={`/circles/${circleHandle}/goals/${goal._id}`} className="group relative block">
+            {" "}
+            {/* Added relative positioning */}
             <Card
                 className={cn(
-                    "h-full transition-shadow duration-200 ease-in-out hover:shadow-lg",
+                    "h-full transition-shadow duration-200 ease-in-out group-hover:shadow-lg", // Use group-hover for card shadow
                     isReview && "border-dashed border-yellow-400 bg-yellow-50/30 opacity-75",
                 )}
             >
@@ -75,6 +87,17 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, circleHandle }) => {
                         )}
                     </div>
                 </CardContent>
+                {/* Create Task Button - Appears on Hover */}
+                {tasksModuleEnabled && canCreateTask && (
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        className="absolute bottom-3 right-3 z-10 scale-90 opacity-0 transition-all duration-200 ease-in-out group-hover:scale-100 group-hover:opacity-100"
+                        onClick={handleCreateTaskClick}
+                    >
+                        <Plus className="mr-1.5 h-4 w-4" /> Create Task
+                    </Button>
+                )}
             </Card>
         </Link>
     );
@@ -143,27 +166,8 @@ const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initia
     const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
     const router = useRouter();
 
-    useEffect(() => {
-        if (!initialGoalsData) {
-            const fetchGoals = async () => {
-                setIsLoading(true);
-                setError(null);
-                try {
-                    const result = await getGoalsAction(circle.handle!);
-                    setAllGoals(result.goals);
-                } catch (err) {
-                    console.error("Error fetching goals for timeline:", err);
-                    setError("Failed to load goals.");
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-            fetchGoals();
-        } else {
-            setAllGoals(initialGoalsData.goals);
-            setIsLoading(false);
-        }
-    }, [circle.handle, initialGoalsData]);
+    // Check if tasks module is enabled
+    const tasksModuleEnabled = useMemo(() => circle.enabledModules?.includes("tasks"), [circle.enabledModules]);
 
     const displayedGoals = useMemo(() => {
         if (activeTab === "active") {
@@ -238,6 +242,9 @@ const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initia
                                                         key={goal._id}
                                                         goal={goal}
                                                         circleHandle={circle.handle!}
+                                                        canCreateTask={permissions.canCreateTask}
+                                                        tasksModuleEnabled={tasksModuleEnabled ?? false} // Ensure boolean
+                                                        router={router}
                                                     />
                                                 ))}
                                             </div>
@@ -252,7 +259,14 @@ const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initia
                     <div key={`${tab}-no_date_section`} className="relative mb-8 mt-8">
                         <div className="ml-12 grid grid-cols-1 gap-4 md:grid-cols-2">
                             {undatedGoals.map((goal) => (
-                                <GoalCard key={goal._id} goal={goal} circleHandle={circle.handle!} />
+                                <GoalCard
+                                    key={goal._id}
+                                    goal={goal}
+                                    circleHandle={circle.handle!}
+                                    canCreateTask={permissions.canCreateTask}
+                                    tasksModuleEnabled={tasksModuleEnabled ?? false} // Ensure boolean
+                                    router={router}
+                                />
                             ))}
                         </div>
                     </div>

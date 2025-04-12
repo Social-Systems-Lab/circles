@@ -225,6 +225,7 @@ const createTaskSchema = z.object({
             { message: "Invalid location data format" },
         ),
     userGroups: z.array(z.string()).optional(), // Optional: User groups for visibility
+    goalId: z.string().optional(), // Optional: Goal ID for task association
 });
 
 const updateTaskSchema = createTaskSchema.extend({
@@ -259,6 +260,7 @@ export async function createTaskAction( // Renamed function
             images: formData.getAll("images"),
             location: formData.get("location") ?? undefined,
             userGroups: formData.getAll("userGroups"), // Assuming multi-select or similar
+            goalId: formData.get("goalId") ?? undefined, // Optional goal ID
         });
 
         if (!validatedData.success) {
@@ -341,6 +343,7 @@ export async function createTaskAction( // Renamed function
             createdAt: new Date(),
             stage: initialStage,
             userGroups: data.userGroups || [], // Use provided groups or default to empty
+            goalId: data.goalId, // Optional goal ID
         };
 
         // Create task in DB (Data function)
@@ -398,6 +401,7 @@ export async function updateTaskAction( // Renamed function
             images: formData.getAll("images"),
             location: formData.get("location") ?? undefined,
             userGroups: formData.getAll("userGroups"),
+            goalId: formData.get("goalId") ?? undefined, // Optional goal ID
         });
 
         if (!validatedData.success) {
@@ -430,11 +434,7 @@ export async function updateTaskAction( // Renamed function
 
         // Check permissions: Author or Moderator? (Placeholder feature handle)
         const isAuthor = userDid === task.createdBy; // Renamed variable
-        const canModerate = await isAuthorized(
-            userDid,
-            circle._id as string,
-            features.tasks?.moderate || "tasks_moderate", // Updated feature handle
-        ); // Placeholder
+        const canModerate = await isAuthorized(userDid, circle._id as string, features.tasks?.moderate); // Placeholder
 
         // Define who can edit and when
         // Example: Author can edit in 'review', Moderator can edit anytime before 'resolved'
@@ -509,6 +509,7 @@ export async function updateTaskAction( // Renamed function
             location: locationData,
             userGroups: data.userGroups || task.userGroups, // Keep existing if not provided, Renamed variable
             updatedAt: new Date(),
+            goalId: data.goalId,
         };
 
         // Update task in DB (Data function)

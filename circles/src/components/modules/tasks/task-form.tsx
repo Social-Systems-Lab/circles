@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react"; // Added useMemo
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8,18 +8,22 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Circle, Media, Task, Location } from "@/models/models"; // Use Task types
+// Import Select components
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Circle, Media, Task, Location, GoalDisplay } from "@/models/models"; // Use Task types, Added GoalDisplay
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, MapPinIcon, MapPin } from "lucide-react";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation"; // Added useSearchParams
 import LocationPicker from "@/components/forms/location-picker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getFullLocationName } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 // Import Task Server Actions
 import { createTaskAction, updateTaskAction } from "@/app/circles/[handle]/tasks/actions"; // Updated actions
+// Import the correct goals action
+import { getGoalsAction } from "@/app/circles/[handle]/goals/actions";
 
 // Form schema for creating/editing a task
 const taskFormSchema = z.object({
@@ -28,12 +32,14 @@ const taskFormSchema = z.object({
     description: z.string().min(1, { message: "Description is required" }),
     images: z.array(z.any()).optional(),
     location: z.any().optional(),
+    goalId: z.string().optional(), // Added goalId
 });
 
 type TaskFormValues = Omit<z.infer<typeof taskFormSchema>, "images" | "location"> & {
     // Renamed type
     images?: (File | Media)[];
     location?: Location;
+    goalId?: string; // Added goalId
 };
 
 interface TaskFormProps {
@@ -47,29 +53,63 @@ interface TaskFormProps {
 export const TaskForm: React.FC<TaskFormProps> = ({ circle, task, circleHandle, taskId }) => {
     // Renamed component, props
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [location, setLocation] = useState<Location | undefined>(task?.location); // Use task prop
+    const [location, setLocation] = useState<Location | undefined>(task?.location);
     const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
+    const [goals, setGoals] = useState<GoalDisplay[]>([]); // State for goals
+    const [isLoadingGoals, setIsLoadingGoals] = useState(false); // State for loading goals
     const { toast } = useToast();
     const router = useRouter();
-    const isEditing = !!task; // Use task prop
+    const searchParams = useSearchParams(); // Get search params
+    const isEditing = !!task;
+    const preselectedGoalId = searchParams.get("goalId"); // Get preselected goal ID
+
+    // Check if goals module is enabled
+    const goalsModuleEnabled = useMemo(() => circle.enabledModules?.includes("goals"), [circle.enabledModules]);
 
     const form = useForm<TaskFormValues>({
         // Updated type
         resolver: zodResolver(taskFormSchema), // Renamed schema
         defaultValues: {
-            title: task?.title || "", // Use task prop
-            description: task?.description || "", // Use task prop
-            images: task?.images || [], // Use task prop
-            location: task?.location, // Use task prop
+            title: task?.title || "",
+            description: task?.description || "",
+            images: task?.images || [],
+            location: task?.location,
+            goalId: task?.goalId || preselectedGoalId || undefined, // Set default goalId
         },
     });
 
     useEffect(() => {
         if (task?.location) {
-            // Use task prop
-            setLocation(task.location); // Use task prop
+            setLocation(task.location);
         }
-    }, [task?.location]); // Use task prop
+    }, [task?.location]);
+
+    // Fetch goals if module is enabled
+    useEffect(() => {
+        const fetchGoals = async () => {
+            if (goalsModuleEnabled) {
+                setIsLoadingGoals(true);
+                try {
+                    // Use the correct action name here
+                    const result = await getGoalsAction(circleHandle);
+                    // The result structure is { goals: GoalDisplay[] } directly
+                    if (result.goals) {
+                        // Filter for 'open' goals only? Or all? Let's assume all for now.
+                        setGoals(result.goals);
+                    } else {
+                        console.error("Failed to fetch goals: No goals array in result");
+                        // Optionally show a toast error here
+                    }
+                } catch (error) {
+                    console.error("Error fetching goals:", error);
+                    // Optionally show a toast error here
+                } finally {
+                    setIsLoadingGoals(false);
+                }
+            }
+        };
+        fetchGoals();
+    }, [goalsModuleEnabled, circleHandle]);
 
     const handleImageChange = (items: ImageItem[]) => {
         const formImages: (File | Media)[] = items
@@ -96,6 +136,11 @@ export const TaskForm: React.FC<TaskFormProps> = ({ circle, task, circleHandle, 
 
         if (location) {
             formData.append("location", JSON.stringify(location));
+        }
+
+        // Add goalId if present
+        if (values.goalId) {
+            formData.append("goalId", values.goalId);
         }
 
         if (values.images) {
@@ -129,10 +174,8 @@ export const TaskForm: React.FC<TaskFormProps> = ({ circle, task, circleHandle, 
                 const navigateToId = isEditing ? taskId : result.taskId; // Use taskId, result.taskId
                 if (navigateToId) {
                     router.push(`/circles/${circleHandle}/tasks/${navigateToId}`); // Updated path
-                    router.refresh();
                 } else {
                     router.push(`/circles/${circleHandle}/tasks`); // Updated path
-                    router.refresh();
                 }
             } else {
                 toast({
@@ -140,6 +183,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({ circle, task, circleHandle, 
                     description: result.message || "An error occurred. Please try again.",
                     variant: "destructive",
                 });
+                setIsSubmitting(false);
             }
         } catch (error) {
             toast({
@@ -147,7 +191,6 @@ export const TaskForm: React.FC<TaskFormProps> = ({ circle, task, circleHandle, 
                 description: "An unexpected error occurred. Please try again.",
                 variant: "destructive",
             });
-        } finally {
             setIsSubmitting(false);
         }
     };
@@ -187,6 +230,50 @@ export const TaskForm: React.FC<TaskFormProps> = ({ circle, task, circleHandle, 
                                     </FormItem>
                                 )}
                             />
+
+                            {/* Goal Selection Dropdown - Conditionally Rendered */}
+                            {goalsModuleEnabled && (
+                                <FormField
+                                    control={form.control}
+                                    name="goalId"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Assign to Goal (Optional)</FormLabel>
+                                            <Select
+                                                onValueChange={field.onChange}
+                                                defaultValue={field.value}
+                                                disabled={isSubmitting || isLoadingGoals || goals.length === 0}
+                                            >
+                                                <FormControl>
+                                                    <SelectTrigger>
+                                                        <SelectValue
+                                                            placeholder={
+                                                                isLoadingGoals
+                                                                    ? "Loading goals..."
+                                                                    : goals.length === 0
+                                                                      ? "No goals available"
+                                                                      : "Select a goal"
+                                                            }
+                                                        />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value="none">-- None --</SelectItem>
+                                                    {goals.map((goal) => (
+                                                        <SelectItem key={goal._id} value={goal._id}>
+                                                            {goal.title}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <FormDescription>
+                                                Link this task to an existing goal in this circle.
+                                            </FormDescription>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            )}
 
                             <FormField
                                 control={form.control}

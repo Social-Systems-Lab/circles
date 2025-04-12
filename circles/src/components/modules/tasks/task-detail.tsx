@@ -6,7 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
-import { Loader2, MoreHorizontal, Pencil, Trash2, MapPin, User, CheckCircle, Clock, Play, Edit } from "lucide-react";
+import {
+    Loader2,
+    MoreHorizontal,
+    Pencil,
+    Trash2,
+    MapPin,
+    User,
+    CheckCircle,
+    Clock,
+    Play,
+    Edit,
+    Target,
+} from "lucide-react"; // Added Target icon
 import { formatDistanceToNow } from "date-fns";
 import { UserPicture } from "../members/user-picture";
 import { cn, getFullLocationName } from "@/lib/utils";
@@ -345,6 +357,19 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                             <div className="flex items-center">
                                 <MapPin className="mr-1 h-3 w-3" />
                                 {getFullLocationName(task.location)} {/* Use task prop */}
+                            </div>
+                        )}
+                        {/* Display Linked Goal */}
+                        {circle.enabledModules?.includes("goals") && task.goal && (
+                            <div className="flex items-center">
+                                <Target className="mr-1 h-3 w-3 text-purple-600" /> {/* Added Goal Icon */}
+                                <Link
+                                    href={`/circles/${circle.handle}/goals/${task.goal._id}`}
+                                    className="hover:underline"
+                                    onClick={(e: React.MouseEvent) => e.stopPropagation()} // Prevent card click if nested
+                                >
+                                    Goal: {task.goal.title}
+                                </Link>
                             </div>
                         )}
                     </div>
