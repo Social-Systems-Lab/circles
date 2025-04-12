@@ -39,6 +39,7 @@ body {
     overflow-x: hidden;
 }
 
+.heading,
 .header {
     font-family: var(--font-wix-display);
 }

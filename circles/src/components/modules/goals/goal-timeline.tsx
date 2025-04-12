@@ -220,9 +220,9 @@ const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initia
                                                     </div>
                                                 )}
                                                 <div className="min-w-0 flex-grow">
-                                                    <h4 className="mb-1 truncate font-semibold group-hover:text-primary">
+                                                    <div className="header mb-1 truncate text-[24px] font-semibold group-hover:text-primary">
                                                         {goal.title}
-                                                    </h4>
+                                                    </div>
                                                     <p className="mb-2 line-clamp-3 text-sm text-muted-foreground">
                                                         {goal.description}
                                                     </p>
