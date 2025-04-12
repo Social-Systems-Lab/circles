@@ -991,7 +991,7 @@ export const goalSchema = z.object({
     title: z.string(),
     description: z.string(),
     stage: goalStageSchema.default("review"), // Use goalStageSchema
-    targetDate: z.date().optional(), // Added targetDate
+    targetDate: z.date().nullable().optional(), // Added targetDate
     userGroups: z.array(z.string()).default([]), // User groups that can see this goal
     location: locationSchema.optional(),
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments

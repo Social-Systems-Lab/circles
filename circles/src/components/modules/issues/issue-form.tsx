@@ -120,10 +120,8 @@ export const IssueForm: React.FC<IssueFormProps> = ({ circle, issue, circleHandl
                 const navigateToId = isEditing ? issueId : result.issueId;
                 if (navigateToId) {
                     router.push(`/circles/${circleHandle}/issues/${navigateToId}`);
-                    router.refresh();
                 } else {
                     router.push(`/circles/${circleHandle}/issues`);
-                    router.refresh();
                 }
             } else {
                 toast({
@@ -131,6 +129,7 @@ export const IssueForm: React.FC<IssueFormProps> = ({ circle, issue, circleHandl
                     description: result.message || "An error occurred. Please try again.",
                     variant: "destructive",
                 });
+                setIsSubmitting(false);
             }
         } catch (error) {
             toast({
@@ -138,7 +137,6 @@ export const IssueForm: React.FC<IssueFormProps> = ({ circle, issue, circleHandl
                 description: "An unexpected error occurred. Please try again.",
                 variant: "destructive",
             });
-        } finally {
             setIsSubmitting(false);
         }
     };

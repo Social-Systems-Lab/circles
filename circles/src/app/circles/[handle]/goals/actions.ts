@@ -310,24 +310,24 @@ export async function createGoalAction( // Renamed function
  * @param formData The form data containing updated details
  * @returns Success status and message
  */
-export async function updateGoalAction( // Renamed function
+export async function updateGoalAction(
     circleHandle: string,
-    goalId: string, // Renamed param
+    goalId: string,
     formData: FormData,
 ): Promise<{ success: boolean; message?: string }> {
     try {
         // Validate form data
         const validatedData = updateGoalSchema.safeParse({
-            // Renamed schema
             title: formData.get("title"),
             description: formData.get("description"),
             images: formData.getAll("images"),
             location: formData.get("location") ?? undefined,
             userGroups: formData.getAll("userGroups"),
-            targetDate: formData.get("targetDate") ?? undefined, // Get targetDate string
+            targetDate: formData.get("targetDate") ?? undefined, // Keep as string or undefined initially
         });
 
         if (!validatedData.success) {
+            // ... error handling ...
             console.error("Validation Error:", validatedData.error.errors);
             return {
                 success: false,
@@ -336,91 +336,73 @@ export async function updateGoalAction( // Renamed function
         }
         const data = validatedData.data;
 
-        // Get the current user
+        // ... user, circle, goal fetching and permission checks ...
         const userDid = await getAuthenticatedUserDid();
-        if (!userDid) {
-            return { success: false, message: "User not authenticated" };
-        }
-
-        // Get the circle
+        if (!userDid) return { success: false, message: "User not authenticated" };
         const circle = await getCircleByHandle(circleHandle);
-        if (!circle) {
-            return { success: false, message: "Circle not found" };
-        }
-
-        // Get the existing goal (Data function)
-        const goal = await getGoalById(goalId, userDid); // Renamed function call, param, variable
-        if (!goal) {
-            // Renamed variable
-            return { success: false, message: "Goal not found" }; // Updated message
-        }
-
-        // Check permissions: Author or Moderator? (Placeholder feature handle)
-        const isAuthor = userDid === goal.createdBy; // Renamed variable
+        if (!circle) return { success: false, message: "Circle not found" };
+        const goal = await getGoalById(goalId, userDid);
+        if (!goal) return { success: false, message: "Goal not found" };
+        const isAuthor = userDid === goal.createdBy;
         const canModerate = await isAuthorized(
             userDid,
             circle._id as string,
-            features.goals?.moderate || "goals_moderate", // Updated feature handle
-        ); // Placeholder
-
-        // Define who can edit and when
-        // Example: Author can edit in 'review', Moderator can edit anytime before 'resolved'
-        const canEdit = (isAuthor && goal.stage === "review") || (canModerate && goal.stage !== "resolved"); // Renamed variable
-
-        if (!canEdit) {
-            return { success: false, message: "Not authorized to update this goal at its current stage" }; // Updated message
-        }
+            features.goals?.moderate || "goals_moderate",
+        );
+        const canEdit = (isAuthor && goal.stage === "review") || (canModerate && goal.stage !== "resolved");
+        if (!canEdit) return { success: false, message: "Not authorized to update this goal at its current stage" };
 
         // --- Parse Location ---
-        let locationData: Goal["location"] = undefined; // Updated type
+        let locationData: Goal["location"] = undefined;
         if (data.location) {
-            locationData = JSON.parse(data.location); // Validated by Zod
-        } else {
-            locationData = undefined; // Explicitly remove if empty
+            try {
+                locationData = JSON.parse(data.location);
+            } catch {
+                /* ignore error, already validated */
+            }
         }
 
         // --- Parse Target Date ---
-        let targetDateData: Date | undefined | null = undefined; // Allow null to unset
-        if (data.targetDate) {
+        let targetDateForUpdate: Date | null | undefined = undefined; // Use null to signal unset
+        if (data.targetDate && data.targetDate.trim() !== "") {
+            // Check if string is not empty
             try {
-                targetDateData = new Date(data.targetDate); // Convert ISO string to Date
+                targetDateForUpdate = new Date(data.targetDate);
+                // Optional: Add validation if the date is invalid
+                if (isNaN(targetDateForUpdate.getTime())) {
+                    console.warn("Invalid target date string received:", data.targetDate);
+                    targetDateForUpdate = undefined; // Treat invalid date as not provided
+                }
             } catch (e) {
-                console.error("Invalid target date format received:", data.targetDate);
-                // Optionally return error or ignore invalid date
+                console.error("Error parsing target date:", data.targetDate, e);
+                targetDateForUpdate = undefined; // Treat parse error as not provided
             }
         } else {
-            // If targetDate is not provided in form, explicitly set to null to unset in DB
-            targetDateData = null;
+            // If date string is empty or not provided, signal to unset the date
+            targetDateForUpdate = null;
         }
 
-        // --- Handle Image Updates (Similar logic to proposal update) ---
-        const existingImages = goal.images || []; // Renamed variable
+        // --- Handle Image Updates ---
+        const existingImages = goal.images || [];
         const submittedImageEntries = data.images || [];
-        // Use isFile helper to identify file objects
         const newImageFiles = submittedImageEntries.filter(isFile);
         const existingMediaJsonStrings = submittedImageEntries.filter(
             (entry): entry is string => typeof entry === "string",
         );
-
         let parsedExistingMedia: Media[] = [];
         try {
-            parsedExistingMedia = existingMediaJsonStrings.map((jsonString) => JSON.parse(jsonString) as Media);
+            parsedExistingMedia = existingMediaJsonStrings.map((jsonString) => JSON.parse(jsonString));
         } catch (e) {
             return { success: false, message: "Failed to process existing image data." };
         }
-
-        const remainingExistingMediaUrls = parsedExistingMedia
-            .map((media) => media?.fileInfo?.url)
-            .filter((url): url is string => typeof url === "string");
-
+        const remainingExistingMediaUrls = new Set(parsedExistingMedia.map((media) => media?.fileInfo?.url));
         const imagesToDelete = existingImages.filter(
-            (existing: Media) => !remainingExistingMediaUrls.includes(existing.fileInfo.url), // Added type Media
+            (existing) => !remainingExistingMediaUrls.has(existing.fileInfo.url),
         );
-
         let newlyUploadedImages: Media[] = [];
         if (newImageFiles.length > 0) {
             const uploadPromises = newImageFiles.map(async (file) => {
-                const fileNamePrefix = `goal_image_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`; // Updated prefix
+                const fileNamePrefix = `goal_image_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
                 return await saveFile(file, fileNamePrefix, circle._id as string, true);
             });
             const uploadResults = await Promise.all(uploadPromises);
@@ -432,49 +414,47 @@ export async function updateGoalAction( // Renamed function
                 }),
             );
         }
-
         if (imagesToDelete.length > 0) {
-            const deletePromises = imagesToDelete.map((img: Media) => deleteFile(img.fileInfo.url)); // Added type Media
-            await Promise.all(deletePromises).catch((err) => console.error("Failed to delete some images:", err)); // Log errors but continue
+            const deletePromises = imagesToDelete.map((img) => deleteFile(img.fileInfo.url));
+            await Promise.all(deletePromises).catch((err) => console.error("Failed to delete some images:", err));
         }
-
         const finalImages: Media[] = [...parsedExistingMedia, ...newlyUploadedImages];
         // --- End Image Updates ---
 
-        // Prepare update data
-        const updateData: Partial<Goal> = {
-            // Updated type
+        // --- Prepare FLAT update data object ---
+        const flatUpdateData: Partial<Goal> = {
             title: data.title,
             description: data.description,
             images: finalImages,
             location: locationData,
-            targetDate: targetDateData === null ? undefined : targetDateData, // Pass Date or undefined
-            userGroups: data.userGroups || goal.userGroups, // Keep existing if not provided, Renamed variable
-            updatedAt: new Date(),
+            // Pass Date object, null (to unset), or undefined (to leave unchanged)
+            targetDate: targetDateForUpdate,
+            userGroups: data.userGroups || goal.userGroups,
+            // DO NOT include updatedAt here, updateGoal handles it
         };
 
-        // Prepare $unset operation if targetDateData is null
-        const updateOperation: any = { $set: updateData };
-        if (targetDateData === null) {
-            updateOperation.$unset = { targetDate: "" };
-        }
+        // Remove undefined fields so they don't overwrite existing data unnecessarily
+        Object.keys(flatUpdateData).forEach(
+            (key) =>
+                flatUpdateData[key as keyof typeof flatUpdateData] === undefined &&
+                delete flatUpdateData[key as keyof typeof flatUpdateData],
+        );
 
-        // Update goal in DB (Data function)
-        // Pass the combined operation to updateGoal
-        const success = await updateGoal(goalId, updateOperation); // Pass the full operation
+        // --- Update goal in DB (Pass the FLAT object) ---
+        const success = await updateGoal(goalId, flatUpdateData);
 
         if (!success) {
-            return { success: false, message: "Failed to update goal" }; // Updated message
+            return { success: false, message: "Failed to update goal" };
         }
 
         // Revalidate relevant pages
-        revalidatePath(`/circles/${circleHandle}/goals`); // Updated path
-        revalidatePath(`/circles/${circleHandle}/goals/${goalId}`); // Updated path, param
+        revalidatePath(`/circles/${circleHandle}/goals`);
+        revalidatePath(`/circles/${circleHandle}/goals/${goalId}`);
 
-        return { success: true, message: "Goal updated successfully" }; // Updated message
+        return { success: true, message: "Goal updated successfully" };
     } catch (error) {
-        console.error("Error updating goal:", error); // Updated message
-        return { success: false, message: "Failed to update goal" }; // Updated message
+        console.error("Error updating goal:", error);
+        return { success: false, message: "Failed to update goal" };
     }
 }
 

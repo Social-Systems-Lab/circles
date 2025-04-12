@@ -152,10 +152,8 @@ export const GoalForm: React.FC<GoalFormProps> = ({ circle, goal, circleHandle, 
                 const navigateToId = isEditing ? goalId : result.goalId; // Use goalId, result.goalId
                 if (navigateToId) {
                     router.push(`/circles/${circleHandle}/goals/${navigateToId}`); // Updated path
-                    router.refresh();
                 } else {
                     router.push(`/circles/${circleHandle}/goals`); // Updated path
-                    router.refresh();
                 }
             } else {
                 toast({
@@ -163,6 +161,7 @@ export const GoalForm: React.FC<GoalFormProps> = ({ circle, goal, circleHandle, 
                     description: result.message || "An error occurred. Please try again.",
                     variant: "destructive",
                 });
+                setIsSubmitting(false);
             }
         } catch (error) {
             toast({
@@ -170,7 +169,6 @@ export const GoalForm: React.FC<GoalFormProps> = ({ circle, goal, circleHandle, 
                 description: "An unexpected error occurred. Please try again.",
                 variant: "destructive",
             });
-        } finally {
             setIsSubmitting(false);
         }
     };

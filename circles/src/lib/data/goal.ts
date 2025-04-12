@@ -291,23 +291,49 @@ export const createGoal = async (goalData: Omit<Goal, "_id">): Promise<Goal> => 
  * @returns Boolean indicating success (true) or failure (false)
  */
 export const updateGoal = async (goalId: string, updates: Partial<Goal>): Promise<boolean> => {
-    // Renamed function, params, type
     try {
         if (!ObjectId.isValid(goalId)) {
-            // Renamed param
-            console.error("Invalid goalId provided for update:", goalId); // Updated error message and param
+            console.error("Invalid goalId provided for update:", goalId);
             return false;
         }
-        // Ensure updatedAt is always set on update
-        const updateData = { ...updates, updatedAt: new Date() };
-        // Remove _id from updates if present, as it cannot be changed
-        delete updateData._id;
 
-        const result = await Goals.updateOne({ _id: new ObjectId(goalId) }, { $set: updateData }); // Changed Issues to Goals, param issueId to goalId
-        return result.matchedCount > 0;
+        // Start with the provided updates and add updatedAt
+        const updateData: any = { ...updates, updatedAt: new Date() };
+        delete updateData._id; // Cannot update _id
+
+        const unsetFields: any = {};
+
+        // Check if targetDate is explicitly being set to null (signal for removal)
+        // Use 'null' as the signal from the action, not undefined.
+        if (updateData.hasOwnProperty("targetDate") && updateData.targetDate === null) {
+            delete updateData.targetDate; // Remove from $set data
+            unsetFields.targetDate = ""; // Add to $unset
+        }
+
+        // Construct the final MongoDB update operation object
+        const updateOp: any = {};
+        // Only add $set if there are fields remaining in updateData
+        if (Object.keys(updateData).length > 0) {
+            updateOp.$set = updateData;
+        }
+        // Only add $unset if there are fields to unset
+        if (Object.keys(unsetFields).length > 0) {
+            updateOp.$unset = unsetFields;
+        }
+
+        // Only perform update if there's something to $set or $unset
+        if (Object.keys(updateOp).length === 0) {
+            console.log("No update operation needed for goal:", goalId);
+            return true; // No changes needed, consider it success
+        }
+
+        // Execute the update operation
+        const result = await Goals.updateOne({ _id: new ObjectId(goalId) }, updateOp);
+
+        // Success if matched or modified
+        return result.matchedCount > 0 || result.modifiedCount > 0;
     } catch (error) {
-        console.error(`Error updating goal (${goalId}):`, error); // Updated error message and param
-        // Do not re-throw, return false to indicate failure
+        console.error(`Error updating goal (${goalId}):`, error);
         return false;
     }
 };

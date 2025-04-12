@@ -403,7 +403,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 {/* Search Bar & Filters (Only in Explore Mode) */}
                 {viewMode === "explore" && !(sidePanelContentVisible === "toolbox" && isMobile) && (
                     <div className="relative">
-                        <div className="absolute flex items-center gap-2 rounded-full bg-white p-1 px-2 shadow-md">
+                        <div className="absolute flex items-center gap-2 rounded-full bg-white p-1 px-3 shadow-md">
                             {/* Search Input */}
                             <div className="flex items-center">
                                 <input

@@ -461,7 +461,7 @@ export const modules: ModuleInfo[] = [
         name: "Goals",
         handle: "goals",
         description:
-            "Define, track, and celebrate the specific, measurable achievements your circle or project is working towards. Goals provide clear targets with defined victory conditions, helping to focus effort and measure progress. Link tasks directly to goals to see how day-to-day activities contribute to the bigger picture.",
+            "Create, track, and celebrate the specific, measurable achievements your circle or project is working towards. Goals provide clear targets with defined victory conditions, helping to focus effort and measure progress. Link tasks directly to goals to see how day-to-day activities contribute to the bigger picture.",
     },
     {
         name: "Tasks",
