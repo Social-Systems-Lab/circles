@@ -4,16 +4,19 @@
 import React, { useState, useEffect } from "react";
 import { GoalDisplay, Circle, GoalPermissions } from "@/models/models";
 import { getGoalsAction } from "@/app/circles/[handle]/goals/actions";
-import { Loader2, CalendarIcon } from "lucide-react"; // Added CalendarIcon
+import { Loader2, CalendarIcon, Plus } from "lucide-react"; // Added CalendarIcon, Plus
 import { Card, CardContent } from "@/components/ui/card"; // Use Card components
 import Image from "next/image";
 import Link from "next/link";
-import { format } from "date-fns"; // For formatting dates
+import { format, parse } from "date-fns"; // For formatting dates, Added parse
+import { Button } from "@/components/ui/button"; // Import Button
+import { useRouter } from "next/navigation"; // Import useRouter
 
 interface GoalTimelineProps {
     circle: Circle;
-    permissions: GoalPermissions; // Keep permissions for potential future use (e.g., actions on cards)
-    initialGoalsData?: { goals: GoalDisplay[] }; // Allow passing initial data
+    permissions: GoalPermissions;
+    initialGoalsData?: { goals: GoalDisplay[] };
+    canCreateGoal: boolean; // Add permission prop
 }
 
 // Helper function to group goals by year/month or into a 'no_date' category
@@ -50,10 +53,12 @@ const groupGoalsByDate = (goals: GoalDisplay[]) => {
     return grouped;
 };
 
-const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initialGoalsData }) => {
+const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initialGoalsData, canCreateGoal }) => {
+    // Added canCreateGoal prop
     const [goals, setGoals] = useState<GoalDisplay[]>(initialGoalsData?.goals || []); // Keep all initial goals
     const [isLoading, setIsLoading] = useState(!initialGoalsData);
     const [error, setError] = useState<string | null>(null);
+    const router = useRouter(); // Initialize router
 
     useEffect(() => {
         // Fetch data only if initial data wasn't provided
@@ -105,8 +110,23 @@ const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initia
         return <div className="p-8 text-center text-muted-foreground">No goals found.</div>;
     }
 
+    // Function to handle navigation to create page with optional date
+    const handleCreateGoal = (targetDate?: string) => {
+        const url = `/circles/${circle.handle}/goals/create${targetDate ? `?targetDate=${targetDate}` : ""}`;
+        router.push(url);
+    };
+
     return (
         <div className="flex w-full flex-col">
+            {/* Top Create Button */}
+            {canCreateGoal && (
+                <div className="mb-4 flex justify-end px-4">
+                    <Button onClick={() => handleCreateGoal()}>
+                        <Plus className="mr-2 h-4 w-4" /> Create Goal
+                    </Button>
+                </div>
+            )}
+
             <div className="relative py-6 pl-12 pr-4">
                 {" "}
                 {/* Increased left padding for timeline labels */}
@@ -114,14 +134,27 @@ const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initia
                 <div className="absolute bottom-0 left-6 top-0 w-0.5 bg-gray-300"></div>
                 {/* Render Dated Goals */}
                 {sortedYears.map((year, yearIndex) => (
-                    <div key={year} className="relative mb-8">
-                        {/* Year Marker */}
+                    <div key={year} className="group/year relative mb-8">
+                        {" "}
+                        {/* Added group/year */}
+                        {/* Year Marker & Add Button */}
                         <div className="absolute left-0 top-0 z-10 -ml-[2px] mt-1 flex items-center">
                             {/* Larger dot for year */}
                             <div className="h-4 w-4 rounded-full bg-primary ring-4 ring-background"></div>
                             <span className="ml-4 text-sm font-semibold text-primary">{year}</span>
+                            {/* Add button on hover for Year */}
+                            {canCreateGoal && (
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="ml-2 h-6 w-6 opacity-0 transition-opacity group-hover/year:opacity-100"
+                                    onClick={() => handleCreateGoal(`${year}-01-01`)} // Target Jan 1st of the year
+                                    aria-label={`Create goal for ${year}`}
+                                >
+                                    <Plus className="h-4 w-4" />
+                                </Button>
+                            )}
                         </div>
-
                         <div className="ml-12 mt-10">
                             {" "}
                             {/* Indent content further */}
@@ -129,11 +162,30 @@ const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initia
                                 <div key={month} className="relative mb-6 pl-8">
                                     {" "}
                                     {/* Increased padding for month label */}
-                                    {/* Month Marker & Line Segment */}
-                                    <div className="absolute -left-[22px] top-1 h-full">
+                                    {/* Month Marker & Line Segment & Add Button */}
+                                    <div className="group/month absolute -left-[22px] top-1 h-full">
+                                        {" "}
+                                        {/* Added group/month */}
                                         {/* Smaller dot for month */}
                                         <div className="absolute left-[1px] top-0 h-2.5 w-2.5 rounded-full bg-secondary ring-2 ring-background"></div>
                                         {/* TODO: Add ellipsis/dashed line for gaps if needed */}
+                                        {/* Add button on hover for Month */}
+                                        {canCreateGoal && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="absolute -left-7 -top-1 h-6 w-6 opacity-0 transition-opacity group-hover/month:opacity-100"
+                                                onClick={() => {
+                                                    // Construct YYYY-MM-DD for the 1st of the month
+                                                    const monthDate = parse(`${month} ${year}`, "MMM yyyy", new Date());
+                                                    const targetDateStr = format(monthDate, "yyyy-MM-dd");
+                                                    handleCreateGoal(targetDateStr);
+                                                }}
+                                                aria-label={`Create goal for ${month} ${year}`}
+                                            >
+                                                <Plus className="h-4 w-4" />
+                                            </Button>
+                                        )}
                                     </div>
                                     {/* Position month label further left */}
                                     <span className="absolute -left-8 top-0 text-xs font-medium text-muted-foreground">
@@ -189,12 +241,26 @@ const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initia
                 {/* Render Undated Goals Section */}
                 {noDateGoals &&
                     Object.entries(noDateGoals).map(([title, undatedMonthGoals]) => (
-                        <div key="no_date_section" className="relative mb-8">
-                            {/* Section Title (No timeline markers) */}
-                            <div className="mb-4 ml-12">
+                        <div key="no_date_section" className="group/undated relative mb-8">
+                            {" "}
+                            {/* Added group/undated */}
+                            {/* Section Title & Add Button */}
+                            <div className="mb-4 ml-12 flex items-center">
                                 {" "}
-                                {/* Aligned with content */}
+                                {/* Aligned with content & flex */}
                                 <h3 className="text-lg font-semibold text-muted-foreground">{title}</h3>
+                                {/* Add button on hover for Undated */}
+                                {canCreateGoal && (
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="ml-2 h-6 w-6 opacity-0 transition-opacity group-hover/undated:opacity-100"
+                                        onClick={() => handleCreateGoal()} // No date pre-fill
+                                        aria-label={`Create goal without target date`}
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                    </Button>
+                                )}
                             </div>
                             {/* Goal Cards for undated goals */}
                             <div className="ml-12 grid grid-cols-1 gap-4 md:grid-cols-2">
