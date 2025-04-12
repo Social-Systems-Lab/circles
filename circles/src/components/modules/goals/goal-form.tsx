@@ -13,10 +13,10 @@ import { useToast } from "@/components/ui/use-toast";
 import { Loader2, MapPinIcon, MapPin, CalendarIcon } from "lucide-react"; // Added CalendarIcon
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useRouter } from "next/navigation";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"; // Added Popover
-import { Calendar } from "@/components/ui/calendar"; // Added Calendar
-import { format } from "date-fns"; // Added date-fns format
+import { useRouter, useSearchParams } from "next/navigation"; // Import useSearchParams
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format, parseISO, isValid } from "date-fns"; // Added parseISO, isValid
 import { cn } from "@/lib/utils"; // Added cn for conditional classes
 import LocationPicker from "@/components/forms/location-picker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -57,17 +57,28 @@ export const GoalForm: React.FC<GoalFormProps> = ({ circle, goal, circleHandle, 
     const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
     const { toast } = useToast();
     const router = useRouter();
-    const isEditing = !!goal; // Use goal prop
+    const searchParams = useSearchParams(); // Get search params
+    const isEditing = !!goal;
+
+    // Get targetDate from query params for pre-filling
+    const targetDateFromQuery = searchParams.get("targetDate");
+    let prefilledDate: Date | undefined = undefined;
+    if (!isEditing && targetDateFromQuery) {
+        const parsedDate = parseISO(targetDateFromQuery);
+        if (isValid(parsedDate)) {
+            prefilledDate = parsedDate;
+        }
+    }
 
     const form = useForm<GoalFormValues>({
-        // Updated type
-        resolver: zodResolver(goalFormSchema), // Renamed schema
+        resolver: zodResolver(goalFormSchema),
         defaultValues: {
             title: goal?.title || "", // Use goal prop
-            description: goal?.description || "", // Use goal prop
-            images: goal?.images || [], // Use goal prop
-            location: goal?.location, // Use goal prop
-            targetDate: goal?.targetDate ? new Date(goal.targetDate) : undefined, // Added targetDate default
+            description: goal?.description || "",
+            images: goal?.images || [],
+            location: goal?.location,
+            // Use prefilledDate if creating, otherwise use goal's date or undefined
+            targetDate: prefilledDate ?? (goal?.targetDate ? new Date(goal.targetDate) : undefined),
         },
     });
 
