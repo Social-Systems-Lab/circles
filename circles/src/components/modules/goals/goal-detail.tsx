@@ -353,16 +353,6 @@ const GoalDetail: React.FC<GoalDetailProps> = ({
                             permissions={taskPermissions!} // Pass task permissions prop
                             hideRank={true}
                         />
-                        {/* Optionally add a link/button to create a new task for this goal */}
-                        {/* {canCreateTask && (
-                            <div className="mt-4">
-                                <Button variant="outline" size="sm" asChild>
-                                    <Link href={`/circles/${circle.handle}/tasks/create?goalId=${goal._id}`}>
-                                        Create Task
-                                    </Link>
-                                </Button>
-                            </div>
-                        )} */}
                     </div>
                 )}
 

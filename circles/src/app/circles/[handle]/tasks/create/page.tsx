@@ -48,7 +48,7 @@ export default async function CreateTaskPage(props: PageProps) {
 
     // --- Fetch Goals Server-Side ---
     let goals: GoalDisplay[] = [];
-    const goalsModuleEnabled = circle.enabledModules?.includes("goals");
+    const goalsModuleEnabled = circle.enabledModules?.includes("goals") ?? false;
     if (goalsModuleEnabled) {
         try {
             const result = await getGoalsAction(circleHandle);
