@@ -117,190 +117,196 @@ const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initia
     };
 
     return (
-        <div className="flex w-full flex-col">
-            {/* Top Create Button */}
-            {canCreateGoal && (
-                <div className="mb-4 flex justify-end px-4">
-                    <Button onClick={() => handleCreateGoal()}>
-                        <Plus className="mr-2 h-4 w-4" /> Create Goal
-                    </Button>
-                </div>
-            )}
-
-            <div className="relative py-6 pl-12 pr-4">
-                {" "}
-                {/* Increased left padding for timeline labels */}
-                {/* Vertical Line */}
-                <div className="absolute bottom-0 left-6 top-0 w-0.5 bg-gray-300"></div>
-                {/* Render Dated Goals */}
-                {sortedYears.map((year, yearIndex) => (
-                    <div key={year} className="group/year relative mb-8">
-                        {" "}
-                        {/* Added group/year */}
-                        {/* Year Marker & Add Button */}
-                        <div className="absolute left-0 top-0 z-10 -ml-[2px] mt-1 flex items-center">
-                            {/* Larger dot for year */}
-                            <div className="h-4 w-4 rounded-full bg-primary ring-4 ring-background"></div>
-                            <span className="ml-4 text-sm font-semibold text-primary">{year}</span>
-                            {/* Add button on hover for Year */}
-                            {canCreateGoal && (
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="ml-2 h-6 w-6 opacity-0 transition-opacity group-hover/year:opacity-100"
-                                    onClick={() => handleCreateGoal(`${year}-01-01`)} // Target Jan 1st of the year
-                                    aria-label={`Create goal for ${year}`}
-                                >
-                                    <Plus className="h-4 w-4" />
-                                </Button>
-                            )}
-                        </div>
-                        <div className="ml-12 mt-10">
-                            {" "}
-                            {/* Indent content further */}
-                            {Object.entries(groupedGoals[year]).map(([month, monthGoals], monthIndex) => (
-                                <div key={month} className="relative mb-6 pl-8">
-                                    {" "}
-                                    {/* Increased padding for month label */}
-                                    {/* Month Marker & Line Segment & Add Button */}
-                                    <div className="group/month absolute -left-[22px] top-1 h-full">
-                                        {" "}
-                                        {/* Added group/month */}
-                                        {/* Smaller dot for month */}
-                                        <div className="absolute left-[1px] top-0 h-2.5 w-2.5 rounded-full bg-secondary ring-2 ring-background"></div>
-                                        {/* TODO: Add ellipsis/dashed line for gaps if needed */}
-                                        {/* Add button on hover for Month */}
-                                        {canCreateGoal && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="absolute -left-7 -top-1 h-6 w-6 opacity-0 transition-opacity group-hover/month:opacity-100"
-                                                onClick={() => {
-                                                    // Construct YYYY-MM-DD for the 1st of the month
-                                                    const monthDate = parse(`${month} ${year}`, "MMM yyyy", new Date());
-                                                    const targetDateStr = format(monthDate, "yyyy-MM-dd");
-                                                    handleCreateGoal(targetDateStr);
-                                                }}
-                                                aria-label={`Create goal for ${month} ${year}`}
-                                            >
-                                                <Plus className="h-4 w-4" />
-                                            </Button>
-                                        )}
-                                    </div>
-                                    {/* Position month label further left */}
-                                    <span className="absolute -left-8 top-0 text-xs font-medium text-muted-foreground">
-                                        {month}
-                                    </span>
-                                    {/* Goal Cards for the month */}
-                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                        {monthGoals.map((goal) => (
-                                            <Link
-                                                key={goal._id}
-                                                href={`/circles/${circle.handle}/goals/${goal._id}`}
-                                                className="group block"
-                                            >
-                                                <Card className="h-full transition-shadow duration-200 ease-in-out hover:shadow-lg">
-                                                    <CardContent className="flex items-start space-x-4 p-4">
-                                                        {goal.images && goal.images.length > 0 && (
-                                                            <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded border">
-                                                                <Image
-                                                                    src={goal.images[0].fileInfo.url}
-                                                                    alt={goal.title}
-                                                                    layout="fill"
-                                                                    objectFit="cover"
-                                                                    className="transition-transform duration-200 ease-in-out group-hover:scale-105"
-                                                                />
-                                                            </div>
-                                                        )}
-                                                        <div className="min-w-0 flex-grow">
-                                                            {" "}
-                                                            {/* Ensure text wraps */}
-                                                            <h4 className="mb-1 truncate font-semibold group-hover:text-primary">
-                                                                {goal.title}
-                                                            </h4>
-                                                            <p className="mb-2 line-clamp-3 text-sm text-muted-foreground">
-                                                                {goal.description}
-                                                            </p>
-                                                            {/* Display Target Date */}
-                                                            <div className="flex items-center text-xs text-muted-foreground">
-                                                                <CalendarIcon className="mr-1 h-3 w-3" />
-                                                                Target:{" "}
-                                                                {format(new Date(goal.targetDate!), "MMM d, yyyy")}
-                                                            </div>
-                                                        </div>
-                                                    </CardContent>
-                                                </Card>
-                                            </Link>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+        <div className="flex w-full flex-col items-center">
+            <div className="max-w-[1100px]">
+                {/* Top Create Button */}
+                {canCreateGoal && (
+                    <div className="mb-4 flex justify-end px-4 pt-4">
+                        <Button onClick={() => handleCreateGoal()}>
+                            <Plus className="mr-2 h-4 w-4" /> Create Goal
+                        </Button>
                     </div>
-                ))}
-                {/* Render Undated Goals Section */}
-                {noDateGoals &&
-                    Object.entries(noDateGoals).map(([title, undatedMonthGoals]) => (
-                        <div key="no_date_section" className="group/undated relative mb-8">
+                )}
+
+                <div className="relative py-6 pl-12 pr-4">
+                    {" "}
+                    {/* Increased left padding for timeline labels */}
+                    {/* Vertical Line */}
+                    <div className="absolute bottom-0 left-6 top-0 w-0.5 bg-gray-300"></div>
+                    {/* Render Dated Goals */}
+                    {sortedYears.map((year, yearIndex) => (
+                        <div key={year} className="group/year relative mb-8">
                             {" "}
-                            {/* Added group/undated */}
-                            {/* Section Title & Add Button */}
-                            <div className="mb-4 ml-12 flex items-center">
-                                {" "}
-                                {/* Aligned with content & flex */}
-                                <h3 className="text-lg font-semibold text-muted-foreground">{title}</h3>
-                                {/* Add button on hover for Undated */}
+                            {/* Added group/year */}
+                            {/* Year Marker & Add Button */}
+                            <div className="absolute left-0 top-0 z-10 -ml-[2px] mt-1 flex items-center">
+                                {/* Larger dot for year */}
+                                <div className="h-4 w-4 rounded-full bg-primary ring-4 ring-background"></div>
+                                <span className="ml-4 text-sm font-semibold text-primary">{year}</span>
+                                {/* Add button on hover for Year */}
                                 {canCreateGoal && (
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="ml-2 h-6 w-6 opacity-0 transition-opacity group-hover/undated:opacity-100"
-                                        onClick={() => handleCreateGoal()} // No date pre-fill
-                                        aria-label={`Create goal without target date`}
+                                        className="ml-2 h-6 w-6 opacity-0 transition-opacity group-hover/year:opacity-100"
+                                        onClick={() => handleCreateGoal(`${year}-01-01`)} // Target Jan 1st of the year
+                                        aria-label={`Create goal for ${year}`}
                                     >
                                         <Plus className="h-4 w-4" />
                                     </Button>
                                 )}
                             </div>
-                            {/* Goal Cards for undated goals */}
-                            <div className="ml-12 grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <div className="ml-12 mt-10">
                                 {" "}
-                                {/* Aligned with content */}
-                                {undatedMonthGoals.map((goal) => (
-                                    <Link
-                                        key={goal._id}
-                                        href={`/circles/${circle.handle}/goals/${goal._id}`}
-                                        className="group block"
-                                    >
-                                        <Card className="h-full transition-shadow duration-200 ease-in-out hover:shadow-lg">
-                                            <CardContent className="flex items-start space-x-4 p-4">
-                                                {goal.images && goal.images.length > 0 && (
-                                                    <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded border">
-                                                        <Image
-                                                            src={goal.images[0].fileInfo.url}
-                                                            alt={goal.title}
-                                                            layout="fill"
-                                                            objectFit="cover"
-                                                            className="transition-transform duration-200 ease-in-out group-hover:scale-105"
-                                                        />
-                                                    </div>
-                                                )}
-                                                <div className="min-w-0 flex-grow">
-                                                    <div className="header mb-1 truncate text-[24px] font-semibold group-hover:text-primary">
-                                                        {goal.title}
-                                                    </div>
-                                                    <p className="mb-2 line-clamp-3 text-sm text-muted-foreground">
-                                                        {goal.description}
-                                                    </p>
-                                                    {/* No target date to display */}
-                                                </div>
-                                            </CardContent>
-                                        </Card>
-                                    </Link>
+                                {/* Indent content further */}
+                                {Object.entries(groupedGoals[year]).map(([month, monthGoals], monthIndex) => (
+                                    <div key={month} className="relative mb-6 pl-8">
+                                        {" "}
+                                        {/* Increased padding for month label */}
+                                        {/* Month Marker & Line Segment & Add Button */}
+                                        <div className="group/month absolute -left-[22px] top-1 h-full">
+                                            {" "}
+                                            {/* Added group/month */}
+                                            {/* Smaller dot for month */}
+                                            <div className="absolute left-[1px] top-0 h-2.5 w-2.5 rounded-full bg-secondary ring-2 ring-background"></div>
+                                            {/* TODO: Add ellipsis/dashed line for gaps if needed */}
+                                            {/* Add button on hover for Month */}
+                                            {canCreateGoal && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="absolute -left-7 -top-1 h-6 w-6 opacity-0 transition-opacity group-hover/month:opacity-100"
+                                                    onClick={() => {
+                                                        // Construct YYYY-MM-DD for the 1st of the month
+                                                        const monthDate = parse(
+                                                            `${month} ${year}`,
+                                                            "MMM yyyy",
+                                                            new Date(),
+                                                        );
+                                                        const targetDateStr = format(monthDate, "yyyy-MM-dd");
+                                                        handleCreateGoal(targetDateStr);
+                                                    }}
+                                                    aria-label={`Create goal for ${month} ${year}`}
+                                                >
+                                                    <Plus className="h-4 w-4" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                        {/* Position month label further left */}
+                                        <span className="absolute -left-8 top-0 text-xs font-medium text-muted-foreground">
+                                            {month}
+                                        </span>
+                                        {/* Goal Cards for the month */}
+                                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                            {monthGoals.map((goal) => (
+                                                <Link
+                                                    key={goal._id}
+                                                    href={`/circles/${circle.handle}/goals/${goal._id}`}
+                                                    className="group block"
+                                                >
+                                                    <Card className="h-full transition-shadow duration-200 ease-in-out hover:shadow-lg">
+                                                        <CardContent className="flex items-start space-x-4 p-4">
+                                                            {goal.images && goal.images.length > 0 && (
+                                                                <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded border">
+                                                                    <Image
+                                                                        src={goal.images[0].fileInfo.url}
+                                                                        alt={goal.title}
+                                                                        layout="fill"
+                                                                        objectFit="cover"
+                                                                        className="transition-transform duration-200 ease-in-out group-hover:scale-105"
+                                                                    />
+                                                                </div>
+                                                            )}
+                                                            <div className="min-w-0 flex-grow">
+                                                                {" "}
+                                                                {/* Ensure text wraps */}
+                                                                <h4 className="mb-1 truncate font-semibold group-hover:text-primary">
+                                                                    {goal.title}
+                                                                </h4>
+                                                                <p className="mb-2 line-clamp-3 text-sm text-muted-foreground">
+                                                                    {goal.description}
+                                                                </p>
+                                                                {/* Display Target Date */}
+                                                                <div className="flex items-center text-xs text-muted-foreground">
+                                                                    <CalendarIcon className="mr-1 h-3 w-3" />
+                                                                    Target:{" "}
+                                                                    {format(new Date(goal.targetDate!), "MMM d, yyyy")}
+                                                                </div>
+                                                            </div>
+                                                        </CardContent>
+                                                    </Card>
+                                                </Link>
+                                            ))}
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
                         </div>
                     ))}
+                    {/* Render Undated Goals Section */}
+                    {noDateGoals &&
+                        Object.entries(noDateGoals).map(([title, undatedMonthGoals]) => (
+                            <div key="no_date_section" className="group/undated relative mb-8">
+                                {" "}
+                                {/* Added group/undated */}
+                                {/* Section Title & Add Button */}
+                                <div className="mb-4 ml-12 flex items-center">
+                                    {" "}
+                                    {/* Aligned with content & flex */}
+                                    <h3 className="text-lg font-semibold text-muted-foreground">{title}</h3>
+                                    {/* Add button on hover for Undated */}
+                                    {canCreateGoal && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="ml-2 h-6 w-6 opacity-0 transition-opacity group-hover/undated:opacity-100"
+                                            onClick={() => handleCreateGoal()} // No date pre-fill
+                                            aria-label={`Create goal without target date`}
+                                        >
+                                            <Plus className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                </div>
+                                {/* Goal Cards for undated goals */}
+                                <div className="ml-12 grid grid-cols-1 gap-4 md:grid-cols-2">
+                                    {" "}
+                                    {/* Aligned with content */}
+                                    {undatedMonthGoals.map((goal) => (
+                                        <Link
+                                            key={goal._id}
+                                            href={`/circles/${circle.handle}/goals/${goal._id}`}
+                                            className="group block"
+                                        >
+                                            <Card className="h-full transition-shadow duration-200 ease-in-out hover:shadow-lg">
+                                                <CardContent className="flex items-start space-x-4 p-4">
+                                                    {goal.images && goal.images.length > 0 && (
+                                                        <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded border">
+                                                            <Image
+                                                                src={goal.images[0].fileInfo.url}
+                                                                alt={goal.title}
+                                                                layout="fill"
+                                                                objectFit="cover"
+                                                                className="transition-transform duration-200 ease-in-out group-hover:scale-105"
+                                                            />
+                                                        </div>
+                                                    )}
+                                                    <div className="min-w-0 flex-grow">
+                                                        <div className="header mb-1 truncate text-[24px] font-semibold group-hover:text-primary">
+                                                            {goal.title}
+                                                        </div>
+                                                        <p className="mb-2 line-clamp-3 text-sm text-muted-foreground">
+                                                            {goal.description}
+                                                        </p>
+                                                        {/* No target date to display */}
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        </Link>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                </div>
             </div>
         </div>
     );
