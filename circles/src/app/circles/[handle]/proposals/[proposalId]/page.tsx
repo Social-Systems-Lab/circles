@@ -1,5 +1,5 @@
 import { getCircleByHandle } from "@/lib/data/circle";
-import { getProposalAction } from "../actions";
+import { getProposalAction, ensureShadowPostForProposalAction } from "../actions"; // Added ensureShadowPostForProposalAction
 import { ProposalItem } from "@/components/modules/proposals/proposal-item";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -62,6 +62,19 @@ export default async function ProposalDetailPage(props: PageProps) {
                 </Button>
             </div>
         );
+    }
+
+    // Ensure shadow post exists for comments
+    if (!proposal.commentPostId) {
+        console.log(`Proposal ${proposalId} missing commentPostId, attempting to ensure shadow post...`);
+        const ensuredPostId = await ensureShadowPostForProposalAction(proposalId, circle._id as string);
+        if (ensuredPostId) {
+            proposal.commentPostId = ensuredPostId; // Update the proposal object in memory
+            console.log(`Successfully ensured shadow post ${ensuredPostId} for proposal ${proposalId}`);
+        } else {
+            console.error(`Failed to ensure shadow post for proposal ${proposalId}`);
+            // Continue rendering without comments enabled for this proposal
+        }
     }
 
     return (

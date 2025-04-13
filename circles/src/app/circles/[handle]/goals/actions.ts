@@ -9,6 +9,10 @@ import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getUserByDid } from "@/lib/data/user";
 import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage";
 import { features } from "@/lib/data/constants";
+import { Feeds, Posts, Goals } from "@/lib/data/db"; // Import DB collections
+import { Post } from "@/models/models"; // Import Post type (Removed duplicate Goal)
+import { createPost } from "@/lib/data/feed"; // Import createPost
+import { ObjectId } from "mongodb"; // Import ObjectId
 import { getGoalsByCircleId, getGoalById, createGoal, updateGoal, deleteGoal, changeGoalStage } from "@/lib/data/goal";
 import { getMembers } from "@/lib/data/member";
 import { notifyGoalSubmittedForReview, notifyGoalApproved, notifyGoalStatusChanged } from "@/lib/data/notifications";
@@ -648,6 +652,82 @@ export const getMembersAction = async (circleId: string) => {
 };
 
 // TODO: Add actions for comment handling if using shadow posts or a dedicated system.
+
+/**
+ * Ensures a shadow post exists for comments on a goal. Creates one if missing.
+ * Called server-side, e.g., from the page component.
+ * @param goalId The ID of the goal
+ * @param circleId The ID of the circle
+ * @returns The commentPostId (string) or null if creation failed or wasn't needed.
+ */
+export async function ensureShadowPostForGoalAction(goalId: string, circleId: string): Promise<string | null> {
+    try {
+        if (!ObjectId.isValid(goalId) || !ObjectId.isValid(circleId)) {
+            console.error("Invalid goalId or circleId provided to ensureShadowPostForGoalAction");
+            return null;
+        }
+
+        const goal = await Goals.findOne({ _id: new ObjectId(goalId) });
+
+        if (!goal) {
+            console.error(`Goal not found: ${goalId}`);
+            return null;
+        }
+
+        // If commentPostId already exists, return it
+        if (goal.commentPostId) {
+            return goal.commentPostId;
+        }
+
+        // --- Create Shadow Post if missing ---
+        console.log(`Shadow post missing for goal ${goalId}, attempting creation...`);
+        const feed = await Feeds.findOne({ circleId: circleId });
+        if (!feed) {
+            console.warn(
+                `No feed found for circle ${circleId} to create shadow post for goal ${goalId}. Cannot enable comments.`,
+            );
+            return null; // Cannot create post without a feed
+        }
+
+        const shadowPostData: Omit<Post, "_id"> = {
+            feedId: feed._id.toString(),
+            createdBy: goal.createdBy, // Use goal creator
+            createdAt: new Date(),
+            content: `Goal: ${goal.title}`, // Simple content
+            postType: "goal",
+            parentItemId: goal._id.toString(),
+            parentItemType: "goal",
+            userGroups: goal.userGroups || [],
+            comments: 0,
+            reactions: {},
+        };
+
+        const shadowPost = await createPost(shadowPostData); // Use the imported createPost
+
+        if (shadowPost && shadowPost._id) {
+            const commentPostIdString = shadowPost._id.toString();
+            const updateResult = await Goals.updateOne(
+                { _id: goal._id },
+                { $set: { commentPostId: commentPostIdString } },
+            );
+            if (updateResult.modifiedCount === 1) {
+                console.log(`Shadow post ${commentPostIdString} created and linked to goal ${goalId}`);
+                return commentPostIdString; // Return the new ID
+            } else {
+                console.error(`Failed to link shadow post ${commentPostIdString} back to goal ${goalId}`);
+                // Optional: Delete orphaned shadow post
+                // await Posts.deleteOne({ _id: shadowPost._id });
+                return null; // Linking failed
+            }
+        } else {
+            console.error(`Failed to create shadow post for goal ${goalId}`);
+            return null; // Post creation failed
+        }
+    } catch (error) {
+        console.error(`Error in ensureShadowPostForGoalAction for goal ${goalId}:`, error);
+        return null; // Return null on any error
+    }
+}
 
 // --- Removed Goal Prioritization Actions ---
 // Removed getGoalsForRankingAction

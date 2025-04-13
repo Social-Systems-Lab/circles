@@ -1,6 +1,6 @@
 // circles/[handle]/goals/[goalId]/page.tsx
 import { getCircleByHandle } from "@/lib/data/circle";
-import { getGoalAction } from "../actions"; // Use goal action
+import { getGoalAction, ensureShadowPostForGoalAction } from "../actions"; // Use goal action, Added ensureShadowPostForGoalAction
 import GoalDetail from "@/components/modules/goals/goal-detail"; // Use GoalDetail component
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -54,6 +54,19 @@ export default async function GoalDetailPage(props: PageProps) {
                 </Button>
             </div>
         );
+    }
+
+    // Ensure shadow post exists for comments
+    if (!goal.commentPostId) {
+        console.log(`Goal ${goalId} missing commentPostId, attempting to ensure shadow post...`);
+        const ensuredPostId = await ensureShadowPostForGoalAction(goalId, circle._id as string);
+        if (ensuredPostId) {
+            goal.commentPostId = ensuredPostId; // Update the goal object in memory
+            console.log(`Successfully ensured shadow post ${ensuredPostId} for goal ${goalId}`);
+        } else {
+            console.error(`Failed to ensure shadow post for goal ${goalId}`);
+            // Continue rendering without comments enabled for this goal
+        }
     }
 
     // Fetch detailed GOAL permissions

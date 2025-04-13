@@ -22,46 +22,14 @@ import { getFeed, getPost } from "./feed";
 import { getCircleById, findProjectByShadowPostId, getCirclesByDids } from "./circle";
 import { getMembers } from "./member";
 import { getProposalById, getProposalReactions } from "./proposal"; // Use getProposalReactions
+import { getIssueById } from "./issue"; // Import getIssueById
+import { getTaskById } from "./task"; // Import getTaskById
+import { getGoalById } from "./goal"; // Import getGoalById
 import { features } from "./constants";
 import { getAuthorizedMembers } from "../auth/auth"; // Import the function to get authorized members
 
 /**
- * Checks if a post is a shadow post for a project and returns the project if it is
- * @param post The post to check
- * @returns The project circle if the post is a shadow post, or null if not
- */
-export async function getProjectForShadowPost(post: Post): Promise<Circle | null> {
-    if (!post || !post._id) return null;
-
-    // Fast check using the postType field
-    if (post.postType !== "project") {
-        return null;
-    }
-
-    try {
-        console.log("🔍 [NOTIFY] Post is a project shadow post, fetching project:", {
-            postId: post._id.toString(),
-        });
-
-        // Since we know it's a project post, find the associated project
-        const projectCircle = await findProjectByShadowPostId(post._id.toString());
-
-        console.log("🔔 [NOTIFY] getProjectForShadowPost results:", {
-            postId: post._id.toString(),
-            foundProject: projectCircle ? "Yes" : "No",
-            projectId: projectCircle?._id,
-            projectName: projectCircle?.name,
-        });
-
-        return projectCircle;
-    } catch (error) {
-        console.error("Error fetching project for shadow post:", error);
-        return null;
-    }
-}
-
-/**
- * Send a notification when someone comments on a user's post or project
+ * Send a notification when someone comments on a user's post, goal, task, etc.
  */
 export async function notifyPostComment(post: Post, comment: Comment, commenter: Circle): Promise<void> {
     console.log("🔔 [NOTIFY] notifyPostComment called:", {
@@ -74,9 +42,18 @@ export async function notifyPostComment(post: Post, comment: Comment, commenter:
     });
 
     try {
-        await notifyRegularPostComment(post, comment, commenter);
-
-        console.log("🔔 [NOTIFY] Notification sent successfully");
+        // Check postType to determine notification logic
+        switch (post.postType) {
+            case "goal":
+            case "task":
+            case "issue":
+            case "proposal":
+                await notifyParentItemComment(post, comment, commenter);
+                break;
+            default: // Regular post or other types (including project for now)
+                await notifyRegularPostComment(post, comment, commenter);
+        }
+        console.log("🔔 [NOTIFY] Notification sent successfully for post type:", post.postType || "post");
     } catch (error) {
         console.error("🔔 [NOTIFY] Error sending post comment notification:", error);
         // We don't re-throw the error because notification failures shouldn't break comment creation
@@ -135,16 +112,30 @@ async function notifyRegularPostComment(post: Post, comment: Comment, commenter:
 }
 
 /**
- * Send a notification when someone replies to a user's comment
+ * Send a notification when someone replies to a user's comment on a post, goal, task, etc.
  */
 export async function notifyCommentReply(
-    post: Post,
+    post: Post, // This is the shadow post
     parentComment: Comment,
     reply: Comment,
     replier: Circle,
 ): Promise<void> {
-    // For regular comments, only notify the comment author
-    await notifyRegularCommentReply(post, parentComment, reply, replier);
+    try {
+        // Check postType to determine notification logic
+        switch (post.postType) {
+            case "goal":
+            case "task":
+            case "issue":
+            case "proposal":
+                await notifyParentItemCommentReply(post, parentComment, reply, replier);
+                break;
+            default: // Regular post or other types (including project for now)
+                await notifyRegularCommentReply(post, parentComment, reply, replier);
+        }
+        console.log("🔔 [NOTIFY] Comment reply notification sent successfully for post type:", post.postType || "post");
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error sending comment reply notification:", error);
+    }
 }
 
 /**
@@ -181,6 +172,228 @@ async function notifyRegularCommentReply(
         comment: reply,
         postId: post._id?.toString(),
         commentId: parentComment._id?.toString(),
+    });
+}
+
+/**
+ * Notifies relevant users (author, assignee) when someone comments on a Goal, Task, Issue, or Proposal shadow post.
+ */
+async function notifyParentItemComment(post: Post, comment: Comment, commenter: Circle): Promise<void> {
+    // Don't notify if commenter is the original item's author (fetched below)
+    if (!post.parentItemId || !post.parentItemType) {
+        console.error("🔔 [NOTIFY] Shadow post missing parent item info:", post._id);
+        return; // Cannot proceed without parent info
+    }
+
+    let parentItem: GoalDisplay | TaskDisplay | IssueDisplay | ProposalDisplay | null = null;
+    let itemAuthorDid: string | undefined = undefined;
+    let itemAssigneeDid: string | undefined = undefined;
+    let itemType = post.parentItemType; // e.g., "goal"
+    let itemId = post.parentItemId;
+
+    // Fetch the parent item based on type
+    try {
+        switch (itemType) {
+            case "goal":
+                parentItem = await getGoalById(itemId);
+                itemAuthorDid = parentItem?.createdBy;
+                break;
+            case "task":
+                parentItem = await getTaskById(itemId);
+                itemAuthorDid = parentItem?.createdBy;
+                itemAssigneeDid = (parentItem as TaskDisplay)?.assignedTo;
+                break;
+            case "issue":
+                parentItem = await getIssueById(itemId);
+                itemAuthorDid = parentItem?.createdBy;
+                itemAssigneeDid = (parentItem as IssueDisplay)?.assignedTo;
+                break;
+            case "proposal":
+                parentItem = await getProposalById(itemId);
+                itemAuthorDid = parentItem?.createdBy;
+                break;
+            default:
+                console.error("🔔 [NOTIFY] Unknown parent item type:", itemType);
+                return;
+        }
+    } catch (fetchError) {
+        console.error(`🔔 [NOTIFY] Error fetching parent ${itemType} (${itemId}):`, fetchError);
+        return; // Stop if parent item cannot be fetched
+    }
+
+    if (!parentItem) {
+        console.error(`🔔 [NOTIFY] Parent ${itemType} not found: ${itemId}`);
+        return;
+    }
+
+    // Don't notify if commenter is the item author
+    if (itemAuthorDid === comment.createdBy) {
+        console.log(`🔔 [NOTIFY] Skipping ${itemType} comment notification - commenter is item author`);
+        return;
+    }
+
+    const recipients: UserPrivate[] = [];
+    const recipientDids = new Set<string>();
+
+    // 1. Add Item Author (if not the commenter)
+    if (itemAuthorDid && itemAuthorDid !== comment.createdBy) {
+        const author = await getUserPrivate(itemAuthorDid);
+        if (author) {
+            recipients.push(author);
+            recipientDids.add(author.did!);
+        } else {
+            console.warn(`🔔 [NOTIFY] Author not found for ${itemType} ${itemId}`);
+        }
+    }
+
+    // 2. Add Assignee (for Tasks/Issues, if different from author and commenter)
+    if (itemAssigneeDid && itemAssigneeDid !== comment.createdBy && !recipientDids.has(itemAssigneeDid)) {
+        const assignee = await getUserPrivate(itemAssigneeDid);
+        if (assignee) {
+            recipients.push(assignee);
+            recipientDids.add(assignee.did!);
+        } else {
+            console.warn(`🔔 [NOTIFY] Assignee not found for ${itemType} ${itemId}`);
+        }
+    }
+
+    if (recipients.length === 0) {
+        console.log(`🔔 [NOTIFY] No recipients found for ${itemType} comment notification:`, itemId);
+        return;
+    }
+
+    // Get circle for context
+    const circle = await getCircleById(parentItem.circleId);
+    if (!circle) {
+        console.error("🔔 [NOTIFY] Circle not found for parent item:", parentItem.circleId);
+        return; // Need circle context
+    }
+
+    // Send notification (reuse post_comment type, but payload indicates parent item)
+    console.log(`🔔 [NOTIFY] Sending ${itemType}_comment notification to ${recipients.length} recipients`);
+    await sendNotifications("post_comment", recipients, {
+        circle,
+        user: commenter, // The user who commented
+        post, // The shadow post (contains parentItemId, parentItemType)
+        comment,
+        // Pass standard payload; sendNotifications/formatter must handle parentItemType
+        postId: post._id?.toString(),
+    });
+}
+
+/**
+ * Notifies relevant users (parent comment author, item author, assignee) when someone replies
+ * to a comment on a Goal, Task, Issue, or Proposal shadow post.
+ */
+async function notifyParentItemCommentReply(
+    post: Post, // Shadow post
+    parentComment: Comment,
+    reply: Comment,
+    replier: Circle,
+): Promise<void> {
+    if (!post.parentItemId || !post.parentItemType) {
+        console.error("🔔 [NOTIFY] Shadow post missing parent item info for reply:", post._id);
+        return;
+    }
+
+    let parentItem: GoalDisplay | TaskDisplay | IssueDisplay | ProposalDisplay | null = null;
+    let itemAuthorDid: string | undefined = undefined;
+    let itemAssigneeDid: string | undefined = undefined;
+    let itemType = post.parentItemType;
+    let itemId = post.parentItemId;
+
+    // Fetch the parent item
+    try {
+        switch (itemType) {
+            case "goal":
+                parentItem = await getGoalById(itemId);
+                itemAuthorDid = parentItem?.createdBy;
+                break;
+            case "task":
+                parentItem = await getTaskById(itemId);
+                itemAuthorDid = parentItem?.createdBy;
+                itemAssigneeDid = (parentItem as TaskDisplay)?.assignedTo;
+                break;
+            case "issue":
+                parentItem = await getIssueById(itemId);
+                itemAuthorDid = parentItem?.createdBy;
+                itemAssigneeDid = (parentItem as IssueDisplay)?.assignedTo;
+                break;
+            case "proposal":
+                parentItem = await getProposalById(itemId);
+                itemAuthorDid = parentItem?.createdBy;
+                break;
+            default:
+                return; // Unknown type
+        }
+    } catch (fetchError) {
+        console.error(`🔔 [NOTIFY] Error fetching parent ${itemType} (${itemId}) for reply:`, fetchError);
+        return;
+    }
+
+    if (!parentItem) {
+        console.error(`🔔 [NOTIFY] Parent ${itemType} not found for reply: ${itemId}`);
+        return;
+    }
+
+    const recipients: UserPrivate[] = [];
+    const recipientDids = new Set<string>();
+
+    // 1. Add Parent Comment Author (if not the replier)
+    if (parentComment.createdBy !== replier.did) {
+        const commentAuthor = await getUserPrivate(parentComment.createdBy);
+        if (commentAuthor) {
+            recipients.push(commentAuthor);
+            recipientDids.add(commentAuthor.did!);
+        } else {
+            console.warn(`🔔 [NOTIFY] Parent comment author not found: ${parentComment.createdBy}`);
+        }
+    }
+
+    // 2. Add Item Author (if different from replier and parent comment author)
+    if (itemAuthorDid && itemAuthorDid !== replier.did && !recipientDids.has(itemAuthorDid)) {
+        const itemAuthor = await getUserPrivate(itemAuthorDid);
+        if (itemAuthor) {
+            recipients.push(itemAuthor);
+            recipientDids.add(itemAuthor.did!);
+        } else {
+            console.warn(`🔔 [NOTIFY] Author not found for ${itemType} ${itemId}`);
+        }
+    }
+
+    // 3. Add Assignee (for Tasks/Issues, if different from replier, parent author, and item author)
+    if (itemAssigneeDid && itemAssigneeDid !== replier.did && !recipientDids.has(itemAssigneeDid)) {
+        const assignee = await getUserPrivate(itemAssigneeDid);
+        if (assignee) {
+            recipients.push(assignee);
+            recipientDids.add(assignee.did!);
+        } else {
+            console.warn(`🔔 [NOTIFY] Assignee not found for ${itemType} ${itemId}`);
+        }
+    }
+
+    if (recipients.length === 0) {
+        console.log(`🔔 [NOTIFY] No recipients found for ${itemType} comment reply notification:`, itemId);
+        return;
+    }
+
+    // Get circle for context
+    const circle = await getCircleById(parentItem.circleId);
+    if (!circle) {
+        console.error("🔔 [NOTIFY] Circle not found for parent item reply:", parentItem.circleId);
+        return;
+    }
+
+    // Send notification (reuse comment_reply type, but payload indicates parent item)
+    console.log(`🔔 [NOTIFY] Sending ${itemType}_comment_reply notification to ${recipients.length} recipients`);
+    await sendNotifications("comment_reply", recipients, {
+        circle,
+        user: replier, // The user who replied
+        post, // The shadow post (contains parentItemId, parentItemType)
+        comment: reply, // The reply itself
+        // Pass standard payload; sendNotifications/formatter must handle parentItemType
+        postId: post._id?.toString(),
+        commentId: parentComment._id?.toString(), // ID of the comment being replied to
     });
 }
 
@@ -281,20 +494,11 @@ export async function notifyCommentMentions(
 
     if (mentionedUsers.length === 0) return;
 
-    // Check if this is a shadow post for a project using the postType field
-    const isProjectComment = post.postType === "project";
-    // If it's a project post, get the project details
-    const project = isProjectComment ? await findProjectByShadowPostId(post._id!.toString()) : null;
+    // TODO: Enhance mention notifications for parent items (Goals, Tasks, etc.)?
+    // Currently, it links to the shadow post. We might want it to link to the parent item.
+    // This would require fetching the parent item based on post.parentItemId/Type here.
 
-    console.log("🔔 [NOTIFY] Comment mention is for project:", isProjectComment ? "Yes" : "No");
-    if (isProjectComment) {
-        console.log("🔔 [NOTIFY] Project info:", {
-            projectId: project?._id,
-            projectName: project?.name,
-        });
-    }
-
-    // Get post circle
+    // Get post circle (from the feed the shadow post belongs to)
     let feed = await getFeed(post.feedId);
     let circle = await getCircleById(feed?.circleId!);
 
@@ -306,8 +510,7 @@ export async function notifyCommentMentions(
         comment,
         postId: post._id?.toString(),
         commentId: comment._id?.toString(),
-        project: isProjectComment ? project! : undefined,
-        projectId: isProjectComment ? project?._id?.toString() : undefined,
+        // Remove project-specific fields
     });
 }
 

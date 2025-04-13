@@ -1,9 +1,10 @@
 // proposal.ts - Proposal data access functions
-import { Proposals, Circles, Members, Reactions } from "./db";
+import { Proposals, Circles, Members, Reactions, Feeds, Posts } from "./db"; // Added Feeds, Posts
 import { ObjectId } from "mongodb";
-import { Proposal, ProposalDisplay, ProposalStage, ProposalOutcome, Circle } from "@/models/models";
+import { Proposal, ProposalDisplay, ProposalStage, ProposalOutcome, Circle, Post } from "@/models/models"; // Added Post type
 import { getCircleById, SAFE_CIRCLE_PROJECTION } from "./circle";
 import { getUserByDid } from "./user";
+import { createPost } from "./feed"; // Import createPost from feed.ts
 
 // Safe projection for proposal queries
 export const SAFE_PROPOSAL_PROJECTION = {
@@ -290,16 +291,80 @@ export const getProposalById = async (proposalId: string, userDid?: string): Pro
 
 /**
  * Create a new proposal
- * @param proposal The proposal to create
- * @returns The created proposal
+ * @param proposalData The proposal data to create (excluding _id, commentPostId)
+ * @returns The created proposal document with its new _id and potentially commentPostId
  */
-export const createProposal = async (proposal: Proposal): Promise<Proposal> => {
+export const createProposal = async (proposalData: Omit<Proposal, "_id" | "commentPostId">): Promise<Proposal> => {
     try {
-        const result = await Proposals.insertOne(proposal);
-        return { ...proposal, _id: result.insertedId.toString() };
+        // Ensure createdAt is set if not provided
+        const proposalToInsert = { ...proposalData, createdAt: proposalData.createdAt || new Date() };
+        const result = await Proposals.insertOne(proposalToInsert);
+        if (!result.insertedId) {
+            throw new Error("Failed to insert proposal into database.");
+        }
+
+        const createdProposalId = result.insertedId;
+        let createdProposal = (await Proposals.findOne({ _id: createdProposalId })) as Proposal | null; // Fetch the created proposal
+
+        if (!createdProposal) {
+            throw new Error("Failed to retrieve created proposal immediately after insertion.");
+        }
+
+        // --- Create Shadow Post ---
+        try {
+            const feed = await Feeds.findOne({ circleId: proposalData.circleId });
+            if (!feed) {
+                console.warn(
+                    `No feed found for circle ${proposalData.circleId} to create shadow post for proposal ${createdProposalId}. Commenting will be disabled.`,
+                );
+            } else {
+                const shadowPostData: Omit<Post, "_id"> = {
+                    feedId: feed._id.toString(),
+                    createdBy: proposalData.createdBy,
+                    createdAt: new Date(),
+                    content: `Proposal: ${proposalData.name}`, // Simple content
+                    postType: "proposal",
+                    parentItemId: createdProposalId.toString(),
+                    parentItemType: "proposal",
+                    userGroups: proposalData.userGroups || [],
+                    comments: 0,
+                    reactions: {},
+                };
+
+                const shadowPost = await createPost(shadowPostData);
+
+                // --- Update Proposal with commentPostId ---
+                if (shadowPost && shadowPost._id) {
+                    const commentPostIdString = shadowPost._id.toString();
+                    const updateResult = await Proposals.updateOne(
+                        { _id: createdProposalId },
+                        { $set: { commentPostId: commentPostIdString } },
+                    );
+                    if (updateResult.modifiedCount === 1) {
+                        createdProposal.commentPostId = commentPostIdString; // Update the object we return
+                        console.log(
+                            `Shadow post ${commentPostIdString} created and linked to proposal ${createdProposalId}`,
+                        );
+                    } else {
+                        console.error(
+                            `Failed to link shadow post ${commentPostIdString} to proposal ${createdProposalId}`,
+                        );
+                        // Optional: Delete orphaned shadow post
+                        // await Posts.deleteOne({ _id: shadowPost._id });
+                    }
+                } else {
+                    console.error(`Failed to create shadow post for proposal ${createdProposalId}`);
+                }
+            }
+        } catch (postError) {
+            console.error(`Error creating/linking shadow post for proposal ${createdProposalId}:`, postError);
+        }
+        // --- End Shadow Post Creation ---
+
+        return createdProposal as Proposal;
     } catch (error) {
         console.error("Error creating proposal:", error);
-        throw error;
+        throw new Error(`Database error creating proposal: ${error instanceof Error ? error.message : String(error)}`);
     }
 };
 

@@ -1,10 +1,11 @@
 // goal.ts - Goal data access functions
-import { Goals, Circles, RankedLists } from "./db"; // Changed Issues to Goals
+import { Goals, Circles, RankedLists, Feeds, Posts } from "./db"; // Added Feeds, Posts
 import { ObjectId } from "mongodb";
-import { Goal, GoalDisplay, GoalStage, RankedList } from "@/models/models"; // Changed Issue types to Goal types
+import { Goal, GoalDisplay, GoalStage, RankedList, Post } from "@/models/models"; // Added Post type
 import { SAFE_CIRCLE_PROJECTION } from "./circle";
 import { getMemberIdsByUserGroup } from "./member";
 import { RANKING_STALENESS_DAYS } from "./constants";
+import { createPost } from "./feed"; // Import createPost from feed.ts
 // No longer need getUserByDid if we use $lookup consistently
 
 // Safe projection for goal queries, similar to proposals
@@ -262,25 +263,84 @@ export const getGoalById = async (goalId: string, userDid?: string): Promise<Goa
 
 /**
  * Create a new goal in the database.
- * @param goalData Data for the new goal (excluding _id)
- * @returns The created goal document with its new _id
+ * @param goalData Data for the new goal (excluding _id, commentPostId)
+ * @returns The created goal document with its new _id and potentially commentPostId
  */
-export const createGoal = async (goalData: Omit<Goal, "_id">): Promise<Goal> => {
-    // Renamed function, params, return type
+export const createGoal = async (goalData: Omit<Goal, "_id" | "commentPostId">): Promise<Goal> => {
     try {
-        const result = await Goals.insertOne(goalData); // Changed Issues to Goals, param issueData to goalData
+        // Ensure createdAt is set if not provided
+        const goalToInsert = { ...goalData, createdAt: goalData.createdAt || new Date() };
+        const result = await Goals.insertOne(goalToInsert);
         if (!result.insertedId) {
-            throw new Error("Failed to insert goal into database."); // Updated error message
+            throw new Error("Failed to insert goal into database.");
         }
-        // Fetch the created document to return it, ensuring all defaults/timestamps are included
-        const createdGoal = await Goals.findOne({ _id: result.insertedId }); // Changed Issues to Goals, variable createdIssue to createdGoal
+
+        const createdGoalId = result.insertedId;
+        let createdGoal = (await Goals.findOne({ _id: createdGoalId })) as Goal | null; // Fetch the created goal
+
         if (!createdGoal) {
-            throw new Error("Failed to retrieve created goal."); // Updated error message
+            // This case should ideally not happen if insert succeeded, but good to check
+            throw new Error("Failed to retrieve created goal immediately after insertion.");
         }
-        return createdGoal as Goal; // Updated type
+
+        // --- Create Shadow Post ---
+        try {
+            // Find a default feed for the circle (e.g., handle 'general' or the first one)
+            // TODO: Consider a more robust feed selection strategy if needed
+            const feed = await Feeds.findOne({ circleId: goalData.circleId });
+            if (!feed) {
+                console.warn(
+                    `No feed found for circle ${goalData.circleId} to create shadow post for goal ${createdGoalId}. Commenting will be disabled.`,
+                );
+                // Proceed without shadow post, goal is already created
+            } else {
+                const shadowPostData: Omit<Post, "_id"> = {
+                    feedId: feed._id.toString(),
+                    createdBy: goalData.createdBy,
+                    createdAt: new Date(), // Use current time for post creation
+                    content: `Goal: ${goalData.title}`, // Simple content for the shadow post
+                    postType: "goal",
+                    parentItemId: createdGoalId.toString(),
+                    parentItemType: "goal",
+                    userGroups: goalData.userGroups || [], // Inherit user groups from goal
+                    comments: 0, // Initialize comment count
+                    reactions: {}, // Initialize reactions
+                    // Ensure all required fields from postSchema are present or have defaults
+                };
+
+                const shadowPost = await createPost(shadowPostData); // Use the imported createPost function
+
+                // --- Update Goal with commentPostId ---
+                if (shadowPost && shadowPost._id) {
+                    const commentPostIdString = shadowPost._id.toString();
+                    const updateResult = await Goals.updateOne(
+                        { _id: createdGoalId },
+                        { $set: { commentPostId: commentPostIdString } },
+                    );
+                    if (updateResult.modifiedCount === 1) {
+                        createdGoal.commentPostId = commentPostIdString; // Update the object we return
+                        console.log(`Shadow post ${commentPostIdString} created and linked to goal ${createdGoalId}`);
+                    } else {
+                        console.error(`Failed to link shadow post ${commentPostIdString} to goal ${createdGoalId}`);
+                        // Optional: Consider deleting the orphaned shadow post?
+                        // await Posts.deleteOne({ _id: shadowPost._id });
+                    }
+                } else {
+                    console.error(`Failed to create shadow post for goal ${createdGoalId}`);
+                }
+            }
+        } catch (postError) {
+            console.error(`Error creating/linking shadow post for goal ${createdGoalId}:`, postError);
+            // Goal creation succeeded, but shadow post failed. Log error but return the created goal.
+        }
+        // --- End Shadow Post Creation ---
+
+        // Return the goal object, potentially updated with commentPostId
+        return createdGoal as Goal;
     } catch (error) {
-        console.error("Error creating goal:", error); // Updated error message
-        throw new Error("Database error creating goal."); // Updated error message
+        console.error("Error creating goal:", error);
+        // Rethrow a more specific error or handle as appropriate
+        throw new Error(`Database error creating goal: ${error instanceof Error ? error.message : String(error)}`);
     }
 };
 

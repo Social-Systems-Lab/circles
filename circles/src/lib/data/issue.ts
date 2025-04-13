@@ -1,8 +1,9 @@
 // issue.ts - Issue data access functions
-import { Issues, Circles, Members, Reactions } from "./db";
+import { Issues, Circles, Members, Reactions, Feeds, Posts } from "./db"; // Added Feeds, Posts
 import { ObjectId } from "mongodb";
-import { Issue, IssueDisplay, IssueStage, Circle, Member } from "@/models/models";
+import { Issue, IssueDisplay, IssueStage, Circle, Member, Post } from "@/models/models"; // Added Post type
 import { getCircleById, SAFE_CIRCLE_PROJECTION } from "./circle";
+import { createPost } from "./feed"; // Import createPost from feed.ts
 // No longer need getUserByDid if we use $lookup consistently
 
 // Safe projection for issue queries, similar to proposals
@@ -248,24 +249,76 @@ export const getIssueById = async (issueId: string, userDid?: string): Promise<I
 
 /**
  * Create a new issue in the database.
- * @param issueData Data for the new issue (excluding _id)
- * @returns The created issue document with its new _id
+ * @param issueData Data for the new issue (excluding _id, commentPostId)
+ * @returns The created issue document with its new _id and potentially commentPostId
  */
-export const createIssue = async (issueData: Omit<Issue, "_id">): Promise<Issue> => {
+export const createIssue = async (issueData: Omit<Issue, "_id" | "commentPostId">): Promise<Issue> => {
     try {
-        const result = await Issues.insertOne(issueData);
+        // Ensure createdAt is set if not provided
+        const issueToInsert = { ...issueData, createdAt: issueData.createdAt || new Date() };
+        const result = await Issues.insertOne(issueToInsert);
         if (!result.insertedId) {
             throw new Error("Failed to insert issue into database.");
         }
-        // Fetch the created document to return it, ensuring all defaults/timestamps are included
-        const createdIssue = await Issues.findOne({ _id: result.insertedId });
+
+        const createdIssueId = result.insertedId;
+        let createdIssue = (await Issues.findOne({ _id: createdIssueId })) as Issue | null; // Fetch the created issue
+
         if (!createdIssue) {
-            throw new Error("Failed to retrieve created issue.");
+            throw new Error("Failed to retrieve created issue immediately after insertion.");
         }
+
+        // --- Create Shadow Post ---
+        try {
+            const feed = await Feeds.findOne({ circleId: issueData.circleId });
+            if (!feed) {
+                console.warn(
+                    `No feed found for circle ${issueData.circleId} to create shadow post for issue ${createdIssueId}. Commenting will be disabled.`,
+                );
+            } else {
+                const shadowPostData: Omit<Post, "_id"> = {
+                    feedId: feed._id.toString(),
+                    createdBy: issueData.createdBy,
+                    createdAt: new Date(),
+                    content: `Issue: ${issueData.title}`, // Simple content
+                    postType: "issue",
+                    parentItemId: createdIssueId.toString(),
+                    parentItemType: "issue",
+                    userGroups: issueData.userGroups || [],
+                    comments: 0,
+                    reactions: {},
+                };
+
+                const shadowPost = await createPost(shadowPostData);
+
+                // --- Update Issue with commentPostId ---
+                if (shadowPost && shadowPost._id) {
+                    const commentPostIdString = shadowPost._id.toString();
+                    const updateResult = await Issues.updateOne(
+                        { _id: createdIssueId },
+                        { $set: { commentPostId: commentPostIdString } },
+                    );
+                    if (updateResult.modifiedCount === 1) {
+                        createdIssue.commentPostId = commentPostIdString; // Update the object we return
+                        console.log(`Shadow post ${commentPostIdString} created and linked to issue ${createdIssueId}`);
+                    } else {
+                        console.error(`Failed to link shadow post ${commentPostIdString} to issue ${createdIssueId}`);
+                        // Optional: Delete orphaned shadow post
+                        // await Posts.deleteOne({ _id: shadowPost._id });
+                    }
+                } else {
+                    console.error(`Failed to create shadow post for issue ${createdIssueId}`);
+                }
+            }
+        } catch (postError) {
+            console.error(`Error creating/linking shadow post for issue ${createdIssueId}:`, postError);
+        }
+        // --- End Shadow Post Creation ---
+
         return createdIssue as Issue;
     } catch (error) {
         console.error("Error creating issue:", error);
-        throw new Error("Database error creating issue.");
+        throw new Error(`Database error creating issue: ${error instanceof Error ? error.message : String(error)}`);
     }
 };
 

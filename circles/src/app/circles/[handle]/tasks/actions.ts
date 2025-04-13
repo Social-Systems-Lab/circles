@@ -3,6 +3,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { Feeds, Posts, Tasks } from "@/lib/data/db"; // Import DB collections
+import { Post } from "@/models/models"; // Import Post type
+import { createPost } from "@/lib/data/feed"; // Import createPost
+import { ObjectId } from "mongodb"; // Import ObjectId
 import {
     Circle,
     Media,
@@ -21,7 +25,6 @@ import { getUserByDid, getUserPrivate } from "@/lib/data/user";
 import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage";
 import { features } from "@/lib/data/constants";
 import { Circles, db, RankedLists } from "@/lib/data/db"; // Import db directly
-import { ObjectId } from "mongodb";
 // Placeholder imports for task data functions (from src/lib/data/task.ts)
 import {
     getTasksByCircleId, // Removed duplicate
@@ -812,6 +815,82 @@ export const getMembersAction = async (circleId: string) => {
 };
 
 // TODO: Add actions for comment handling if using shadow posts or a dedicated system.
+
+/**
+ * Ensures a shadow post exists for comments on a task. Creates one if missing.
+ * Called server-side, e.g., from the page component.
+ * @param taskId The ID of the task
+ * @param circleId The ID of the circle
+ * @returns The commentPostId (string) or null if creation failed or wasn't needed.
+ */
+export async function ensureShadowPostForTaskAction(taskId: string, circleId: string): Promise<string | null> {
+    try {
+        if (!ObjectId.isValid(taskId) || !ObjectId.isValid(circleId)) {
+            console.error("Invalid taskId or circleId provided to ensureShadowPostForTaskAction");
+            return null;
+        }
+
+        const task = await Tasks.findOne({ _id: new ObjectId(taskId) });
+
+        if (!task) {
+            console.error(`Task not found: ${taskId}`);
+            return null;
+        }
+
+        // If commentPostId already exists, return it
+        if (task.commentPostId) {
+            return task.commentPostId;
+        }
+
+        // --- Create Shadow Post if missing ---
+        console.log(`Shadow post missing for task ${taskId}, attempting creation...`);
+        const feed = await Feeds.findOne({ circleId: circleId });
+        if (!feed) {
+            console.warn(
+                `No feed found for circle ${circleId} to create shadow post for task ${taskId}. Cannot enable comments.`,
+            );
+            return null; // Cannot create post without a feed
+        }
+
+        const shadowPostData: Omit<Post, "_id"> = {
+            feedId: feed._id.toString(),
+            createdBy: task.createdBy, // Use task creator
+            createdAt: new Date(),
+            content: `Task: ${task.title}`, // Simple content
+            postType: "task",
+            parentItemId: task._id.toString(),
+            parentItemType: "task",
+            userGroups: task.userGroups || [],
+            comments: 0,
+            reactions: {},
+        };
+
+        const shadowPost = await createPost(shadowPostData); // Use the imported createPost
+
+        if (shadowPost && shadowPost._id) {
+            const commentPostIdString = shadowPost._id.toString();
+            const updateResult = await Tasks.updateOne(
+                { _id: task._id },
+                { $set: { commentPostId: commentPostIdString } },
+            );
+            if (updateResult.modifiedCount === 1) {
+                console.log(`Shadow post ${commentPostIdString} created and linked to task ${taskId}`);
+                return commentPostIdString; // Return the new ID
+            } else {
+                console.error(`Failed to link shadow post ${commentPostIdString} back to task ${taskId}`);
+                // Optional: Delete orphaned shadow post
+                // await Posts.deleteOne({ _id: shadowPost._id });
+                return null; // Linking failed
+            }
+        } else {
+            console.error(`Failed to create shadow post for task ${taskId}`);
+            return null; // Post creation failed
+        }
+    } catch (error) {
+        console.error(`Error in ensureShadowPostForTaskAction for task ${taskId}:`, error);
+        return null; // Return null on any error
+    }
+}
 
 // --- Task Prioritization Actions ---
 

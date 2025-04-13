@@ -1,11 +1,12 @@
 // task.ts - Task data access functions
-import { Tasks, Circles, Members, Reactions, RankedLists } from "./db"; // Changed Issues to Tasks
+import { Tasks, Circles, Members, Reactions, RankedLists, Feeds, Posts } from "./db"; // Added Feeds, Posts
 import { ObjectId } from "mongodb";
-import { Task, TaskDisplay, TaskStage, Circle, Member, RankedList } from "@/models/models"; // Changed Issue types to Task types
+import { Task, TaskDisplay, TaskStage, Circle, Member, RankedList, Post } from "@/models/models"; // Added Post type
 import { getCircleById, SAFE_CIRCLE_PROJECTION } from "./circle";
 import { getMemberIdsByUserGroup } from "./member";
 import { isAuthorized } from "../auth/auth";
 import { features, RANKING_STALENESS_DAYS } from "./constants";
+import { createPost } from "./feed"; // Import createPost from feed.ts
 // No longer need getUserByDid if we use $lookup consistently
 
 // Safe projection for task queries, similar to proposals
@@ -394,25 +395,76 @@ export const getTaskById = async (
 
 /**
  * Create a new task in the database.
- * @param taskData Data for the new task (excluding _id)
- * @returns The created task document with its new _id
+ * @param taskData Data for the new task (excluding _id, commentPostId)
+ * @returns The created task document with its new _id and potentially commentPostId
  */
-export const createTask = async (taskData: Omit<Task, "_id">): Promise<Task> => {
-    // Renamed function, params, return type
+export const createTask = async (taskData: Omit<Task, "_id" | "commentPostId">): Promise<Task> => {
     try {
-        const result = await Tasks.insertOne(taskData); // Changed Issues to Tasks, param issueData to taskData
+        // Ensure createdAt is set if not provided
+        const taskToInsert = { ...taskData, createdAt: taskData.createdAt || new Date() };
+        const result = await Tasks.insertOne(taskToInsert);
         if (!result.insertedId) {
-            throw new Error("Failed to insert task into database."); // Updated error message
+            throw new Error("Failed to insert task into database.");
         }
-        // Fetch the created document to return it, ensuring all defaults/timestamps are included
-        const createdTask = await Tasks.findOne({ _id: result.insertedId }); // Changed Issues to Tasks, variable createdIssue to createdTask
+
+        const createdTaskId = result.insertedId;
+        let createdTask = (await Tasks.findOne({ _id: createdTaskId })) as Task | null; // Fetch the created task
+
         if (!createdTask) {
-            throw new Error("Failed to retrieve created task."); // Updated error message
+            throw new Error("Failed to retrieve created task immediately after insertion.");
         }
-        return createdTask as Task; // Updated type
+
+        // --- Create Shadow Post ---
+        try {
+            const feed = await Feeds.findOne({ circleId: taskData.circleId });
+            if (!feed) {
+                console.warn(
+                    `No feed found for circle ${taskData.circleId} to create shadow post for task ${createdTaskId}. Commenting will be disabled.`,
+                );
+            } else {
+                const shadowPostData: Omit<Post, "_id"> = {
+                    feedId: feed._id.toString(),
+                    createdBy: taskData.createdBy,
+                    createdAt: new Date(),
+                    content: `Task: ${taskData.title}`, // Simple content
+                    postType: "task",
+                    parentItemId: createdTaskId.toString(),
+                    parentItemType: "task",
+                    userGroups: taskData.userGroups || [],
+                    comments: 0,
+                    reactions: {},
+                };
+
+                const shadowPost = await createPost(shadowPostData);
+
+                // --- Update Task with commentPostId ---
+                if (shadowPost && shadowPost._id) {
+                    const commentPostIdString = shadowPost._id.toString();
+                    const updateResult = await Tasks.updateOne(
+                        { _id: createdTaskId },
+                        { $set: { commentPostId: commentPostIdString } },
+                    );
+                    if (updateResult.modifiedCount === 1) {
+                        createdTask.commentPostId = commentPostIdString; // Update the object we return
+                        console.log(`Shadow post ${commentPostIdString} created and linked to task ${createdTaskId}`);
+                    } else {
+                        console.error(`Failed to link shadow post ${commentPostIdString} to task ${createdTaskId}`);
+                        // Optional: Delete orphaned shadow post
+                        // await Posts.deleteOne({ _id: shadowPost._id });
+                    }
+                } else {
+                    console.error(`Failed to create shadow post for task ${createdTaskId}`);
+                }
+            }
+        } catch (postError) {
+            console.error(`Error creating/linking shadow post for task ${createdTaskId}:`, postError);
+        }
+        // --- End Shadow Post Creation ---
+
+        return createdTask as Task;
     } catch (error) {
-        console.error("Error creating task:", error); // Updated error message
-        throw new Error("Database error creating task."); // Updated error message
+        console.error("Error creating task:", error);
+        throw new Error(`Database error creating task: ${error instanceof Error ? error.message : String(error)}`);
     }
 };
 

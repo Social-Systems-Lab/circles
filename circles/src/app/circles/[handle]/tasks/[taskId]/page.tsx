@@ -1,6 +1,6 @@
 // circles/[handle]/tasks/[taskId]/page.tsx
 import { getCircleByHandle } from "@/lib/data/circle";
-import { getTaskAction } from "../actions"; // Use task action
+import { getTaskAction, ensureShadowPostForTaskAction } from "../actions"; // Use task action, Added ensureShadowPostForTaskAction
 import TaskDetail from "@/components/modules/tasks/task-detail"; // Use TaskDetail component
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -54,6 +54,19 @@ export default async function TaskDetailPage(props: PageProps) {
                 </Button>
             </div>
         );
+    }
+
+    // Ensure shadow post exists for comments
+    if (!task.commentPostId) {
+        console.log(`Task ${taskId} missing commentPostId, attempting to ensure shadow post...`);
+        const ensuredPostId = await ensureShadowPostForTaskAction(taskId, circle._id as string);
+        if (ensuredPostId) {
+            task.commentPostId = ensuredPostId; // Update the task object in memory
+            console.log(`Successfully ensured shadow post ${ensuredPostId} for task ${taskId}`);
+        } else {
+            console.error(`Failed to ensure shadow post for task ${taskId}`);
+            // Continue rendering without comments enabled for this task
+        }
     }
 
     // Fetch detailed permissions for actions within the detail view

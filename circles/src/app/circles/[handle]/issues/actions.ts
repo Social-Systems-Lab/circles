@@ -28,6 +28,10 @@ import {
     assignIssue,
 } from "@/lib/data/issue";
 import { getMembers } from "@/lib/data/member";
+import { Feeds, Posts, Issues } from "@/lib/data/db"; // Import DB collections
+import { Post } from "@/models/models"; // Import Post type
+import { createPost } from "@/lib/data/feed"; // Import createPost
+import { ObjectId } from "mongodb"; // Import ObjectId
 // Import issue notification functions
 import {
     notifyIssueSubmittedForReview,
@@ -714,3 +718,79 @@ export const getMembersAction = async (circleId: string) => {
 };
 
 // TODO: Add actions for comment handling if using shadow posts or a dedicated system.
+
+/**
+ * Ensures a shadow post exists for comments on an issue. Creates one if missing.
+ * Called server-side, e.g., from the page component.
+ * @param issueId The ID of the issue
+ * @param circleId The ID of the circle
+ * @returns The commentPostId (string) or null if creation failed or wasn't needed.
+ */
+export async function ensureShadowPostForIssueAction(issueId: string, circleId: string): Promise<string | null> {
+    try {
+        if (!ObjectId.isValid(issueId) || !ObjectId.isValid(circleId)) {
+            console.error("Invalid issueId or circleId provided to ensureShadowPostForIssueAction");
+            return null;
+        }
+
+        const issue = await Issues.findOne({ _id: new ObjectId(issueId) });
+
+        if (!issue) {
+            console.error(`Issue not found: ${issueId}`);
+            return null;
+        }
+
+        // If commentPostId already exists, return it
+        if (issue.commentPostId) {
+            return issue.commentPostId;
+        }
+
+        // --- Create Shadow Post if missing ---
+        console.log(`Shadow post missing for issue ${issueId}, attempting creation...`);
+        const feed = await Feeds.findOne({ circleId: circleId });
+        if (!feed) {
+            console.warn(
+                `No feed found for circle ${circleId} to create shadow post for issue ${issueId}. Cannot enable comments.`,
+            );
+            return null; // Cannot create post without a feed
+        }
+
+        const shadowPostData: Omit<Post, "_id"> = {
+            feedId: feed._id.toString(),
+            createdBy: issue.createdBy, // Use issue creator
+            createdAt: new Date(),
+            content: `Issue: ${issue.title}`, // Simple content
+            postType: "issue",
+            parentItemId: issue._id.toString(),
+            parentItemType: "issue",
+            userGroups: issue.userGroups || [],
+            comments: 0,
+            reactions: {},
+        };
+
+        const shadowPost = await createPost(shadowPostData); // Use the imported createPost
+
+        if (shadowPost && shadowPost._id) {
+            const commentPostIdString = shadowPost._id.toString();
+            const updateResult = await Issues.updateOne(
+                { _id: issue._id },
+                { $set: { commentPostId: commentPostIdString } },
+            );
+            if (updateResult.modifiedCount === 1) {
+                console.log(`Shadow post ${commentPostIdString} created and linked to issue ${issueId}`);
+                return commentPostIdString; // Return the new ID
+            } else {
+                console.error(`Failed to link shadow post ${commentPostIdString} back to issue ${issueId}`);
+                // Optional: Delete orphaned shadow post
+                // await Posts.deleteOne({ _id: shadowPost._id });
+                return null; // Linking failed
+            }
+        } else {
+            console.error(`Failed to create shadow post for issue ${issueId}`);
+            return null; // Post creation failed
+        }
+    } catch (error) {
+        console.error(`Error in ensureShadowPostForIssueAction for issue ${issueId}:`, error);
+        return null; // Return null on any error
+    }
+}

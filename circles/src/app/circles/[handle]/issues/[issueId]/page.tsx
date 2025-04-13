@@ -1,5 +1,5 @@
 import { getCircleByHandle } from "@/lib/data/circle";
-import { getIssueAction } from "../actions"; // Use issue action
+import { getIssueAction, ensureShadowPostForIssueAction } from "../actions"; // Use issue action, Added ensureShadowPostForIssueAction
 import IssueDetail from "@/components/modules/issues/issue-detail"; // Placeholder for IssueDetail component
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -48,6 +48,19 @@ export default async function IssueDetailPage(props: PageProps) {
                 </Button>
             </div>
         );
+    }
+
+    // Ensure shadow post exists for comments
+    if (!issue.commentPostId) {
+        console.log(`Issue ${issueId} missing commentPostId, attempting to ensure shadow post...`);
+        const ensuredPostId = await ensureShadowPostForIssueAction(issueId, circle._id as string);
+        if (ensuredPostId) {
+            issue.commentPostId = ensuredPostId; // Update the issue object in memory
+            console.log(`Successfully ensured shadow post ${ensuredPostId} for issue ${issueId}`);
+        } else {
+            console.error(`Failed to ensure shadow post for issue ${issueId}`);
+            // Continue rendering without comments enabled for this issue
+        }
     }
 
     // Fetch detailed permissions for actions within the detail view
