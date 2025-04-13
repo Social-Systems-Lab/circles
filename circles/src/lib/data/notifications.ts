@@ -226,11 +226,8 @@ async function notifyParentItemComment(post: Post, comment: Comment, commenter: 
         return;
     }
 
-    // Don't notify if commenter is the item author
-    if (itemAuthorDid === comment.createdBy) {
-        console.log(`🔔 [NOTIFY] Skipping ${itemType} comment notification - commenter is item author`);
-        return;
-    }
+    // No longer needed: Logic to skip author notification if they are the commenter
+    // is handled in the "Add Item Author" block below.
 
     const recipients: UserPrivate[] = [];
     const recipientDids = new Set<string>();
@@ -247,14 +244,36 @@ async function notifyParentItemComment(post: Post, comment: Comment, commenter: 
     }
 
     // 2. Add Assignee (for Tasks/Issues, if different from author and commenter)
-    if (itemAssigneeDid && itemAssigneeDid !== comment.createdBy && !recipientDids.has(itemAssigneeDid)) {
-        const assignee = await getUserPrivate(itemAssigneeDid);
-        if (assignee) {
-            recipients.push(assignee);
-            recipientDids.add(assignee.did!);
+    if (itemAssigneeDid) {
+        // Check if assignee DID exists first
+        console.log(`🔔 [NOTIFY] Found Assignee DID for ${itemType} ${itemId}: ${itemAssigneeDid}`);
+        if (itemAssigneeDid !== comment.createdBy && !recipientDids.has(itemAssigneeDid)) {
+            console.log(`🔔 [NOTIFY] Attempting to fetch assignee: ${itemAssigneeDid}`);
+            const assignee = await getUserPrivate(itemAssigneeDid);
+            if (assignee) {
+                console.log(`🔔 [NOTIFY] Assignee found and added to recipients: ${assignee.name} (${assignee.did})`);
+                recipients.push(assignee);
+                recipientDids.add(assignee.did!);
+            } else {
+                // Existing warning is good
+                console.warn(
+                    `🔔 [NOTIFY] Assignee user private data not found for DID: ${itemAssigneeDid} on ${itemType} ${itemId}`,
+                );
+            }
         } else {
-            console.warn(`🔔 [NOTIFY] Assignee not found for ${itemType} ${itemId}`);
+            if (itemAssigneeDid === comment.createdBy) {
+                console.log(
+                    `🔔 [NOTIFY] Skipping assignee notification - assignee is the commenter: ${itemAssigneeDid}`,
+                );
+            }
+            if (recipientDids.has(itemAssigneeDid)) {
+                console.log(
+                    `🔔 [NOTIFY] Skipping assignee notification - assignee is already a recipient (likely the author): ${itemAssigneeDid}`,
+                );
+            }
         }
+    } else {
+        console.log(`🔔 [NOTIFY] No Assignee DID found on ${itemType} ${itemId}`);
     }
 
     if (recipients.length === 0) {
