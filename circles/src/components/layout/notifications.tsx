@@ -426,10 +426,16 @@ export const Notifications = () => {
 
             case "comment_like":
                 // Check if it's a like on a parent item's comment
-                if (groupedNotification.post?.postType && groupedNotification.post.parentItemType) {
+                if (groupedNotification.post?.parentItemType) {
+                    // Check parentItemType directly
                     const itemType = groupedNotification.post.parentItemType;
+                    // Access specific title field based on type
                     const itemTitle =
-                        groupedNotification[`${itemType}Title` as keyof typeof groupedNotification] || `a ${itemType}`;
+                        groupedNotification.goalTitle ||
+                        groupedNotification.taskTitle ||
+                        groupedNotification.issueTitle ||
+                        groupedNotification.proposalName || // Use proposalName
+                        `a ${itemType}`;
                     return `${userList} liked a comment on the ${itemType}: "${itemTitle}"`;
                 }
                 return `${userList} liked your comment`; // Fallback
@@ -467,10 +473,16 @@ export const Notifications = () => {
 
             case "comment_mention":
                 // Check if it's a mention in a parent item's comment
-                if (groupedNotification.post?.postType && groupedNotification.post.parentItemType) {
+                if (groupedNotification.post?.parentItemType) {
+                    // Check parentItemType directly
                     const itemType = groupedNotification.post.parentItemType;
+                    // Access specific title field based on type
                     const itemTitle =
-                        groupedNotification[`${itemType}Title` as keyof typeof groupedNotification] || `a ${itemType}`;
+                        groupedNotification.goalTitle ||
+                        groupedNotification.taskTitle ||
+                        groupedNotification.issueTitle ||
+                        groupedNotification.proposalName || // Use proposalName
+                        `a ${itemType}`;
                     return `${userList} mentioned you in a comment on the ${itemType}: "${itemTitle}"`;
                 }
                 return `${userList} mentioned you in a comment`; // Fallback

@@ -276,8 +276,12 @@ async function notifyParentItemComment(post: Post, comment: Comment, commenter: 
         user: commenter, // The user who commented
         post, // The shadow post (contains parentItemId, parentItemType)
         comment,
-        // Pass standard payload; sendNotifications/formatter must handle parentItemType
-        postId: post._id?.toString(),
+        // Populate specific fields based on itemType for sendNotifications payload
+        ...(itemType === "goal" && { goalId: itemId, goalTitle: (parentItem as GoalDisplay).title }),
+        ...(itemType === "task" && { taskId: itemId, taskTitle: (parentItem as TaskDisplay).title }),
+        ...(itemType === "issue" && { issueId: itemId, issueTitle: (parentItem as IssueDisplay).title }),
+        ...(itemType === "proposal" && { proposalId: itemId, proposalName: (parentItem as ProposalDisplay).name }),
+        postId: post._id?.toString(), // Keep postId as fallback/context
     });
 }
 
@@ -389,10 +393,14 @@ async function notifyParentItemCommentReply(
     await sendNotifications("comment_reply", recipients, {
         circle,
         user: replier, // The user who replied
-        post, // The shadow post (contains parentItemId, parentItemType)
+        post, // The shadow post
         comment: reply, // The reply itself
-        // Pass standard payload; sendNotifications/formatter must handle parentItemType
-        postId: post._id?.toString(),
+        // Populate specific fields based on itemType for sendNotifications payload
+        ...(itemType === "goal" && { goalId: itemId, goalTitle: (parentItem as GoalDisplay).title }),
+        ...(itemType === "task" && { taskId: itemId, taskTitle: (parentItem as TaskDisplay).title }),
+        ...(itemType === "issue" && { issueId: itemId, issueTitle: (parentItem as IssueDisplay).title }),
+        ...(itemType === "proposal" && { proposalId: itemId, proposalName: (parentItem as ProposalDisplay).name }),
+        postId: post._id?.toString(), // Keep postId as fallback/context
         commentId: parentComment._id?.toString(), // ID of the comment being replied to
     });
 }
@@ -446,6 +454,39 @@ export async function notifyCommentLike(
     let feed = await getFeed(post.feedId);
     let circle = await getCircleById(feed?.circleId!);
 
+    // --- Check if it's a comment on a parent item ---
+    let parentItemPayload = {};
+    if (post.parentItemType && post.parentItemId) {
+        let parentItem: GoalDisplay | TaskDisplay | IssueDisplay | ProposalDisplay | null = null;
+        try {
+            switch (post.parentItemType) {
+                case "goal":
+                    parentItem = await getGoalById(post.parentItemId);
+                    break;
+                case "task":
+                    parentItem = await getTaskById(post.parentItemId);
+                    break;
+                case "issue":
+                    parentItem = await getIssueById(post.parentItemId);
+                    break;
+                case "proposal":
+                    parentItem = await getProposalById(post.parentItemId);
+                    break;
+            }
+        } catch (e) {
+            console.error("Error fetching parent item for comment like notification", e);
+        }
+
+        if (parentItem) {
+            parentItemPayload = {
+                [`${post.parentItemType}Id`]: post.parentItemId,
+                [`${post.parentItemType}Title`]: (parentItem as any).title || (parentItem as any).name,
+                parentItemType: post.parentItemType,
+            };
+        }
+    }
+    // --- End parent item check ---
+
     // Send notification
     await sendNotifications("comment_like", [commentAuthorPrivate], {
         circle,
@@ -455,6 +496,7 @@ export async function notifyCommentLike(
         reaction: reactionType,
         postId: post._id?.toString(),
         commentId: comment._id?.toString(),
+        ...parentItemPayload, // Spread the parent item details into the payload
     });
 }
 
@@ -502,6 +544,39 @@ export async function notifyCommentMentions(
     let feed = await getFeed(post.feedId);
     let circle = await getCircleById(feed?.circleId!);
 
+    // --- Check if it's a comment on a parent item ---
+    let parentItemPayloadMention = {};
+    if (post.parentItemType && post.parentItemId) {
+        let parentItem: GoalDisplay | TaskDisplay | IssueDisplay | ProposalDisplay | null = null;
+        try {
+            switch (post.parentItemType) {
+                case "goal":
+                    parentItem = await getGoalById(post.parentItemId);
+                    break;
+                case "task":
+                    parentItem = await getTaskById(post.parentItemId);
+                    break;
+                case "issue":
+                    parentItem = await getIssueById(post.parentItemId);
+                    break;
+                case "proposal":
+                    parentItem = await getProposalById(post.parentItemId);
+                    break;
+            }
+        } catch (e) {
+            console.error("Error fetching parent item for comment mention notification", e);
+        }
+
+        if (parentItem) {
+            parentItemPayloadMention = {
+                [`${post.parentItemType}Id`]: post.parentItemId,
+                [`${post.parentItemType}Title`]: (parentItem as any).title || (parentItem as any).name,
+                parentItemType: post.parentItemType,
+            };
+        }
+    }
+    // --- End parent item check ---
+
     // Send notifications to all mentioned users
     await sendNotifications("comment_mention", mentionedUsers, {
         circle,
@@ -510,7 +585,7 @@ export async function notifyCommentMentions(
         comment,
         postId: post._id?.toString(),
         commentId: comment._id?.toString(),
-        // Remove project-specific fields
+        ...parentItemPayloadMention, // Spread the parent item details into the payload
     });
 }
 

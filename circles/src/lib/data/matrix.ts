@@ -13,6 +13,7 @@ import {
     TaskDisplay, // Added TaskDisplay
     TaskStage,
     GoalStage, // Added TaskStage
+    Media, // Added Media
 } from "@/models/models";
 import crypto from "crypto";
 import { getCirclesByDids, updateCircle } from "./circle";
@@ -588,14 +589,72 @@ export async function sendNotifications(
     }
 }
 
+// Helper function to sanitize Media objects (ensure fileInfo is basic)
+function sanitizeMedia(media: any): any {
+    if (!media || typeof media !== "object") return media;
+    const sanitized = { ...media };
+    if (sanitized.fileInfo && typeof sanitized.fileInfo === "object") {
+        sanitized.fileInfo = {
+            url: sanitized.fileInfo.url,
+            fileName: sanitized.fileInfo.fileName,
+            originalName: sanitized.fileInfo.originalName,
+        };
+    }
+    // Remove other potentially complex fields if necessary
+    return sanitized;
+}
+
 // Helper functions to sanitize data
 function sanitizeContent(obj: any): any {
-    if (!obj) return obj;
+    if (!obj || typeof obj !== "object") return obj; // Handle null or non-objects
 
-    const sanitized = { ...obj };
+    const sanitized = { ...obj } as any; // Use 'as any' carefully or define a more specific type
+
+    // Sanitize known fields
     if (sanitized._id) sanitized._id = sanitized._id.toString();
-    if (sanitized.createdAt) sanitized.createdAt = sanitized.createdAt.toISOString();
-    if (sanitized.editedAt) sanitized.editedAt = sanitized.editedAt.toISOString();
+    if (sanitized.createdAt instanceof Date) sanitized.createdAt = sanitized.createdAt.toISOString();
+    if (sanitized.editedAt instanceof Date) sanitized.editedAt = sanitized.editedAt.toISOString();
+    if (typeof sanitized.comments === "number") sanitized.comments = Math.floor(sanitized.comments);
+    if (typeof sanitized.replies === "number") sanitized.replies = Math.floor(sanitized.replies);
+
+    // Sanitize reactions object more thoroughly
+    if (sanitized.reactions && typeof sanitized.reactions === "object") {
+        const sanitizedReactions: { [key: string]: number | string } = {}; // Allow string values too
+        for (const key in sanitized.reactions) {
+            if (Object.prototype.hasOwnProperty.call(sanitized.reactions, key)) {
+                const value = sanitized.reactions[key];
+                if (typeof value === "number") {
+                    sanitizedReactions[key] = Math.floor(value); // Ensure integer
+                } else {
+                    sanitizedReactions[key] = String(value); // Convert others to string just in case
+                }
+            }
+        }
+        sanitized.reactions = sanitizedReactions;
+    }
+
+    // Recursively sanitize nested 'author' object if it exists and is an object
+    if (sanitized.author && typeof sanitized.author === "object") {
+        // Assuming author structure might be similar to Circle, use sanitizeCircle
+        sanitized.author = sanitizeCircle(sanitized.author);
+    }
+
+    // Recursively sanitize nested 'parentComment' object if it exists and is an object
+    if (sanitized.parentComment && typeof sanitized.parentComment === "object") {
+        sanitized.parentComment = sanitizeContent(sanitized.parentComment); // Use sanitizeContent for comments
+    }
+
+    // Sanitize media array if present
+    if (Array.isArray(sanitized.media)) {
+        sanitized.media = sanitized.media.map(sanitizeMedia); // Use sanitizeMedia helper
+    }
+
+    // Remove potentially sensitive or problematic fields before sending to Matrix
+    delete sanitized.password; // Example if password was ever included
+    delete sanitized.matrixAccessToken;
+    delete sanitized.matrixPassword;
+    delete sanitized.parentItem; // Remove potentially large/complex nested object if not needed directly by Matrix
+    // delete sanitized.accessRules; // Consider if this large object is needed
 
     return sanitized;
 }
@@ -636,22 +695,36 @@ function sanitizeCircle(circle: Circle): Partial<Circle> & { createdAt?: string 
 
     const sanitized = { ...circle } as any;
 
-    // If there's a location field, convert any numeric lat/lng to strings
+    // If there's a location field, ensure lat/lng are strings or integers if possible
     if (sanitized.location?.lngLat) {
         const { lng, lat } = sanitized.location.lngLat;
-        // Only do this if they're finite; or default to empty string
-        sanitized.location.lngLat.lng = Number.isFinite(lng) ? String(lng) : "";
-        sanitized.location.lngLat.lat = Number.isFinite(lat) ? String(lat) : "";
+        // Convert finite numbers to strings, otherwise keep as is (might be null/undefined)
+        if (Number.isFinite(lng)) sanitized.location.lngLat.lng = String(lng);
+        if (Number.isFinite(lat)) sanitized.location.lngLat.lat = String(lat);
     }
+    // Ensure members count is an integer
+    if (typeof sanitized.members === "number") sanitized.members = Math.floor(sanitized.members); // Use floor
 
     if (sanitized._id) sanitized._id = sanitized._id.toString();
-    if (sanitized.createdAt) {
-        const createdAtString = sanitized.createdAt.toISOString();
-        delete sanitized.createdAt;
-        return { ...sanitized, createdAt: createdAtString } as Partial<Circle> & { createdAt?: string };
+    // Ensure createdAt is converted only if it's a Date object
+    if (sanitized.createdAt instanceof Date) {
+        sanitized.createdAt = sanitized.createdAt.toISOString();
     }
 
-    return sanitized as Partial<Circle> & { createdAt?: string };
+    // Sanitize images array if present
+    if (Array.isArray(sanitized.images)) {
+        sanitized.images = sanitized.images.map(sanitizeMedia); // Use sanitizeMedia helper
+    }
+
+    // Remove potentially sensitive or problematic fields before sending to Matrix
+    delete sanitized.password;
+    delete sanitized.matrixAccessToken;
+    delete sanitized.matrixPassword;
+    delete sanitized.accessRules; // Often large and unnecessary for notifications
+    delete sanitized.userGroups; // Often large and unnecessary for notifications
+    delete sanitized.questionnaire;
+
+    return sanitized as Partial<Circle> & { createdAt?: string }; // Adjust return type if needed
 }
 
 function deriveBody(
@@ -706,41 +779,82 @@ function deriveBody(
             return `You have been accepted into circle ${circleName}`;
         case "post_comment":
             // Check if it's a comment on a parent item (Goal, Task, etc.)
-            if (payload.post?.postType && payload.post.parentItemType) {
+            if (payload.post?.parentItemType) {
                 const itemType = payload.post.parentItemType;
-                const itemTitle = payload[`${itemType}Title` as keyof typeof payload] || `a ${itemType}`;
+                // Access the specific title field directly from the payload
+                const itemTitle =
+                    payload.goalTitle ||
+                    payload.taskTitle ||
+                    payload.issueTitle ||
+                    payload.proposalName || // Use proposalName for proposals
+                    `a ${itemType}`;
                 // TODO: Add specific message for assignee if needed
                 return `${userName} commented on the ${itemType}: "${itemTitle}"`;
             }
             return `${userName} commented on your post`; // Fallback for regular posts
         case "comment_reply":
             // Check if it's a reply on a parent item's comment thread
-            if (payload.post?.postType && payload.post.parentItemType) {
+            if (payload.post?.parentItemType) {
                 const itemType = payload.post.parentItemType;
-                const itemTitle = payload[`${itemType}Title` as keyof typeof payload] || `a ${itemType}`;
+                const itemTitle =
+                    payload.goalTitle ||
+                    payload.taskTitle ||
+                    payload.issueTitle ||
+                    payload.proposalName || // Use proposalName for proposals
+                    `a ${itemType}`;
                 // TODO: Add specific message for assignee if needed
                 return `${userName} replied to a comment on the ${itemType}: "${itemTitle}"`;
             }
             return `${userName} replied to your comment`; // Fallback for regular posts
         case "post_like":
-            // TODO: Potentially adjust for likes on shadow posts if needed (e.g., notify item author?)
-            return `${userName} liked your post`;
+            // Check if it's a like on a parent item's shadow post
+            if (payload.post?.parentItemType) {
+                const itemType = payload.post.parentItemType;
+                const itemTitle =
+                    payload.goalTitle ||
+                    payload.taskTitle ||
+                    payload.issueTitle ||
+                    payload.proposalName || // Use proposalName for proposals
+                    `a ${itemType}`;
+                return `${userName} liked the ${itemType}: "${itemTitle}"`;
+            }
+            return `${userName} liked your post`; // Fallback for regular posts
         case "comment_like":
             // Check if it's a like on a parent item's comment
-            if (payload.post?.postType && payload.post.parentItemType) {
+            if (payload.post?.parentItemType) {
                 const itemType = payload.post.parentItemType;
-                const itemTitle = payload[`${itemType}Title` as keyof typeof payload] || `a ${itemType}`;
+                const itemTitle =
+                    payload.goalTitle ||
+                    payload.taskTitle ||
+                    payload.issueTitle ||
+                    payload.proposalName || // Use proposalName for proposals
+                    `a ${itemType}`;
                 return `${userName} liked a comment on the ${itemType}: "${itemTitle}"`;
             }
             return `${userName} liked your comment`; // Fallback for regular posts
         case "post_mention":
-            // TODO: Potentially adjust for mentions in shadow posts if needed (e.g., link to parent item?)
-            return `${userName} mentioned you in a post`;
+            // Check if it's a mention in a parent item's shadow post
+            if (payload.post?.parentItemType) {
+                const itemType = payload.post.parentItemType;
+                const itemTitle =
+                    payload.goalTitle ||
+                    payload.taskTitle ||
+                    payload.issueTitle ||
+                    payload.proposalName || // Use proposalName for proposals
+                    `a ${itemType}`;
+                return `${userName} mentioned you in the ${itemType}: "${itemTitle}"`;
+            }
+            return `${userName} mentioned you in a post`; // Fallback for regular posts
         case "comment_mention":
             // Check if it's a mention in a parent item's comment
-            if (payload.post?.postType && payload.post.parentItemType) {
+            if (payload.post?.parentItemType) {
                 const itemType = payload.post.parentItemType;
-                const itemTitle = payload[`${itemType}Title` as keyof typeof payload] || `a ${itemType}`;
+                const itemTitle =
+                    payload.goalTitle ||
+                    payload.taskTitle ||
+                    payload.issueTitle ||
+                    payload.proposalName || // Use proposalName for proposals
+                    `a ${itemType}`;
                 return `${userName} mentioned you in a comment on the ${itemType}: "${itemTitle}"`;
             }
             return `${userName} mentioned you in a comment`; // Fallback for regular posts
