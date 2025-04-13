@@ -49,6 +49,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Link from "next/link";
 import { isAuthorized } from "@/lib/auth/client-auth";
 import { features } from "@/lib/data/constants";
+import { CommentSection } from "../feeds/CommentSection"; // Import CommentSection
 
 // Helper function for goal stage badge styling
 const getGoalStageInfo = (stage: GoalStage) => {
@@ -356,15 +357,27 @@ const GoalDetail: React.FC<GoalDetailProps> = ({
                     </div>
                 )}
 
-                {/* Comments Section Placeholder */}
-                <div className="mt-8 border-t pt-6">
-                    <h3 className="mb-4 text-lg font-semibold">Comments</h3>
-                    <div className="text-center text-gray-500">
-                        {permissions.canComment
-                            ? "Comment functionality coming soon."
-                            : "Comments are disabled or you don't have permission."}
+                {/* --- Comment Section --- */}
+                {goal.commentPostId && permissions.canComment && (
+                    <CommentSection
+                        postId={goal.commentPostId}
+                        circle={circle}
+                        user={user ?? null} // Convert undefined from atom to null for the component prop
+                        // initialCommentCount={goal.comments || 0} // Pass if comment count is added to GoalDisplay
+                    />
+                )}
+                {/* Show message if comments are disabled or no post ID */}
+                {(!goal.commentPostId || !permissions.canComment) && (
+                    <div className="mt-8 border-t pt-6">
+                        <h3 className="mb-4 text-lg font-semibold">Comments</h3>
+                        <div className="text-sm text-gray-500">
+                            {permissions.canComment
+                                ? "Comments are not available for this goal yet."
+                                : "Comments are disabled or you don't have permission."}
+                        </div>
                     </div>
-                </div>
+                )}
+                {/* --- End Comment Section --- */}
             </CardContent>
         </>
     );

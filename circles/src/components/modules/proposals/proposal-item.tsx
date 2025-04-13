@@ -46,6 +46,7 @@ import {
     deleteProposalAction,
     voteOnProposalAction,
 } from "@/app/circles/[handle]/proposals/actions";
+import { CommentSection } from "../feeds/CommentSection"; // Import CommentSection
 
 interface ProposalItemProps {
     proposal: ProposalDisplay;
@@ -439,6 +440,25 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                         </div>
                     </div>
                 )}
+
+                {/* --- Comment Section --- */}
+                {/* Render comments only if not in preview mode and commentPostId exists */}
+                {!isPreview && proposal.commentPostId && (
+                    <CommentSection
+                        postId={proposal.commentPostId}
+                        circle={circle}
+                        user={user ?? null} // Convert undefined from atom to null
+                        // initialCommentCount={proposal.comments || 0} // Pass if comment count is added to ProposalDisplay
+                    />
+                )}
+                {/* Optional: Show a message if comments aren't available */}
+                {/* {!isPreview && !proposal.commentPostId && (
+                     <div className="mt-8 border-t pt-6">
+                        <h3 className="mb-4 text-lg font-semibold">Comments</h3>
+                        <div className="text-sm text-gray-500">Comments are not available for this proposal.</div>
+                    </div>
+                )} */}
+                {/* --- End Comment Section --- */}
             </CardContent>
 
             <CardFooter className={`flex items-start justify-between ${isPreview ? "flex-col gap-4" : ""}`}>

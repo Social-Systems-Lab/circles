@@ -48,6 +48,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import Link from "next/link";
 import { Separator } from "@/components/ui/separator"; // Import Separator
+import { CommentSection } from "../feeds/CommentSection"; // Import CommentSection
 
 // Helper function for stage badge styling and icons (copied from issues-list)
 const getStageInfo = (stage: IssueStage) => {
@@ -398,16 +399,27 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
                     </div>
                 )}
 
-                {/* Comments Section Placeholder */}
-                <div className="mt-8 border-t pt-6">
-                    <h3 className="mb-4 text-lg font-semibold">Comments</h3>
-                    {/* TODO: Integrate comment component here */}
-                    <div className="text-center text-gray-500">
-                        {permissions.canComment
-                            ? "Comment functionality coming soon."
-                            : "Comments are disabled or you don't have permission."}
+                {/* --- Comment Section --- */}
+                {issue.commentPostId && permissions.canComment && (
+                    <CommentSection
+                        postId={issue.commentPostId}
+                        circle={circle}
+                        user={user ?? null} // Convert undefined from atom to null
+                        // initialCommentCount={issue.comments || 0} // Pass if comment count is added to IssueDisplay
+                    />
+                )}
+                {/* Show message if comments are disabled or no post ID */}
+                {(!issue.commentPostId || !permissions.canComment) && (
+                    <div className="mt-8 border-t pt-6">
+                        <h3 className="mb-4 text-lg font-semibold">Comments</h3>
+                        <div className="text-sm text-gray-500">
+                            {permissions.canComment
+                                ? "Comments are not available for this issue yet."
+                                : "Comments are disabled or you don't have permission."}
+                        </div>
                     </div>
-                </div>
+                )}
+                {/* --- End Comment Section --- */}
             </CardContent>
             {/* Footer can be used for additional info or actions if needed */}
             {/* <CardFooter></CardFooter> */}

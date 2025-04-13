@@ -210,8 +210,10 @@ export const postSchema = z.object({
     highlightedCommentId: z.string().optional(),
     comments: z.number().default(0),
     mentions: z.array(mentionSchema).optional(),
-    postType: z.enum(["post", "project"]).optional(), // To identify shadow posts for projects
+    postType: z.enum(["post", "goal", "task", "issue", "proposal"]).optional(), // To identify shadow posts for projects
     userGroups: z.array(z.string()).default([]), // User groups that can see this post
+    parentItemId: z.string().optional(), // ID of the parent Goal, Task, Issue, or Proposal for shadow posts
+    parentItemType: z.enum(["goal", "task", "issue", "proposal"]).optional(), // Type of the parent item
     // Link Preview Fields
     linkPreviewUrl: z.string().url().optional(),
     linkPreviewTitle: z.string().optional(),
@@ -884,6 +886,7 @@ export const proposalSchema = z.object({
     reactions: z.record(z.string(), z.number()).default({}), // For "likes" in voting stage
     userGroups: z.array(z.string()).default([]), // User groups that can see this proposal
     location: locationSchema.optional(), // Added location field
+    commentPostId: z.string().optional(), // Optional link to a shadow post for comments
 });
 
 export type Proposal = z.infer<typeof proposalSchema>;
