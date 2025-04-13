@@ -705,17 +705,45 @@ function deriveBody(
         case "follow_accepted":
             return `You have been accepted into circle ${circleName}`;
         case "post_comment":
-            return `${userName} commented on your post`;
+            // Check if it's a comment on a parent item (Goal, Task, etc.)
+            if (payload.post?.postType && payload.post.parentItemType) {
+                const itemType = payload.post.parentItemType;
+                const itemTitle = payload[`${itemType}Title` as keyof typeof payload] || `a ${itemType}`;
+                // TODO: Add specific message for assignee if needed
+                return `${userName} commented on the ${itemType}: "${itemTitle}"`;
+            }
+            return `${userName} commented on your post`; // Fallback for regular posts
         case "comment_reply":
-            return `${userName} replied to your comment`;
+            // Check if it's a reply on a parent item's comment thread
+            if (payload.post?.postType && payload.post.parentItemType) {
+                const itemType = payload.post.parentItemType;
+                const itemTitle = payload[`${itemType}Title` as keyof typeof payload] || `a ${itemType}`;
+                // TODO: Add specific message for assignee if needed
+                return `${userName} replied to a comment on the ${itemType}: "${itemTitle}"`;
+            }
+            return `${userName} replied to your comment`; // Fallback for regular posts
         case "post_like":
+            // TODO: Potentially adjust for likes on shadow posts if needed (e.g., notify item author?)
             return `${userName} liked your post`;
         case "comment_like":
-            return `${userName} liked your comment`;
+            // Check if it's a like on a parent item's comment
+            if (payload.post?.postType && payload.post.parentItemType) {
+                const itemType = payload.post.parentItemType;
+                const itemTitle = payload[`${itemType}Title` as keyof typeof payload] || `a ${itemType}`;
+                return `${userName} liked a comment on the ${itemType}: "${itemTitle}"`;
+            }
+            return `${userName} liked your comment`; // Fallback for regular posts
         case "post_mention":
+            // TODO: Potentially adjust for mentions in shadow posts if needed (e.g., link to parent item?)
             return `${userName} mentioned you in a post`;
         case "comment_mention":
-            return `${userName} mentioned you in a comment`;
+            // Check if it's a mention in a parent item's comment
+            if (payload.post?.postType && payload.post.parentItemType) {
+                const itemType = payload.post.parentItemType;
+                const itemTitle = payload[`${itemType}Title` as keyof typeof payload] || `a ${itemType}`;
+                return `${userName} mentioned you in a comment on the ${itemType}: "${itemTitle}"`;
+            }
+            return `${userName} mentioned you in a comment`; // Fallback for regular posts
         // Proposal Notifications Fallbacks
         case "proposal_submitted_for_review":
             return `${userName} submitted proposal "${proposalName}" for review in ${circleName}`;

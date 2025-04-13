@@ -291,7 +291,21 @@ export const Notifications = () => {
 
     const handleNotificationClick = (groupedNotification: GroupedNotification) => {
         const notification = groupedNotification.latestNotification;
-        const circleHandle = notification.circle?.handle || "default";
+        const circleHandle = notification.circle?.handle || "default"; // Use circle handle from notification if available
+
+        // Helper function to get parent item URL
+        const getParentItemUrl = (notif: Notification): string | null => {
+            const type = notif.post?.parentItemType;
+            const id = notif.post?.parentItemId;
+            const handle = notif.circle?.handle || circleHandle; // Prefer circle handle from notification payload
+
+            if (type && id && handle) {
+                // Map type to plural form used in URL paths
+                const typePlural = type === "issue" ? "issues" : `${type}s`;
+                return `/circles/${handle}/${typePlural}/${id}`;
+            }
+            return null;
+        };
 
         switch (notification.notificationType) {
             // Original notification types
@@ -305,24 +319,21 @@ export const Notifications = () => {
                 router.push(`/circles/${notification.circle?.handle}`);
                 break;
 
-            // Post-related notifications
+            // Post/Comment related notifications - Check for parent item first
             case "post_comment":
-            case "post_like":
-            case "post_mention":
-                if (notification.postId) {
-                    // Navigate to the dedicated post page
-                    router.push(`/circles/${circleHandle}/post/${notification.postId}`);
-                }
-                break;
-
-            // Comment-related notifications
             case "comment_reply":
+            case "post_like": // Link like to parent item? Or post? Linking to parent for now.
             case "comment_like":
+            case "post_mention": // Link mention to parent item? Or post? Linking to parent for now.
             case "comment_mention":
-                if (notification.postId) {
-                    // Navigate to the dedicated post page with comment id
-                    // This will need to be enhanced to scroll to the specific comment
+                const parentUrl = getParentItemUrl(notification);
+                if (parentUrl) {
+                    // Navigate to the parent Goal/Task/Issue/Proposal page
+                    router.push(parentUrl);
+                } else if (notification.postId) {
+                    // Fallback: Navigate to the regular post page (or shadow post page)
                     router.push(`/circles/${circleHandle}/post/${notification.postId}`);
+                    // TODO: Consider scrolling to the specific comment if commentId is present
                 }
                 break;
 
@@ -362,7 +373,8 @@ export const Notifications = () => {
             case "goal_submitted_for_review":
             case "goal_approved":
             case "goal_status_changed":
-                if (notification.taskId) {
+                if (notification.goalId) {
+                    // Check goalId
                     router.push(`/circles/${circleHandle}/goals/${notification.goalId}`);
                 }
                 break;
@@ -403,22 +415,65 @@ export const Notifications = () => {
         // Create appropriate message based on notification type
         switch (notificationType) {
             case "post_like":
-                return `${userList} liked your post`;
+                // Check if it's a like on a parent item's shadow post
+                if (groupedNotification.post?.postType && groupedNotification.post.parentItemType) {
+                    const itemType = groupedNotification.post.parentItemType;
+                    const itemTitle =
+                        groupedNotification[`${itemType}Title` as keyof typeof groupedNotification] || `a ${itemType}`;
+                    return `${userList} liked the ${itemType}: "${itemTitle}"`; // Message doesn't imply ownership
+                }
+                return `${userList} liked your post`; // Fallback
 
             case "comment_like":
-                return `${userList} liked your comment`;
+                // Check if it's a like on a parent item's comment
+                if (groupedNotification.post?.postType && groupedNotification.post.parentItemType) {
+                    const itemType = groupedNotification.post.parentItemType;
+                    const itemTitle =
+                        groupedNotification[`${itemType}Title` as keyof typeof groupedNotification] || `a ${itemType}`;
+                    return `${userList} liked a comment on the ${itemType}: "${itemTitle}"`;
+                }
+                return `${userList} liked your comment`; // Fallback
 
             case "post_comment":
-                return `${userList} commented on your post`;
+                // Check if it's a comment on a parent item
+                if (groupedNotification.post?.postType && groupedNotification.post.parentItemType) {
+                    const itemType = groupedNotification.post.parentItemType;
+                    const itemTitle =
+                        groupedNotification[`${itemType}Title` as keyof typeof groupedNotification] || `a ${itemType}`;
+                    // TODO: Differentiate message if recipient is assignee vs author?
+                    return `${userList} commented on the ${itemType}: "${itemTitle}"`;
+                }
+                return `${userList} commented on your post`; // Fallback
 
             case "comment_reply":
-                return `${userList} replied to your comment`;
+                // Check if it's a reply on a parent item's comment thread
+                if (groupedNotification.post?.postType && groupedNotification.post.parentItemType) {
+                    const itemType = groupedNotification.post.parentItemType;
+                    const itemTitle =
+                        groupedNotification[`${itemType}Title` as keyof typeof groupedNotification] || `a ${itemType}`;
+                    return `${userList} replied to a comment on the ${itemType}: "${itemTitle}"`;
+                }
+                return `${userList} replied to your comment`; // Fallback
 
             case "post_mention":
-                return `${userList} mentioned you in a post`;
+                // Check if it's a mention in a parent item's shadow post
+                if (groupedNotification.post?.postType && groupedNotification.post.parentItemType) {
+                    const itemType = groupedNotification.post.parentItemType;
+                    const itemTitle =
+                        groupedNotification[`${itemType}Title` as keyof typeof groupedNotification] || `a ${itemType}`;
+                    return `${userList} mentioned you in the ${itemType}: "${itemTitle}"`;
+                }
+                return `${userList} mentioned you in a post`; // Fallback
 
             case "comment_mention":
-                return `${userList} mentioned you in a comment`;
+                // Check if it's a mention in a parent item's comment
+                if (groupedNotification.post?.postType && groupedNotification.post.parentItemType) {
+                    const itemType = groupedNotification.post.parentItemType;
+                    const itemTitle =
+                        groupedNotification[`${itemType}Title` as keyof typeof groupedNotification] || `a ${itemType}`;
+                    return `${userList} mentioned you in a comment on the ${itemType}: "${itemTitle}"`;
+                }
+                return `${userList} mentioned you in a comment`; // Fallback
 
             // Proposal Grouped Messages
             case "proposal_vote":
