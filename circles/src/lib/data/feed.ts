@@ -249,7 +249,7 @@ export async function getPostsFromMultipleFeeds(
             $match: {
                 feedId: { $in: feedIds },
                 // Filter out project shadow posts from regular feeds
-                $or: [{ postType: { $ne: "project" } }, { postType: { $exists: false } }],
+                $or: [{ postType: { $eq: "post" } }, { postType: { $exists: false } }],
             },
         },
 
@@ -686,7 +686,7 @@ export const getPosts = async (
             $match: {
                 feedId: feedId,
                 // Filter out project shadow posts from regular feeds
-                $or: [{ postType: { $ne: "project" } }, { postType: { $exists: false } }],
+                $or: [{ postType: { $eq: "post" } }, { postType: { $exists: false } }],
             },
         },
         // Lookup for author details
