@@ -4,8 +4,9 @@ import { ObjectId } from "mongodb";
 import { Goal, GoalDisplay, GoalStage, RankedList, Post } from "@/models/models"; // Added Post type
 import { SAFE_CIRCLE_PROJECTION } from "./circle";
 import { getMemberIdsByUserGroup } from "./member";
-import { RANKING_STALENESS_DAYS } from "./constants";
+// RANKING_STALENESS_DAYS is now in ranking.ts
 import { createPost } from "./feed"; // Import createPost from feed.ts
+import { getAggregateRanking, RankingContext } from "./ranking"; // Import the new generic function
 // No longer need getUserByDid if we use $lookup consistently
 
 // Safe projection for goal queries, similar to proposals
@@ -468,201 +469,39 @@ type GoalRankingResult = {
     activeGoalIds: Set<string>; // Also return the set of IDs used for ranking
 };
 
+/**
+ * Retrieves the aggregate goal ranking for a circle, optionally filtered by user group.
+ * Uses the cached ranking if available and valid.
+ * @param circleId The ID of the circle
+ * @param filterUserGroupHandle Optional handle of the user group to filter by
+ * @returns Promise<GoalRankingResult>
+ */
 export const getGoalRanking = async (circleId: string, filterUserGroupHandle?: string): Promise<GoalRankingResult> => {
-    // Updated return type
-    const defaultResult: GoalRankingResult = {
-        rankMap: new Map(),
-        totalRankers: 0,
-        activeGoalIds: new Set(),
+    const context: RankingContext = {
+        entityId: circleId,
+        itemType: "goals",
+        filterUserGroupHandle: filterUserGroupHandle,
     };
-    const now = new Date();
 
     try {
-        // Get active goals
-        const activeGoals = await getActiveGoalsByCircleId(circleId);
-        const activeGoalIds = new Set(activeGoals.map((t: GoalDisplay) => t._id!.toString()));
-        const N = activeGoalIds.size;
+        // Use a reasonable cache age, e.g., 1 hour (3600 seconds)
+        const maxCacheAgeSeconds = 3600;
+        const result = await getAggregateRanking(context, maxCacheAgeSeconds);
 
-        if (N === 0) return { ...defaultResult, activeGoalIds }; // Return empty map but with active IDs
-
-        // Fetch all potentially relevant ranked lists
-        const allRankedLists = await RankedLists.find({
-            entityId: circleId,
-            type: "goals",
-        }).toArray();
-
-        // Filter lists and prepare user IDs
-        const userIdsToCheck = new Set<string>();
-        const potentiallyValidLists: (RankedList & { becameStaleAt?: Date | null })[] = [];
-        for (const list of allRankedLists) {
-            userIdsToCheck.add(list.userId);
-            potentiallyValidLists.push(list);
-        }
-
-        if (potentiallyValidLists.length === 0) return { ...defaultResult, activeGoalIds };
-
-        // Check if user of each list has permission to rank
-        const users = await Circles.find({ _id: { $in: Array.from(userIdsToCheck).map((id) => new ObjectId(id)) } })
-            .project<{ _id: ObjectId; did?: string }>({ _id: 1, did: 1 })
-            .toArray();
-        const userMap = new Map(users.map((u: { _id: ObjectId; did?: string }) => [u._id.toString(), u.did]));
-        let groupMemberIds: Set<string> | null = null;
-        if (filterUserGroupHandle) {
-            groupMemberIds = new Set(await getMemberIdsByUserGroup(circleId, filterUserGroupHandle));
-        }
-
-        const permissionChecks = Array.from(userIdsToCheck).map(async (userId) => {
-            const userDid = userMap.get(userId);
-            if (!userDid) return false;
-            if (groupMemberIds && !groupMemberIds.has(userId)) return false;
-            // Removed rank permission check as the feature is removed
-            // const hasPermission = await isAuthorized(userDid, circleId, features.goals.rank);
-            // return hasPermission ? userId : false;
-            // Assume if they are in the group (if filtered), they are permitted for now
-            return userId; // Return userId directly if checks pass
-        });
-
-        const results = await Promise.all(permissionChecks);
-        const permittedUserIds = new Set(results.filter((result): result is string => result !== false));
-
-        // Filter the lists based on included users
-        const listsToProcess = potentiallyValidLists.filter((list) => permittedUserIds.has(list.userId));
-        if (listsToProcess.length === 0) return { ...defaultResult, activeGoalIds };
-
-        // Get goal creation dates for tie-breaking
-        const goalCreationDates = new Map<string, Date>();
-        activeGoals.forEach((goal) => {
-            if (goal._id && goal.createdAt) {
-                // Ensure createdAt is stored as a Date object
-                goalCreationDates.set(goal._id.toString(), new Date(goal.createdAt));
-            }
-        });
-
-        // 4. Aggregate scores using Borda Count with Grace Period & Average Points
-        const goalScores = new Map<string, number>();
-        let contributingRankers = 0; // Count lists that contribute points
-        const listUpdatePromises: Promise<any>[] = []; // To track DB updates
-
-        for (const list of listsToProcess) {
-            const userRankedIds = new Set(list.list);
-            const isComplete = userRankedIds.size === N && list.list.every((id) => activeGoalIds.has(id));
-            let listContributes = false; // Flag if this list adds points in this run
-
-            if (isComplete) {
-                // --- List is Complete and Fresh ---
-                listContributes = true;
-                // Assign standard Borda points
-                list.list.forEach((goalId, index) => {
-                    const points = N - index; // Rank 1 gets N points, etc.
-                    goalScores.set(goalId, (goalScores.get(goalId) || 0) + points);
-                });
-
-                // If it was previously stale, mark it as fresh again
-                if (list.becameStaleAt) {
-                    listUpdatePromises.push(
-                        RankedLists.updateOne({ _id: list._id }, { $unset: { becameStaleAt: "" } }),
-                    );
-                }
-            } else {
-                // --- List is Incomplete ---
-                const becameStaleAt = list.becameStaleAt ? new Date(list.becameStaleAt) : null; // Ensure it's a Date object
-
-                if (!becameStaleAt) {
-                    // --- First time detected as stale: Start grace period ---
-                    listContributes = true;
-                    const K = list.list.length; // Items user ranked
-                    const M = N - K; // Items user did not rank
-                    const avgPoints = M > 0 ? (N - K + 1) / 2 : 0; // Avoid division by zero if K=N (shouldn't happen here)
-
-                    // Assign points for explicitly ranked items
-                    list.list.forEach((goalId, index) => {
-                        const points = N - index;
-                        goalScores.set(goalId, (goalScores.get(goalId) || 0) + points);
-                    });
-                    // Assign average points for unranked items
-                    activeGoalIds.forEach((goalId) => {
-                        if (!userRankedIds.has(goalId)) {
-                            goalScores.set(goalId, (goalScores.get(goalId) || 0) + avgPoints);
-                        }
-                    });
-
-                    // **Write becameStaleAt = now() to DB**
-                    listUpdatePromises.push(RankedLists.updateOne({ _id: list._id }, { $set: { becameStaleAt: now } }));
-                } else {
-                    // --- Already stale: Check if grace period expired ---
-                    const stalenessThreshold = new Date(becameStaleAt);
-                    stalenessThreshold.setDate(stalenessThreshold.getDate() + RANKING_STALENESS_DAYS);
-
-                    if (now <= stalenessThreshold) {
-                        // --- Within Grace Period ---
-                        listContributes = true;
-                        const K = list.list.length;
-                        const M = N - K;
-                        const avgPoints = M > 0 ? (N - K + 1) / 2 : 0;
-
-                        // Assign points (same logic as above)
-                        list.list.forEach((goalId, index) => {
-                            const points = N - index;
-                            goalScores.set(goalId, (goalScores.get(goalId) || 0) + points);
-                        });
-                        activeGoalIds.forEach((goalId) => {
-                            if (!userRankedIds.has(goalId)) {
-                                goalScores.set(goalId, (goalScores.get(goalId) || 0) + avgPoints);
-                            }
-                        });
-                    } else {
-                        // --- Grace Period Expired ---
-                        // List does not contribute points. No updates needed.
-                        listContributes = false;
-                    }
-                }
-            }
-
-            if (listContributes) {
-                contributingRankers++;
-            }
-        }
-
-        // Wait for all potential DB updates to finish (important!)
-        // Consider adding error handling for these updates if needed
-        await Promise.all(listUpdatePromises);
-
-        // 5. Convert scores to ranks
-        const rankedResults = Array.from(goalScores.entries())
-            .map(([goalId, score]) => ({
-                goalId,
-                score,
-                // Retrieve creation date for sorting
-                createdAt: goalCreationDates.get(goalId) || new Date(0), // Use epoch if not found
-            }))
-            .sort((a, b) => {
-                // 1. Sort by score descending (primary criterion)
-                if (b.score !== a.score) {
-                    return b.score - a.score;
-                }
-                // 2. Sort by creation date ascending (secondary - older first)
-                // Check if dates are valid before comparing getTime()
-                if (a.createdAt && b.createdAt && !isNaN(a.createdAt.getTime()) && !isNaN(b.createdAt.getTime())) {
-                    return a.createdAt.getTime() - b.createdAt.getTime();
-                }
-                // 3. Fallback tie-breaker (e.g., Goal ID) if dates are missing/invalid or identical
-                return a.goalId.localeCompare(b.goalId);
-            });
-
-        const rankMap = new Map<string, number>();
-        rankedResults.forEach((item, index) => {
-            // Assign rank 1, 2, 3, ... based on the final sorted position
-            rankMap.set(item.goalId, index + 1);
-        });
-
+        // Adapt the result from getAggregateRanking to GoalRankingResult format
         return {
-            rankMap,
-            totalRankers: contributingRankers, // Use the count of lists that added points
-            activeGoalIds,
+            rankMap: result.rankMap,
+            totalRankers: result.totalRankers,
+            activeGoalIds: result.activeItemIds, // Rename activeItemIds to activeGoalIds
         };
     } catch (error) {
-        console.error("Error calculating goal ranking:", error);
-        return defaultResult; // Return default on error
+        console.error(`Error getting goal ranking for circle ${circleId}:`, error);
+        // Return a default empty result on error
+        return {
+            rankMap: new Map(),
+            totalRankers: 0,
+            activeGoalIds: new Set(),
+        };
     }
 };
 

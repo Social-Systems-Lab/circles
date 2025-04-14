@@ -834,7 +834,10 @@ export type NotificationType =
     // Goal Notifications
     | "goal_submitted_for_review"
     | "goal_approved"
-    | "goal_status_changed";
+    | "goal_status_changed"
+    // Ranking Notifications
+    | "ranking_stale_reminder" // User's ranking list is stale, reminder sent
+    | "ranking_grace_period_ended"; // User's ranking list is past grace period
 
 // Define all onboarding steps in a single place for consistency
 export const ONBOARDING_STEPS = [
@@ -933,14 +936,16 @@ export interface IssueDisplay extends Issue {
 // Ranked List for prioritization
 export const rankedListSchema = z.object({
     _id: z.any().optional(),
-    entityId: z.string(), // ID of the circle (for tasks) or other entity (e.g., poll)
-    type: z.enum(["tasks", "goals", "poll"]), // Type of entity being ranked - add more as needed
+    entityId: z.string(), // ID of the circle or other entity
+    type: z.enum(["tasks", "goals", "issues", "proposals", "poll"]), // Added "issues", "proposals"
     userId: z.string(), // User's _id who submitted this ranking
-    list: z.array(z.string()), // Ordered array of item IDs (task IDs in this case)
+    list: z.array(z.string()), // Ordered array of item IDs
     createdAt: z.date(),
     updatedAt: z.date(),
     isValid: z.boolean().default(true), // Flag to mark if the list is current and usable for aggregation
-    becameStaleAt: z.date().optional(),
+    becameStaleAt: z.date().optional(), // When the list first became incomplete relative to active items
+    lastStaleReminderSentAt: z.date().nullable().optional(), // Track when the stale reminder was last sent
+    lastGracePeriodEndedSentAt: z.date().nullable().optional(), // Track when the grace period ended notification was last sent
 });
 
 export type RankedList = z.infer<typeof rankedListSchema>;

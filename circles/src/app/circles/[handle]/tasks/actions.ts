@@ -38,6 +38,7 @@ import {
     getTaskRanking, // Will be created in task.ts
 } from "@/lib/data/task";
 import { getMembers, getMemberIdsByUserGroup } from "@/lib/data/member"; // Will be created in member.ts
+import { updateAggregateRankCache } from "@/lib/data/ranking"; // Import cache update function
 // Import task notification functions (assuming they will be created)
 import {
     notifyTaskSubmittedForReview,
@@ -1065,6 +1066,16 @@ export async function saveUserRankedListAction(
             },
             { upsert: true },
         );
+
+        // --- Update Aggregate Rank Cache ---
+        // Trigger cache update after user saves their list.
+        // This affects the overall ranking (no group filter).
+        await updateAggregateRankCache({
+            entityId: circle._id!.toString(),
+            itemType: "tasks",
+            filterUserGroupHandle: undefined, // Update the main cache
+        });
+        // --- End Cache Update ---
 
         // Revalidate the tasks list page where rank sorting might be used
         revalidatePath(`/circles/${circleHandle}/tasks`);

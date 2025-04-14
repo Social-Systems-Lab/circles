@@ -127,6 +127,104 @@ export const getIssuesByCircleId = async (circleId: string, userDid: string): Pr
 };
 
 /**
+ * Get active issues (open or inProgress) for a circle, including author and assignee details.
+ * Filters results based on the user's group membership and the issue's userGroups.
+ * @param circleId The ID of the circle
+ * @returns Array of active issues the user is allowed to see
+ */
+export const getActiveIssuesByCircleId = async (circleId: string): Promise<IssueDisplay[]> => {
+    try {
+        const issues = (await Issues.aggregate([
+            // 1) Match on circleId and active stages first
+            {
+                $match: {
+                    circleId,
+                    stage: { $in: ["open", "inProgress"] }, // Filter for active stages
+                },
+            },
+
+            // 2) Lookup author details (same as getIssuesByCircleId)
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { authorDid: "$createdBy" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$did", "$$authorDid"] },
+                                        { $eq: ["$circleType", "user"] },
+                                        { $ne: ["$$authorDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" },
+                            },
+                        },
+                    ],
+                    as: "authorDetails",
+                },
+            },
+            { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: false } },
+
+            // 3) Lookup assignee details (same as getIssuesByCircleId)
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { assigneeDid: "$assignedTo" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$did", "$$assigneeDid"] },
+                                        { $eq: ["$circleType", "user"] },
+                                        { $ne: ["$$assigneeDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" },
+                            },
+                        },
+                    ],
+                    as: "assigneeDetails",
+                },
+            },
+            { $unwind: { path: "$assigneeDetails", preserveNullAndEmptyArrays: true } },
+
+            // 4) Final projection (same as getIssuesByCircleId)
+            {
+                $project: {
+                    ...SAFE_ISSUE_PROJECTION,
+                    _id: { $toString: "$_id" },
+                    author: "$authorDetails",
+                    assignee: "$assigneeDetails",
+                },
+            },
+
+            // 5) Sort by newest first (optional, might be overridden by ranking later)
+            { $sort: { createdAt: -1 } },
+        ]).toArray()) as IssueDisplay[];
+
+        // TODO: Add fine-grained visibility filtering based on userDid and issue.userGroups if needed
+
+        return issues;
+    } catch (error) {
+        console.error("Error getting active issues by circle ID:", error);
+        throw error;
+    }
+};
+
+/**
  * Get a single issue by ID, including author and assignee details.
  * Does NOT perform visibility checks here, assumes calling action does.
  * @param issueId The ID of the issue
@@ -435,6 +533,54 @@ export const assignIssue = async (issueId: string, assigneeDid: string | undefin
     } catch (error) {
         console.error(`Error assigning issue (${issueId}):`, error);
         return false;
+    }
+};
+
+// --- Ranking Function ---
+import { getAggregateRanking, RankingContext } from "./ranking"; // Import the generic ranking function
+
+type IssueRankingResult = {
+    rankMap: Map<string, number>;
+    totalRankers: number;
+    activeIssueIds: Set<string>;
+};
+
+/**
+ * Retrieves the aggregate issue ranking for a circle, optionally filtered by user group.
+ * Uses the cached ranking if available and valid.
+ * @param circleId The ID of the circle
+ * @param filterUserGroupHandle Optional handle of the user group to filter by
+ * @returns Promise<IssueRankingResult>
+ */
+export const getIssueRanking = async (
+    circleId: string,
+    filterUserGroupHandle?: string,
+): Promise<IssueRankingResult> => {
+    const context: RankingContext = {
+        entityId: circleId,
+        itemType: "issues",
+        filterUserGroupHandle: filterUserGroupHandle,
+    };
+
+    try {
+        // Use a reasonable cache age, e.g., 1 hour (3600 seconds)
+        const maxCacheAgeSeconds = 3600;
+        const result = await getAggregateRanking(context, maxCacheAgeSeconds);
+
+        // Adapt the result from getAggregateRanking to IssueRankingResult format
+        return {
+            rankMap: result.rankMap,
+            totalRankers: result.totalRankers,
+            activeIssueIds: result.activeItemIds, // Rename activeItemIds to activeIssueIds
+        };
+    } catch (error) {
+        console.error(`Error getting issue ranking for circle ${circleId}:`, error);
+        // Return a default empty result on error
+        return {
+            rankMap: new Map(),
+            totalRankers: 0,
+            activeIssueIds: new Set(),
+        };
     }
 };
 

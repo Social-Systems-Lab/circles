@@ -5,8 +5,9 @@ import { Task, TaskDisplay, TaskStage, Circle, Member, RankedList, Post } from "
 import { getCircleById, SAFE_CIRCLE_PROJECTION } from "./circle";
 import { getMemberIdsByUserGroup } from "./member";
 import { isAuthorized } from "../auth/auth";
-import { features, RANKING_STALENESS_DAYS } from "./constants";
+import { features } from "./constants"; // RANKING_STALENESS_DAYS is now in ranking.ts
 import { createPost } from "./feed"; // Import createPost from feed.ts
+import { getAggregateRanking, RankingContext } from "./ranking"; // Import the new generic function
 // No longer need getUserByDid if we use $lookup consistently
 
 // Safe projection for task queries, similar to proposals
@@ -613,202 +614,45 @@ export const assignTask = async (taskId: string, assigneeDid: string | undefined
 type TaskRankingResult = {
     rankMap: Map<string, number>;
     totalRankers: number;
-    activeTaskIds: Set<string>; // Also return the set of IDs used for ranking
+    activeTaskIds: Set<string>; // Renamed from activeGoalIds to be consistent
 };
 
+/**
+ * Retrieves the aggregate task ranking for a circle, optionally filtered by user group.
+ * Uses the cached ranking if available and valid.
+ * @param circleId The ID of the circle
+ * @param filterUserGroupHandle Optional handle of the user group to filter by
+ * @returns Promise<TaskRankingResult>
+ */
 export const getTaskRanking = async (circleId: string, filterUserGroupHandle?: string): Promise<TaskRankingResult> => {
-    // Updated return type
-    const defaultResult: TaskRankingResult = {
-        rankMap: new Map(),
-        totalRankers: 0,
-        activeTaskIds: new Set(),
+    const context: RankingContext = {
+        entityId: circleId,
+        itemType: "tasks",
+        filterUserGroupHandle: filterUserGroupHandle,
+        // userDid is not strictly needed here as getAggregateRanking handles permissions internally,
+        // but could be passed if needed for other reasons in the future.
     };
-    const now = new Date();
 
     try {
-        // Get active tasks
-        const activeTasks = await getActiveTasksByCircleId(circleId);
-        const activeTaskIds = new Set(activeTasks.map((t: TaskDisplay) => t._id!.toString()));
-        const N = activeTaskIds.size;
+        // Use a reasonable cache age, e.g., 1 hour (3600 seconds)
+        // Or 0 if you always want the absolute latest calculation triggered by this call
+        const maxCacheAgeSeconds = 3600;
+        const result = await getAggregateRanking(context, maxCacheAgeSeconds);
 
-        if (N === 0) return { ...defaultResult, activeTaskIds }; // Return empty map but with active IDs
-
-        // Fetch all potentially relevant ranked lists
-        const allRankedLists = await RankedLists.find({
-            entityId: circleId,
-            type: "tasks",
-        }).toArray();
-
-        // Filter lists and prepare user IDs
-        const userIdsToCheck = new Set<string>();
-        const potentiallyValidLists: (RankedList & { becameStaleAt?: Date | null })[] = [];
-        for (const list of allRankedLists) {
-            userIdsToCheck.add(list.userId);
-            potentiallyValidLists.push(list);
-        }
-
-        if (potentiallyValidLists.length === 0) return { ...defaultResult, activeTaskIds };
-
-        // Check if user of each list has permission to rank
-        const users = await Circles.find({ _id: { $in: Array.from(userIdsToCheck).map((id) => new ObjectId(id)) } })
-            .project<{ _id: ObjectId; did?: string }>({ _id: 1, did: 1 })
-            .toArray();
-        const userMap = new Map(users.map((u: { _id: ObjectId; did?: string }) => [u._id.toString(), u.did]));
-        let groupMemberIds: Set<string> | null = null;
-        if (filterUserGroupHandle) {
-            groupMemberIds = new Set(await getMemberIdsByUserGroup(circleId, filterUserGroupHandle));
-        }
-
-        const permissionChecks = Array.from(userIdsToCheck).map(async (userId) => {
-            const userDid = userMap.get(userId);
-            if (!userDid) return false;
-            if (groupMemberIds && !groupMemberIds.has(userId)) return false;
-            // Check if user still has permission to rank (important!)
-            const hasPermission = await isAuthorized(userDid, circleId, features.tasks.rank);
-            return hasPermission ? userId : false;
-        });
-
-        const results = await Promise.all(permissionChecks);
-        const permittedUserIds = new Set(results.filter((result): result is string => result !== false));
-
-        // Filter the lists based on included users
-        const listsToProcess = potentiallyValidLists.filter((list) => permittedUserIds.has(list.userId));
-        if (listsToProcess.length === 0) return { ...defaultResult, activeTaskIds };
-
-        // Get task creation dates for tie-breaking
-        const taskCreationDates = new Map<string, Date>();
-        activeTasks.forEach((task) => {
-            if (task._id && task.createdAt) {
-                // Ensure createdAt is stored as a Date object
-                taskCreationDates.set(task._id.toString(), new Date(task.createdAt));
-            }
-        });
-
-        // 4. Aggregate scores using Borda Count with Grace Period & Average Points
-        const taskScores = new Map<string, number>();
-        let contributingRankers = 0; // Count lists that contribute points
-        const listUpdatePromises: Promise<any>[] = []; // To track DB updates
-
-        for (const list of listsToProcess) {
-            const userRankedIds = new Set(list.list);
-            const isComplete = userRankedIds.size === N && list.list.every((id) => activeTaskIds.has(id));
-            let listContributes = false; // Flag if this list adds points in this run
-
-            if (isComplete) {
-                // --- List is Complete and Fresh ---
-                listContributes = true;
-                // Assign standard Borda points
-                list.list.forEach((taskId, index) => {
-                    const points = N - index; // Rank 1 gets N points, etc.
-                    taskScores.set(taskId, (taskScores.get(taskId) || 0) + points);
-                });
-
-                // If it was previously stale, mark it as fresh again
-                if (list.becameStaleAt) {
-                    listUpdatePromises.push(
-                        RankedLists.updateOne({ _id: list._id }, { $unset: { becameStaleAt: "" } }),
-                    );
-                }
-            } else {
-                // --- List is Incomplete ---
-                const becameStaleAt = list.becameStaleAt ? new Date(list.becameStaleAt) : null; // Ensure it's a Date object
-
-                if (!becameStaleAt) {
-                    // --- First time detected as stale: Start grace period ---
-                    listContributes = true;
-                    const K = list.list.length; // Items user ranked
-                    const M = N - K; // Items user did not rank
-                    const avgPoints = M > 0 ? (N - K + 1) / 2 : 0; // Avoid division by zero if K=N (shouldn't happen here)
-
-                    // Assign points for explicitly ranked items
-                    list.list.forEach((taskId, index) => {
-                        const points = N - index;
-                        taskScores.set(taskId, (taskScores.get(taskId) || 0) + points);
-                    });
-                    // Assign average points for unranked items
-                    activeTaskIds.forEach((taskId) => {
-                        if (!userRankedIds.has(taskId)) {
-                            taskScores.set(taskId, (taskScores.get(taskId) || 0) + avgPoints);
-                        }
-                    });
-
-                    // **Write becameStaleAt = now() to DB**
-                    listUpdatePromises.push(RankedLists.updateOne({ _id: list._id }, { $set: { becameStaleAt: now } }));
-                } else {
-                    // --- Already stale: Check if grace period expired ---
-                    const stalenessThreshold = new Date(becameStaleAt);
-                    stalenessThreshold.setDate(stalenessThreshold.getDate() + RANKING_STALENESS_DAYS);
-
-                    if (now <= stalenessThreshold) {
-                        // --- Within Grace Period ---
-                        listContributes = true;
-                        const K = list.list.length;
-                        const M = N - K;
-                        const avgPoints = M > 0 ? (N - K + 1) / 2 : 0;
-
-                        // Assign points (same logic as above)
-                        list.list.forEach((taskId, index) => {
-                            const points = N - index;
-                            taskScores.set(taskId, (taskScores.get(taskId) || 0) + points);
-                        });
-                        activeTaskIds.forEach((taskId) => {
-                            if (!userRankedIds.has(taskId)) {
-                                taskScores.set(taskId, (taskScores.get(taskId) || 0) + avgPoints);
-                            }
-                        });
-                    } else {
-                        // --- Grace Period Expired ---
-                        // List does not contribute points. No updates needed.
-                        listContributes = false;
-                    }
-                }
-            }
-
-            if (listContributes) {
-                contributingRankers++;
-            }
-        }
-
-        // Wait for all potential DB updates to finish (important!)
-        // Consider adding error handling for these updates if needed
-        await Promise.all(listUpdatePromises);
-
-        // 5. Convert scores to ranks
-        const rankedResults = Array.from(taskScores.entries())
-            .map(([taskId, score]) => ({
-                taskId,
-                score,
-                // Retrieve creation date for sorting
-                createdAt: taskCreationDates.get(taskId) || new Date(0), // Use epoch if not found
-            }))
-            .sort((a, b) => {
-                // 1. Sort by score descending (primary criterion)
-                if (b.score !== a.score) {
-                    return b.score - a.score;
-                }
-                // 2. Sort by creation date ascending (secondary - older first)
-                // Check if dates are valid before comparing getTime()
-                if (a.createdAt && b.createdAt && !isNaN(a.createdAt.getTime()) && !isNaN(b.createdAt.getTime())) {
-                    return a.createdAt.getTime() - b.createdAt.getTime();
-                }
-                // 3. Fallback tie-breaker (e.g., Task ID) if dates are missing/invalid or identical
-                return a.taskId.localeCompare(b.taskId);
-            });
-
-        const rankMap = new Map<string, number>();
-        rankedResults.forEach((item, index) => {
-            // Assign rank 1, 2, 3, ... based on the final sorted position
-            rankMap.set(item.taskId, index + 1);
-        });
-
+        // Adapt the result from getAggregateRanking to TaskRankingResult format
         return {
-            rankMap,
-            totalRankers: contributingRankers, // Use the count of lists that added points
-            activeTaskIds,
+            rankMap: result.rankMap,
+            totalRankers: result.totalRankers,
+            activeTaskIds: result.activeItemIds, // Rename activeItemIds to activeTaskIds
         };
     } catch (error) {
-        console.error("Error calculating task ranking:", error);
-        return defaultResult; // Return default on error
+        console.error(`Error getting task ranking for circle ${circleId}:`, error);
+        // Return a default empty result on error
+        return {
+            rankMap: new Map(),
+            totalRankers: 0,
+            activeTaskIds: new Set(),
+        };
     }
 };
 

@@ -178,6 +178,134 @@ export const getProposalsByCircleId = async (circleId: string, userDid?: string)
     }
 };
 
+// --- Ranking Function ---
+import { getAggregateRanking, RankingContext } from "./ranking"; // Import the generic ranking function
+
+type ProposalRankingResult = {
+    rankMap: Map<string, number>;
+    totalRankers: number;
+    activeProposalIds: Set<string>;
+};
+
+/**
+ * Retrieves the aggregate proposal ranking for a circle, optionally filtered by user group.
+ * Uses the cached ranking if available and valid.
+ * @param circleId The ID of the circle
+ * @param filterUserGroupHandle Optional handle of the user group to filter by
+ * @returns Promise<ProposalRankingResult>
+ */
+export const getProposalRanking = async (
+    circleId: string,
+    filterUserGroupHandle?: string,
+): Promise<ProposalRankingResult> => {
+    const context: RankingContext = {
+        entityId: circleId,
+        itemType: "proposals",
+        filterUserGroupHandle: filterUserGroupHandle,
+    };
+
+    try {
+        // Use a reasonable cache age, e.g., 1 hour (3600 seconds)
+        const maxCacheAgeSeconds = 3600;
+        const result = await getAggregateRanking(context, maxCacheAgeSeconds);
+
+        // Adapt the result from getAggregateRanking to ProposalRankingResult format
+        return {
+            rankMap: result.rankMap,
+            totalRankers: result.totalRankers,
+            activeProposalIds: result.activeItemIds, // Rename activeItemIds to activeProposalIds
+        };
+    } catch (error) {
+        console.error(`Error getting proposal ranking for circle ${circleId}:`, error);
+        // Return a default empty result on error
+        return {
+            rankMap: new Map(),
+            totalRankers: 0,
+            activeProposalIds: new Set(),
+        };
+    }
+};
+
+/**
+ * Get active proposals (discussion or voting) for a circle
+ * @param circleId The ID of the circle
+ * @returns Array of active proposals
+ */
+export const getActiveProposalsByCircleId = async (circleId: string): Promise<ProposalDisplay[]> => {
+    try {
+        const proposals = (await Proposals.aggregate([
+            // 1) Match on circleId and active stages first
+            {
+                $match: {
+                    circleId,
+                    stage: { $in: ["discussion", "voting"] }, // Filter for active stages
+                },
+            },
+
+            // 2) Lookup author details
+            {
+                $lookup: {
+                    from: "circles",
+                    localField: "createdBy",
+                    foreignField: "did",
+                    as: "authorDetails",
+                },
+            },
+            { $unwind: "$authorDetails" },
+
+            // 3) Lookup circle details
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { circleId: { $toObjectId: "$circleId" } },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ["$_id", "$$circleId"] } } },
+                        {
+                            $project: {
+                                _id: { $toString: "$_id" },
+                                name: 1,
+                                handle: 1,
+                                picture: 1,
+                                userGroups: 1,
+                            },
+                        },
+                    ],
+                    as: "circleDetails",
+                },
+            },
+            { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
+
+            // 4) Final projection (include necessary fields for display + ranking)
+            {
+                $project: {
+                    ...SAFE_PROPOSAL_PROJECTION, // Include safe fields
+                    _id: { $toString: "$_id" },
+                    author: {
+                        // Simplified author for list display
+                        _id: { $toString: "$authorDetails._id" },
+                        did: "$authorDetails.did",
+                        name: "$authorDetails.name",
+                        handle: "$authorDetails.handle",
+                        picture: "$authorDetails.picture",
+                    },
+                    circle: "$circleDetails",
+                    // Exclude userReaction lookup for performance in list view
+                },
+            },
+
+            // 5) Sort by newest first (optional, might be overridden by ranking later)
+            { $sort: { createdAt: -1 } },
+        ]).toArray()) as ProposalDisplay[];
+
+        // TODO: Add fine-grained visibility filtering based on userDid and proposal.userGroups if needed
+
+        return proposals;
+    } catch (error) {
+        console.error("Error getting active proposals by circle ID:", error);
+        throw error;
+    }
+};
+
 /**
  * Get a proposal by ID
  * @param proposalId The ID of the proposal

@@ -484,7 +484,7 @@ export async function sendNotifications(
     recipients: Circle[],
     payload: {
         circle?: Circle;
-        user?: Circle;
+        user?: Circle | undefined; // Allow undefined as corrected in ranking.ts
         post?: Post;
         comment?: Comment;
         reaction?: string;
@@ -514,6 +514,8 @@ export async function sendNotifications(
         goalOldStage?: GoalStage;
         goalNewStage?: GoalStage;
         messageBody?: string; // For pre-formatted messages like resolution
+        // Add index signature to allow other properties for custom notification types
+        [key: string]: any;
     },
 ): Promise<void> {
     console.log(
@@ -896,6 +898,13 @@ function deriveBody(
             return `Your goal "${goalTitle}" in ${circleName} was approved and is now Open`;
         case "goal_status_changed":
             return `Goal "${goalTitle}" in ${circleName} changed status from ${oldGoalStage} to ${newGoalStage}`;
+        // Ranking Notifications Fallbacks
+        case "ranking_stale_reminder":
+            // Note: The actual message is usually pre-formatted in payload.messageBody
+            return `You have new items to rank in ${circleName}.`;
+        case "ranking_grace_period_ended":
+            // Note: The actual message is usually pre-formatted in payload.messageBody
+            return `Your ranking in ${circleName} is no longer being counted.`;
         default:
             // Ensure exhaustive check or provide a generic default
             const exhaustiveCheck: never = notificationType;

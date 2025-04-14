@@ -187,6 +187,13 @@ export const features = {
             defaultUserGroups: ["admins", "moderators", "members", "everyone"],
             module: "goals",
         } as Feature,
+        rank: {
+            name: "Rank Goals",
+            handle: "rank",
+            description: "Create and manage a ranking of goals",
+            defaultUserGroups: ["admins", "moderators", "members"],
+            module: "goals",
+        } as Feature,
     },
     tasks: {
         // Added tasks module features, mirroring issues
@@ -297,6 +304,13 @@ export const features = {
             defaultUserGroups: ["admins"],
             module: "proposals",
         } as Feature,
+        rank: {
+            name: "Rank Proposals",
+            handle: "rank",
+            description: "Create and manage a ranking of proposals",
+            defaultUserGroups: ["admins", "moderators", "members"], // Same as tasks/goals
+            module: "proposals",
+        } as Feature,
     },
     issues: {
         view: {
@@ -353,6 +367,13 @@ export const features = {
             handle: "comment",
             description: "Add comments to issues",
             defaultUserGroups: ["admins", "moderators", "members", "everyone"], // Default: All who can view can comment
+            module: "issues",
+        } as Feature,
+        rank: {
+            name: "Rank Issues",
+            handle: "rank",
+            description: "Create and manage a ranking of issues",
+            defaultUserGroups: ["admins", "moderators", "members"], // Same as tasks/goals/proposals
             module: "issues",
         } as Feature,
     },
