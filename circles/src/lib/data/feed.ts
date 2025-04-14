@@ -1446,19 +1446,3 @@ export const checkIfLiked = async (
     });
     return !!reaction;
 };
-
-/**
- * Check if a post ID belongs to a project shadow post
- * @param postId The post ID to check
- * @returns Promise<boolean> True if it's a project shadow post, false otherwise
- */
-export const isShadowPost = async (postId: string): Promise<boolean> => {
-    try {
-        const post = await Posts.findOne({ _id: new ObjectId(postId) }, { projection: { postType: 1 } });
-
-        return post?.postType === "project";
-    } catch (error) {
-        console.error(`Error checking if post ${postId} is a shadow post:`, error);
-        return false;
-    }
-};
