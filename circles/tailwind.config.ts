@@ -17,6 +17,7 @@ const config = {
         extend: {
             fontFamily: {
                 sans: ["var(--font-wix-display)", ...fontFamily.sans],
+                bebas: ["var(--font-bebas-neue)"],
             },
             colors: {
                 border: "hsl(var(--border))",
@@ -61,28 +62,54 @@ const config = {
             },
             keyframes: {
                 "accordion-down": {
-                    from: { height: "0" },
-                    to: { height: "var(--radix-accordion-content-height)" },
+                    from: {
+                        height: "0",
+                    },
+                    to: {
+                        height: "var(--radix-accordion-content-height)",
+                    },
                 },
                 "accordion-up": {
-                    from: { height: "var(--radix-accordion-content-height)" },
-                    to: { height: "0" },
+                    from: {
+                        height: "var(--radix-accordion-content-height)",
+                    },
+                    to: {
+                        height: "0",
+                    },
                 },
                 "slide-in": {
-                    "0%": { opacity: "0", transform: "translateX(75%)" },
-                    "100%": { opacity: "1", transform: "translateX(0)" },
+                    "0%": {
+                        opacity: "0",
+                        transform: "translateX(75%)",
+                    },
+                    "100%": {
+                        opacity: "1",
+                        transform: "translateX(0)",
+                    },
                 },
                 "slide-up": {
-                    "0%": { transform: "translateY(0)" },
-                    "100%": { transform: "translateY(-36px)" },
+                    "0%": {
+                        transform: "translateY(0)",
+                    },
+                    "100%": {
+                        transform: "translateY(-36px)",
+                    },
                 },
                 wiggle: {
-                    "0%, 100%": { transform: "rotate(-8deg)" },
-                    "50%": { transform: "rotate(8deg)" },
+                    "0%, 100%": {
+                        transform: "rotate(-8deg)",
+                    },
+                    "50%": {
+                        transform: "rotate(8deg)",
+                    },
                 },
                 float: {
-                    "0%, 100%": { transform: "translateY(0)" },
-                    "50%": { transform: "translateY(-4px)" },
+                    "0%, 100%": {
+                        transform: "translateY(0)",
+                    },
+                    "50%": {
+                        transform: "translateY(-4px)",
+                    },
                 },
                 pulse: {
                     "0%": {
@@ -108,6 +135,22 @@ const config = {
                         transform: "scale3d(1.35, 1.35, 1)",
                     },
                 },
+                "accordion-down": {
+                    from: {
+                        height: "0",
+                    },
+                    to: {
+                        height: "var(--radix-accordion-content-height)",
+                    },
+                },
+                "accordion-up": {
+                    from: {
+                        height: "var(--radix-accordion-content-height)",
+                    },
+                    to: {
+                        height: "0",
+                    },
+                },
             },
             animation: {
                 "accordion-down": "accordion-down 0.2s ease-out",
@@ -120,6 +163,8 @@ const config = {
                 ripple: "ripple 4s cubic-bezier(0.65, 0, 0.34, 1) infinite",
                 "ripple-delay": "ripple 4s cubic-bezier(0.65, 0, 0.34, 1) infinite 1.5s",
                 "ripple-delay-2": "ripple 4s cubic-bezier(0.65, 0, 0.34, 1) infinite 3s",
+                "accordion-down": "accordion-down 0.2s ease-out",
+                "accordion-up": "accordion-up 0.2s ease-out",
             },
         },
     },

@@ -29,6 +29,15 @@ body[data-scroll-locked] {
     min-width: 100%;
 }
 
+.font-bebas {
+    font-family: var(--font-bebas-neue), sans-serif;
+    letter-spacing: 0.05em;
+}
+
+.font-avenir {
+    font-family: var(--font-montserrat), sans-serif;
+}
+
 html {
     font-family: var(--font-libre-franklin);
     overflow-y: scroll;

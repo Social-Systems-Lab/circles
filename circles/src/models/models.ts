@@ -387,7 +387,7 @@ export const circleSchema = z.object({
     _id: z.any().optional(),
     did: didSchema.optional(),
     publicKey: z.string().optional(),
-    name: z.string().default("Circles").optional(),
+    name: z.string().optional(),
     type: accountTypeSchema.default("user").optional(),
     email: z.string().email().optional(),
     handle: handleSchema.optional(),

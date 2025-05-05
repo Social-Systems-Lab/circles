@@ -27,7 +27,7 @@ export default function CirclesTabs({ currentTab, circleType }: { currentTab?: s
 
     return (
         <div className="w-full">
-            <h1 className="mb-4 text-2xl font-bold">{circleType === "project" ? "Projects" : "Circles"}</h1>
+            <h1 className="mb-4 text-2xl font-bold">{circleType === "project" ? "Projects" : "Communities"}</h1>
             <div className="flex w-full border-b">
                 <button
                     className={`flex-1 py-2 text-center ${
