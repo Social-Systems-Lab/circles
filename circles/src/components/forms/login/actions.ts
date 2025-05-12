@@ -16,6 +16,19 @@ export const submitLoginFormAction = async (values: Record<string, any>): Promis
             throw new AuthenticationError("Account does not exist");
         }
 
+        // Check if email is verified
+        if (!user.isEmailVerified) {
+            // Optionally, trigger a resend of verification email here
+            // For now, just inform the user.
+            // You could add a specific error code or flag to the response
+            // to allow the frontend to show a "Resend verification email" button.
+            return {
+                success: false,
+                message: "Email not verified. Please check your inbox for the verification link.",
+                // errorCode: "EMAIL_NOT_VERIFIED" // Example for frontend handling
+            };
+        }
+
         authenticateUser(user.did!, password);
 
         let privateUser = await getUserPrivate(user.did!);

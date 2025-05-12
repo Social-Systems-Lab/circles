@@ -13,6 +13,7 @@ import { createNewUser, getUserById, getUserPrivate } from "../data/user";
 import { addMember, getMembers } from "../data/member";
 import { getCircleById, getCirclesByDids, getCirclesByIds, getDefaultCircle } from "../data/circle";
 import { registerOrLoginMatrixUser } from "../data/matrix";
+import { generateSecureToken, hashToken, sendEmail } from "../data/email"; // Added sendEmail for now, will be sendVerificationEmail
 
 export const SALT_FILENAME = "salt.bin";
 export const IV_FILENAME = "iv.bin";
@@ -89,9 +90,41 @@ export const createUserAccount = async (
     fs.writeFileSync(path.join(accountPath, ENCRYPTED_PRIVATE_KEY_FILENAME), encryptedPrivateKey);
 
     // add user to the database
-    let user: Circle = createNewUser(did, publicKeyPem as string, name, handle, type, email);
+    const unhashedVerificationToken = generateSecureToken();
+    const hashedVerificationToken = hashToken(unhashedVerificationToken);
+    const verificationTokenExpiry = new Date(Date.now() + 24 * 3600 * 1000); // 24 hours expiry
+
+    let user: Circle = createNewUser(
+        did,
+        publicKeyPem as string,
+        name,
+        handle,
+        type,
+        email,
+        false, // isEmailVerified
+        hashedVerificationToken, // emailVerificationToken
+        verificationTokenExpiry, // emailVerificationTokenExpiry
+    );
     let res = await Circles.insertOne(user);
     user._id = res.insertedId.toString();
+
+    // Send verification email
+    const verificationLink = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/verify-email?token=${unhashedVerificationToken}`;
+    try {
+        await sendEmail({
+            to: email,
+            templateAlias: "email-verification", // As per spec
+            templateModel: {
+                name: name,
+                verificationLink: verificationLink,
+            },
+        });
+        console.log(`Verification email sent to ${email}`);
+    } catch (error) {
+        console.error(`Failed to send verification email to ${email}:`, error);
+        // Decide if account creation should fail if email sending fails.
+        // For now, we'll log the error and continue. User can request resend later.
+    }
 
     // add user as member of their own circle
     await addMember(did, user._id!, ["admins", "moderators", "members"], undefined);

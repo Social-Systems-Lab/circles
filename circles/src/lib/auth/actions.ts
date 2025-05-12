@@ -116,7 +116,7 @@ export async function initiatePasswordReset(userId: string): Promise<InitiateRes
 // Schema for the resetPassword action input
 const resetPasswordSchema = z.object({
     token: z.string().min(1, "Reset token is required."),
-    email: emailSchema,
+    // email: emailSchema, // Email will be derived from the user found via token
     password: passwordSchema,
     // It's good practice to have password confirmation on the client-side,
     // but the server action only needs the final password.
@@ -129,35 +129,33 @@ type ResetPasswordResult = { success: true } | { success: false; error: string }
  * Server Action for Users to reset their password using a valid token.
  * Verifies the token, generates a new identity (DID, keys), updates filesystem,
  * updates the user record, and updates all references to the old DID in the DB.
- * @param formData - FormData containing token, email, and new password.
+ * @param token - The unhashed password reset token from the URL.
+ * @param newPassword - The new password provided by the user.
  */
-export async function resetPassword(token: string, email: string, password: string): Promise<ResetPasswordResult> {
+export async function resetPassword(token: string, newPassword: string): Promise<ResetPasswordResult> {
     try {
-        // 1. Validate input
+        // 1. Validate input (token and newPassword)
         const result = resetPasswordSchema.safeParse({
             token,
-            email,
-            password,
+            password: newPassword, // Zod schema uses 'password'
         });
         if (!result.success) {
-            // Combine Zod errors for better feedback if needed
             const errors = result.error.errors.map((e) => e.message).join(", ");
             return { success: false, error: `Invalid input: ${errors}` };
         }
 
-        // 2. Find user by email and verify token state
-        const user = await Circles.findOne({ email: email });
-        if (!user || !user.passwordResetToken || !user.passwordResetTokenExpiry) {
+        // 2. Hash the provided token for lookup
+        const hashedTokenToFind = crypto.createHash("sha256").update(token).digest("hex");
+
+        // 3. Find user by the hashed password reset token
+        const user = await Circles.findOne({ passwordResetToken: hashedTokenToFind });
+
+        if (!user || !user.passwordResetTokenExpiry) {
+            // Check expiry along with token existence
             return { success: false, error: "Invalid or expired reset token." };
         }
 
-        // 3. Hash the provided token for comparison
-        const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
-
-        // 4. Verify token hash and expiry
-        if (hashedToken !== user.passwordResetToken) {
-            return { success: false, error: "Invalid or expired reset token." };
-        }
+        // 4. Verify token expiry (token itself is verified by being found)
         if (new Date() > user.passwordResetTokenExpiry) {
             // Optionally clear the expired token here
             await Circles.updateOne(
@@ -168,6 +166,7 @@ export async function resetPassword(token: string, email: string, password: stri
         }
 
         // --- Token is valid, proceed with identity change ---
+        // Email is now user.email
 
         const oldDid = user.did;
         if (!oldDid) {
@@ -190,7 +189,7 @@ export async function resetPassword(token: string, email: string, password: stri
         const newIv = crypto.randomBytes(16); // newIv is Buffer
         // IMPORTANT: Use the *new* password and *new* salt here
         // encryptionKey will be inferred as Buffer
-        const newEncryptionKey = crypto.pbkdf2Sync(password, newSalt, 100000, 32, "sha512");
+        const newEncryptionKey = crypto.pbkdf2Sync(newPassword, newSalt, 100000, 32, "sha512"); // Use newPassword
         // Pass Buffers directly
         const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, newEncryptionKey, newIv);
         let newEncryptedPrivateKey = cipher.update(

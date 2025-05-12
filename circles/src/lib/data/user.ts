@@ -76,6 +76,9 @@ export const createNewUser = (
     handle?: string,
     type?: AccountType,
     email?: string,
+    isEmailVerified?: boolean,
+    emailVerificationToken?: string,
+    emailVerificationTokenExpiry?: Date,
 ): Circle => {
     let user: Circle = {
         did,
@@ -84,6 +87,9 @@ export const createNewUser = (
         handle,
         type,
         email,
+        isEmailVerified,
+        emailVerificationToken,
+        emailVerificationTokenExpiry,
         circleType: "user",
         description: "",
         picture: { url: "/images/default-user-picture.png" },

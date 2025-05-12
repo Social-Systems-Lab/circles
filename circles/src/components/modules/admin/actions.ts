@@ -32,6 +32,7 @@ export async function getEntitiesByType(type: "circle" | "user" | "project") {
                     _id: 1,
                     name: 1,
                     handle: 1,
+                    email: 1,
                     picture: 1,
                     did: 1,
                     description: 1,

@@ -424,6 +424,10 @@ export const circleSchema = z.object({
     // Password Reset Fields
     passwordResetToken: z.string().nullable().optional(),
     passwordResetTokenExpiry: z.date().nullable().optional(),
+    // Email Verification Fields
+    isEmailVerified: z.boolean().optional(),
+    emailVerificationToken: z.string().nullable().optional(),
+    emailVerificationTokenExpiry: z.date().nullable().optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;

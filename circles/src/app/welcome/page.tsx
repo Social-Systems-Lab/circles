@@ -17,7 +17,7 @@ export default async function Welcome() {
                         src="/images/world-map-dots.png"
                         alt="World Map Dots"
                         fill
-                        className="object-cover opacity-30"
+                        className="object-cover opacity-60"
                         priority
                     />
                 </div>
@@ -52,7 +52,7 @@ export default async function Welcome() {
             {/* Why Make Circles - Thinner like a footer */}
             <section className="w-full bg-[#2B463C] px-4 py-4 text-white md:px-8">
                 <div className="mx-auto flex max-w-4xl items-center justify-between">
-                    <h2 className="font-bebas text-lg">Why Make Circles?</h2>
+                    <h2 className="font-bebas mb-0 mt-0 pb-0 pt-0 text-lg">Why Make Circles?</h2>
                     <a
                         href="https://www.socialsystems.io/wp-content/uploads/2025/03/MakeCircles.pdf"
                         target="_blank"
@@ -130,11 +130,14 @@ export default async function Welcome() {
                         You decide who you share what information with and give what access to.
                     </p>
                     <div className="relative mt-16 flex items-center justify-center rounded-lg border border-gray-300 p-8">
-                        <div className="flex aspect-video w-full max-w-md items-center justify-center rounded bg-gray-100">
-                            <div className="text-[#FAAE3C]">
-                                <Play size={48} />
-                            </div>
-                        </div>
+                        <video
+                            className="aspect-video w-full max-w-md rounded"
+                            controls
+                            poster="/images/video-thumbnail.jpg"
+                        >
+                            <source src="/videos/intro.mp4" type="video/mp4" />
+                            Your browser does not support the video tag.
+                        </video>
                         <div className="absolute bottom-4 right-4 bg-[#FAAE3C] p-2 text-white">
                             <p className="text-xs">Tom</p>
                             <p className="text-xs">Talking</p>
