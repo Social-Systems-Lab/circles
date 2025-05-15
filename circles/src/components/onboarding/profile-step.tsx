@@ -256,7 +256,7 @@ export default function ProfileStep({ userData, setUserData, nextStep, prevStep 
 
                     <div className="space-y-2">
                         <Label className="flex items-center gap-2">
-                            <ImageIcon className="h-4 w-4" /> Profile Images
+                            <ImageIcon className="h-4 w-4" /> Cover Pictures
                         </Label>
                         {/* Replace OnboardingImageUpload for cover with MultiImageUploader */}
                         <MultiImageUploader

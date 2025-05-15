@@ -49,7 +49,17 @@ export async function requestPasswordResetAction(email: string): Promise<Request
                     templateModel: {
                         name: user.name || "User",
                         actionUrl: resetLink,
-                        // Add any other variables your Postmark template might need
+                        product_name: "MakeCircles", // Or from process.env
+                        product_url: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+                        support_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/support`, // Example, adjust as needed
+                        company_name: "Social Systems Lab", // Or from process.env
+                        company_address: "Illerstigen 8, 170 71 Solna, Sweden", // Or from process.env
+                        current_year: new Date().getFullYear().toString(),
+                        // For operating_system and browser_name, you'd need to find a way to pass these
+                        // from the client if desired, or extract from request headers if possible in server actions.
+                        // For now, they will be omitted or you can pass placeholder values.
+                        // operating_system: "Unknown", // Placeholder
+                        // browser_name: "Unknown", // Placeholder
                     },
                 });
                 console.log(`Password reset email initiated for ${user.email}`);

@@ -251,7 +251,8 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
 
                     <div className="space-y-2">
                         <Label className="flex items-center gap-2">
-                            <ImageIcon className="h-4 w-4" /> {circleData.isProjectsPage ? "Project" : "Circle"} Images
+                            <ImageIcon className="h-4 w-4" /> {circleData.isProjectsPage ? "Project" : "Circle"} Cover
+                            Pictures
                         </Label>
                         {/* Replace CircleImageUpload for cover with MultiImageUploader */}
                         <MultiImageUploader

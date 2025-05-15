@@ -76,7 +76,7 @@ export function LoginForm(): React.ReactElement {
 
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="w-full space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="formatted mb-4 w-full space-y-6 md:min-w-[400px]">
                 <h2 className="text-center text-2xl font-semibold">Login</h2>
                 <p className="text-center text-sm text-muted-foreground">Enter your email and password to log in.</p>
 
@@ -111,6 +111,12 @@ export function LoginForm(): React.ReactElement {
                         </FormItem>
                     )}
                 />
+
+                <div className="text-right text-sm">
+                    <Link href="/forgot-password" className="text-muted-foreground underline hover:text-primary">
+                        Forgot Password?
+                    </Link>
+                </div>
 
                 <Button type="submit" disabled={isSubmitting} className="w-full">
                     {isSubmitting ? "Logging in..." : "Log in"}
