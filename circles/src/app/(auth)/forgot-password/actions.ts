@@ -48,7 +48,7 @@ export async function requestPasswordResetAction(email: string): Promise<Request
                     templateAlias: "password-reset", // As per spec
                     templateModel: {
                         name: user.name || "User",
-                        resetLink: resetLink,
+                        actionUrl: resetLink,
                         // Add any other variables your Postmark template might need
                     },
                 });

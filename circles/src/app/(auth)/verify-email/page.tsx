@@ -22,9 +22,9 @@ function VerifyEmailContent() {
                         setMessage(response.message || "Email verified successfully! You can now log in.");
                         setError(false);
                         // Optional: Redirect to login or dashboard after a delay
-                        setTimeout(() => {
-                            router.push("/login");
-                        }, 3000);
+                        // setTimeout(() => {
+                        //     router.push("/login");
+                        // }, 3000);
                     } else {
                         setMessage(response.message || "Failed to verify email. The link may be invalid or expired.");
                         setError(true);
@@ -48,12 +48,14 @@ function VerifyEmailContent() {
                 </h1>
                 <p className={`text-center ${error ? "text-red-500" : "text-green-500"}`}>{message}</p>
                 {!error && message.includes("successfully") && (
-                    <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">Redirecting to login...</p>
+                    <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
+                        Your email has been verified...
+                    </p>
                 )}
                 {(error || message.includes("successfully")) && (
                     <div className="mt-6 text-center">
                         <Button asChild>
-                            <Link href="/login">Go to Login</Link>
+                            <Link href="/">Enter</Link>
                         </Button>
                     </div>
                 )}

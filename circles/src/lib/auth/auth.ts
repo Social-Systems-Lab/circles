@@ -116,7 +116,7 @@ export const createUserAccount = async (
             templateAlias: "email-verification", // As per spec
             templateModel: {
                 name: name,
-                verificationLink: verificationLink,
+                actionUrl: verificationLink,
             },
         });
         console.log(`Verification email sent to ${email}`);

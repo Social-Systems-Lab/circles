@@ -80,7 +80,7 @@ const ProfileMenuBar = () => {
     };
 
     const onSignUpClick = () => {
-        let redirectTo = searchParams.get("redirectTo");
+        let redirectTo = searchParams.get("redirectTo") ?? "/";
         router.push("/signup?redirectTo=" + redirectTo);
     };
 

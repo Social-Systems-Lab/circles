@@ -51,8 +51,6 @@ export async function verifyEmailAction(token: string): Promise<VerifyEmailRespo
             {
                 $set: {
                     isEmailVerified: true,
-                    emailVerificationToken: null,
-                    emailVerificationTokenExpiry: null,
                 },
             },
         );
@@ -68,7 +66,6 @@ export async function verifyEmailAction(token: string): Promise<VerifyEmailRespo
         // Revalidate user-specific paths if necessary, e.g., profile page
         if (user.handle) {
             revalidatePath(`/circles/${user.handle}`);
-            revalidatePath(`/profile/${user.handle}`); // Assuming a profile page exists
         }
 
         return { success: true, message: "Email verified successfully! You can now log in." };

@@ -46,9 +46,13 @@ export const sendEmail = async (options: EmailOptions): Promise<void> => {
 
     // Add common variables that might be useful in all templates
     (message.TemplateModel as any).product_url = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    (message.TemplateModel as any).product_name = "MakeCircles"; // Or from env
-    (message.TemplateModel as any).company_name = "MakeCircles Inc."; // Or from env
-    (message.TemplateModel as any).company_address = "123 Main St, Anytown, USA"; // Or from env
+    (message.TemplateModel as any).product_name = "MakeCircles";
+    (message.TemplateModel as any).company_name = "Social Systems Lab";
+    (message.TemplateModel as any).company_address = "Illerstigen 8, 170 71 Solna, Sweden";
+    (message.TemplateModel as any).name = templateModel.name || "User"; // Default to "User" if not provided
+    (message.TemplateModel as any).action_url = templateModel.actionUrl;
+    (message.TemplateModel as any).support_email = "hello@socialsystems.io";
+    (message.TemplateModel as any).current_year = new Date().getFullYear().toString();
 
     try {
         console.log(`Attempting to send email to ${to} using template ${templateAlias}`);
