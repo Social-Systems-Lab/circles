@@ -40,7 +40,7 @@ export async function requestPasswordResetAction(email: string): Promise<Request
                 },
             );
 
-            const resetLink = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/reset-password?token=${unhashedToken}`;
+            const resetLink = `${process.env.CIRCLES_URL || "http://localhost:3000"}/reset-password?token=${unhashedToken}`;
 
             try {
                 await sendEmail({
@@ -50,8 +50,8 @@ export async function requestPasswordResetAction(email: string): Promise<Request
                         name: user.name || "User",
                         actionUrl: resetLink,
                         product_name: "MakeCircles", // Or from process.env
-                        product_url: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-                        support_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/support`, // Example, adjust as needed
+                        product_url: process.env.CIRCLES_URL || "http://localhost:3000",
+                        support_url: `${process.env.CIRCLES_URL || "http://localhost:3000"}/support`, // Example, adjust as needed
                         company_name: "Social Systems Lab", // Or from process.env
                         company_address: "Illerstigen 8, 170 71 Solna, Sweden", // Or from process.env
                         current_year: new Date().getFullYear().toString(),

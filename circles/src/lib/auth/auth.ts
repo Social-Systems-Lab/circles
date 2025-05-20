@@ -109,7 +109,7 @@ export const createUserAccount = async (
     user._id = res.insertedId.toString();
 
     // Send verification email
-    const verificationLink = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/verify-email?token=${unhashedVerificationToken}`;
+    const verificationLink = `${process.env.CIRCLES_URL || "http://localhost:3000"}/verify-email?token=${unhashedVerificationToken}`;
     try {
         await sendEmail({
             to: email,

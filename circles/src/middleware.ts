@@ -107,6 +107,6 @@ function redirectToErrorPage(request: NextRequest) {
 
 export const config = {
     matcher: [
-        "/((?!api|explore|map|chat|settings|logged-out|foryou|login|unauthorized|unauthenticated|error|not-found|signup|demo/moviedb|demo/tech|demo/ratings|public/images|_next/static|robots.txt|sitemap.xml|favicon.ico|_next/image|.*\\.svg|.*\\.jpg|.*\\.png$).*)",
+        "/((?!api|explore|map|chat|settings|logged-out|foryou|login|reset-password|verify-email|forgot-password|unauthorized|unauthenticated|error|not-found|signup|demo/moviedb|demo/tech|demo/ratings|public/images|_next/static|robots.txt|sitemap.xml|favicon.ico|_next/image|.*\\.svg|.*\\.jpg|.*\\.png$).*)",
     ],
 };

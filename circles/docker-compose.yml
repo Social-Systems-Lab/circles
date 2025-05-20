@@ -20,6 +20,9 @@ services:
             - MINIO_ROOT_USERNAME=${MINIO_ROOT_USERNAME}
             - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
             - CIRCLES_REGISTRY_URL=${CIRCLES_REGISTRY_URL}
+            - POSTMARK_API_TOKEN=${POSTMARK_API_TOKEN}
+            - POSTMARK_SENDER_EMAIL=${POSTMARK_SENDER_EMAIL}
+            - CIRCLES_URL=${CIRCLES_URL}
         volumes:
             - circles:/circles
         depends_on:
