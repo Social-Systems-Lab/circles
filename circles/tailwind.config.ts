@@ -135,22 +135,6 @@ const config = {
                         transform: "scale3d(1.35, 1.35, 1)",
                     },
                 },
-                "accordion-down": {
-                    from: {
-                        height: "0",
-                    },
-                    to: {
-                        height: "var(--radix-accordion-content-height)",
-                    },
-                },
-                "accordion-up": {
-                    from: {
-                        height: "var(--radix-accordion-content-height)",
-                    },
-                    to: {
-                        height: "0",
-                    },
-                },
             },
             animation: {
                 "accordion-down": "accordion-down 0.2s ease-out",
@@ -163,8 +147,6 @@ const config = {
                 ripple: "ripple 4s cubic-bezier(0.65, 0, 0.34, 1) infinite",
                 "ripple-delay": "ripple 4s cubic-bezier(0.65, 0, 0.34, 1) infinite 1.5s",
                 "ripple-delay-2": "ripple 4s cubic-bezier(0.65, 0, 0.34, 1) infinite 3s",
-                "accordion-down": "accordion-down 0.2s ease-out",
-                "accordion-up": "accordion-up 0.2s ease-out",
             },
         },
     },

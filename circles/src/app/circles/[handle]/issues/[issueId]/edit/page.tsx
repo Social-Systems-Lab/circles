@@ -1,5 +1,5 @@
 import { getCircleByHandle } from "@/lib/data/circle";
-import { getIssueById } from "@/lib/data/issue"; // Assuming this function exists or will be created
+import { getIssueById } from "@/lib/data/issue";
 import { IssueForm } from "@/components/modules/issues/issue-form";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";

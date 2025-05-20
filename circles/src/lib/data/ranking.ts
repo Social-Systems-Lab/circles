@@ -1,8 +1,7 @@
 // src/lib/data/ranking.ts - Generic Ranking Logic
-import { Collection, ObjectId } from "mongodb";
-import { db } from "./db"; // Import db instance
-import { RankedLists, Circles, Tasks, Goals, Issues, Proposals } from "./db";
-import { RankedList, Circle, TaskDisplay, GoalDisplay, IssueDisplay, ProposalDisplay } from "@/models/models";
+import { ObjectId } from "mongodb";
+import { AggregateRanks } from "./db"; // Import db instance
+import { RankedLists, Circles } from "./db";
 import { getMemberIdsByUserGroup } from "./member";
 import { isAuthorized } from "../auth/auth";
 import { features } from "./constants"; // Assuming features constant is defined here or imported
@@ -13,8 +12,6 @@ import { getActiveProposalsByCircleId } from "./proposal";
 // Removed incorrect logger import, will use console.*
 import { sendNotifications } from "./matrix"; // Import the actual sending function
 import { getUserPrivate } from "./user"; // To fetch recipient details
-import { UserPrivate } from "@/models/models"; // Import UserPrivate type
-import { getCircleById } from "./circle"; // To get circle name for notifications
 
 // --- Constants ---
 
@@ -74,12 +71,9 @@ export interface AggregateRank {
 
 // --- Database Collection ---
 
-// Define the collection for aggregate ranks
-export const AggregateRanks: Collection<AggregateRank> = db.collection<AggregateRank>("aggregateRanks");
-
 // Ensure indexes for efficient querying of cache
-AggregateRanks.createIndex({ entityId: 1, itemType: 1, filterUserGroupHandle: 1 }, { unique: true });
-AggregateRanks.createIndex({ updatedAt: 1 }); // For potential TTL or cleanup
+AggregateRanks?.createIndex({ entityId: 1, itemType: 1, filterUserGroupHandle: 1 }, { unique: true });
+AggregateRanks?.createIndex({ updatedAt: 1 }); // For potential TTL or cleanup
 
 // --- Helper Functions ---
 

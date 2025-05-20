@@ -1,7 +1,9 @@
 # Run the ranking processing job every hour at minute 0
-0 * * * * curl -f -H "Authorization: Bearer $CRON_SECRET" http://circles:3000/api/cron/process-rankings?secret=$CRON_SECRET || echo "Cron job failed: process-rankings at $(date)" >> /var/log/cron.log
+
+# 0 \* \* \* \* curl -f -H "Authorization: Bearer $CRON_SECRET" http://circles:3000/api/cron/process-rankings?secret=$CRON_SECRET || echo "Cron job failed: process-rankings at $(date)" >> /var/log/cron.log
 
 # Add future cron jobs here, each on a new line
-# Example: 15 * * * * curl ...
+
+# Example: 15 \* \* \* \* curl ...
 
 # End of file needs a newline

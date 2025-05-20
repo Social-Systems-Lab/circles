@@ -20,6 +20,7 @@ import {
     RankedList,
     Goal, // Added Task model
 } from "@/models/models";
+import { AggregateRank } from "./ranking";
 
 const MONGO_HOST = process.env.MONGO_HOST || "127.0.0.1";
 const MONGO_PORT = parseInt(process.env.MONGO_PORT || "27017");
@@ -51,6 +52,7 @@ let Issues: Collection<Issue>;
 let Tasks: Collection<Task>;
 let Goals: Collection<Goal>;
 let RankedLists: Collection<RankedList>;
+let AggregateRanks: Collection<AggregateRank>;
 
 // Only initialize the database connection if not in build mode
 if (process.env.IS_BUILD !== "true") {
@@ -82,6 +84,7 @@ if (process.env.IS_BUILD !== "true") {
     Tasks = db.collection<Task>("tasks");
     Goals = db.collection<Goal>("goals");
     RankedLists = db.collection<RankedList>("rankedLists");
+    AggregateRanks = db.collection<AggregateRank>("aggregateRanks");
 }
 
 export {
@@ -106,4 +109,5 @@ export {
     Tasks,
     Goals,
     RankedLists,
+    AggregateRanks,
 };
