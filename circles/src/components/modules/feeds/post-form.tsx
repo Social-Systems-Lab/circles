@@ -120,16 +120,16 @@ const postMentionsInputStyle = {
         fontSize: "1.125rem",
         lineHeight: "1.75rem",
         paddingTop: "1.5rem",
-        overflowWrap: "break-word", // Add word wrapping
-        wordBreak: "break-word", // Ensure breaks happen correctly
+        overflowWrap: "break-word" as const, // Type assertion to specific OverflowWrap type
+        wordBreak: "break-word" as const, // Ensure breaks happen correctly
     },
     highlighter: {
         padding: "0 0", // Same as input
         paddingTop: "1.5rem",
         fontSize: "1.125rem",
         lineHeight: "1.75rem",
-        overflowWrap: "break-word", // Add word wrapping
-        wordBreak: "break-word", // Ensure breaks happen correctly
+        overflowWrap: "break-word" as const, // Type assertion to specific OverflowWrap type
+        wordBreak: "break-word" as const, // Ensure breaks happen correctly
     },
     suggestions: {
         control: {

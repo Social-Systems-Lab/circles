@@ -3,7 +3,6 @@ import type { NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
     let userDid = undefined;
-    return;
 
     // determine host and port based on environment
     const host = process.env.NODE_ENV === "production" ? process.env.CIRCLES_HOST : "localhost";

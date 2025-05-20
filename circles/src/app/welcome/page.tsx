@@ -24,7 +24,7 @@ export default async function Welcome() {
 
                 {/* Content */}
                 <div className="relative z-10">
-                    <h1 className="font-bebas mb-4 text-5xl text-[#175848] md:text-6xl lg:text-7xl">
+                    <h1 className="mb-4 font-bebas text-5xl text-[#175848] md:text-6xl lg:text-7xl">
                         MakeCircles - The Social Impact Network
                     </h1>
                     <p className="mb-8 inline-block rounded-md bg-white/60 px-4 py-1 text-xl">
@@ -32,15 +32,15 @@ export default async function Welcome() {
                     </p>
 
                     <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
-                        <Link href="/explore">
+                        {/* <Link href="/explore">
                             <Button className="rounded bg-[#FAAE3C] px-8 py-6 text-white hover:bg-[#FAAE3C]/90">
                                 Explore the platform
                             </Button>
-                        </Link>
-                        <Link href="https://makecircles.socialsystems.io/">
+                        </Link> */}
+                        <Link href="/signup">
                             <Button
                                 variant="outline"
-                                className="rounded border-[#2B463C] px-8 py-6 text-[#2B463C] hover:bg-[#2B463C] hover:text-white"
+                                className="rounded bg-[#FAAE3C] px-8 py-6 text-white hover:bg-[#FAAE3C]/90"
                             >
                                 Test Pilot Sign-up
                             </Button>
@@ -52,7 +52,7 @@ export default async function Welcome() {
             {/* Why Make Circles - Thinner like a footer */}
             <section className="w-full bg-[#2B463C] px-4 py-4 text-white md:px-8">
                 <div className="mx-auto flex max-w-4xl items-center justify-between">
-                    <h2 className="font-bebas mb-0 mt-0 pb-0 pt-0 text-lg">Why Make Circles?</h2>
+                    <h2 className="mb-0 mt-0 pb-0 pt-0 font-bebas text-lg">Why Make Circles?</h2>
                     <a
                         href="https://www.socialsystems.io/wp-content/uploads/2025/03/MakeCircles.pdf"
                         target="_blank"
@@ -67,7 +67,7 @@ export default async function Welcome() {
             {/* Social Media Problems */}
             <section className="w-full px-4 py-16 md:px-8">
                 <div className="mx-auto max-w-4xl">
-                    <h2 className="font-bebas mb-6 text-4xl text-[#175848] md:text-5xl">
+                    <h2 className="mb-6 font-bebas text-4xl text-[#175848] md:text-5xl">
                         Social Media is not designed to improve your life or the world
                     </h2>
                     <p className="mb-8 text-lg">
@@ -94,7 +94,7 @@ export default async function Welcome() {
             {/* Building MakeCircles - With different background color */}
             <section className="w-full bg-[#FEF9E8] px-4 py-16 md:px-8">
                 <div className="mx-auto max-w-4xl">
-                    <h2 className="font-bebas mb-6 text-4xl text-[#175848] md:text-5xl">
+                    <h2 className="mb-6 font-bebas text-4xl text-[#175848] md:text-5xl">
                         That&apos;s Why We Are Building MakeCircles
                     </h2>
                     <p className="mb-8 text-lg">
@@ -111,7 +111,7 @@ export default async function Welcome() {
             {/* What can MakeCircles Do */}
             <section className="w-full px-4 py-16 md:px-8">
                 <div className="mx-auto max-w-4xl">
-                    <h2 className="font-bebas mb-6 text-4xl text-[#175848] md:text-5xl">What can MakeCircles Do?</h2>
+                    <h2 className="mb-6 font-bebas text-4xl text-[#175848] md:text-5xl">What can MakeCircles Do?</h2>
                     <p className="mb-8 text-lg">
                         MakeCircles is currently in our <strong>beta testing phase</strong>. This means we are not ready
                         for public use as we need to test the platform for bugs and also have a number of new features
@@ -150,7 +150,7 @@ export default async function Welcome() {
             {/* How You can help */}
             <section className="w-full bg-[#FEF9E8] px-4 py-16 md:px-8">
                 <div className="mx-auto max-w-4xl">
-                    <h2 className="font-bebas mb-6 text-4xl text-[#175848] md:text-5xl">How You can help</h2>
+                    <h2 className="mb-6 font-bebas text-4xl text-[#175848] md:text-5xl">How You can help</h2>
                     <p className="mb-8 text-lg">
                         There are a number of ways you can help. First, <strong>create a profile</strong>, explore the
                         platform, invite some friends. Then, create a project or a community circle and test the
@@ -187,7 +187,7 @@ export default async function Welcome() {
             {/* Who do we think we are */}
             <section className="w-full px-4 py-16 md:px-8">
                 <div className="mx-auto max-w-4xl">
-                    <h2 className="font-bebas mb-6 text-4xl text-[#175848] md:text-5xl">Who do we think we are?</h2>
+                    <h2 className="mb-6 font-bebas text-4xl text-[#175848] md:text-5xl">Who do we think we are?</h2>
                     <p className="mb-8 text-lg">
                         We are a small team with big visions running a not-for profit, oligarch-free platform designed
                         to outcompete the best of its for-profit competitors. The project custodian is The Social
@@ -212,7 +212,7 @@ export default async function Welcome() {
             {/* Tell Me More */}
             <section className="w-full bg-[#FEF9E8] px-4 py-16 md:px-8">
                 <div className="mx-auto max-w-4xl">
-                    <h2 className="font-bebas mb-6 text-4xl text-[#175848] md:text-5xl">Tell Me More...</h2>
+                    <h2 className="mb-6 font-bebas text-4xl text-[#175848] md:text-5xl">Tell Me More...</h2>
                     <p className="mb-8 text-lg">Still wondering why you should join MakeCircles as a test pilot?</p>
 
                     <div className="formatted space-y-4">

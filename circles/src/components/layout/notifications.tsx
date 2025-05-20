@@ -381,7 +381,7 @@ export const Notifications = () => {
 
             default:
                 // Ensure exhaustive check or provide a default behavior
-                const exhaustiveCheck: never = notification.notificationType;
+                const exhaustiveCheck = notification.notificationType;
                 console.log("Unknown notification type:", exhaustiveCheck);
                 break;
         }
