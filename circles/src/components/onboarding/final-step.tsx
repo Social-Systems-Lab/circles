@@ -100,7 +100,7 @@ function FinalStep({ nextStep }: OnboardingStepProps) {
                 </div>
             )}
             <p className="text-gray-600">
-                Get ready to connect with allies, join circles, and embark on world-changing quests!
+                Get ready to connect with allies, join communities, and embark on world-changing quests!
             </p>
             <p className="text-sm text-gray-600">
                 Remember, you&apos;re part of a supportive community. Don&apos;t hesitate to reach out, collaborate, and

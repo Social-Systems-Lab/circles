@@ -70,12 +70,12 @@ export default function GlobalNavItems() {
                     >
                         <FaRegCircle size={"24px"} />
                         <motion.span
-                            className="mt-[4px] text-[11px]"
+                            className="mt-[4px] text-[10px]"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.3, delay: 0.2 + 2 * 0.1 }}
                         >
-                            Circles
+                            Communities
                         </motion.span>
                     </motion.div>
                 </Link>
