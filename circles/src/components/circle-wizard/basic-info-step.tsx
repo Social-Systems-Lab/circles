@@ -1,19 +1,59 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect, useCallback, useMemo } from "react"; // Added useMemo
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import CircleSelector from "@/components/global-create/circle-selector"; // Added
+import { Circle } from "@/models/models"; // Added
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { CircleWizardStepProps } from "./circle-wizard";
 import { Loader2 } from "lucide-react";
 import { saveBasicInfoAction } from "./actions";
 import { generateSlug } from "@/lib/utils";
+import { useAtom } from "jotai";
+import { userAtom } from "@/lib/data/atoms"; // Corrected path
+import {
+    CreatableItemDetail, // Added
+    creatableItemsList, // Added
+    CreatableItemKey, // Added
+} from "@/components/global-create/global-create-dialog-content"; // Added
 
 export default function BasicInfoStep({ circleData, setCircleData, nextStep, prevStep }: CircleWizardStepProps) {
     const [isPending, startTransition] = useTransition();
     const [nameError, setNameError] = useState("");
     const [handleError, setHandleError] = useState("");
+    // selectedParentCircle state is managed by CircleSelector's onCircleSelected callback
+    // const [selectedParentCircle, setSelectedParentCircle] = useState<Circle | null>(null);
+    const [user] = useAtom(userAtom);
+
+    // This effect is now handled by onCircleSelected callback
+    // useEffect(() => {
+    //     // Initialize parentCircleId in circleData if a parent is selected
+    //     if (selectedParentCircle) {
+    //         setCircleData((prev) => ({
+    //             ...prev,
+    //             parentCircleId: selectedParentCircle._id,
+    //         }));
+    //     } else {
+    //         // If no parent is selected (e.g. "Create under Your User")
+    //         // ensure parentCircleId is undefined or handled as per your logic for user-level creation
+    //         setCircleData((prev) => ({
+    //             ...prev,
+    //             parentCircleId: undefined, // Or user?._id if creating under user directly without a "user circle"
+    //         }));
+    //     }
+    // }, [selectedParentCircle, setCircleData, user]);
+
+    const handleParentCircleSelected = useCallback(
+        (circle: Circle | null) => {
+            setCircleData((prev) => ({
+                ...prev,
+                parentCircleId: circle ? circle._id : undefined,
+            }));
+        },
+        [setCircleData],
+    ); // Wrapped with useCallback
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -75,7 +115,7 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
                 circleData.handle,
                 circleData.isPublic,
                 circleData._id,
-                circleData.parentCircleId,
+                circleData.parentCircleId, // parentCircleId is now set by handleParentCircleSelected
                 circleData.circleType,
             );
 
@@ -113,6 +153,24 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
             </div>
 
             <div className="space-y-4">
+                {/* Add CircleSelector here */}
+                <div>
+                    <CircleSelector
+                        itemType={useMemo(() => {
+                            const typeToFind = circleData.circleType === "circle" ? "community" : circleData.circleType;
+                            return creatableItemsList.find(
+                                (item) => item.key === (typeToFind as CreatableItemKey),
+                            ) as CreatableItemDetail;
+                        }, [circleData.circleType])}
+                        onCircleSelected={handleParentCircleSelected}
+                        // selectedCircle and setSelectedCircle are not direct props of CircleSelector
+                    />
+                    <p className="text-xs text-gray-500">
+                        Select where this {circleData.isProjectsPage ? "project" : "community"} will be created.
+                        Defaults to your user.
+                    </p>
+                </div>
+
                 <div className="space-y-2">
                     <Label htmlFor="name">{circleData.isProjectsPage ? "Project" : "Community"} Name</Label>
                     <Input
@@ -156,7 +214,7 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
             </div>
 
             <div className="flex justify-end">
-                <Button onClick={handleNext} disabled={isPending} className="w-[100px]">
+                <Button onClick={handleNext} disabled={isPending} className="w-[150px]">
                     {isPending ? (
                         <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />

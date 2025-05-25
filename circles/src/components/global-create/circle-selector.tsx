@@ -8,6 +8,7 @@ import { Circle, UserPrivate, Feature } from "@/models/models"; // Added Feature
 import { CreatableItemDetail } from "./global-create-dialog-content";
 import { features, modules as moduleInfos } from "@/lib/data/constants";
 import { isAuthorized } from "@/lib/auth/client-auth"; // Assuming this can be used or adapted
+import { Label } from "../ui/label";
 
 interface CircleSelectorProps {
     itemType: CreatableItemDetail;
@@ -100,12 +101,10 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({ itemType, onCirc
     }
 
     return (
-        <div className="p-4">
-            <label htmlFor="circle-select" className="mb-1 block text-sm font-medium text-gray-700">
-                Create in:
-            </label>
+        <div>
+            <Label htmlFor="circle-select">Create in:</Label>
             <Select value={selectedCircleId} onValueChange={handleSelectionChange}>
-                <SelectTrigger id="circle-select" className="w-full">
+                <SelectTrigger id="circle-select" className="mt-2 w-full">
                     <SelectValue placeholder="Select a circle..." />
                 </SelectTrigger>
                 <SelectContent>

@@ -46,12 +46,12 @@ export type CircleWizardStepProps = {
 };
 
 interface CircleWizardProps {
-    parentCircleId?: string;
+    // parentCircleId?: string; // Removed, as BasicInfoStep now handles parent selection
     isProjectsPage?: boolean;
-    onComplete?: () => void;
+    onComplete?: (createdCircleId?: string) => void; // Modified to pass createdCircleId
 }
 
-export default function CircleWizard({ parentCircleId, isProjectsPage = false, onComplete }: CircleWizardProps) {
+export default function CircleWizard({ isProjectsPage = false, onComplete }: CircleWizardProps) {
     const [isOpen, setIsOpen] = useState(true);
     const [currentStepIndex, setCurrentStepIndex] = useState(0);
     const router = useRouter();
@@ -67,14 +67,14 @@ export default function CircleWizard({ parentCircleId, isProjectsPage = false, o
         selectedSkills: [],
         picture: "/images/default-picture.png",
         images: [], // Initialize images as empty array
-        parentCircleId,
+        parentCircleId: undefined, // Initialized as undefined, BasicInfoStep will set it
         circleType: isProjectsPage ? "project" : "circle",
         isProjectsPage,
     });
 
     // Effect to reset state if key props change (indicating a new wizard session)
     useEffect(() => {
-        console.log("Wizard props changed, resetting state.");
+        console.log("Wizard props changed, resetting state (isProjectsPage or isOpen).");
         setCircleData({
             name: "",
             handle: "",
@@ -86,14 +86,14 @@ export default function CircleWizard({ parentCircleId, isProjectsPage = false, o
             selectedSkills: [],
             picture: "/images/default-picture.png", // Reset picture
             images: [], // Reset images
-            parentCircleId, // Update parentCircleId from props
+            parentCircleId: undefined, // Reset parentCircleId
             circleType: isProjectsPage ? "project" : "circle", // Update type from props
             isProjectsPage, // Update flag from props
             _id: undefined, // Clear any existing ID
             pictureFile: undefined, // Clear any lingering file object
         });
         setCurrentStepIndex(0); // Reset to the first step
-    }, [isOpen, parentCircleId, isProjectsPage]); // Dependency array
+    }, [isOpen, isProjectsPage]); // Dependency array updated, parentCircleId removed
 
     // Define the steps for the wizard
     const steps = useMemo(() => {
@@ -147,13 +147,17 @@ export default function CircleWizard({ parentCircleId, isProjectsPage = false, o
             const nextStepIndex = currentStepIndex + 1;
             setCurrentStepIndex(nextStepIndex);
         } else {
+            // This is the final step completion
             setIsOpen(false);
-            // Call onComplete callback if provided
             if (onComplete) {
-                onComplete();
+                onComplete(circleData._id); // Pass the created circle's ID
             } else {
-                // Navigate back to circles page or to the new circle's page
-                router.push("/circles");
+                // Default navigation if onComplete is not provided
+                if (circleData._id) {
+                    router.push(`/circles/${circleData.handle || circleData._id}`);
+                } else {
+                    router.push(isProjectsPage ? "/projects" : "/circles");
+                }
             }
         }
     };

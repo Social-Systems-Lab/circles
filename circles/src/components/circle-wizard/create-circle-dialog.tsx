@@ -9,11 +9,12 @@ import { useIsCompact } from "@/components/utils/use-is-compact";
 import { DialogTitle, DialogHeader } from "@/components/ui/dialog";
 
 type CreateCircleDialogProps = {
-    parentCircleId?: string;
+    // parentCircleId?: string; // Removed
     isProjectsPage?: boolean;
 };
 
-export function CreateCircleDialog({ parentCircleId, isProjectsPage = false }: CreateCircleDialogProps) {
+export function CreateCircleDialog({ isProjectsPage = false }: CreateCircleDialogProps) {
+    // parentCircleId removed from props
     const [isOpen, setIsOpen] = useState(false);
     const isCompact = useIsCompact();
 
@@ -38,9 +39,9 @@ export function CreateCircleDialog({ parentCircleId, isProjectsPage = false }: C
                     <DialogTitle>{`Create ${isProjectsPage ? "Project" : "Community"}`}</DialogTitle>
                 </div>
                 <CircleWizard
-                    parentCircleId={parentCircleId}
+                    // parentCircleId={parentCircleId} // Removed
                     isProjectsPage={isProjectsPage}
-                    onComplete={() => setIsOpen(false)}
+                    onComplete={() => setIsOpen(false)} // This is compatible, createdCircleId will be ignored
                 />
             </DialogContent>
         </Dialog>

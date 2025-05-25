@@ -24,7 +24,8 @@ export interface CreatableItemDetail {
     title: string;
     description: string;
     icon: React.ElementType;
-    // moduleHandle and createFeatureHandle might not be needed here anymore if this component only triggers dialogs
+    moduleHandle: string; // Un-commented
+    createFeatureHandle: string; // Un-commented
 }
 
 // Define the items that can be created
@@ -35,42 +36,56 @@ export const creatableItemsList: CreatableItemDetail[] = [
         title: "Community",
         description: "Start a new community or group.",
         icon: Users,
+        moduleHandle: "circles",
+        createFeatureHandle: "create",
     },
     {
         key: "project",
         title: "Project",
         description: "Launch a new project.",
         icon: Hammer,
+        moduleHandle: "projects",
+        createFeatureHandle: "create",
     },
     {
         key: "post",
         title: "Post",
         description: "Share an update, idea, or story.",
         icon: MessageSquare,
+        moduleHandle: "feed",
+        createFeatureHandle: "post",
     },
     {
         key: "task",
         title: "Task",
         description: "Define a new task to be done.",
         icon: ListChecks,
+        moduleHandle: "tasks",
+        createFeatureHandle: "create",
     },
     {
         key: "goal",
         title: "Goal",
         description: "Set a new goal to achieve.",
         icon: Target,
+        moduleHandle: "goals",
+        createFeatureHandle: "create",
     },
     {
         key: "issue",
         title: "Issue",
         description: "Report a new issue or problem.",
         icon: AlertTriangle,
+        moduleHandle: "issues",
+        createFeatureHandle: "create",
     },
     {
         key: "proposal",
         title: "Proposal",
         description: "Make a new proposal for decision.",
         icon: FileText,
+        moduleHandle: "proposals",
+        createFeatureHandle: "create",
     },
 ];
 

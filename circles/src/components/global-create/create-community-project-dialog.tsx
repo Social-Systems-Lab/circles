@@ -58,18 +58,20 @@ export const CreateCommunityProjectDialog: React.FC<CreateCommunityProjectDialog
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-[95vw] p-0 sm:max-w-[95vw] md:max-w-[800px] lg:max-w-[1000px]">
-                {/* DialogHeader might be part of CircleWizard or managed here if needed */}
-                {/* For now, CircleWizard likely has its own title structure */}
-                {/* <DialogHeader>
-                    <DialogTitle>Create New {itemDetail.title}</DialogTitle>
-                </DialogHeader> */}
-
+                <div className="hidden">
+                    <DialogHeader>
+                        <DialogTitle>
+                            Create New {itemDetail?.title || (itemKey === "community" ? "Community" : "Project")}
+                        </DialogTitle>
+                        {/* Optional: Add DialogDescription if needed for accessibility, though often title is enough for hidden ones */}
+                    </DialogHeader>
+                </div>
                 {/* 
                   The CircleSelector for choosing a PARENT will be *inside* CircleWizard.
                   The CircleWizard itself is the content.
                 */}
                 <CircleWizard
-                    parentCircleId={parentCircleIdForWizard} // This will be dynamic from CircleWizard's internal state
+                    // parentCircleId={parentCircleIdForWizard} // Removed, CircleWizard handles this internally
                     isProjectsPage={itemKey === "project"}
                     onComplete={handleWizardComplete}
                     // TODO: CircleWizard might need an onCancel prop that calls onOpenChange(false)
