@@ -20,6 +20,7 @@ import { MdQrCodeScanner, MdQrCode } from "react-icons/md";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import QRCode from "react-qr-code";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import Link from "next/link";
 
 const ProfileMenuBar = () => {
     const router = useRouter();
@@ -145,7 +146,7 @@ const ProfileMenuBar = () => {
                             <Button
                                 className="h-auto w-auto rounded-full p-0"
                                 variant="ghost"
-                                onClick={() => openUserToolbox("profile")}
+                                onClick={() => router.push(`/circles/${user?.handle}`)}
                             >
                                 <UserPicture name={user?.name} picture={user?.picture?.url} size="40px" />
                             </Button>
