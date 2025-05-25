@@ -110,7 +110,7 @@ export default function CausesStep({
         <div className="space-y-4">
             <h2 className="text-2xl font-bold">Choose Causes</h2>
             <p className="text-gray-500">
-                Select causes that align with your {circleData.isProjectsPage ? "project" : "circle"}&apos;s mission:
+                Select causes that align with your {circleData.isProjectsPage ? "project" : "community"}&apos;s mission:
             </p>
 
             <div className="relative">

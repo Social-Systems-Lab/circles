@@ -110,7 +110,7 @@ export default function SkillsStep({
         <div className="space-y-4">
             <h2 className="text-2xl font-bold">Choose Needs</h2>
             <p className="text-gray-500">
-                Select skills that your {circleData.isProjectsPage ? "project" : "circle"} needs:
+                Select skills that your {circleData.isProjectsPage ? "project" : "community"} needs:
             </p>
 
             <div className="relative">

@@ -38,10 +38,12 @@ export default function FinalStep({
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-2xl font-bold">Create Your {circleData.isProjectsPage ? "Project" : "Circle"}</h2>
+                <h2 className="text-2xl font-bold">
+                    Create Your {circleData.isProjectsPage ? "Project" : "Community"}
+                </h2>
                 <p className="text-gray-500">
-                    You&apos;re all set! Review your {circleData.isProjectsPage ? "project" : "circle"} details and
-                    create your {circleData.isProjectsPage ? "project" : "circle"}.
+                    You&apos;re all set! Review your {circleData.isProjectsPage ? "project" : "community"} details and
+                    create your {circleData.isProjectsPage ? "project" : "community"}.
                 </p>
             </div>
 
@@ -53,7 +55,7 @@ export default function FinalStep({
                         <p className="text-sm text-gray-600">@{circleData.handle}</p>
                         <p className="text-sm text-gray-600">
                             {circleData.isPublic ? "Public" : "Private"}{" "}
-                            {circleData.isProjectsPage ? "Project" : "Circle"}
+                            {circleData.isProjectsPage ? "Project" : "Community"}
                         </p>
                     </div>
 
@@ -122,7 +124,7 @@ export default function FinalStep({
 
                 <Button onClick={handleViewCircle} className="rounded-full">
                     <Check className="mr-2 h-4 w-4" />
-                    View {circleData.isProjectsPage ? "Project" : "Circle"}
+                    View {circleData.isProjectsPage ? "Project" : "Community"}
                     <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
             </div>

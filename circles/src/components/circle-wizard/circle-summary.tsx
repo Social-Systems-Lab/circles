@@ -60,7 +60,7 @@ export default function CircleSummary({ circleData }: CircleSummaryProps) {
             {mission && (
                 <div className="space-y-1">
                     <div className="text-md m-0 p-0 pb-0 font-semibold uppercase text-gray-500">
-                        {circleData.isProjectsPage ? "Project" : "Circle"} Mission
+                        {circleData.isProjectsPage ? "Project" : "Community"} Mission
                     </div>
                     <p className="text-sm italic text-gray-700">&quot;{mission}&quot;</p>
                 </div>

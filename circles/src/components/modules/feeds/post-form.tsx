@@ -189,11 +189,11 @@ export function PostForm({
     const [location, setLocation] = useState<Location | undefined>(initialPost?.location);
     const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
 
-    // State for circle selection and user groups
-    const [selectedCircle, setSelectedCircle] = useState<Circle>(circle);
+    // State for user groups (circle selection is now handled by the parent dialog)
+    // const [selectedCircle, setSelectedCircle] = useState<Circle>(circle); // Removed, use 'circle' prop directly
     const [userGroups, setUserGroups] = useState<string[]>(initialPost?.userGroups || ["everyone"]); // Use initial post groups if available
     const [isUserGroupsDialogOpen, setIsUserGroupsDialogOpen] = useState(false);
-    const [availableCircles, setAvailableCircles] = useState<Circle[]>([]);
+    // const [availableCircles, setAvailableCircles] = useState<Circle[]>([]); // Removed
     const { toast } = useToast(); // Initialize toast
 
     // --- Re-insert Dropzone Logic ---
@@ -269,13 +269,13 @@ export function PostForm({
     const cancelInternalFetchRef = useRef<() => void>(() => {}); // Ref for cancel function
     // --- End Internal Link Preview State ---
 
-    // Get all circles the user is a member of
-    useEffect(() => {
-        if (user && user.memberships) {
-            const circles = user.memberships.map((membership) => membership.circle);
-            setAvailableCircles(circles);
-        }
-    }, [user]);
+    // Get all circles the user is a member of - REMOVED as circle is now a direct prop
+    // useEffect(() => {
+    //     if (user && user.memberships) {
+    //         const circles = user.memberships.map((membership) => membership.circle);
+    //         setAvailableCircles(circles);
+    //     }
+    // }, [user]);
 
     // --- Combined Link Preview Logic (External & Internal) ---
     const extractFirstUrl = (text: string): { url: string; isInternal: boolean } | null => {
@@ -492,13 +492,14 @@ export function PostForm({
     ); // Added toast dependency
 
     const getUserGroupName = (userGroup: string) => {
-        if (!selectedCircle || !selectedCircle.userGroups) {
+        // Use 'circle' prop directly instead of 'selectedCircle' state
+        if (!circle || !circle.userGroups) {
             // If no circle is selected or it has no user groups, capitalize the first letter of the group name
             return userGroup.charAt(0).toUpperCase() + userGroup.slice(1);
         }
 
         // Find the user group in the selected circle's user groups
-        const group = selectedCircle.userGroups.find((g) => g.handle === userGroup);
+        const group = circle.userGroups.find((g) => g.handle === userGroup);
 
         // If the group is not found, capitalize the first letter of the group name
         if (!group) {
@@ -510,10 +511,11 @@ export function PostForm({
 
     // Get available user groups for the selected circle that the user is a member of
     const getAvailableUserGroups = () => {
-        if (!selectedCircle || !user || !user.memberships) return ["everyone"];
+        // Use 'circle' prop directly
+        if (!circle || !user || !user.memberships) return ["everyone"];
 
         // Find the user's membership for the selected circle
-        const membership = user.memberships.find((m) => m.circleId === selectedCircle._id);
+        const membership = user.memberships.find((m) => m.circleId === circle._id);
 
         if (!membership) {
             // If user is not a member of this circle, only allow "everyone"
@@ -535,16 +537,15 @@ export function PostForm({
         return groups;
     };
 
-    // Handle circle change
-    const handleCircleChange = (circleId: string) => {
-        const newCircle = availableCircles.find((c) => c._id === circleId);
-        if (newCircle) {
-            setSelectedCircle(newCircle);
-
-            // Reset user groups to default
-            setUserGroups(["everyone"]);
-        }
-    };
+    // Handle circle change - REMOVED
+    // const handleCircleChange = (circleId: string) => {
+    //     const newCircle = availableCircles.find((c) => c._id === circleId);
+    //     if (newCircle) {
+    //         setSelectedCircle(newCircle); // This state is removed
+    //         // Reset user groups to default
+    //         setUserGroups(["everyone"]);
+    //     }
+    // };
 
     useEffect(() => {
         if (initialPost) {
@@ -573,7 +574,7 @@ export function PostForm({
         startTransition(async () => {
             const formData = new FormData();
             formData.append("content", postContent);
-            formData.append("circleId", selectedCircle._id);
+            formData.append("circleId", circle._id!); // Use 'circle' prop
             userGroups.forEach((group) => {
                 formData.append("userGroups", group);
             });
@@ -624,32 +625,11 @@ export function PostForm({
                         <div className="flex flex-row items-center justify-center gap-[4px]">
                             <div className="text-xs text-gray-500">Post in</div>
 
-                            {/* Circle selector */}
-                            {availableCircles.length > 0 ? (
-                                <Select value={selectedCircle._id} onValueChange={handleCircleChange}>
-                                    <SelectTrigger className="h-6 w-auto border-0 bg-transparent p-0 pl-1 text-xs hover:bg-gray-100">
-                                        <div className="flex items-center gap-1">
-                                            <CirclePicture circle={selectedCircle} size="14px" />
-                                            <span>{selectedCircle.name}</span>
-                                        </div>
-                                    </SelectTrigger>
-                                    <SelectContent className="z-[111]">
-                                        {availableCircles.map((c) => (
-                                            <SelectItem key={c._id} value={c._id}>
-                                                <div className="flex items-center gap-2">
-                                                    <CirclePicture circle={c} size="20px" />
-                                                    <span>{c.name}</span>
-                                                </div>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            ) : (
-                                <div className="flex items-center gap-1">
-                                    <CirclePicture circle={selectedCircle} size="14px" />
-                                    <span className="text-xs">{selectedCircle.name}</span>
-                                </div>
-                            )}
+                            {/* Circle display (no selector here anymore) */}
+                            <div className="flex items-center gap-1">
+                                <CirclePicture circle={circle} size="14px" /> {/* Use 'circle' prop */}
+                                <span className="text-xs">{circle.name}</span> {/* Use 'circle' prop */}
+                            </div>
 
                             {/* User group selector */}
                             <Button
@@ -1022,7 +1002,8 @@ export function PostForm({
                                         <div className="flex-1">
                                             <div className="font-medium">{getUserGroupName(group)}</div>
                                             <div className="text-xs text-gray-500">
-                                                Only {getUserGroupName(group)?.toLowerCase()} of {selectedCircle.name}
+                                                Only {getUserGroupName(group)?.toLowerCase()} of {circle.name}{" "}
+                                                {/* Use 'circle' prop */}
                                             </div>
                                         </div>
                                         <div className="ml-2">

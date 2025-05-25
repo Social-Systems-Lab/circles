@@ -15,12 +15,7 @@ import { useAtom } from "jotai";
 import { UserPicture } from "../modules/members/user-picture";
 import { Bell, MessageCircle } from "lucide-react";
 import { UserToolboxTab } from "@/models/models";
-import { IoMdQrScanner } from "react-icons/io";
-import { MdQrCodeScanner, MdQrCode } from "react-icons/md";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import QRCode from "react-qr-code";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
-import Link from "next/link";
 
 const ProfileMenuBar = () => {
     const router = useRouter();

@@ -65,7 +65,7 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url, initialD
         switch (circleType) {
             default:
             case "circle":
-                return "Circle";
+                return "Community";
             case "project":
                 return "Project";
             case "user":

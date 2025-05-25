@@ -118,7 +118,7 @@ export default function CircleWizard({ parentCircleId, isProjectsPage = false, o
 
     // Helper function to get step titles
     function getStepTitle(stepIndex: number) {
-        const entityType = isProjectsPage ? "Project" : "Circle";
+        const entityType = isProjectsPage ? "Project" : "Community";
         switch (stepIndex) {
             case 0:
                 return "Basic Information";

@@ -49,13 +49,13 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
 
         // Validate name
         if (!circleData.name.trim()) {
-            setNameError(`${circleData.isProjectsPage ? "Project" : "Circle"} name is required`);
+            setNameError(`${circleData.isProjectsPage ? "Project" : "Community"} name is required`);
             isValid = false;
         }
 
         // Validate handle
         if (!circleData.handle.trim()) {
-            setHandleError(`${circleData.isProjectsPage ? "Project" : "Circle"} handle is required`);
+            setHandleError(`${circleData.isProjectsPage ? "Project" : "Community"} handle is required`);
             isValid = false;
         } else if (!/^[a-zA-Z0-9\-]*$/.test(circleData.handle)) {
             setHandleError("Handle can only contain letters, numbers and hyphens (-)");
@@ -103,28 +103,30 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-2xl font-bold">Create a New {circleData.isProjectsPage ? "Project" : "Circle"}</h2>
+                <h2 className="text-2xl font-bold">
+                    Create a New {circleData.isProjectsPage ? "Project" : "Community"}
+                </h2>
                 <p className="text-gray-500">
                     Let&apos;s start with the basic information for your{" "}
-                    {circleData.isProjectsPage ? "project" : "circle"}.
+                    {circleData.isProjectsPage ? "project" : "community"}.
                 </p>
             </div>
 
             <div className="space-y-4">
                 <div className="space-y-2">
-                    <Label htmlFor="name">{circleData.isProjectsPage ? "Project" : "Circle"} Name</Label>
+                    <Label htmlFor="name">{circleData.isProjectsPage ? "Project" : "Community"} Name</Label>
                     <Input
                         id="name"
                         name="name"
                         value={circleData.name}
                         onChange={handleInputChange}
-                        placeholder={`Enter ${circleData.isProjectsPage ? "project" : "circle"} name`}
+                        placeholder={`Enter ${circleData.isProjectsPage ? "project" : "community"} name`}
                     />
                     {nameError && <p className="text-sm text-red-500">{nameError}</p>}
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="handle">{circleData.isProjectsPage ? "Project" : "Circle"} Handle</Label>
+                    <Label htmlFor="handle">{circleData.isProjectsPage ? "Project" : "Community"} Handle</Label>
                     <div className="flex items-center">
                         <span className="mr-1 text-gray-500">@</span>
                         <Input
@@ -132,22 +134,22 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
                             name="handle"
                             value={circleData.handle}
                             onChange={handleInputChange}
-                            placeholder={`${circleData.isProjectsPage ? "project" : "circle"}-handle`}
+                            placeholder={`${circleData.isProjectsPage ? "project" : "community"}-handle`}
                         />
                     </div>
                     <p className="text-xs text-gray-500">
-                        This will be used in the URL for your {circleData.isProjectsPage ? "project" : "circle"}:
-                        circles/{circleData.handle || `${circleData.isProjectsPage ? "project" : "circle"}-handle`}
+                        This will be used in the URL for your {circleData.isProjectsPage ? "project" : "community"}:
+                        circles/{circleData.handle || `${circleData.isProjectsPage ? "project" : "community"}-handle`}
                     </p>
                     {handleError && <p className="text-sm text-red-500">{handleError}</p>}
                 </div>
 
                 <div className="flex items-center space-x-2">
                     <Switch id="isPublic" checked={circleData.isPublic} onCheckedChange={handleSwitchChange} />
-                    <Label htmlFor="isPublic">Public {circleData.isProjectsPage ? "Project" : "Circle"}</Label>
+                    <Label htmlFor="isPublic">Public {circleData.isProjectsPage ? "Project" : "Community"}</Label>
                     <p className="text-xs text-gray-500">
                         {circleData.isPublic
-                            ? `Anyone can follow this ${circleData.isProjectsPage ? "project" : "circle"} without approval`
+                            ? `Anyone can follow this ${circleData.isProjectsPage ? "project" : "community"} without approval`
                             : `New followers will need approval`}
                     </p>
                 </div>
@@ -161,7 +163,7 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
                             Saving...
                         </>
                     ) : (
-                        `Create ${circleData.isProjectsPage ? "Project" : "Circle"}`
+                        `Create ${circleData.isProjectsPage ? "Project" : "Community"}`
                     )}
                 </Button>
             </div>

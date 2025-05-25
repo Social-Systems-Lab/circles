@@ -1,39 +1,89 @@
 "use client";
 
-import React from "react";
-import { Circle } from "@/models/models";
+import React, { useState, useEffect } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Circle, UserPrivate } from "@/models/models";
 import { ProposalForm } from "@/components/modules/proposals/proposal-form";
-import { CreatableItemDetail } from "./global-create-dialog-content";
+import { CreatableItemDetail, CreatableItemKey, creatableItemsList } from "./global-create-dialog-content";
+import CircleSelector from "./circle-selector";
+import { useAtom } from "jotai";
+import { userAtom } from "@/lib/data/atoms";
 
 interface CreateProposalDialogProps {
-    selectedCircle: Circle;
-    selectedItem: CreatableItemDetail; // To confirm it's a proposal
-    onSuccess: (proposalId?: string) => void; // Callback on successful proposal creation
-    onCancel: () => void; // Callback to go back or cancel
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    onSuccess: (proposalId?: string) => void;
+    itemKey: CreatableItemKey;
 }
 
 export const CreateProposalDialog: React.FC<CreateProposalDialogProps> = ({
-    selectedCircle,
-    selectedItem,
+    isOpen,
+    onOpenChange,
     onSuccess,
-    onCancel,
+    itemKey,
 }) => {
-    if (selectedItem.key !== "proposal") {
-        return <p className="text-red-500">Error: Incorrect item type for Proposal creation.</p>;
+    const [user] = useAtom(userAtom);
+    const [selectedCircle, setSelectedCircle] = useState<Circle | null>(null);
+
+    const itemDetail = creatableItemsList.find((item: CreatableItemDetail) => item.key === itemKey);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setSelectedCircle(null);
+        }
+    }, [isOpen]);
+
+    const handleFormSuccess = (proposalId?: string) => {
+        onSuccess(proposalId);
+        onOpenChange(false);
+    };
+
+    const handleCancel = () => {
+        onOpenChange(false);
+    };
+
+    if (itemKey !== "proposal" || !itemDetail) {
+        if (isOpen) onOpenChange(false);
+        return null;
     }
 
     return (
-        <div className="p-0">
-            {" "}
-            {/* ProposalForm has its own Card styling with padding */}
-            <ProposalForm
-                circle={selectedCircle}
-                circleHandle={selectedCircle.handle!}
-                // proposal prop would be undefined for new proposal
-                onFormSubmitSuccess={onSuccess}
-                onCancel={onCancel}
-            />
-        </div>
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-[600px] md:max-w-[750px] lg:max-w-[900px]">
+                <DialogHeader>
+                    <DialogTitle>Create New {itemDetail.title}</DialogTitle>
+                    {selectedCircle && (
+                        <DialogDescription>
+                            {`Creating in '${selectedCircle.name || selectedCircle.handle}'`}
+                        </DialogDescription>
+                    )}
+                </DialogHeader>
+
+                {!user && <p className="p-4 text-red-500">Please log in to create a proposal.</p>}
+
+                {user && (
+                    <div className="pt-4">
+                        <CircleSelector itemType={itemDetail} onCircleSelected={setSelectedCircle} />
+
+                        {selectedCircle && (
+                            <div className="mt-4">
+                                <ProposalForm
+                                    circle={selectedCircle}
+                                    circleHandle={selectedCircle.handle!}
+                                    onFormSubmitSuccess={handleFormSuccess}
+                                    onCancel={handleCancel}
+                                />
+                            </div>
+                        )}
+                        {!selectedCircle && itemDetail && (
+                            <p className="p-4 text-sm text-muted-foreground">
+                                Please select a circle to create the {itemDetail.key}.
+                            </p>
+                        )}
+                    </div>
+                )}
+            </DialogContent>
+        </Dialog>
     );
 };
 

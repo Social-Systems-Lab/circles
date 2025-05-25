@@ -25,7 +25,7 @@ export function CreateCircleDialog({ parentCircleId, isProjectsPage = false }: C
                     className={isCompact ? "h-[32px] w-[32px] p-0" : "gap-2"}
                 >
                     <Plus className="h-4 w-4" />
-                    {isCompact ? "" : `Create ${isProjectsPage ? "Project" : "Circle"}`}
+                    {isCompact ? "" : `Create ${isProjectsPage ? "Project" : "Community"}`}
                 </Button>
             </DialogTrigger>
             <DialogContent
@@ -35,7 +35,7 @@ export function CreateCircleDialog({ parentCircleId, isProjectsPage = false }: C
                 }}
             >
                 <div className="hidden">
-                    <DialogTitle>{`Create ${isProjectsPage ? "Project" : "Circle"}`}</DialogTitle>
+                    <DialogTitle>{`Create ${isProjectsPage ? "Project" : "Community"}`}</DialogTitle>
                 </div>
                 <CircleWizard
                     parentCircleId={parentCircleId}
