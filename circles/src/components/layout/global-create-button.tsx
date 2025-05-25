@@ -33,7 +33,7 @@ export function GlobalCreateButton() {
     const handleItemCreatedSuccess = (itemKey: CreatableItemKey, createdItemId?: string) => {
         toast({
             title: `${itemKey.charAt(0).toUpperCase() + itemKey.slice(1)} created successfully!`,
-            description: createdItemId ? `ID: ${createdItemId}` : undefined,
+            // description: createdItemId ? `ID: ${createdItemId}` : undefined, // Removed ID from toast
         });
         // Ensure all specific dialogs are closed (though they should close themselves via onOpenChange)
         setCreateTaskOpen(false);

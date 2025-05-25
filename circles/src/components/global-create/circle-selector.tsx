@@ -19,92 +19,114 @@ interface CircleSelectorProps {
 
 export const CircleSelector: React.FC<CircleSelectorProps> = ({ itemType, onCircleSelected }) => {
     const [user] = useAtom(userAtom);
-    const [validCircles, setValidCircles] = useState<Circle[]>([]);
+    const [selectableCircles, setSelectableCircles] = useState<Circle[]>([]);
     const [selectedCircleId, setSelectedCircleId] = useState<string | undefined>(undefined);
     const [isLoading, setIsLoading] = useState(true);
+    const [showEnableModuleMessage, setShowEnableModuleMessage] = useState(false);
+
+    const updateModuleEnableMessage = (selectedCircle: Circle | null, userCircle: UserPrivate | null) => {
+        if (
+            selectedCircle &&
+            userCircle &&
+            selectedCircle._id === userCircle._id &&
+            !selectedCircle.enabledModules?.includes(itemType.moduleHandle)
+        ) {
+            setShowEnableModuleMessage(true);
+        } else {
+            setShowEnableModuleMessage(false);
+        }
+    };
 
     useEffect(() => {
-        if (!user) {
+        if (!user || !itemType) {
             setIsLoading(false);
-            setValidCircles([]);
+            setSelectableCircles([]);
+            setSelectedCircleId(undefined);
+            onCircleSelected(null);
+            setShowEnableModuleMessage(false);
             return;
         }
 
         setIsLoading(true);
-        const currentUserCircle = user as UserPrivate; // User's own circle data
-
-        // Simulate fetching all circles user is part of.
-        // In a real scenario, this would involve an API call or using existing memberships data.
+        const currentUserCircle = user as UserPrivate;
         const allUserMemberships = currentUserCircle.memberships || [];
-        const potentialCircles: Circle[] = [
-            currentUserCircle, // User's own circle
-            ...allUserMemberships.map((mem) => mem.circle), // Circles user is a member of
-        ].filter(Boolean); // Filter out any undefined/null circles
+        const potentialCircles: Circle[] = [...allUserMemberships.map((mem) => mem.circle)].filter(Boolean);
 
-        console.log("Potential circles:", potentialCircles);
+        const featureToAuth = (features[itemType.moduleHandle as keyof typeof features] as any)?.[
+            itemType.createFeatureHandle
+        ];
 
-        const filteredCircles = potentialCircles.filter((circle) => {
-            if (!circle || !circle.handle) return false; // Basic check
-
-            // 1. Check if module is enabled
-            const moduleEnabled = circle.enabledModules?.includes(itemType.moduleHandle);
-            if (!moduleEnabled) return false;
-
-            console.log("Checking circle:", circle.name || circle.handle, "for itemType:", itemType.key);
-
-            // 2. Check permission to create
-            // The feature handle for creation is itemType.createFeatureHandle
-            // The module handle is itemType.moduleHandle
-            // We need to use a permission checking function like isAuthorized
-            const featureToAuth = (features[itemType.moduleHandle as keyof typeof features] as any)?.[
-                itemType.createFeatureHandle
-            ];
-
-            console.log("Feature to auth:", featureToAuth);
-
-            if (!featureToAuth) return false; // Feature definition not found
-
-            const canCreateInCircle = isAuthorized(user, circle, featureToAuth as Feature);
-
-            console.log("canCreateInCircle:", canCreateInCircle);
-
-            return canCreateInCircle;
-        });
-
-        setValidCircles(filteredCircles);
-
-        // Pre-selection logic
-        if (filteredCircles.length > 0) {
-            const userOwnCircleIsValid = filteredCircles.find((c) => c._id === currentUserCircle._id);
-            if (userOwnCircleIsValid) {
-                setSelectedCircleId(currentUserCircle._id);
-                onCircleSelected(currentUserCircle);
-            } else {
-                setSelectedCircleId(filteredCircles[0]._id);
-                onCircleSelected(filteredCircles[0]);
-            }
-        } else {
+        if (!featureToAuth) {
+            console.warn(`Feature definition not found for ${itemType.moduleHandle} - ${itemType.createFeatureHandle}`);
+            setSelectableCircles([]);
             setSelectedCircleId(undefined);
             onCircleSelected(null);
+            setShowEnableModuleMessage(false);
+            setIsLoading(false);
+            return;
         }
+
+        const filteredAndProcessedCircles = potentialCircles.filter((circle) => {
+            if (!circle || !circle.handle) return false;
+
+            if (circle._id === currentUserCircle._id) {
+                // User's own circle: always allow selection, message will indicate if module needs enabling.
+                // Permission is implicitly true for user's own circle for creatable items.
+                return true;
+            } else {
+                // Other circles: module must be enabled, and user must have permission.
+                const moduleEnabled = circle.enabledModules?.includes(itemType.moduleHandle);
+                if (!moduleEnabled) return false;
+                return isAuthorized(user, circle, featureToAuth as Feature);
+            }
+        });
+
+        setSelectableCircles(filteredAndProcessedCircles);
+
+        let initialSelectedCircle: Circle | null = null;
+        if (filteredAndProcessedCircles.length > 0) {
+            const userOwnCircleIsSelectable = filteredAndProcessedCircles.find((c) => c._id === currentUserCircle._id);
+            if (userOwnCircleIsSelectable) {
+                initialSelectedCircle = userOwnCircleIsSelectable;
+            } else {
+                initialSelectedCircle = filteredAndProcessedCircles[0];
+            }
+            setSelectedCircleId(initialSelectedCircle._id);
+        } else {
+            setSelectedCircleId(undefined);
+        }
+
+        onCircleSelected(initialSelectedCircle);
+        updateModuleEnableMessage(initialSelectedCircle, currentUserCircle);
         setIsLoading(false);
-    }, [user, itemType, onCircleSelected]);
+    }, [user, itemType, onCircleSelected]); // onCircleSelected is stable due to useCallback in parent
 
     const handleSelectionChange = (circleId: string) => {
-        const circle = validCircles.find((c) => c._id === circleId);
+        const circle = selectableCircles.find((c) => c._id === circleId);
         setSelectedCircleId(circleId);
         onCircleSelected(circle || null);
+        if (user && circle) {
+            updateModuleEnableMessage(circle, user as UserPrivate);
+        } else {
+            setShowEnableModuleMessage(false);
+        }
     };
 
     if (isLoading) {
         return <div className="p-4 text-sm text-muted-foreground">Loading circles...</div>;
     }
 
-    if (validCircles.length === 0) {
-        const moduleName = moduleInfos.find((m) => m.handle === itemType.moduleHandle)?.name || itemType.moduleHandle;
+    // itemType might be null briefly if parent component is setting up
+    if (!itemType) {
+        return <div className="p-4 text-sm text-muted-foreground">Initializing...</div>;
+    }
+
+    const moduleName = moduleInfos.find((m) => m.handle === itemType.moduleHandle)?.name || itemType.moduleHandle;
+
+    if (selectableCircles.length === 0) {
         return (
             <div className="p-4 text-sm text-red-600">
-                {`No valid circles found to create a ${itemType.key}. Ensure the '${moduleName}' module is enabled and you have permission.`}
+                {`No valid circles found to create a ${itemType.key}. Ensure the '${moduleName}' module is enabled in a circle you belong to and you have permission, or select your user profile.`}
             </div>
         );
     }
@@ -117,14 +139,21 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({ itemType, onCirc
                     <SelectValue placeholder="Select a circle..." />
                 </SelectTrigger>
                 <SelectContent>
-                    {validCircles.map((circle) => (
+                    {selectableCircles.map((circle) => (
                         <SelectItem key={circle._id} value={circle._id}>
                             {/* TODO: Add CirclePicture here */}
-                            {circle.name || circle.handle} ({circle.circleType})
+                            {circle.name || circle.handle}{" "}
+                            {circle._id === user?._id ? "(Your User Profile)" : `(${circle.circleType || "Circle"})`}
                         </SelectItem>
                     ))}
                 </SelectContent>
             </Select>
+            {showEnableModuleMessage && (
+                <p className="mt-2 text-xs text-blue-600">
+                    The &quot;{moduleName}&quot; module is not currently enabled on your user profile. It will be
+                    enabled automatically if you proceed.
+                </p>
+            )}
         </div>
     );
 };
