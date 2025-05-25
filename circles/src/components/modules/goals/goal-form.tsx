@@ -48,9 +48,18 @@ interface GoalFormProps {
     goal?: Goal; // Renamed prop, updated type
     circleHandle: string;
     goalId?: string; // Renamed prop
+    onFormSubmitSuccess?: (goalId?: string) => void; // For dialog usage
+    onCancel?: () => void; // For dialog usage
 }
 
-export const GoalForm: React.FC<GoalFormProps> = ({ circle, goal, circleHandle, goalId }) => {
+export const GoalForm: React.FC<GoalFormProps> = ({
+    circle,
+    goal,
+    circleHandle,
+    goalId,
+    onFormSubmitSuccess,
+    onCancel,
+}) => {
     // Renamed component, props
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [location, setLocation] = useState<Location | undefined>(goal?.location); // Use goal prop
@@ -149,11 +158,16 @@ export const GoalForm: React.FC<GoalFormProps> = ({ circle, goal, circleHandle, 
                         result.message || (isEditing ? "Goal successfully updated." : "Goal successfully submitted."), // Updated text
                 });
 
-                const navigateToId = isEditing ? goalId : result.goalId; // Use goalId, result.goalId
-                if (navigateToId) {
-                    router.push(`/circles/${circleHandle}/goals/${navigateToId}`); // Updated path
+                if (onFormSubmitSuccess) {
+                    onFormSubmitSuccess(result.goalId);
                 } else {
-                    router.push(`/circles/${circleHandle}/goals`); // Updated path
+                    const navigateToId = isEditing ? goalId : result.goalId; // Use goalId, result.goalId
+                    if (navigateToId) {
+                        router.push(`/circles/${circleHandle}/goals/${navigateToId}`); // Updated path
+                    } else {
+                        router.push(`/circles/${circleHandle}/goals`); // Updated path
+                    }
+                    // router.refresh(); // GoalForm didn't have this, so not adding.
                 }
             } else {
                 toast({
@@ -332,18 +346,28 @@ export const GoalForm: React.FC<GoalFormProps> = ({ circle, goal, circleHandle, 
                                 </div>
 
                                 <div className="flex space-x-4">
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={() =>
-                                            router.push(
-                                                `/circles/${circle.handle}/goals${goal?._id ? `/${goal._id}` : ""}`, // Updated path, use goal prop
-                                            )
-                                        }
-                                        disabled={isSubmitting}
-                                    >
-                                        Cancel
-                                    </Button>
+                                    {onCancel ? (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={onCancel}
+                                            disabled={isSubmitting}
+                                        >
+                                            Cancel
+                                        </Button>
+                                    ) : !isEditing ? ( // Only show router-based cancel if not editing and not in dialog
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() =>
+                                                // When !isEditing, goal is undefined, so path is just to goals list for the circle
+                                                router.push(`/circles/${circleHandle}/goals`)
+                                            }
+                                            disabled={isSubmitting}
+                                        >
+                                            Cancel
+                                        </Button>
+                                    ) : null}
                                     <Button type="submit" disabled={isSubmitting}>
                                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                                         {isEditing ? "Update Goal" : "Create Goal"} {/* Updated text */}

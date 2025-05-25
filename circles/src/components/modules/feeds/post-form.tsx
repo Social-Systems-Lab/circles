@@ -166,16 +166,26 @@ type PostFormProps = {
     initialPost?: PostDisplay;
     onSubmit: (formData: FormData) => Promise<void>;
     onCancel: () => void;
+    isSubmitting?: boolean; // Added for external control
 };
 
-export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }: PostFormProps) {
+export function PostForm({
+    circle,
+    feed,
+    user,
+    initialPost,
+    onSubmit,
+    onCancel,
+    isSubmitting: externalIsSubmitting,
+}: PostFormProps) {
     const [postContent, setPostContent] = useState(initialPost?.content || "");
     const [showPollCreator, setShowPollCreator] = useState(false);
     const [images, setImages] = useState<ImageItem[]>([]);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [dragging, setDragging] = useState(false);
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
-    const [isPending, startTransition] = useTransition();
+    const [isPending, startTransition] = useTransition(); // Internal pending state for actions within PostForm
+    const isActuallySubmitting = externalIsSubmitting ?? isPending; // Prioritize external prop
     const [location, setLocation] = useState<Location | undefined>(initialPost?.location);
     const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
 
@@ -928,9 +938,9 @@ export function PostForm({ circle, feed, user, initialPost, onSubmit, onCancel }
                     <Button
                         className="rounded-full bg-blue-500 px-6 text-white hover:bg-blue-600"
                         onClick={handleSubmit}
-                        disabled={isPending || isPreviewLoading || isInternalPreviewLoading} // Disable if any preview is loading
+                        disabled={isActuallySubmitting || isPreviewLoading || isInternalPreviewLoading} // Use isActuallySubmitting
                     >
-                        {isPending ? (
+                        {isActuallySubmitting ? ( // Use isActuallySubmitting
                             <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                 {initialPost ? "Updating..." : "Posting..."}

@@ -39,9 +39,18 @@ interface IssueFormProps {
     issue?: Issue; // If provided, we're editing an existing issue
     circleHandle: string;
     issueId?: string; // Pass issueId if editing
+    onFormSubmitSuccess?: (issueId?: string) => void; // For dialog usage
+    onCancel?: () => void; // For dialog usage
 }
 
-export const IssueForm: React.FC<IssueFormProps> = ({ circle, issue, circleHandle, issueId }) => {
+export const IssueForm: React.FC<IssueFormProps> = ({
+    circle,
+    issue,
+    circleHandle,
+    issueId,
+    onFormSubmitSuccess,
+    onCancel,
+}) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [location, setLocation] = useState<Location | undefined>(issue?.location);
     const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
@@ -117,11 +126,16 @@ export const IssueForm: React.FC<IssueFormProps> = ({ circle, issue, circleHandl
                         result.message || (isEditing ? "Issue successfully updated." : "Issue successfully submitted."),
                 });
 
-                const navigateToId = isEditing ? issueId : result.issueId;
-                if (navigateToId) {
-                    router.push(`/circles/${circleHandle}/issues/${navigateToId}`);
+                if (onFormSubmitSuccess) {
+                    onFormSubmitSuccess(result.issueId);
                 } else {
-                    router.push(`/circles/${circleHandle}/issues`);
+                    const navigateToId = isEditing ? issueId : result.issueId;
+                    if (navigateToId) {
+                        router.push(`/circles/${circleHandle}/issues/${navigateToId}`);
+                    } else {
+                        router.push(`/circles/${circleHandle}/issues`);
+                    }
+                    // router.refresh(); // IssueForm didn't have this
                 }
             } else {
                 toast({
@@ -250,18 +264,28 @@ export const IssueForm: React.FC<IssueFormProps> = ({ circle, issue, circleHandl
                                 </div>
 
                                 <div className="flex space-x-4">
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={() =>
-                                            router.push(
-                                                `/circles/${circle.handle}/issues${issue?._id ? `/${issue._id}` : ""}`,
-                                            )
-                                        }
-                                        disabled={isSubmitting}
-                                    >
-                                        Cancel
-                                    </Button>
+                                    {onCancel ? (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={onCancel}
+                                            disabled={isSubmitting}
+                                        >
+                                            Cancel
+                                        </Button>
+                                    ) : !isEditing ? ( // Only show router-based cancel if not editing and not in dialog
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() =>
+                                                // When !isEditing, issue is undefined, so path is just to issues list for the circle
+                                                router.push(`/circles/${circleHandle}/issues`)
+                                            }
+                                            disabled={isSubmitting}
+                                        >
+                                            Cancel
+                                        </Button>
+                                    ) : null}
                                     <Button type="submit" disabled={isSubmitting}>
                                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                                         {isEditing ? "Update Issue" : "Submit Issue"}

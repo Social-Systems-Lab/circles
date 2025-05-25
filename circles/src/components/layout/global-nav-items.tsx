@@ -15,6 +15,7 @@ import { CgFeed } from "react-icons/cg";
 import { MdRssFeed } from "react-icons/md";
 import { AiOutlineHome } from "react-icons/ai";
 import { Hammer } from "lucide-react";
+import GlobalCreateButton from "./global-create-button";
 
 export default function GlobalNavItems() {
     const pathname = usePathname();
@@ -125,6 +126,8 @@ export default function GlobalNavItems() {
                         </motion.span>
                     </motion.div>
                 </Link>
+
+                <GlobalCreateButton />
 
                 {/* <Link href={"/map"}>
                     <motion.div

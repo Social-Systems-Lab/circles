@@ -42,9 +42,18 @@ interface ProposalFormProps {
     // Remove onSubmit prop
     circleHandle: string; // Pass handle for action call
     proposalId?: string; // Pass proposalId if editing
+    onFormSubmitSuccess?: (proposalId?: string) => void; // For dialog usage
+    onCancel?: () => void; // For dialog usage
 }
 
-export const ProposalForm: React.FC<ProposalFormProps> = ({ circle, proposal, circleHandle, proposalId }) => {
+export const ProposalForm: React.FC<ProposalFormProps> = ({
+    circle,
+    proposal,
+    circleHandle,
+    proposalId,
+    onFormSubmitSuccess,
+    onCancel,
+}) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [location, setLocation] = useState<Location | undefined>(proposal?.location); // Added location state
     const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false); // Added dialog state
@@ -133,14 +142,18 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({ circle, proposal, ci
                 });
 
                 // Navigate after success
-                const navigateToId = isEditing ? proposalId : result.proposalId;
-                if (navigateToId) {
-                    router.push(`/circles/${circleHandle}/proposals/${navigateToId}`);
-                    router.refresh(); // Refresh page data
+                if (onFormSubmitSuccess) {
+                    onFormSubmitSuccess(result.proposalId);
                 } else {
-                    // Fallback if ID is missing (shouldn't happen in success case)
-                    router.push(`/circles/${circleHandle}/proposals`);
-                    router.refresh();
+                    const navigateToId = isEditing ? proposalId : result.proposalId;
+                    if (navigateToId) {
+                        router.push(`/circles/${circleHandle}/proposals/${navigateToId}`);
+                        router.refresh(); // Refresh page data
+                    } else {
+                        // Fallback if ID is missing (shouldn't happen in success case)
+                        router.push(`/circles/${circleHandle}/proposals`);
+                        router.refresh();
+                    }
                 }
             } else {
                 toast({
@@ -348,18 +361,28 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({ circle, proposal, ci
 
                                 {/* Right side: Cancel/Submit */}
                                 <div className="flex space-x-4">
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={() =>
-                                            router.push(
-                                                `/circles/${circle.handle}/proposals${proposal?._id ? `/${proposal._id}` : ""}`,
-                                            )
-                                        }
-                                        disabled={isSubmitting}
-                                    >
-                                        Cancel
-                                    </Button>
+                                    {onCancel ? (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={onCancel}
+                                            disabled={isSubmitting}
+                                        >
+                                            Cancel
+                                        </Button>
+                                    ) : !isEditing ? ( // Only show router-based cancel if not editing and not in dialog
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() =>
+                                                // When !isEditing, proposal is undefined, so path is just to proposals list for the circle
+                                                router.push(`/circles/${circleHandle}/proposals`)
+                                            }
+                                            disabled={isSubmitting}
+                                        >
+                                            Cancel
+                                        </Button>
+                                    ) : null}
                                     <Button type="submit" disabled={isSubmitting}>
                                         {isSubmitting ? (
                                             <>
