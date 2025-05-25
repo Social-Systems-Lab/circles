@@ -214,6 +214,7 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
             </div>
 
             <div className="flex justify-end">
+                <pre>{JSON.stringify(circleData, null, 2)}</pre>
                 <Button onClick={handleNext} disabled={isPending} className="w-[150px]">
                     {isPending ? (
                         <>
