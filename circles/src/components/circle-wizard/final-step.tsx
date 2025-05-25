@@ -28,10 +28,25 @@ export default function FinalStep({
     }, [circleData._id, circleData.handle]);
 
     const handleViewCircle = () => {
+        // Call nextStep to trigger the onComplete callback in CircleWizard,
+        // which will then call the onComplete from CreateCommunityProjectDialog to close it.
+        if (nextStep) {
+            nextStep(); // This will eventually call onComplete from CircleWizard
+        } else if (onComplete) {
+            // Fallback if nextStep isn't directly doing the final onComplete call
+            // (though it should via CircleWizard's logic)
+            onComplete();
+        }
+
+        // Then navigate
         if (createdCircleHandle) {
             router.push(`/circles/${createdCircleHandle}`);
+        } else if (circleData.handle) {
+            // Fallback to circleData.handle if createdCircleHandle wasn't set
+            router.push(`/circles/${circleData.handle}`);
         } else {
-            router.push("/circles");
+            // Fallback further if no handle is available (should not happen if creation was successful)
+            router.push(circleData.isProjectsPage ? "/projects" : "/circles");
         }
     };
 
