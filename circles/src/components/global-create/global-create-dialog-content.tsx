@@ -36,7 +36,7 @@ export const creatableItemsList: CreatableItemDetail[] = [
         title: "Community",
         description: "Start a new community or group.",
         icon: Users,
-        moduleHandle: "circles",
+        moduleHandle: "communities",
         createFeatureHandle: "create",
     },
     {

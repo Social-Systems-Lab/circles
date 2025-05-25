@@ -37,7 +37,7 @@ export async function saveBasicInfoAction(
             return { success: true, message: "Basic info updated successfully", data: { circle: updatedCircle } };
         } else {
             // --- CREATE NEW CIRCLE ---
-            const authorized = await isAuthorized(userDid, parentCircleId ?? "", features.circles.create);
+            const authorized = await isAuthorized(userDid, parentCircleId ?? "", features.communities.create);
             if (!authorized) {
                 return { success: false, message: "You are not authorized to create new circles" };
             }

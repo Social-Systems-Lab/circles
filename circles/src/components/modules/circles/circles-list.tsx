@@ -49,7 +49,7 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
     const canCreateSubcircle = isAuthorized(
         user,
         circle,
-        isProjectsList ? features.projects.create : features.circles.create,
+        isProjectsList ? features.projects.create : features.communities.create,
     );
     const router = useRouter();
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
@@ -122,7 +122,7 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
                     }}
                 >
                     <Input
-                        placeholder={`Search ${isProjectsList ? "projects" : inUser ? "users" : "circles"}...`}
+                        placeholder={`Search ${isProjectsList ? "projects" : inUser ? "users" : "communities"}...`}
                         value={searchQuery}
                         onChange={(event) => setSearchQuery(event.target.value)}
                         className="flex-1"

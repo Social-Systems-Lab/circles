@@ -99,7 +99,7 @@ export async function deleteCircleAction(circleId: string, confirmationName: str
         }
 
         // Check if user has admin permissions for this circle
-        const isAdmin = await isAuthorized(userDid, circleId, features.circles.delete);
+        const isAdmin = await isAuthorized(userDid, circleId, features.communities.delete);
         if (!isAdmin) {
             return {
                 success: false,

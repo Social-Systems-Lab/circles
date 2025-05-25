@@ -297,7 +297,7 @@ export async function getInternalLinkPreviewData(url: string): Promise<InternalL
             const circle = await getCircleByHandle(handle);
             if (!circle) return { error: "Circle not found" };
             // Basic authorization check for viewing a circle profile
-            const authorized = await isAuthorized(userDid, circle._id.toString(), features.circles.view); // Corrected feature path
+            const authorized = await isAuthorized(userDid, circle._id.toString(), features.communities.view); // Corrected feature path
             if (!authorized && !circle.isPublic) return { error: "Unauthorized" }; // Allow public circles
             return { type: "circle", data: circle };
         } else {
