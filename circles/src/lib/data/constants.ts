@@ -97,27 +97,27 @@ export const features = {
             module: "followers",
         } as Feature,
     },
-    circles: {
+    communities: {
         view: {
-            name: "View Circles",
+            name: "View Communities",
             handle: "view",
-            description: "View the circles list",
+            description: "View the communities list",
             defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-            module: "circles",
+            module: "communities",
         } as Feature,
         create: {
-            name: "Create Circle",
+            name: "Create Community",
             handle: "create",
             description: "Create a new circle",
             defaultUserGroups: ["admins", "moderators", "members"],
-            module: "circles",
+            module: "communities",
         } as Feature,
         delete: {
-            name: "Delete Circle",
+            name: "Delete Community",
             handle: "delete",
-            description: "Delete a circle",
+            description: "Delete a community",
             defaultUserGroups: ["admins"],
-            module: "circles",
+            module: "communities",
         } as Feature,
     },
     projects: {
