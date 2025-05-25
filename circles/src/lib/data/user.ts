@@ -14,6 +14,7 @@ import { signRegisterUserChallenge } from "../auth/auth";
 import { getUserPendingMembershipRequests } from "./membership-requests";
 import { defaultUserGroupsForUser, getDefaultAccessRules, getDefaultModules } from "./constants";
 import { SAFE_CIRCLE_PROJECTION, getCircleById } from "./circle"; // Added getCircleById import
+import { getEnabledModules } from "../auth/client-auth";
 
 export const getAllUsers = async (): Promise<Circle[]> => {
     let circles: Circle[] = await Circles.find(
@@ -140,6 +141,8 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
                             images: 1, // Added images field
                             location: 1,
                             parentCircleId: 1,
+                            enabledModules: 1,
+                            accessRules: 1,
                         },
                     },
                 ],
@@ -166,6 +169,8 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
                     location: "$circle.location",
                     circleType: "$circle.circleType",
                     parentCircleId: "$circle.parentCircleId",
+                    enabledModules: "$circle.enabledModules",
+                    accessRules: "$circle.accessRules", // Include access rules
                 },
             },
         },

@@ -41,12 +41,16 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({ itemType, onCirc
             ...allUserMemberships.map((mem) => mem.circle), // Circles user is a member of
         ].filter(Boolean); // Filter out any undefined/null circles
 
+        console.log("Potential circles:", potentialCircles);
+
         const filteredCircles = potentialCircles.filter((circle) => {
             if (!circle || !circle.handle) return false; // Basic check
 
             // 1. Check if module is enabled
             const moduleEnabled = circle.enabledModules?.includes(itemType.moduleHandle);
             if (!moduleEnabled) return false;
+
+            console.log("Checking circle:", circle.name || circle.handle, "for itemType:", itemType.key);
 
             // 2. Check permission to create
             // The feature handle for creation is itemType.createFeatureHandle
@@ -55,9 +59,14 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({ itemType, onCirc
             const featureToAuth = (features[itemType.moduleHandle as keyof typeof features] as any)?.[
                 itemType.createFeatureHandle
             ];
+
+            console.log("Feature to auth:", featureToAuth);
+
             if (!featureToAuth) return false; // Feature definition not found
 
             const canCreateInCircle = isAuthorized(user, circle, featureToAuth as Feature);
+
+            console.log("canCreateInCircle:", canCreateInCircle);
 
             return canCreateInCircle;
         });
