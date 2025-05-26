@@ -427,7 +427,11 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
                     </Table>
                 </div>
                 <Dialog open={removeMemberDialogOpen} onOpenChange={setRemoveMemberDialogOpen}>
-                    <DialogContent>
+                    <DialogContent
+                        onInteractOutside={(e) => {
+                            e.preventDefault();
+                        }}
+                    >
                         <DialogHeader>
                             <DialogTitle>Are you sure?</DialogTitle>
                             <DialogDescription>
@@ -452,7 +456,11 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
                     </DialogContent>
                 </Dialog>
                 <Dialog open={editUserGroupsDialogOpen} onOpenChange={setEditUserGroupsDialogOpen}>
-                    <DialogContent>
+                    <DialogContent
+                        onInteractOutside={(e) => {
+                            e.preventDefault();
+                        }}
+                    >
                         <DialogHeader>
                             <DialogTitle>Edit User Groups</DialogTitle>
                             <DialogDescription>Edit user groups for {selectedMember?.name}.</DialogDescription>

@@ -454,3 +454,60 @@ export const deleteCircle = async (circleId: string): Promise<void> => {
 
     console.log("🗑️ [DB] Circle deleted successfully:", circleId);
 };
+
+/**
+ * Ensures a specific module is enabled on a user's own circle.
+ * @param circleId The ID of the user's circle.
+ * @param moduleHandle The handle of the module to enable.
+ * @param currentUserDid The DID of the currently authenticated user.
+ * @returns True if the module was enabled or already enabled, false otherwise.
+ */
+export const ensureModuleIsEnabledOnCircle = async (
+    circleId: string,
+    moduleHandle: string,
+    currentUserDid: string,
+): Promise<boolean> => {
+    try {
+        const circle = await getCircleById(circleId);
+
+        if (!circle) {
+            console.warn(`[ensureModuleIsEnabledOnCircle] Circle not found: ${circleId}`);
+            return false;
+        }
+
+        // This function is intended only for user circles (user profiles)
+        if (circle.circleType !== "user") {
+            console.log(
+                `[ensureModuleIsEnabledOnCircle] Skipping module enablement for non-user circle: ${circleId}, type: ${circle.circleType}`,
+            );
+            return true; // Not an error, but no action taken for non-user circles
+        }
+
+        // Verify the currentUserDid matches the circle's owner DID
+        if (circle.did !== currentUserDid) {
+            console.error(
+                `[ensureModuleIsEnabledOnCircle] Unauthorized attempt to enable module. User DID ${currentUserDid} does not own circle ${circleId} (owner DID: ${circle.did})`,
+            );
+            return false;
+        }
+
+        const currentEnabledModules = circle.enabledModules || [];
+        if (currentEnabledModules.includes(moduleHandle)) {
+            console.log(
+                `[ensureModuleIsEnabledOnCircle] Module ${moduleHandle} already enabled for circle ${circleId}`,
+            );
+            return true;
+        }
+
+        const newEnabledModules = [...currentEnabledModules, moduleHandle];
+        await updateCircle({ _id: circleId, enabledModules: newEnabledModules }, currentUserDid);
+        console.log(`[ensureModuleIsEnabledOnCircle] Module ${moduleHandle} enabled for circle ${circleId}`);
+        return true;
+    } catch (error) {
+        console.error(
+            `[ensureModuleIsEnabledOnCircle] Error enabling module ${moduleHandle} for circle ${circleId}:`,
+            error,
+        );
+        return false;
+    }
+};

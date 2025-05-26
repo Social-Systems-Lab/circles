@@ -367,7 +367,11 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             </Card>
 
             <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Select Location</DialogTitle>
                     </DialogHeader>

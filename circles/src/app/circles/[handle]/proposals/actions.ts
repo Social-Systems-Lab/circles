@@ -30,6 +30,7 @@ import {
     notifyProposalResolvedVoters,
     notifyProposalVote,
 } from "@/lib/data/notifications";
+import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
 
 /**
  * Get all proposals for a circle
@@ -306,6 +307,16 @@ export async function createProposalAction(
 
         // Revalidate the proposals page
         revalidatePath(`/circles/${circleHandle}/proposals`);
+
+        // Ensure 'proposals' module is enabled if creating in user's own circle
+        try {
+            if (circle.circleType === "user" && circle.did === userDid) {
+                await ensureModuleIsEnabledOnCircle(circle._id as string, "proposals", userDid);
+            }
+        } catch (moduleEnableError) {
+            console.error("Failed to ensure proposals module is enabled on user circle:", moduleEnableError);
+            // Non-critical, so don't fail the proposal creation
+        }
 
         return {
             success: true,

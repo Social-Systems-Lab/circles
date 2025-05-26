@@ -52,7 +52,19 @@ export function CircleTabs({ circle }: CircleTabsProps) {
     );
 
     const enabledModules = useMemo(() => {
-        return circle.enabledModules ?? [];
+        // loop through all modules and check if they are enabled for the circle
+        let moduleList: string[] = [];
+        if (!circle.enabledModules) {
+            return moduleList;
+        }
+
+        for (let moduleHandle of modules.map((m) => m.handle)) {
+            let isModuleEnabled = circle.enabledModules.includes(moduleHandle);
+            if (isModuleEnabled && hasAccess(moduleHandle)) {
+                moduleList.push(moduleHandle);
+            }
+        }
+        return moduleList;
     }, [circle.enabledModules]);
 
     // Filter modules based on enabledModules and excludeFromMenu

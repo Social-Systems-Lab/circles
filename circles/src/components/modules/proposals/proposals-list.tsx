@@ -485,7 +485,11 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle }) => {
                     </Table>
                 </div>
                 <Dialog open={deleteProposalDialogOpen} onOpenChange={setDeleteProposalDialogOpen}>
-                    <DialogContent>
+                    <DialogContent
+                        onInteractOutside={(e) => {
+                            e.preventDefault();
+                        }}
+                    >
                         <DialogHeader>
                             <DialogTitle>Delete Proposal</DialogTitle>
                             <DialogDescription>
@@ -513,7 +517,11 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle }) => {
 
                 {/* Create Proposal Dialog */}
                 <Dialog open={createProposalDialogOpen} onOpenChange={setCreateProposalDialogOpen}>
-                    <DialogContent>
+                    <DialogContent
+                        onInteractOutside={(e) => {
+                            e.preventDefault();
+                        }}
+                    >
                         <DialogHeader>
                             <DialogTitle>Create New Proposal</DialogTitle>
                             <DialogDescription>

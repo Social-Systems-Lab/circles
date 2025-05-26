@@ -17,6 +17,8 @@ import { getGoalsByCircleId, getGoalById, createGoal, updateGoal, deleteGoal, ch
 import { getMembers } from "@/lib/data/member";
 import { notifyGoalSubmittedForReview, notifyGoalApproved, notifyGoalStatusChanged } from "@/lib/data/notifications";
 
+import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
+
 // Removed ranking-related properties from result type
 type GetGoalsActionResult = {
     goals: GoalDisplay[];
@@ -295,6 +297,16 @@ export async function createGoalAction( // Renamed function
 
         // Revalidate the goals list page
         revalidatePath(`/circles/${circleHandle}/goals`); // Updated path
+
+        // Ensure 'goals' module is enabled if creating in user's own circle
+        try {
+            if (circle.circleType === "user" && circle.did === userDid) {
+                await ensureModuleIsEnabledOnCircle(circle._id as string, "goals", userDid);
+            }
+        } catch (moduleEnableError) {
+            console.error("Failed to ensure goals module is enabled on user circle:", moduleEnableError);
+            // Non-critical, so don't fail the goal creation
+        }
 
         return {
             success: true,

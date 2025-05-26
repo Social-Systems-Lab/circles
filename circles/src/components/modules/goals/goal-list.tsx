@@ -453,7 +453,11 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
 
                     <Dialog open={deleteGoalDialogOpen} onOpenChange={setDeleteGoalDialogOpen}>
                         {/* Renamed state */}
-                        <DialogContent>
+                        <DialogContent
+                            onInteractOutside={(e) => {
+                                e.preventDefault();
+                            }}
+                        >
                             <DialogHeader>
                                 <DialogTitle>Delete Goal</DialogTitle> {/* Updated text */}
                                 <DialogDescription>

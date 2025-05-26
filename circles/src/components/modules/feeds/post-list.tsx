@@ -769,7 +769,12 @@ export const PostItem = ({
                                                     <div>Edit</div>
                                                 </DropdownMenuItem>
                                             </DialogTrigger>
-                                            <DialogContent className="overflow-hidden rounded-[15px] p-0 sm:max-w-[425px] sm:rounded-[15px]">
+                                            <DialogContent
+                                                className="overflow-hidden rounded-[15px] p-0 sm:max-w-[425px] sm:rounded-[15px]"
+                                                onInteractOutside={(e) => {
+                                                    e.preventDefault();
+                                                }}
+                                            >
                                                 <div className="hidden">
                                                     <DialogTitle>Edit post</DialogTitle>
                                                 </div>
@@ -797,7 +802,11 @@ export const PostItem = ({
                                                 <div>Delete</div>
                                             </DropdownMenuItem>
                                         </DialogTrigger>
-                                        <DialogContent>
+                                        <DialogContent
+                                            onInteractOutside={(e) => {
+                                                e.preventDefault();
+                                            }}
+                                        >
                                             <DialogHeader>
                                                 <DialogTitle>Delete Post</DialogTitle>
                                                 <DialogDescription>

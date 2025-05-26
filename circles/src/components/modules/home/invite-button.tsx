@@ -72,7 +72,12 @@ const InviteButton: React.FC<InviteButtonProps> = ({ circle, renderCompact }) =>
                     {compact ? "" : "Invite"}
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent
+                className="sm:max-w-md"
+                onInteractOutside={(e) => {
+                    e.preventDefault();
+                }}
+            >
                 <DialogHeader>
                     <DialogTitle>{isUser ? "Invite people to the user" : "Invite people to the circle"}</DialogTitle>
                     <DialogDescription>

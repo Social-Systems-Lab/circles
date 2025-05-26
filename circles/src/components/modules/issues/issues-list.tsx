@@ -486,7 +486,11 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
                         </Table>
                     </div>
                     <Dialog open={deleteIssueDialogOpen} onOpenChange={setDeleteIssueDialogOpen}>
-                        <DialogContent>
+                        <DialogContent
+                            onInteractOutside={(e) => {
+                                e.preventDefault();
+                            }}
+                        >
                             <DialogHeader>
                                 <DialogTitle>Delete Issue</DialogTitle>
                                 <DialogDescription>

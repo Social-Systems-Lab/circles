@@ -511,7 +511,7 @@ export const modules: ModuleInfo[] = [
     },
 ];
 
-export const defaultUserModules = ["home", "feed", "followers", "circles", "projects", "goals", "settings"];
+export const defaultUserModules = ["home", "feed", "followers", "communities", "projects", "goals", "settings"];
 export const defaultCircleModules = ["home", "feed", "followers", "projects", "goals", "settings"];
 export const defaultProjectModules = ["home", "feed", "followers", "goals", "tasks", "proposals", "issues", "settings"]; // Added 'tasks'
 

@@ -39,9 +39,12 @@ export const getAllUsers = async (): Promise<Circle[]> => {
 };
 
 export const getUser = async (userDid: string): Promise<Circle> => {
-    let user = await Circles.findOne({ did: userDid }, { projection: SAFE_CIRCLE_PROJECTION });
+    let user = (await Circles.findOne({ did: userDid }, { projection: SAFE_CIRCLE_PROJECTION })) as Circle;
     if (!user) {
         throw new Error("User not found");
+    }
+    if (user?._id) {
+        user._id = user._id.toString();
     }
     return user;
 };

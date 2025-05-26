@@ -1,9 +1,10 @@
 "use server";
 
-import { createCircle, updateCircle, getCircleById, getCirclePath } from "@/lib/data/circle";
+import { createCircle, updateCircle, getCircleById, ensureModuleIsEnabledOnCircle } from "@/lib/data/circle";
 import { Circle, CircleType, Media, FileInfo } from "@/models/models";
 import { ImageItem } from "@/components/forms/controls/multi-image-uploader";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
+import { getUser, getUserPrivate } from "@/lib/data/user"; // Corrected import for getUserPrivate
 import { features } from "@/lib/data/constants";
 import { isFile, saveFile, deleteFile } from "@/lib/data/storage";
 import { addMember } from "@/lib/data/member";
@@ -61,6 +62,15 @@ export async function saveBasicInfoAction(
 
             // 2. Add user as admin member
             await addMember(userDid, newCircle._id!, ["admins", "moderators", "members"]);
+
+            // 3. If the parent is the user's own circle, ensure the relevant module is enabled
+            if (parentCircleId) {
+                const userCircle = await getUser(userDid);
+                if (userCircle && userCircle._id === parentCircleId) {
+                    const moduleToEnable = circleType === "project" ? "projects" : "communities";
+                    await ensureModuleIsEnabledOnCircle(parentCircleId, moduleToEnable, userDid);
+                }
+            }
 
             return { success: true, message: "Circle created successfully", data: { circle: newCircle } };
         }

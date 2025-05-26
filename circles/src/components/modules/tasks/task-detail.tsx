@@ -473,7 +473,11 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
 
             {/* Dialogs remain outside the conditional wrapper */}
             <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Delete Task</DialogTitle> {/* Updated text */}
                         <DialogDescription>
@@ -493,7 +497,11 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
             </Dialog>
 
             <Dialog open={stageChangeDialogOpen} onOpenChange={setStageChangeDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Confirm Stage Change</DialogTitle>
                         <DialogDescription>
@@ -513,7 +521,11 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
             </Dialog>
 
             <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Assign Task</DialogTitle> {/* Updated text */}
                         <DialogDescription>

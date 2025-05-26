@@ -433,7 +433,11 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
 
             {/* Dialogs remain outside the conditional wrapper */}
             <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Delete Issue</DialogTitle>
                         <DialogDescription>
@@ -452,7 +456,11 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
             </Dialog>
 
             <Dialog open={stageChangeDialogOpen} onOpenChange={setStageChangeDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Confirm Stage Change</DialogTitle>
                         <DialogDescription>
@@ -472,7 +480,11 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
 
             <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
                 <DialogContent>
-                    <DialogHeader>
+                    <DialogHeader
+                        onInteractOutside={(e) => {
+                            e.preventDefault();
+                        }}
+                    >
                         <DialogTitle>Assign Issue</DialogTitle>
                         <DialogDescription>
                             Select a member to assign this issue to, or assign it to yourself.

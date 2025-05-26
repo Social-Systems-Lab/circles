@@ -938,7 +938,12 @@ export function PostForm({
             )}
             {/* Location Dialog */}
             <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
-                <DialogContent className="z-[111]">
+                <DialogContent
+                    className="z-[111]"
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Select Location</DialogTitle>
                     </DialogHeader>
@@ -955,7 +960,12 @@ export function PostForm({
             </Dialog>
             {/* User Groups Dialog */}
             <Dialog open={isUserGroupsDialogOpen} onOpenChange={setIsUserGroupsDialogOpen}>
-                <DialogContent className="z-[111] max-w-md">
+                <DialogContent
+                    className="z-[111] max-w-md"
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle className="text-center text-xl font-bold">Who can see your post?</DialogTitle>
                     </DialogHeader>

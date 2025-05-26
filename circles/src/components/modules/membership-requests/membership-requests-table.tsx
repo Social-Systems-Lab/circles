@@ -136,7 +136,11 @@ const MembershipRequestsTable: React.FC<MembershipRequestsTableProps> = ({ circl
                                                 <Eye className="mr-2 h-4 w-4" /> View Details
                                             </Button>
                                         </DialogTrigger>
-                                        <DialogContent>
+                                        <DialogContent
+                                            onInteractOutside={(e) => {
+                                                e.preventDefault();
+                                            }}
+                                        >
                                             <DialogHeader>
                                                 <DialogTitle>Follow Request Details</DialogTitle>
                                             </DialogHeader>

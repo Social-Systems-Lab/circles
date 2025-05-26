@@ -28,7 +28,12 @@ export const CircleQuestionnaireDialog: React.FC<CircleQuestionnaireDialogProps>
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent
+                className="sm:max-w-[425px]"
+                onInteractOutside={(e) => {
+                    e.preventDefault();
+                }}
+            >
                 <DialogHeader>
                     <DialogTitle>Circle Questionnaire</DialogTitle>
                 </DialogHeader>

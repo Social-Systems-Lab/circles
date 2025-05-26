@@ -388,7 +388,11 @@ const GoalDetail: React.FC<GoalDetailProps> = ({
 
             {/* Dialogs remain outside */}
             <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Delete Goal</DialogTitle>
                         <DialogDescription>
@@ -407,7 +411,11 @@ const GoalDetail: React.FC<GoalDetailProps> = ({
             </Dialog>
 
             <Dialog open={stageChangeDialogOpen} onOpenChange={setStageChangeDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Confirm Stage Change</DialogTitle>
                         <DialogDescription>

@@ -686,7 +686,11 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
 
                     <Dialog open={deleteTaskDialogOpen} onOpenChange={setDeleteTaskDialogOpen}>
                         {/* Renamed state */}
-                        <DialogContent>
+                        <DialogContent
+                            onInteractOutside={(e) => {
+                                e.preventDefault();
+                            }}
+                        >
                             <DialogHeader>
                                 <DialogTitle>Delete Task</DialogTitle> {/* Updated text */}
                                 <DialogDescription>

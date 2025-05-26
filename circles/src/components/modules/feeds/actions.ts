@@ -58,6 +58,7 @@ import {
     notifyPostMentions,
     notifyCommentMentions,
 } from "@/lib/data/notifications";
+import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
 
 // Global posts: posts from all public feeds
 export async function getGlobalPostsAction(
@@ -459,6 +460,17 @@ export async function createPostAction(
 
         let circlePath = await getCirclePath({ _id: circleId } as Circle);
         revalidatePath(`${circlePath}feed`);
+
+        // Ensure 'feed' module is enabled if posting to user's own circle
+        try {
+            const targetCircle = await getCircleById(circleId);
+            if (targetCircle && targetCircle.circleType === "user" && targetCircle.did === userDid) {
+                await ensureModuleIsEnabledOnCircle(circleId, "feed", userDid);
+            }
+        } catch (moduleEnableError) {
+            console.error("Failed to ensure feed module is enabled on user circle:", moduleEnableError);
+            // Non-critical, so don't fail the post creation
+        }
 
         return { success: true, message: "Post created successfully", post: newPost };
     } catch (error) {

@@ -380,7 +380,11 @@ export const GoalForm: React.FC<GoalFormProps> = ({
             </Card>
 
             <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Select Location</DialogTitle>
                     </DialogHeader>

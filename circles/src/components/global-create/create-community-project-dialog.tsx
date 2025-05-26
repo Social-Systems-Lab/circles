@@ -57,7 +57,12 @@ export const CreateCommunityProjectDialog: React.FC<CreateCommunityProjectDialog
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-[95vw] p-0 sm:max-w-[95vw] md:max-w-[800px] lg:max-w-[1000px]">
+            <DialogContent
+                className="max-w-[95vw] p-0 sm:max-w-[95vw] md:max-w-[800px] lg:max-w-[1000px]"
+                onInteractOutside={(e) => {
+                    e.preventDefault();
+                }}
+            >
                 <div className="hidden">
                     <DialogHeader>
                         <DialogTitle>

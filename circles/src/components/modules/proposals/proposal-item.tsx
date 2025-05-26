@@ -496,7 +496,11 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
 
             {/* Render Dialogs here, outside MainContent but within the main return, only if not in preview */}
             <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Delete Proposal</DialogTitle>
                         <DialogDescription>
@@ -523,7 +527,11 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
 
             {/* Submit for Review Confirmation Dialog */}
             <Dialog open={submitReviewDialogOpen} onOpenChange={setSubmitReviewDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Submit for Review?</DialogTitle>
                         <DialogDescription>
@@ -551,7 +559,11 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
 
             {/* Reject Review Confirmation Dialog */}
             <Dialog open={rejectReviewDialogOpen} onOpenChange={setRejectReviewDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Reject Proposal?</DialogTitle>
                         <DialogDescription>
@@ -588,7 +600,11 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
 
             {/* Approve for Voting Confirmation Dialog */}
             <Dialog open={approveVotingDialogOpen} onOpenChange={setApproveVotingDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Approve for Voting?</DialogTitle>
                         <DialogDescription>
@@ -615,7 +631,11 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
 
             {/* Reject Voting Confirmation Dialog */}
             <Dialog open={rejectVotingDialogOpen} onOpenChange={setRejectVotingDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Reject Proposal?</DialogTitle>
                         <DialogDescription>
@@ -652,7 +672,11 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
 
             {/* Accept Voting Confirmation Dialog */}
             <Dialog open={acceptVotingDialogOpen} onOpenChange={setAcceptVotingDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Accept Proposal?</DialogTitle>
                         <DialogDescription>
@@ -688,7 +712,11 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
             </Dialog>
             {/* Submit for Review Confirmation Dialog */}
             <Dialog open={submitReviewDialogOpen} onOpenChange={setSubmitReviewDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Submit for Review?</DialogTitle>
                         <DialogDescription>
@@ -716,7 +744,11 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
 
             {/* Reject Review Confirmation Dialog */}
             <Dialog open={rejectReviewDialogOpen} onOpenChange={setRejectReviewDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Reject Proposal?</DialogTitle>
                         <DialogDescription>
@@ -753,7 +785,11 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
 
             {/* Approve for Voting Confirmation Dialog */}
             <Dialog open={approveVotingDialogOpen} onOpenChange={setApproveVotingDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Approve for Voting?</DialogTitle>
                         <DialogDescription>
@@ -780,7 +816,11 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
 
             {/* Reject Voting Confirmation Dialog */}
             <Dialog open={rejectVotingDialogOpen} onOpenChange={setRejectVotingDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Reject Proposal?</DialogTitle>
                         <DialogDescription>
@@ -817,7 +857,11 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
 
             {/* Accept Voting Confirmation Dialog */}
             <Dialog open={acceptVotingDialogOpen} onOpenChange={setAcceptVotingDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Accept Proposal?</DialogTitle>
                         <DialogDescription>
@@ -853,7 +897,11 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
             </Dialog>
             {/* Submit for Review Confirmation Dialog */}
             <Dialog open={submitReviewDialogOpen} onOpenChange={setSubmitReviewDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Submit for Review?</DialogTitle>
                         <DialogDescription>
@@ -881,7 +929,11 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
 
             {/* Reject Review Confirmation Dialog */}
             <Dialog open={rejectReviewDialogOpen} onOpenChange={setRejectReviewDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Reject Proposal?</DialogTitle>
                         <DialogDescription>
@@ -918,7 +970,11 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
 
             {/* Approve for Voting Confirmation Dialog */}
             <Dialog open={approveVotingDialogOpen} onOpenChange={setApproveVotingDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Approve for Voting?</DialogTitle>
                         <DialogDescription>
@@ -945,7 +1001,11 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
 
             {/* Reject Voting Confirmation Dialog */}
             <Dialog open={rejectVotingDialogOpen} onOpenChange={setRejectVotingDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Reject Proposal?</DialogTitle>
                         <DialogDescription>
@@ -982,7 +1042,11 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
 
             {/* Accept Voting Confirmation Dialog */}
             <Dialog open={acceptVotingDialogOpen} onOpenChange={setAcceptVotingDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Accept Proposal?</DialogTitle>
                         <DialogDescription>

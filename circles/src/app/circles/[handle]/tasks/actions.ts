@@ -46,6 +46,7 @@ import {
     notifyTaskAssigned,
     notifyTaskStatusChanged,
 } from "@/lib/data/notifications";
+import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
 
 type GetTasksActionResult = {
     tasks: TaskDisplay[]; // Tasks with aggregated and user ranks
@@ -373,6 +374,16 @@ export async function createTaskAction( // Renamed function
 
         // Revalidate the tasks list page
         revalidatePath(`/circles/${circleHandle}/tasks`); // Updated path
+
+        // Ensure 'tasks' module is enabled if creating in user's own circle
+        try {
+            if (circle.circleType === "user" && circle.did === userDid) {
+                await ensureModuleIsEnabledOnCircle(circle._id as string, "tasks", userDid);
+            }
+        } catch (moduleEnableError) {
+            console.error("Failed to ensure tasks module is enabled on user circle:", moduleEnableError);
+            // Non-critical, so don't fail the task creation
+        }
 
         return {
             success: true,

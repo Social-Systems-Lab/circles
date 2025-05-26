@@ -274,7 +274,12 @@ export default function UsersTab() {
 
             {/* Reset Link Dialog */}
             <Dialog open={resetLinkDialogOpen} onOpenChange={setResetLinkDialogOpen}>
-                <DialogContent className="sm:max-w-[525px]">
+                <DialogContent
+                    className="sm:max-w-[525px]"
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Password Reset Link for {resettingUser?.name}</DialogTitle>
                         <DialogDescription>

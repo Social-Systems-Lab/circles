@@ -402,7 +402,11 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
 
             {/* Location Dialog */}
             <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
-                <DialogContent>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Select Location</DialogTitle>
                     </DialogHeader>

@@ -44,7 +44,12 @@ export const CreateIssueDialog: React.FC<CreateIssueDialogProps> = ({ isOpen, on
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[600px] md:max-w-[750px] lg:max-w-[900px]">
+            <DialogContent
+                className="sm:max-w-[600px] md:max-w-[750px] lg:max-w-[900px]"
+                onInteractOutside={(e) => {
+                    e.preventDefault();
+                }}
+            >
                 <DialogHeader>
                     <DialogTitle>Create New {itemDetail.title}</DialogTitle>
                     {selectedCircle && (

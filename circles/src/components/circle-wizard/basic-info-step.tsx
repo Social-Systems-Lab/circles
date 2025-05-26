@@ -23,6 +23,7 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
     const [isPending, startTransition] = useTransition();
     const [nameError, setNameError] = useState("");
     const [handleError, setHandleError] = useState("");
+    const [parentCircleId, setParentCircleId] = useState<string | undefined>(undefined);
     // selectedParentCircle state is managed by CircleSelector's onCircleSelected callback
     // const [selectedParentCircle, setSelectedParentCircle] = useState<Circle | null>(null);
     const [user] = useAtom(userAtom);
@@ -45,15 +46,9 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
     //     }
     // }, [selectedParentCircle, setCircleData, user]);
 
-    const handleParentCircleSelected = useCallback(
-        (circle: Circle | null) => {
-            setCircleData((prev) => ({
-                ...prev,
-                parentCircleId: circle ? circle._id : undefined,
-            }));
-        },
-        [setCircleData],
-    ); // Wrapped with useCallback
+    const handleParentCircleSelected = useCallback((circle: Circle | null) => {
+        setParentCircleId(circle ? circle._id : undefined);
+    }, []); // Wrapped with useCallback
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -115,7 +110,7 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
                 circleData.handle,
                 circleData.isPublic,
                 circleData._id,
-                circleData.parentCircleId, // parentCircleId is now set by handleParentCircleSelected
+                parentCircleId, // parentCircleId is now set by handleParentCircleSelected
                 circleData.circleType,
             );
 
@@ -214,7 +209,6 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
             </div>
 
             <div className="flex justify-end">
-                <pre>{JSON.stringify(circleData, null, 2)}</pre>
                 <Button onClick={handleNext} disabled={isPending} className="w-[150px]">
                     {isPending ? (
                         <>

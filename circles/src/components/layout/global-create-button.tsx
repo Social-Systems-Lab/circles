@@ -50,21 +50,14 @@ export function GlobalCreateButton() {
             <Dialog open={isMainDialogOpen} onOpenChange={setIsMainDialogOpen}>
                 <DialogTrigger asChild>
                     <motion.div
-                        className="flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8]"
+                        className="flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg text-[#696969] md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8]"
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.95 }}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5, delay: 0.4 * 0.1 }} // Adjusted delay
                     >
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-10 w-10 rounded-full md:h-12 md:w-12"
-                            aria-label="Create new"
-                        >
-                            <Plus className="h-6 w-6 text-[#696969]" />
-                        </Button>
+                        <Plus size={"24px"} />
                         <motion.span
                             className="mt-[4px] text-[11px] text-[#696969]"
                             initial={{ opacity: 0 }}
@@ -77,7 +70,7 @@ export function GlobalCreateButton() {
                 </DialogTrigger>
                 <DialogContent
                     className="z-[100] max-h-[90vh] overflow-y-auto rounded-[15px] bg-white p-0 sm:max-w-[600px] md:max-w-[750px] lg:max-w-[900px]"
-                    // onInteractOutside={(e) => e.preventDefault()} // Prevent closing on outside click if needed
+                    onInteractOutside={(e) => e.preventDefault()}
                 >
                     <GlobalCreateDialogContent
                         onCloseMainDialog={() => setIsMainDialogOpen(false)}

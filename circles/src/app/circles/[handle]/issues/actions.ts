@@ -39,6 +39,7 @@ import {
     notifyIssueAssigned,
     notifyIssueStatusChanged,
 } from "@/lib/data/notifications";
+import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
 
 /**
  * Get all issues for a circle
@@ -286,6 +287,16 @@ export async function createIssueAction(
 
         // Revalidate the issues list page
         revalidatePath(`/circles/${circleHandle}/issues`);
+
+        // Ensure 'issues' module is enabled if creating in user's own circle
+        try {
+            if (circle.circleType === "user" && circle.did === userDid) {
+                await ensureModuleIsEnabledOnCircle(circle._id as string, "issues", userDid);
+            }
+        } catch (moduleEnableError) {
+            console.error("Failed to ensure issues module is enabled on user circle:", moduleEnableError);
+            // Non-critical, so don't fail the issue creation
+        }
 
         return {
             success: true,
