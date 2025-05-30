@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Circle, Feed, UserPrivate } from "@/models/models";
 import { PostForm } from "@/components/modules/feeds/post-form";
 import { CreatableItemDetail, CreatableItemKey, creatableItemsList } from "./global-create-dialog-content";
-import CircleSelector from "./circle-selector";
+// CircleSelector is now inside PostForm
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { useToast } from "@/components/ui/use-toast";
@@ -20,46 +20,21 @@ interface CreatePostDialogProps {
 
 export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({ isOpen, onOpenChange, onSuccess, itemKey }) => {
     const [user] = useAtom(userAtom);
-    const { toast } = useToast(); // Keep toast for potential direct use if needed, though parent handles main success
-    const [isSubmittingForm, setIsSubmittingForm] = useState(false); // Renamed to avoid conflict with PostForm's internal state if any
-
-    const [selectedCircle, setSelectedCircle] = useState<Circle | null>(null);
-    const [targetFeed, setTargetFeed] = useState<Feed | null>(null);
-    const [feedError, setFeedError] = useState<string | null>(null);
+    const { toast } = useToast();
+    const [isSubmittingForm, setIsSubmittingForm] = useState(false);
 
     const itemDetail = creatableItemsList.find((item: CreatableItemDetail) => item.key === itemKey);
 
+    // Reset local state when dialog closes
     useEffect(() => {
         if (!isOpen) {
-            setSelectedCircle(null); // Reset selected circle when dialog is closed
-            setTargetFeed(null);
-            setFeedError(null);
+            setIsSubmittingForm(false);
         }
     }, [isOpen]);
 
-    useEffect(() => {
-        // Fetch/determine targetFeed when selectedCircle changes
-        if (selectedCircle && user) {
-            // TODO: Implement actual robust feed fetching/selection logic.
-            // This is a placeholder.
-            const dummyFeed: Feed = {
-                _id: "dummyFeedIdFor_" + selectedCircle._id,
-                name: selectedCircle.handle === user.handle ? "My Feed" : "Primary Feed",
-                handle: "primary",
-                circleId: selectedCircle._id!,
-                createdAt: new Date(),
-                userGroups: [],
-            };
-            setTargetFeed(dummyFeed);
-            setFeedError(null);
-        } else {
-            setTargetFeed(null);
-        }
-    }, [selectedCircle, user]);
-
     const handleFormSuccess = (postId?: string) => {
         onSuccess(postId);
-        onOpenChange(false);
+        onOpenChange(false); // Close this dialog
     };
 
     const handleCancel = () => {
@@ -67,23 +42,23 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({ isOpen, onOp
     };
 
     if (itemKey !== "post" || !itemDetail) {
-        if (isOpen) onOpenChange(false);
+        if (isOpen) onOpenChange(false); // Close if wrong itemKey somehow
         return null;
     }
 
-    // This is the internal submit handler for PostForm, which then calls the dialog's success handler
-    const internalPostFormSubmit = async (formData: FormData) => {
-        if (!selectedCircle || !targetFeed) {
-            toast({ title: "Error", description: "Circle or Feed not selected.", variant: "destructive" });
-            return;
-        }
+    // PostForm's onSubmit now expects (formData, targetCircleId)
+    const internalPostFormSubmit = async (formData: FormData, targetCircleId: string) => {
         setIsSubmittingForm(true);
-        // Ensure circleId and feedId are on the formData if PostForm doesn't add them
-        // PostForm's handleSubmit in its original context (CreateNewPost) adds circleId.
-        // It might need feedId too. Let's assume PostForm is adapted or createPostAction handles it.
-        // For safety, we can add them if not present, or rely on PostForm to do so.
-        // formData.append("circleId", selectedCircle._id!); // PostForm should handle this via its circle prop
-        formData.append("feedId", targetFeed._id!); // PostForm needs feedId
+
+        // The createPostAction expects circleId on formData to determine the feed.
+        // PostForm now provides targetCircleId separately.
+        // We need to ensure createPostAction can derive the feed from targetCircleId.
+        // For now, let's add circleId to formData as createPostAction expects.
+        // This might need adjustment in createPostAction later if it's to use targetCircleId directly.
+        formData.append("circleId", targetCircleId);
+
+        // feedId is derived by createPostAction from circleId (default feed)
+        // So, no need to explicitly add feedId here if createPostAction handles it.
 
         const response = await createPostAction(formData);
 
@@ -110,44 +85,21 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({ isOpen, onOp
             >
                 <DialogHeader>
                     <DialogTitle>Create New {itemDetail.title}</DialogTitle>
-                    {selectedCircle && (
-                        <DialogDescription>
-                            {`Creating in '${selectedCircle.name || selectedCircle.handle}'`}
-                        </DialogDescription>
-                    )}
+                    {/* Description can be simplified or removed as CircleSelector is inside PostForm */}
                 </DialogHeader>
 
                 {!user && <p className="p-4 text-red-500">Please log in to create a post.</p>}
 
                 {user && (
-                    <div className="pt-4">
-                        <CircleSelector itemType={itemDetail} onCircleSelected={setSelectedCircle} />
-
-                        {selectedCircle && !targetFeed && !feedError && (
-                            <p className="p-4 text-sm text-muted-foreground">Loading feed...</p>
-                        )}
-                        {feedError && <p className="p-4 text-sm text-red-500">{feedError}</p>}
-
-                        {selectedCircle && targetFeed && (
-                            <div className="mt-4">
-                                {" "}
-                                {/* Ensure PostForm is only rendered when ready */}
-                                <PostForm
-                                    circle={selectedCircle}
-                                    feed={targetFeed}
-                                    user={user as UserPrivate}
-                                    onSubmit={internalPostFormSubmit}
-                                    onCancel={handleCancel}
-                                    isSubmitting={isSubmittingForm}
-                                />
-                            </div>
-                        )}
-                        {!selectedCircle && itemDetail && (
-                            <p className="p-4 text-sm text-muted-foreground">
-                                Please select a circle to create the {itemDetail.key}.
-                            </p>
-                        )}
-                    </div>
+                    <PostForm
+                        user={user as UserPrivate}
+                        onSubmit={internalPostFormSubmit}
+                        onCancel={handleCancel}
+                        isSubmitting={isSubmittingForm}
+                        moduleHandle={itemDetail.moduleHandle}
+                        createFeatureHandle={itemDetail.createFeatureHandle}
+                        itemKey={itemKey}
+                    />
                 )}
             </DialogContent>
         </Dialog>

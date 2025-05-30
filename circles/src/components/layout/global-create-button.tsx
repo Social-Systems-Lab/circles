@@ -21,29 +21,32 @@ export function GlobalCreateButton() {
     const [isMainDialogOpen, setIsMainDialogOpen] = useState(false);
     const { toast } = useToast();
 
-    // States for each specific creation dialog
-    const [isCreateTaskOpen, setCreateTaskOpen] = useState(false);
-    const [isCreateGoalOpen, setCreateGoalOpen] = useState(false);
-    const [isCreateIssueOpen, setCreateIssueOpen] = useState(false);
-    const [isCreateProposalOpen, setCreateProposalOpen] = useState(false);
-    const [isCreatePostOpen, setCreatePostOpen] = useState(false); // Placeholder
-    const [isCreateCommunityOpen, setCreateCommunityOpen] = useState(false); // Placeholder
-    const [isCreateProjectOpen, setCreateProjectOpen] = useState(false); // Placeholder
+    // State to manage which specific creation dialog to open
+    const [selectedItemTypeForCreation, setSelectedItemTypeForCreation] = useState<CreatableItemKey | null>(null);
+
+    // States for Community and Project dialogs (handled differently for now)
+    const [isCreateCommunityOpen, setCreateCommunityOpen] = useState(false);
+    const [isCreateProjectOpen, setCreateProjectOpen] = useState(false);
 
     const handleItemCreatedSuccess = (itemKey: CreatableItemKey, createdItemId?: string) => {
         toast({
             title: `${itemKey.charAt(0).toUpperCase() + itemKey.slice(1)} created successfully!`,
-            // description: createdItemId ? `ID: ${createdItemId}` : undefined, // Removed ID from toast
         });
-        // Ensure all specific dialogs are closed (though they should close themselves via onOpenChange)
-        setCreateTaskOpen(false);
-        setCreateGoalOpen(false);
-        setCreateIssueOpen(false);
-        setCreateProposalOpen(false);
-        setCreatePostOpen(false);
+        // Close the specific dialog by resetting the selected item type
+        setSelectedItemTypeForCreation(null);
+        // Also ensure community/project dialogs are closed if they were open
         setCreateCommunityOpen(false);
         setCreateProjectOpen(false);
     };
+
+    const handleSelectItemType = (itemKey: CreatableItemKey) => {
+        setSelectedItemTypeForCreation(itemKey);
+        // Main dialog is already closed by GlobalCreateDialogContent's handleItemClick
+    };
+
+    // Helper to manage open state for individual dialogs based on selectedItemTypeForCreation
+    const isSpecificDialogOpen = (itemKey: CreatableItemKey) => selectedItemTypeForCreation === itemKey;
+    const setSpecificDialogClose = () => setSelectedItemTypeForCreation(null);
 
     return (
         <>
@@ -74,52 +77,46 @@ export function GlobalCreateButton() {
                 >
                     <GlobalCreateDialogContent
                         onCloseMainDialog={() => setIsMainDialogOpen(false)}
-                        setCreateTaskOpen={setCreateTaskOpen}
-                        setCreateGoalOpen={setCreateGoalOpen}
-                        setCreateIssueOpen={setCreateIssueOpen}
-                        setCreateProposalOpen={setCreateProposalOpen}
-                        setCreatePostOpen={setCreatePostOpen}
-                        setCreateCommunityOpen={setCreateCommunityOpen}
-                        setCreateProjectOpen={setCreateProjectOpen}
+                        onSelectItemType={handleSelectItemType}
+                        setCreateCommunityOpen={setCreateCommunityOpen} // Keep for now
+                        setCreateProjectOpen={setCreateProjectOpen} // Keep for now
                     />
                 </DialogContent>
             </Dialog>
 
-            {/* Render all individual creation dialogs here, controlled by their respective states */}
-            {/* These dialogs will need to be refactored to be proper Dialog components */}
-            {/* and to include the CircleSelector internally */}
-
+            {/* Render specific creation dialogs based on selectedItemTypeForCreation */}
             <CreateTaskDialog
-                isOpen={isCreateTaskOpen}
-                onOpenChange={setCreateTaskOpen}
+                isOpen={isSpecificDialogOpen("task")}
+                onOpenChange={(open) => !open && setSpecificDialogClose()}
                 onSuccess={(id) => handleItemCreatedSuccess("task", id)}
-                itemKey="task" // Pass itemKey
+                itemKey="task"
             />
             <CreateGoalDialog
-                isOpen={isCreateGoalOpen}
-                onOpenChange={setCreateGoalOpen}
+                isOpen={isSpecificDialogOpen("goal")}
+                onOpenChange={(open) => !open && setSpecificDialogClose()}
                 onSuccess={(id) => handleItemCreatedSuccess("goal", id)}
-                itemKey="goal" // Pass itemKey
+                itemKey="goal"
             />
             <CreateIssueDialog
-                isOpen={isCreateIssueOpen}
-                onOpenChange={setCreateIssueOpen}
+                isOpen={isSpecificDialogOpen("issue")}
+                onOpenChange={(open) => !open && setSpecificDialogClose()}
                 onSuccess={(id) => handleItemCreatedSuccess("issue", id)}
-                itemKey="issue" // Pass itemKey
+                itemKey="issue"
             />
             <CreateProposalDialog
-                isOpen={isCreateProposalOpen}
-                onOpenChange={setCreateProposalOpen}
+                isOpen={isSpecificDialogOpen("proposal")}
+                onOpenChange={(open) => !open && setSpecificDialogClose()}
                 onSuccess={(id) => handleItemCreatedSuccess("proposal", id)}
-                itemKey="proposal" // Pass itemKey
+                itemKey="proposal"
             />
             <CreatePostDialog
-                isOpen={isCreatePostOpen}
-                onOpenChange={setCreatePostOpen}
+                isOpen={isSpecificDialogOpen("post")}
+                onOpenChange={(open) => !open && setSpecificDialogClose()}
                 onSuccess={(id) => handleItemCreatedSuccess("post", id)}
                 itemKey="post"
             />
 
+            {/* Community and Project dialogs remain as they were for now */}
             <CreateCommunityProjectDialog
                 isOpen={isCreateCommunityOpen}
                 onOpenChange={setCreateCommunityOpen}

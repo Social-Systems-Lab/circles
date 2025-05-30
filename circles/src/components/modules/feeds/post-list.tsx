@@ -778,14 +778,23 @@ export const PostItem = ({
                                                 <div className="hidden">
                                                     <DialogTitle>Edit post</DialogTitle>
                                                 </div>
-
                                                 <PostForm
-                                                    circle={circle}
-                                                    feed={feed}
-                                                    user={user!} // Assert user is not null here
+                                                    user={user!}
                                                     initialPost={post}
-                                                    onSubmit={handleEditSubmit}
+                                                    onSubmit={async (formData, targetCircleId) => {
+                                                        // When editing, targetCircleId is the post's original circle.
+                                                        // updatePostAction uses postId from formData.
+                                                        // The circleId for updatePostAction is derived from the post object
+                                                        // or not strictly needed if only postId is used.
+                                                        // We ensure handleEditSubmit is called correctly.
+                                                        // If handleEditSubmit needs targetCircleId, pass post.circle._id!
+                                                        // For now, assuming handleEditSubmit only needs formData.
+                                                        await handleEditSubmit(formData);
+                                                    }}
                                                     onCancel={() => setOpenDropdown(false)}
+                                                    moduleHandle="feed"
+                                                    createFeatureHandle="post" // Or "edit" if a specific edit feature exists
+                                                    itemKey="post"
                                                 />
                                             </DialogContent>
                                         </Dialog>

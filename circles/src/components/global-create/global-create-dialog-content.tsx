@@ -91,58 +91,29 @@ export const creatableItemsList: CreatableItemDetail[] = [
 
 interface GlobalCreateDialogContentProps {
     onCloseMainDialog: () => void; // To close this selection dialog
-    setCreateTaskOpen: (open: boolean) => void;
-    setCreateGoalOpen: (open: boolean) => void;
-    setCreateIssueOpen: (open: boolean) => void;
-    setCreateProposalOpen: (open: boolean) => void;
-    setCreatePostOpen: (open: boolean) => void;
+    onSelectItemType: (itemKey: CreatableItemKey) => void; // New prop to inform parent of selection
+    // Keep these for now as Community/Project creation flow is slightly different
     setCreateCommunityOpen: (open: boolean) => void;
     setCreateProjectOpen: (open: boolean) => void;
 }
 
 export const GlobalCreateDialogContent: React.FC<GlobalCreateDialogContentProps> = ({
     onCloseMainDialog,
-    setCreateTaskOpen,
-    setCreateGoalOpen,
-    setCreateIssueOpen,
-    setCreateProposalOpen,
-    setCreatePostOpen,
+    onSelectItemType,
     setCreateCommunityOpen,
     setCreateProjectOpen,
 }) => {
     const handleItemClick = (itemKey: CreatableItemKey) => {
-        // It's better if the parent (GlobalCreateButton) closes this dialog
-        // and then opens the specific one to avoid state complexities here.
-        // So, onCloseMainDialog should ideally be called by the parent after one of these setters is called.
-        // For now, let's assume the parent handles closing this dialog when one of the item dialogs opens.
-        // Or, we call onCloseMainDialog() here. The user message said "main selection dialog might close".
+        onCloseMainDialog(); // Close this selection dialog
 
-        onCloseMainDialog(); // Close this (the selection) dialog.
-
-        switch (itemKey) {
-            case "task":
-                setCreateTaskOpen(true);
-                break;
-            case "goal":
-                setCreateGoalOpen(true);
-                break;
-            case "issue":
-                setCreateIssueOpen(true);
-                break;
-            case "proposal":
-                setCreateProposalOpen(true);
-                break;
-            case "post":
-                setCreatePostOpen(true);
-                break;
-            case "community":
-                setCreateCommunityOpen(true);
-                break;
-            case "project":
-                setCreateProjectOpen(true);
-                break;
-            default:
-                console.warn("Unknown item key:", itemKey);
+        // For community and project, use the old method for now
+        if (itemKey === "community") {
+            setCreateCommunityOpen(true);
+        } else if (itemKey === "project") {
+            setCreateProjectOpen(true);
+        } else {
+            // For other items, notify the parent to open the specific dialog
+            onSelectItemType(itemKey);
         }
     };
 

@@ -1,5 +1,5 @@
 // post-form.tsx
-import React, { useState, useCallback, useEffect, useTransition, useRef, useMemo } from "react"; // Added useMemo
+import React, { useState, useCallback, useEffect, useTransition, useRef, useMemo } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import {
     ImageIcon,
@@ -12,7 +12,7 @@ import {
     Users,
     Globe,
     X,
-} from "lucide-react"; // Added X
+} from "lucide-react";
 import { UserPicture } from "../members/user-picture";
 import {
     Circle,
@@ -23,9 +23,15 @@ import {
     UserPrivate,
     ProposalDisplay,
     IssueDisplay,
-    TaskDisplay, // Added TaskDisplay
+    TaskDisplay,
 } from "@/models/models";
+import {
+    CreatableItemKey,
+    CreatableItemDetail,
+    creatableItemsList,
+} from "@/components/global-create/global-create-dialog-content";
 import { CirclePicture } from "../circles/circle-picture";
+import CircleSelector from "@/components/global-create/circle-selector";
 import {
     Carousel,
     CarouselContent,
@@ -52,23 +58,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { userAtom } from "@/lib/data/atoms";
-import { getLinkPreviewAction, getInternalLinkPreviewData, InternalLinkPreviewResult } from "./actions"; // Import server actions
-import { useToast } from "@/components/ui/use-toast"; // Import useToast
-import Image from "next/image"; // Import Next Image
-import { Card, CardContent } from "@/components/ui/card"; // Import Card components
-import InternalLinkPreview from "./InternalLinkPreview"; // Reuse for display logic structure
+import { getLinkPreviewAction, getInternalLinkPreviewData, InternalLinkPreviewResult } from "./actions";
+import { useToast } from "@/components/ui/use-toast";
+import Image from "next/image";
+import { Card, CardContent } from "@/components/ui/card";
+import InternalLinkPreview from "./InternalLinkPreview";
 import { truncateText } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { AlertCircle, CircleHelp } from "lucide-react"; // Removed duplicate Users import
+import { AlertCircle, CircleHelp } from "lucide-react";
 
-// Debounce function
-// Updated debounce to return a cancel function
 function debounce<F extends (...args: any[]) => any>(
     func: F,
     waitFor: number,
 ): [(...args: Parameters<F>) => ReturnType<F>, () => void] {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
     const debounced = (...args: Parameters<F>): ReturnType<F> => {
         if (timeoutId !== null) {
             clearTimeout(timeoutId);
@@ -76,22 +79,17 @@ function debounce<F extends (...args: any[]) => any>(
         timeoutId = setTimeout(() => {
             func(...args);
         }, waitFor);
-        // Debounce doesn't typically return the function's result directly
-        // If needed, this structure would need adjustment (e.g., Promises)
-        return undefined as ReturnType<F>; // Adjust if return value is needed
+        return undefined as ReturnType<F>;
     };
-
     const cancel = () => {
         if (timeoutId !== null) {
             clearTimeout(timeoutId);
             timeoutId = null;
         }
     };
-
     return [debounced, cancel];
 }
 
-// Type for the link preview data structure returned by the action
 type LinkPreviewData = {
     url: string;
     title?: string;
@@ -102,12 +100,11 @@ type LinkPreviewData = {
     favicons?: string[];
 };
 
-// Simplified internal preview structure for display within the form
 type InternalPreviewDisplayData = {
-    type: "circle" | "post" | "proposal" | "issue" | "task"; // Added task
-    id: string; // handle or ID
+    type: "circle" | "post" | "proposal" | "issue" | "task";
+    id: string;
     url: string;
-    data: Circle | PostDisplay | ProposalDisplay | IssueDisplay | TaskDisplay; // Added TaskDisplay
+    data: Circle | PostDisplay | ProposalDisplay | IssueDisplay | TaskDisplay;
 };
 
 const postMentionsInputStyle = {
@@ -120,16 +117,16 @@ const postMentionsInputStyle = {
         fontSize: "1.125rem",
         lineHeight: "1.75rem",
         paddingTop: "1.5rem",
-        overflowWrap: "break-word" as const, // Type assertion to specific OverflowWrap type
-        wordBreak: "break-word" as const, // Ensure breaks happen correctly
+        overflowWrap: "break-word" as const,
+        wordBreak: "break-word" as const,
     },
     highlighter: {
-        padding: "0 0", // Same as input
+        padding: "0 0",
         paddingTop: "1.5rem",
         fontSize: "1.125rem",
         lineHeight: "1.75rem",
-        overflowWrap: "break-word" as const, // Type assertion to specific OverflowWrap type
-        wordBreak: "break-word" as const, // Ensure breaks happen correctly
+        overflowWrap: "break-word" as const,
+        wordBreak: "break-word" as const,
     },
     suggestions: {
         control: {
@@ -145,7 +142,6 @@ const postMentionsInputStyle = {
         item: {
             backgroundColor: "white",
             padding: "5px 15px",
-            // borderBottom: "1px solid rgba(0,0,0,0.15)",
             "&focused": {
                 backgroundColor: "#cee4e5",
             },
@@ -160,43 +156,61 @@ type ImageItem = {
 };
 
 type PostFormProps = {
-    circle: Circle;
-    feed: Feed;
     user: UserPrivate;
     initialPost?: PostDisplay;
-    onSubmit: (formData: FormData) => Promise<void>;
+    onSubmit: (formData: FormData, targetCircleId: string) => Promise<void>;
     onCancel: () => void;
-    isSubmitting?: boolean; // Added for external control
+    isSubmitting?: boolean;
+    moduleHandle: string;
+    createFeatureHandle: string;
+    itemKey: CreatableItemKey;
 };
 
 export function PostForm({
-    circle,
-    feed,
     user,
     initialPost,
     onSubmit,
     onCancel,
     isSubmitting: externalIsSubmitting,
+    moduleHandle,
+    createFeatureHandle,
+    itemKey,
 }: PostFormProps) {
     const [postContent, setPostContent] = useState(initialPost?.content || "");
     const [showPollCreator, setShowPollCreator] = useState(false);
+    const [selectedCircleId, setSelectedCircleId] = useState<string | null>(null);
+    const [selectedCircle, setSelectedCircle] = useState<Circle | null>(null);
     const [images, setImages] = useState<ImageItem[]>([]);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [dragging, setDragging] = useState(false);
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
-    const [isPending, startTransition] = useTransition(); // Internal pending state for actions within PostForm
-    const isActuallySubmitting = externalIsSubmitting ?? isPending; // Prioritize external prop
+    const [isPending, startTransition] = useTransition();
+    const isActuallySubmitting = externalIsSubmitting ?? isPending;
     const [location, setLocation] = useState<Location | undefined>(initialPost?.location);
     const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
-
-    // State for user groups (circle selection is now handled by the parent dialog)
-    // const [selectedCircle, setSelectedCircle] = useState<Circle>(circle); // Removed, use 'circle' prop directly
-    const [userGroups, setUserGroups] = useState<string[]>(initialPost?.userGroups || ["everyone"]); // Use initial post groups if available
+    const [userGroups, setUserGroups] = useState<string[]>(initialPost?.userGroups || ["everyone"]);
     const [isUserGroupsDialogOpen, setIsUserGroupsDialogOpen] = useState(false);
-    // const [availableCircles, setAvailableCircles] = useState<Circle[]>([]); // Removed
-    const { toast } = useToast(); // Initialize toast
+    const { toast } = useToast();
 
-    // --- Re-insert Dropzone Logic ---
+    const itemDetail: CreatableItemDetail | undefined = useMemo(
+        () => creatableItemsList.find((item) => item.key === itemKey),
+        [itemKey],
+    );
+
+    useEffect(() => {
+        if (selectedCircleId) {
+            if (user.did && user._id === selectedCircleId) {
+                setSelectedCircle(user as Circle);
+            } else {
+                // If CircleSelector passes the full Circle object via onCircleSelected's second param,
+                // this else block might not be needed or could be simplified.
+                // For now, we rely on selectedCircle being updated by onCircleSelected.
+            }
+        } else {
+            setSelectedCircle(null);
+        }
+    }, [selectedCircleId, user]);
+
     const onDrop = useCallback(
         (acceptedFiles: File[]) => {
             const newImages = acceptedFiles.map((file) => ({
@@ -204,16 +218,14 @@ export function PostForm({
                 preview: URL.createObjectURL(file),
             }));
             setImages((prevImages) => [...prevImages, ...newImages]);
-            setDragging(false); // Ensure dragging state is reset
-
-            // Scroll to the end of the carousel after adding images
+            setDragging(false);
             setTimeout(() => {
                 if (carouselApi) {
                     carouselApi.scrollTo(images.length + newImages.length - 1);
                 }
             }, 0);
         },
-        [carouselApi, images.length, setImages], // Added setImages dependency
+        [carouselApi, images.length, setImages],
     );
 
     const removeImage = (index: number) => {
@@ -221,11 +233,9 @@ export function PostForm({
             const newImages = [...prevImages];
             const removedImage = newImages.splice(index, 1)[0];
             if (removedImage.file) {
-                URL.revokeObjectURL(removedImage.preview); // Clean up object URL
+                URL.revokeObjectURL(removedImage.preview);
             }
-            // Adjust carousel scroll after removal if needed
             if (carouselApi) {
-                // Small delay to allow state update before scrolling
                 setTimeout(() => carouselApi.scrollTo(Math.max(0, index - 1)), 0);
             }
             return newImages;
@@ -237,12 +247,10 @@ export function PostForm({
         accept: { "image/*": [] },
         onDragEnter: () => setDragging(true),
         onDragLeave: () => setDragging(false),
-        onDropAccepted: () => setDragging(false), // Ensure reset on drop
-        noClick: true, // Prevent default click behavior if using custom button
+        onDropAccepted: () => setDragging(false),
+        noClick: true,
     });
-    // --- End Re-insert Dropzone Logic ---
 
-    // --- Link Preview State ---
     const [linkPreview, setLinkPreview] = useState<LinkPreviewData | null>(
         initialPost?.linkPreviewUrl
             ? {
@@ -258,37 +266,19 @@ export function PostForm({
         initialPost?.linkPreviewUrl || initialPost?.internalPreviewUrl || null,
     );
     const fetchPreviewController = useRef<AbortController | null>(null);
-    // --- End Link Preview State ---
 
-    // --- Internal Link Preview State ---
     const [internalPreview, setInternalPreview] = useState<InternalPreviewDisplayData | null>(null);
     const [isInternalPreviewLoading, setIsInternalPreviewLoading] = useState(false);
     const fetchInternalPreviewController = useRef<AbortController | null>(null);
-    const [previewRemovedManually, setPreviewRemovedManually] = useState(false); // State to track manual removal
-    const cancelExternalFetchRef = useRef<() => void>(() => {}); // Ref for cancel function
-    const cancelInternalFetchRef = useRef<() => void>(() => {}); // Ref for cancel function
-    // --- End Internal Link Preview State ---
+    const [previewRemovedManually, setPreviewRemovedManually] = useState(false);
+    const cancelExternalFetchRef = useRef<() => void>(() => {});
+    const cancelInternalFetchRef = useRef<() => void>(() => {});
 
-    // Get all circles the user is a member of - REMOVED as circle is now a direct prop
-    // useEffect(() => {
-    //     if (user && user.memberships) {
-    //         const circles = user.memberships.map((membership) => membership.circle);
-    //         setAvailableCircles(circles);
-    //     }
-    // }, [user]);
-
-    // --- Combined Link Preview Logic (External & Internal) ---
     const extractFirstUrl = (text: string): { url: string; isInternal: boolean } | null => {
-        // Regex for absolute URLs (external)
         const externalUrlRegex = /(https?:\/\/[^\s]+)/g;
-        // Regex for internal paths (relative or absolute starting with /circles/)
         const internalUrlRegex = /(\/circles\/[a-zA-Z0-9\-\/]+)/g;
-
-        // Prioritize internal links if both exist? Or just first match? Let's try first match.
-        // Combine regex carefully or check sequentially. Let's check internal first.
-        const internalMatches = text.match(internalUrlRegex); // Use the 'text' parameter
+        const internalMatches = text.match(internalUrlRegex);
         if (internalMatches) {
-            // Validate if it matches specific internal patterns
             const url = internalMatches[0];
             const postRegex = /^\/circles\/[a-zA-Z0-9\-]+\/post\/[a-zA-Z0-9]+$/;
             const proposalRegex = /^\/circles\/[a-zA-Z0-9\-]+\/proposals\/[a-zA-Z0-9]+$/;
@@ -298,27 +288,21 @@ export function PostForm({
                 return { url: url, isInternal: true };
             }
         }
-
-        // Check for external URLs if no internal match found or if external comes first (adjust logic if needed)
         const externalMatches = text.match(externalUrlRegex);
         if (externalMatches) {
             return { url: externalMatches[0], isInternal: false };
         }
-
         return null;
     };
 
-    // Fetch External Link Preview
     const fetchExternalLinkPreview = useCallback(
         async (url: string) => {
             if (fetchPreviewController.current) fetchPreviewController.current.abort();
             const controller = new AbortController();
             fetchPreviewController.current = controller;
-
             setIsPreviewLoading(true);
             setLinkPreview(null);
-            setInternalPreview(null); // Clear internal preview if fetching external
-
+            setInternalPreview(null);
             try {
                 const result = await getLinkPreviewAction(url);
                 if (controller.signal.aborted) return;
@@ -341,23 +325,19 @@ export function PostForm({
                 }
             }
         },
-        [toast], // Keep toast dependency if used for errors
+        [], // Removed toast from dependencies as it's not used here
     );
 
-    // Fetch Internal Link Preview
     const fetchInternalLinkPreview = useCallback(async (url: string) => {
         if (fetchInternalPreviewController.current) fetchInternalPreviewController.current.abort();
         const controller = new AbortController();
         fetchInternalPreviewController.current = controller;
-
         setIsInternalPreviewLoading(true);
         setInternalPreview(null);
-        setLinkPreview(null); // Clear external preview if fetching internal
-
+        setLinkPreview(null);
         try {
             const result = await getInternalLinkPreviewData(url);
             if (controller.signal.aborted) return;
-
             if ("error" in result) {
                 console.warn("Failed to fetch internal link preview:", result.error);
                 setDetectedUrl(url);
@@ -366,11 +346,10 @@ export function PostForm({
                 setInternalPreview({
                     type: result.type,
                     id: result.type === "circle" ? result.data.handle! : result.data._id.toString(),
-                    // Construct full URL for internal links
                     url: window.location.origin + url,
                     data: result.data,
                 });
-                setDetectedUrl(url); // Update detected URL (keep relative for detection)
+                setDetectedUrl(url);
             }
         } catch (error: any) {
             if (error.name !== "AbortError") {
@@ -386,7 +365,6 @@ export function PostForm({
         }
     }, []);
 
-    // Create debounced functions and store cancel methods in refs
     const debouncedFetchExternalPreview = useMemo(() => {
         const [debounced, cancel] = debounce(fetchExternalLinkPreview, 750);
         cancelExternalFetchRef.current = cancel;
@@ -401,11 +379,9 @@ export function PostForm({
 
     useEffect(() => {
         const urlInfo = extractFirstUrl(postContent);
-
         if (urlInfo) {
-            // If a URL is detected and it's different from the current one, or if preview was manually removed
             if (urlInfo.url !== detectedUrl || previewRemovedManually) {
-                setPreviewRemovedManually(false); // Reset manual removal flag
+                setPreviewRemovedManually(false);
                 if (urlInfo.isInternal) {
                     debouncedFetchInternalPreview(urlInfo.url);
                 } else {
@@ -413,119 +389,49 @@ export function PostForm({
                 }
             }
         } else if (detectedUrl) {
-            // If no URL is detected anymore, but there was one, remove the preview
             removeLinkPreview();
         }
-        // Only re-run when postContent changes significantly enough to potentially change the URL
     }, [
         postContent,
         detectedUrl,
         debouncedFetchExternalPreview,
         debouncedFetchInternalPreview,
         previewRemovedManually,
-    ]); // Added previewRemovedManually
+    ]);
 
     const removeLinkPreview = () => {
         setLinkPreview(null);
-        setInternalPreview(null); // Clear internal as well
+        setInternalPreview(null);
         setDetectedUrl(null);
         setIsPreviewLoading(false);
-        setIsInternalPreviewLoading(false); // Clear internal loading
+        setIsInternalPreviewLoading(false);
         if (fetchPreviewController.current) fetchPreviewController.current.abort();
         if (fetchInternalPreviewController.current) fetchInternalPreviewController.current.abort();
-        // Cancel any pending debounced fetches using refs
         cancelExternalFetchRef.current();
         cancelInternalFetchRef.current();
-        setPreviewRemovedManually(true); // Set flag indicating manual removal
+        setPreviewRemovedManually(true);
     };
-    // --- End Combined Link Preview Logic ---
-
-    // Removed the misplaced useEffect block that caused syntax errors and referred to 'text' incorrectly.
-    // The correct useEffect for fetching circles is already present earlier in the code.
-
-    const fetchLinkPreview = useCallback(
-        async (url: string) => {
-            if (fetchPreviewController.current) {
-                fetchPreviewController.current.abort(); // Abort previous request if any
-            }
-            const controller = new AbortController();
-            fetchPreviewController.current = controller;
-
-            setIsPreviewLoading(true);
-            setLinkPreview(null); // Clear previous preview
-
-            try {
-                const result = await getLinkPreviewAction(url);
-
-                // Check if the request was aborted
-                if (controller.signal.aborted) {
-                    console.log("Link preview fetch aborted for:", url);
-                    return;
-                }
-
-                if (result.success && result.preview) {
-                    setLinkPreview(result.preview);
-                    setDetectedUrl(result.preview.url); // Update detected URL to the final one after redirects
-                } else {
-                    console.warn("Failed to fetch link preview:", result.error);
-                    // Optionally show a toast message on failure
-                    // toast({ title: "Link Preview Failed", description: result.error, variant: "destructive" });
-                    setDetectedUrl(url); // Keep the originally detected URL so we don't retry immediately
-                    setLinkPreview(null); // Ensure preview is cleared on failure
-                }
-            } catch (error: any) {
-                if (error.name !== "AbortError") {
-                    console.error("Error calling getLinkPreviewAction:", error);
-                    // toast({ title: "Error", description: "Could not fetch link preview.", variant: "destructive" });
-                    setDetectedUrl(url);
-                    setLinkPreview(null);
-                }
-            } finally {
-                // Only set loading to false if this is the latest request
-                if (fetchPreviewController.current === controller) {
-                    setIsPreviewLoading(false);
-                    fetchPreviewController.current = null;
-                }
-            }
-        },
-        [toast],
-    ); // Added toast dependency
 
     const getUserGroupName = (userGroup: string) => {
-        // Use 'circle' prop directly instead of 'selectedCircle' state
-        if (!circle || !circle.userGroups) {
-            // If no circle is selected or it has no user groups, capitalize the first letter of the group name
+        const targetCircleForGroups = selectedCircle || user;
+        if (!targetCircleForGroups || !targetCircleForGroups.userGroups) {
             return userGroup.charAt(0).toUpperCase() + userGroup.slice(1);
         }
-
-        // Find the user group in the selected circle's user groups
-        const group = circle.userGroups.find((g) => g.handle === userGroup);
-
-        // If the group is not found, capitalize the first letter of the group name
+        const group = targetCircleForGroups.userGroups.find((g) => g.handle === userGroup);
         if (!group) {
             return userGroup.charAt(0).toUpperCase() + userGroup.slice(1);
         }
-
         return group.name;
     };
 
-    // Get available user groups for the selected circle that the user is a member of
     const getAvailableUserGroups = () => {
-        // Use 'circle' prop directly
-        if (!circle || !user || !user.memberships) return ["everyone"];
-
-        // Find the user's membership for the selected circle
-        const membership = user.memberships.find((m) => m.circleId === circle._id);
-
+        const targetCircleForGroups = selectedCircle || user;
+        if (!targetCircleForGroups || !user || !user.memberships) return ["everyone"];
+        const membership = user.memberships.find((m) => m.circleId === targetCircleForGroups._id);
         if (!membership) {
-            // If user is not a member of this circle, only allow "everyone"
             return ["everyone"];
         }
-
-        // Always include "everyone" as an option
         const groups = ["everyone"];
-
-        // Add the user groups the user is a member of in this circle
         if (membership.userGroups && membership.userGroups.length > 0) {
             membership.userGroups.forEach((group) => {
                 if (!groups.includes(group)) {
@@ -533,38 +439,22 @@ export function PostForm({
                 }
             });
         }
-
         return groups;
     };
 
-    // Handle circle change - REMOVED
-    // const handleCircleChange = (circleId: string) => {
-    //     const newCircle = availableCircles.find((c) => c._id === circleId);
-    //     if (newCircle) {
-    //         setSelectedCircle(newCircle); // This state is removed
-    //         // Reset user groups to default
-    //         setUserGroups(["everyone"]);
-    //     }
-    // };
-
     useEffect(() => {
         if (initialPost) {
-            // State setting moved to useState initial values
+            // Initial post state already handled by useState initial values
         }
     }, [initialPost]);
 
-    // Ensure carousel useEffect is present
     useEffect(() => {
         if (!carouselApi) return;
-
         const updateSelectedSlide = () => {
             setCurrentImageIndex(carouselApi.selectedScrollSnap());
         };
-
         setCurrentImageIndex(carouselApi.selectedScrollSnap() || 0);
-
         carouselApi.on("select", updateSelectedSlide);
-
         return () => {
             carouselApi.off("select", updateSelectedSlide);
         };
@@ -573,478 +463,460 @@ export function PostForm({
     const handleSubmit = async () => {
         startTransition(async () => {
             const formData = new FormData();
+            if (!selectedCircleId) {
+                toast({ title: "Error", description: "Please select a circle to post in.", variant: "destructive" });
+                return;
+            }
             formData.append("content", postContent);
-            formData.append("circleId", circle._id!); // Use 'circle' prop
             userGroups.forEach((group) => {
                 formData.append("userGroups", group);
             });
-
-            images.forEach((image, index) => {
+            images.forEach((image) => {
                 if (image.file) {
                     formData.append("media", image.file);
                 } else if (image.media) {
                     formData.append(`existingMedia`, JSON.stringify(image.media));
                 }
             });
-
             if (initialPost) {
                 formData.append("postId", initialPost._id);
             }
             if (location) {
                 formData.append("location", JSON.stringify(location));
             }
-
-            // --- Append Link Preview Data ---
             if (linkPreview) {
-                // Append external link preview data
                 formData.append("linkPreviewUrl", linkPreview.url);
                 if (linkPreview.title) formData.append("linkPreviewTitle", linkPreview.title);
                 if (linkPreview.description) formData.append("linkPreviewDescription", linkPreview.description);
                 if (linkPreview.image) formData.append("linkPreviewImageUrl", linkPreview.image);
             } else if (internalPreview) {
-                // Append internal link preview data
                 formData.append("internalPreviewType", internalPreview.type);
                 formData.append("internalPreviewId", internalPreview.id);
                 formData.append("internalPreviewUrl", internalPreview.url);
             }
-            // --- End Append Link Preview Data ---
-
-            await onSubmit(formData);
+            await onSubmit(formData, selectedCircleId);
         });
     };
 
     return (
-        // Use getRootProps on the main div
-        <div {...getRootProps()} className="p-4">
-            {/* ... (existing header with user/circle/group selectors) ... */}
-            <div className="mb-[5px] flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                    <UserPicture name={user?.name} picture={user?.picture?.url} size="40px" />
-                    <div>
-                        <div className="text-sm font-semibold">{user?.name}</div>
-                        <div className="flex flex-row items-center justify-center gap-[4px]">
-                            <div className="text-xs text-gray-500">Post in</div>
+        <div {...getRootProps()} className="flex h-full flex-col p-4">
+            <div className="mb-4">
+                {itemDetail && (
+                    <CircleSelector
+                        onCircleSelected={(circle: Circle | null) => {
+                            setSelectedCircleId(circle?._id || null);
+                            setSelectedCircle(circle);
+                            setUserGroups(["everyone"]);
+                        }}
+                        itemType={itemDetail}
+                    />
+                )}
+            </div>
 
-                            {/* Circle display (no selector here anymore) */}
-                            <div className="flex items-center gap-1">
-                                <CirclePicture circle={circle} size="14px" /> {/* Use 'circle' prop */}
-                                <span className="text-xs">{circle.name}</span> {/* Use 'circle' prop */}
+            {selectedCircleId && (
+                <div className="flex flex-grow flex-col overflow-hidden">
+                    <div className="mb-[5px] flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                            <UserPicture name={user?.name} picture={user?.picture?.url} size="40px" />
+                            <div>
+                                <div className="text-sm font-semibold">{user?.name}</div>
+                                <div className="flex flex-row items-center justify-center gap-[4px]">
+                                    <div className="text-xs text-gray-500">Post in</div>
+                                    <div className="flex items-center gap-1">
+                                        <CirclePicture circle={selectedCircle || user} size="14px" />
+                                        <span className="text-xs">{(selectedCircle || user).name}</span>
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="ml-2 h-6 p-0 pl-1 text-xs hover:bg-gray-100"
+                                        onClick={() => setIsUserGroupsDialogOpen(true)}
+                                        disabled={!selectedCircleId}
+                                    >
+                                        <div className="flex items-center gap-1">
+                                            <Users className="h-3 w-3" />
+                                            <span>
+                                                {userGroups.includes("everyone")
+                                                    ? "Everyone"
+                                                    : getUserGroupName(userGroups?.[0])}
+                                            </span>
+                                            <ChevronDown className="h-3 w-3" />
+                                        </div>
+                                    </Button>
+                                </div>
                             </div>
-
-                            {/* User group selector */}
+                        </div>
+                    </div>
+                    <div className="max-h-[calc(60vh-50px)] flex-grow overflow-y-auto pr-2">
+                        <MentionsInput
+                            value={postContent}
+                            onChange={(e) => setPostContent(e.target.value)}
+                            placeholder="Share your story..."
+                            className="flex-grow"
+                            autoFocus
+                            style={postMentionsInputStyle}
+                        >
+                            <Mention
+                                trigger="@"
+                                data={handleMentionQuery}
+                                style={defaultMentionStyle}
+                                displayTransform={(id, display) => `${display}`}
+                                renderSuggestion={renderCircleSuggestion}
+                                markup="[__display__](/circles/__id__)"
+                            />
+                        </MentionsInput>
+                        {isPreviewLoading && (
+                            <div className="mt-4 flex items-center justify-center rounded-lg border p-4">
+                                <Loader2 className="mr-2 h-5 w-5 animate-spin text-gray-500" />
+                                <span className="text-gray-500">Loading preview...</span>
+                            </div>
+                        )}
+                        {linkPreview && !isPreviewLoading && !internalPreview && (
+                            <Card className="relative mt-4 overflow-hidden">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute right-1 top-1 z-10 h-6 w-6 rounded-full bg-gray-900/50 text-white hover:bg-gray-700/70 hover:text-white"
+                                    onClick={removeLinkPreview}
+                                    aria-label="Remove link preview"
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                                <a href={linkPreview.url} target="_blank" rel="noopener noreferrer" className="block">
+                                    <CardContent className="flex flex-col gap-2 p-0 md:flex-row">
+                                        {linkPreview.image && (
+                                            <div className="relative h-32 w-full flex-shrink-0 md:h-auto md:w-40">
+                                                <Image
+                                                    src={linkPreview.image}
+                                                    alt={linkPreview.title || "Link preview image"}
+                                                    fill
+                                                    className="object-cover"
+                                                    sizes="(max-width: 768px) 100vw, 160px"
+                                                />
+                                            </div>
+                                        )}
+                                        <div className="flex flex-col justify-center p-3">
+                                            <div className="text-sm font-semibold text-gray-600">
+                                                {new URL(linkPreview.url).hostname}
+                                            </div>
+                                            <div className="mt-1 line-clamp-2 font-medium">{linkPreview.title}</div>
+                                            {linkPreview.description && (
+                                                <div className="mt-1 line-clamp-2 text-sm text-gray-500">
+                                                    {linkPreview.description}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </CardContent>
+                                </a>
+                            </Card>
+                        )}
+                        {internalPreview && !isInternalPreviewLoading && !linkPreview && (
+                            <Card className="relative mt-4 overflow-hidden">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute right-1 top-1 z-10 h-6 w-6 rounded-full bg-gray-900/50 text-white hover:bg-gray-700/70 hover:text-white"
+                                    onClick={removeLinkPreview}
+                                    aria-label="Remove link preview"
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                                <div className="flex items-center space-x-3 p-3">
+                                    {internalPreview.type === "circle" && (
+                                        <>
+                                            <Avatar className="h-10 w-10 rounded-md">
+                                                <AvatarImage
+                                                    src={(internalPreview.data as Circle).picture?.url}
+                                                    alt={(internalPreview.data as Circle).name}
+                                                />
+                                                <AvatarFallback>
+                                                    <Users className="h-5 w-5" />
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            <div>
+                                                <div className="text-xs text-gray-500">Circle</div>
+                                                <div className="font-medium">
+                                                    {(internalPreview.data as Circle).name}
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                    {internalPreview.type === "post" && (
+                                        <>
+                                            <Avatar className="h-10 w-10 rounded-full">
+                                                <AvatarImage
+                                                    src={(internalPreview.data as PostDisplay).author?.picture?.url}
+                                                    alt={(internalPreview.data as PostDisplay).author?.name}
+                                                />
+                                                <AvatarFallback>
+                                                    {(internalPreview.data as PostDisplay).author?.name?.charAt(0) ||
+                                                        "?"}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            <div>
+                                                <div className="text-xs text-gray-500">
+                                                    Post by {(internalPreview.data as PostDisplay).author?.name}
+                                                </div>
+                                                <p className="text-sm text-gray-800">
+                                                    {truncateText((internalPreview.data as PostDisplay).content!, 100)}
+                                                </p>
+                                            </div>
+                                        </>
+                                    )}
+                                    {internalPreview.type === "proposal" && (
+                                        <>
+                                            <Avatar className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-100 text-blue-700">
+                                                <CircleHelp className="h-5 w-5" />
+                                            </Avatar>
+                                            <div>
+                                                <div className="text-xs text-gray-500">Proposal</div>
+                                                <div className="font-medium">
+                                                    {(internalPreview.data as ProposalDisplay).name}
+                                                </div>
+                                                <p className="text-sm text-gray-600">
+                                                    Status:{" "}
+                                                    <span className="font-semibold">
+                                                        {(internalPreview.data as ProposalDisplay).stage}
+                                                    </span>
+                                                </p>
+                                            </div>
+                                        </>
+                                    )}
+                                    {internalPreview.type === "issue" && (
+                                        <>
+                                            <Avatar className="flex h-10 w-10 items-center justify-center rounded-md bg-orange-100 text-orange-700">
+                                                <AlertCircle className="h-5 w-5" />
+                                            </Avatar>
+                                            <div>
+                                                <div className="text-xs text-gray-500">Issue</div>
+                                                <div className="font-medium">
+                                                    {(internalPreview.data as IssueDisplay).title}
+                                                </div>
+                                                <p className="text-sm text-gray-600">
+                                                    Status:{" "}
+                                                    <span className="font-semibold">
+                                                        {(internalPreview.data as IssueDisplay).stage}
+                                                    </span>
+                                                </p>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </Card>
+                        )}
+                        {images.length > 0 && (
+                            <div className="relative mt-4">
+                                <Carousel setApi={setCarouselApi}>
+                                    <CarouselContent>
+                                        {images.map((image, index) => (
+                                            <CarouselItem key={index} className="relative">
+                                                <img
+                                                    src={image.preview}
+                                                    alt={`Uploaded image ${index + 1}`}
+                                                    className="h-48 w-full rounded-lg object-cover"
+                                                />
+                                                <Button
+                                                    variant="destructive"
+                                                    size="icon"
+                                                    className="absolute right-2 top-2 rounded-full"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        removeImage(index);
+                                                    }}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </CarouselItem>
+                                        ))}
+                                    </CarouselContent>
+                                    <CarouselPrevious />
+                                    <CarouselNext />
+                                </Carousel>
+                                <div className="mt-2 flex justify-center">
+                                    {images.map((_, index) => (
+                                        <button
+                                            key={index}
+                                            onClick={() => carouselApi?.scrollTo(index)}
+                                            className={`mx-1 h-2 w-2 rounded-full ${
+                                                index === currentImageIndex ? "bg-blue-500" : "bg-gray-300"
+                                            }`}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {location && (
+                            <div className="mt-4 flex flex-row items-center justify-center rounded-lg bg-gray-100 p-4 pl-3">
+                                <MapPin className={`mr-3 h-5 w-5`} style={{ color: "#c3224d" }} />
+                                {getFullLocationName(location)}
+                            </div>
+                        )}
+                        {showPollCreator && (
+                            <div className="mt-4 rounded-lg bg-gray-100 p-4">
+                                <p className="text-sm text-gray-600">📊 Poll creator placeholder</p>
+                            </div>
+                        )}
+                    </div>
+                    <div className="mt-4 flex items-center justify-between border-t pt-4">
+                        <div className="flex space-x-2">
+                            <div>
+                                <input {...getInputProps()} className="hidden" id="image-picker-input" />
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="rounded-full"
+                                    onClick={() => {
+                                        document.getElementById("image-picker-input")?.click();
+                                    }}
+                                >
+                                    <ImageIcon className="h-5 w-5 text-gray-500" />
+                                </Button>
+                            </div>
                             <Button
                                 variant="ghost"
-                                size="sm"
-                                className="ml-2 h-6 p-0 pl-1 text-xs hover:bg-gray-100"
-                                onClick={() => setIsUserGroupsDialogOpen(true)}
+                                size="icon"
+                                className="rounded-full"
+                                onClick={() => setIsLocationDialogOpen(true)}
                             >
-                                <div className="flex items-center gap-1">
-                                    <Users className="h-3 w-3" />
-                                    <span>
-                                        {userGroups.includes("everyone")
-                                            ? "Everyone"
-                                            : getUserGroupName(userGroups?.[0])}
-                                    </span>
-                                    <ChevronDown className="h-3 w-3" />
-                                </div>
+                                <MapPinIcon className="h-5 w-5 text-gray-500" />
+                            </Button>
+                        </div>
+                        <div className="space-x-2">
+                            <Button variant="ghost" className="text-gray-500" onClick={onCancel}>
+                                Cancel
+                            </Button>
+                            <Button
+                                className="rounded-full bg-blue-500 px-6 text-white hover:bg-blue-600"
+                                onClick={handleSubmit}
+                                disabled={isActuallySubmitting || isPreviewLoading || isInternalPreviewLoading}
+                            >
+                                {isActuallySubmitting ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        {initialPost ? "Updating..." : "Posting..."}
+                                    </>
+                                ) : (
+                                    <>{initialPost ? "Update" : "Post"}</>
+                                )}
                             </Button>
                         </div>
                     </div>
-                </div>
-            </div>
-            {/* Scrollable Content Area */}
-            <div className="max-h-[60vh] flex-grow overflow-y-auto pr-2">
-                {" "}
-                {/* Added pr-2 for scrollbar spacing */}
-                <MentionsInput
-                    value={postContent}
-                    onChange={(e) => setPostContent(e.target.value)}
-                    placeholder="Share your story..."
-                    className="flex-grow"
-                    autoFocus
-                    style={postMentionsInputStyle}
-                >
-                    <Mention
-                        trigger="@"
-                        data={handleMentionQuery}
-                        style={defaultMentionStyle}
-                        displayTransform={(id, display) => `${display}`}
-                        renderSuggestion={renderCircleSuggestion}
-                        markup="[__display__](/circles/__id__)"
-                    />
-                </MentionsInput>
-                {/* --- Link Preview Display --- */}
-                {isPreviewLoading && (
-                    <div className="mt-4 flex items-center justify-center rounded-lg border p-4">
-                        <Loader2 className="mr-2 h-5 w-5 animate-spin text-gray-500" />
-                        <span className="text-gray-500">Loading preview...</span>
-                    </div>
-                )}
-                {/* External Link Preview */}
-                {linkPreview && !isPreviewLoading && !internalPreview && (
-                    <Card className="relative mt-4 overflow-hidden">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="absolute right-1 top-1 z-10 h-6 w-6 rounded-full bg-gray-900/50 text-white hover:bg-gray-700/70 hover:text-white"
-                            onClick={removeLinkPreview}
-                            aria-label="Remove link preview"
-                        >
-                            <X className="h-4 w-4" />
-                        </Button>
-                        <a href={linkPreview.url} target="_blank" rel="noopener noreferrer" className="block">
-                            <CardContent className="flex flex-col gap-2 p-0 md:flex-row">
-                                {linkPreview.image && (
-                                    <div className="relative h-32 w-full flex-shrink-0 md:h-auto md:w-40">
-                                        <Image
-                                            src={linkPreview.image}
-                                            alt={linkPreview.title || "Link preview image"}
-                                            fill
-                                            className="object-cover"
-                                            sizes="(max-width: 768px) 100vw, 160px" // Basic responsive sizes
-                                        />
-                                    </div>
-                                )}
-                                <div className="flex flex-col justify-center p-3">
-                                    <div className="text-sm font-semibold text-gray-600">
-                                        {new URL(linkPreview.url).hostname}
-                                    </div>
-                                    <div className="mt-1 line-clamp-2 font-medium">{linkPreview.title}</div>
-                                    {linkPreview.description && (
-                                        <div className="mt-1 line-clamp-2 text-sm text-gray-500">
-                                            {linkPreview.description}
-                                        </div>
-                                    )}
-                                </div>
-                            </CardContent>
-                        </a>
-                    </Card>
-                )}
-                {/* Internal Link Preview */}
-                {internalPreview && !isInternalPreviewLoading && !linkPreview && (
-                    <Card className="relative mt-4 overflow-hidden">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="absolute right-1 top-1 z-10 h-6 w-6 rounded-full bg-gray-900/50 text-white hover:bg-gray-700/70 hover:text-white"
-                            onClick={removeLinkPreview} // Use the same remove function
-                            aria-label="Remove link preview"
-                        >
-                            <X className="h-4 w-4" />
-                        </Button>
-                        {/* Use a simplified display, maybe adapt InternalLinkPreview component later */}
-                        <div className="flex items-center space-x-3 p-3">
-                            {internalPreview.type === "circle" && (
-                                <>
-                                    <Avatar className="h-10 w-10 rounded-md">
-                                        <AvatarImage
-                                            src={(internalPreview.data as Circle).picture?.url} // Cast to Circle
-                                            alt={(internalPreview.data as Circle).name} // Cast to Circle
-                                        />
-                                        <AvatarFallback>
-                                            <Users className="h-5 w-5" />
-                                        </AvatarFallback>
-                                    </Avatar>
-                                    <div>
-                                        <div className="text-xs text-gray-500">Circle</div>
-                                        <div className="font-medium">{(internalPreview.data as Circle).name}</div>{" "}
-                                        {/* Cast to Circle */}
-                                    </div>
-                                </>
-                            )}
-                            {internalPreview.type === "post" && (
-                                <>
-                                    <Avatar className="h-10 w-10 rounded-full">
-                                        <AvatarImage
-                                            src={(internalPreview.data as PostDisplay).author?.picture?.url}
-                                            alt={(internalPreview.data as PostDisplay).author?.name}
-                                        />
-                                        <AvatarFallback>
-                                            {(internalPreview.data as PostDisplay).author?.name?.charAt(0) || "?"}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                    <div>
-                                        <div className="text-xs text-gray-500">
-                                            Post by {(internalPreview.data as PostDisplay).author?.name}
-                                        </div>
-                                        <p className="text-sm text-gray-800">
-                                            {truncateText((internalPreview.data as PostDisplay).content!, 100)}{" "}
-                                            {/* Cast to PostDisplay */}
-                                        </p>
-                                    </div>
-                                </>
-                            )}
-                            {internalPreview.type === "proposal" && (
-                                <>
-                                    <Avatar className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-100 text-blue-700">
-                                        <CircleHelp className="h-5 w-5" />
-                                    </Avatar>
-                                    <div>
-                                        <div className="text-xs text-gray-500">Proposal</div>
-                                        <div className="font-medium">
-                                            {(internalPreview.data as ProposalDisplay).name}
-                                        </div>
-                                        <p className="text-sm text-gray-600">
-                                            Status:{" "}
-                                            <span className="font-semibold">
-                                                {(internalPreview.data as ProposalDisplay).stage}
-                                            </span>
-                                        </p>
-                                    </div>
-                                </>
-                            )}
-                            {internalPreview.type === "issue" && (
-                                <>
-                                    <Avatar className="flex h-10 w-10 items-center justify-center rounded-md bg-orange-100 text-orange-700">
-                                        <AlertCircle className="h-5 w-5" />
-                                    </Avatar>
-                                    <div>
-                                        <div className="text-xs text-gray-500">Issue</div>
-                                        <div className="font-medium">
-                                            {(internalPreview.data as IssueDisplay).title}
-                                        </div>
-                                        <p className="text-sm text-gray-600">
-                                            Status:{" "}
-                                            <span className="font-semibold">
-                                                {(internalPreview.data as IssueDisplay).stage}
-                                            </span>
-                                        </p>
-                                    </div>
-                                </>
-                            )}
+                    {dragging && (
+                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-gray-200 bg-opacity-50">
+                            <p className="text-lg font-semibold text-gray-700">Drop images here</p>
                         </div>
-                    </Card>
-                )}
-                {/* --- End Link Preview Display --- */}
-                {/* Image Carousel */}
-                {images.length > 0 && (
-                    <div className="relative mt-4">
-                        <Carousel setApi={setCarouselApi}>
-                            <CarouselContent>
-                                {images.map((image, index) => (
-                                    <CarouselItem key={index} className="relative">
-                                        {/* eslint-disable-next-line */}
-                                        <img
-                                            src={image.preview}
-                                            alt={`Uploaded image ${index + 1}`}
-                                            className="h-48 w-full rounded-lg object-cover"
-                                        />
-                                        <Button
-                                            variant="destructive"
-                                            size="icon"
-                                            className="absolute right-2 top-2 rounded-full"
-                                            onClick={(e) => {
-                                                // Prevent dropzone activation on button click
-                                                e.stopPropagation();
-                                                removeImage(index);
-                                            }}
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </CarouselItem>
-                                ))}
-                            </CarouselContent>
-                            <CarouselPrevious />
-                            <CarouselNext />
-                        </Carousel>
-                        <div className="mt-2 flex justify-center">
-                            {images.map((_, index) => (
-                                <button
-                                    key={index}
-                                    onClick={() => carouselApi?.scrollTo(index)}
-                                    className={`mx-1 h-2 w-2 rounded-full ${
-                                        index === currentImageIndex ? "bg-blue-500" : "bg-gray-300"
-                                    }`}
-                                />
-                            ))}
-                        </div>
-                    </div>
-                )}
-                {location && (
-                    <div className="mt-4 flex flex-row items-center justify-center rounded-lg bg-gray-100 p-4 pl-3">
-                        <MapPin className={`mr-3 h-5 w-5`} style={{ color: "#c3224d" }} />
-                        {getFullLocationName(location)}
-                    </div>
-                )}
-                {showPollCreator && (
-                    <div className="mt-4 rounded-lg bg-gray-100 p-4">
-                        <p className="text-sm text-gray-600">📊 Poll creator placeholder</p>
-                    </div>
-                )}
-            </div>{" "}
-            {/* End Scrollable Content Area */}
-            {/* Action Buttons - Kept outside scrollable area */}
-            <div className="mt-4 flex items-center justify-between border-t pt-4">
-                {" "}
-                {/* Added border-t and pt-4 */}
-                <div className="flex space-x-2">
-                    <div>
-                        {/* Ensure the image input uses getInputProps */}
-                        <input {...getInputProps()} className="hidden" id="image-picker-input" />
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="rounded-full"
-                            onClick={() => {
-                                document.getElementById("image-picker-input")?.click();
+                    )}
+                    <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
+                        <DialogContent
+                            className="z-[111]"
+                            onInteractOutside={(e) => {
+                                e.preventDefault();
                             }}
                         >
-                            <ImageIcon className="h-5 w-5 text-gray-500" />
-                        </Button>
-                    </div>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="rounded-full"
-                        onClick={() => setIsLocationDialogOpen(true)}
-                    >
-                        <MapPinIcon className="h-5 w-5 text-gray-500" />
-                    </Button>
-                    {/*
-                    TODO - Implement Poll Creator
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="rounded-full"
-                        onClick={() => setShowPollCreator(!showPollCreator)}
-                    >
-                        <BarChartIcon className="h-5 w-5 text-gray-500" />
-                    </Button> */}
-                </div>
-                <div className="space-x-2">
-                    <Button variant="ghost" className="text-gray-500" onClick={onCancel}>
-                        Cancel
-                    </Button>
-                    <Button
-                        className="rounded-full bg-blue-500 px-6 text-white hover:bg-blue-600"
-                        onClick={handleSubmit}
-                        disabled={isActuallySubmitting || isPreviewLoading || isInternalPreviewLoading} // Use isActuallySubmitting
-                    >
-                        {isActuallySubmitting ? ( // Use isActuallySubmitting
-                            <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                {initialPost ? "Updating..." : "Posting..."}
-                            </>
-                        ) : (
-                            <>{initialPost ? "Update" : "Post"}</>
-                        )}
-                    </Button>
-                </div>
-            </div>
-            {dragging && (
-                <div className="absolute inset-0 z-50 flex items-center justify-center bg-gray-200 bg-opacity-50">
-                    <p className="text-lg font-semibold text-gray-700">Drop images here</p>
-                </div>
-            )}
-            {/* Location Dialog */}
-            <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
-                <DialogContent
-                    className="z-[111]"
-                    onInteractOutside={(e) => {
-                        e.preventDefault();
-                    }}
-                >
-                    <DialogHeader>
-                        <DialogTitle>Select Location</DialogTitle>
-                    </DialogHeader>
-                    <LocationPicker value={location!} onChange={setLocation} />
-                    <div className="mt-4 flex justify-end">
-                        <Button variant="secondary" onClick={() => setIsLocationDialogOpen(false)}>
-                            Cancel
-                        </Button>
-                        <Button variant="default" onClick={() => setIsLocationDialogOpen(false)} className="ml-2">
-                            Set Location
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
-            {/* User Groups Dialog */}
-            <Dialog open={isUserGroupsDialogOpen} onOpenChange={setIsUserGroupsDialogOpen}>
-                <DialogContent
-                    className="z-[111] max-w-md"
-                    onInteractOutside={(e) => {
-                        e.preventDefault();
-                    }}
-                >
-                    <DialogHeader>
-                        <DialogTitle className="text-center text-xl font-bold">Who can see your post?</DialogTitle>
-                    </DialogHeader>
-                    <div className="mt-2 space-y-4">
-                        <div className="text-sm text-gray-600">
-                            Your post will be visible in feeds, on your profile, and in search results.
-                        </div>
-
-                        <div className="text-sm text-gray-600">
-                            Your default audience is <span className="font-semibold">Everyone</span> but you can change
-                            the audience for this post.
-                        </div>
-
-                        <div className="max-h-[300px] space-y-3 overflow-y-auto py-2">
-                            {/* Everyone option */}
-                            <div className="flex items-center rounded-lg p-2 hover:bg-gray-100">
-                                <div className="mr-3 flex h-10 w-10 items-center justify-center rounded-full bg-gray-200">
-                                    <Globe className="h-5 w-5 text-gray-700" />
-                                </div>
-                                <div className="flex-1">
-                                    <div className="font-medium">Everyone</div>
-                                    <div className="text-xs text-gray-500">Everyone on and outside MakeCircles</div>
-                                </div>
-                                <div className="ml-2">
-                                    <input
-                                        type="radio"
-                                        id="group-everyone"
-                                        name="visibility"
-                                        className="h-4 w-4 text-blue-600"
-                                        checked={userGroups.includes("everyone")}
-                                        onChange={() => setUserGroups(["everyone"])}
-                                    />
-                                </div>
+                            <DialogHeader>
+                                <DialogTitle>Select Location</DialogTitle>
+                            </DialogHeader>
+                            <LocationPicker value={location!} onChange={setLocation} />
+                            <div className="mt-4 flex justify-end">
+                                <Button variant="secondary" onClick={() => setIsLocationDialogOpen(false)}>
+                                    Cancel
+                                </Button>
+                                <Button
+                                    variant="default"
+                                    onClick={() => setIsLocationDialogOpen(false)}
+                                    className="ml-2"
+                                >
+                                    Set Location
+                                </Button>
                             </div>
-
-                            {/* Other user groups */}
-                            {getAvailableUserGroups()
-                                .filter((group) => group !== "everyone")
-                                .map((group) => (
-                                    <div key={group} className="flex items-center rounded-lg p-2 hover:bg-gray-100">
+                        </DialogContent>
+                    </Dialog>
+                    <Dialog open={isUserGroupsDialogOpen} onOpenChange={setIsUserGroupsDialogOpen}>
+                        <DialogContent
+                            className="z-[111] max-w-md"
+                            onInteractOutside={(e) => {
+                                e.preventDefault();
+                            }}
+                        >
+                            <DialogHeader>
+                                <DialogTitle className="text-center text-xl font-bold">
+                                    Who can see your post?
+                                </DialogTitle>
+                            </DialogHeader>
+                            <div className="mt-2 space-y-4">
+                                <div className="text-sm text-gray-600">
+                                    Your post will be visible in feeds, on your profile, and in search results.
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                    Your default audience is <span className="font-semibold">Everyone</span> but you can
+                                    change the audience for this post.
+                                </div>
+                                <div className="max-h-[300px] space-y-3 overflow-y-auto py-2">
+                                    <div className="flex items-center rounded-lg p-2 hover:bg-gray-100">
                                         <div className="mr-3 flex h-10 w-10 items-center justify-center rounded-full bg-gray-200">
-                                            <Users className="h-5 w-5 text-gray-700" />
+                                            <Globe className="h-5 w-5 text-gray-700" />
                                         </div>
                                         <div className="flex-1">
-                                            <div className="font-medium">{getUserGroupName(group)}</div>
+                                            <div className="font-medium">Everyone</div>
                                             <div className="text-xs text-gray-500">
-                                                Only {getUserGroupName(group)?.toLowerCase()} of {circle.name}{" "}
-                                                {/* Use 'circle' prop */}
+                                                Everyone on and outside MakeCircles
                                             </div>
                                         </div>
                                         <div className="ml-2">
                                             <input
                                                 type="radio"
-                                                id={`group-${group}`}
+                                                id="group-everyone"
                                                 name="visibility"
                                                 className="h-4 w-4 text-blue-600"
-                                                checked={userGroups.includes(group) && !userGroups.includes("everyone")}
-                                                onChange={() => setUserGroups([group])}
+                                                checked={userGroups.includes("everyone")}
+                                                onChange={() => setUserGroups(["everyone"])}
                                             />
                                         </div>
                                     </div>
-                                ))}
-                        </div>
-
-                        {/* <div className="flex items-center space-x-2 pt-2">
-                            <Checkbox id="set-as-default" />
-                            <Label htmlFor="set-as-default" className="text-sm">
-                                Set as default audience
-                            </Label>
-                        </div> */}
-                    </div>
-                    <DialogFooter className="flex justify-between sm:justify-between">
-                        <Button variant="ghost" onClick={() => setIsUserGroupsDialogOpen(false)}>
-                            Cancel
-                        </Button>
-                        <Button onClick={() => setIsUserGroupsDialogOpen(false)}>Done</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                                    {getAvailableUserGroups()
+                                        .filter((group) => group !== "everyone")
+                                        .map((group) => (
+                                            <div
+                                                key={group}
+                                                className="flex items-center rounded-lg p-2 hover:bg-gray-100"
+                                            >
+                                                <div className="mr-3 flex h-10 w-10 items-center justify-center rounded-full bg-gray-200">
+                                                    <Users className="h-5 w-5 text-gray-700" />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <div className="font-medium">{getUserGroupName(group)}</div>
+                                                    <div className="text-xs text-gray-500">
+                                                        Only {getUserGroupName(group)?.toLowerCase()} of{" "}
+                                                        {(selectedCircle || user).name}
+                                                    </div>
+                                                </div>
+                                                <div className="ml-2">
+                                                    <input
+                                                        type="radio"
+                                                        id={`group-${group}`}
+                                                        name="visibility"
+                                                        className="h-4 w-4 text-blue-600"
+                                                        checked={
+                                                            userGroups.includes(group) &&
+                                                            !userGroups.includes("everyone")
+                                                        }
+                                                        onChange={() => setUserGroups([group])}
+                                                    />
+                                                </div>
+                                            </div>
+                                        ))}
+                                </div>
+                            </div>
+                            <DialogFooter className="flex justify-between sm:justify-between">
+                                <Button variant="ghost" onClick={() => setIsUserGroupsDialogOpen(false)}>
+                                    Cancel
+                                </Button>
+                                <Button onClick={() => setIsUserGroupsDialogOpen(false)}>Done</Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                </div>
+            )}
         </div>
     );
 }
