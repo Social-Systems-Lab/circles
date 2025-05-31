@@ -66,7 +66,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
                         <Authenticator />
                         <ImageGallery />
                         <Onboarding />
-                        <MatrixSync />
+                        {process.env.NODE_ENV !== "development" && <MatrixSync />}
                         <MapboxInitializer mapboxKey={serverConfig.mapboxKey} />
                         <SupportButton />
                     </main>

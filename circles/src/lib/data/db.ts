@@ -18,7 +18,8 @@ import {
     Issue,
     Task,
     RankedList,
-    Goal, // Added Task model
+    Goal,
+    GoalMember, // Added GoalMember model
 } from "@/models/models";
 import { AggregateRank } from "./ranking";
 
@@ -51,6 +52,7 @@ let Proposals: Collection<Proposal>;
 let Issues: Collection<Issue>;
 let Tasks: Collection<Task>;
 let Goals: Collection<Goal>;
+let GoalMembers: Collection<GoalMember>; // Added GoalMembers collection
 let RankedLists: Collection<RankedList>;
 let AggregateRanks: Collection<AggregateRank>;
 
@@ -83,6 +85,7 @@ if (process.env.IS_BUILD !== "true") {
     Issues = db.collection<Issue>("issues");
     Tasks = db.collection<Task>("tasks");
     Goals = db.collection<Goal>("goals");
+    GoalMembers = db.collection<GoalMember>("goalMembers"); // Initialize GoalMembers
     RankedLists = db.collection<RankedList>("rankedLists");
     AggregateRanks = db.collection<AggregateRank>("aggregateRanks");
 }
@@ -108,6 +111,7 @@ export {
     Issues,
     Tasks,
     Goals,
+    GoalMembers, // Export GoalMembers
     RankedLists,
     AggregateRanks,
 };

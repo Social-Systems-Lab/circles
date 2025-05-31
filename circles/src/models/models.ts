@@ -780,6 +780,16 @@ export type Challenge = z.infer<typeof challengeSchema>;
 
 export type ChatRoomMember = z.infer<typeof chatRoomMemberSchema>;
 
+export const goalMemberSchema = z.object({
+    _id: z.any().optional(),
+    userId: z.string(), // Points to User._id
+    goalId: z.string(),
+    circleId: z.string(),
+    joinedAt: z.date().optional(),
+});
+
+export type GoalMember = z.infer<typeof goalMemberSchema>;
+
 export type Account = {
     did: string;
     publicKey: string;

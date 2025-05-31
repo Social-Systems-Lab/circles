@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useTransition, useMemo } from "react";
+import React, { useState, useTransition, useMemo, useEffect } from "react";
 import { Circle, GoalDisplay, GoalStage, GoalPermissions, TaskDisplay, TaskPermissions } from "@/models/models";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -18,6 +18,8 @@ import {
     Play,
     CalendarIcon,
     ListChecks,
+    UserPlus, // For Follow icon
+    UserCheck, // For Following icon
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { getFullLocationName } from "@/lib/utils";
@@ -43,7 +45,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import RichText from "../feeds/RichText";
 import ImageThumbnailCarousel from "@/components/ui/image-thumbnail-carousel";
-import { changeGoalStageAction, deleteGoalAction } from "@/app/circles/[handle]/goals/actions";
+import {
+    changeGoalStageAction,
+    deleteGoalAction,
+    followGoalAction,
+    unfollowGoalAction,
+    getGoalFollowDataAction,
+} from "@/app/circles/[handle]/goals/actions";
 import TasksList from "@/components/modules/tasks/tasks-list";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Link from "next/link";
@@ -114,11 +122,36 @@ const GoalDetail: React.FC<GoalDetailProps> = ({
     const { toast } = useToast();
     const router = useRouter();
 
+    // Follow state
+    const [isFollowingCurrentUser, setIsFollowingCurrentUser] = useState(false); // Placeholder, will be fetched
+    const [followersCount, setFollowersCount] = useState(0); // Placeholder, will be fetched
+    const [isLoadingFollow, setIsLoadingFollow] = useState(false);
+    const [isLoadingInitialFollowStatus, setIsLoadingInitialFollowStatus] = useState(true); // For initial load
+
     const isAuthor = currentUserDid === goal.createdBy;
     const canCreateTask = isAuthorized(user, circle, features.tasks.create);
+    const canFollowFeatureEnabled = isAuthorized(user, circle, features.goals.follow);
 
     // Removed useMemo for tasksModuleEnabled, using prop directly
     // Removed useEffect for fetching tasks and permissions
+
+    useEffect(() => {
+        if (goal._id && canFollowFeatureEnabled) {
+            // Only fetch if the feature is enabled for the user
+            setIsLoadingInitialFollowStatus(true);
+            getGoalFollowDataAction(goal._id as string)
+                .then((data) => {
+                    if (data) {
+                        setIsFollowingCurrentUser(data.isFollowing);
+                        setFollowersCount(data.followerCount);
+                    }
+                })
+                .catch((err) => console.error("Failed to fetch goal follow status", err))
+                .finally(() => setIsLoadingInitialFollowStatus(false));
+        } else {
+            setIsLoadingInitialFollowStatus(false); // If feature not enabled, don't show loading
+        }
+    }, [goal._id, currentUserDid, canFollowFeatureEnabled]); // Added canFollowFeatureEnabled to dependencies
 
     // Filter for active tasks using the prop
     const activeTasks = useMemo(() => {
@@ -199,6 +232,53 @@ const GoalDetail: React.FC<GoalDetailProps> = ({
     const canEditGoal = (isAuthor && goal.stage === "review") || permissions.canModerate;
     const canDeleteGoal = isAuthor || permissions.canModerate;
 
+    const handleFollowToggle = () => {
+        if (!goal._id || !circle.handle) return;
+        setIsLoadingFollow(true);
+        startTransition(async () => {
+            const actionToCall = isFollowingCurrentUser ? unfollowGoalAction : followGoalAction;
+            const currentFollowStatus = isFollowingCurrentUser;
+            const currentFollowerCount = followersCount;
+
+            // Optimistic update
+            setIsFollowingCurrentUser(!currentFollowStatus);
+            setFollowersCount(currentFollowerCount + (!currentFollowStatus ? 1 : -1));
+
+            try {
+                const result = await actionToCall(circle.handle!, goal._id as string);
+                if (result.success) {
+                    toast({
+                        title: "Success",
+                        description: result.message,
+                    });
+                    // Actual state update based on server response (could refine optimistic update if server returns new count)
+                    // For now, the optimistic update stands unless an error occurs.
+                    // router.refresh(); // Could cause a full re-render, might not be needed if only count/status changes
+                } else {
+                    toast({
+                        title: "Error",
+                        description: result.message || "Action failed",
+                        variant: "destructive",
+                    });
+                    // Revert optimistic update on failure
+                    setIsFollowingCurrentUser(currentFollowStatus);
+                    setFollowersCount(currentFollowerCount);
+                }
+            } catch (error) {
+                toast({
+                    title: "Error",
+                    description: "An unexpected error occurred.",
+                    variant: "destructive",
+                });
+                // Revert optimistic update on failure
+                setIsFollowingCurrentUser(currentFollowStatus);
+                setFollowersCount(currentFollowerCount);
+            } finally {
+                setIsLoadingFollow(false);
+            }
+        });
+    };
+
     // Function to render primary action buttons based on stage and permissions
     const renderGoalActions = () => {
         const actions = [];
@@ -278,33 +358,78 @@ const GoalDetail: React.FC<GoalDetailProps> = ({
                 </div>
 
                 {/* Actions Dropdown */}
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                            <span className="sr-only">Open menu</span>
-                            <MoreHorizontal className="h-4 w-4" />
+                <div className="flex items-center gap-2">
+                    {/* Follow Button */}
+                    {canFollowFeatureEnabled && !isLoadingInitialFollowStatus && (
+                        <Button
+                            variant={isFollowingCurrentUser ? "outline" : "default"}
+                            size="sm"
+                            onClick={handleFollowToggle}
+                            disabled={isLoadingFollow || isPending}
+                            className="flex items-center"
+                        >
+                            {isLoadingFollow ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : isFollowingCurrentUser ? (
+                                <UserCheck className="mr-2 h-4 w-4" />
+                            ) : (
+                                <UserPlus className="mr-2 h-4 w-4" />
+                            )}
+                            {isFollowingCurrentUser ? "Following" : "Follow"}
+                            {followersCount > 0 && <span className="ml-2 text-xs">({followersCount})</span>}
                         </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Options</DropdownMenuLabel>
-                        {canEditGoal && (
-                            <DropdownMenuItem onClick={handleEdit} disabled={goal.stage === "resolved"}>
-                                <Pencil className="mr-2 h-4 w-4" /> Edit Goal
-                            </DropdownMenuItem>
-                        )}
-                        {canDeleteGoal && (
-                            <>
-                                {canEditGoal && <DropdownMenuSeparator />}
-                                <DropdownMenuItem onClick={() => setDeleteDialogOpen(true)} className="text-red-600">
-                                    <Trash2 className="mr-2 h-4 w-4" /> Delete Goal
+                    )}
+                    {isLoadingInitialFollowStatus && canFollowFeatureEnabled && (
+                        <Button variant="outline" size="sm" disabled className="flex items-center">
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...
+                        </Button>
+                    )}
+
+                    {/* Actions Dropdown */}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                                <span className="sr-only">Open menu</span>
+                                <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Options</DropdownMenuLabel>
+                            {canEditGoal && (
+                                <DropdownMenuItem onClick={handleEdit} disabled={goal.stage === "resolved"}>
+                                    <Pencil className="mr-2 h-4 w-4" /> Edit Goal
                                 </DropdownMenuItem>
-                            </>
-                        )}
-                        {!canEditGoal && !canDeleteGoal && (
-                            <DropdownMenuItem disabled>No actions available</DropdownMenuItem>
-                        )}
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                            )}
+                            {canDeleteGoal && (
+                                <>
+                                    {canEditGoal && <DropdownMenuSeparator />}
+                                    <DropdownMenuItem
+                                        onClick={() => setDeleteDialogOpen(true)}
+                                        className="text-red-600"
+                                    >
+                                        <Trash2 className="mr-2 h-4 w-4" /> Delete Goal
+                                    </DropdownMenuItem>
+                                </>
+                            )}
+                            {/* Separator if other actions exist and follow actions are added here */}
+                            {/* Example: Add follow/unfollow to dropdown too if needed */}
+                            {/* {canFollowFeatureEnabled && (canEditGoal || canDeleteGoal) && <DropdownMenuSeparator />} */}
+                            {/* {canFollowFeatureEnabled && (
+                                <DropdownMenuItem onClick={handleFollowToggle} disabled={isLoadingFollow || isPending}>
+                                    {isFollowingCurrentUser ? (
+                                        <UserCheck className="mr-2 h-4 w-4" />
+                                    ) : (
+                                        <UserPlus className="mr-2 h-4 w-4" />
+                                    )}
+                                    {isFollowingCurrentUser ? "Unfollow Goal" : "Follow Goal"}
+                                </DropdownMenuItem>
+                            )} */}
+                            {!canEditGoal && !canDeleteGoal && !canFollowFeatureEnabled && (
+                                <DropdownMenuItem disabled>No actions available</DropdownMenuItem>
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
             </CardHeader>
 
             <CardContent className="pt-4">

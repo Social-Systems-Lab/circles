@@ -3,13 +3,13 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { Media, Goal, GoalDisplay, GoalStage, locationSchema } from "@/models/models";
+import { Media, Goal, GoalDisplay, GoalStage, locationSchema, GoalMember } from "@/models/models";
 import { getCircleByHandle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getUserByDid } from "@/lib/data/user";
 import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage";
 import { features } from "@/lib/data/constants";
-import { Feeds, Posts, Goals } from "@/lib/data/db"; // Import DB collections
+import { Feeds, Posts, Goals, GoalMembers } from "@/lib/data/db"; // Import DB collections
 import { Post } from "@/models/models"; // Import Post type (Removed duplicate Goal)
 import { createPost } from "@/lib/data/feed"; // Import createPost
 import { ObjectId } from "mongodb"; // Import ObjectId
@@ -746,3 +746,164 @@ export async function ensureShadowPostForGoalAction(goalId: string, circleId: st
 // Removed getUserRankedListAction
 // Removed saveUserRankedListAction
 // Removed invalidateUserRankingsIfNeededAction
+
+/**
+ * Follow a goal
+ * @param circleHandle The handle of the circle
+ * @param goalId The ID of the goal to follow
+ * @returns Success status and message
+ */
+export async function followGoalAction(
+    circleHandle: string,
+    goalId: string,
+): Promise<{ success: boolean; message?: string }> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "User not authenticated" };
+        }
+        const user = await getUserByDid(userDid);
+        if (!user || !user._id) {
+            return { success: false, message: "User data not found" };
+        }
+        const userId = user._id.toString();
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle || !circle._id) {
+            return { success: false, message: "Circle not found" };
+        }
+        const circleId = circle._id.toString();
+
+        const goal = await getGoalById(goalId, userDid);
+        if (!goal) {
+            return { success: false, message: "Goal not found" };
+        }
+
+        const canFollowGoal = await isAuthorized(userDid, circleId, features.goals.follow);
+        if (!canFollowGoal) {
+            return { success: false, message: "Not authorized to follow goals in this circle" };
+        }
+
+        const existingFollow = await GoalMembers.findOne({ userId, goalId, circleId });
+        if (existingFollow) {
+            return { success: true, message: "Already following this goal" };
+        }
+
+        const newGoalMember: Omit<GoalMember, "_id"> = {
+            userId,
+            goalId,
+            circleId,
+            joinedAt: new Date(),
+        };
+
+        await GoalMembers.insertOne(newGoalMember);
+
+        revalidatePath(`/circles/${circleHandle}/goals`);
+        revalidatePath(`/circles/${circleHandle}/goals/${goalId}`);
+
+        // TODO: Add notification for goal follower if desired
+
+        return { success: true, message: "Successfully followed goal" };
+    } catch (error) {
+        console.error("Error following goal:", error);
+        return { success: false, message: "Failed to follow goal" };
+    }
+}
+
+/**
+ * Unfollow a goal
+ * @param circleHandle The handle of the circle
+ * @param goalId The ID of the goal to unfollow
+ * @returns Success status and message
+ */
+export async function unfollowGoalAction(
+    circleHandle: string,
+    goalId: string,
+): Promise<{ success: boolean; message?: string }> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "User not authenticated" };
+        }
+        const user = await getUserByDid(userDid);
+        if (!user || !user._id) {
+            return { success: false, message: "User data not found" };
+        }
+        const userId = user._id.toString();
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle || !circle._id) {
+            return { success: false, message: "Circle not found" };
+        }
+        const circleId = circle._id.toString();
+
+        // Goal existence check (optional for unfollow, but good for consistency)
+        const goal = await getGoalById(goalId, userDid);
+        if (!goal) {
+            // If goal doesn't exist or user can't see it, they can't be following it.
+            // Or, we could allow unfollowing even if the goal is deleted/hidden.
+            // For now, let's assume if they can't see it, the unfollow is effectively done.
+            // However, to prevent accidental unfollows of non-existent items, let's check.
+            return { success: false, message: "Goal not found or not accessible" };
+        }
+
+        // No specific authorization check for unfollowing, if they were following, they can unfollow.
+
+        const result = await GoalMembers.deleteOne({ userId, goalId, circleId });
+
+        if (result.deletedCount === 0) {
+            return { success: true, message: "Not following this goal or already unfollowed" };
+        }
+
+        revalidatePath(`/circles/${circleHandle}/goals`);
+        revalidatePath(`/circles/${circleHandle}/goals/${goalId}`);
+
+        // TODO: Add notification if desired (e.g., "You are no longer following X goal")
+
+        return { success: true, message: "Successfully unfollowed goal" };
+    } catch (error) {
+        console.error("Error unfollowing goal:", error);
+        return { success: false, message: "Failed to unfollow goal" };
+    }
+}
+
+/**
+ * Get follow status and count for a goal
+ * @param goalId The ID of the goal
+ * @returns Object with isFollowing (boolean) and followerCount (number)
+ */
+export async function getGoalFollowDataAction(
+    goalId: string,
+): Promise<{ isFollowing: boolean; followerCount: number } | null> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        // User doesn't need to be authenticated to get total follower count,
+        // but isFollowing will be false if not authenticated.
+
+        let userId: string | undefined;
+        if (userDid) {
+            const user = await getUserByDid(userDid);
+            if (user && user._id) {
+                userId = user._id.toString();
+            }
+        }
+
+        if (!ObjectId.isValid(goalId)) {
+            console.error("Invalid goalId provided to getGoalFollowDataAction");
+            return null;
+        }
+
+        const followerCount = await GoalMembers.countDocuments({ goalId });
+
+        let isFollowing = false;
+        if (userId) {
+            const existingFollow = await GoalMembers.findOne({ userId, goalId });
+            isFollowing = !!existingFollow;
+        }
+
+        return { isFollowing, followerCount };
+    } catch (error) {
+        console.error("Error getting goal follow data:", error);
+        return null;
+    }
+}

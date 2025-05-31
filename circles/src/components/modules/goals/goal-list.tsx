@@ -23,9 +23,20 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Circle, ContentPreviewData, GoalDisplay, GoalStage, GoalPermissions } from "@/models/models"; // Use Goal types, Added ContentPreviewData, GoalPermissions
+import { Circle, ContentPreviewData, GoalDisplay, GoalStage, GoalPermissions, UserPrivate } from "@/models/models"; // Use Goal types, Added ContentPreviewData, GoalPermissions, UserPrivate
 import { Button } from "@/components/ui/button";
-import { ArrowDown, ArrowUp, Loader2, MoreHorizontal, Plus, CheckCircle, Clock, Play } from "lucide-react";
+import {
+    ArrowDown,
+    ArrowUp,
+    Loader2,
+    MoreHorizontal,
+    Plus,
+    CheckCircle,
+    Clock,
+    Play,
+    UserPlus,
+    UserCheck,
+} from "lucide-react"; // Added UserPlus, UserCheck
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -45,7 +56,12 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "@/components/utils/use-is-compact";
-import { deleteGoalAction } from "@/app/circles/[handle]/goals/actions";
+import {
+    deleteGoalAction,
+    followGoalAction,
+    unfollowGoalAction,
+    getGoalFollowDataAction,
+} from "@/app/circles/[handle]/goals/actions"; // Added follow/unfollow actions
 import { motion } from "framer-motion";
 import { isAuthorized } from "@/lib/auth/client-auth";
 import { features } from "@/lib/data/constants";
@@ -126,6 +142,7 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
     const [user] = useAtom(userAtom);
     const [sorting, setSorting] = React.useState<SortingState>([{ id: "createdAt", desc: true }]); // Default sort by createdAt
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+    const currentUser = user; // userAtom is UserPrivate | undefined
     const [deleteGoalDialogOpen, setDeleteGoalDialogOpen] = useState<boolean>(false);
     const [selectedGoal, setSelectedGoal] = useState<GoalDisplay | null>(null);
     const [isPending, startTransition] = useTransition();
@@ -225,8 +242,18 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
                 ),
                 cell: (info) => new Date(info.getValue() as Date).toLocaleDateString(),
             },
+            {
+                id: "followAction",
+                header: () => <div className="text-center">Follow</div>,
+                cell: ({ row }) => {
+                    const goal = row.original;
+                    // Pass currentUser (which is UserPrivate | null)
+                    return <GoalFollowButton goal={goal} circle={circle} currentUser={currentUser} />;
+                },
+                size: 120, // Adjust size as needed
+            },
         ],
-        [circle.handle], // Add dependencies
+        [circle, currentUser, openAuthor], // Add dependencies, openAuthor was missing
     );
 
     const table = useReactTable({
@@ -387,12 +414,15 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
                                             >
                                                 {/* Start children immediately */}
                                                 {row.getVisibleCells().map((cell) => (
-                                                    <TableCell key={cell.id}>
+                                                    <TableCell
+                                                        key={cell.id}
+                                                        className={cell.column.id === "followAction" ? "p-1" : ""}
+                                                    >
                                                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                                     </TableCell>
                                                 ))}
-                                                {/* No space after map */}
-                                                <TableCell className="w-[40px]">
+                                                {/* Actions Dropdown (MoreHorizontal) */}
+                                                <TableCell className="w-[40px] p-1">
                                                     {(canEdit || canDelete) && (
                                                         <DropdownMenu>
                                                             <DropdownMenuTrigger asChild>
@@ -413,10 +443,10 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
                                                                             router.push(
-                                                                                `/circles/${circle.handle}/goals/${goal._id}/edit`, // Updated path
+                                                                                `/circles/${circle.handle}/goals/${goal._id}/edit`,
                                                                             );
                                                                         }}
-                                                                        disabled={goal.stage === "resolved"} // Can't edit resolved goals, Renamed variable
+                                                                        disabled={goal.stage === "resolved"}
                                                                     >
                                                                         Edit
                                                                     </DropdownMenuItem>
@@ -426,8 +456,8 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
                                                                         className="text-red-600"
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
-                                                                            setSelectedGoal(goal); // Renamed state setter, param
-                                                                            setDeleteGoalDialogOpen(true); // Renamed state setter
+                                                                            setSelectedGoal(goal);
+                                                                            setDeleteGoalDialogOpen(true);
                                                                         }}
                                                                     >
                                                                         Delete
@@ -443,7 +473,7 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
                                 ) : (
                                     <TableRow>
                                         <TableCell colSpan={columns.length + 1} className="h-24 text-center">
-                                            No goals found. {/* Updated text */}
+                                            No goals found.
                                         </TableCell>
                                     </TableRow>
                                 )}
@@ -452,16 +482,15 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
                     </div>
 
                     <Dialog open={deleteGoalDialogOpen} onOpenChange={setDeleteGoalDialogOpen}>
-                        {/* Renamed state */}
                         <DialogContent
                             onInteractOutside={(e) => {
                                 e.preventDefault();
                             }}
                         >
                             <DialogHeader>
-                                <DialogTitle>Delete Goal</DialogTitle> {/* Updated text */}
+                                <DialogTitle>Delete Goal</DialogTitle>
                                 <DialogDescription>
-                                    Are you sure you want to delete the goal &quot;{selectedGoal?.title}&quot;? This
+                                    Are you sure you want to delete the goal &#34;{selectedGoal?.title}&#34;? This
                                     action cannot be undone.
                                 </DialogDescription>
                             </DialogHeader>
@@ -470,19 +499,120 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
                                     <Button variant="outline">Cancel</Button>
                                 </DialogClose>
                                 <Button variant="destructive" onClick={onConfirmDeleteGoal} disabled={isPending}>
-                                    {" "}
-                                    {/* Renamed handler */}
                                     {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                                     Delete
                                 </Button>
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
-                    {/* Removed Prioritization Modal */}
                 </div>
             </div>
         </TooltipProvider>
     );
 };
 
-export default GoalsList; // Renamed export
+interface GoalFollowButtonProps {
+    goal: GoalDisplay;
+    circle: Circle;
+    currentUser: UserPrivate | undefined; // Changed to UserPrivate | undefined
+}
+
+const GoalFollowButton: React.FC<GoalFollowButtonProps> = ({ goal, circle, currentUser }) => {
+    const [isFollowingCurrentUser, setIsFollowingCurrentUser] = useState(false);
+    const [followersCount, setFollowersCount] = useState(0);
+    const [isLoadingFollow, setIsLoadingFollow] = useState(false);
+    const [isLoadingInitialFollowStatus, setIsLoadingInitialFollowStatus] = useState(true);
+    const [isPending, startTransition] = useTransition();
+    const { toast } = useToast();
+
+    const canFollowFeatureEnabled = isAuthorized(currentUser, circle, features.goals.follow);
+
+    useEffect(() => {
+        if (goal._id && canFollowFeatureEnabled && currentUser?._id) {
+            setIsLoadingInitialFollowStatus(true);
+            getGoalFollowDataAction(goal._id as string)
+                .then((data) => {
+                    if (data) {
+                        setIsFollowingCurrentUser(data.isFollowing);
+                        setFollowersCount(data.followerCount);
+                    }
+                })
+                .catch((err) => console.error("Failed to fetch goal follow status for list item", err))
+                .finally(() => setIsLoadingInitialFollowStatus(false));
+        } else {
+            setIsLoadingInitialFollowStatus(false);
+        }
+    }, [goal._id, currentUser?._id, canFollowFeatureEnabled]);
+
+    const handleFollowToggle = () => {
+        if (!goal._id || !circle.handle || !currentUser) return;
+        setIsLoadingFollow(true);
+        startTransition(async () => {
+            const actionToCall = isFollowingCurrentUser ? unfollowGoalAction : followGoalAction;
+            const currentFollowStatus = isFollowingCurrentUser;
+            const currentFollowerCount = followersCount;
+
+            setIsFollowingCurrentUser(!currentFollowStatus);
+            setFollowersCount(currentFollowerCount + (!currentFollowStatus ? 1 : -1));
+
+            try {
+                const result = await actionToCall(circle.handle!, goal._id as string);
+                if (result.success) {
+                    toast({ title: "Success", description: result.message });
+                } else {
+                    toast({ title: "Error", description: result.message || "Action failed", variant: "destructive" });
+                    setIsFollowingCurrentUser(currentFollowStatus);
+                    setFollowersCount(currentFollowerCount);
+                }
+            } catch (error) {
+                toast({ title: "Error", description: "An unexpected error occurred.", variant: "destructive" });
+                setIsFollowingCurrentUser(currentFollowStatus);
+                setFollowersCount(currentFollowerCount);
+            } finally {
+                setIsLoadingFollow(false);
+            }
+        });
+    };
+
+    if (!canFollowFeatureEnabled) {
+        return null; // Don't render button if feature is not enabled for the user/circle
+    }
+
+    if (isLoadingInitialFollowStatus) {
+        return (
+            <Button
+                variant="outline"
+                size="sm"
+                disabled
+                className="flex h-auto w-full items-center justify-center px-2 py-1 text-xs"
+            >
+                <Loader2 className="h-3 w-3 animate-spin" />
+            </Button>
+        );
+    }
+
+    return (
+        <Button
+            variant={isFollowingCurrentUser ? "outline" : "default"}
+            size="sm"
+            onClick={(e) => {
+                e.stopPropagation(); // Prevent row click
+                handleFollowToggle();
+            }}
+            disabled={isLoadingFollow || isPending}
+            className="flex h-auto w-full items-center justify-center px-2 py-1 text-xs" // Make button smaller
+        >
+            {isLoadingFollow ? (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+            ) : isFollowingCurrentUser ? (
+                <UserCheck className="mr-1 h-3 w-3" />
+            ) : (
+                <UserPlus className="mr-1 h-3 w-3" />
+            )}
+            {isFollowingCurrentUser ? "Following" : "Follow"}
+            {followersCount > 0 && <span className="ml-1">({followersCount})</span>}
+        </Button>
+    );
+};
+
+export default GoalsList;
