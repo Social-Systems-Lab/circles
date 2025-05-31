@@ -2,17 +2,15 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
+// import { Button } from "@/components/ui/button"; // Not directly used, but PopoverTrigger might use it via asChild
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { NotificationBellIcon } from "./NotificationBellIcon";
-import {
-    getGroupedUserNotificationSettings,
-    updateUserNotificationSetting,
-    GroupedNotificationSettings,
-} from "@/lib/actions/notificationSettings";
-import { EntityType, NotificationType, notificationTypeValues } from "@/models/models";
+import { getGroupedUserNotificationSettings, updateUserNotificationSetting } from "@/lib/actions/notificationSettings";
+import { EntityType, NotificationType, notificationTypeValues, GroupedNotificationSettings } from "@/models/models";
 import { useToast } from "@/components/ui/use-toast"; // Assuming you have a toast hook
+// import { useAtom } from "jotai"; // Placeholder for Jotai
+// import { userPrivateAtom } from "@/lib/store/jotaiAtoms"; // Placeholder for your Jotai atom
 
 interface NotificationSettingsPopoverProps {
     entityType: EntityType;
@@ -36,33 +34,42 @@ export const NotificationSettingsPopover: React.FC<NotificationSettingsPopoverPr
     className,
 }) => {
     const [isOpen, setIsOpen] = useState(false);
+    // const [userPrivateData, setUserPrivateData] = useAtom(userPrivateAtom); // JOTAI: Uncomment and use your atom
+
+    // JOTAI: Derive settings from the Jotai atom
+    // const allUserNotificationSettings = userPrivateData?.notificationSettings;
+    // const currentEntitySettings = allUserNotificationSettings?.[entityType]?.[entityId];
+
+    // Local state for settings, to be replaced or supplemented by Jotai
     const [settings, setSettings] = useState<EntitySpecificSettings | null>(null);
+
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const { toast } = useToast();
 
-    const fetchSettings = useCallback(async () => {
+    const fetchAndSetSettings = useCallback(async () => {
+        // JOTAI: This direct fetch might be replaced by relying on the atom,
+        // or used as a refresh mechanism.
         if (!isOpen) return;
         setIsLoading(true);
         setError(null);
         try {
+            // JOTAI: If atom is populated, use it. Otherwise, fetch.
+            // For now, always fetching as placeholder.
             const result = await getGroupedUserNotificationSettings();
             if ("error" in result) {
                 setError(result.error);
                 setSettings(null);
             } else {
-                const entitySettings = result[entityType]?.[entityId];
-                if (entitySettings) {
-                    setSettings(entitySettings);
+                const entitySettingsFromResult = result[entityType]?.[entityId];
+                if (entitySettingsFromResult) {
+                    setSettings(entitySettingsFromResult);
                 } else {
                     // Initialize with defaults if no specific settings found for this entity
                     const defaultEntitySettings: EntitySpecificSettings = {} as EntitySpecificSettings;
-                    // This part needs refinement: how to get *relevant* default settings for this specific entityType
-                    // For now, we'll iterate all notification types and assume a default if not present.
-                    // A proper solution would involve the backend providing applicable defaults for the entityType.
                     notificationTypeValues.forEach((nt) => {
                         // @ts-ignore - Placeholder for default logic
-                        defaultEntitySettings[nt] = { isEnabled: true, isConfigurable: true };
+                        defaultEntitySettings[nt] = { isEnabled: true, isConfigurable: true }; // Sensible default
                     });
                     setSettings(defaultEntitySettings);
                 }
@@ -76,14 +83,25 @@ export const NotificationSettingsPopover: React.FC<NotificationSettingsPopoverPr
     }, [entityType, entityId, isOpen]);
 
     useEffect(() => {
-        fetchSettings();
-    }, [fetchSettings]);
+        // JOTAI: If using Jotai, this effect might listen to changes in the atom for the specific entity,
+        // or the initial settings could be directly derived from the atom when the component mounts/opens.
+        if (isOpen) {
+            // const jotaiEntitySettings = userPrivateData?.notificationSettings?.[entityType]?.[entityId];
+            // if (jotaiEntitySettings) {
+            //     setSettings(jotaiEntitySettings);
+            // } else {
+            //     fetchAndSetSettings(); // Fetch if not in Jotai or if refresh needed
+            // }
+            fetchAndSetSettings(); // Placeholder: always fetch when opened for now
+        }
+    }, [isOpen, fetchAndSetSettings /*, userPrivateData, entityType, entityId */]); // JOTAI: Add userPrivateData and dependencies
 
     const handleSettingChange = async (type: NotificationType, checked: boolean) => {
         if (!settings) return;
 
-        const originalSetting = settings[type];
-        // Optimistically update UI
+        const originalSettingState = settings[type];
+
+        // Optimistically update local UI state
         setSettings((prev) => ({
             ...prev!,
             [type]: { ...prev![type], isEnabled: checked },
@@ -106,13 +124,17 @@ export const NotificationSettingsPopover: React.FC<NotificationSettingsPopoverPr
                 // Revert optimistic update
                 setSettings((prev) => ({
                     ...prev!,
-                    [type]: originalSetting,
+                    [type]: originalSettingState,
                 }));
             } else {
                 toast({
                     title: "Success",
                     description: `${getNotificationTypeLabel(type)} setting updated.`,
                 });
+                // JOTAI: Trigger a refresh of userPrivateData in the Jotai atom
+                // e.g., by calling a function that re-fetches getPrivateUser
+                // or by updating the atom directly if the server action returns enough info.
+                // Example: refreshUserPrivateData();
             }
         } catch (e) {
             toast({
@@ -123,7 +145,7 @@ export const NotificationSettingsPopover: React.FC<NotificationSettingsPopoverPr
             // Revert optimistic update
             setSettings((prev) => ({
                 ...prev!,
-                [type]: originalSetting,
+                [type]: originalSettingState,
             }));
         }
     };

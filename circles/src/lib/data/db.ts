@@ -20,6 +20,8 @@ import {
     RankedList,
     Goal,
     GoalMember, // Added GoalMember model
+    UserNotificationSetting, // Added UserNotificationSetting model
+    DefaultNotificationSetting, // Added DefaultNotificationSetting model
 } from "@/models/models";
 import { AggregateRank } from "./ranking";
 
@@ -55,6 +57,8 @@ let Goals: Collection<Goal>;
 let GoalMembers: Collection<GoalMember>; // Added GoalMembers collection
 let RankedLists: Collection<RankedList>;
 let AggregateRanks: Collection<AggregateRank>;
+let UserNotificationSettings: Collection<UserNotificationSetting>; // Added UserNotificationSettings collection
+let DefaultNotificationSettings: Collection<DefaultNotificationSetting>; // Added DefaultNotificationSettings collection
 
 // Only initialize the database connection if not in build mode
 if (process.env.IS_BUILD !== "true") {
@@ -88,6 +92,8 @@ if (process.env.IS_BUILD !== "true") {
     GoalMembers = db.collection<GoalMember>("goalMembers"); // Initialize GoalMembers
     RankedLists = db.collection<RankedList>("rankedLists");
     AggregateRanks = db.collection<AggregateRank>("aggregateRanks");
+    UserNotificationSettings = db.collection<UserNotificationSetting>("userNotificationSettings");
+    DefaultNotificationSettings = db.collection<DefaultNotificationSetting>("defaultNotificationSettings");
 }
 
 export {
@@ -114,4 +120,6 @@ export {
     GoalMembers, // Export GoalMembers
     RankedLists,
     AggregateRanks,
+    UserNotificationSettings,
+    DefaultNotificationSettings,
 };

@@ -12,54 +12,83 @@ import {
     DefaultNotificationSetting,
     defaultNotificationSettingSchema,
     notificationTypeValues, // Import the actual array of values
+    GroupedNotificationSettings, // Import the type from models
     // entityTypeSchema, // No longer need schema if using values directly
 } from "@/models/models"; // Adjusted path
 import { getAuthenticatedUserDid } from "@/lib/auth/auth"; // Corrected path and function
-// import { db } from "@/lib/data/db"; // Placeholder for database utility
+import { UserNotificationSettings, DefaultNotificationSettings } from "../data/db"; // Import actual DB collections
 // import { checkPermission } from "@/lib/permissions"; // Placeholder for permission checking utility
 
-// Placeholder for database interaction functions
-const db = {
-    userNotificationSetting: {
-        findMany: async (query: any): Promise<UserNotificationSetting[]> => {
-            console.log("DB Query (UserNotificationSetting - findMany):", query);
-            return [];
-        },
-        upsert: async (query: any): Promise<UserNotificationSetting> => {
-            console.log("DB Query (UserNotificationSetting - upsert):", query.where, query.update);
-            // @ts-ignore
-            return { ...query.create, _id: "new_setting_id", createdAt: new Date(), updatedAt: new Date() };
-        },
-    },
-    defaultNotificationSetting: {
-        findMany: async (query: any): Promise<DefaultNotificationSetting[]> => {
-            console.log("DB Query (DefaultNotificationSetting - findMany):", query);
-            return [];
-        },
-    },
-};
+import { Circles, Members } from "../data/db"; // Import Circle and Member collections
+import { ObjectId } from "mongodb";
 
 // Placeholder for permission checking
 // This would check if a user has the 'requiredPermission' for a given entity and notification type
 const checkUserPermissionForNotification = async (
-    userId: string,
+    userId: string, // This is user DID
     entityType: EntityType,
-    entityId: string,
+    entityId: string, // ID of the entity instance (e.g. circleId, postId)
     requiredPermission?: string,
 ): Promise<boolean> => {
-    if (!requiredPermission) return true; // No specific permission required
-    console.log(`Checking permission '${requiredPermission}' for user ${userId} on ${entityType}:${entityId}`);
-    // Actual permission logic would go here, e.g., querying user groups, circle access rules etc.
-    // For now, let's assume admin users have all permissions
-    // const user = await db.user.findUnique({ where: { id: userId } });
-    // return user?.isAdmin || false;
-    return true; // Placeholder: allow all for now
-};
+    if (!requiredPermission) return true; // No specific permission required, always allow configuration
 
-export type GroupedNotificationSettings = Record<
-    EntityType,
-    Record<string, Record<NotificationType, { isEnabled: boolean; isConfigurable: boolean }>>
->;
+    console.log(`Checking permission '${requiredPermission}' for user ${userId} on ${entityType}:${entityId}`);
+
+    // Example for CIRCLE entity type
+    if (entityType === "CIRCLE") {
+        const circleId = entityId;
+        try {
+            const circle = await Circles.findOne({ _id: new ObjectId(circleId) });
+            if (!circle) {
+                console.warn(`Circle not found: ${circleId}`);
+                return false;
+            }
+
+            const member = await Members.findOne({ userDid: userId, circleId: circleId });
+            if (!member) {
+                console.warn(`User ${userId} is not a member of circle ${circleId}`);
+                return false;
+            }
+
+            const memberUserGroups = member.userGroups || [];
+
+            // This is a simplified check. A real implementation would:
+            // 1. Map `requiredPermission` (e.g., "CAN_APPROVE_REQUESTS") to specific feature handles or access levels.
+            // 2. Check circle.accessRules against the user's groups for that feature/module.
+            // 3. Check circle.userGroups definitions for accessLevel associated with the user's groups.
+            // For now, let's assume if a user is an 'admin' or 'moderator' in the circle, they have most permissions.
+            // This requires `userGroupSchema` in `circle.userGroups` to have a `handle` (e.g., 'admins', 'moderators').
+
+            const isAdminOrModerator = memberUserGroups.some((groupHandle) => {
+                const groupDefinition = circle.userGroups?.find((ug) => ug.handle === groupHandle);
+                // Assuming 'admins' or 'moderators' handles imply high privileges.
+                // Or, a more granular check based on `requiredPermission` string mapping to specific access rules.
+                return groupDefinition?.handle === "admins" || groupDefinition?.handle === "moderators";
+            });
+
+            if (isAdminOrModerator) return true;
+
+            // Add more specific checks based on `requiredPermission` string if needed.
+            // e.g., if (requiredPermission === "SOME_SPECIFIC_ACTION_PERMISSION") { ... }
+
+            console.log(
+                `User ${userId} does not have required permission '${requiredPermission}' for circle ${circleId}`,
+            );
+            return false;
+        } catch (error) {
+            console.error("Error checking circle permission:", error);
+            return false;
+        }
+    } else if (entityType === "USER") {
+        // For entityType USER, the entityId would be the target user's DID.
+        // Permissions here usually mean "is the requesting user the same as the target user?"
+        return userId === entityId;
+    }
+    // TODO: Implement permission checks for other entity types (POST, COMMENT, TASK, etc.)
+    // This might involve checking ownership (e.g., post author) or roles within a parent entity (e.g., circle).
+    console.warn(`Permission check not fully implemented for entityType: ${entityType}. Defaulting to true for now.`);
+    return true; // Default to true for other entity types until implemented
+};
 
 /**
  * Fetches all notification settings for the current user,
@@ -75,8 +104,8 @@ export async function getGroupedUserNotificationSettings(): Promise<GroupedNotif
 
     try {
         const [userSettingsList, defaultSettingsList] = await Promise.all([
-            db.userNotificationSetting.findMany({ where: { userId } }),
-            db.defaultNotificationSetting.findMany({}),
+            UserNotificationSettings.find({ userId }).toArray(),
+            DefaultNotificationSettings.find({}).toArray(),
         ]);
 
         const combinedSettings: GroupedNotificationSettings = {} as GroupedNotificationSettings;
@@ -219,44 +248,45 @@ export async function updateUserNotificationSetting(
 
     try {
         // Verify permission to change this setting
-        const defaultSetting = await db.defaultNotificationSetting.findMany({
-            // Should be findFirst/findUnique
-            where: { entityType, notificationType },
+        const defaultSetting = await DefaultNotificationSettings.findOne({
+            entityType,
+            notificationType,
         });
 
         const hasPermission = await checkUserPermissionForNotification(
             userId,
             entityType,
             entityId,
-            defaultSetting[0]?.requiredPermission, // Assuming findMany returns array, take first if exists
+            defaultSetting?.requiredPermission,
         );
 
         if (!hasPermission) {
             return { error: "You do not have permission to change this setting." };
         }
 
-        const setting = await db.userNotificationSetting.upsert({
-            where: {
-                userId_entityId_entityType_notificationType: {
-                    // Prisma-like unique constraint name
-                    userId,
-                    entityId,
-                    entityType,
-                    notificationType,
-                },
-            },
-            update: { isEnabled, updatedAt: new Date() },
-            create: {
-                userId,
-                entityId,
-                entityType,
-                notificationType,
-                isEnabled,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-            },
+        const filter = { userId, entityId, entityType, notificationType };
+        const updateDoc = {
+            $set: { isEnabled, updatedAt: new Date() },
+            $setOnInsert: { createdAt: new Date(), userId, entityId, entityType, notificationType },
+        };
+
+        const result = await UserNotificationSettings.findOneAndUpdate(filter, updateDoc, {
+            upsert: true,
+            returnDocument: "after",
         });
-        return setting;
+
+        if (!result) {
+            // result.value is deprecated, check result itself for newer driver versions or result for older.
+            // For MongoDB driver v4+, findOneAndUpdate returns a WithId<TSchema> | null.
+            // If upsert happened and it was an insert, result will contain the new document.
+            // If it was an update, it will contain the updated document.
+            // If no document matched and upsert:false, it's null.
+            // Given upsert:true, it should always return a document.
+            // However, to be safe, especially if the driver version or exact return type is uncertain:
+            return { error: "Failed to update or create notification setting." };
+        }
+        // @ts-ignore _id is present
+        return result as UserNotificationSetting;
     } catch (error) {
         console.error("Error updating notification setting:", error);
         return { error: "Failed to update notification setting." };

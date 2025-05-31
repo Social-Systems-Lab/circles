@@ -100,6 +100,7 @@ export interface UserPrivate extends Circle {
     matrixUrl?: string;
     fullMatrixName?: string;
     ignoredCircles?: string[]; // IDs of circles the user has chosen to ignore
+    notificationSettings?: GroupedNotificationSettings;
 }
 
 export type Partial<T> = {
@@ -919,6 +920,12 @@ export const defaultNotificationSettingSchema = z.object({
     requiredPermission: z.string().optional(), // Key for a permission check, e.g., "CAN_APPROVE_MEMBERSHIP_REQUESTS"
 });
 export type DefaultNotificationSetting = z.infer<typeof defaultNotificationSettingSchema>;
+
+// Type for the structured notification settings used by the frontend and getPrivateUser
+export type GroupedNotificationSettings = Record<
+    EntityType,
+    Record<string, Record<NotificationType, { isEnabled: boolean; isConfigurable: boolean }>>
+>;
 
 // Define all onboarding steps in a single place for consistency
 export const ONBOARDING_STEPS = [

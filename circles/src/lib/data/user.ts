@@ -15,6 +15,7 @@ import { getUserPendingMembershipRequests } from "./membership-requests";
 import { defaultUserGroupsForUser, getDefaultAccessRules, getDefaultModules } from "./constants";
 import { SAFE_CIRCLE_PROJECTION, getCircleById } from "./circle"; // Added getCircleById import
 import { getEnabledModules } from "../auth/client-auth";
+import { getGroupedUserNotificationSettings } from "@/lib/actions/notificationSettings";
 
 export const getAllUsers = async (): Promise<Circle[]> => {
     let circles: Circle[] = await Circles.find(
@@ -323,6 +324,15 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
     }
 
     user.accessRules = getDefaultAccessRules();
+
+    // Add notification settings
+    const notificationSettingsResult = await getGroupedUserNotificationSettings(); // Assumes getGroupedUserNotificationSettings uses the authenticated user from its own context
+    if ("error" in notificationSettingsResult) {
+        console.error("Failed to fetch notification settings for user private data:", notificationSettingsResult.error);
+        user.notificationSettings = undefined;
+    } else {
+        user.notificationSettings = notificationSettingsResult;
+    }
 
     return user as UserPrivate;
 };
