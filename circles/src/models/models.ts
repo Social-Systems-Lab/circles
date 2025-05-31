@@ -853,6 +853,73 @@ export type NotificationType =
     | "ranking_stale_reminder" // User's ranking list is stale, reminder sent
     | "ranking_grace_period_ended"; // User's ranking list is past grace period
 
+// Helper array for NotificationType values
+export const notificationTypeValues = [
+    "follow_request",
+    "new_follower",
+    "follow_accepted",
+    "post_comment",
+    "comment_reply",
+    "post_like",
+    "comment_like",
+    "post_mention",
+    "comment_mention",
+    "proposal_submitted_for_review",
+    "proposal_moved_to_voting",
+    "proposal_approved_for_voting",
+    "proposal_resolved",
+    "proposal_resolved_voter",
+    "proposal_vote",
+    "issue_submitted_for_review",
+    "issue_approved",
+    "issue_assigned",
+    "issue_status_changed",
+    "task_submitted_for_review",
+    "task_approved",
+    "task_assigned",
+    "task_status_changed",
+    "goal_submitted_for_review",
+    "goal_approved",
+    "goal_status_changed",
+    "ranking_stale_reminder",
+    "ranking_grace_period_ended",
+] as const;
+
+export const notificationTypeSchema = z.enum(notificationTypeValues);
+
+export const entityTypeSchema = z.enum([
+    "CIRCLE",
+    "POST",
+    "COMMENT",
+    "PROPOSAL",
+    "ISSUE",
+    "TASK",
+    "GOAL",
+    "USER", // For user-level notifications not tied to a specific sub-entity instance
+]);
+export type EntityType = z.infer<typeof entityTypeSchema>;
+
+export const userNotificationSettingSchema = z.object({
+    _id: z.any().optional(),
+    userId: didSchema, // User's identifier
+    entityId: z.string(), // ID of the specific entity instance (e.g., circleId, postId). Could be userId if entityType is USER.
+    entityType: entityTypeSchema,
+    notificationType: notificationTypeSchema,
+    isEnabled: z.boolean(),
+    createdAt: z.date().optional(),
+    updatedAt: z.date().optional(),
+});
+export type UserNotificationSetting = z.infer<typeof userNotificationSettingSchema>;
+
+export const defaultNotificationSettingSchema = z.object({
+    _id: z.any().optional(),
+    entityType: entityTypeSchema,
+    notificationType: notificationTypeSchema,
+    defaultIsEnabled: z.boolean(),
+    requiredPermission: z.string().optional(), // Key for a permission check, e.g., "CAN_APPROVE_MEMBERSHIP_REQUESTS"
+});
+export type DefaultNotificationSetting = z.infer<typeof defaultNotificationSettingSchema>;
+
 // Define all onboarding steps in a single place for consistency
 export const ONBOARDING_STEPS = [
     "welcome",
