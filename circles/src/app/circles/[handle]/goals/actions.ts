@@ -279,6 +279,28 @@ export async function createGoalAction( // Renamed function
         // Create goal in DB (Data function)
         const createdGoal = await createGoal(newGoalData); // Renamed function call, variable, param
 
+        // Automatically follow the goal for the creator
+        if (createdGoal && createdGoal._id && user && user._id && circle && circle._id) {
+            const creatorGoalMember: Omit<GoalMember, "_id"> = {
+                userId: user._id.toString(),
+                goalId: createdGoal._id.toString(),
+                circleId: circle._id.toString(),
+                joinedAt: new Date(),
+            };
+            try {
+                await GoalMembers.insertOne(creatorGoalMember);
+                console.log(
+                    `User ${user._id.toString()} automatically followed created goal ${createdGoal._id.toString()}`,
+                );
+            } catch (followError) {
+                console.error(
+                    `Failed to automatically follow goal ${createdGoal._id.toString()} for user ${user._id.toString()}:`,
+                    followError,
+                );
+                // Non-critical, so don't fail the goal creation
+            }
+        }
+
         // --- Trigger Notification ---
         const fullCreatedGoal = await getGoalById(createdGoal._id as string, userDid); // Fetch full display data, Renamed function call, variable
         if (fullCreatedGoal) {
