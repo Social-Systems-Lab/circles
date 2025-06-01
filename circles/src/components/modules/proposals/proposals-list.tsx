@@ -85,10 +85,15 @@ const getStageBadgeColor = (stage: ProposalStage) => {
             return "bg-blue-200 text-blue-800";
         case "voting":
             return "bg-green-200 text-green-800";
-        case "resolved":
-            return "bg-purple-200 text-purple-800";
+        case "accepted": // New stage
+            return "bg-teal-200 text-teal-800";
+        case "implemented": // New stage
+            return "bg-indigo-200 text-indigo-800";
+        case "rejected": // New stage (was part of resolved)
+            return "bg-red-200 text-red-800";
+        // 'resolved' is no longer a direct stage, but a conceptual state covered by implemented/rejected
         default:
-            return "bg-gray-200 text-gray-800";
+            return "bg-gray-200 text-gray-800"; // Fallback for any unexpected stage
     }
 };
 
@@ -154,23 +159,30 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle }) => {
                 cell: (info) => {
                     const stage = info.getValue() as ProposalStage;
                     const proposal = info.row.original;
-                    let badgeText = stage.charAt(0).toUpperCase() + stage.slice(1);
-                    let IconComponent = null;
+                    const stageDisplay = stage.charAt(0).toUpperCase() + stage.slice(1);
+                    let icon = null;
+                    let fullText = stageDisplay;
 
-                    if (stage === "resolved") {
-                        if (proposal.outcome === "accepted") {
-                            badgeText += " (Accepted)";
-                            IconComponent = CheckCircle;
-                        } else if (proposal.outcome === "rejected") {
-                            badgeText += " (Rejected)";
-                            IconComponent = XCircle;
+                    if (stage === "implemented") {
+                        icon = <CheckCircle className="mr-1 h-3 w-3" />;
+                        // Optionally, if you want to show the linked goal's name or ID:
+                        // if (proposal.goalId) fullText += ` (Goal: ${proposal.goalId.substring(0,6)}...)`;
+                    } else if (stage === "rejected") {
+                        icon = <XCircle className="mr-1 h-3 w-3" />;
+                        if (proposal.outcomeReason) {
+                            // Keep it brief for the badge, full reason in details view
+                            // fullText += ` (${proposal.outcomeReason.substring(0, 15)}...)`;
                         }
+                    } else if (stage === "accepted") {
+                        // Potentially show ranking info here in the future, or just "Accepted"
+                        // icon = <ThumbsUp className="mr-1 h-3 w-3" />; // Example icon
                     }
+                    // Add other icons for draft, review, voting if desired
 
                     return (
-                        <Badge className={`${getStageBadgeColor(stage)} items-center gap-1`}>
-                            {IconComponent && <IconComponent className="h-3 w-3" />}
-                            {badgeText}
+                        <Badge className={`${getStageBadgeColor(stage)} items-center`}>
+                            {icon}
+                            {fullText}
                         </Badge>
                     );
                 },
@@ -385,7 +397,9 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle }) => {
                             <SelectItem value="draft">Draft</SelectItem>
                             <SelectItem value="review">Review</SelectItem>
                             <SelectItem value="voting">Voting</SelectItem>
-                            <SelectItem value="resolved">Resolved</SelectItem>
+                            <SelectItem value="accepted">Accepted</SelectItem>
+                            <SelectItem value="implemented">Implemented</SelectItem>
+                            <SelectItem value="rejected">Rejected</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -415,6 +429,11 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle }) => {
                                     const isAuthor = user && proposal.createdBy === user?.did;
                                     const isActive = (contentPreview?.content as ProposalDisplay)?._id === proposal._id;
 
+                                    // Determine if edit/delete should be shown based on new stage logic
+                                    const canEditThisProposal =
+                                        canModerate || (isAuthor && ["draft", "review"].includes(proposal.stage));
+                                    const canDeleteThisProposal = canModerate || isAuthor; // Authors can always delete their own, mods can delete any
+
                                     return (
                                         <motion.tr
                                             key={row.id}
@@ -433,7 +452,7 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle }) => {
                                                 </TableCell>
                                             ))}
                                             <TableCell className="w-[40px]">
-                                                {(isAuthor || canModerate) && (
+                                                {(canEditThisProposal || canDeleteThisProposal) && (
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
                                                             <Button
@@ -447,26 +466,38 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle }) => {
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
                                                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                            <DropdownMenuSeparator />
-                                                            <DropdownMenuItem
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    router.push(
-                                                                        `/circles/${circle.handle}/proposals/${proposal._id}/edit`,
-                                                                    );
-                                                                }}
-                                                            >
-                                                                Edit
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setSelectedProposal(proposal);
-                                                                    setDeleteProposalDialogOpen(true);
-                                                                }}
-                                                            >
-                                                                Delete
-                                                            </DropdownMenuItem>
+                                                            {canEditThisProposal && (
+                                                                <>
+                                                                    <DropdownMenuSeparator />
+                                                                    <DropdownMenuItem
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            router.push(
+                                                                                `/circles/${circle.handle}/proposals/${proposal._id}/edit`,
+                                                                            );
+                                                                        }}
+                                                                        disabled={!canEditThisProposal} // Explicitly disable if not editable
+                                                                    >
+                                                                        Edit
+                                                                    </DropdownMenuItem>
+                                                                </>
+                                                            )}
+                                                            {canDeleteThisProposal && (
+                                                                <>
+                                                                    <DropdownMenuSeparator />
+                                                                    <DropdownMenuItem
+                                                                        className="text-red-600 hover:!text-red-700"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setSelectedProposal(proposal);
+                                                                            setDeleteProposalDialogOpen(true);
+                                                                        }}
+                                                                        disabled={!canDeleteThisProposal} // Explicitly disable if not deletable
+                                                                    >
+                                                                        Delete
+                                                                    </DropdownMenuItem>
+                                                                </>
+                                                            )}
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 )}

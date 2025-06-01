@@ -210,19 +210,19 @@ export async function getGroupedUserNotificationSettings(): Promise<GroupedNotif
             if (entityType === "CIRCLE") {
                 circleDetails = (await getCircleById(entityId)) as UserPrivate;
                 if (!circleDetails) {
-                    console.warn(
-                        `[NotifSettings] Circle details not found for entityId: ${entityId}. Skipping settings for this entity.`,
-                    );
+                    // console.warn(
+                    //     `[NotifSettings] Circle details not found for entityId: ${entityId}. Skipping settings for this entity.`,
+                    // );
                     skipEntityProcessing = true;
                 } else {
-                    console.log(
-                        `[NotifSettings] Processing Circle ${entityId}. Enabled Modules: ${JSON.stringify(circleDetails.enabledModules)}`,
-                    );
+                    // console.log(
+                    //     `[NotifSettings] Processing Circle ${entityId}. Enabled Modules: ${JSON.stringify(circleDetails.enabledModules)}`,
+                    // );
                 }
             }
 
             if (skipEntityProcessing) {
-                console.log(`[NotifSettings] Skipping entity ${entityId} due to earlier issue.`);
+                // console.log(`[NotifSettings] Skipping entity ${entityId} due to earlier issue.`);
                 continue;
             }
 
@@ -234,18 +234,18 @@ export async function getGroupedUserNotificationSettings(): Promise<GroupedNotif
                 if (entityType === "CIRCLE" && summaryDetail.moduleHandle) {
                     if (!circleDetails) {
                         // Should not happen if skipEntityProcessing worked, but as a safeguard
-                        console.warn(
-                            `[NotifSettings] circleDetails is null for ${entityId} when checking module for ${summaryNt}. Skipping module check.`,
-                        );
+                        // console.warn(
+                        //     `[NotifSettings] circleDetails is null for ${entityId} when checking module for ${summaryNt}. Skipping module check.`,
+                        // );
                     } else if (!circleDetails.enabledModules) {
-                        console.warn(
-                            `[NotifSettings] Circle ${entityId} has no enabledModules array. Module ${summaryDetail.moduleHandle} for ${summaryNt} cannot be checked. Assuming not enabled.`,
-                        );
+                        // console.warn(
+                        //     `[NotifSettings] Circle ${entityId} has no enabledModules array. Module ${summaryDetail.moduleHandle} for ${summaryNt} cannot be checked. Assuming not enabled.`,
+                        // );
                         continue;
                     } else if (!circleDetails.enabledModules.includes(summaryDetail.moduleHandle)) {
-                        console.log(
-                            `[NotifSettings] Module ${summaryDetail.moduleHandle} (for ${summaryNt}) is NOT enabled for circle ${entityId}. Skipping this setting.`,
-                        );
+                        // console.log(
+                        //     `[NotifSettings] Module ${summaryDetail.moduleHandle} (for ${summaryNt}) is NOT enabled for circle ${entityId}. Skipping this setting.`,
+                        // );
                         continue;
                     } else {
                         // console.log(`[NotifSettings] Module ${summaryDetail.moduleHandle} (for ${summaryNt}) IS enabled for circle ${entityId}. Proceeding.`);
@@ -289,9 +289,9 @@ export async function getGroupedUserNotificationSettings(): Promise<GroupedNotif
                     // If no default for the summary type, try using the ultimate fallback
                     const fallback = ultimateFallbackDefaults[entityType]?.[summaryNt as SummaryNotificationType];
                     if (fallback) {
-                        console.log(
-                            `[NotifSettings] Using ultimate fallback for ${summaryNt} on ${entityType}:${entityId}`,
-                        );
+                        // console.log(
+                        //     `[NotifSettings] Using ultimate fallback for ${summaryNt} on ${entityType}:${entityId}`,
+                        // );
                         processingPromises.push(
                             (async () => {
                                 const userSetting = userSettingsMap.get(`${entityType}:${entityId}:${summaryNt}`);
@@ -318,9 +318,9 @@ export async function getGroupedUserNotificationSettings(): Promise<GroupedNotif
                             })(),
                         );
                     } else {
-                        console.warn(
-                            `[NotifSettings] No default setting OR ultimate fallback found for summary type: ${summaryNt} and entity type: ${entityType}. Setting will not be available.`,
-                        );
+                        // console.warn(
+                        //     `[NotifSettings] No default setting OR ultimate fallback found for summary type: ${summaryNt} and entity type: ${entityType}. Setting will not be available.`,
+                        // );
                     }
                 }
             }

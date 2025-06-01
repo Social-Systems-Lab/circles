@@ -24,6 +24,7 @@ export const SAFE_PROPOSAL_PROJECTION = {
     reactions: 1,
     userGroups: 1,
     resolvedAtStage: 1,
+    goalId: 1, // Add goalId
 } as const;
 
 /**
@@ -238,7 +239,7 @@ export const getActiveProposalsByCircleId = async (circleId: string): Promise<Pr
             {
                 $match: {
                     circleId,
-                    stage: { $in: ["discussion", "voting"] }, // Filter for active stages
+                    stage: { $in: ["draft", "review", "voting"] }, // Updated active stages
                 },
             },
 
@@ -422,10 +423,13 @@ export const getProposalById = async (proposalId: string, userDid?: string): Pro
  * @param proposalData The proposal data to create (excluding _id, commentPostId)
  * @returns The created proposal document with its new _id and potentially commentPostId
  */
-export const createProposal = async (proposalData: Omit<Proposal, "_id" | "commentPostId">): Promise<Proposal> => {
+export const createProposal = async (
+    proposalData: Omit<Proposal, "_id" | "commentPostId" | "goalId">,
+): Promise<Proposal> => {
     try {
-        // Ensure createdAt is set if not provided
-        const proposalToInsert = { ...proposalData, createdAt: proposalData.createdAt || new Date() };
+        // Ensure createdAt is set if not provided, and ensure goalId is not part of initial creation
+        const { goalId, ...restOfProposalData } = proposalData as any; // goalId should not be set on creation
+        const proposalToInsert = { ...restOfProposalData, createdAt: proposalData.createdAt || new Date() };
         const result = await Proposals.insertOne(proposalToInsert);
         if (!result.insertedId) {
             throw new Error("Failed to insert proposal into database.");
@@ -536,49 +540,86 @@ export const deleteProposal = async (proposalId: string): Promise<boolean> => {
  * Change the stage of a proposal
  * @param proposalId The ID of the proposal
  * @param newStage The new stage
- * @param outcome Optional outcome (for resolved stage)
- * @param outcomeReason Optional reason for the outcome
+ * @param options Optional parameters: outcome, outcomeReason, goalId
  * @returns Success status
  */
 export const changeProposalStage = async (
     proposalId: string,
     newStage: ProposalStage,
-    outcome?: ProposalOutcome,
-    outcomeReason?: string,
+    options?: {
+        outcome?: ProposalOutcome;
+        outcomeReason?: string;
+        goalId?: string;
+    },
 ): Promise<boolean> => {
     try {
         const updates: Partial<Proposal> = { stage: newStage };
-        let unsetFields: any = {}; // Fields to potentially remove
+        let unsetFields: any = {};
 
-        // If moving to resolved stage, include outcome, reason, and the stage it was resolved at
-        if (newStage === "resolved" && outcome) {
-            // Find the proposal to determine the stage it's coming *from*
-            const proposal = await Proposals.findOne({ _id: new ObjectId(proposalId) });
-            if (!proposal) return false; // Proposal not found
-
-            updates.outcome = outcome;
-            updates.resolvedAtStage = proposal.stage; // Store the stage before resolving
-            if (outcomeReason) {
-                updates.outcomeReason = outcomeReason;
-            } else {
-                // If reason is empty or undefined, ensure it's removed from the document
-                unsetFields.outcomeReason = "";
-            }
-        } else {
-            // If moving *out* of resolved, clear outcome fields
-            unsetFields.outcome = "";
-            unsetFields.outcomeReason = "";
-            unsetFields.resolvedAtStage = "";
+        const proposal = await Proposals.findOne({ _id: new ObjectId(proposalId) });
+        if (!proposal) {
+            console.error(`Proposal with ID ${proposalId} not found.`);
+            return false;
         }
 
-        // Perform the update and potentially unset fields in one operation
-        const updateOperation: any = { $set: updates };
+        // Default behavior: clear outcome-related and goalId fields
+        unsetFields.outcome = "";
+        unsetFields.outcomeReason = "";
+        unsetFields.resolvedAtStage = "";
+        unsetFields.goalId = "";
+
+        if (newStage === "implemented") {
+            if (!options?.goalId) {
+                console.error("goalId is required when moving proposal to 'implemented' stage.");
+                return false;
+            }
+            updates.goalId = options.goalId;
+            updates.outcome = "accepted"; // Mark as accepted outcome
+            updates.resolvedAtStage = proposal.stage; // Store stage before implementation
+            delete unsetFields.goalId; // Don't unset goalId
+            delete unsetFields.outcome; // Don't unset outcome
+            delete unsetFields.resolvedAtStage; // Don't unset resolvedAtStage
+            // outcomeReason should be unset (handled by default)
+        } else if (newStage === "rejected") {
+            updates.outcome = "rejected";
+            updates.resolvedAtStage = proposal.stage; // Store stage before rejection
+            if (options?.outcomeReason) {
+                updates.outcomeReason = options.outcomeReason;
+                delete unsetFields.outcomeReason; // Don't unset if provided
+            }
+            delete unsetFields.outcome; // Don't unset outcome
+            delete unsetFields.resolvedAtStage; // Don't unset resolvedAtStage
+            // goalId should be unset (handled by default)
+        } else if (newStage === "accepted") {
+            // Moving to 'accepted' (from voting, presumably)
+            // All outcome fields, resolvedAtStage, and goalId should be cleared (handled by default unsetFields)
+        } else if (newStage === "draft" || newStage === "review" || newStage === "voting") {
+            // Active, non-terminal stages.
+            // All outcome fields, resolvedAtStage, and goalId should be cleared (handled by default unsetFields)
+        }
+
+        // Remove fields from 'updates' if they are also in 'unsetFields' to avoid conflicts
+        // This ensures $unset takes precedence if a field is accidentally in both
+        for (const key in unsetFields) {
+            if (updates.hasOwnProperty(key)) {
+                delete (updates as any)[key];
+            }
+        }
+
+        const updateOperation: any = {};
+        if (Object.keys(updates).length > 0) {
+            updateOperation.$set = updates;
+        }
         if (Object.keys(unsetFields).length > 0) {
             updateOperation.$unset = unsetFields;
         }
 
-        const result = await Proposals.updateOne({ _id: new ObjectId(proposalId) }, updateOperation);
+        if (Object.keys(updateOperation).length === 0) {
+            // No actual changes to make (e.g., setting stage to current stage with no other options)
+            return true; // Or false if this should indicate an issue
+        }
 
+        const result = await Proposals.updateOne({ _id: new ObjectId(proposalId) }, updateOperation);
         return result.matchedCount > 0;
     } catch (error) {
         console.error("Error changing proposal stage:", error);

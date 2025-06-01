@@ -1025,7 +1025,7 @@ export type ModuleInfo = {
 };
 
 // Proposal stages
-export const proposalStageSchema = z.enum(["draft", "review", "voting", "resolved"]);
+export const proposalStageSchema = z.enum(["draft", "review", "voting", "accepted", "implemented", "rejected"]);
 
 export type ProposalStage = z.infer<typeof proposalStageSchema>;
 
@@ -1054,6 +1054,7 @@ export const proposalSchema = z.object({
     userGroups: z.array(z.string()).default([]), // User groups that can see this proposal
     location: locationSchema.optional(), // Added location field
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments
+    goalId: z.string().optional(), // Optional link to a goal created from this proposal
 });
 
 export type Proposal = z.infer<typeof proposalSchema>;

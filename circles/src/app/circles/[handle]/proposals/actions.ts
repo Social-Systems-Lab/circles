@@ -33,7 +33,41 @@ import {
 import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
 
 /**
- * Get all proposals for a circle
+ * Get all proposals for a circle (client-callable action)
+ * @param circleHandle The handle of the circle
+ * @returns Object with success status, proposals array, or error message
+ */
+export async function getProposalsByCircleIdAction(
+    circleHandle: string,
+): Promise<{ success: boolean; proposals?: ProposalDisplay[]; message?: string }> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        // Note: getProposalsByCircleId handles userDid being null for public visibility,
+        // but for an action, we might want to enforce authentication or specific view rights.
+        // For now, let's proceed assuming getProposalsByCircleId's internal logic is sufficient.
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) {
+            return { success: false, message: "Circle not found" };
+        }
+
+        // Optional: Add explicit permission check here if needed, beyond what getProposalsByCircleId does.
+        // const canView = await isAuthorized(userDid, circle._id.toString(), features.proposals.view);
+        // if (!canView) {
+        //     return { success: false, message: "Not authorized to view proposals for this circle." };
+        // }
+
+        const proposals = await getProposalsByCircleId(circle._id.toString(), userDid || undefined);
+        return { success: true, proposals };
+    } catch (error) {
+        console.error("Error in getProposalsByCircleIdAction:", error);
+        const message = error instanceof Error ? error.message : "An unknown error occurred";
+        return { success: false, message };
+    }
+}
+
+/**
+ * Get all proposals for a circle (legacy, consider deprecating or aligning with new action)
  * @param circleHandle The handle of the circle
  * @returns Array of proposals
  */
@@ -52,13 +86,13 @@ export async function getProposalsAction(circleHandle: string): Promise<Proposal
         }
 
         // Check if user has permission to view proposals
-        const canViewProposals = await isAuthorized(userDid, circle._id as string, features.proposals.view);
+        const canViewProposals = await isAuthorized(userDid, circle._id.toString(), features.proposals.view);
         if (!canViewProposals) {
             throw new Error("Not authorized to view proposals");
         }
 
         // Get proposals from the database
-        const proposals = await getProposalsByCircleId(circle._id as string, userDid);
+        const proposals = await getProposalsByCircleId(circle._id.toString(), userDid);
         return proposals;
     } catch (error) {
         console.error("Error getting proposals:", error);
@@ -235,7 +269,7 @@ export async function createProposalAction(
         }
 
         // Check if user has permission to create proposals
-        const canCreateProposals = await isAuthorized(userDid, circle._id as string, features.proposals.create);
+        const canCreateProposals = await isAuthorized(userDid, circle._id.toString(), features.proposals.create);
         if (!canCreateProposals) {
             return { success: false, message: "Not authorized to create proposals" };
         }
@@ -289,10 +323,10 @@ export async function createProposalAction(
             decisionText: data.decisionText,
             images: uploadedImages, // Use uploaded image data
             location: locationData, // Use parsed location data
-            circleId: circle._id as string,
+            circleId: circle._id.toString(),
             createdBy: userDid,
             createdAt: new Date(),
-            stage: "draft",
+            stage: "draft", // Default stage
             reactions: {},
             userGroups: ["admins", "moderators", "members"], // Default visibility
         };
@@ -311,7 +345,7 @@ export async function createProposalAction(
         // Ensure 'proposals' module is enabled if creating in user's own circle
         try {
             if (circle.circleType === "user" && circle.did === userDid) {
-                await ensureModuleIsEnabledOnCircle(circle._id as string, "proposals", userDid);
+                await ensureModuleIsEnabledOnCircle(circle._id.toString(), "proposals", userDid);
             }
         } catch (moduleEnableError) {
             console.error("Failed to ensure proposals module is enabled on user circle:", moduleEnableError);
@@ -321,7 +355,7 @@ export async function createProposalAction(
         return {
             success: true,
             message: "Proposal created successfully",
-            proposalId: createdProposal._id?.toString(), // Return the ID
+            proposalId: createdProposal._id.toString(), // Return the ID
         };
     } catch (error) {
         console.error("Error creating proposal:", error);
@@ -358,7 +392,7 @@ export async function createProposalDraftAction(
         }
 
         // Check permission
-        const canCreateProposals = await isAuthorized(userDid, circle._id as string, features.proposals.create);
+        const canCreateProposals = await isAuthorized(userDid, circle._id.toString(), features.proposals.create);
         if (!canCreateProposals) {
             return { success: false, message: "Not authorized to create proposals" };
         }
@@ -374,10 +408,10 @@ export async function createProposalDraftAction(
             background: "", // Default empty
             decisionText: "", // Default empty
             images: [], // Default empty
-            circleId: circle._id as string,
+            circleId: circle._id.toString(),
             createdBy: userDid,
             createdAt: new Date(),
-            stage: "draft",
+            stage: "draft", // Default stage
             reactions: {},
             userGroups: ["admins", "moderators", "members"], // Default visibility
         };
@@ -390,7 +424,7 @@ export async function createProposalDraftAction(
         return {
             success: true,
             message: "Proposal draft created successfully",
-            proposalId: createdProposal._id?.toString(), // Return the ID
+            proposalId: createdProposal._id.toString(), // Return the ID
         };
     } catch (error) {
         console.error("Error creating proposal draft:", error);
@@ -463,7 +497,7 @@ export async function updateProposalAction(
 
         // Check if user is the author or has moderation permissions
         const isAuthor = userDid === proposal.createdBy;
-        const canModerate = await isAuthorized(userDid, circle._id as string, features.proposals.moderate);
+        const canModerate = await isAuthorized(userDid, circle._id.toString(), features.proposals.moderate);
 
         if (!isAuthor && !canModerate) {
             return { success: false, message: "Not authorized to update this proposal" };
@@ -474,8 +508,9 @@ export async function updateProposalAction(
             return { success: false, message: "Proposals can only be edited in draft stage" };
         }
 
-        if (proposal.stage === "voting" || proposal.stage === "resolved") {
-            return { success: false, message: "Proposals can not be edited beyond review stage" };
+        // Prevent editing for proposals in voting or any terminal stage (accepted, implemented, rejected) by non-moderators
+        if (["voting", "accepted", "implemented", "rejected"].includes(proposal.stage) && !canModerate) {
+            return { success: false, message: "Proposals in this stage cannot be edited." };
         }
 
         // --- Parse Location ---
@@ -529,7 +564,7 @@ export async function updateProposalAction(
         if (newImageFiles.length > 0) {
             const uploadPromises = newImageFiles.map(async (file) => {
                 const fileNamePrefix = `proposal_image_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-                return await saveFile(file, fileNamePrefix, circle._id as string, true); // Use saveFile
+                return await saveFile(file, fileNamePrefix, circle._id.toString(), true); // Use saveFile
             });
             const uploadResults = await Promise.all(uploadPromises);
 
@@ -629,7 +664,7 @@ export async function deleteProposalAction(
 
         // Check if user is the author or has moderation permissions
         const isAuthor = userDid === proposal.createdBy;
-        const canModerate = await isAuthorized(userDid, circle._id as string, features.proposals.moderate);
+        const canModerate = await isAuthorized(userDid, circle._id.toString(), features.proposals.moderate);
 
         if (!isAuthor && !canModerate) {
             return { success: false, message: "Not authorized to delete this proposal" };
@@ -657,16 +692,19 @@ export async function deleteProposalAction(
  * @param circleHandle The handle of the circle
  * @param proposalId The ID of the proposal
  * @param newStage The new stage for the proposal
- * @param outcome Optional outcome (for resolved stage)
- * @param outcomeReason Optional reason for the outcome
+ * @param options Optional parameters: outcome, outcomeReason, goalId
  * @returns Success status and message
  */
 export async function changeProposalStageAction(
     circleHandle: string,
     proposalId: string,
     newStage: ProposalStage,
-    outcome?: ProposalOutcome,
-    outcomeReason?: string,
+    options?: {
+        // Updated to accept an options object
+        outcome?: ProposalOutcome;
+        outcomeReason?: string;
+        goalId?: string;
+    },
 ): Promise<{ success: boolean; message?: string }> {
     try {
         // Get the current user
@@ -693,57 +731,72 @@ export async function changeProposalStageAction(
 
         // Check permissions based on current stage and new stage
         const isAuthor = userDid === proposal.createdBy;
-        const canReview = await isAuthorized(userDid, circle._id as string, features.proposals.review);
-        const canResolve = await isAuthorized(userDid, circle._id as string, features.proposals.resolve);
-        const canModerate = await isAuthorized(userDid, circle._id as string, features.proposals.moderate);
+        const canReview = await isAuthorized(userDid, circle._id.toString(), features.proposals.review);
+        const canVote = await isAuthorized(userDid, circle._id.toString(), features.proposals.vote); // For moving to accepted/rejected from voting
+        const canRank = await isAuthorized(userDid, circle._id.toString(), features.proposals.rank); // For moving from accepted to implemented
+        const canResolve = await isAuthorized(userDid, circle._id.toString(), features.proposals.resolve); // General resolve/reject permission
+        const canModerate = await isAuthorized(userDid, circle._id.toString(), features.proposals.moderate);
 
-        // Determine if the user can make this stage change
         let canChangeStage = false;
 
         if (canModerate) {
-            // Moderators can change to any stage
             canChangeStage = true;
-        } else if (proposal.stage === "draft" && newStage === "review") {
-            // Authors can submit their draft for review
-            canChangeStage = isAuthor;
-        } else if (proposal.stage === "review") {
-            // Reviewers can approve for voting or reject
-            canChangeStage = canReview;
-        } else if (proposal.stage === "voting" && newStage === "resolved") {
-            // Resolvers can mark as resolved
-            canChangeStage = canResolve;
+        } else {
+            switch (proposal.stage) {
+                case "draft":
+                    if (newStage === "review" && isAuthor) canChangeStage = true;
+                    break;
+                case "review":
+                    if ((newStage === "voting" || newStage === "rejected") && canReview) canChangeStage = true;
+                    break;
+                case "voting":
+                    if ((newStage === "accepted" || newStage === "rejected") && (canVote || canResolve))
+                        canChangeStage = true;
+                    break;
+                case "accepted":
+                    // Moving from 'accepted' to 'implemented' (requires goalId) or 'rejected'
+                    if (newStage === "implemented" && options?.goalId && (canRank || canResolve)) canChangeStage = true;
+                    if (newStage === "rejected" && (canRank || canResolve)) canChangeStage = true;
+                    break;
+                // No transitions out of 'implemented' or 'rejected' by non-moderators
+            }
         }
 
         if (!canChangeStage) {
-            return { success: false, message: "Not authorized to change the stage of this proposal" };
+            return { success: false, message: "Not authorized to change the stage of this proposal." };
         }
 
-        // Change the proposal stage
-        const success = await changeProposalStage(proposalId, newStage, outcome, outcomeReason);
+        // Change the proposal stage using the new signature for changeProposalStage
+        const success = await changeProposalStage(proposalId, newStage, options);
 
         if (!success) {
             return { success: false, message: "Failed to change proposal stage" };
         }
 
         // --- Trigger Notifications ---
-        // Fetch the updated proposal *after* the stage change to ensure correct data
-        const updatedProposal = await getProposalById(proposalId, userDid);
+        const updatedProposal = await getProposalById(proposalId, userDid); // Fetch fresh proposal data for notifications
         if (updatedProposal) {
+            // Adapting notification logic based on new stages
             if (proposal.stage === "draft" && newStage === "review") {
-                // Notify reviewers when submitted
                 notifyProposalSubmittedForReview(updatedProposal, user);
             } else if (proposal.stage === "review" && newStage === "voting") {
-                // Notify voters and author when moved to voting
-                notifyProposalMovedToVoting(updatedProposal, user);
-                notifyProposalApprovedForVoting(updatedProposal, user);
-            } else if (newStage === "resolved") {
-                // Notify author and voters when resolved
-                notifyProposalResolvedAuthor(updatedProposal, user);
-                notifyProposalResolvedVoters(updatedProposal, user);
+                notifyProposalMovedToVoting(updatedProposal, user); // To voters
+                notifyProposalApprovedForVoting(updatedProposal, user); // To author
+            } else if (proposal.stage === "voting" && (newStage === "accepted" || newStage === "rejected")) {
+                // This is effectively a resolution from the voting stage
+                notifyProposalResolvedAuthor(updatedProposal, user); // Notify author
+                notifyProposalResolvedVoters(updatedProposal, user); // Notify voters
+            } else if (proposal.stage === "accepted" && (newStage === "implemented" || newStage === "rejected")) {
+                // Resolution from the accepted (ranking) stage
+                notifyProposalResolvedAuthor(updatedProposal, user); // Notify author
+                // Consider if voters need another notification here, or if previous one was sufficient.
+                // For now, let's assume author notification is key.
             }
+            // Add more specific notifications if needed for 'accepted' or 'implemented' stages directly.
         } else {
             console.error("Failed to fetch updated proposal for notifications:", proposalId);
         }
+
         // --- End Notifications ---
 
         // Revalidate the proposal pages
@@ -798,7 +851,7 @@ export async function voteOnProposalAction(
         }
 
         // Check if user has permission to vote
-        const canVote = await isAuthorized(userDid, circle._id as string, features.proposals.vote);
+        const canVote = await isAuthorized(userDid, circle._id.toString(), features.proposals.vote);
         if (!canVote) {
             return { success: false, message: "Not authorized to vote on proposals" };
         }
