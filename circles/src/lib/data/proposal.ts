@@ -392,7 +392,7 @@ export const getActiveProposalsByCircleId = async (circleId: string): Promise<Pr
             {
                 $match: {
                     circleId,
-                    stage: { $in: ["draft", "review", "voting"] }, // Updated active stages
+                    stage: "accepted", // Only 'accepted' proposals are active for ranking
                 },
             },
 
