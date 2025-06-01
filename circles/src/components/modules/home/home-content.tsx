@@ -14,7 +14,7 @@ import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { MessageButton } from "./message-button";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
-import { NotificationSettingsPopover } from "@/components/notifications/NotificationSettingsPopover";
+import { NotificationSettingsDialog } from "@/components/notifications/NotificationSettingsDialog"; // Changed Popover to Dialog
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -108,7 +108,7 @@ export default function HomeContent({ circle, authorizedToEdit }: HomeContentPro
                                 <FollowButton circle={circle} />
                                 {/* Consistent Bell Icon for Mobile View */}
                                 {circle._id && user && (
-                                    <NotificationSettingsPopover
+                                    <NotificationSettingsDialog // Changed Popover to Dialog
                                         entityType="CIRCLE"
                                         entityId={circle._id.toString()}
                                         className="h-8 w-8 p-0" // Adjust styling as needed for compact view
@@ -163,10 +163,10 @@ export default function HomeContent({ circle, authorizedToEdit }: HomeContentPro
                             )}
                             <InviteButton circle={circle} />
                             <FollowButton circle={circle} />
-                            {/* Add NotificationSettingsPopover for the current circle */}
+                            {/* Add NotificationSettingsDialog for the current circle */}
                             {circle._id &&
                                 user && ( // Ensure circle ID and user are available
-                                    <NotificationSettingsPopover
+                                    <NotificationSettingsDialog // Changed Popover to Dialog
                                         entityType="CIRCLE"
                                         entityId={circle._id.toString()}
                                         className="ml-1" // Add some margin if needed

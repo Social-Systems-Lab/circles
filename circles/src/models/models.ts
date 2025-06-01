@@ -101,6 +101,10 @@ export interface UserPrivate extends Circle {
     fullMatrixName?: string;
     ignoredCircles?: string[]; // IDs of circles the user has chosen to ignore
     notificationSettings?: GroupedNotificationSettings;
+    notificationPauseConfig?: {
+        allUntil?: Date; // For "Pause All"
+        categoryUntil?: Record<string, Date>; // For "Pause Category", key is category/module handle
+    };
 }
 
 export type Partial<T> = {
@@ -852,13 +856,26 @@ export type NotificationType =
     | "goal_status_changed"
     // Ranking Notifications
     | "ranking_stale_reminder" // User's ranking list is stale, reminder sent
-    | "ranking_grace_period_ended"; // User's ranking list is past grace period
+    | "ranking_grace_period_ended" // User's ranking list is past grace period
+    // Consolidated Summary Notification Types
+    | "COMMUNITY_FOLLOW_REQUEST" // Replaces follow_request
+    | "COMMUNITY_NEW_FOLLOWER" // Replaces new_follower
+    // follow_accepted is not configurable by user
+    | "POSTS_ALL" // Covers all post and comment notifications (post_comment, comment_reply, post_like, comment_like, post_mention, comment_mention)
+    | "PROPOSALS_ALL" // Covers all proposal notifications
+    | "ISSUES_ALL" // Covers all issue notifications
+    | "TASKS_ALL" // Covers all task notifications AND ranking_stale_reminder, ranking_grace_period_ended
+    | "GOALS_ALL"; // Covers all goal notifications
 
 // Helper array for NotificationType values
+// Note: Granular types are kept for backend sending logic, but UI will use summary types.
+// The schema should include ALL possible types that can be stored.
+// For the UI settings, we will filter down to the summary types.
 export const notificationTypeValues = [
+    // Granular (still needed for backend sending logic and potentially direct storage if ever needed)
     "follow_request",
     "new_follower",
-    "follow_accepted",
+    "follow_accepted", // Not configurable by user, but still a type
     "post_comment",
     "comment_reply",
     "post_like",
@@ -884,9 +901,76 @@ export const notificationTypeValues = [
     "goal_status_changed",
     "ranking_stale_reminder",
     "ranking_grace_period_ended",
+    // Summary Types (for user configuration)
+    "COMMUNITY_FOLLOW_REQUEST",
+    "COMMUNITY_NEW_FOLLOWER",
+    "POSTS_ALL",
+    "PROPOSALS_ALL",
+    "ISSUES_ALL",
+    "TASKS_ALL",
+    "GOALS_ALL",
 ] as const;
 
 export const notificationTypeSchema = z.enum(notificationTypeValues);
+
+// Define which notification types are summary types for UI configuration
+export const summaryNotificationTypes = [
+    "COMMUNITY_FOLLOW_REQUEST",
+    "COMMUNITY_NEW_FOLLOWER",
+    "POSTS_ALL",
+    "PROPOSALS_ALL",
+    "ISSUES_ALL",
+    "TASKS_ALL",
+    "GOALS_ALL",
+] as const;
+export type SummaryNotificationType = (typeof summaryNotificationTypes)[number];
+
+export const summaryNotificationTypeDetails: Record<
+    SummaryNotificationType,
+    { label: string; moduleHandle?: string; mapsTo?: NotificationType[] }
+> = {
+    COMMUNITY_FOLLOW_REQUEST: { label: "Follow Request", moduleHandle: "members", mapsTo: ["follow_request"] }, // Technically 'members' or 'general'
+    COMMUNITY_NEW_FOLLOWER: { label: "New Follower", moduleHandle: "members", mapsTo: ["new_follower"] }, // Technically 'members' or 'general'
+    POSTS_ALL: {
+        label: "Posts",
+        moduleHandle: "feed",
+        mapsTo: ["post_comment", "comment_reply", "post_like", "comment_like", "post_mention", "comment_mention"],
+    },
+    PROPOSALS_ALL: {
+        label: "Proposals",
+        moduleHandle: "proposals",
+        mapsTo: [
+            "proposal_submitted_for_review",
+            "proposal_moved_to_voting",
+            "proposal_approved_for_voting",
+            "proposal_resolved",
+            "proposal_resolved_voter",
+            "proposal_vote",
+        ],
+    },
+    ISSUES_ALL: {
+        label: "Issues",
+        moduleHandle: "issues",
+        mapsTo: ["issue_submitted_for_review", "issue_approved", "issue_assigned", "issue_status_changed"],
+    },
+    TASKS_ALL: {
+        label: "Tasks & Ranking",
+        moduleHandle: "tasks", // Tasks module might also handle ranking notifications
+        mapsTo: [
+            "task_submitted_for_review",
+            "task_approved",
+            "task_assigned",
+            "task_status_changed",
+            "ranking_stale_reminder",
+            "ranking_grace_period_ended",
+        ],
+    },
+    GOALS_ALL: {
+        label: "Goals",
+        moduleHandle: "goals",
+        mapsTo: ["goal_submitted_for_review", "goal_approved", "goal_status_changed"],
+    },
+};
 
 export const entityTypeSchema = z.enum([
     "CIRCLE",
@@ -907,6 +991,7 @@ export const userNotificationSettingSchema = z.object({
     entityType: entityTypeSchema,
     notificationType: notificationTypeSchema,
     isEnabled: z.boolean(),
+    pausedUntil: z.date().optional(), // For pausing individual notification types
     createdAt: z.date().optional(),
     updatedAt: z.date().optional(),
 });

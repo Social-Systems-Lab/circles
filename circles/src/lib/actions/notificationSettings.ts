@@ -11,84 +11,104 @@ import {
     userNotificationSettingSchema,
     DefaultNotificationSetting,
     defaultNotificationSettingSchema,
-    notificationTypeValues, // Import the actual array of values
-    GroupedNotificationSettings, // Import the type from models
-    // entityTypeSchema, // No longer need schema if using values directly
-} from "@/models/models"; // Adjusted path
-import { getAuthenticatedUserDid } from "@/lib/auth/auth"; // Corrected path and function
-import { UserNotificationSettings, DefaultNotificationSettings } from "../data/db"; // Import actual DB collections
-// import { checkPermission } from "@/lib/permissions"; // Placeholder for permission checking utility
-
+    notificationTypeValues,
+    GroupedNotificationSettings,
+    UserPrivate,
+    summaryNotificationTypes, // Import the new summary types
+    summaryNotificationTypeDetails, // Import the details mapping
+} from "@/models/models";
+import { getAuthenticatedUserDid } from "@/lib/auth/auth";
+import { UserNotificationSettings, DefaultNotificationSettings } from "../data/db";
+import { features } from "../data/constants"; // Import the features object
 import { Circles, Members } from "../data/db"; // Import Circle and Member collections
 import { ObjectId } from "mongodb";
+import { getCircleById } from "../data/circle"; // Import getCircleById
 
-// Placeholder for permission checking
-// This would check if a user has the 'requiredPermission' for a given entity and notification type
+// Checks if a user has the 'requiredPermission' for a given entity and notification type
 export const checkUserPermissionForNotification = async (
-    // Added export
-    userId: string, // This is user DID
+    userId: string, // User's DID
     entityType: EntityType,
     entityId: string, // ID of the entity instance (e.g. circleId, postId)
-    requiredPermission?: string,
+    requiredPermission?: string, // e.g., "feed.post" or "general.manage_membership_requests"
 ): Promise<boolean> => {
-    if (!requiredPermission) return true; // No specific permission required, always allow configuration
+    if (!requiredPermission) {
+        return true; // No specific permission required, always allow configuration
+    }
 
-    console.log(`Checking permission '${requiredPermission}' for user ${userId} on ${entityType}:${entityId}`);
+    const parts = requiredPermission.split(".");
+    if (parts.length !== 2) {
+        console.warn(`Invalid requiredPermission format: ${requiredPermission}. Expected 'module.feature'.`);
+        return false; // Invalid format, deny permission
+    }
+    const moduleName = parts[0];
+    const featureName = parts[1];
 
-    // Example for CIRCLE entity type
+    // @ts-ignore
+    const featureDefinition = features[moduleName]?.[featureName];
+    if (!featureDefinition) {
+        console.warn(`Feature definition not found for permission: ${requiredPermission}`);
+        return false; // Feature not defined, deny permission
+    }
+
     if (entityType === "CIRCLE") {
         const circleId = entityId;
         try {
             const circle = await Circles.findOne({ _id: new ObjectId(circleId) });
             if (!circle) {
-                console.warn(`Circle not found: ${circleId}`);
+                console.warn(`Circle not found for permission check: ${circleId}`);
                 return false;
             }
 
             const member = await Members.findOne({ userDid: userId, circleId: circleId });
             if (!member) {
-                console.warn(`User ${userId} is not a member of circle ${circleId}`);
+                // If user is not a member, check if 'everyone' group has permission
+                const allowedGroups =
+                    circle.accessRules?.[moduleName]?.[featureName] || featureDefinition.defaultUserGroups || [];
+                if (allowedGroups.includes("everyone")) {
+                    return true;
+                }
+                console.warn(`User ${userId} is not a member of circle ${circleId} and 'everyone' not permitted.`);
                 return false;
             }
 
             const memberUserGroups = member.userGroups || [];
+            if (memberUserGroups.includes("admins")) return true; // Admins can always configure
 
-            // This is a simplified check. A real implementation would:
-            // 1. Map `requiredPermission` (e.g., "CAN_APPROVE_REQUESTS") to specific feature handles or access levels.
-            // 2. Check circle.accessRules against the user's groups for that feature/module.
-            // 3. Check circle.userGroups definitions for accessLevel associated with the user's groups.
-            // For now, let's assume if a user is an 'admin' or 'moderator' in the circle, they have most permissions.
-            // This requires `userGroupSchema` in `circle.userGroups` to have a `handle` (e.g., 'admins', 'moderators').
+            // Determine allowed groups: circle specific rules override default feature rules
+            const allowedGroups =
+                circle.accessRules?.[moduleName]?.[featureName] || featureDefinition.defaultUserGroups || [];
 
-            const isAdminOrModerator = memberUserGroups.some((groupHandle) => {
-                const groupDefinition = circle.userGroups?.find((ug) => ug.handle === groupHandle);
-                // Assuming 'admins' or 'moderators' handles imply high privileges.
-                // Or, a more granular check based on `requiredPermission` string mapping to specific access rules.
-                return groupDefinition?.handle === "admins" || groupDefinition?.handle === "moderators";
-            });
+            // Check if any of the user's groups are in the allowed list
+            const hasAccess = memberUserGroups.some((groupHandle) => allowedGroups.includes(groupHandle));
 
-            if (isAdminOrModerator) return true;
-
-            // Add more specific checks based on `requiredPermission` string if needed.
-            // e.g., if (requiredPermission === "SOME_SPECIFIC_ACTION_PERMISSION") { ... }
-
-            console.log(
-                `User ${userId} does not have required permission '${requiredPermission}' for circle ${circleId}`,
-            );
-            return false;
+            if (!hasAccess) {
+                console.log(
+                    `User ${userId} (groups: ${memberUserGroups.join(
+                        ", ",
+                    )}) does not have required permission '${requiredPermission}' (allowed: ${allowedGroups.join(
+                        ", ",
+                    )}) for circle ${circleId}`,
+                );
+            }
+            return hasAccess;
         } catch (error) {
-            console.error("Error checking circle permission:", error);
+            console.error(`Error checking CIRCLE permission for ${requiredPermission}:`, error);
             return false;
         }
     } else if (entityType === "USER") {
-        // For entityType USER, the entityId would be the target user's DID.
-        // Permissions here usually mean "is the requesting user the same as the target user?"
+        // For entityType USER, the entityId is the target user's DID.
+        // Permission means the requesting user is the same as the target user.
         return userId === entityId;
+    } else {
+        // TODO: Implement permission checks for other entity types (POST, COMMENT, TASK, GOAL, ISSUE, PROPOSAL etc.)
+        // This might involve checking ownership (e.g., post author) or roles within a parent entity (e.g., circle).
+        // For example, for a POST, you might need to fetch the post, find its parent circle,
+        // and then check permissions within that circle.
+        console.warn(
+            `Permission check for entityType '${entityType}' (permission: '${requiredPermission}') is not fully implemented. Defaulting to true for now.`,
+        );
+        return true; // Default to true for other entity types until fully implemented
     }
-    // TODO: Implement permission checks for other entity types (POST, COMMENT, TASK, etc.)
-    // This might involve checking ownership (e.g., post author) or roles within a parent entity (e.g., circle).
-    console.warn(`Permission check not fully implemented for entityType: ${entityType}. Defaulting to true for now.`);
-    return true; // Default to true for other entity types until implemented
 };
 
 /**
@@ -111,61 +131,40 @@ export async function getGroupedUserNotificationSettings(): Promise<GroupedNotif
 
         const combinedSettings: GroupedNotificationSettings = {} as GroupedNotificationSettings;
 
-        // Process default settings first
-        for (const defaultSetting of defaultSettingsList) {
-            // This part is tricky without knowing all entity IDs the user interacts with.
-            // For a generic "all settings" view, we might only show defaults for 'USER' entityType
-            // or rely on the client to request settings for specific entities it knows about.
-            // For now, let's assume we're preparing a structure that can be queried for specific entities.
-
-            // Initialize if not present
-            if (!combinedSettings[defaultSetting.entityType]) {
-                // @ts-ignore
-                combinedSettings[defaultSetting.entityType] = {};
-            }
-            // How to handle entityId for defaults? Defaults are not entity-instance-specific.
-            // One approach: store defaults under a special '_DEFAULT_' entityId or apply them when a specific entity is queried.
-            // For now, this function will return a structure that includes defaults, and client/consuming functions
-            // will need to merge them appropriately for specific entity instances.
-            // Let's assume for now that defaults are primarily for non-instance specific things or as a base.
-        }
-
         // Create a map for quick lookup of user settings
         const userSettingsMap = new Map<string, UserNotificationSetting>();
-        for (const us of userSettingsList) {
+        userSettingsList.forEach((us) => {
             userSettingsMap.set(`${us.entityType}:${us.entityId}:${us.notificationType}`, us);
-        }
+        });
 
-        // Iterate through all possible notification types and entity types to build the full structure
-        // This requires knowing all NotificationType values and EntityType values
-        const allEntityTypes = entityTypeSchema.options; // Corrected: Use .options for Zod enums
-        const allNotificationTypes = notificationTypeValues; // Use the imported array
+        const allEntityTypes = entityTypeSchema.options; // Keep for cleaning loop, but main logic uses summaryNotificationTypes
+        // const allNotificationTypes = notificationTypeValues; // We will use summaryNotificationTypes for the main loop
 
-        for (const entityType of allEntityTypes) {
+        // Determine all relevant entity IDs for the user
+        const relevantEntityIds: { entityType: EntityType; entityId: string }[] = [];
+
+        // 1. Add user's own profile (entityType: USER, entityId: userId)
+        relevantEntityIds.push({ entityType: "USER", entityId: userId });
+
+        // 2. Add all circles the user is a member of
+        const memberships = await Members.find({ userDid: userId }).toArray();
+        memberships.forEach((membership) => {
+            relevantEntityIds.push({ entityType: "CIRCLE", entityId: membership.circleId });
+        });
+
+        // Potentially add other relevant entities here (e.g., posts authored by user, tasks assigned to user)
+        // For now, focusing on USER and CIRCLE as per immediate need.
+
+        const uniqueRelevantEntityIds = relevantEntityIds.filter(
+            (value, index, self) =>
+                index === self.findIndex((t) => t.entityType === value.entityType && t.entityId === value.entityId),
+        );
+
+        const processingPromises: Promise<void>[] = [];
+
+        for (const { entityType, entityId } of uniqueRelevantEntityIds) {
             if (!combinedSettings[entityType]) {
-                combinedSettings[entityType] = {} as GroupedNotificationSettings[EntityType];
-            }
-            // We need a list of relevant entity IDs for the user for each entity type.
-            // This is the complex part for a "global" settings fetch.
-            // For this example, let's assume we only populate for entities where user has specific settings.
-            // A more robust solution might involve `getPrivateUser` providing relevant entity IDs.
-        }
-
-        for (const userSetting of userSettingsList) {
-            const { entityType, entityId, notificationType, isEnabled } = userSetting;
-            const defaultSetting = defaultSettingsList.find(
-                (ds) => ds.entityType === entityType && ds.notificationType === notificationType,
-            );
-
-            const hasPermission = await checkUserPermissionForNotification(
-                userId,
-                entityType,
-                entityId,
-                defaultSetting?.requiredPermission,
-            );
-
-            if (!combinedSettings[entityType]) {
-                combinedSettings[entityType] = {} as GroupedNotificationSettings[EntityType];
+                combinedSettings[entityType] = {};
             }
             if (!combinedSettings[entityType][entityId]) {
                 combinedSettings[entityType][entityId] = {} as Record<
@@ -173,51 +172,90 @@ export async function getGroupedUserNotificationSettings(): Promise<GroupedNotif
                     { isEnabled: boolean; isConfigurable: boolean }
                 >;
             }
+            const currentEntitySettings = combinedSettings[entityType][entityId];
 
-            const entitySettings = combinedSettings[entityType][entityId];
-            entitySettings[notificationType] = {
-                // No implicit any here
-                isEnabled: isEnabled,
-                isConfigurable: hasPermission, // User can only configure if they have permission
-            };
-        }
+            // Fetch circle details if entityType is CIRCLE to check enabledModules
+            let circleDetails: UserPrivate | null = null; // Use UserPrivate as Circle is a subset
+            if (entityType === "CIRCLE") {
+                circleDetails = (await getCircleById(entityId)) as UserPrivate; // Cast as UserPrivate for enabledModules
+                if (!circleDetails) {
+                    console.warn(`Circle details not found for ${entityId}, skipping module check for it.`);
+                    // Decide if you want to continue without module check or skip this entityId
+                }
+            }
 
-        // Now, fill in any missing settings with defaults for entities the user *has* interacted with
-        // (i.e., has at least one userSetting for)
-        for (const entityType of allEntityTypes) {
-            if (combinedSettings[entityType]) {
-                for (const entityId in combinedSettings[entityType]) {
-                    const currentEntitySettings = combinedSettings[entityType][entityId];
-                    for (const notificationType of allNotificationTypes) {
-                        if (!currentEntitySettings[notificationType]) {
-                            const defaultSetting = defaultSettingsList.find(
-                                (ds) => ds.entityType === entityType && ds.notificationType === notificationType,
+            for (const summaryNt of summaryNotificationTypes) {
+                const summaryDetail = summaryNotificationTypeDetails[summaryNt];
+
+                // Check if module is enabled for CIRCLE entityType
+                if (entityType === "CIRCLE" && summaryDetail.moduleHandle && circleDetails) {
+                    if (!circleDetails.enabledModules?.includes(summaryDetail.moduleHandle)) {
+                        continue; // Skip this summary notification type if its module is not enabled
+                    }
+                }
+                // For USER entityType, or if moduleHandle is undefined (general community notifications), proceed.
+
+                // Use the summaryNt for DefaultNotificationSetting lookup
+                const defaultSetting = defaultSettingsList.find(
+                    (ds) => ds.entityType === entityType && ds.notificationType === summaryNt,
+                );
+
+                if (defaultSetting) {
+                    processingPromises.push(
+                        (async () => {
+                            // User setting should also be looked up using summaryNt
+                            const userSetting = userSettingsMap.get(`${entityType}:${entityId}:${summaryNt}`);
+                            const hasPermission = await checkUserPermissionForNotification(
+                                userId,
+                                entityType,
+                                entityId,
+                                defaultSetting.requiredPermission,
                             );
-                            if (defaultSetting) {
-                                const hasPermission = await checkUserPermissionForNotification(
-                                    userId,
-                                    entityType,
-                                    entityId, // entityId might be less relevant for a purely default check if it's a global default
-                                    defaultSetting.requiredPermission,
-                                );
-                                if (hasPermission) {
-                                    // Only show default if user would have permission
-                                    currentEntitySettings[notificationType] = {
-                                        // No implicit any
+
+                            if (hasPermission) {
+                                if (userSetting) {
+                                    currentEntitySettings[summaryNt] = {
+                                        isEnabled: userSetting.isEnabled,
+                                        isConfigurable: true,
+                                    };
+                                } else {
+                                    currentEntitySettings[summaryNt] = {
                                         isEnabled: defaultSetting.defaultIsEnabled,
-                                        isConfigurable: true, // If shown, it's configurable
+                                        isConfigurable: true,
                                     };
                                 }
                             }
-                        }
+                        })(),
+                    );
+                } else {
+                    // If no default for the summary type, it means it's not a configurable option from the backend.
+                    // This can happen if DefaultNotificationSettings are not yet updated for new summary types.
+                    console.warn(
+                        `No default setting found for summary type: ${summaryNt} and entity type: ${entityType}`,
+                    );
+                }
+            }
+        }
+
+        await Promise.all(processingPromises);
+
+        // Clean up empty entityId records and empty entityType records
+        for (const et of allEntityTypes) {
+            if (combinedSettings[et]) {
+                for (const eid in combinedSettings[et]) {
+                    if (Object.keys(combinedSettings[et][eid]).length === 0) {
+                        delete combinedSettings[et][eid];
                     }
+                }
+                if (Object.keys(combinedSettings[et]).length === 0) {
+                    delete combinedSettings[et];
                 }
             }
         }
 
         return combinedSettings;
     } catch (error) {
-        console.error("Error fetching notification settings:", error);
+        console.error("Error fetching grouped notification settings:", error);
         return { error: "Failed to fetch notification settings." };
     }
 }
@@ -250,6 +288,7 @@ const updateSettingsSchema = z.object({
 export async function updateUserNotificationSetting(
     input: z.infer<typeof updateSettingsSchema>,
 ): Promise<UserNotificationSetting | { error: string }> {
+    // This return type might need to become more generic if we update UserPrivate directly
     const userId = await getAuthenticatedUserDid();
     if (!userId) {
         return { error: "User not authenticated." };
@@ -302,9 +341,93 @@ export async function updateUserNotificationSetting(
             return { error: "Failed to update or create notification setting." };
         }
         // @ts-ignore _id is present
-        return result as UserNotificationSetting;
+        return result as UserNotificationSetting; // This might need adjustment if we return the whole UserPrivate
     } catch (error) {
         console.error("Error updating notification setting:", error);
         return { error: "Failed to update notification setting." };
+    }
+}
+
+// Schema for updating pause settings
+const updatePauseSettingsSchema = z.object({
+    pauseType: z.enum(["all", "category"]),
+    durationSeconds: z.number().int().min(0).optional(), // 0 means unpause, undefined could mean 'forever' if used with a flag
+    isPausedForever: z.boolean().optional(), // For "until I turn it back on"
+    categoryKey: z.string().optional(), // e.g., "post", "proposal" - only if pauseType is "category"
+});
+
+/**
+ * Updates the global or category-specific notification pause settings for the current user.
+ */
+export async function updateUserPauseSettings(
+    input: z.infer<typeof updatePauseSettingsSchema>,
+): Promise<{ success: boolean; error?: string; notificationPauseConfig?: UserPrivate["notificationPauseConfig"] }> {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, error: "User not authenticated." };
+    }
+
+    const parseResult = updatePauseSettingsSchema.safeParse(input);
+    if (!parseResult.success) {
+        return { success: false, error: `Invalid input: ${parseResult.error.format()}` };
+    }
+
+    const { pauseType, durationSeconds, categoryKey, isPausedForever } = parseResult.data;
+
+    if (pauseType === "category" && !categoryKey) {
+        return { success: false, error: "Category key is required for category pause type." };
+    }
+
+    try {
+        // Fetch user as UserPrivate type to ensure notificationPauseConfig is available
+        const user = (await Circles.findOne({ did: userDid, circleType: "user" })) as UserPrivate | null;
+        if (!user) {
+            return { success: false, error: "User profile not found." };
+        }
+
+        let newPauseConfig = user.notificationPauseConfig || { categoryUntil: {} }; // Ensure categoryUntil is initialized
+        let untilDate: Date | undefined = undefined;
+
+        if (isPausedForever) {
+            // Set a very distant future date for "forever"
+            untilDate = new Date("9999-12-31T23:59:59.999Z");
+        } else if (durationSeconds !== undefined && durationSeconds > 0) {
+            untilDate = new Date(Date.now() + durationSeconds * 1000);
+        } else {
+            // Unpausing (durationSeconds is 0 or undefined and not isPausedForever)
+            untilDate = undefined;
+        }
+
+        if (pauseType === "all") {
+            newPauseConfig.allUntil = untilDate;
+        } else if (pauseType === "category" && categoryKey) {
+            if (!newPauseConfig.categoryUntil) {
+                newPauseConfig.categoryUntil = {};
+            }
+            if (untilDate) {
+                newPauseConfig.categoryUntil[categoryKey] = untilDate;
+            } else {
+                delete newPauseConfig.categoryUntil[categoryKey]; // Remove pause for this category
+                if (Object.keys(newPauseConfig.categoryUntil).length === 0) {
+                    delete newPauseConfig.categoryUntil; // Clean up if no categories are paused
+                }
+            }
+        }
+
+        // Clean up allUntil if it's undefined and categoryUntil is also empty or undefined
+        if (
+            newPauseConfig.allUntil === undefined &&
+            (newPauseConfig.categoryUntil === undefined || Object.keys(newPauseConfig.categoryUntil).length === 0)
+        ) {
+            // If everything is unpaused, remove the notificationPauseConfig field entirely
+            await Circles.updateOne({ _id: user._id }, { $unset: { notificationPauseConfig: "" } });
+            return { success: true, notificationPauseConfig: undefined };
+        } else {
+            await Circles.updateOne({ _id: user._id }, { $set: { notificationPauseConfig: newPauseConfig } });
+            return { success: true, notificationPauseConfig: newPauseConfig };
+        }
+    } catch (error) {
+        console.error("Error updating user pause settings:", error);
+        return { success: false, error: "Failed to update pause settings." };
     }
 }

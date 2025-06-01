@@ -17,7 +17,7 @@ import {
     getChatRoomMember,
     removeChatRoomMember,
 } from "@/lib/data/chat";
-import { addUserToRoom, sendReadReceipt } from "@/lib/data/matrix";
+import { addUserToRoom } from "@/lib/data/matrix";
 import { features } from "@/lib/data/constants";
 
 export async function joinChatRoomAction(
@@ -109,10 +109,6 @@ export const fetchMatrixUsers = async (usernames: string[]): Promise<(Circle | n
         const user = userMap.get(extractedUsername);
         return user ?? null;
     });
-};
-
-export const sendReadReceiptAction = async (roomId: string, eventId: string) => {
-    await sendReadReceipt(roomId, eventId);
 };
 
 export const findOrCreateDMRoomAction = async (
