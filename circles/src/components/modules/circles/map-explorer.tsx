@@ -532,9 +532,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                 animate={{ opacity: 1 }}
                                 className="ml-2 flex max-w-[400px] flex-col items-center gap-4 rounded-xl border bg-white p-8 shadow-lg"
                             >
-                                <div className="text-xl font-semibold">No circles to show!</div>
+                                <div className="text-xl font-semibold">No communities to show!</div>
                                 <p className="text-center text-gray-600">
-                                    You might have seen, followed, or ignored all available circles.
+                                    You might have seen, followed, or ignored all available communities.
                                 </p>
                                 <div className="flex flex-row gap-2">
                                     <Button onClick={handleExplore} className="mt-4 gap-2">
@@ -625,7 +625,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                             <div className="mt-1 line-clamp-2 p-0 text-xs text-gray-500">
                                                 {/* Handle description/content/mission based on type */}
                                                 {"description" in item
-                                                    ? item.description ?? ("mission" in item ? item.mission : "") ?? ""
+                                                    ? (item.description ??
+                                                      ("mission" in item ? item.mission : "") ??
+                                                      "")
                                                     : "content" in item && typeof item.content === "string"
                                                       ? item.content.substring(0, 70) +
                                                         (item.content.length > 70 ? "..." : "")
@@ -689,7 +691,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                 {isSearching && <p className="py-4 text-center">Loading...</p>}
                                 {!isSearching && drawerListData.length === 0 && (
                                     <p className="py-4 text-center text-sm text-gray-500">
-                                        {hasSearched ? `No results found for "${searchQuery}".` : "No circles found."}
+                                        {hasSearched
+                                            ? `No results found for "${searchQuery}".`
+                                            : "No communities found."}
                                     </p>
                                 )}
 

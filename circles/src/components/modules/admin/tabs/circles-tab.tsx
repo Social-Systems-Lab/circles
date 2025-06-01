@@ -130,7 +130,9 @@ export default function CirclesTab() {
                             {filteredCircles.length === 0 ? (
                                 <TableRow>
                                     <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                                        {searchTerm ? "No circles found matching your search" : "No circles found"}
+                                        {searchTerm
+                                            ? "No communities found matching your search"
+                                            : "No communities found"}
                                     </TableCell>
                                 </TableRow>
                             ) : (

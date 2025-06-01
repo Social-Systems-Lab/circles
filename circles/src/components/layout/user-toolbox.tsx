@@ -186,7 +186,7 @@ export const UserToolbox = () => {
                             ))
                         ) : (
                             <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
-                                No circles followed
+                                No communities followed
                             </div>
                         )}
                     </TabsContent>

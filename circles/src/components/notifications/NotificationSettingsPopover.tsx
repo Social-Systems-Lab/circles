@@ -159,10 +159,11 @@ export const NotificationSettingsPopover: React.FC<NotificationSettingsPopoverPr
     return (
         <Popover open={isOpen} onOpenChange={setIsOpen}>
             <PopoverTrigger asChild>
-                <NotificationBellIcon onClick={() => setIsOpen((v) => !v)} className={className} />
+                {/* onClick is removed here; PopoverTrigger with asChild handles it */}
+                <NotificationBellIcon className={className} />
             </PopoverTrigger>
             <PopoverContent className="w-80">
-                <div className="grid gap-4">
+                <div className="formatted grid gap-4">
                     <div className="space-y-2">
                         <h4 className="font-medium leading-none">Notification Settings</h4>
                         <p className="text-sm text-muted-foreground">
