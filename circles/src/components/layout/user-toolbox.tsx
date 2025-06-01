@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bell, MessageCircle, Users, Circle as CircleIcon, Hammer } from "lucide-react";
+import { Bell, MessageCircle, Users, Circle as CircleIcon } from "lucide-react";
 import { MdOutlineLogout } from "react-icons/md";
 import { RxDashboard } from "react-icons/rx";
 import {
@@ -72,9 +72,6 @@ export const UserToolbox = () => {
             ?.filter((m) => m.circle.circleType === "circle" && m.circle.handle !== "default")
             ?.map((membership) => membership.circle) || [];
 
-    const projects =
-        user?.memberships?.filter((m) => m.circle.circleType === "project")?.map((membership) => membership.circle) ||
-        [];
     const contacts =
         user?.memberships
             ?.filter((m) => m.circle.circleType === "user" && m.circle._id !== user?._id)
@@ -142,12 +139,6 @@ export const UserToolbox = () => {
                             <CircleIcon className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger
-                            value="projects"
-                            className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
-                        >
-                            <Hammer className="h-5 w-5" />
-                        </TabsTrigger>
-                        <TabsTrigger
                             value="contacts"
                             className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
                         >
@@ -187,33 +178,6 @@ export const UserToolbox = () => {
                         ) : (
                             <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
                                 No communities followed
-                            </div>
-                        )}
-                    </TabsContent>
-                    <TabsContent value="projects" className="m-0 flex-grow overflow-auto pt-1">
-                        {projects.length > 0 ? (
-                            projects.map((project) => (
-                                <div
-                                    key={project._id}
-                                    className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
-                                    onClick={() => openCircle(project)}
-                                >
-                                    <div className="h-[40px] w-[40px] overflow-hidden rounded-md">
-                                        <img
-                                            src={project?.picture?.url ?? "/images/default-picture.png"}
-                                            alt={project.name}
-                                            className="h-full w-full object-cover"
-                                        />
-                                    </div>
-                                    <div className="flex-1">
-                                        <p className="text-sm font-medium">{project.name}</p>
-                                        <p className="text-xs text-muted-foreground">{project.description}</p>
-                                    </div>
-                                </div>
-                            ))
-                        ) : (
-                            <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
-                                No projects followed
                             </div>
                         )}
                     </TabsContent>

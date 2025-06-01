@@ -33,8 +33,7 @@ export type CircleData = {
     parentCircleId?: string;
     pictureFile?: File; // Keep profile picture file for now
     // coverFile?: File; // Remove cover file
-    circleType?: CircleType;
-    isProjectsPage?: boolean;
+    circleType?: CircleType; // Should default to "circle"
 };
 
 export type CircleWizardStepProps = {
@@ -47,11 +46,11 @@ export type CircleWizardStepProps = {
 
 interface CircleWizardProps {
     // parentCircleId?: string; // Removed, as BasicInfoStep now handles parent selection
-    isProjectsPage?: boolean;
+    // isProjectsPage?: boolean; // Removed
     onComplete?: (createdCircleId?: string) => void; // Modified to pass createdCircleId
 }
 
-export default function CircleWizard({ isProjectsPage = false, onComplete }: CircleWizardProps) {
+export default function CircleWizard({ onComplete }: CircleWizardProps) {
     const [isOpen, setIsOpen] = useState(true);
     const [currentStepIndex, setCurrentStepIndex] = useState(0);
     const router = useRouter();
@@ -68,13 +67,12 @@ export default function CircleWizard({ isProjectsPage = false, onComplete }: Cir
         picture: "/images/default-picture.png",
         images: [], // Initialize images as empty array
         parentCircleId: undefined, // Initialized as undefined, BasicInfoStep will set it
-        circleType: isProjectsPage ? "project" : "circle",
-        isProjectsPage,
+        circleType: "circle", // Always "circle" now
     });
 
     // Effect to reset state if key props change (indicating a new wizard session)
     useEffect(() => {
-        console.log("Wizard props changed, resetting state (isProjectsPage or isOpen).");
+        console.log("Wizard props changed, resetting state (isOpen).");
         setCircleData({
             name: "",
             handle: "",
@@ -87,13 +85,12 @@ export default function CircleWizard({ isProjectsPage = false, onComplete }: Cir
             picture: "/images/default-picture.png", // Reset picture
             images: [], // Reset images
             parentCircleId: undefined, // Reset parentCircleId
-            circleType: isProjectsPage ? "project" : "circle", // Update type from props
-            isProjectsPage, // Update flag from props
+            circleType: "circle", // Always "circle"
             _id: undefined, // Clear any existing ID
             pictureFile: undefined, // Clear any lingering file object
         });
         setCurrentStepIndex(0); // Reset to the first step
-    }, [isOpen, isProjectsPage]); // Dependency array updated, parentCircleId removed
+    }, [isOpen]); // Dependency array updated, isProjectsPage removed
 
     // Define the steps for the wizard
     const steps = useMemo(() => {
@@ -118,7 +115,7 @@ export default function CircleWizard({ isProjectsPage = false, onComplete }: Cir
 
     // Helper function to get step titles
     function getStepTitle(stepIndex: number) {
-        const entityType = isProjectsPage ? "Project" : "Community";
+        const entityType = "Community"; // Always "Community" now
         switch (stepIndex) {
             case 0:
                 return "Basic Information";
@@ -156,7 +153,7 @@ export default function CircleWizard({ isProjectsPage = false, onComplete }: Cir
                 if (circleData._id) {
                     router.push(`/circles/${circleData.handle || circleData._id}`);
                 } else {
-                    router.push(isProjectsPage ? "/projects" : "/circles");
+                    router.push("/circles"); // Always "/circles" now
                 }
             }
         }
@@ -193,7 +190,7 @@ export default function CircleWizard({ isProjectsPage = false, onComplete }: Cir
                                     transition={{ duration: 0.3 }}
                                 >
                                     <CurrentStepComponent
-                                        circleData={{ ...circleData, isProjectsPage }}
+                                        circleData={circleData}
                                         setCircleData={setCircleData}
                                         nextStep={nextStep}
                                         prevStep={prevStep}

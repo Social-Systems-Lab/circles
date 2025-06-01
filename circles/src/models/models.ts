@@ -12,7 +12,7 @@ export const handleSchema = z
     .regex(/^[a-zA-Z0-9\-]*$/, { message: "Handle can only contain letters, numbers and hyphens (-)." });
 
 export const accountTypeSchema = z.enum(["user", "organization"]);
-export const circleTypeSchema = z.enum(["user", "circle", "project"]);
+export const circleTypeSchema = z.enum(["user", "circle"]);
 export const emailSchema = z.string().email({ message: "Enter valid email" });
 
 const DEFAULT_MAX_IMAGE_FILE_SIZE = 5000000; // 5MB
@@ -506,7 +506,6 @@ export type ContentPreviewData =
     | { type: "member"; content: MemberDisplay; props?: never }
     | { type: "user"; content: Circle; props?: never }
     | { type: "circle"; content: Circle; props?: never }
-    | { type: "project"; content: Circle; props?: never }
     | { type: "proposal"; content: ProposalDisplay; props: { circle: Circle } }
     | { type: "issue"; content: IssueDisplay; props: { circle: Circle; permissions: IssuePermissions } }
     | { type: "task"; content: TaskDisplay; props: { circle: Circle; permissions: TaskPermissions } }
@@ -752,15 +751,7 @@ export type MissionDisplay = {
     picture: string;
 };
 
-export type UserToolboxTab =
-    | "chat"
-    | "notifications"
-    | "profile"
-    | "circles"
-    | "projects"
-    | "contacts"
-    | "account"
-    | undefined;
+export type UserToolboxTab = "chat" | "notifications" | "profile" | "circles" | "contacts" | "account" | undefined;
 export type UserToolboxData = {
     tab: UserToolboxTab;
 };

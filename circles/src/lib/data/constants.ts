@@ -120,22 +120,6 @@ export const features = {
             module: "communities",
         } as Feature,
     },
-    projects: {
-        view: {
-            name: "View Projects",
-            handle: "view",
-            description: "View the projects list",
-            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
-            module: "projects",
-        } as Feature,
-        create: {
-            name: "Create Project",
-            handle: "create",
-            description: "Create a new project",
-            defaultUserGroups: ["admins", "moderators", "members"],
-            module: "projects",
-        } as Feature,
-    },
     goals: {
         // Added goals module features, mirroring issues
         view: {
@@ -480,12 +464,6 @@ export const modules: ModuleInfo[] = [
             "Displays all communities connected to this community. Helps members navigate related communities, deepen partnerships, and organize nested initiatives.",
     },
     {
-        name: "Projects",
-        handle: "projects",
-        description:
-            "Lists all projects the circle is working on or supporting. Offers a structured overview of ongoing initiatives, goals, and collaboration opportunities for members.",
-    },
-    {
         name: "Goals",
         handle: "goals",
         description:
@@ -518,9 +496,8 @@ export const modules: ModuleInfo[] = [
     },
 ];
 
-export const defaultUserModules = ["home", "feed", "followers", "communities", "projects", "goals", "settings"];
-export const defaultCircleModules = ["home", "feed", "followers", "projects", "goals", "settings"];
-export const defaultProjectModules = ["home", "feed", "followers", "goals", "tasks", "proposals", "issues", "settings"]; // Added 'tasks'
+export const defaultUserModules = ["home", "feed", "followers", "communities", "goals", "settings"];
+export const defaultCircleModules = ["home", "feed", "followers", "goals", "settings"];
 
 export const getDefaultModules = (circleType: CircleType): string[] => {
     switch (circleType) {
@@ -528,8 +505,6 @@ export const getDefaultModules = (circleType: CircleType): string[] => {
             return defaultUserModules;
         case "circle":
             return defaultCircleModules;
-        case "project":
-            return defaultProjectModules;
         default:
             // Default to user modules if type is unknown or not specified
             return defaultUserModules;

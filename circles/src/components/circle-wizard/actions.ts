@@ -51,7 +51,7 @@ export async function saveBasicInfoAction(
                 description: "",
                 content: "",
                 mission: "",
-                circleType: circleType === "project" ? "project" : "circle",
+                circleType: "circle", // Projects are no longer a distinct type here
                 createdBy: userDid,
                 parentCircleId,
                 picture: { url: "/images/default-picture.png" }, // Default picture
@@ -67,7 +67,7 @@ export async function saveBasicInfoAction(
             if (parentCircleId) {
                 const userCircle = await getUser(userDid);
                 if (userCircle && userCircle._id === parentCircleId) {
-                    const moduleToEnable = circleType === "project" ? "projects" : "communities";
+                    const moduleToEnable = "communities"; // Always communities now
                     await ensureModuleIsEnabledOnCircle(parentCircleId, moduleToEnable, userDid);
                 }
             }

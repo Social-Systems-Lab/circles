@@ -15,7 +15,7 @@ import { CreateGoalDialog } from "@/components/global-create/create-goal-dialog"
 import { CreateIssueDialog } from "@/components/global-create/create-issue-dialog";
 import { CreateProposalDialog } from "@/components/global-create/create-proposal-dialog";
 import { CreatePostDialog } from "@/components/global-create/create-post-dialog";
-import { CreateCommunityProjectDialog } from "@/components/global-create/create-community-project-dialog"; // Import
+import { CreateCommunityDialog } from "@/components/global-create/create-community-dialog"; // Updated Import
 
 export function GlobalCreateButton() {
     const [isMainDialogOpen, setIsMainDialogOpen] = useState(false);
@@ -26,7 +26,7 @@ export function GlobalCreateButton() {
 
     // States for Community and Project dialogs (handled differently for now)
     const [isCreateCommunityOpen, setCreateCommunityOpen] = useState(false);
-    const [isCreateProjectOpen, setCreateProjectOpen] = useState(false);
+    // const [isCreateProjectOpen, setCreateProjectOpen] = useState(false); // Removed project state
 
     const handleItemCreatedSuccess = (itemKey: CreatableItemKey, createdItemId?: string) => {
         toast({
@@ -36,7 +36,7 @@ export function GlobalCreateButton() {
         setSelectedItemTypeForCreation(null);
         // Also ensure community/project dialogs are closed if they were open
         setCreateCommunityOpen(false);
-        setCreateProjectOpen(false);
+        // setCreateProjectOpen(false); // Removed project state setter
     };
 
     const handleSelectItemType = (itemKey: CreatableItemKey) => {
@@ -79,7 +79,7 @@ export function GlobalCreateButton() {
                         onCloseMainDialog={() => setIsMainDialogOpen(false)}
                         onSelectItemType={handleSelectItemType}
                         setCreateCommunityOpen={setCreateCommunityOpen} // Keep for now
-                        setCreateProjectOpen={setCreateProjectOpen} // Keep for now
+                        // setCreateProjectOpen={setCreateProjectOpen} // Removed
                     />
                 </DialogContent>
             </Dialog>
@@ -117,18 +117,13 @@ export function GlobalCreateButton() {
             />
 
             {/* Community and Project dialogs remain as they were for now */}
-            <CreateCommunityProjectDialog
+            <CreateCommunityDialog
                 isOpen={isCreateCommunityOpen}
                 onOpenChange={setCreateCommunityOpen}
                 onSuccess={(id) => handleItemCreatedSuccess("community", id)}
-                itemKey="community"
+                // itemKey="community" // No longer needed by CreateCommunityDialog
             />
-            <CreateCommunityProjectDialog
-                isOpen={isCreateProjectOpen}
-                onOpenChange={setCreateProjectOpen}
-                onSuccess={(id) => handleItemCreatedSuccess("project", id)}
-                itemKey="project"
-            />
+            {/* Removed Project Dialog instance */}
         </>
     );
 }
