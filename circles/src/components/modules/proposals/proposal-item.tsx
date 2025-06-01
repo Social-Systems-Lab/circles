@@ -7,11 +7,11 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { ProposalStageTimeline } from "./proposal-stage-timeline";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
-import Link from "next/link"; // Import Link
-import { Heart, Loader2, MoreHorizontal, Pencil, Trash2, MapPin } from "lucide-react"; // Added MapPin
+import Link from "next/link";
+import { Heart, Loader2, MoreHorizontal, Pencil, Trash2, MapPin } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { UserPicture } from "../members/user-picture";
-import { cn, getFullLocationName } from "@/lib/utils"; // Added getFullLocationName
+import { cn, getFullLocationName } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAtom } from "jotai";
@@ -39,19 +39,18 @@ import { Badge } from "@/components/ui/badge";
 import RichText from "../feeds/RichText";
 import { CirclePicture } from "../circles/circle-picture";
 import { useIsCompact } from "@/components/utils/use-is-compact";
-import ImageCarousel from "@/components/ui/image-carousel";
-import ImageThumbnailCarousel from "@/components/ui/image-thumbnail-carousel"; // Import the new thumbnail carousel
+import ImageThumbnailCarousel from "@/components/ui/image-thumbnail-carousel";
 import {
     changeProposalStageAction,
     deleteProposalAction,
     voteOnProposalAction,
 } from "@/app/circles/[handle]/proposals/actions";
-import { CommentSection } from "../feeds/CommentSection"; // Import CommentSection
+import { CommentSection } from "../feeds/CommentSection";
 
 interface ProposalItemProps {
     proposal: ProposalDisplay;
     circle: Circle;
-    isPreview?: boolean; // Add isPreview prop
+    isPreview?: boolean;
 }
 
 const getStageBadgeColor = (stage: ProposalStage) => {
@@ -62,8 +61,12 @@ const getStageBadgeColor = (stage: ProposalStage) => {
             return "bg-blue-200 text-blue-800";
         case "voting":
             return "bg-green-200 text-green-800";
-        case "resolved":
-            return "bg-purple-200 text-purple-800";
+        case "accepted":
+            return "bg-teal-200 text-teal-800";
+        case "implemented":
+            return "bg-indigo-200 text-indigo-800";
+        case "rejected":
+            return "bg-red-200 text-red-800";
         default:
             return "bg-gray-200 text-gray-800";
     }
@@ -76,44 +79,33 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
     const [submitReviewDialogOpen, setSubmitReviewDialogOpen] = useState(false);
     const [rejectReviewDialogOpen, setRejectReviewDialogOpen] = useState(false);
     const [approveVotingDialogOpen, setApproveVotingDialogOpen] = useState(false);
-    const [rejectVotingDialogOpen, setRejectVotingDialogOpen] = useState(false); // State for reject confirmation (voting)
-    const [acceptVotingDialogOpen, setAcceptVotingDialogOpen] = useState(false); // State for accept confirmation (voting)
-    const [resolutionReason, setResolutionReason] = useState(""); // State for accept/reject reason (voting)
+    const [rejectVotingDialogOpen, setRejectVotingDialogOpen] = useState(false);
+    const [acceptVotingDialogOpen, setAcceptVotingDialogOpen] = useState(false);
+    const [resolutionReason, setResolutionReason] = useState("");
     const [isVoting, setIsVoting] = useState(false);
     const { toast } = useToast();
     const router = useRouter();
-
     const isCompact = useIsCompact();
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
 
-    // Check permissions
     const isAuthor = user?.did === proposal.createdBy;
-    const canEdit = isAuthor || isAuthorized(user, circle, features.proposals.moderate);
+    const canModerate = isAuthorized(user, circle, features.proposals.moderate);
+    const canEdit = (isAuthor && (proposal.stage === "draft" || proposal.stage === "review")) || canModerate;
     const canReview = isAuthorized(user, circle, features.proposals.review);
     const canVote = isAuthorized(user, circle, features.proposals.vote);
     const canResolve = isAuthorized(user, circle, features.proposals.resolve);
-
-    // Check if user has already voted
     const hasVoted = !!proposal.userReaction;
-
-    // Calculate vote count
     const voteCount = Object.values(proposal.reactions || {}).reduce((sum, count) => sum + count, 0);
 
-    const handleEdit = () => {
-        router.push(`/circles/${circle.handle}/proposals/${proposal._id}/edit`);
-    };
+    const handleEdit = () => router.push(`/circles/${circle.handle}/proposals/${proposal._id}/edit`);
 
     const handleDelete = async () => {
         startTransition(async () => {
             const result = await deleteProposalAction(circle.handle!, proposal._id);
-
             if (result.success) {
-                toast({
-                    title: "Success",
-                    description: result.message,
-                });
-                router.push(`/circles/${circle.handle}/proposals`); // Redirect after delete
+                toast({ title: "Success", description: result.message });
+                router.push(`/circles/${circle.handle}/proposals`);
             } else {
                 toast({
                     title: "Error",
@@ -121,24 +113,18 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                     variant: "destructive",
                 });
             }
-
             setDeleteDialogOpen(false);
         });
     };
 
     const handleVote = async () => {
         if (proposal.stage !== "voting") return;
-
         setIsVoting(true);
         try {
             const result = await voteOnProposalAction(circle.handle!, proposal._id, hasVoted ? null : "like");
-
             if (result.success) {
-                toast({
-                    title: hasVoted ? "Vote removed" : "Vote added",
-                    description: result.message,
-                });
-                router.refresh(); // Refresh to show updated vote count/status
+                toast({ title: hasVoted ? "Vote removed" : "Vote added", description: result.message });
+                router.refresh();
             } else {
                 toast({
                     title: "Error",
@@ -147,11 +133,7 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                 });
             }
         } catch (error) {
-            toast({
-                title: "Error",
-                description: "An unexpected error occurred",
-                variant: "destructive",
-            });
+            toast({ title: "Error", description: "An unexpected error occurred", variant: "destructive" });
         } finally {
             setIsVoting(false);
         }
@@ -159,24 +141,13 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
 
     const handleStageChange = async (
         newStage: ProposalStage,
-        outcome?: "accepted" | "rejected",
-        outcomeReason?: string,
+        options?: { outcome?: "accepted" | "rejected"; outcomeReason?: string; goalId?: string },
     ) => {
         startTransition(async () => {
-            const result = await changeProposalStageAction(
-                circle.handle!,
-                proposal._id,
-                newStage,
-                outcome,
-                outcomeReason,
-            );
-
+            const result = await changeProposalStageAction(circle.handle!, proposal._id, newStage, options);
             if (result.success) {
-                toast({
-                    title: "Success",
-                    description: result.message,
-                });
-                router.refresh(); // Refresh to show the new stage
+                toast({ title: "Success", description: result.message });
+                router.refresh();
             } else {
                 toast({
                     title: "Error",
@@ -191,28 +162,24 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
         handleStageChange("review");
         setSubmitReviewDialogOpen(false);
     };
-
     const confirmRejectReview = () => {
-        handleStageChange("resolved", "rejected", resolutionReason.trim());
+        handleStageChange("rejected", { outcome: "rejected", outcomeReason: resolutionReason.trim() });
         setRejectReviewDialogOpen(false);
-        setResolutionReason(""); // Reset reason
+        setResolutionReason("");
     };
-
     const confirmApproveVoting = () => {
         handleStageChange("voting");
         setApproveVotingDialogOpen(false);
     };
-
     const confirmRejectVoting = () => {
-        handleStageChange("resolved", "rejected", resolutionReason.trim());
+        handleStageChange("rejected", { outcome: "rejected", outcomeReason: resolutionReason.trim() });
         setRejectVotingDialogOpen(false);
-        setResolutionReason(""); // Reset reason
+        setResolutionReason("");
     };
-
     const confirmAcceptVoting = () => {
-        handleStageChange("resolved", "accepted", resolutionReason.trim());
+        handleStageChange("accepted", { outcome: "accepted", outcomeReason: resolutionReason.trim() });
         setAcceptVotingDialogOpen(false);
-        setResolutionReason(""); // Reset reason
+        setResolutionReason("");
     };
 
     const openCircle = () => {
@@ -220,109 +187,127 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
             router.push(`/circles/${proposal.author.handle}`);
             return;
         }
-        let contentPreviewData: ContentPreviewData = {
-            type: "user",
-            content: proposal.author,
-        };
+        let contentPreviewData: ContentPreviewData = { type: "user", content: proposal.author };
         setContentPreview((x) =>
             x?.content === proposal.author && sidePanelContentVisible === "content" ? undefined : contentPreviewData,
         );
     };
 
-    // Render stage-specific action buttons
-    const renderStageActions = () => {
-        switch (proposal.stage) {
-            case "draft":
-                if (isAuthor) {
-                    return (
-                        <div className="flex space-x-2">
-                            <Button onClick={handleEdit}>Edit Proposal</Button>
-                            {/* Open confirmation dialog instead of directly changing stage */}
-                            <Button onClick={() => setSubmitReviewDialogOpen(true)} disabled={isPending}>
-                                {isPending ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Submitting...
-                                    </>
-                                ) : (
-                                    <>Submit for Review</>
-                                )}
-                            </Button>
-                        </div>
-                    );
-                }
-                return null;
-
-            case "review":
-                if (canReview) {
-                    return (
-                        <div className="flex space-x-2">
-                            {/* <Button
-                                variant="destructive"
-                                onClick={() => handleStageChange("draft")}
-                                disabled={isPending}
-                            >
-                                Withdraw from Review
-                            </Button> */}
-                            {/* Open reject confirmation dialog */}
-                            <Button
-                                variant="destructive"
-                                onClick={() => setRejectReviewDialogOpen(true)}
-                                disabled={isPending}
-                            >
-                                Reject
-                            </Button>
-                            {/* Open approve confirmation dialog */}
-                            <Button onClick={() => setApproveVotingDialogOpen(true)} disabled={isPending}>
-                                Approve for Voting
-                            </Button>
-                        </div>
-                    );
-                }
-                return null;
-
-            case "voting":
-                return (
-                    <div className="flex space-x-2">
-                        {canVote && (
-                            <Button
-                                variant={hasVoted ? "default" : "outline"}
-                                onClick={handleVote}
-                                disabled={isVoting}
-                                className={cn(
-                                    "flex items-center",
-                                    hasVoted && "bg-pink-100 text-pink-800 hover:bg-pink-200 hover:text-pink-900",
-                                )}
-                            >
-                                <Heart className={cn("mr-1 h-4 w-4", hasVoted && "fill-current")} />
-                                {isVoting ? "Processing..." : hasVoted ? "Voted" : "Vote"} ({voteCount})
-                            </Button>
-                        )}
-                        {canResolve && (
+    const renderAuthorActions = () => {
+        if (proposal.stage === "draft" && isAuthor && !isPreview) {
+            return (
+                <div className="mb-4 flex space-x-2">
+                    <Button onClick={() => setSubmitReviewDialogOpen(true)} disabled={isPending}>
+                        {isPending ? (
                             <>
-                                {/* Open reject dialog */}
-                                <Button
-                                    variant="destructive"
-                                    onClick={() => setRejectVotingDialogOpen(true)}
-                                    disabled={isPending}
-                                >
-                                    Reject
-                                </Button>
-                                {/* Open accept dialog */}
-                                <Button onClick={() => setAcceptVotingDialogOpen(true)} disabled={isPending}>
-                                    Accept
-                                </Button>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...
                             </>
+                        ) : (
+                            "Submit for Review"
                         )}
-                    </div>
-                );
-
-            case "resolved":
-                return null;
-
-            default:
-                return null;
+                    </Button>
+                </div>
+            );
         }
+        return null;
+    };
+
+    const renderVotingActions = () => {
+        if (proposal.stage === "voting" && canVote && !isPreview) {
+            return (
+                <div className="my-4">
+                    <h3 className="mb-2 text-lg font-medium">Your Vote</h3>
+                    <Button
+                        variant={hasVoted ? "default" : "outline"}
+                        onClick={handleVote}
+                        disabled={isVoting}
+                        className={cn(
+                            "flex items-center",
+                            hasVoted && "bg-pink-100 text-pink-800 hover:bg-pink-200 hover:text-pink-900",
+                        )}
+                    >
+                        <Heart className={cn("mr-1 h-4 w-4", hasVoted && "fill-current")} />
+                        {isVoting ? "Processing..." : hasVoted ? "Voted" : "Vote"} ({voteCount} total)
+                    </Button>
+                </div>
+            );
+        }
+        return null;
+    };
+
+    const renderDecisionZoneActions = () => {
+        const decisionActions: React.ReactNode[] = [];
+        if (isPreview) return null; // No decision zone in preview
+
+        switch (proposal.stage) {
+            case "review":
+                if (canReview || canModerate) {
+                    decisionActions.push(
+                        <Button
+                            key="reject-review"
+                            variant="destructive"
+                            onClick={() => setRejectReviewDialogOpen(true)}
+                            disabled={isPending}
+                        >
+                            Reject
+                        </Button>,
+                        <Button
+                            key="approve-voting"
+                            onClick={() => setApproveVotingDialogOpen(true)}
+                            disabled={isPending}
+                        >
+                            Approve for Voting
+                        </Button>,
+                    );
+                }
+                break;
+            case "voting":
+                if (canResolve || canModerate) {
+                    decisionActions.push(
+                        <Button
+                            key="reject-voting"
+                            variant="destructive"
+                            onClick={() => setRejectVotingDialogOpen(true)}
+                            disabled={isPending}
+                        >
+                            Reject
+                        </Button>,
+                        <Button
+                            key="accept-voting"
+                            onClick={() => setAcceptVotingDialogOpen(true)}
+                            disabled={isPending}
+                        >
+                            Accept (Move to Ranking)
+                        </Button>,
+                    );
+                }
+                break;
+            case "accepted":
+                if (canResolve || canModerate) {
+                    decisionActions.push(
+                        <Button key="implement" onClick={() => alert("Implement as Goal - TBD")} disabled={isPending}>
+                            Implement as Goal
+                        </Button>,
+                        <Button
+                            key="reject-accepted"
+                            variant="destructive"
+                            onClick={() => alert("Reject Accepted Proposal - TBD")}
+                            disabled={isPending}
+                        >
+                            Reject
+                        </Button>,
+                    );
+                }
+                break;
+        }
+
+        if (decisionActions.length === 0) return null;
+        return (
+            <div className="mt-6 rounded-lg border bg-slate-50 p-4">
+                <h3 className="text-md mb-3 font-semibold text-slate-700">Decision Zone</h3>
+                <div className="flex flex-wrap gap-2">{decisionActions}</div>
+            </div>
+        );
     };
 
     const MainContent = (
@@ -330,15 +315,17 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                 <div>
                     <div className="mb-2 flex items-center space-x-2">
-                        {/* Link only if not in preview */}
                         <Link
                             href={`/circles/${circle.handle}/proposals/${proposal._id}`}
-                            onClick={(e: React.MouseEvent) => e.stopPropagation()} // Add type for event
+                            onClick={(e: React.MouseEvent) => !isPreview && e.stopPropagation()}
+                            className={isPreview ? "pointer-events-none" : ""}
                         >
                             <h1>{proposal.name}</h1>
                         </Link>
                         <Badge className={`${getStageBadgeColor(proposal.stage)}`}>
                             {proposal.stage.charAt(0).toUpperCase() + proposal.stage.slice(1)}
+                            {proposal.stage === "implemented" && proposal.goalId && " (Goal Linked)"}
+                            {proposal.stage === "rejected" && proposal.outcomeReason && " (Reason Provided)"}
                         </Badge>
                     </div>
                     <div className="mt-1 flex items-center space-x-2 text-xs text-muted-foreground">
@@ -347,10 +334,9 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                             {proposal.createdAt &&
                                 formatDistanceToNow(new Date(proposal.createdAt), { addSuffix: true })}
                         </div>
-                        {/* Display Location if available */}
                         {proposal.location && (
                             <>
-                                <span>·</span>
+                                <span className="mx-1">·</span>
                                 <div className="flex items-center">
                                     <MapPin className="mr-1 h-3 w-3" />
                                     <span>{getFullLocationName(proposal.location)}</span>
@@ -359,9 +345,7 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                         )}
                     </div>
                 </div>
-
-                {/* Hide dropdown menu in preview */}
-                {canEdit && (
+                {canEdit && !isPreview && (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="h-8 w-8 p-0">
@@ -371,50 +355,60 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={handleEdit}>
-                                <Pencil className="mr-2 h-4 w-4" />
-                                Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setDeleteDialogOpen(true)} className="text-red-600">
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
-                            </DropdownMenuItem>
+                            {(isAuthor && (proposal.stage === "draft" || proposal.stage === "review")) ||
+                            canModerate ? (
+                                <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={handleEdit}>
+                                        <Pencil className="mr-2 h-4 w-4" />
+                                        Edit
+                                    </DropdownMenuItem>
+                                </>
+                            ) : null}
+                            {(isAuthor || canModerate) && (
+                                <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                        onClick={() => setDeleteDialogOpen(true)}
+                                        className="text-red-600"
+                                    >
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        Delete
+                                    </DropdownMenuItem>
+                                </>
+                            )}
                         </DropdownMenuContent>
                     </DropdownMenu>
                 )}
             </CardHeader>
-
             <CardContent className="pt-4">
-                {/* <div className="mb-6">
-                    <ProposalStageTimeline currentStage={proposal.stage} />
-                </div> */}
-
-                {proposal.outcome && proposal.outcomeReason && (
+                {proposal.outcome && (proposal.stage === "rejected" || proposal.stage === "implemented") && (
                     <div
                         className={cn(
                             "mb-4 rounded-md p-3",
-                            proposal.outcome === "accepted" ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800",
+                            proposal.outcome === "accepted" || proposal.stage === "implemented"
+                                ? "bg-green-50 text-green-800"
+                                : "bg-red-50 text-red-800",
                         )}
                     >
                         <span className="font-medium">
-                            {proposal.outcome === "accepted" ? "Accepted" : "Rejected"}
+                            {proposal.stage === "implemented"
+                                ? "Implemented"
+                                : proposal.outcome === "accepted"
+                                  ? "Accepted"
+                                  : "Rejected"}
                             {proposal.resolvedAtStage &&
-                                ` during ${proposal.resolvedAtStage.charAt(0).toUpperCase() + proposal.resolvedAtStage.slice(1)} Stage`}
+                                ` from ${proposal.resolvedAtStage.charAt(0).toUpperCase() + proposal.resolvedAtStage.slice(1)} Stage`}
                         </span>
                         {proposal.outcomeReason && `: ${proposal.outcomeReason}`}
                     </div>
                 )}
-
-                {/* Decision Text Section */}
                 <div className="mb-6 rounded-md border border-blue-200 bg-blue-50 p-4">
                     <div className="mb-2 text-lg font-semibold text-blue-800">Proposed Decision</div>
                     <div className="prose prose-sm max-w-none text-blue-900">
                         <RichText content={proposal.decisionText} />
                     </div>
                 </div>
-
-                {/* Background & Images Section */}
                 {((proposal.images && proposal.images.length > 0) || proposal.background) && (
                     <div className="mb-6">
                         <h3 className="mb-2 text-lg font-semibold">Background</h3>
@@ -428,54 +422,27 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                         </div>
                     </div>
                 )}
-
-                {proposal.stage === "voting" && (
-                    <div className="mt-6">
-                        <h3 className="mb-2 text-lg font-medium">Voting Results</h3>
-                        <div className="flex items-center space-x-2">
-                            <Heart className="h-5 w-5 text-pink-500" />
-                            <span>
-                                {voteCount} vote{voteCount !== 1 ? "s" : ""}
-                            </span>
-                        </div>
-                    </div>
-                )}
-
-                {/* --- Comment Section --- */}
-                {/* Render comments only if not in preview mode and commentPostId exists */}
+                {!isPreview && renderAuthorActions()}
+                {!isPreview && renderVotingActions()}
+                {!isPreview && renderDecisionZoneActions()}
                 {!isPreview && proposal.commentPostId && (
-                    <CommentSection
-                        postId={proposal.commentPostId}
-                        circle={circle}
-                        user={user ?? null} // Convert undefined from atom to null
-                        // initialCommentCount={proposal.comments || 0} // Pass if comment count is added to ProposalDisplay
-                    />
-                )}
-                {/* Optional: Show a message if comments aren't available */}
-                {/* {!isPreview && !proposal.commentPostId && (
-                     <div className="mt-8 border-t pt-6">
-                        <h3 className="mb-4 text-lg font-semibold">Comments</h3>
-                        <div className="text-sm text-gray-500">Comments are not available for this proposal.</div>
+                    <div className="mt-8 border-t pt-6">
+                        <h3 className="mb-4 text-lg font-semibold">Discussion</h3>
+                        <CommentSection postId={proposal.commentPostId} circle={circle} user={user ?? null} />
                     </div>
-                )} */}
-                {/* --- End Comment Section --- */}
+                )}
             </CardContent>
-
-            <CardFooter className={`flex items-start justify-between ${isPreview ? "flex-col gap-4" : ""}`}>
+            <CardFooter className={`flex items-start justify-between ${isPreview ? "hidden" : ""}`}>
                 <div className={`flex cursor-pointer items-center`} onClick={openCircle}>
                     <UserPicture name={proposal.author.name} picture={proposal.author.picture?.url} size="32px" />
                     <span className="ml-2">{proposal.author.name}</span>
                 </div>
-                {/* Hide stage actions in preview */}
-                {renderStageActions()}
             </CardFooter>
-            {/* </Card> Rendered conditionally below */}
         </>
-    ); // End of MainContent definition
+    );
 
     return (
         <div className="formatted">
-            {/* Conditionally render timeline */}
             {!isPreview && (
                 <div className="mb-12 ml-4 mr-4">
                     <ProposalStageTimeline
@@ -485,22 +452,9 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                     />
                 </div>
             )}
-
-            {/* Conditionally render Card wrapper */}
-            {isPreview ? (
-                // Added overflow-y-auto, max-h-[70vh], and custom-scrollbar class for preview scrolling
-                <div>{MainContent}</div>
-            ) : (
-                <Card className="mb-6">{MainContent}</Card>
-            )}
-
-            {/* Render Dialogs here, outside MainContent but within the main return, only if not in preview */}
+            {isPreview ? <div>{MainContent}</div> : <Card className="mb-6">{MainContent}</Card>}
             <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-                <DialogContent
-                    onInteractOutside={(e) => {
-                        e.preventDefault();
-                    }}
-                >
+                <DialogContent onInteractOutside={(e) => e.preventDefault()}>
                     <DialogHeader>
                         <DialogTitle>Delete Proposal</DialogTitle>
                         <DialogDescription>
@@ -514,24 +468,17 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                         <Button variant="destructive" onClick={handleDelete} disabled={isPending}>
                             {isPending ? (
                                 <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Deleting...
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...
                                 </>
                             ) : (
-                                <>Delete</>
+                                "Delete"
                             )}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-
-            {/* Submit for Review Confirmation Dialog */}
             <Dialog open={submitReviewDialogOpen} onOpenChange={setSubmitReviewDialogOpen}>
-                <DialogContent
-                    onInteractOutside={(e) => {
-                        e.preventDefault();
-                    }}
-                >
+                <DialogContent onInteractOutside={(e) => e.preventDefault()}>
                     <DialogHeader>
                         <DialogTitle>Submit for Review?</DialogTitle>
                         <DialogDescription>
@@ -546,24 +493,17 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                         <Button onClick={confirmSubmitForReview} disabled={isPending}>
                             {isPending ? (
                                 <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Submitting...
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...
                                 </>
                             ) : (
-                                <>Confirm Submit</>
+                                "Confirm Submit"
                             )}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-
-            {/* Reject Review Confirmation Dialog */}
             <Dialog open={rejectReviewDialogOpen} onOpenChange={setRejectReviewDialogOpen}>
-                <DialogContent
-                    onInteractOutside={(e) => {
-                        e.preventDefault();
-                    }}
-                >
+                <DialogContent onInteractOutside={(e) => e.preventDefault()}>
                     <DialogHeader>
                         <DialogTitle>Reject Proposal?</DialogTitle>
                         <DialogDescription>
@@ -587,24 +527,17 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                         <Button variant="destructive" onClick={confirmRejectReview} disabled={isPending}>
                             {isPending ? (
                                 <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Rejecting...
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Rejecting...
                                 </>
                             ) : (
-                                <>Confirm Reject</>
+                                "Confirm Reject"
                             )}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-
-            {/* Approve for Voting Confirmation Dialog */}
             <Dialog open={approveVotingDialogOpen} onOpenChange={setApproveVotingDialogOpen}>
-                <DialogContent
-                    onInteractOutside={(e) => {
-                        e.preventDefault();
-                    }}
-                >
+                <DialogContent onInteractOutside={(e) => e.preventDefault()}>
                     <DialogHeader>
                         <DialogTitle>Approve for Voting?</DialogTitle>
                         <DialogDescription>
@@ -618,24 +551,17 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                         <Button onClick={confirmApproveVoting} disabled={isPending}>
                             {isPending ? (
                                 <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Approving...
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Approving...
                                 </>
                             ) : (
-                                <>Confirm Approve</>
+                                "Confirm Approve"
                             )}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-
-            {/* Reject Voting Confirmation Dialog */}
             <Dialog open={rejectVotingDialogOpen} onOpenChange={setRejectVotingDialogOpen}>
-                <DialogContent
-                    onInteractOutside={(e) => {
-                        e.preventDefault();
-                    }}
-                >
+                <DialogContent onInteractOutside={(e) => e.preventDefault()}>
                     <DialogHeader>
                         <DialogTitle>Reject Proposal?</DialogTitle>
                         <DialogDescription>
@@ -659,24 +585,17 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                         <Button variant="destructive" onClick={confirmRejectVoting} disabled={isPending}>
                             {isPending ? (
                                 <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Rejecting...
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Rejecting...
                                 </>
                             ) : (
-                                <>Confirm Reject</>
+                                "Confirm Reject"
                             )}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-
-            {/* Accept Voting Confirmation Dialog */}
             <Dialog open={acceptVotingDialogOpen} onOpenChange={setAcceptVotingDialogOpen}>
-                <DialogContent
-                    onInteractOutside={(e) => {
-                        e.preventDefault();
-                    }}
-                >
+                <DialogContent onInteractOutside={(e) => e.preventDefault()}>
                     <DialogHeader>
                         <DialogTitle>Accept Proposal?</DialogTitle>
                         <DialogDescription>
@@ -700,381 +619,10 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                         <Button onClick={confirmAcceptVoting} disabled={isPending}>
                             {isPending ? (
                                 <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Accepting...
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Accepting...
                                 </>
                             ) : (
-                                <>Confirm Accept</>
-                            )}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-            {/* Submit for Review Confirmation Dialog */}
-            <Dialog open={submitReviewDialogOpen} onOpenChange={setSubmitReviewDialogOpen}>
-                <DialogContent
-                    onInteractOutside={(e) => {
-                        e.preventDefault();
-                    }}
-                >
-                    <DialogHeader>
-                        <DialogTitle>Submit for Review?</DialogTitle>
-                        <DialogDescription>
-                            Once submitted for review, the proposal can no longer be edited. Are you sure you want to
-                            proceed?
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <DialogClose asChild>
-                            <Button variant="outline">Cancel</Button>
-                        </DialogClose>
-                        <Button onClick={confirmSubmitForReview} disabled={isPending}>
-                            {isPending ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Submitting...
-                                </>
-                            ) : (
-                                <>Confirm Submit</>
-                            )}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Reject Review Confirmation Dialog */}
-            <Dialog open={rejectReviewDialogOpen} onOpenChange={setRejectReviewDialogOpen}>
-                <DialogContent
-                    onInteractOutside={(e) => {
-                        e.preventDefault();
-                    }}
-                >
-                    <DialogHeader>
-                        <DialogTitle>Reject Proposal?</DialogTitle>
-                        <DialogDescription>
-                            Are you sure you want to reject this proposal? It will be moved to the Resolved stage. You
-                            can optionally provide a reason.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                        <Label htmlFor="resolution-reason-reject-review">Reason (Optional)</Label>
-                        <Textarea
-                            id="resolution-reason-reject-review"
-                            value={resolutionReason}
-                            onChange={(e) => setResolutionReason(e.target.value)}
-                            placeholder="Enter reason for rejection..."
-                        />
-                    </div>
-                    <DialogFooter>
-                        <DialogClose asChild>
-                            <Button variant="outline">Cancel</Button>
-                        </DialogClose>
-                        <Button variant="destructive" onClick={confirmRejectReview} disabled={isPending}>
-                            {isPending ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Rejecting...
-                                </>
-                            ) : (
-                                <>Confirm Reject</>
-                            )}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Approve for Voting Confirmation Dialog */}
-            <Dialog open={approveVotingDialogOpen} onOpenChange={setApproveVotingDialogOpen}>
-                <DialogContent
-                    onInteractOutside={(e) => {
-                        e.preventDefault();
-                    }}
-                >
-                    <DialogHeader>
-                        <DialogTitle>Approve for Voting?</DialogTitle>
-                        <DialogDescription>
-                            This will move the proposal to the Voting stage. Are you sure?
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <DialogClose asChild>
-                            <Button variant="outline">Cancel</Button>
-                        </DialogClose>
-                        <Button onClick={confirmApproveVoting} disabled={isPending}>
-                            {isPending ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Approving...
-                                </>
-                            ) : (
-                                <>Confirm Approve</>
-                            )}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Reject Voting Confirmation Dialog */}
-            <Dialog open={rejectVotingDialogOpen} onOpenChange={setRejectVotingDialogOpen}>
-                <DialogContent
-                    onInteractOutside={(e) => {
-                        e.preventDefault();
-                    }}
-                >
-                    <DialogHeader>
-                        <DialogTitle>Reject Proposal?</DialogTitle>
-                        <DialogDescription>
-                            Are you sure you want to reject this proposal after the voting period? It will be moved to
-                            the Resolved stage. You can optionally provide a reason.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                        <Label htmlFor="resolution-reason-reject">Reason (Optional)</Label>
-                        <Textarea
-                            id="resolution-reason-reject"
-                            value={resolutionReason}
-                            onChange={(e) => setResolutionReason(e.target.value)}
-                            placeholder="Enter reason for rejection..."
-                        />
-                    </div>
-                    <DialogFooter>
-                        <DialogClose asChild>
-                            <Button variant="outline">Cancel</Button>
-                        </DialogClose>
-                        <Button variant="destructive" onClick={confirmRejectVoting} disabled={isPending}>
-                            {isPending ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Rejecting...
-                                </>
-                            ) : (
-                                <>Confirm Reject</>
-                            )}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Accept Voting Confirmation Dialog */}
-            <Dialog open={acceptVotingDialogOpen} onOpenChange={setAcceptVotingDialogOpen}>
-                <DialogContent
-                    onInteractOutside={(e) => {
-                        e.preventDefault();
-                    }}
-                >
-                    <DialogHeader>
-                        <DialogTitle>Accept Proposal?</DialogTitle>
-                        <DialogDescription>
-                            Are you sure you want to accept this proposal after the voting period? It will be moved to
-                            the Resolved stage. You can optionally provide a reason.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                        <Label htmlFor="resolution-reason-accept">Reason (Optional)</Label>
-                        <Textarea
-                            id="resolution-reason-accept"
-                            value={resolutionReason}
-                            onChange={(e) => setResolutionReason(e.target.value)}
-                            placeholder="Enter reason for acceptance..."
-                        />
-                    </div>
-                    <DialogFooter>
-                        <DialogClose asChild>
-                            <Button variant="outline">Cancel</Button>
-                        </DialogClose>
-                        <Button onClick={confirmAcceptVoting} disabled={isPending}>
-                            {isPending ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Accepting...
-                                </>
-                            ) : (
-                                <>Confirm Accept</>
-                            )}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-            {/* Submit for Review Confirmation Dialog */}
-            <Dialog open={submitReviewDialogOpen} onOpenChange={setSubmitReviewDialogOpen}>
-                <DialogContent
-                    onInteractOutside={(e) => {
-                        e.preventDefault();
-                    }}
-                >
-                    <DialogHeader>
-                        <DialogTitle>Submit for Review?</DialogTitle>
-                        <DialogDescription>
-                            Once submitted for review, the proposal can no longer be edited. Are you sure you want to
-                            proceed?
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <DialogClose asChild>
-                            <Button variant="outline">Cancel</Button>
-                        </DialogClose>
-                        <Button onClick={confirmSubmitForReview} disabled={isPending}>
-                            {isPending ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Submitting...
-                                </>
-                            ) : (
-                                <>Confirm Submit</>
-                            )}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Reject Review Confirmation Dialog */}
-            <Dialog open={rejectReviewDialogOpen} onOpenChange={setRejectReviewDialogOpen}>
-                <DialogContent
-                    onInteractOutside={(e) => {
-                        e.preventDefault();
-                    }}
-                >
-                    <DialogHeader>
-                        <DialogTitle>Reject Proposal?</DialogTitle>
-                        <DialogDescription>
-                            Are you sure you want to reject this proposal? It will be moved to the Resolved stage. You
-                            can optionally provide a reason.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                        <Label htmlFor="resolution-reason-reject-review">Reason (Optional)</Label>
-                        <Textarea
-                            id="resolution-reason-reject-review"
-                            value={resolutionReason}
-                            onChange={(e) => setResolutionReason(e.target.value)}
-                            placeholder="Enter reason for rejection..."
-                        />
-                    </div>
-                    <DialogFooter>
-                        <DialogClose asChild>
-                            <Button variant="outline">Cancel</Button>
-                        </DialogClose>
-                        <Button variant="destructive" onClick={confirmRejectReview} disabled={isPending}>
-                            {isPending ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Rejecting...
-                                </>
-                            ) : (
-                                <>Confirm Reject</>
-                            )}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Approve for Voting Confirmation Dialog */}
-            <Dialog open={approveVotingDialogOpen} onOpenChange={setApproveVotingDialogOpen}>
-                <DialogContent
-                    onInteractOutside={(e) => {
-                        e.preventDefault();
-                    }}
-                >
-                    <DialogHeader>
-                        <DialogTitle>Approve for Voting?</DialogTitle>
-                        <DialogDescription>
-                            This will move the proposal to the Voting stage. Are you sure?
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <DialogClose asChild>
-                            <Button variant="outline">Cancel</Button>
-                        </DialogClose>
-                        <Button onClick={confirmApproveVoting} disabled={isPending}>
-                            {isPending ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Approving...
-                                </>
-                            ) : (
-                                <>Confirm Approve</>
-                            )}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Reject Voting Confirmation Dialog */}
-            <Dialog open={rejectVotingDialogOpen} onOpenChange={setRejectVotingDialogOpen}>
-                <DialogContent
-                    onInteractOutside={(e) => {
-                        e.preventDefault();
-                    }}
-                >
-                    <DialogHeader>
-                        <DialogTitle>Reject Proposal?</DialogTitle>
-                        <DialogDescription>
-                            Are you sure you want to reject this proposal after the voting period? It will be moved to
-                            the Resolved stage. You can optionally provide a reason.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                        <Label htmlFor="resolution-reason-reject">Reason (Optional)</Label>
-                        <Textarea
-                            id="resolution-reason-reject"
-                            value={resolutionReason}
-                            onChange={(e) => setResolutionReason(e.target.value)}
-                            placeholder="Enter reason for rejection..."
-                        />
-                    </div>
-                    <DialogFooter>
-                        <DialogClose asChild>
-                            <Button variant="outline">Cancel</Button>
-                        </DialogClose>
-                        <Button variant="destructive" onClick={confirmRejectVoting} disabled={isPending}>
-                            {isPending ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Rejecting...
-                                </>
-                            ) : (
-                                <>Confirm Reject</>
-                            )}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Accept Voting Confirmation Dialog */}
-            <Dialog open={acceptVotingDialogOpen} onOpenChange={setAcceptVotingDialogOpen}>
-                <DialogContent
-                    onInteractOutside={(e) => {
-                        e.preventDefault();
-                    }}
-                >
-                    <DialogHeader>
-                        <DialogTitle>Accept Proposal?</DialogTitle>
-                        <DialogDescription>
-                            Are you sure you want to accept this proposal after the voting period? It will be moved to
-                            the Resolved stage. You can optionally provide a reason.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                        <Label htmlFor="resolution-reason-accept">Reason (Optional)</Label>
-                        <Textarea
-                            id="resolution-reason-accept"
-                            value={resolutionReason}
-                            onChange={(e) => setResolutionReason(e.target.value)}
-                            placeholder="Enter reason for acceptance..."
-                        />
-                    </div>
-                    <DialogFooter>
-                        <DialogClose asChild>
-                            <Button variant="outline">Cancel</Button>
-                        </DialogClose>
-                        <Button onClick={confirmAcceptVoting} disabled={isPending}>
-                            {isPending ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Accepting...
-                                </>
-                            ) : (
-                                <>Confirm Accept</>
+                                "Confirm Accept"
                             )}
                         </Button>
                     </DialogFooter>

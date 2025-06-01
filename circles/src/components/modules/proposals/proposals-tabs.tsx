@@ -15,74 +15,33 @@ import ProposalsList from "./proposals-list"; // We'll integrate this properly l
 
 interface ProposalsTabsProps {
     circle: Circle;
-    // We might pass initial proposals if fetched server-side, or fetch client-side
-    // initialProposals?: ProposalDisplay[];
+    initialProposals: ProposalDisplay[]; // Added prop for initial data
 }
 
 type TabValue = "submitted" | "accepted" | "resolved";
 
-const ProposalsTabs: React.FC<ProposalsTabsProps> = ({ circle }) => {
+const ProposalsTabs: React.FC<ProposalsTabsProps> = ({ circle, initialProposals }) => {
     const [user] = useAtom(userAtom);
     const router = useRouter();
-    const [isLoading, setIsLoading] = useState(true);
-    const [allProposals, setAllProposals] = useState<ProposalDisplay[]>([]);
+    // Set initial loading state to false as data is passed via props
+    const [isLoading, setIsLoading] = useState(false);
+    // Initialize allProposals with initialProposals prop
+    const [allProposals, setAllProposals] = useState<ProposalDisplay[]>(initialProposals || []);
     const [activeTab, setActiveTab] = useState<TabValue>("submitted");
 
     const canCreateProposal = isAuthorized(user, circle, features.proposals.create);
 
+    // useEffect to update proposals if initialProposals prop changes
     useEffect(() => {
-        const fetchProposals = async () => {
-            setIsLoading(true);
-            try {
-                // TODO: Replace with an actual action that fetches all proposals for the circle
-                // For now, using a placeholder. This action should ideally be created.
-                // const proposals = initialProposals || await getProposalsByCircleId(circle._id);
-                // setAllProposals(proposals);
-
-                // Placeholder: Simulate fetching. Replace with actual call to getProposalsByCircleIdAction
-                // const result = await getProposalsByCircleIdAction(circle.handle!);
-                // if (result.success && result.proposals) {
-                //    setAllProposals(result.proposals);
-                // } else {
-                //    console.error("Failed to fetch proposals:", result.message);
-                //    setAllProposals([]); // Set to empty array on failure
-                // }
-                // For now, we'll assume proposals will be passed to a modified ProposalsList
-                // or fetched within ProposalsList instances per tab.
-                // This top-level fetch might be redundant if each tab's list fetches its own.
-                // For simplicity in this step, we'll manage a dummy list.
-                // In a real scenario, you'd fetch all proposals here or have each
-                // tab's component fetch its specific subset.
-                console.warn("Placeholder: Proposal fetching logic needs to be implemented.");
-                // Simulating a fetch delay and setting some dummy data for UI structure
-                setTimeout(() => {
-                    // Dummy data for now, replace with actual fetched data
-                    // setAllProposals([]);
-                    setIsLoading(false);
-                }, 500);
-            } catch (error) {
-                console.error("Error fetching proposals:", error);
-                setAllProposals([]); // Set to empty array on error
-            } finally {
-                // setIsLoading(false); // Moved to timeout for simulation
-            }
-        };
-
-        fetchProposals();
-    }, [circle.handle, circle._id]);
+        setAllProposals(initialProposals || []);
+        setIsLoading(false); // Ensure loading is false when props are received/updated
+    }, [initialProposals]);
 
     const filteredProposals = useMemo(() => {
-        switch (activeTab) {
-            case "submitted":
-                return allProposals.filter((p) => ["draft", "review", "voting"].includes(p.stage));
-            case "accepted":
-                return allProposals.filter((p) => p.stage === "accepted");
-            case "resolved":
-                return allProposals.filter((p) => ["implemented", "rejected"].includes(p.stage));
-            default:
-                return [];
-        }
-    }, [allProposals, activeTab]);
+        // No need to filter by activeTab here, as ProposalsList will receive the full list for that tab
+        // The filtering logic is now per tab when rendering ProposalsList
+        return allProposals;
+    }, [allProposals]);
 
     const handleCreateProposal = () => {
         // For now, this will navigate to a generic create page or open a dialog

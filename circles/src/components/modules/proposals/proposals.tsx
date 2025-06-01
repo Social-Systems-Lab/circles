@@ -45,10 +45,11 @@ export default async function ProposalsModule({ circle }: PageProps) {
         }
 
         // remove all proposals that are rejected that don't belong to the current user
+        // Updated to check new 'rejected' stage
         if (
-            proposal.stage === "resolved" &&
-            proposal.outcome === "rejected" &&
-            proposal.resolvedAtStage !== "voting" &&
+            proposal.stage === "rejected" && // Check new 'rejected' stage
+            // proposal.outcome === "rejected" is implicit with the 'rejected' stage
+            proposal.resolvedAtStage !== "voting" && // This condition might need review based on new flow
             proposal.author.did !== userDid
         ) {
             return false;
@@ -61,7 +62,26 @@ export default async function ProposalsModule({ circle }: PageProps) {
         if (proposal.stage === "voting" && !(canVoteProposal || canModerateProposal)) {
             return false;
         }
-        if (proposal.stage === "resolved" && proposal.resolvedAtStage !== "voting" && !canResolveProposal) {
+        // This condition for 'resolved' needs to be updated or re-evaluated
+        // For 'implemented' or 'rejected' stages, visibility might be different.
+        // For now, let's assume if it's 'implemented' or 'rejected' and passed previous checks, it's viewable.
+        // The original logic for "resolved" stage and "resolvedAtStage" needs careful mapping to the new stages.
+        // If a proposal is 'rejected' (new stage), the previous check for proposal.stage === "rejected" handles it.
+        // If a proposal is 'implemented', it's generally viewable.
+        // The condition `proposal.resolvedAtStage !== "voting" && !canResolveProposal`
+        // was for the old 'resolved' stage. We might simplify this for now.
+        // A more robust permission check might be needed per new stage if visibility rules are complex.
+        if (
+            (proposal.stage === "implemented" || proposal.stage === "rejected") &&
+            proposal.resolvedAtStage !== "voting" &&
+            !canResolveProposal &&
+            !canModerateProposal &&
+            proposal.author.did !== userDid
+        ) {
+            // This is a placeholder to be more restrictive, similar to old logic for non-voting resolved items.
+            // This specific complex condition might be better handled by ensuring `getProposalsAction`
+            // or `getProposalsByCircleId` already filters based on user-specific visibility for terminal states.
+            // For now, this attempts to mirror the old restriction.
             return false;
         }
 
