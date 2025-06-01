@@ -29,8 +29,6 @@ const ProposalsTabs: React.FC<ProposalsTabsProps> = ({ circle, initialProposals 
     const [allProposals, setAllProposals] = useState<ProposalDisplay[]>(initialProposals || []);
     const [activeTab, setActiveTab] = useState<TabValue>("submitted");
 
-    const canCreateProposal = isAuthorized(user, circle, features.proposals.create);
-
     // useEffect to update proposals if initialProposals prop changes
     useEffect(() => {
         setAllProposals(initialProposals || []);
@@ -42,17 +40,6 @@ const ProposalsTabs: React.FC<ProposalsTabsProps> = ({ circle, initialProposals 
         // The filtering logic is now per tab when rendering ProposalsList
         return allProposals;
     }, [allProposals]);
-
-    const handleCreateProposal = () => {
-        // For now, this will navigate to a generic create page or open a dialog
-        // The existing ProposalsList has a dialog for creating a draft, which is good.
-        // We might want to trigger that dialog from here or a dedicated create page.
-        router.push(`/circles/${circle.handle}/proposals/create`); // Or open a dialog
-    };
-
-    // This component will be responsible for fetching ALL proposals for the circle,
-    // and then passing filtered lists to instances of a modified `ProposalsList` component.
-    // For now, each tab will just show a placeholder.
 
     return (
         <div className="flex w-full flex-col items-center">
@@ -79,12 +66,6 @@ const ProposalsTabs: React.FC<ProposalsTabsProps> = ({ circle, initialProposals 
                                 Resolved
                             </TabsTrigger>
                         </TabsList>
-
-                        {canCreateProposal && (
-                            <Button onClick={handleCreateProposal} size="sm">
-                                <Plus className="mr-1.5 h-4 w-4" /> Create Proposal
-                            </Button>
-                        )}
                     </div>
 
                     {isLoading ? (

@@ -14,61 +14,59 @@ interface ProposalStageTimelineProps {
 export const ProposalStageTimeline: React.FC<ProposalStageTimelineProps> = ({
     currentStage,
     outcome,
-    resolvedAtStage, // Use the new prop
+    resolvedAtStage,
 }) => {
-    // Define all stages in order
-    const stages: ProposalStage[] = ["draft", "review", "voting", "resolved"];
+    const stages: ProposalStage[] = ["draft", "review", "voting", "accepted", "implemented"];
+    // 'rejected' is a terminal state that can occur from 'review', 'voting', or 'accepted'.
+    // It's not a linear step after 'implemented'.
 
-    // Determine rejection stage directly from resolvedAtStage if outcome is rejected
-    const rejectionStage: ProposalStage | null = outcome === "rejected" ? resolvedAtStage || null : null;
+    const currentActualStage = currentStage; // The actual stage from the proposal object
+    const isRejected = currentActualStage === "rejected";
+    const isImplemented = currentActualStage === "implemented";
 
-    // Find the index of the current stage
-    const currentStageIndex = stages.indexOf(currentStage);
-    const rejectionStageIndex = rejectionStage ? stages.indexOf(rejectionStage) : -1;
+    // Determine the visual "current" point on the timeline
+    // If rejected, the timeline stops at the stage it was rejected *from* (resolvedAtStage)
+    // If implemented, it goes all the way to 'implemented'.
+    // Otherwise, it's the currentStage.
+    let visualCurrentStage = currentActualStage;
+    if (isRejected && resolvedAtStage) {
+        visualCurrentStage = resolvedAtStage;
+    }
 
-    // Helper function to determine the status of each stage
-    const getStageStatus = (stage: ProposalStage) => {
-        const stageIndex = stages.indexOf(stage);
+    const visualCurrentStageIndex = stages.indexOf(visualCurrentStage);
 
-        // If the proposal is rejected, the rejection stage itself is 'completed' visually (green check)
-        // but the 'Resolved' stage shows the rejection.
-        if (outcome === "rejected") {
-            if (stage === "resolved") return "rejected"; // Final stage shows rejection
-            if (stageIndex <= rejectionStageIndex) return "completed"; // Stages up to rejection are completed
-            return "skipped"; // Stages after rejection are skipped
+    const getStageStatus = (stage: ProposalStage, index: number) => {
+        if (isRejected) {
+            if (resolvedAtStage && index < stages.indexOf(resolvedAtStage)) return "completed";
+            if (resolvedAtStage && stage === resolvedAtStage) return "rejected-at"; // Special status for the point of rejection
+            if (resolvedAtStage && index > stages.indexOf(resolvedAtStage)) return "skipped";
+            // If rejected from a stage not in the main timeline (e.g. draft, if not listed)
+            // or if resolvedAtStage is somehow not on the timeline, mark all as skipped or based on currentActualStage
+            if (stage === currentActualStage) return "rejected-at"; // If current stage is 'rejected' itself
+            return "skipped"; // Default for rejected if specific point unclear
         }
 
-        // If accepted or still in progress
-        if (stageIndex < currentStageIndex) return "completed";
-        if (stageIndex === currentStageIndex) return "current";
+        if (isImplemented) {
+            // If implemented, all defined stages are considered completed.
+            // The "implemented" stage itself will get the 'implemented' status.
+            if (stage === "implemented") return "implemented";
+            return "completed";
+        }
+
+        // Standard flow
+        if (index < visualCurrentStageIndex) return "completed";
+        if (index === visualCurrentStageIndex) return "current";
         return "upcoming";
     };
 
-    // Helper function to get the appropriate icon for each stage
     const getStageIcon = (stage: ProposalStage, status: string) => {
-        if (status === "rejected") {
-            // Only the 'Resolved' stage will have this status now
-            return <XCircle className="h-6 w-6 text-red-500" />;
-        }
-        if (status === "completed") {
-            return <CheckCircle2 className="h-6 w-6 text-green-500" />;
-        }
-        if (status === "skipped") {
-            return <Circle className="h-6 w-6 text-gray-300" />; // Use upcoming icon for skipped
-        }
-        if (status === "current") {
-            // If current stage is 'resolved' and it was accepted, show completed icon
-            if (stage === "resolved" && outcome === "accepted") {
-                return <CheckCircle2 className="h-6 w-6 text-green-500" />;
-            }
-            // Otherwise, show the current stage icon (clock)
-            return <Clock className="h-6 w-6 text-blue-500" />;
-        }
-        // Upcoming stage
-        return <Circle className="h-6 w-6 text-gray-300" />;
+        if (status === "rejected-at") return <XCircle className="h-6 w-6 text-red-500" />;
+        if (status === "implemented") return <CheckCircle2 className="h-6 w-6 text-green-500" />;
+        if (status === "completed") return <CheckCircle2 className="h-6 w-6 text-green-500" />;
+        if (status === "current") return <Clock className="h-6 w-6 text-blue-500" />;
+        return <Circle className="h-6 w-6 text-gray-300" />; // upcoming or skipped
     };
 
-    // Helper function to get the label for each stage
     const getStageLabel = (stage: ProposalStage) => {
         switch (stage) {
             case "draft":
@@ -77,77 +75,99 @@ export const ProposalStageTimeline: React.FC<ProposalStageTimelineProps> = ({
                 return "Review";
             case "voting":
                 return "Voting";
-            case "resolved":
-                return "Resolved";
+            case "accepted":
+                return "Accepted";
+            case "implemented":
+                return "Implemented";
+            // 'rejected' is not a label on the linear timeline here
             default:
-                // This case should never happen as we've covered all possible values
-                // But TypeScript requires a default case
-                return "Unknown Stage";
+                return "Unknown";
         }
     };
+
+    // Final display node for Rejected/Implemented status if applicable
+    const finalStatusNode = () => {
+        if (isRejected) {
+            return (
+                <div className="relative flex flex-col items-center">
+                    <div className={cn("flex h-10 w-10 items-center justify-center rounded-full bg-red-100")}>
+                        <XCircle className="h-6 w-6 text-red-500" />
+                    </div>
+                    <span className={cn("absolute bottom-[-25px] text-sm font-medium text-red-600")}>
+                        Rejected
+                        {resolvedAtStage && ` (at ${getStageLabel(resolvedAtStage)})`}
+                    </span>
+                </div>
+            );
+        }
+        // 'Implemented' is part of the main stages array now.
+        return null;
+    };
+
+    const timelineStages = isRejected ? stages.filter((s) => s !== "implemented") : stages;
 
     return (
         <div className="w-full">
             <div className="mb-[30px] flex items-center justify-between">
-                {stages.map((stage, index) => {
-                    const status = getStageStatus(stage);
-                    const isFirst = index === 0;
-                    const isLast = index === stages.length - 1;
+                {timelineStages.map((stage, index) => {
+                    // If proposal is rejected, and this stage is 'implemented', skip it.
+                    if (isRejected && stage === "implemented") return null;
+
+                    const status = getStageStatus(stage, index);
+                    const isLastVisible = isRejected
+                        ? resolvedAtStage
+                            ? stage === resolvedAtStage
+                            : index === timelineStages.length - 1
+                        : index === timelineStages.length - 1;
 
                     return (
                         <React.Fragment key={stage}>
-                            {/* Stage indicator */}
                             <div className="relative flex flex-col items-center">
                                 <div
                                     className={cn(
                                         "flex h-10 w-10 items-center justify-center rounded-full",
-                                        status === "rejected" && "bg-red-100",
-                                        status === "completed" && "bg-green-100",
+                                        (status === "completed" || status === "implemented") && "bg-green-100",
                                         status === "current" && "bg-blue-100",
-                                        (status === "upcoming" || status === "skipped") && "bg-gray-100", // Skipped uses upcoming style
-                                        // Special case for resolved stage when accepted
-                                        stage === "resolved" && outcome === "accepted" && "bg-green-100",
+                                        (status === "upcoming" || status === "skipped") && "bg-gray-100",
+                                        status === "rejected-at" && "bg-red-100",
                                     )}
                                 >
                                     {getStageIcon(stage, status)}
                                 </div>
                                 <span
                                     className={cn(
-                                        "absolute bottom-[-25px] text-sm font-medium",
-                                        status === "rejected" && "text-red-600",
-                                        status === "completed" && "text-green-600",
+                                        "absolute bottom-[-25px] whitespace-nowrap text-sm font-medium",
+                                        (status === "completed" || status === "implemented") && "text-green-600",
                                         status === "current" && "text-blue-600",
-                                        (status === "upcoming" || status === "skipped") && "text-gray-500", // Skipped uses upcoming style
-                                        // Special case for resolved stage when accepted
-                                        stage === "resolved" && outcome === "accepted" && "text-green-600",
+                                        (status === "upcoming" || status === "skipped") && "text-gray-500",
+                                        status === "rejected-at" && "text-red-600",
                                     )}
                                 >
                                     {getStageLabel(stage)}
                                 </span>
                             </div>
 
-                            {/* Connector line (except after the last stage) */}
-                            {!isLast && (
+                            {!isLastVisible && (
                                 <div
                                     className={cn(
                                         "h-0.5 flex-1",
-                                        // Line logic based on the *next* stage's status
-                                        getStageStatus(stages[index + 1]) === "completed" ||
-                                            (getStageStatus(stages[index + 1]) === "current" &&
-                                                outcome !== "rejected") ||
-                                            getStageStatus(stages[index + 1]) === "rejected"
-                                            ? "bg-green-500" // Green if next is completed, current (and not rejected), or the final rejected stage
-                                            : "bg-gray-200", // Gray otherwise (upcoming or skipped)
-                                        // If the proposal was rejected, lines after the rejection stage are gray
-                                        rejectionStage && index >= rejectionStageIndex && "bg-gray-200",
-                                        // If the proposal was accepted, all lines are green
-                                        currentStage === "resolved" && outcome === "accepted" && "bg-green-500",
+                                        (status === "completed" ||
+                                            status === "current" ||
+                                            status === "implemented" ||
+                                            status === "rejected-at") &&
+                                            !(isRejected && resolvedAtStage && index >= stages.indexOf(resolvedAtStage))
+                                            ? "bg-green-500"
+                                            : "bg-gray-200",
                                     )}
                                 />
                             )}
                         </React.Fragment>
                     );
                 })}
+                {isRejected && resolvedAtStage && stages.indexOf(resolvedAtStage) < stages.indexOf("implemented") && (
+                    <div className={cn("h-0.5 flex-1 bg-gray-200")} /> /* Connector to final rejected node if needed */
+                )}
+                {isRejected && finalStatusNode()}
             </div>
         </div>
     );
