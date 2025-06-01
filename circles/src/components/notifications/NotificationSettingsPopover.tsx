@@ -7,10 +7,20 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { NotificationBellIcon } from "./NotificationBellIcon";
 import { getGroupedUserNotificationSettings, updateUserNotificationSetting } from "@/lib/actions/notificationSettings";
-import { EntityType, NotificationType, notificationTypeValues, GroupedNotificationSettings } from "@/models/models";
+import {
+    EntityType,
+    NotificationType,
+    notificationTypeValues,
+    GroupedNotificationSettings,
+    UserPrivate,
+} from "@/models/models";
 import { useToast } from "@/components/ui/use-toast"; // Assuming you have a toast hook
-// import { useAtom } from "jotai"; // Placeholder for Jotai
-// import { userPrivateAtom } from "@/lib/store/jotaiAtoms"; // Placeholder for your Jotai atom
+import { useAtom } from "jotai";
+import { userAtom } from "@/lib/data/atoms";
+import { getDefaultSettingsForEntityType } from "@/lib/actions/notificationSettings";
+// Note: checkUserPermissionForNotification is a server-side function.
+// `isConfigurable` flags are now expected to be correctly set by `getGroupedUserNotificationSettings`
+// and included in the `UserPrivate` object's `notificationSettings`.
 
 interface NotificationSettingsPopoverProps {
     entityType: EntityType;
@@ -34,79 +44,63 @@ export const NotificationSettingsPopover: React.FC<NotificationSettingsPopoverPr
     className,
 }) => {
     const [isOpen, setIsOpen] = useState(false);
-    // const [userPrivateData, setUserPrivateData] = useAtom(userPrivateAtom); // JOTAI: Uncomment and use your atom
+    const [userPrivateData, setUserPrivateData] = useAtom(userAtom);
 
-    // JOTAI: Derive settings from the Jotai atom
-    // const allUserNotificationSettings = userPrivateData?.notificationSettings;
-    // const currentEntitySettings = allUserNotificationSettings?.[entityType]?.[entityId];
+    // Derive settings directly from the Jotai atom
+    const entitySettingsFromAtom = userPrivateData?.notificationSettings?.[entityType]?.[entityId];
 
-    // Local state for settings, to be replaced or supplemented by Jotai
-    const [settings, setSettings] = useState<EntitySpecificSettings | null>(null);
+    // Local state to manage optimistic updates if needed, or to hold a working copy.
+    // For simplicity, we can try to directly use entitySettingsFromAtom if updates are reflected quickly.
+    // However, for optimistic UI, a local copy that syncs with atom is better.
+    const [localSettings, setLocalSettings] = useState<EntitySpecificSettings | null>(null);
 
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(false); // Kept for the update operation
+    const [error, setError] = useState<string | null>(null); // Kept for update operation errors
     const { toast } = useToast();
 
-    const fetchAndSetSettings = useCallback(async () => {
-        // JOTAI: This direct fetch might be replaced by relying on the atom,
-        // or used as a refresh mechanism.
-        if (!isOpen) return;
-        setIsLoading(true);
-        setError(null);
-        try {
-            // JOTAI: If atom is populated, use it. Otherwise, fetch.
-            // For now, always fetching as placeholder.
-            const result = await getGroupedUserNotificationSettings();
-            if ("error" in result) {
-                setError(result.error);
-                setSettings(null);
-            } else {
-                const entitySettingsFromResult = result[entityType]?.[entityId];
-                if (entitySettingsFromResult) {
-                    setSettings(entitySettingsFromResult);
-                } else {
-                    // Initialize with defaults if no specific settings found for this entity
-                    const defaultEntitySettings: EntitySpecificSettings = {} as EntitySpecificSettings;
-                    notificationTypeValues.forEach((nt) => {
-                        // @ts-ignore - Placeholder for default logic
-                        defaultEntitySettings[nt] = { isEnabled: true, isConfigurable: true }; // Sensible default
-                    });
-                    setSettings(defaultEntitySettings);
-                }
-            }
-        } catch (e) {
-            setError("An unexpected error occurred while fetching settings.");
-            setSettings(null);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [entityType, entityId, isOpen]);
-
     useEffect(() => {
-        // JOTAI: If using Jotai, this effect might listen to changes in the atom for the specific entity,
-        // or the initial settings could be directly derived from the atom when the component mounts/opens.
         if (isOpen) {
-            // const jotaiEntitySettings = userPrivateData?.notificationSettings?.[entityType]?.[entityId];
-            // if (jotaiEntitySettings) {
-            //     setSettings(jotaiEntitySettings);
-            // } else {
-            //     fetchAndSetSettings(); // Fetch if not in Jotai or if refresh needed
-            // }
-            fetchAndSetSettings(); // Placeholder: always fetch when opened for now
+            if (entitySettingsFromAtom) {
+                setLocalSettings(entitySettingsFromAtom);
+                setError(null);
+            } else if (userPrivateData) {
+                // User data loaded, but no specific settings for this entity
+                // Initialize with defaults if no specific settings found for this entity
+                // This assumes getGroupedUserNotificationSettings on the backend has already determined configurability
+                // and provided a full structure for known entity types.
+                // If userPrivateData.notificationSettings doesn't even have the entityType, it's an issue.
+                const initialSettings: EntitySpecificSettings = {} as EntitySpecificSettings;
+                notificationTypeValues.forEach((nt) => {
+                    // Fallback if `getGroupedUserNotificationSettings` didn't provide a full structure
+                    // (which it should, including defaults and configurability)
+                    initialSettings[nt] = { isEnabled: true, isConfigurable: true };
+                });
+                setLocalSettings(initialSettings);
+                console.warn(
+                    `NotificationSettingsPopover: No settings found in userAtom for ${entityType}:${entityId}. Initializing with defaults. This might indicate an issue with getPrivateUser's data population.`,
+                );
+                setError(null);
+            } else {
+                // User data itself is not loaded yet, show loading or error.
+                // This case should ideally be handled by a global loading state for userAtom.
+                setError("User data not available. Cannot load notification settings.");
+                setLocalSettings(null);
+            }
         }
-    }, [isOpen, fetchAndSetSettings /*, userPrivateData, entityType, entityId */]); // JOTAI: Add userPrivateData and dependencies
+    }, [isOpen, userPrivateData, entityType, entityId]);
 
     const handleSettingChange = async (type: NotificationType, checked: boolean) => {
-        if (!settings) return;
+        if (!localSettings) return;
 
-        const originalSettingState = settings[type];
+        const originalSettingState = localSettings[type];
 
         // Optimistically update local UI state
-        setSettings((prev) => ({
+        setLocalSettings((prev) => ({
             ...prev!,
             [type]: { ...prev![type], isEnabled: checked },
         }));
 
+        setIsLoading(true);
         try {
             const result = await updateUserNotificationSetting({
                 entityType,
@@ -122,7 +116,8 @@ export const NotificationSettingsPopover: React.FC<NotificationSettingsPopoverPr
                     variant: "destructive",
                 });
                 // Revert optimistic update
-                setSettings((prev) => ({
+                setLocalSettings((prev) => ({
+                    // Corrected: use setLocalSettings
                     ...prev!,
                     [type]: originalSettingState,
                 }));
@@ -131,10 +126,14 @@ export const NotificationSettingsPopover: React.FC<NotificationSettingsPopoverPr
                     title: "Success",
                     description: `${getNotificationTypeLabel(type)} setting updated.`,
                 });
-                // JOTAI: Trigger a refresh of userPrivateData in the Jotai atom
-                // e.g., by calling a function that re-fetches getPrivateUser
-                // or by updating the atom directly if the server action returns enough info.
-                // Example: refreshUserPrivateData();
+                // JOTAI: Trigger a refresh of userPrivateData in the Jotai atom.
+                // This typically involves calling the server action that populates userAtom.
+                // For example, if there's a `refreshUserSession` function:
+                // await refreshUserSession();
+                // Or, if `updateUserNotificationSetting` returned the updated `UserPrivate` object,
+                // you could update the atom directly:
+                // setUserPrivateData(updatedUserPrivateData);
+                console.log("TODO: Implement userAtom refresh after notification setting update.");
             }
         } catch (e) {
             toast({
@@ -143,14 +142,19 @@ export const NotificationSettingsPopover: React.FC<NotificationSettingsPopoverPr
                 variant: "destructive",
             });
             // Revert optimistic update
-            setSettings((prev) => ({
+            setLocalSettings((prev) => ({
+                // Revert localSettings
                 ...prev!,
                 [type]: originalSettingState,
             }));
+        } finally {
+            setIsLoading(false);
         }
     };
 
-    const configurableSettings = settings ? Object.entries(settings).filter(([_, value]) => value.isConfigurable) : [];
+    const configurableSettings = localSettings
+        ? Object.entries(localSettings).filter(([_, value]) => value.isConfigurable)
+        : [];
 
     return (
         <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -165,35 +169,39 @@ export const NotificationSettingsPopover: React.FC<NotificationSettingsPopoverPr
                             Manage notifications for this {entityType.toLowerCase()}.
                         </p>
                     </div>
-                    {isLoading && <p>Loading settings...</p>}
+                    {isLoading && <p>Updating...</p>}
                     {error && <p className="text-sm text-destructive">{error}</p>}
-                    {!isLoading && !error && settings && (
-                        <div className="grid gap-2">
-                            {configurableSettings.length > 0 ? (
-                                configurableSettings.map(([type, setting]) => (
-                                    <div key={type} className="flex items-center space-x-2">
-                                        <Checkbox
-                                            id={`${entityId}-${type}`}
-                                            checked={setting.isEnabled}
-                                            onCheckedChange={(checked) =>
-                                                handleSettingChange(type as NotificationType, !!checked)
-                                            }
-                                            disabled={!setting.isConfigurable}
-                                        />
-                                        <Label htmlFor={`${entityId}-${type}`} className="text-sm font-normal">
-                                            {getNotificationTypeLabel(type as NotificationType)}
-                                        </Label>
-                                    </div>
-                                ))
-                            ) : (
-                                <p className="text-sm text-muted-foreground">
-                                    No configurable notifications for this item.
-                                </p>
-                            )}
-                        </div>
-                    )}
-                    {!isLoading && !error && !settings && !configurableSettings.length && (
-                        <p className="text-sm text-muted-foreground">No notification settings available.</p>
+                    {!isLoading &&
+                        !error &&
+                        localSettings && ( // Use localSettings for rendering
+                            <div className="grid gap-2">
+                                {configurableSettings.length > 0 ? (
+                                    configurableSettings.map(([type, setting]) => (
+                                        <div key={type} className="flex items-center space-x-2">
+                                            <Checkbox
+                                                id={`${entityId}-${type}`}
+                                                checked={setting.isEnabled}
+                                                onCheckedChange={(checked) =>
+                                                    handleSettingChange(type as NotificationType, !!checked)
+                                                }
+                                                disabled={!setting.isConfigurable}
+                                            />
+                                            <Label htmlFor={`${entityId}-${type}`} className="text-sm font-normal">
+                                                {getNotificationTypeLabel(type as NotificationType)}
+                                            </Label>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-sm text-muted-foreground">
+                                        No configurable notifications for this item.
+                                    </p>
+                                )}
+                            </div>
+                        )}
+                    {!isLoading && !error && !localSettings && !configurableSettings.length && (
+                        <p className="text-sm text-muted-foreground">
+                            No notification settings available or user data not loaded.
+                        </p>
                     )}
                 </div>
             </PopoverContent>

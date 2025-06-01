@@ -24,7 +24,8 @@ import { ObjectId } from "mongodb";
 
 // Placeholder for permission checking
 // This would check if a user has the 'requiredPermission' for a given entity and notification type
-const checkUserPermissionForNotification = async (
+export const checkUserPermissionForNotification = async (
+    // Added export
     userId: string, // This is user DID
     entityType: EntityType,
     entityId: string, // ID of the entity instance (e.g. circleId, postId)
@@ -218,6 +219,21 @@ export async function getGroupedUserNotificationSettings(): Promise<GroupedNotif
     } catch (error) {
         console.error("Error fetching notification settings:", error);
         return { error: "Failed to fetch notification settings." };
+    }
+}
+
+/**
+ * Fetches default notification settings for a given entity type.
+ */
+export async function getDefaultSettingsForEntityType(
+    entityType: EntityType,
+): Promise<DefaultNotificationSetting[] | { error: string }> {
+    try {
+        const defaults = await DefaultNotificationSettings.find({ entityType }).toArray();
+        return defaults;
+    } catch (error) {
+        console.error(`Error fetching default settings for entityType ${entityType}:`, error);
+        return { error: `Failed to fetch default settings for ${entityType}.` };
     }
 }
 

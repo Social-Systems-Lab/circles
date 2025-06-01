@@ -14,12 +14,21 @@ import {
     TaskStage,
     GoalStage, // Added TaskStage
     Media, // Added Media
+    EntityType, // For notification settings
+    DefaultNotificationSetting, // For notification settings
+    UserNotificationSetting, // For notification settings
 } from "@/models/models";
 import crypto from "crypto";
 import { getCirclesByDids, updateCircle } from "./circle";
 import { getServerSettings, updateServerSettings } from "./server-settings";
 import { getPrivateUserByDid, getUser } from "./user";
 import { getMembers } from "./member";
+import { UserNotificationSettings, DefaultNotificationSettings } from "./db"; // DB collections
+// Import checkUserPermissionForNotification - this is a server action.
+// We might need to call it or replicate its essential logic if matrix.ts is purely server-side.
+// For now, let's assume we can call it or have access to similar permission checking.
+// If matrix.ts can call server actions:
+import { checkUserPermissionForNotification } from "@/lib/actions/notificationSettings";
 
 const MATRIX_HOST = process.env.MATRIX_HOST || "127.0.0.1";
 const MATRIX_PORT = parseInt(process.env.MATRIX_PORT || "8008");
@@ -523,19 +532,120 @@ export async function sendNotifications(
         recipients?.map((x) => x.name),
     );
     for (const recipient of recipients) {
-        let r = recipient;
-        if (!r.matrixAccessToken || !r.matrixNotificationsRoomId) {
-            const userDoc = await getPrivateUserByDid(recipient.did!);
-            if (!userDoc) continue;
-            r = userDoc;
-        }
-
-        // If still no matrix credentials or no notifications room, skip.
-        if (!r.matrixAccessToken || !r.matrixNotificationsRoomId) {
+        let r = recipient; // User object for the recipient
+        if (!r.did) {
+            console.warn("Recipient has no DID, skipping notification:", r.name);
             continue;
         }
 
-        // Sanitize payload to convert any ObjectId or Date to string
+        // Determine entityType and entityId from payload and notificationType
+        let currentEntityType: EntityType | undefined = undefined;
+        let currentEntityId: string | undefined = undefined;
+
+        if (notificationType.startsWith("post_") || notificationType.startsWith("comment_")) {
+            if (payload.postId) {
+                currentEntityType = "POST";
+                currentEntityId = payload.postId.toString();
+                if (notificationType.startsWith("comment_") && payload.commentId) {
+                    // For comment-specific notifications, the primary entity might still be the post,
+                    // or we could model comments as their own entities for notifications.
+                    // Let's assume for now comment notifications are tied to the POST entity context.
+                    // If comments were their own entityType for notifications:
+                    // currentEntityType = "COMMENT";
+                    // currentEntityId = payload.commentId.toString();
+                }
+            }
+        } else if (notificationType.startsWith("proposal_")) {
+            currentEntityType = "PROPOSAL";
+            currentEntityId = payload.proposalId?.toString();
+        } else if (notificationType.startsWith("issue_")) {
+            currentEntityType = "ISSUE";
+            currentEntityId = payload.issueId?.toString();
+        } else if (notificationType.startsWith("task_")) {
+            currentEntityType = "TASK";
+            currentEntityId = payload.taskId?.toString();
+        } else if (notificationType.startsWith("goal_")) {
+            currentEntityType = "GOAL";
+            currentEntityId = payload.goalId?.toString();
+        } else if (notificationType.startsWith("follow_") || notificationType === "new_follower") {
+            currentEntityType = "CIRCLE";
+            currentEntityId = payload.circle?._id?.toString();
+        }
+        // Add other mappings as needed, e.g., for "USER" entityType if applicable
+
+        if (!currentEntityType || !currentEntityId) {
+            console.warn(
+                `Could not determine entityType/Id for notificationType: ${notificationType}. Sending without check.`,
+            );
+            // Fallback: send notification if entity cannot be determined (old behavior)
+        } else {
+            let isEnabled = false;
+            let isPermitted = false;
+
+            // 1. Check user-specific setting
+            const userSetting = await UserNotificationSettings.findOne({
+                userId: r.did,
+                entityType: currentEntityType,
+                entityId: currentEntityId,
+                notificationType: notificationType,
+            });
+
+            if (userSetting) {
+                isEnabled = userSetting.isEnabled;
+            } else {
+                // 2. Check default setting if no user-specific one
+                const defaultSetting = await DefaultNotificationSettings.findOne({
+                    entityType: currentEntityType,
+                    notificationType: notificationType,
+                });
+                if (defaultSetting) {
+                    isEnabled = defaultSetting.defaultIsEnabled;
+                } else {
+                    // Fallback: if no default is defined, assume enabled (or choose a stricter default like false)
+                    isEnabled = true;
+                    console.warn(
+                        `No default setting found for ${currentEntityType} - ${notificationType}. Assuming enabled.`,
+                    );
+                }
+            }
+
+            // 3. Verify permission (re-verification step)
+            // This uses the `requiredPermission` from the default setting if available.
+            const defaultForPermCheck = await DefaultNotificationSettings.findOne({
+                entityType: currentEntityType,
+                notificationType: notificationType,
+            });
+
+            isPermitted = await checkUserPermissionForNotification(
+                r.did,
+                currentEntityType,
+                currentEntityId,
+                defaultForPermCheck?.requiredPermission,
+            );
+
+            if (!isEnabled || !isPermitted) {
+                console.log(
+                    `Notification ${notificationType} for ${r.name} on ${currentEntityType}:${currentEntityId} is disabled or not permitted. Skipping.`,
+                );
+                continue; // Skip sending this notification
+            }
+        }
+
+        // Proceed with sending if checks pass or if entityType/Id could not be determined (fallback)
+        if (!r.matrixAccessToken || !r.matrixNotificationsRoomId) {
+            const userDoc = await getPrivateUserByDid(r.did); // r.did should be valid here
+            if (!userDoc) {
+                console.warn("Could not retrieve full userDoc for recipient, skipping:", r.name);
+                continue;
+            }
+            r = userDoc; // Use the full UserPrivate object
+        }
+
+        if (!r.matrixAccessToken || !r.matrixNotificationsRoomId) {
+            console.warn("Recipient still missing Matrix credentials or notifications room, skipping:", r.name);
+            continue;
+        }
+
         const sanitizedPayload = {
             circle: payload.circle ? sanitizeCircle(payload.circle) : undefined,
             user: payload.user ? sanitizeCircle(payload.user) : undefined,

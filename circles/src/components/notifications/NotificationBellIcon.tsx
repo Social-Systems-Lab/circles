@@ -11,8 +11,18 @@ interface NotificationBellIconProps {
 }
 
 export const NotificationBellIcon: React.FC<NotificationBellIconProps> = ({ onClick, className, size = 20 }) => {
+    const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+        console.log("NotificationBellIcon clicked. Event target:", event.target);
+        onClick();
+    };
     return (
-        <Button variant="ghost" size="icon" onClick={onClick} className={className} aria-label="Notification settings">
+        <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleClick}
+            className={className}
+            aria-label="Notification settings"
+        >
             <Bell size={size} />
         </Button>
     );

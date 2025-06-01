@@ -14,6 +14,15 @@ import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { MessageButton } from "./message-button";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
+import { NotificationSettingsPopover } from "@/components/notifications/NotificationSettingsPopover";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { MoreHorizontal } from "lucide-react";
 
 type HomeContentProps = {
     circle: Circle;
@@ -92,9 +101,19 @@ export default function HomeContent({ circle, authorizedToEdit }: HomeContentPro
                                     <MessageButton circle={circle} renderCompact={false} />
                                 </div>
                             )}
-                            <div className={`absolute right-0 top-0 flex flex-row gap-1 pt-2`}>
+                            <div className={`absolute right-0 top-0 flex flex-row items-center gap-1 pt-2`}>
+                                {" "}
+                                {/* items-center added */}
                                 <InviteButton circle={circle} />
                                 <FollowButton circle={circle} />
+                                {/* Consistent Bell Icon for Mobile View */}
+                                {circle._id && user && (
+                                    <NotificationSettingsPopover
+                                        entityType="CIRCLE"
+                                        entityId={circle._id.toString()}
+                                        className="h-8 w-8 p-0" // Adjust styling as needed for compact view
+                                    />
+                                )}
                             </div>
                         </>
                     )}
@@ -122,7 +141,7 @@ export default function HomeContent({ circle, authorizedToEdit }: HomeContentPro
                                         multiline
                                     />
                                 ) : (
-                                    circle.description ?? circle.mission
+                                    (circle.description ?? circle.mission)
                                 )}
                             </div>
                         )}
@@ -144,6 +163,15 @@ export default function HomeContent({ circle, authorizedToEdit }: HomeContentPro
                             )}
                             <InviteButton circle={circle} />
                             <FollowButton circle={circle} />
+                            {/* Add NotificationSettingsPopover for the current circle */}
+                            {circle._id &&
+                                user && ( // Ensure circle ID and user are available
+                                    <NotificationSettingsPopover
+                                        entityType="CIRCLE"
+                                        entityId={circle._id.toString()}
+                                        className="ml-1" // Add some margin if needed
+                                    />
+                                )}
                         </div>
                     )}
                 </div>
