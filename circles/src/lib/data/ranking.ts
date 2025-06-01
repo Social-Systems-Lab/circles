@@ -413,9 +413,9 @@ export const getAggregateRanking = async (
         filterUserGroupHandle: filterUserGroupHandle || null,
     };
 
-    console.trace(
-        `Getting aggregate ranking for ${itemType} in ${entityId} (group: ${filterUserGroupHandle || "all"})`,
-    ); // Replaced log.trace with console.trace
+    // console.trace(
+    //     `Getting aggregate ranking for ${itemType} in ${entityId} (group: ${filterUserGroupHandle || "all"})`,
+    // ); // Replaced log.trace with console.trace
 
     // If maxCacheAge is 0, skip cache check and recalculate
     if (maxCacheAgeSeconds > 0) {

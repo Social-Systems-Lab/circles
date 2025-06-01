@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useTransition, ChangeEvent } from "react";
+import React, { useEffect, useState, useTransition, ChangeEvent, useMemo } from "react";
 import {
     ColumnDef,
     ColumnFiltersState,
@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Circle, ContentPreviewData, ProposalDisplay, ProposalStage } from "@/models/models";
 import { Button } from "@/components/ui/button";
-import { ArrowDown, ArrowUp, Loader2, MoreHorizontal, Plus } from "lucide-react";
+import { ArrowDown, ArrowUp, Loader2, MoreHorizontal, Plus, TriangleAlert, CheckCircle2 } from "lucide-react"; // Added TriangleAlert, CheckCircle2
 import { Label } from "@/components/ui/label";
 import {
     DropdownMenu,
@@ -48,7 +48,9 @@ import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link"; // Import Link
-import { CheckCircle, XCircle, ListOrdered } from "lucide-react"; // Import icons for outcome and ranking
+import { CheckCircle, XCircle, ListOrdered, User as UserIcon } from "lucide-react"; // Import icons for outcome and ranking, UserIcon
+import { PiRankingBold, PiUsersThree } from "react-icons/pi"; // For aggregated rank icon, PiUsersThree
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // For tooltips
 import ProposalPrioritizationModal from "./proposal-prioritization-modal"; // Import the modal
 
 interface ProposalsListProps {
@@ -115,6 +117,26 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
     const [createProposalDialogOpen, setCreateProposalDialogOpen] = useState<boolean>(false);
     const [newProposalName, setNewProposalName] = useState<string>("");
     const [isPrioritizationModalOpen, setIsPrioritizationModalOpen] = useState(false); // State for modal
+    const [hasMounted, setHasMounted] = useState(false);
+
+    useEffect(() => {
+        setHasMounted(true);
+    }, []);
+
+    // Aggregate ranking stats for "accepted" tab
+    const rankingStats = useMemo(() => {
+        if (currentTabKey !== "accepted" || proposals.length === 0) {
+            return { totalRankers: 0, hasUserRanked: false, unrankedCount: 0 };
+        }
+        // Assuming all proposals passed to the list for the 'accepted' tab have these fields populated consistently
+        // We take the values from the first proposal as they should be the same for all in this context.
+        const firstProposal = proposals[0];
+        return {
+            totalRankers: firstProposal.totalRankers || 0,
+            hasUserRanked: firstProposal.hasUserRanked || false,
+            unrankedCount: firstProposal.unrankedCount || 0,
+        };
+    }, [proposals, currentTabKey]);
 
     // Check permissions
     const canCreate = isAuthorized(user, circle, features.proposals.create);
@@ -124,7 +146,78 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
     const { toast } = useToast();
 
     const columns = React.useMemo<ColumnDef<ProposalDisplay>[]>(() => {
-        const baseColumns: ColumnDef<ProposalDisplay>[] = [
+        let columnsToRender: ColumnDef<ProposalDisplay>[] = [];
+
+        // Add rank columns first if on the "accepted" tab
+        if (currentTabKey === "accepted") {
+            columnsToRender.push(
+                {
+                    accessorKey: "rank", // Assuming ProposalDisplay will have this for overall rank
+                    header: ({ column }) => (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                                        className="p-1"
+                                    >
+                                        <PiRankingBold className="h-4 w-4" />
+                                        <SortIcon sortDir={column.getIsSorted()} />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Sort by Aggregated Rank</TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    ),
+                    cell: (info) => {
+                        const rank = info.getValue() as number | undefined;
+                        return rank !== undefined ? (
+                            <span className="inline-block min-w-[20px] rounded bg-gray-200 px-1.5 py-0.5 text-center text-xs font-semibold text-gray-700">
+                                {rank}
+                            </span>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        );
+                    },
+                    size: 100, // Adjust size as needed
+                } as ColumnDef<ProposalDisplay>,
+                {
+                    accessorKey: "userRank", // Assuming ProposalDisplay will have this
+                    header: ({ column }) => (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                                        className="p-1"
+                                    >
+                                        <UserIcon className="h-4 w-4" />
+                                        <SortIcon sortDir={column.getIsSorted()} />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Sort by Your Rank</TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    ),
+                    cell: (info) => {
+                        const userRank = info.getValue() as number | undefined;
+                        return userRank !== undefined ? (
+                            <span className="inline-block min-w-[20px] rounded border border-blue-300 bg-blue-100 px-1.5 py-0.5 text-center text-xs font-semibold text-blue-800">
+                                {userRank}
+                            </span>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        );
+                    },
+                    size: 100, // Adjust size as needed
+                } as ColumnDef<ProposalDisplay>,
+            );
+        }
+
+        // Add base columns
+        columnsToRender.push(
             {
                 accessorKey: "name",
                 header: ({ column }) => {
@@ -148,48 +241,6 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
                     );
                 },
             },
-            // Conditional User Rank Column
-            ...(currentTabKey === "accepted"
-                ? [
-                      {
-                          accessorKey: "userRank", // Assuming ProposalDisplay will have this
-                          header: ({ column }: { column: any }) => (
-                              <Button variant="ghost" onClick={() => column.toggleSorting()}>
-                                  Your Rank
-                                  <SortIcon sortDir={column.getIsSorted()} />
-                              </Button>
-                          ),
-                          cell: (info: any) => {
-                              const rank = info.getValue();
-                              return rank ? (
-                                  <Badge variant="outline">{rank}</Badge>
-                              ) : (
-                                  <span className="text-muted-foreground">-</span>
-                              );
-                          },
-                          size: 100,
-                      } as ColumnDef<ProposalDisplay>, // Cast to satisfy TypeScript
-                  ]
-                : []),
-            // Conditional Overall Rank Column
-            ...(currentTabKey === "accepted"
-                ? [
-                      {
-                          accessorKey: "rank", // Assuming ProposalDisplay will have this for overall rank
-                          header: ({ column }: { column: any }) => (
-                              <Button variant="ghost" onClick={() => column.toggleSorting()}>
-                                  Overall Rank
-                                  <SortIcon sortDir={column.getIsSorted()} />
-                              </Button>
-                          ),
-                          cell: (info: any) => {
-                              const rank = info.getValue();
-                              return rank ? <Badge>{rank}</Badge> : <span className="text-muted-foreground">-</span>;
-                          },
-                          size: 100,
-                      } as ColumnDef<ProposalDisplay>, // Cast to satisfy TypeScript
-                  ]
-                : []),
             {
                 accessorKey: "stage",
                 header: ({ column }) => {
@@ -272,8 +323,8 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
                 },
                 cell: (info) => new Date(info.getValue() as Date).toLocaleDateString(),
             },
-        ];
-        return baseColumns;
+        );
+        return columnsToRender;
     }, [isCompact, currentTabKey, circle.handle]);
 
     const table = useReactTable({
@@ -415,7 +466,59 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
 
     return (
         <div className="flex flex-1 flex-row justify-center">
-            <div className="mb-4 ml-2 mr-2 mt-4 flex max-w-[1100px] flex-1 flex-col">
+            <div className="mb-4 flex max-w-[1100px] flex-1 flex-col">
+                {/* --- START: Rank Stats and Nudge Boxes (for 'accepted' tab) --- */}
+                {currentTabKey === "accepted" && (
+                    <>
+                        {rankingStats.hasUserRanked && (
+                            <div className="mb-3 rounded border bg-blue-50 p-3 text-sm text-blue-800 shadow-sm">
+                                <p className="flex items-center">
+                                    <PiUsersThree className="mr-2 h-5 w-5 flex-shrink-0" />
+                                    You&apos;ve ranked these proposals.{" "}
+                                    <span>
+                                        {" "}
+                                        Currently,{" "}
+                                        <span className="mx-1 font-semibold">{rankingStats.totalRankers}</span>{" "}
+                                        {rankingStats.totalRankers === 1 ? "user" : "users"} contributed to the
+                                        aggregated ranking.
+                                    </span>
+                                </p>
+                            </div>
+                        )}
+
+                        {rankingStats.hasUserRanked && rankingStats.unrankedCount > 0 && (
+                            <div
+                                className="mb-4 cursor-pointer rounded border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800 shadow-sm transition-colors hover:bg-yellow-100"
+                                onClick={() => setIsPrioritizationModalOpen(true)}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => e.key === "Enter" && setIsPrioritizationModalOpen(true)}
+                            >
+                                <p className="flex items-center">
+                                    <TriangleAlert className="mr-2 h-5 w-5 flex-shrink-0 text-yellow-600" />
+                                    You have{" "}
+                                    <span className="mx-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
+                                        {rankingStats.unrankedCount}
+                                    </span>{" "}
+                                    unranked proposal{rankingStats.unrankedCount !== 1 ? "s" : ""}.
+                                    {/* Staleness info omitted for now */}
+                                    {!isCompact && " Click here to rank."}
+                                </p>
+                            </div>
+                        )}
+
+                        {rankingStats.hasUserRanked && rankingStats.unrankedCount === 0 && (
+                            <div className="mb-4 rounded border border-green-400 bg-green-50 p-3 text-sm text-green-800 shadow-sm">
+                                <p className="flex items-center">
+                                    <CheckCircle2 className="mr-2 h-5 w-5 flex-shrink-0 text-green-600" />
+                                    Nicely done! You've ranked all available proposals.
+                                </p>
+                            </div>
+                        )}
+                    </>
+                )}
+                {/* --- END: Rank Stats and Nudge Boxes --- */}
+
                 <div className="flex w-full flex-row items-center gap-2">
                     <div className="flex flex-1 flex-col">
                         <Input
@@ -425,14 +528,16 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
                         />
                     </div>
                     <div className="flex items-center gap-2">
-                        {currentTabKey === "accepted" && canRank && (
-                            <Button variant="outline" onClick={() => setIsPrioritizationModalOpen(true)}>
-                                <ListOrdered className="mr-2 h-4 w-4" /> Rank Accepted Proposals
-                            </Button>
-                        )}
-                        {canCreate && (
+                        {hasMounted && canCreate && (
                             <Button onClick={handleCreateProposalClick}>
                                 <Plus className="mr-2 h-4 w-4" /> Create Proposal
+                            </Button>
+                        )}
+                        {hasMounted && currentTabKey === "accepted" && canRank && (
+                            <Button onClick={() => setIsPrioritizationModalOpen(true)}>
+                                {" "}
+                                {/* Blue button by default */}
+                                <ListOrdered className="mr-2 h-4 w-4" /> Rank
                             </Button>
                         )}
                     </div>
@@ -481,9 +586,11 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
                                     const isActive = (contentPreview?.content as ProposalDisplay)?._id === proposal._id;
 
                                     // Determine if edit/delete should be shown based on new stage logic
+                                    // Defer permission-based rendering until client-side mount
                                     const canEditThisProposal =
-                                        canModerate || (isAuthor && ["draft", "review"].includes(proposal.stage));
-                                    const canDeleteThisProposal = canModerate || isAuthor; // Authors can always delete their own, mods can delete any
+                                        hasMounted &&
+                                        (canModerate || (isAuthor && ["draft", "review"].includes(proposal.stage)));
+                                    const canDeleteThisProposal = hasMounted && (canModerate || isAuthor);
 
                                     return (
                                         <motion.tr
@@ -575,8 +682,8 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
                         <DialogHeader>
                             <DialogTitle>Delete Proposal</DialogTitle>
                             <DialogDescription>
-                                Are you sure you want to delete the proposal &quot;{selectedProposal?.name}&quot;? This
-                                action cannot be undone.
+                                Are you sure you want to delete the proposal "{selectedProposal?.name}"? This action
+                                cannot be undone.
                             </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>

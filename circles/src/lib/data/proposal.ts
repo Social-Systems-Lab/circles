@@ -1,10 +1,20 @@
 // proposal.ts - Proposal data access functions
-import { Proposals, Circles, Members, Reactions, Feeds, Posts } from "./db"; // Added Feeds, Posts
+import { Proposals, Circles, Members, Reactions, Feeds, Posts, RankedLists } from "./db"; // Added Feeds, Posts, RankedLists
 import { ObjectId } from "mongodb";
-import { Proposal, ProposalDisplay, ProposalStage, ProposalOutcome, Circle, Post } from "@/models/models"; // Added Post type
+import {
+    Proposal,
+    ProposalDisplay,
+    ProposalStage,
+    ProposalOutcome,
+    Circle,
+    Post,
+    RankedList,
+    // User, // User type is not exported from models, getUserByDid returns a Circle
+} from "@/models/models"; // Added Post type, RankedList
 import { getCircleById, SAFE_CIRCLE_PROJECTION } from "./circle";
 import { getUserByDid } from "./user";
 import { createPost } from "./feed"; // Import createPost from feed.ts
+// import { getStalenessInfo } from "./ranking"; // getStalenessInfo is not exported from ranking
 
 // Safe projection for proposal queries
 export const SAFE_PROPOSAL_PROJECTION = {
@@ -25,6 +35,7 @@ export const SAFE_PROPOSAL_PROJECTION = {
     userGroups: 1,
     resolvedAtStage: 1,
     goalId: 1, // Add goalId
+    // Ranking related fields will be added dynamically
 } as const;
 
 /**
@@ -133,46 +144,86 @@ export const getProposalsByCircleId = async (circleId: string, userDid?: string)
             { $sort: { createdAt: -1 } },
         ]).toArray()) as ProposalDisplay[];
 
+        // --- START: Integrate Ranking Data ---
+        let finalProposals: ProposalDisplay[] = proposals;
+
+        if (userDid) {
+            const user = await getUserByDid(userDid); // Fetch user for ranking
+            if (user) {
+                const rankingData = await getProposalRanking(circleId);
+                const userRankedListDoc = (await RankedLists.findOne({
+                    entityId: circleId,
+                    type: "proposals",
+                    userId: user._id?.toString(),
+                })) as RankedList | null;
+
+                const userRankedProposalIds = userRankedListDoc?.list || [];
+                const userRankMap = new Map(userRankedProposalIds.map((id, index) => [id, index + 1]));
+
+                const hasUserRanked = !!userRankedListDoc && userRankedListDoc.isValid;
+
+                // Calculate unrankedCount for proposals in 'accepted' stage
+                // This assumes activeProposalIds from getProposalRanking are those in 'accepted' stage
+                let unrankedCount = 0;
+                if (hasUserRanked) {
+                    rankingData.activeProposalIds.forEach((proposalId) => {
+                        if (!userRankMap.has(proposalId)) {
+                            unrankedCount++;
+                        }
+                    });
+                } else if (userRankedListDoc && !userRankedListDoc.isValid) {
+                    // If list is invalid, all active proposals are considered unranked for this user for the nudge
+                    unrankedCount = rankingData.activeProposalIds.size;
+                }
+
+                finalProposals = proposals.map((proposal) => {
+                    const proposalIdStr = proposal._id.toString();
+                    const rank = rankingData.rankMap.get(proposalIdStr);
+                    const userRank = userRankMap.get(proposalIdStr);
+                    const isAcceptedStage = proposal.stage === "accepted";
+
+                    return {
+                        ...proposal,
+                        rank: isAcceptedStage && rank !== undefined ? rank : undefined,
+                        userRank: isAcceptedStage && userRank !== undefined ? userRank : undefined,
+                        totalRankers: isAcceptedStage ? rankingData.totalRankers : undefined,
+                        hasUserRanked: isAcceptedStage ? hasUserRanked : undefined,
+                        unrankedCount: isAcceptedStage ? unrankedCount : undefined,
+                        // stalenessInfo will be added if needed, requires more context on how it's calculated for proposals
+                    };
+                });
+            }
+        }
+        // --- END: Integrate Ranking Data ---
+
         // Post-processing to filter based on user groups
         if (userDid) {
-            // Get user's memberships for the circle
             const userMemberships = new Map<string, string[]>();
-
-            // Always add "everyone" as a group the user belongs to
             userMemberships.set("everyone", ["everyone"]);
-
-            // Get the user's membership from the Members collection
             const memberDoc = await Members.findOne({ userDid, circleId });
-
             if (memberDoc?.userGroups && memberDoc.userGroups.length > 0) {
                 userMemberships.set(circleId, memberDoc.userGroups);
             }
 
-            // Filter proposals based on user groups
-            const filteredProposals = proposals.filter((proposal) => {
-                // If proposal has no user groups or empty user groups array, it's visible to everyone
-                if (!proposal.userGroups || proposal.userGroups.length === 0) {
-                    return true;
-                }
-
-                // Get the user's groups in this circle
+            finalProposals = finalProposals.filter((proposal) => {
+                if (!proposal.userGroups || proposal.userGroups.length === 0) return true;
                 const userGroupsInCircle = userMemberships.get(circleId) || [];
-
-                // Check if any of the proposal's user groups match the user's groups in this circle
                 return (
                     proposal.userGroups.includes("everyone") ||
                     proposal.userGroups.some((group) => userGroupsInCircle.includes(group))
                 );
             });
-
-            return filteredProposals;
+        } else {
+            // If no user is specified, only return proposals with "everyone" user group
+            finalProposals = finalProposals.filter(
+                (proposal) =>
+                    !proposal.userGroups ||
+                    proposal.userGroups.length === 0 ||
+                    proposal.userGroups.includes("everyone"),
+            );
         }
 
-        // If no user is specified, only return proposals with "everyone" user group
-        return proposals.filter(
-            (proposal) =>
-                !proposal.userGroups || proposal.userGroups.length === 0 || proposal.userGroups.includes("everyone"),
-        );
+        return finalProposals;
     } catch (error) {
         console.error("Error getting proposals:", error);
         throw error;

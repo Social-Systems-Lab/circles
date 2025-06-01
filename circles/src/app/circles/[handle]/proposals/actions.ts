@@ -2,12 +2,22 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod"; // Add zod import
-import { Feeds, Posts, Proposals } from "@/lib/data/db"; // Import DB collections
+import { Feeds, Posts, Proposals, RankedLists } from "@/lib/data/db"; // Import DB collections // Added RankedLists
 import { Post } from "@/models/models"; // Import Post type
 import { createPost } from "@/lib/data/feed"; // Import createPost
 import { ObjectId } from "mongodb"; // Import ObjectId
-import { Circle, Media, Proposal, ProposalDisplay, ProposalOutcome, ProposalStage, mediaSchema } from "@/models/models"; // Add Media, mediaSchema
-import { getCircleByHandle } from "@/lib/data/circle";
+import {
+    Circle,
+    Media,
+    Proposal,
+    ProposalDisplay,
+    ProposalOutcome,
+    ProposalStage,
+    mediaSchema,
+    RankedList,
+    rankedListSchema,
+} from "@/models/models"; // Add Media, mediaSchema, RankedList, rankedListSchema
+import { getCircleByHandle, ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added ensureModuleIsEnabledOnCircle
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getUserByDid } from "@/lib/data/user";
 import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage"; // Correct storage functions and add FileInfo type alias, import isFile
@@ -21,7 +31,7 @@ import {
     changeProposalStage,
     addReactionToProposal,
     removeReactionFromProposal,
-    getActiveProposalsByStage, // Placeholder for now
+    getActiveProposalsByStage,
     // getProposalRanking, // Placeholder for aggregate ranking if needed later
 } from "@/lib/data/proposal";
 import {
@@ -32,9 +42,6 @@ import {
     notifyProposalResolvedVoters,
     notifyProposalVote,
 } from "@/lib/data/notifications";
-import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
-import { RankedList, rankedListSchema } from "@/models/models"; // Added for ranking
-import { RankedLists } from "@/lib/data/db"; // Added for ranking
 import { updateAggregateRankCache } from "@/lib/data/ranking"; // Added for ranking
 
 /**
@@ -561,7 +568,7 @@ export async function updateProposalAction(
 
         // Identify images to delete (compare original existing images with the URLs of those submitted back)
         const imagesToDelete = existingImages.filter(
-            (existing) => !remainingExistingMediaUrls.includes(existing.fileInfo.url),
+            (existing: Media) => !remainingExistingMediaUrls.includes(existing.fileInfo.url),
         );
 
         // Upload new files
@@ -588,7 +595,7 @@ export async function updateProposalAction(
 
         // Delete removed files from storage using their URLs
         if (imagesToDelete.length > 0) {
-            const deletePromises = imagesToDelete.map(async (img) => {
+            const deletePromises = imagesToDelete.map(async (img: Media) => {
                 try {
                     await deleteFile(img.fileInfo.url); // Use deleteFile with URL
                 } catch (error) {
@@ -919,7 +926,6 @@ export async function getProposalsForRankingAction(circleHandle: string): Promis
         }
 
         // Assuming getActiveProposalsByStage fetches proposals in the 'accepted' stage
-        // This function needs to be implemented in "@/lib/data/proposal"
         const acceptedProposals = await getActiveProposalsByStage(circle._id!.toString(), "accepted", userDid);
         return acceptedProposals;
     } catch (error) {
@@ -963,10 +969,11 @@ export async function getUserRankedProposalsAction(
             entityId: circle._id?.toString(),
             type: type, // Use the passed "proposals" type
             userId: user._id?.toString(),
-        })) as RankedList;
+        })) as RankedList | null; // Ensure it can be null
 
-        if (rankedList) {
-            rankedList._id = rankedList?._id.toString();
+        if (rankedList && rankedList._id) {
+            // Check if rankedList and _id exist
+            rankedList._id = rankedList._id.toString();
         }
 
         return rankedList;
@@ -1023,7 +1030,6 @@ export async function saveUserRankedProposalsAction(
         }
 
         // Get all currently 'accepted' proposals to validate the submitted list
-        // This function needs to be implemented in "@/lib/data/proposal"
         const acceptedProposals = await getActiveProposalsByStage(circle._id!.toString(), "accepted", userDid);
         const acceptedProposalIds = new Set(acceptedProposals.map((p: ProposalDisplay) => p._id?.toString()));
         const submittedProposalIds = new Set(rankedItemIds);
@@ -1091,13 +1097,8 @@ export async function saveUserRankedProposalsAction(
  */
 export async function invalidateUserProposalRankingsIfNeededAction(circleId: string): Promise<void> {
     try {
-        // This function needs to be implemented in "@/lib/data/proposal" or a generic ranking helper
-        // For now, this is a placeholder.
-        // It would be similar to invalidateUserRankingsIfNeededAction in tasks/actions.ts
-        // but would fetch active proposals (stage: "accepted")
-        console.log(`Placeholder: InvalidateUserProposalRankingsIfNeededAction called for circle ${circleId}`);
+        console.log(`InvalidateUserProposalRankingsIfNeededAction called for circle ${circleId}`);
 
-        // Example structure (needs getActiveProposalsByStage from proposal data functions):
         const activeProposals = await getActiveProposalsByStage(circleId, "accepted"); // Assuming userDid not needed for system check
         const activeProposalIds = new Set(activeProposals.map((p: ProposalDisplay) => p._id?.toString()));
 
@@ -1117,16 +1118,16 @@ export async function invalidateUserProposalRankingsIfNeededAction(circleId: str
                 listProposalIds.size !== activeProposalIds.size ||
                 !Array.from(listProposalIds)
                     .map(String)
-                    .every((id: string) => activeProposalIds.has(id))
+                    .every((id: string) => activeProposalIds.has(id as string)) // Ensure id is treated as string for Set.has
             ) {
-                listsToInvalidate.push(list._id as ObjectId); // Cast to ObjectId if direct usage, or ensure it's string if find returns string IDs
+                listsToInvalidate.push(list._id as ObjectId);
             }
         }
 
         if (listsToInvalidate.length > 0) {
             await RankedLists.updateMany(
                 { _id: { $in: listsToInvalidate } },
-                { $set: { isValid: false, updatedAt: new Date(), becameStaleAt: new Date() } }, // Also set becameStaleAt
+                { $set: { isValid: false, updatedAt: new Date(), becameStaleAt: new Date() } },
             );
             console.log(`Invalidated ${listsToInvalidate.length} proposal rankings for circle ${circleId}`);
         }

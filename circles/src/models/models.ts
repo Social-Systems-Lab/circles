@@ -1065,6 +1065,11 @@ export interface ProposalDisplay extends Proposal {
     userReaction?: string; // Current user's reaction
     circle?: Circle;
     location?: Location; // Added location field
+    rank?: number; // Aggregated rank
+    userRank?: number; // User's specific rank
+    totalRankers?: number; // Total users who have ranked proposals in this context
+    hasUserRanked?: boolean; // Whether the current user has a valid ranking for proposals
+    unrankedCount?: number; // Number of 'accepted' proposals the user hasn't ranked yet
 }
 
 // Issue stages
