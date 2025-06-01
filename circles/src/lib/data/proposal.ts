@@ -228,6 +228,108 @@ export const getProposalRanking = async (
 };
 
 /**
+ * Get active proposals by a specific stage for a circle.
+ * @param circleId The ID of the circle
+ * @param stage The specific stage to filter by (e.g., "accepted")
+ * @param userDid Optional user DID for visibility checks (if needed, though typically system calls might not need this)
+ * @returns Array of proposals in the specified stage
+ */
+export const getActiveProposalsByStage = async (
+    circleId: string,
+    stage: ProposalStage,
+    userDid?: string, // Added userDid for consistency, though might not be strictly needed for 'accepted' stage if visibility is open
+): Promise<ProposalDisplay[]> => {
+    try {
+        const proposals = (await Proposals.aggregate([
+            {
+                $match: {
+                    circleId,
+                    stage: stage, // Filter by the provided stage
+                },
+            },
+            // Lookup for author details
+            {
+                $lookup: {
+                    from: "circles",
+                    localField: "createdBy",
+                    foreignField: "did",
+                    as: "authorDetails",
+                },
+            },
+            { $unwind: "$authorDetails" },
+
+            // Lookup for circle details
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { circleId: { $toObjectId: "$circleId" } },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ["$_id", "$$circleId"] } } },
+                        {
+                            $project: {
+                                _id: { $toString: "$_id" },
+                                name: 1,
+                                handle: 1,
+                                picture: 1,
+                                userGroups: 1, // Include userGroups for potential filtering
+                            },
+                        },
+                    ],
+                    as: "circleDetails",
+                },
+            },
+            { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
+
+            // Final projection
+            {
+                $project: {
+                    ...SAFE_PROPOSAL_PROJECTION,
+                    _id: { $toString: "$_id" },
+                    author: {
+                        _id: { $toString: "$authorDetails._id" },
+                        did: "$authorDetails.did",
+                        name: "$authorDetails.name",
+                        handle: "$authorDetails.handle",
+                        picture: "$authorDetails.picture",
+                    },
+                    circle: "$circleDetails",
+                    // userReaction is omitted for this list view for performance, can be added if needed
+                },
+            },
+            { $sort: { createdAt: -1 } }, // Or rank, if applicable
+        ]).toArray()) as ProposalDisplay[];
+
+        // Optional: Add user group filtering if userDid is provided and necessary for the stage
+        if (userDid) {
+            const memberDoc = await Members.findOne({ userDid, circleId });
+            const userGroupsInCircle = memberDoc?.userGroups || [];
+            const userIsMemberOrAdmin =
+                userGroupsInCircle.length > 0 || (await Circles.findOne({ _id: new ObjectId(circleId), did: userDid })); // Basic check
+
+            return proposals.filter((proposal) => {
+                if (
+                    !proposal.userGroups ||
+                    proposal.userGroups.length === 0 ||
+                    proposal.userGroups.includes("everyone")
+                ) {
+                    return true;
+                }
+                if (userIsMemberOrAdmin) {
+                    // Simplified check, refine if needed
+                    return proposal.userGroups.some((group) => userGroupsInCircle.includes(group));
+                }
+                return false;
+            });
+        }
+
+        return proposals;
+    } catch (error) {
+        console.error(`Error getting proposals for stage ${stage} in circle ${circleId}:`, error);
+        throw error;
+    }
+};
+
+/**
  * Get active proposals (discussion or voting) for a circle
  * @param circleId The ID of the circle
  * @returns Array of active proposals

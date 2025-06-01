@@ -80,14 +80,15 @@ const ProposalsTabs: React.FC<ProposalsTabsProps> = ({ circle, initialProposals 
                                     proposals={filteredProposals.filter((p) =>
                                         ["draft", "review", "voting"].includes(p.stage),
                                     )}
+                                    currentTabKey="submitted"
                                 />
                             </TabsContent>
                             <TabsContent value="accepted" className="mt-0">
                                 <ProposalsList
                                     circle={circle}
                                     proposals={filteredProposals.filter((p) => p.stage === "accepted")}
+                                    currentTabKey="accepted"
                                 />
-                                {/* Ranking UI will go here */}
                             </TabsContent>
                             <TabsContent value="resolved" className="mt-0">
                                 <ProposalsList
@@ -95,6 +96,7 @@ const ProposalsTabs: React.FC<ProposalsTabsProps> = ({ circle, initialProposals 
                                     proposals={filteredProposals.filter((p) =>
                                         ["implemented", "rejected"].includes(p.stage),
                                     )}
+                                    currentTabKey="resolved"
                                 />
                             </TabsContent>
                         </>

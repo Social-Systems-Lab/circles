@@ -21,6 +21,8 @@ import {
     changeProposalStage,
     addReactionToProposal,
     removeReactionFromProposal,
+    getActiveProposalsByStage, // Placeholder for now
+    // getProposalRanking, // Placeholder for aggregate ranking if needed later
 } from "@/lib/data/proposal";
 import {
     notifyProposalSubmittedForReview,
@@ -31,6 +33,9 @@ import {
     notifyProposalVote,
 } from "@/lib/data/notifications";
 import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
+import { RankedList, rankedListSchema } from "@/models/models"; // Added for ranking
+import { RankedLists } from "@/lib/data/db"; // Added for ranking
+import { updateAggregateRankCache } from "@/lib/data/ranking"; // Added for ranking
 
 /**
  * Get all proposals for a circle (client-callable action)
@@ -886,5 +891,246 @@ export async function voteOnProposalAction(
     } catch (error) {
         console.error("Error voting on proposal:", error);
         return { success: false, message: "Failed to process vote" };
+    }
+}
+
+// --- Proposal Prioritization Actions ---
+
+/**
+ * Get active proposals eligible for prioritization for a circle (i.e., in 'accepted' stage).
+ * Requires rank permission.
+ * @param circleHandle The handle of the circle
+ * @returns Array of 'accepted' proposals
+ */
+export async function getProposalsForRankingAction(circleHandle: string): Promise<ProposalDisplay[]> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            throw new Error("User not authenticated");
+        }
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) {
+            throw new Error("Circle not found");
+        }
+
+        const canRank = await isAuthorized(userDid, circle._id.toString(), features.proposals.rank);
+        if (!canRank) {
+            throw new Error("Not authorized to rank proposals");
+        }
+
+        // Assuming getActiveProposalsByStage fetches proposals in the 'accepted' stage
+        // This function needs to be implemented in "@/lib/data/proposal"
+        const acceptedProposals = await getActiveProposalsByStage(circle._id!.toString(), "accepted", userDid);
+        return acceptedProposals;
+    } catch (error) {
+        console.error("Error getting proposals for ranking:", error);
+        return []; // Return empty on error
+    }
+}
+
+/**
+ * Get the current user's ranked list for proposals in a circle.
+ * Requires rank permission.
+ * @param circleHandle The handle of the circle
+ * @param type The type of ranking list (should be "proposals")
+ * @returns The user's RankedList or null if not found/not authorized
+ */
+export async function getUserRankedProposalsAction(
+    circleHandle: string,
+    type: "proposals", // Ensure type is "proposals"
+): Promise<RankedList | null> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            throw new Error("User not authenticated");
+        }
+        const user = await getUserByDid(userDid);
+        if (!user) {
+            throw new Error("User data not found");
+        }
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) {
+            throw new Error("Circle not found");
+        }
+
+        const canRank = await isAuthorized(userDid, circle._id.toString(), features.proposals.rank);
+        if (!canRank) {
+            return null;
+        }
+
+        const rankedList = (await RankedLists.findOne({
+            entityId: circle._id?.toString(),
+            type: type, // Use the passed "proposals" type
+            userId: user._id?.toString(),
+        })) as RankedList;
+
+        if (rankedList) {
+            rankedList._id = rankedList?._id.toString();
+        }
+
+        return rankedList;
+    } catch (error) {
+        console.error("Error getting user ranked proposals list:", error);
+        return null;
+    }
+}
+
+const saveRankedProposalsSchema = z.object({
+    rankedItemIds: z.array(z.string()),
+});
+
+/**
+ * Save the user's ranked list for proposals in a circle.
+ * Requires rank permission and the list must contain all 'accepted' proposals.
+ * @param circleHandle The handle of the circle
+ * @param type The type of ranking list (should be "proposals")
+ * @param formData FormData containing rankedItemIds
+ * @returns Success status and message
+ */
+export async function saveUserRankedProposalsAction(
+    circleHandle: string,
+    type: "proposals", // Ensure type is "proposals"
+    formData: FormData,
+): Promise<{ success: boolean; message?: string }> {
+    try {
+        const validatedData = saveRankedProposalsSchema.safeParse({
+            rankedItemIds: formData.getAll("rankedItemIds"),
+        });
+
+        if (!validatedData.success) {
+            return { success: false, message: "Invalid input data for ranked list." };
+        }
+        const { rankedItemIds } = validatedData.data;
+
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "User not authenticated" };
+        }
+        const user = await getUserByDid(userDid);
+        if (!user) {
+            return { success: false, message: "User data not found" };
+        }
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) {
+            return { success: false, message: "Circle not found" };
+        }
+
+        const canRank = await isAuthorized(userDid, circle._id.toString(), features.proposals.rank);
+        if (!canRank) {
+            return { success: false, message: "Not authorized to rank proposals" };
+        }
+
+        // Get all currently 'accepted' proposals to validate the submitted list
+        // This function needs to be implemented in "@/lib/data/proposal"
+        const acceptedProposals = await getActiveProposalsByStage(circle._id!.toString(), "accepted", userDid);
+        const acceptedProposalIds = new Set(acceptedProposals.map((p: ProposalDisplay) => p._id?.toString()));
+        const submittedProposalIds = new Set(rankedItemIds);
+
+        if (
+            acceptedProposalIds.size !== submittedProposalIds.size ||
+            ![...acceptedProposalIds].every((id) => submittedProposalIds.has(id))
+        ) {
+            return {
+                success: false,
+                message: "Ranking is incomplete or contains invalid proposals. Please rank all accepted proposals.",
+            };
+        }
+
+        const now = new Date();
+        const rankedListData: Omit<RankedList, "_id"> = {
+            entityId: circle._id!.toString(),
+            type: type, // Use the passed "proposals" type
+            userId: user._id!.toString(),
+            list: rankedItemIds,
+            createdAt: now,
+            updatedAt: now,
+            isValid: true,
+        };
+
+        await RankedLists.updateOne(
+            {
+                entityId: rankedListData.entityId,
+                type: rankedListData.type,
+                userId: rankedListData.userId,
+            },
+            {
+                $set: {
+                    list: rankedListData.list,
+                    updatedAt: rankedListData.updatedAt,
+                    isValid: rankedListData.isValid,
+                },
+                $setOnInsert: {
+                    createdAt: rankedListData.createdAt,
+                },
+            },
+            { upsert: true },
+        );
+
+        // Update Aggregate Rank Cache for proposals
+        await updateAggregateRankCache({
+            entityId: circle._id!.toString(),
+            itemType: "proposals", // Specify itemType as "proposals"
+            filterUserGroupHandle: undefined,
+        });
+
+        revalidatePath(`/circles/${circleHandle}/proposals`);
+
+        return { success: true, message: "Proposal ranking saved successfully." };
+    } catch (error) {
+        console.error("Error saving user ranked proposals list:", error);
+        return { success: false, message: "Failed to save proposal ranking." };
+    }
+}
+
+/**
+ * Marks user proposal rankings as potentially invalid if the set of 'accepted' proposals changes.
+ * Should be called internally when proposals enter/leave 'accepted' stage or are deleted.
+ * @param circleId The ID of the circle where proposals changed
+ */
+export async function invalidateUserProposalRankingsIfNeededAction(circleId: string): Promise<void> {
+    try {
+        // This function needs to be implemented in "@/lib/data/proposal" or a generic ranking helper
+        // For now, this is a placeholder.
+        // It would be similar to invalidateUserRankingsIfNeededAction in tasks/actions.ts
+        // but would fetch active proposals (stage: "accepted")
+        console.log(`Placeholder: InvalidateUserProposalRankingsIfNeededAction called for circle ${circleId}`);
+
+        // Example structure (needs getActiveProposalsByStage from proposal data functions):
+        const activeProposals = await getActiveProposalsByStage(circleId, "accepted"); // Assuming userDid not needed for system check
+        const activeProposalIds = new Set(activeProposals.map((p: ProposalDisplay) => p._id?.toString()));
+
+        const listsToValidate = await RankedLists.find({
+            entityId: circleId,
+            type: "proposals",
+            isValid: true,
+        })
+            .project({ _id: 1, list: 1 })
+            .toArray();
+
+        const listsToInvalidate: ObjectId[] = [];
+
+        for (const list of listsToValidate) {
+            const listProposalIds = new Set(list.list);
+            if (
+                listProposalIds.size !== activeProposalIds.size ||
+                !Array.from(listProposalIds)
+                    .map(String)
+                    .every((id: string) => activeProposalIds.has(id))
+            ) {
+                listsToInvalidate.push(list._id as ObjectId); // Cast to ObjectId if direct usage, or ensure it's string if find returns string IDs
+            }
+        }
+
+        if (listsToInvalidate.length > 0) {
+            await RankedLists.updateMany(
+                { _id: { $in: listsToInvalidate } },
+                { $set: { isValid: false, updatedAt: new Date(), becameStaleAt: new Date() } }, // Also set becameStaleAt
+            );
+            console.log(`Invalidated ${listsToInvalidate.length} proposal rankings for circle ${circleId}`);
+        }
+    } catch (error) {
+        console.error(`Error invalidating proposal rankings for circle ${circleId}:`, error);
     }
 }

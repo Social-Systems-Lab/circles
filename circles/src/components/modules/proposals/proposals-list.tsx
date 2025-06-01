@@ -48,11 +48,13 @@ import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link"; // Import Link
-import { CheckCircle, XCircle } from "lucide-react"; // Import icons for outcome
+import { CheckCircle, XCircle, ListOrdered } from "lucide-react"; // Import icons for outcome and ranking
+import ProposalPrioritizationModal from "./proposal-prioritization-modal"; // Import the modal
 
 interface ProposalsListProps {
     proposals: ProposalDisplay[];
     circle: Circle;
+    currentTabKey?: "submitted" | "accepted" | "resolved"; // To identify the current context/tab
 }
 
 const SortIcon = ({ sortDir }: { sortDir: string | boolean }) => {
@@ -97,7 +99,7 @@ const getStageBadgeColor = (stage: ProposalStage) => {
     }
 };
 
-const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle }) => {
+const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, currentTabKey }) => {
     const data = React.useMemo(() => proposals, [proposals]);
     const [sorting, setSorting] = React.useState<SortingState>([{ id: "createdAt", desc: true }]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -112,16 +114,17 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle }) => {
     const [stageFilter, setStageFilter] = useState<ProposalStage | "all">("all");
     const [createProposalDialogOpen, setCreateProposalDialogOpen] = useState<boolean>(false);
     const [newProposalName, setNewProposalName] = useState<string>("");
+    const [isPrioritizationModalOpen, setIsPrioritizationModalOpen] = useState(false); // State for modal
 
-    // Check permissions
     // Check permissions
     const canCreate = isAuthorized(user, circle, features.proposals.create);
     const canModerate = isAuthorized(user, circle, features.proposals.moderate);
+    const canRank = isAuthorized(user, circle, features.proposals.rank); // Permission to rank
 
     const { toast } = useToast();
 
-    const columns = React.useMemo<ColumnDef<ProposalDisplay>[]>(
-        () => [
+    const columns = React.useMemo<ColumnDef<ProposalDisplay>[]>(() => {
+        const baseColumns: ColumnDef<ProposalDisplay>[] = [
             {
                 accessorKey: "name",
                 header: ({ column }) => {
@@ -135,7 +138,6 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle }) => {
                 cell: (info) => {
                     const proposal = info.row.original;
                     return (
-                        // Wrap name in a Link that stops propagation
                         <Link
                             href={`/circles/${circle.handle}/proposals/${proposal._id}`}
                             onClick={(e) => e.stopPropagation()}
@@ -146,6 +148,48 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle }) => {
                     );
                 },
             },
+            // Conditional User Rank Column
+            ...(currentTabKey === "accepted"
+                ? [
+                      {
+                          accessorKey: "userRank", // Assuming ProposalDisplay will have this
+                          header: ({ column }: { column: any }) => (
+                              <Button variant="ghost" onClick={() => column.toggleSorting()}>
+                                  Your Rank
+                                  <SortIcon sortDir={column.getIsSorted()} />
+                              </Button>
+                          ),
+                          cell: (info: any) => {
+                              const rank = info.getValue();
+                              return rank ? (
+                                  <Badge variant="outline">{rank}</Badge>
+                              ) : (
+                                  <span className="text-muted-foreground">-</span>
+                              );
+                          },
+                          size: 100,
+                      } as ColumnDef<ProposalDisplay>, // Cast to satisfy TypeScript
+                  ]
+                : []),
+            // Conditional Overall Rank Column
+            ...(currentTabKey === "accepted"
+                ? [
+                      {
+                          accessorKey: "rank", // Assuming ProposalDisplay will have this for overall rank
+                          header: ({ column }: { column: any }) => (
+                              <Button variant="ghost" onClick={() => column.toggleSorting()}>
+                                  Overall Rank
+                                  <SortIcon sortDir={column.getIsSorted()} />
+                              </Button>
+                          ),
+                          cell: (info: any) => {
+                              const rank = info.getValue();
+                              return rank ? <Badge>{rank}</Badge> : <span className="text-muted-foreground">-</span>;
+                          },
+                          size: 100,
+                      } as ColumnDef<ProposalDisplay>, // Cast to satisfy TypeScript
+                  ]
+                : []),
             {
                 accessorKey: "stage",
                 header: ({ column }) => {
@@ -228,9 +272,9 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle }) => {
                 },
                 cell: (info) => new Date(info.getValue() as Date).toLocaleDateString(),
             },
-        ],
-        [],
-    );
+        ];
+        return baseColumns;
+    }, [isCompact, currentTabKey, circle.handle]);
 
     const table = useReactTable({
         data: data,
@@ -380,11 +424,18 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle }) => {
                             onChange={(event) => table.getColumn("name")?.setFilterValue(event.target.value)}
                         />
                     </div>
-                    {canCreate && (
-                        <Button onClick={handleCreateProposalClick}>
-                            <Plus className="mr-2 h-4 w-4" /> Create Proposal
-                        </Button>
-                    )}
+                    <div className="flex items-center gap-2">
+                        {currentTabKey === "accepted" && canRank && (
+                            <Button variant="outline" onClick={() => setIsPrioritizationModalOpen(true)}>
+                                <ListOrdered className="mr-2 h-4 w-4" /> Rank Accepted Proposals
+                            </Button>
+                        )}
+                        {canCreate && (
+                            <Button onClick={handleCreateProposalClick}>
+                                <Plus className="mr-2 h-4 w-4" /> Create Proposal
+                            </Button>
+                        )}
+                    </div>
                     <Select
                         value={stageFilter}
                         onValueChange={(value) => setStageFilter(value as ProposalStage | "all")}
@@ -590,6 +641,16 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle }) => {
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
+
+                {isPrioritizationModalOpen && (
+                    <ProposalPrioritizationModal
+                        circle={circle}
+                        onClose={() => {
+                            setIsPrioritizationModalOpen(false);
+                            router.refresh(); // Refresh data after modal closes
+                        }}
+                    />
+                )}
             </div>
         </div>
     );
