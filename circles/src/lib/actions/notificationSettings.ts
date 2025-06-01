@@ -16,6 +16,7 @@ import {
     UserPrivate,
     summaryNotificationTypes, // Import the new summary types
     summaryNotificationTypeDetails, // Import the details mapping
+    SummaryNotificationType, // Import the type itself
 } from "@/models/models";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { UserNotificationSettings, DefaultNotificationSettings } from "../data/db";
@@ -23,6 +24,34 @@ import { features } from "../data/constants"; // Import the features object
 import { Circles, Members } from "../data/db"; // Import Circle and Member collections
 import { ObjectId } from "mongodb";
 import { getCircleById } from "../data/circle"; // Import getCircleById
+
+// Ultimate fallback defaults if a DefaultNotificationSetting is not found in DB
+const ultimateFallbackDefaults: Record<
+    EntityType,
+    Partial<Record<SummaryNotificationType, { defaultIsEnabled: boolean; requiredPermission?: string }>>
+> = {
+    CIRCLE: {
+        COMMUNITY_FOLLOW_REQUEST: { defaultIsEnabled: true, requiredPermission: "members.manage_requests" },
+        COMMUNITY_NEW_FOLLOWER: { defaultIsEnabled: false }, // Default to false
+        POSTS_ALL: { defaultIsEnabled: true, requiredPermission: "feed.view" },
+        PROPOSALS_ALL: { defaultIsEnabled: true, requiredPermission: "proposals.view" },
+        ISSUES_ALL: { defaultIsEnabled: true, requiredPermission: "issues.view" },
+        TASKS_ALL: { defaultIsEnabled: true, requiredPermission: "tasks.view" },
+        GOALS_ALL: { defaultIsEnabled: true, requiredPermission: "goals.view" },
+    },
+    USER: {
+        // Example for USER entity type, can be expanded
+        // For USER entity, permissions are usually just "is this the user themselves?"
+        // No module specific settings typically apply here unless we define them.
+    },
+    // Fallbacks for other entity types can be added here if needed
+    POST: {},
+    COMMENT: {},
+    PROPOSAL: {},
+    ISSUE: {},
+    TASK: {},
+    GOAL: {},
+};
 
 // Checks if a user has the 'requiredPermission' for a given entity and notification type
 export const checkUserPermissionForNotification = async (
@@ -175,25 +204,54 @@ export async function getGroupedUserNotificationSettings(): Promise<GroupedNotif
             const currentEntitySettings = combinedSettings[entityType][entityId];
 
             // Fetch circle details if entityType is CIRCLE to check enabledModules
-            let circleDetails: UserPrivate | null = null; // Use UserPrivate as Circle is a subset
+            let circleDetails: UserPrivate | null = null;
+            let skipEntityProcessing = false;
+
             if (entityType === "CIRCLE") {
-                circleDetails = (await getCircleById(entityId)) as UserPrivate; // Cast as UserPrivate for enabledModules
+                circleDetails = (await getCircleById(entityId)) as UserPrivate;
                 if (!circleDetails) {
-                    console.warn(`Circle details not found for ${entityId}, skipping module check for it.`);
-                    // Decide if you want to continue without module check or skip this entityId
+                    console.warn(
+                        `[NotifSettings] Circle details not found for entityId: ${entityId}. Skipping settings for this entity.`,
+                    );
+                    skipEntityProcessing = true;
+                } else {
+                    console.log(
+                        `[NotifSettings] Processing Circle ${entityId}. Enabled Modules: ${JSON.stringify(circleDetails.enabledModules)}`,
+                    );
                 }
+            }
+
+            if (skipEntityProcessing) {
+                console.log(`[NotifSettings] Skipping entity ${entityId} due to earlier issue.`);
+                continue;
             }
 
             for (const summaryNt of summaryNotificationTypes) {
                 const summaryDetail = summaryNotificationTypeDetails[summaryNt];
+                // console.log(`[NotifSettings] Checking summaryNt: ${summaryNt} for entity ${entityType}:${entityId}`);
 
                 // Check if module is enabled for CIRCLE entityType
-                if (entityType === "CIRCLE" && summaryDetail.moduleHandle && circleDetails) {
-                    if (!circleDetails.enabledModules?.includes(summaryDetail.moduleHandle)) {
-                        continue; // Skip this summary notification type if its module is not enabled
+                if (entityType === "CIRCLE" && summaryDetail.moduleHandle) {
+                    if (!circleDetails) {
+                        // Should not happen if skipEntityProcessing worked, but as a safeguard
+                        console.warn(
+                            `[NotifSettings] circleDetails is null for ${entityId} when checking module for ${summaryNt}. Skipping module check.`,
+                        );
+                    } else if (!circleDetails.enabledModules) {
+                        console.warn(
+                            `[NotifSettings] Circle ${entityId} has no enabledModules array. Module ${summaryDetail.moduleHandle} for ${summaryNt} cannot be checked. Assuming not enabled.`,
+                        );
+                        continue;
+                    } else if (!circleDetails.enabledModules.includes(summaryDetail.moduleHandle)) {
+                        console.log(
+                            `[NotifSettings] Module ${summaryDetail.moduleHandle} (for ${summaryNt}) is NOT enabled for circle ${entityId}. Skipping this setting.`,
+                        );
+                        continue;
+                    } else {
+                        // console.log(`[NotifSettings] Module ${summaryDetail.moduleHandle} (for ${summaryNt}) IS enabled for circle ${entityId}. Proceeding.`);
                     }
                 }
-                // For USER entityType, or if moduleHandle is undefined (general community notifications), proceed.
+                // For USER entityType, or if moduleHandle is undefined (general community notifications like follow requests), proceed.
 
                 // Use the summaryNt for DefaultNotificationSetting lookup
                 const defaultSetting = defaultSettingsList.find(
@@ -228,11 +286,42 @@ export async function getGroupedUserNotificationSettings(): Promise<GroupedNotif
                         })(),
                     );
                 } else {
-                    // If no default for the summary type, it means it's not a configurable option from the backend.
-                    // This can happen if DefaultNotificationSettings are not yet updated for new summary types.
-                    console.warn(
-                        `No default setting found for summary type: ${summaryNt} and entity type: ${entityType}`,
-                    );
+                    // If no default for the summary type, try using the ultimate fallback
+                    const fallback = ultimateFallbackDefaults[entityType]?.[summaryNt as SummaryNotificationType];
+                    if (fallback) {
+                        console.log(
+                            `[NotifSettings] Using ultimate fallback for ${summaryNt} on ${entityType}:${entityId}`,
+                        );
+                        processingPromises.push(
+                            (async () => {
+                                const userSetting = userSettingsMap.get(`${entityType}:${entityId}:${summaryNt}`);
+                                const hasPermission = await checkUserPermissionForNotification(
+                                    userId,
+                                    entityType,
+                                    entityId,
+                                    fallback.requiredPermission,
+                                );
+
+                                if (hasPermission) {
+                                    if (userSetting) {
+                                        currentEntitySettings[summaryNt] = {
+                                            isEnabled: userSetting.isEnabled,
+                                            isConfigurable: true,
+                                        };
+                                    } else {
+                                        currentEntitySettings[summaryNt] = {
+                                            isEnabled: fallback.defaultIsEnabled,
+                                            isConfigurable: true,
+                                        };
+                                    }
+                                }
+                            })(),
+                        );
+                    } else {
+                        console.warn(
+                            `[NotifSettings] No default setting OR ultimate fallback found for summary type: ${summaryNt} and entity type: ${entityType}. Setting will not be available.`,
+                        );
+                    }
                 }
             }
         }

@@ -656,7 +656,7 @@ function deriveBody(notificationType: NotificationType, payload: { [key: string]
         case "ranking_grace_period_ended":
             return `Your ranking in ${circleName} is no longer being counted.`;
         default:
-            const exhaustiveCheck: never = notificationType;
+            const exhaustiveCheck = notificationType;
             console.warn(`Unhandled notification type in deriveBody: ${exhaustiveCheck}`);
             return "Unknown notification";
     }

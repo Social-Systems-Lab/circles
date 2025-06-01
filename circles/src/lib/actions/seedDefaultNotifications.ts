@@ -91,6 +91,50 @@ const defaultSettingsConfig: Omit<DefaultNotificationSetting, "_id" | "createdAt
     // Example: if ranking_stale_reminder is a user-level notification not tied to a specific circle.
     // { entityType: "USER", notificationType: "ranking_stale_reminder", defaultIsEnabled: true },
     // { entityType: "USER", notificationType: "ranking_grace_period_ended", defaultIsEnabled: true },
+
+    // NEW SUMMARY SETTINGS FOR CIRCLES
+    {
+        entityType: "CIRCLE",
+        notificationType: "COMMUNITY_FOLLOW_REQUEST",
+        defaultIsEnabled: true,
+        requiredPermission: "members.manage_requests", // User must have permission to manage membership requests
+    },
+    {
+        entityType: "CIRCLE",
+        notificationType: "COMMUNITY_NEW_FOLLOWER",
+        defaultIsEnabled: false, // Default to false as per new requirement
+        // No specific permission beyond being a member, visibility controlled by module
+    },
+    {
+        entityType: "CIRCLE",
+        notificationType: "POSTS_ALL",
+        defaultIsEnabled: true,
+        requiredPermission: "feed.view", // User must be able to view the feed module
+    },
+    {
+        entityType: "CIRCLE",
+        notificationType: "PROPOSALS_ALL",
+        defaultIsEnabled: true,
+        requiredPermission: "proposals.view", // User must be able to view the proposals module
+    },
+    {
+        entityType: "CIRCLE",
+        notificationType: "ISSUES_ALL",
+        defaultIsEnabled: true,
+        requiredPermission: "issues.view", // User must be able to view the issues module
+    },
+    {
+        entityType: "CIRCLE",
+        notificationType: "TASKS_ALL", // Covers tasks and ranking
+        defaultIsEnabled: true,
+        requiredPermission: "tasks.view", // User must be able to view the tasks module
+    },
+    {
+        entityType: "CIRCLE",
+        notificationType: "GOALS_ALL",
+        defaultIsEnabled: true,
+        requiredPermission: "goals.view", // User must be able to view the goals module
+    },
 ];
 
 export async function seedDefaultNotificationSettings(): Promise<{ success: boolean; message: string; count: number }> {

@@ -954,7 +954,7 @@ export const summaryNotificationTypeDetails: Record<
         mapsTo: ["issue_submitted_for_review", "issue_approved", "issue_assigned", "issue_status_changed"],
     },
     TASKS_ALL: {
-        label: "Tasks & Ranking",
+        label: "Tasks", // Changed label
         moduleHandle: "tasks", // Tasks module might also handle ranking notifications
         mapsTo: [
             "task_submitted_for_review",
