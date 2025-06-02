@@ -272,12 +272,6 @@ export const ContentPreview: React.FC = () => {
                 );
             case "user":
             case "circle":
-            case "project":
-                return (
-                    <div className="custom-scrollbar h-full overflow-y-auto">
-                        <CirclePreview circle={contentPreview!.content as Circle} circleType={contentPreview.type} />
-                    </div>
-                );
             case "proposal": {
                 // Render ProposalItem in preview mode
                 const proposal = contentPreview!.content as ProposalDisplay;

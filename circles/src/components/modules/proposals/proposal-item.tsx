@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useTransition, useEffect } from "react"; // Added useEffect
-import { Circle, ContentPreviewData, ProposalDisplay, ProposalStage, GoalDisplay } from "@/models/models"; // Added GoalDisplay
+import React, { useState, useTransition } from "react"; // Removed useEffect
+import { Circle, ContentPreviewData, ProposalDisplay, ProposalStage } from "@/models/models"; // Removed GoalDisplay, it's part of ProposalDisplay.linkedGoal
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProposalStageTimeline } from "./proposal-stage-timeline";
@@ -45,7 +45,7 @@ import {
     deleteProposalAction,
     voteOnProposalAction,
 } from "@/app/circles/[handle]/proposals/actions";
-import { getGoalAction } from "@/app/circles/[handle]/goals/actions"; // Import action to get goal
+// Removed: import { getGoalAction } from "@/app/circles/[handle]/goals/actions";
 import { CommentSection } from "../feeds/CommentSection";
 import CreateGoalDialog from "@/components/global-create/create-goal-dialog"; // Import CreateGoalDialog
 
@@ -91,8 +91,8 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
     const isCompact = useIsCompact();
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
-    const [linkedGoal, setLinkedGoal] = useState<GoalDisplay | null>(null);
-    const [isLoadingGoal, setIsLoadingGoal] = useState(false);
+    // Removed: const [linkedGoal, setLinkedGoal] = useState<GoalDisplay | null>(null);
+    // Removed: const [isLoadingGoal, setIsLoadingGoal] = useState(false);
 
     const isAuthor = user?.did === proposal.createdBy;
     const canModerate = isAuthorized(user, circle, features.proposals.moderate);
@@ -103,19 +103,7 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
     const hasVoted = !!proposal.userReaction;
     const voteCount = Object.values(proposal.reactions || {}).reduce((sum, count) => sum + count, 0);
 
-    useEffect(() => {
-        if (proposal.goalId && proposal.stage === "implemented" && circle.handle) {
-            setIsLoadingGoal(true);
-            getGoalAction(circle.handle, proposal.goalId)
-                .then((goalData) => {
-                    if (goalData) {
-                        setLinkedGoal(goalData);
-                    }
-                })
-                .catch((err) => console.error("Failed to fetch linked goal", err))
-                .finally(() => setIsLoadingGoal(false));
-        }
-    }, [proposal.goalId, proposal.stage, circle.handle]);
+    // Removed useEffect for fetching linkedGoal
 
     const handleEdit = () => router.push(`/circles/${circle.handle}/proposals/${proposal._id}/edit`);
 
@@ -360,29 +348,22 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                                 </div>
                             </>
                         )}
-                        {proposal.stage === "implemented" && linkedGoal && (
+                        {proposal.stage === "implemented" && proposal.linkedGoal && (
                             <>
                                 <span className="mx-1">·</span>
                                 <div className="flex items-center">
                                     <LinkIcon className="mr-1 h-3 w-3" />
                                     Implemented as Goal:{" "}
                                     <Link
-                                        href={`/circles/${circle.handle}/goals/${linkedGoal._id}`}
+                                        href={`/circles/${circle.handle}/goals/${proposal.linkedGoal._id}`}
                                         className="ml-1 text-indigo-600 hover:underline"
                                     >
-                                        {linkedGoal.title}
+                                        {proposal.linkedGoal.title}
                                     </Link>
                                 </div>
                             </>
                         )}
-                        {proposal.stage === "implemented" && isLoadingGoal && !linkedGoal && (
-                            <>
-                                <span className="mx-1">·</span>
-                                <div className="flex items-center text-xs text-muted-foreground">
-                                    <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Loading goal link...
-                                </div>
-                            </>
-                        )}
+                        {/* isLoadingGoal state is removed, so this loading indicator is also removed */}
                         {proposal.stage === "rejected" && proposal.outcomeReason && (
                             <>
                                 <span className="mx-1">·</span>
@@ -473,7 +454,6 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                 {!isPreview && renderDecisionZoneActions()}
                 {!isPreview && proposal.commentPostId && (
                     <div className="mt-8 border-t pt-6">
-                        <h3 className="mb-4 text-lg font-semibold">Discussion</h3>
                         <CommentSection postId={proposal.commentPostId} circle={circle} user={user ?? null} />
                     </div>
                 )}

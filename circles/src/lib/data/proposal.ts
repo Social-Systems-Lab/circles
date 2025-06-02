@@ -105,6 +105,39 @@ export const getProposalsByCircleId = async (circleId: string, userDid?: string)
             },
             { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
 
+            // Lookup for linked Goal details
+            {
+                $lookup: {
+                    from: "goals", // The collection to join
+                    let: { goalIdStr: "$goalId" }, // Variable for goalId from the proposal
+                    pipeline: [
+                        // Match only if goalIdStr is a valid ObjectId string and exists
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $ne: ["$$goalIdStr", null] },
+                                        { $ne: ["$$goalIdStr", ""] },
+                                        { $eq: ["$_id", { $toObjectId: "$$goalIdStr" }] },
+                                    ],
+                                },
+                            },
+                        },
+                        // Project only necessary fields from the goal
+                        {
+                            $project: {
+                                _id: { $toString: "$_id" },
+                                title: 1,
+                                // Add other fields from GoalDisplay if needed
+                            },
+                        },
+                    ],
+                    as: "linkedGoalDetails", // Output array field
+                },
+            },
+            // Unwind the linkedGoalDetails array. Use preserveNullAndEmptyArrays if a proposal might not have a linked goal.
+            { $unwind: { path: "$linkedGoalDetails", preserveNullAndEmptyArrays: true } },
+
             // Final projection
             {
                 $project: {
@@ -125,6 +158,7 @@ export const getProposalsByCircleId = async (circleId: string, userDid?: string)
                     userGroups: 1,
                     resolvedAtStage: 1,
                     location: 1,
+                    goalId: 1, // Ensure goalId is projected
                     author: {
                         _id: { $toString: "$authorDetails._id" },
                         did: "$authorDetails.did",
@@ -137,6 +171,7 @@ export const getProposalsByCircleId = async (circleId: string, userDid?: string)
                     },
                     userReaction: { $arrayElemAt: ["$userReaction.reactionType", 0] },
                     circle: "$circleDetails",
+                    linkedGoal: "$linkedGoalDetails", // Add linked goal to projection
                 },
             },
 
@@ -527,6 +562,35 @@ export const getProposalById = async (proposalId: string, userDid?: string): Pro
             },
             { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
 
+            // Lookup for linked Goal details
+            {
+                $lookup: {
+                    from: "goals",
+                    let: { goalIdStr: "$goalId" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $ne: ["$$goalIdStr", null] },
+                                        { $ne: ["$$goalIdStr", ""] },
+                                        { $eq: ["$_id", { $toObjectId: "$$goalIdStr" }] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                _id: { $toString: "$_id" },
+                                title: 1,
+                            },
+                        },
+                    ],
+                    as: "linkedGoalDetails",
+                },
+            },
+            { $unwind: { path: "$linkedGoalDetails", preserveNullAndEmptyArrays: true } },
+
             // Final projection
             {
                 $project: {
@@ -547,6 +611,7 @@ export const getProposalById = async (proposalId: string, userDid?: string): Pro
                     userGroups: 1,
                     resolvedAtStage: 1,
                     location: 1,
+                    goalId: 1, // Ensure goalId is projected
                     author: {
                         _id: { $toString: "$authorDetails._id" },
                         did: "$authorDetails.did",
@@ -560,6 +625,7 @@ export const getProposalById = async (proposalId: string, userDid?: string): Pro
                     },
                     userReaction: { $arrayElemAt: ["$userReaction.reactionType", 0] },
                     circle: "$circleDetails",
+                    linkedGoal: "$linkedGoalDetails", // Add linked goal to projection
                 },
             },
         ]).toArray()) as ProposalDisplay[];

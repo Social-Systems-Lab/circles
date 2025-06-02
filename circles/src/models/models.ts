@@ -1070,6 +1070,7 @@ export interface ProposalDisplay extends Proposal {
     totalRankers?: number; // Total users who have ranked proposals in this context
     hasUserRanked?: boolean; // Whether the current user has a valid ranking for proposals
     unrankedCount?: number; // Number of 'accepted' proposals the user hasn't ranked yet
+    linkedGoal?: GoalDisplay; // Optional linked goal details
 }
 
 // Issue stages
