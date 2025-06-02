@@ -24,6 +24,7 @@ import { getFullLocationName } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 // Import Goal Server Actions
 import { createGoalAction, updateGoalAction } from "@/app/circles/[handle]/goals/actions"; // Updated actions
+import { createGoalFromProposalAction } from "@/app/circles/[handle]/proposals/actions"; // Import new action
 
 // Form schema for creating/editing a goal
 const goalFormSchema = z.object({
@@ -50,6 +51,12 @@ interface GoalFormProps {
     goalId?: string; // Renamed prop
     onFormSubmitSuccess?: (goalId?: string) => void; // For dialog usage
     onCancel?: () => void; // For dialog usage
+    initialData?: {
+        // For prefilling from a proposal
+        title?: string;
+        description?: string;
+        proposalId?: string;
+    };
 }
 
 export const GoalForm: React.FC<GoalFormProps> = ({
@@ -59,6 +66,7 @@ export const GoalForm: React.FC<GoalFormProps> = ({
     goalId,
     onFormSubmitSuccess,
     onCancel,
+    initialData,
 }) => {
     // Renamed component, props
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -82,12 +90,12 @@ export const GoalForm: React.FC<GoalFormProps> = ({
     const form = useForm<GoalFormValues>({
         resolver: zodResolver(goalFormSchema),
         defaultValues: {
-            title: goal?.title || "", // Use goal prop
-            description: goal?.description || "",
-            images: goal?.images || [],
-            location: goal?.location,
-            // Use prefilledDate if creating, otherwise use goal's date or undefined
+            title: initialData?.title || goal?.title || "",
+            description: initialData?.description || goal?.description || "",
+            images: goal?.images || [], // Images are not prefilled from proposal directly here
+            location: goal?.location, // Location not prefilled from proposal directly here
             targetDate: prefilledDate ?? (goal?.targetDate ? new Date(goal.targetDate) : undefined),
+            // proposalId is not part of GoalFormValues but will be passed in FormData
         },
     });
 
@@ -130,6 +138,11 @@ export const GoalForm: React.FC<GoalFormProps> = ({
             formData.append("targetDate", values.targetDate.toISOString());
         }
 
+        // If creating from a proposal, add proposalId to the form data
+        if (initialData?.proposalId && !isEditing) {
+            formData.append("proposalId", initialData.proposalId);
+        }
+
         if (values.images) {
             values.images.forEach((imgOrFile) => {
                 if (imgOrFile instanceof File) {
@@ -146,7 +159,13 @@ export const GoalForm: React.FC<GoalFormProps> = ({
                 // Use goalId
                 console.log(`[GoalForm] Calling updateGoalAction with goalId: ${goalId}`); // Updated log
                 result = await updateGoalAction(circleHandle, goalId, formData); // Renamed action, use goalId
+            } else if (initialData?.proposalId) {
+                // Creating a new goal from a proposal
+                console.log("[GoalForm] Calling createGoalFromProposalAction with proposalId:", initialData.proposalId);
+                // formData already contains proposalId, title, description from initialData
+                result = await createGoalFromProposalAction(circleHandle, formData);
             } else {
+                // Creating a new goal normally (not from a proposal)
                 console.log("[GoalForm] Calling createGoalAction"); // Updated log
                 result = await createGoalAction(circleHandle, formData); // Renamed action
             }

@@ -46,6 +46,7 @@ import {
     voteOnProposalAction,
 } from "@/app/circles/[handle]/proposals/actions";
 import { CommentSection } from "../feeds/CommentSection";
+import CreateGoalDialog from "@/components/global-create/create-goal-dialog"; // Import CreateGoalDialog
 
 interface ProposalItemProps {
     proposal: ProposalDisplay;
@@ -81,6 +82,7 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
     const [approveVotingDialogOpen, setApproveVotingDialogOpen] = useState(false);
     const [rejectVotingDialogOpen, setRejectVotingDialogOpen] = useState(false);
     const [acceptVotingDialogOpen, setAcceptVotingDialogOpen] = useState(false);
+    const [createGoalDialogOpen, setCreateGoalDialogOpen] = useState(false); // State for Create Goal Dialog
     const [resolutionReason, setResolutionReason] = useState("");
     const [isVoting, setIsVoting] = useState(false);
     const { toast } = useToast();
@@ -285,13 +287,13 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
             case "accepted":
                 if (canResolve || canModerate) {
                     decisionActions.push(
-                        <Button key="implement" onClick={() => alert("Implement as Goal - TBD")} disabled={isPending}>
+                        <Button key="implement" onClick={() => setCreateGoalDialogOpen(true)} disabled={isPending}>
                             Implement as Goal
                         </Button>,
                         <Button
-                            key="reject-accepted"
+                            key="reject-accepted" // Placeholder for now, will be a dialog later
                             variant="destructive"
-                            onClick={() => alert("Reject Accepted Proposal - TBD")}
+                            onClick={() => alert("Reject Accepted Proposal - TBD")} // TODO: Implement reject dialog
                             disabled={isPending}
                         >
                             Reject
@@ -628,6 +630,22 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Create Goal Dialog from Proposal */}
+            {proposal && (
+                <CreateGoalDialog
+                    isOpen={createGoalDialogOpen}
+                    onOpenChange={setCreateGoalDialogOpen}
+                    itemKey="goal"
+                    proposal={proposal}
+                    circle={circle} // Pass the circle from ProposalItemProps
+                    onSuccess={(goalId) => {
+                        toast({ title: "Success", description: "Goal created from proposal." });
+                        setCreateGoalDialogOpen(false);
+                        router.refresh(); // Refresh to see updated proposal stage
+                    }}
+                />
+            )}
         </div>
     );
 };

@@ -41,8 +41,10 @@ import {
     notifyProposalResolvedAuthor,
     notifyProposalResolvedVoters,
     notifyProposalVote,
+    // Consider a new notification for when a proposal is implemented into a goal
 } from "@/lib/data/notifications";
 import { updateAggregateRankCache } from "@/lib/data/ranking"; // Added for ranking
+import { createGoal } from "@/lib/data/goal"; // Import createGoal
 
 /**
  * Get all proposals for a circle (client-callable action)
@@ -1097,7 +1099,7 @@ export async function saveUserRankedProposalsAction(
  */
 export async function invalidateUserProposalRankingsIfNeededAction(circleId: string): Promise<void> {
     try {
-        console.log(`InvalidateUserProposalRankingsIfNeededAction called for circle ${circleId}`);
+        console.log(`[proposals/actions] InvalidateUserProposalRankingsIfNeededAction called for circle ${circleId}`);
 
         const activeProposals = await getActiveProposalsByStage(circleId, "accepted"); // Assuming userDid not needed for system check
         const activeProposalIds = new Set(activeProposals.map((p: ProposalDisplay) => p._id?.toString()));
@@ -1129,9 +1131,193 @@ export async function invalidateUserProposalRankingsIfNeededAction(circleId: str
                 { _id: { $in: listsToInvalidate } },
                 { $set: { isValid: false, updatedAt: new Date(), becameStaleAt: new Date() } },
             );
-            console.log(`Invalidated ${listsToInvalidate.length} proposal rankings for circle ${circleId}`);
+            console.log(
+                `[proposals/actions] Invalidated ${listsToInvalidate.length} proposal rankings for circle ${circleId}`,
+            );
         }
     } catch (error) {
-        console.error(`Error invalidating proposal rankings for circle ${circleId}:`, error);
+        console.error(`[proposals/actions] Error invalidating proposal rankings for circle ${circleId}:`, error);
+    }
+}
+
+// --- Create Goal from Proposal Action ---
+
+const createGoalFromProposalSchema = z.object({
+    title: z.string().min(1, { message: "Goal title is required" }),
+    description: z.string().min(1, { message: "Description is required" }),
+    proposalId: z.string().min(1, { message: "Proposal ID is required" }),
+    images: z.array(z.any()).optional(), // For potential image uploads for the goal
+    location: z.string().optional(), // Location for the goal (as JSON string)
+    targetDate: z.string().optional(), // Target date for the goal (as ISO string)
+});
+
+export async function createGoalFromProposalAction(
+    circleHandle: string,
+    formData: FormData,
+): Promise<{ success: boolean; message?: string; goalId?: string }> {
+    try {
+        const validatedData = createGoalFromProposalSchema.safeParse({
+            title: formData.get("title"),
+            description: formData.get("description"),
+            proposalId: formData.get("proposalId"),
+            images: formData.getAll("images"),
+            location: formData.get("location") ?? undefined,
+            targetDate: formData.get("targetDate") ?? undefined,
+        });
+
+        if (!validatedData.success) {
+            console.error(
+                "[proposals/actions] Validation Error (createGoalFromProposalAction):",
+                validatedData.error.errors,
+            );
+            return {
+                success: false,
+                message: `Invalid input: ${validatedData.error.errors.map((e) => e.message).join(", ")}`,
+            };
+        }
+        const data = validatedData.data;
+
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "User not authenticated" };
+        }
+        const user = await getUserByDid(userDid);
+        if (!user) {
+            return { success: false, message: "User data not found" };
+        }
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) {
+            return { success: false, message: "Circle not found" };
+        }
+        const circleId = circle._id.toString();
+
+        // Permission checks
+        const canCreateGoalsInCircle = await isAuthorized(userDid, circleId, features.goals.create);
+        if (!canCreateGoalsInCircle) {
+            return { success: false, message: "Not authorized to create goals in this circle." };
+        }
+        // Assuming implementing a proposal requires similar rights to resolving or ranking it.
+        // Using 'features.proposals.resolve' as a proxy for 'implement' permission.
+        const canImplementProposal =
+            (await isAuthorized(userDid, circleId, features.proposals.resolve)) ||
+            (await isAuthorized(userDid, circleId, features.proposals.rank)) ||
+            (await isAuthorized(userDid, circleId, features.proposals.moderate));
+        if (!canImplementProposal) {
+            return { success: false, message: "Not authorized to implement this proposal." };
+        }
+
+        const proposal = await getProposalById(data.proposalId, userDid);
+        if (!proposal) {
+            return { success: false, message: "Proposal not found." };
+        }
+        if (proposal.stage !== "accepted") {
+            return { success: false, message: "Proposal must be in 'accepted' stage to be implemented." };
+        }
+        if (proposal.goalId) {
+            return { success: false, message: "Proposal has already been implemented into a goal." };
+        }
+
+        // --- Handle Goal Image Uploads (if any) ---
+        let goalImages: Media[] = [];
+        const imageFiles = (data.images || []).filter(isFile);
+        if (imageFiles.length > 0) {
+            const uploadPromises = imageFiles.map(async (file) => {
+                const fileNamePrefix = `goal_image_${Date.now()}`;
+                return await saveFile(file, fileNamePrefix, circleId, true);
+            });
+            const uploadResults = await Promise.all(uploadPromises);
+            goalImages = uploadResults.map(
+                (result: StorageFileInfo): Media => ({
+                    name: result.originalName || "Goal Image",
+                    type: imageFiles.find((f) => f.name === result.originalName)?.type || "application/octet-stream",
+                    fileInfo: { url: result.url, fileName: result.fileName, originalName: result.originalName },
+                }),
+            );
+        }
+
+        // --- Parse Goal Location ---
+        let goalLocationData: Proposal["location"] = undefined;
+        if (data.location) {
+            try {
+                goalLocationData = JSON.parse(data.location);
+            } catch (e) {
+                return { success: false, message: "Invalid goal location data format." };
+            }
+        }
+
+        // --- Parse Goal Target Date ---
+        let goalTargetDate: Date | undefined = undefined;
+        if (data.targetDate) {
+            try {
+                const parsed = new Date(data.targetDate);
+                if (!isNaN(parsed.getTime())) {
+                    goalTargetDate = parsed;
+                } else {
+                    throw new Error("Invalid date format for targetDate");
+                }
+            } catch (e) {
+                return { success: false, message: "Invalid target date format for goal." };
+            }
+        }
+
+        // Prepare goal data for createGoal function
+        // Note: createGoal expects Omit<Goal, "_id" | "commentPostId">
+        // We need to ensure the structure matches.
+        const goalDataForCreation = {
+            title: data.title,
+            description: data.description,
+            circleId: circleId,
+            createdBy: userDid,
+            createdAt: new Date(),
+            stage: "open", // New goals from proposals start as 'open'
+            images: goalImages,
+            location: goalLocationData,
+            targetDate: goalTargetDate,
+            userGroups: proposal.userGroups, // Inherit user groups from proposal
+            // commentPostId will be created by createGoal if needed
+        };
+
+        const newGoal = await createGoal(goalDataForCreation as Omit<Goal, "_id" | "commentPostId">);
+        if (!newGoal || !newGoal._id) {
+            return { success: false, message: "Failed to create goal." };
+        }
+        const newGoalId = newGoal._id.toString();
+
+        // Update the proposal stage to 'implemented' and link the goalId
+        const stageChangeSuccess = await changeProposalStage(data.proposalId, "implemented", {
+            goalId: newGoalId,
+            outcome: "accepted", // Explicitly set outcome
+        });
+
+        if (!stageChangeSuccess) {
+            // Attempt to roll back goal creation or log inconsistency
+            console.error(
+                `[proposals/actions] Goal ${newGoalId} created, but failed to update proposal ${data.proposalId} stage. Manual intervention may be needed.`,
+            );
+            // For now, we'll still return success for goal creation but with a warning.
+            // A more robust solution might involve transactions or a cleanup mechanism.
+            return {
+                success: true, // Goal was created
+                goalId: newGoalId,
+                message: "Goal created, but there was an issue updating the proposal stage. Please check.",
+            };
+        }
+
+        // Invalidate proposal rankings as an implemented proposal is no longer 'accepted' for ranking
+        await invalidateUserProposalRankingsIfNeededAction(circleId);
+
+        revalidatePath(`/circles/${circleHandle}/proposals`);
+        revalidatePath(`/circles/${circleHandle}/proposals/${data.proposalId}`);
+        revalidatePath(`/circles/${circleHandle}/goals`);
+        revalidatePath(`/circles/${circleHandle}/goals/${newGoalId}`);
+
+        // TODO: Add notification for proposal implemented into a goal
+
+        return { success: true, message: "Goal created from proposal successfully.", goalId: newGoalId };
+    } catch (error) {
+        console.error("[proposals/actions] Error in createGoalFromProposalAction:", error);
+        const message = error instanceof Error ? error.message : "An unknown error occurred";
+        return { success: false, message };
     }
 }

@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Circle, ContentPreviewData, ProposalDisplay, ProposalStage } from "@/models/models";
 import { Button } from "@/components/ui/button";
-import { ArrowDown, ArrowUp, Loader2, MoreHorizontal, Plus, TriangleAlert, CheckCircle2 } from "lucide-react"; // Added TriangleAlert, CheckCircle2
+import { ArrowDown, ArrowUp, Loader2, MoreHorizontal, Plus, TriangleAlert, CheckCircle2, Target } from "lucide-react"; // Added TriangleAlert, CheckCircle2, Target
 import { Label } from "@/components/ui/label";
 import {
     DropdownMenu,
@@ -42,9 +42,10 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 // Import the new draft action
-import { createProposalDraftAction, deleteProposalAction } from "@/app/circles/[handle]/proposals/actions";
+import { createProposalDraftAction, deleteProposalAction } from "@/app/circles/[handle]/proposals/actions"; // createGoalFromProposalAction will be added later
 import { UserPicture } from "../members/user-picture";
 import { motion } from "framer-motion";
+import CreateGoalDialog from "@/components/global-create/create-goal-dialog"; // Import CreateGoalDialog
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link"; // Import Link
@@ -117,6 +118,7 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
     const [createProposalDialogOpen, setCreateProposalDialogOpen] = useState<boolean>(false);
     const [newProposalName, setNewProposalName] = useState<string>("");
     const [isPrioritizationModalOpen, setIsPrioritizationModalOpen] = useState(false); // State for modal
+    const [isCreateGoalDialogOpen, setIsCreateGoalDialogOpen] = useState(false); // State for Create Goal dialog
     const [hasMounted, setHasMounted] = useState(false);
 
     useEffect(() => {
@@ -139,9 +141,10 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
     }, [proposals, currentTabKey]);
 
     // Check permissions
-    const canCreate = isAuthorized(user, circle, features.proposals.create);
-    const canModerate = isAuthorized(user, circle, features.proposals.moderate);
-    const canRank = isAuthorized(user, circle, features.proposals.rank); // Permission to rank
+    const canCreateProposal = isAuthorized(user, circle, features.proposals.create);
+    const canModerateProposals = isAuthorized(user, circle, features.proposals.moderate);
+    const canRankProposals = isAuthorized(user, circle, features.proposals.rank); // Permission to rank
+    const canCreateGoal = isAuthorized(user, circle, features.goals.create); // Permission to create goals
 
     const { toast } = useToast();
 
@@ -474,7 +477,7 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
                             <div className="mb-3 rounded border bg-blue-50 p-3 text-sm text-blue-800 shadow-sm">
                                 <p className="flex items-center">
                                     <PiUsersThree className="mr-2 h-5 w-5 flex-shrink-0" />
-                                    You&apos;ve ranked these proposals.{" "}
+                                    You've ranked these proposals.{" "}
                                     <span>
                                         {" "}
                                         Currently,{" "}
@@ -528,12 +531,12 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
                         />
                     </div>
                     <div className="flex items-center gap-2">
-                        {hasMounted && canCreate && (
+                        {hasMounted && canCreateProposal && (
                             <Button onClick={handleCreateProposalClick}>
                                 <Plus className="mr-2 h-4 w-4" /> Create Proposal
                             </Button>
                         )}
-                        {hasMounted && currentTabKey === "accepted" && canRank && (
+                        {hasMounted && currentTabKey === "accepted" && canRankProposals && (
                             <Button onClick={() => setIsPrioritizationModalOpen(true)}>
                                 {" "}
                                 {/* Blue button by default */}
@@ -589,8 +592,14 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
                                     // Defer permission-based rendering until client-side mount
                                     const canEditThisProposal =
                                         hasMounted &&
-                                        (canModerate || (isAuthor && ["draft", "review"].includes(proposal.stage)));
-                                    const canDeleteThisProposal = hasMounted && (canModerate || isAuthor);
+                                        (canModerateProposals ||
+                                            (isAuthor && ["draft", "review"].includes(proposal.stage)));
+                                    const canDeleteThisProposal = hasMounted && (canModerateProposals || isAuthor);
+                                    const showCreateGoalButton =
+                                        hasMounted &&
+                                        currentTabKey === "accepted" &&
+                                        proposal.stage === "accepted" &&
+                                        canCreateGoal;
 
                                     return (
                                         <motion.tr
@@ -610,7 +619,9 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
                                                 </TableCell>
                                             ))}
                                             <TableCell className="w-[40px]">
-                                                {(canEditThisProposal || canDeleteThisProposal) && (
+                                                {(canEditThisProposal ||
+                                                    canDeleteThisProposal ||
+                                                    showCreateGoalButton) && (
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
                                                             <Button
@@ -624,6 +635,21 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
                                                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                            {showCreateGoalButton && (
+                                                                <>
+                                                                    <DropdownMenuSeparator />
+                                                                    <DropdownMenuItem
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setSelectedProposal(proposal);
+                                                                            setIsCreateGoalDialogOpen(true);
+                                                                        }}
+                                                                    >
+                                                                        <Target className="mr-2 h-4 w-4" />
+                                                                        Create Goal
+                                                                    </DropdownMenuItem>
+                                                                </>
+                                                            )}
                                                             {canEditThisProposal && (
                                                                 <>
                                                                     <DropdownMenuSeparator />
@@ -756,6 +782,24 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
                             setIsPrioritizationModalOpen(false);
                             router.refresh(); // Refresh data after modal closes
                         }}
+                    />
+                )}
+
+                {/* Create Goal Dialog */}
+                {selectedProposal && (
+                    <CreateGoalDialog
+                        isOpen={isCreateGoalDialogOpen}
+                        onOpenChange={setIsCreateGoalDialogOpen}
+                        // circle={circle} // CreateGoalDialog gets circle via CircleSelector or if passed directly to GoalForm
+                        itemKey="goal" // Assuming 'goal' is the correct key
+                        onSuccess={(goalId) => {
+                            // Handle successful goal creation, e.g., refresh data or show toast
+                            console.log("Goal created with ID:", goalId);
+                            setIsCreateGoalDialogOpen(false); // Close dialog
+                            router.refresh(); // Refresh the page to show updated proposal stage
+                        }}
+                        // We will modify CreateGoalDialog to accept 'proposal' prop later
+                        // proposal={selectedProposal}
                     />
                 )}
             </div>

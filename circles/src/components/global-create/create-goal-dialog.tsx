@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Circle, UserPrivate } from "@/models/models"; // GoalDisplay is not needed here as GoalForm handles it
+import { Circle, ProposalDisplay, UserPrivate } from "@/models/models"; // Added ProposalDisplay
 import { GoalForm } from "@/components/modules/goals/goal-form";
 import { CreatableItemDetail, CreatableItemKey, creatableItemsList } from "./global-create-dialog-content";
 import CircleSelector from "./circle-selector";
@@ -14,19 +14,50 @@ interface CreateGoalDialogProps {
     onOpenChange: (open: boolean) => void;
     onSuccess: (goalId?: string) => void;
     itemKey: CreatableItemKey;
+    proposal?: ProposalDisplay; // Optional proposal to prefill from
+    // circle prop might be needed if we bypass CircleSelector when proposal is present
+    circle?: Circle; // If passed, this circle is used directly
 }
 
-export const CreateGoalDialog: React.FC<CreateGoalDialogProps> = ({ isOpen, onOpenChange, onSuccess, itemKey }) => {
+export const CreateGoalDialog: React.FC<CreateGoalDialogProps> = ({
+    isOpen,
+    onOpenChange,
+    onSuccess,
+    itemKey,
+    proposal,
+    circle: preselectedCircle, // Renamed for clarity
+}) => {
     const [user] = useAtom(userAtom);
-    const [selectedCircle, setSelectedCircle] = useState<Circle | null>(null);
+    // Initialize selectedCircle with preselectedCircle if available, especially when a proposal is passed
+    const [selectedCircle, setSelectedCircle] = useState<Circle | null>(preselectedCircle || null);
 
     const itemDetail = creatableItemsList.find((item: CreatableItemDetail) => item.key === itemKey);
 
     useEffect(() => {
-        if (!isOpen) {
-            setSelectedCircle(null);
+        if (proposal && proposal.circle) {
+            // If a proposal is passed, use its circle and disable/hide circle selector
+            setSelectedCircle(proposal.circle as Circle); // Assuming proposal.circle is populated
+        } else if (preselectedCircle) {
+            setSelectedCircle(preselectedCircle);
         }
-    }, [isOpen]);
+        if (!isOpen) {
+            // Reset selectedCircle only if not pre-filled by proposal or direct prop
+            if (!proposal && !preselectedCircle) {
+                setSelectedCircle(null);
+            }
+        }
+    }, [isOpen, proposal, preselectedCircle]);
+
+    const initialGoalData = useMemo(() => {
+        if (proposal) {
+            return {
+                title: proposal.name,
+                description: `${proposal.background}\n\nDecision: ${proposal.decisionText}`, // Combine background and decision text
+                proposalId: proposal._id?.toString(), // Pass proposalId to GoalForm
+            };
+        }
+        return undefined;
+    }, [proposal]);
 
     const handleFormSuccess = (goalId?: string) => {
         onSuccess(goalId);
@@ -42,6 +73,10 @@ export const CreateGoalDialog: React.FC<CreateGoalDialogProps> = ({ isOpen, onOp
         return null;
     }
 
+    // Determine if CircleSelector should be shown
+    // Show if no proposal is passed AND no preselectedCircle is passed
+    const showCircleSelector = !proposal && !preselectedCircle;
+
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent
@@ -50,8 +85,10 @@ export const CreateGoalDialog: React.FC<CreateGoalDialogProps> = ({ isOpen, onOp
                     e.preventDefault();
                 }}
             >
-                <DialogHeader>
-                    <DialogTitle>Create New {itemDetail.title}</DialogTitle>
+                <DialogHeader className="hidden">
+                    <DialogTitle>
+                        {proposal ? `Create Goal from Proposal: ${proposal.name}` : `Create New ${itemDetail.title}`}
+                    </DialogTitle>
                     {selectedCircle && (
                         <DialogDescription>
                             {`Creating in '${selectedCircle.name || selectedCircle.handle}'`}
@@ -59,27 +96,16 @@ export const CreateGoalDialog: React.FC<CreateGoalDialogProps> = ({ isOpen, onOp
                     )}
                 </DialogHeader>
 
-                {!user && <p className="p-4 text-red-500">Please log in to create a goal.</p>}
-
-                {user && (
-                    <div className="pt-4">
-                        <CircleSelector itemType={itemDetail} onCircleSelected={setSelectedCircle} />
-
-                        {selectedCircle && (
-                            <div className="mt-4">
-                                <GoalForm
-                                    circle={selectedCircle}
-                                    circleHandle={selectedCircle.handle!}
-                                    onFormSubmitSuccess={handleFormSuccess}
-                                    onCancel={handleCancel}
-                                />
-                            </div>
-                        )}
-                        {!selectedCircle && itemDetail && (
-                            <p className="p-4 text-sm text-muted-foreground">
-                                Please select a circle to create the {itemDetail.key}.
-                            </p>
-                        )}
+                {selectedCircle && (
+                    <div className="mt-4">
+                        <GoalForm
+                            circle={selectedCircle}
+                            circleHandle={selectedCircle.handle!}
+                            onFormSubmitSuccess={handleFormSuccess}
+                            onCancel={handleCancel}
+                            initialData={initialGoalData} // Pass initial data to GoalForm
+                            showCircleSelector={showCircleSelector}
+                        />
                     </div>
                 )}
             </DialogContent>
