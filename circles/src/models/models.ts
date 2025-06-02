@@ -1174,6 +1174,8 @@ export const goalSchema = z.object({
     location: locationSchema.optional(),
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments
     images: z.array(mediaSchema).optional(), // Optional images/media attached to the goal
+    proposalId: z.string().optional(), // Optional link to the proposal this goal was created from
+    followers: z.array(didSchema).optional(), // Array of user DIDs following the goal
 });
 
 export type Goal = z.infer<typeof goalSchema>;

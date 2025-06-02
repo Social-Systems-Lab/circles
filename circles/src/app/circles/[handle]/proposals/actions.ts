@@ -16,6 +16,7 @@ import {
     mediaSchema,
     RankedList,
     rankedListSchema,
+    Goal, // Added Goal type
 } from "@/models/models"; // Add Media, mediaSchema, RankedList, rankedListSchema
 import { getCircleByHandle, ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added ensureModuleIsEnabledOnCircle
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -1262,9 +1263,9 @@ export async function createGoalFromProposalAction(
         }
 
         // Prepare goal data for createGoal function
-        // Note: createGoal expects Omit<Goal, "_id" | "commentPostId">
+        // Note: createGoal expects Omit<Goal, "_id" | "commentPostId" | "followers">
         // We need to ensure the structure matches.
-        const goalDataForCreation = {
+        const goalDataForCreation: Omit<Goal, "_id" | "commentPostId" | "followers"> = {
             title: data.title,
             description: data.description,
             circleId: circleId,
@@ -1275,10 +1276,21 @@ export async function createGoalFromProposalAction(
             location: goalLocationData,
             targetDate: goalTargetDate,
             userGroups: proposal.userGroups, // Inherit user groups from proposal
-            // commentPostId will be created by createGoal if needed
+            proposalId: data.proposalId, // Ensure proposalId is part of the goal data
+            // followers will be passed as a separate argument to createGoal
         };
 
-        const newGoal = await createGoal(goalDataForCreation as Omit<Goal, "_id" | "commentPostId">);
+        // Collect follower DIDs
+        const followerDids = new Set<string>();
+        if (proposal.createdBy) {
+            followerDids.add(proposal.createdBy); // Proposal author
+        }
+        followerDids.add(userDid); // Goal creator
+        if (proposal.reactions) {
+            Object.keys(proposal.reactions).forEach((did) => followerDids.add(did)); // Voters
+        }
+
+        const newGoal = await createGoal(goalDataForCreation, Array.from(followerDids));
         if (!newGoal || !newGoal._id) {
             return { success: false, message: "Failed to create goal." };
         }

@@ -1,7 +1,15 @@
 "use client";
 
 import React, { useState, useTransition, useMemo, useEffect } from "react";
-import { Circle, GoalDisplay, GoalStage, GoalPermissions, TaskDisplay, TaskPermissions } from "@/models/models";
+import {
+    Circle,
+    GoalDisplay,
+    GoalStage,
+    GoalPermissions,
+    TaskDisplay,
+    TaskPermissions,
+    ProposalDisplay,
+} from "@/models/models"; // Added ProposalDisplay
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
@@ -20,6 +28,7 @@ import {
     ListChecks,
     UserPlus, // For Follow icon
     UserCheck, // For Following icon
+    LinkIcon, // For proposal link
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { getFullLocationName } from "@/lib/utils";
@@ -52,6 +61,7 @@ import {
     unfollowGoalAction,
     getGoalFollowDataAction,
 } from "@/app/circles/[handle]/goals/actions";
+import { getProposalAction } from "@/app/circles/[handle]/proposals/actions"; // Import action to get proposal
 import TasksList from "@/components/modules/tasks/tasks-list";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Link from "next/link";
@@ -127,6 +137,8 @@ const GoalDetail: React.FC<GoalDetailProps> = ({
     const [followersCount, setFollowersCount] = useState(0); // Placeholder, will be fetched
     const [isLoadingFollow, setIsLoadingFollow] = useState(false);
     const [isLoadingInitialFollowStatus, setIsLoadingInitialFollowStatus] = useState(true); // For initial load
+    const [linkedProposal, setLinkedProposal] = useState<ProposalDisplay | null>(null);
+    const [isLoadingProposal, setIsLoadingProposal] = useState(false);
 
     const isAuthor = currentUserDid === goal.createdBy;
     const canCreateTask = isAuthorized(user, circle, features.tasks.create);
@@ -137,7 +149,6 @@ const GoalDetail: React.FC<GoalDetailProps> = ({
 
     useEffect(() => {
         if (goal._id && canFollowFeatureEnabled) {
-            // Only fetch if the feature is enabled for the user
             setIsLoadingInitialFollowStatus(true);
             getGoalFollowDataAction(goal._id as string)
                 .then((data) => {
@@ -149,9 +160,21 @@ const GoalDetail: React.FC<GoalDetailProps> = ({
                 .catch((err) => console.error("Failed to fetch goal follow status", err))
                 .finally(() => setIsLoadingInitialFollowStatus(false));
         } else {
-            setIsLoadingInitialFollowStatus(false); // If feature not enabled, don't show loading
+            setIsLoadingInitialFollowStatus(false);
         }
-    }, [goal._id, currentUserDid, canFollowFeatureEnabled]); // Added canFollowFeatureEnabled to dependencies
+
+        if (goal.proposalId && circle.handle) {
+            setIsLoadingProposal(true);
+            getProposalAction(circle.handle, goal.proposalId)
+                .then((proposalData) => {
+                    if (proposalData) {
+                        setLinkedProposal(proposalData);
+                    }
+                })
+                .catch((err) => console.error("Failed to fetch linked proposal", err))
+                .finally(() => setIsLoadingProposal(false));
+        }
+    }, [goal._id, goal.proposalId, circle.handle, currentUserDid, canFollowFeatureEnabled]);
 
     // Filter for active tasks using the prop
     const activeTasks = useMemo(() => {
@@ -352,6 +375,23 @@ const GoalDetail: React.FC<GoalDetailProps> = ({
                             <div className="flex items-center">
                                 <CalendarIcon className="mr-1 h-3 w-3" />
                                 Target: {format(new Date(goal.targetDate), "PPP")}
+                            </div>
+                        )}
+                        {linkedProposal && (
+                            <div className="flex items-center">
+                                <LinkIcon className="mr-1 h-3 w-3" />
+                                From Proposal:{" "}
+                                <Link
+                                    href={`/circles/${circle.handle}/proposals/${linkedProposal._id}`}
+                                    className="ml-1 text-blue-600 hover:underline"
+                                >
+                                    {linkedProposal.name}
+                                </Link>
+                            </div>
+                        )}
+                        {isLoadingProposal && !linkedProposal && (
+                            <div className="flex items-center text-xs text-muted-foreground">
+                                <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Loading proposal link...
                             </div>
                         )}
                     </div>

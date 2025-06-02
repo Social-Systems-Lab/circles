@@ -1,14 +1,14 @@
 "use client";
 
-import React, { useState, useTransition } from "react";
-import { Circle, ContentPreviewData, ProposalDisplay, ProposalStage } from "@/models/models";
+import React, { useState, useTransition, useEffect } from "react"; // Added useEffect
+import { Circle, ContentPreviewData, ProposalDisplay, ProposalStage, GoalDisplay } from "@/models/models"; // Added GoalDisplay
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProposalStageTimeline } from "./proposal-stage-timeline";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Heart, Loader2, MoreHorizontal, Pencil, Trash2, MapPin } from "lucide-react";
+import { Heart, Loader2, MoreHorizontal, Pencil, Trash2, MapPin, LinkIcon } from "lucide-react"; // Added LinkIcon
 import { formatDistanceToNow } from "date-fns";
 import { UserPicture } from "../members/user-picture";
 import { cn, getFullLocationName } from "@/lib/utils";
@@ -45,6 +45,7 @@ import {
     deleteProposalAction,
     voteOnProposalAction,
 } from "@/app/circles/[handle]/proposals/actions";
+import { getGoalAction } from "@/app/circles/[handle]/goals/actions"; // Import action to get goal
 import { CommentSection } from "../feeds/CommentSection";
 import CreateGoalDialog from "@/components/global-create/create-goal-dialog"; // Import CreateGoalDialog
 
@@ -90,6 +91,8 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
     const isCompact = useIsCompact();
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+    const [linkedGoal, setLinkedGoal] = useState<GoalDisplay | null>(null);
+    const [isLoadingGoal, setIsLoadingGoal] = useState(false);
 
     const isAuthor = user?.did === proposal.createdBy;
     const canModerate = isAuthorized(user, circle, features.proposals.moderate);
@@ -99,6 +102,20 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
     const canResolve = isAuthorized(user, circle, features.proposals.resolve);
     const hasVoted = !!proposal.userReaction;
     const voteCount = Object.values(proposal.reactions || {}).reduce((sum, count) => sum + count, 0);
+
+    useEffect(() => {
+        if (proposal.goalId && proposal.stage === "implemented" && circle.handle) {
+            setIsLoadingGoal(true);
+            getGoalAction(circle.handle, proposal.goalId)
+                .then((goalData) => {
+                    if (goalData) {
+                        setLinkedGoal(goalData);
+                    }
+                })
+                .catch((err) => console.error("Failed to fetch linked goal", err))
+                .finally(() => setIsLoadingGoal(false));
+        }
+    }, [proposal.goalId, proposal.stage, circle.handle]);
 
     const handleEdit = () => router.push(`/circles/${circle.handle}/proposals/${proposal._id}/edit`);
 
@@ -326,11 +343,9 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                         </Link>
                         <Badge className={`${getStageBadgeColor(proposal.stage)}`}>
                             {proposal.stage.charAt(0).toUpperCase() + proposal.stage.slice(1)}
-                            {proposal.stage === "implemented" && proposal.goalId && " (Goal Linked)"}
-                            {proposal.stage === "rejected" && proposal.outcomeReason && " (Reason Provided)"}
                         </Badge>
                     </div>
-                    <div className="mt-1 flex items-center space-x-2 text-xs text-muted-foreground">
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                         <div>
                             Created by {proposal.author.name}{" "}
                             {proposal.createdAt &&
@@ -343,6 +358,35 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                                     <MapPin className="mr-1 h-3 w-3" />
                                     <span>{getFullLocationName(proposal.location)}</span>
                                 </div>
+                            </>
+                        )}
+                        {proposal.stage === "implemented" && linkedGoal && (
+                            <>
+                                <span className="mx-1">·</span>
+                                <div className="flex items-center">
+                                    <LinkIcon className="mr-1 h-3 w-3" />
+                                    Implemented as Goal:{" "}
+                                    <Link
+                                        href={`/circles/${circle.handle}/goals/${linkedGoal._id}`}
+                                        className="ml-1 text-indigo-600 hover:underline"
+                                    >
+                                        {linkedGoal.title}
+                                    </Link>
+                                </div>
+                            </>
+                        )}
+                        {proposal.stage === "implemented" && isLoadingGoal && !linkedGoal && (
+                            <>
+                                <span className="mx-1">·</span>
+                                <div className="flex items-center text-xs text-muted-foreground">
+                                    <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Loading goal link...
+                                </div>
+                            </>
+                        )}
+                        {proposal.stage === "rejected" && proposal.outcomeReason && (
+                            <>
+                                <span className="mx-1">·</span>
+                                <span>Reason: {proposal.outcomeReason}</span>
                             </>
                         )}
                     </div>
@@ -642,7 +686,12 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                     onSuccess={(goalId) => {
                         toast({ title: "Success", description: "Goal created from proposal." });
                         setCreateGoalDialogOpen(false);
-                        router.refresh(); // Refresh to see updated proposal stage
+                        // router.refresh(); // Refresh might not be needed if navigating away
+                        if (goalId && circle?.handle) {
+                            router.push(`/circles/${circle.handle}/goals/${goalId}`);
+                        } else {
+                            router.refresh(); // Fallback to refresh if navigation details are missing
+                        }
                     }}
                 />
             )}

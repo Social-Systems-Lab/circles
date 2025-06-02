@@ -104,7 +104,6 @@ export const CreateGoalDialog: React.FC<CreateGoalDialogProps> = ({
                             onFormSubmitSuccess={handleFormSuccess}
                             onCancel={handleCancel}
                             initialData={initialGoalData} // Pass initial data to GoalForm
-                            showCircleSelector={showCircleSelector}
                         />
                     </div>
                 )}

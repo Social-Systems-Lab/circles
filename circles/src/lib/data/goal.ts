@@ -265,13 +265,25 @@ export const getGoalById = async (goalId: string, userDid?: string): Promise<Goa
 /**
  * Create a new goal in the database.
  * @param goalData Data for the new goal (excluding _id, commentPostId)
+ * @param followerDids Optional array of user DIDs to add as initial followers
  * @returns The created goal document with its new _id and potentially commentPostId
  */
-export const createGoal = async (goalData: Omit<Goal, "_id" | "commentPostId">): Promise<Goal> => {
+export const createGoal = async (
+    goalData: Omit<Goal, "_id" | "commentPostId" | "followers">, // Exclude followers from base type
+    followerDids?: string[],
+): Promise<Goal> => {
     try {
         // Ensure createdAt is set if not provided
-        const goalToInsert = { ...goalData, createdAt: goalData.createdAt || new Date() };
-        const result = await Goals.insertOne(goalToInsert);
+        const goalToInsert: Omit<Goal, "_id" | "commentPostId"> & { followers?: string[] } = {
+            ...goalData,
+            createdAt: goalData.createdAt || new Date(),
+        };
+
+        if (followerDids && followerDids.length > 0) {
+            goalToInsert.followers = followerDids;
+        }
+
+        const result = await Goals.insertOne(goalToInsert as Goal); // Cast to Goal for insertion
         if (!result.insertedId) {
             throw new Error("Failed to insert goal into database.");
         }
