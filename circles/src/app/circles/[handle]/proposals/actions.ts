@@ -42,10 +42,10 @@ import {
     notifyProposalResolvedAuthor,
     notifyProposalResolvedVoters,
     notifyProposalVote,
-    // Consider a new notification for when a proposal is implemented into a goal
+    notifyProposalToGoal, // Added for proposal to goal conversion
 } from "@/lib/data/notifications";
 import { updateAggregateRankCache } from "@/lib/data/ranking"; // Added for ranking
-import { createGoal } from "@/lib/data/goal"; // Import createGoal
+import { createGoal, getGoalById } from "@/lib/data/goal"; // Import createGoal and getGoalById
 
 /**
  * Get all proposals for a circle (client-callable action)
@@ -1324,7 +1324,18 @@ export async function createGoalFromProposalAction(
         revalidatePath(`/circles/${circleHandle}/goals`);
         revalidatePath(`/circles/${circleHandle}/goals/${newGoalId}`);
 
-        // TODO: Add notification for proposal implemented into a goal
+        // --- Trigger Notification for Proposal to Goal ---
+        const finalProposal = await getProposalById(data.proposalId, userDid);
+        const finalGoal = await getGoalById(newGoalId, userDid);
+
+        if (finalProposal && finalGoal && user) {
+            notifyProposalToGoal(finalProposal, finalGoal, user);
+        } else {
+            console.error(
+                `[proposals/actions] Failed to fetch proposal/goal details for notification. Proposal: ${data.proposalId}, Goal: ${newGoalId}`,
+            );
+        }
+        // --- End Notification ---
 
         return { success: true, message: "Goal created from proposal successfully.", goalId: newGoalId };
     } catch (error) {

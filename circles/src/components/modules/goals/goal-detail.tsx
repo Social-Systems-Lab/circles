@@ -29,6 +29,7 @@ import {
     UserPlus, // For Follow icon
     UserCheck, // For Following icon
     LinkIcon, // For proposal link
+    Award, // For Complete Goal button
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { getFullLocationName } from "@/lib/utils";
@@ -68,6 +69,7 @@ import Link from "next/link";
 import { isAuthorized } from "@/lib/auth/client-auth";
 import { features } from "@/lib/data/constants";
 import { CommentSection } from "../feeds/CommentSection"; // Import CommentSection
+import { CompleteGoalDialog } from "./complete-goal-dialog"; // Import the new dialog
 
 // Helper function for goal stage badge styling
 const getGoalStageInfo = (stage: GoalStage) => {
@@ -84,11 +86,11 @@ const getGoalStageInfo = (stage: GoalStage) => {
                 icon: Play,
                 text: "Open",
             };
-        case "resolved":
+        case "completed": // Changed from "resolved"
             return {
                 color: "bg-green-200 text-green-800",
                 icon: CheckCircle,
-                text: "Resolved",
+                text: "Completed",
             };
         default:
             return {
@@ -242,18 +244,20 @@ const GoalDetail: React.FC<GoalDetailProps> = ({
         },
         {
             label: "Mark Resolved",
-            stage: "resolved" as GoalStage,
+            stage: "completed" as GoalStage, // Changed from "resolved"
             allowed: permissions.canResolve && goal.stage === "open",
         },
         {
             label: "Re-open",
             stage: "open" as GoalStage,
-            allowed: permissions.canResolve && goal.stage === "resolved",
+            allowed: permissions.canResolve && goal.stage === "completed", // Changed from "resolved"
         },
     ].filter((action) => action.allowed);
 
-    const canEditGoal = (isAuthor && goal.stage === "review") || permissions.canModerate;
-    const canDeleteGoal = isAuthor || permissions.canModerate;
+    const canEditGoal =
+        (isAuthor && goal.stage === "review") || (permissions.canModerate && goal.stage !== "completed");
+    const canDeleteGoal = (isAuthor || permissions.canModerate) && goal.stage !== "completed";
+    const canCompleteGoal = (isAuthor || permissions.canResolve) && goal.stage === "open";
 
     const handleFollowToggle = () => {
         if (!goal._id || !circle.handle) return;
@@ -313,13 +317,29 @@ const GoalDetail: React.FC<GoalDetailProps> = ({
             );
         }
         if (permissions.canResolve && goal.stage === "open") {
+            // This is now handled by the CompleteGoalDialog trigger
+            // actions.push(
+            //     <Button key="resolve" onClick={() => openStageChangeDialog("completed")} disabled={isPending}>
+            //         {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Mark Completed
+            //     </Button>,
+            // );
+        }
+        if (canCompleteGoal) {
             actions.push(
-                <Button key="resolve" onClick={() => openStageChangeDialog("resolved")} disabled={isPending}>
-                    {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Mark Resolved
-                </Button>,
+                <CompleteGoalDialog
+                    key="complete-goal"
+                    goal={goal}
+                    circleHandle={circle.handle!}
+                    onGoalCompleted={() => router.refresh()}
+                >
+                    <Button variant="default" disabled={isPending}>
+                        <Award className="mr-2 h-4 w-4" />
+                        {isPending ? "Processing..." : "Complete Goal"}
+                    </Button>
+                </CompleteGoalDialog>,
             );
         }
-        if (permissions.canResolve && goal.stage === "resolved") {
+        if (permissions.canResolve && goal.stage === "completed") {
             actions.push(
                 <Button
                     key="reopen"
@@ -436,7 +456,7 @@ const GoalDetail: React.FC<GoalDetailProps> = ({
                         <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Options</DropdownMenuLabel>
                             {canEditGoal && (
-                                <DropdownMenuItem onClick={handleEdit} disabled={goal.stage === "resolved"}>
+                                <DropdownMenuItem onClick={handleEdit} disabled={goal.stage === "completed"}>
                                     <Pencil className="mr-2 h-4 w-4" /> Edit Goal
                                 </DropdownMenuItem>
                             )}

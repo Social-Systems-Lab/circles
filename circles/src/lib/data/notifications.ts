@@ -523,17 +523,26 @@ export async function notifyCommentLike(
  * Send notifications when someone is mentioned in a post
  */
 export async function notifyPostMentions(post: Post, author: Circle, mentionedCircles: Circle[]): Promise<void> {
-    // Filter out self-mentions
-    const mentionedUsers = mentionedCircles.filter((circle) => circle.did && circle.did !== author.did);
+    // Filter out self-mentions and get DIDs
+    const mentionedUserDids = mentionedCircles
+        .map((circle) => circle.did)
+        .filter((did): did is string => !!did && did !== author.did);
 
-    if (mentionedUsers.length === 0) return;
+    if (mentionedUserDids.length === 0) return;
+
+    // Get UserPrivate for all mentioned users
+    const mentionedUserPrivates = (await Promise.all(mentionedUserDids.map((did) => getUserPrivate(did)))).filter(
+        (up): up is UserPrivate => up !== null,
+    );
+
+    if (mentionedUserPrivates.length === 0) return;
 
     // Get post circle
     let feed = await getFeed(post.feedId);
     let circle = await getCircleById(feed?.circleId!);
 
     // Send notifications to all mentioned users
-    await sendNotifications("post_mention", mentionedUsers, {
+    await sendNotifications("post_mention", mentionedUserPrivates, {
         circle,
         user: author,
         post,
@@ -550,10 +559,19 @@ export async function notifyCommentMentions(
     author: Circle,
     mentionedCircles: Circle[],
 ): Promise<void> {
-    // Filter out self-mentions
-    const mentionedUsers = mentionedCircles.filter((circle) => circle.did && circle.did !== author.did);
+    // Filter out self-mentions and get DIDs
+    const mentionedUserDids = mentionedCircles
+        .map((circle) => circle.did)
+        .filter((did): did is string => !!did && did !== author.did);
 
-    if (mentionedUsers.length === 0) return;
+    if (mentionedUserDids.length === 0) return;
+
+    // Get UserPrivate for all mentioned users
+    const mentionedUserPrivates = (await Promise.all(mentionedUserDids.map((did) => getUserPrivate(did)))).filter(
+        (up): up is UserPrivate => up !== null,
+    );
+
+    if (mentionedUserPrivates.length === 0) return;
 
     // TODO: Enhance mention notifications for parent items (Goals, Tasks, etc.)?
     // Currently, it links to the shadow post. We might want it to link to the parent item.
@@ -597,7 +615,7 @@ export async function notifyCommentMentions(
     // --- End parent item check ---
 
     // Send notifications to all mentioned users
-    await sendNotifications("comment_mention", mentionedUsers, {
+    await sendNotifications("comment_mention", mentionedUserPrivates, {
         circle,
         user: author,
         post,
@@ -637,18 +655,27 @@ export async function notifyProposalSubmittedForReview(proposal: ProposalDisplay
         const circle = await getProposalCircle(proposal);
         if (!circle) return;
 
-        // Find users with review permission (excluding the submitter)
-        const reviewers = (await getAuthorizedMembers(circle, features.proposals.review)).filter(
-            (user: Circle) => user.did !== submitter.did,
+        // Find DIDs of users with review permission (excluding the submitter)
+        const reviewerDids = (await getAuthorizedMembers(circle, features.proposals.review))
+            .map((user) => user.did)
+            .filter((did): did is string => !!did && did !== submitter.did);
+
+        if (reviewerDids.length === 0) {
+            console.log("🔔 [NOTIFY] No reviewer DIDs found to notify for proposal:", proposal._id);
+            return;
+        }
+
+        const reviewerUserPrivates = (await Promise.all(reviewerDids.map((did) => getUserPrivate(did)))).filter(
+            (up): up is UserPrivate => up !== null,
         );
 
-        if (reviewers.length === 0) {
-            console.log("🔔 [NOTIFY] No reviewers found to notify for proposal:", proposal._id);
+        if (reviewerUserPrivates.length === 0) {
+            console.log("🔔 [NOTIFY] No reviewers (UserPrivate) found to notify for proposal:", proposal._id);
             return; // Exit if no reviewers
         }
 
-        console.log(`🔔 [NOTIFY] Sending proposal_submitted_for_review to ${reviewers.length} reviewers`);
-        await sendNotifications("proposal_submitted_for_review", reviewers, {
+        console.log(`🔔 [NOTIFY] Sending proposal_submitted_for_review to ${reviewerUserPrivates.length} reviewers`);
+        await sendNotifications("proposal_submitted_for_review", reviewerUserPrivates, {
             circle,
             user: submitter, // The user who triggered the notification (submitter)
             proposalId: proposal._id?.toString(),
@@ -671,18 +698,26 @@ export async function notifyProposalMovedToVoting(proposal: ProposalDisplay, app
         const circle = await getProposalCircle(proposal);
         if (!circle) return;
 
-        // Find users with voting permission (excluding the approver)
-        const voters = (await getAuthorizedMembers(circle, features.proposals.vote)).filter(
-            (user: Circle) => user.did !== approver.did,
+        // Find DIDs of users with voting permission (excluding the approver)
+        const voterDids = (await getAuthorizedMembers(circle, features.proposals.vote))
+            .map((user) => user.did)
+            .filter((did): did is string => !!did && did !== approver.did);
+
+        if (voterDids.length === 0) {
+            console.log("🔔 [NOTIFY] No voter DIDs found to notify for proposal:", proposal._id);
+            return;
+        }
+        const voterUserPrivates = (await Promise.all(voterDids.map((did) => getUserPrivate(did)))).filter(
+            (up): up is UserPrivate => up !== null,
         );
 
-        if (voters.length === 0) {
-            console.log("🔔 [NOTIFY] No voters found to notify for proposal:", proposal._id);
+        if (voterUserPrivates.length === 0) {
+            console.log("🔔 [NOTIFY] No voters (UserPrivate) found to notify for proposal:", proposal._id);
             return; // Exit if no voters
         }
 
-        console.log(`🔔 [NOTIFY] Sending proposal_moved_to_voting to ${voters.length} voters`);
-        await sendNotifications("proposal_moved_to_voting", voters, {
+        console.log(`🔔 [NOTIFY] Sending proposal_moved_to_voting to ${voterUserPrivates.length} voters`);
+        await sendNotifications("proposal_moved_to_voting", voterUserPrivates, {
             circle,
             user: approver, // The user who triggered the notification (approver)
             proposalId: proposal._id?.toString(),
@@ -804,20 +839,29 @@ export async function notifyProposalResolvedVoters(proposal: ProposalDisplay, re
         const circle = await getProposalCircle(proposal);
         if (!circle) return;
 
-        // Get users who voted (reacted) - excluding the resolver and the author
-        const voters = (await getProposalReactions(proposal._id as string)).filter(
-            (user: Circle) => user.did !== resolver.did && user.did !== proposal.createdBy,
+        // Get DIDs of users who voted (reacted) - excluding the resolver and the author
+        const voterDids = (await getProposalReactions(proposal._id as string))
+            .map((user) => user.did)
+            .filter((did): did is string => !!did && did !== resolver.did && did !== proposal.createdBy);
+
+        if (voterDids.length === 0) {
+            console.log("🔔 [NOTIFY] No voter DIDs found to notify for resolved proposal:", proposal._id);
+            return;
+        }
+
+        const voterUserPrivates = (await Promise.all(voterDids.map((did) => getUserPrivate(did)))).filter(
+            (up): up is UserPrivate => up !== null,
         );
 
-        if (voters.length === 0) {
-            console.log("🔔 [NOTIFY] No voters found to notify for resolved proposal:", proposal._id);
+        if (voterUserPrivates.length === 0) {
+            console.log("🔔 [NOTIFY] No voters (UserPrivate) found to notify for resolved proposal:", proposal._id);
             return; // Exit if no voters
         }
 
         const message = formatProposalResolutionMessage(proposal, "The proposal");
 
-        console.log(`🔔 [NOTIFY] Sending proposal_resolved_voter to ${voters.length} voters`);
-        await sendNotifications("proposal_resolved_voter", voters, {
+        console.log(`🔔 [NOTIFY] Sending proposal_resolved_voter to ${voterUserPrivates.length} voters`);
+        await sendNotifications("proposal_resolved_voter", voterUserPrivates, {
             circle,
             user: resolver, // The user who triggered the notification (resolver)
             proposalId: proposal._id?.toString(),
@@ -931,18 +975,26 @@ export async function notifyIssueSubmittedForReview(issue: IssueDisplay, submitt
         const circle = await getIssueCircle(issue);
         if (!circle) return;
 
-        // Find users with review permission (excluding the submitter)
-        const reviewers = (await getAuthorizedMembers(circle, features.issues?.review)).filter(
-            (user: Circle) => user.did !== submitter.did,
+        // Find DIDs of users with review permission (excluding the submitter)
+        const reviewerDids = (await getAuthorizedMembers(circle, features.issues?.review))
+            .map((user) => user.did)
+            .filter((did): did is string => !!did && did !== submitter.did);
+
+        if (reviewerDids.length === 0) {
+            console.log("🔔 [NOTIFY] No reviewer DIDs found to notify for issue:", issue._id);
+            return;
+        }
+        const reviewerUserPrivates = (await Promise.all(reviewerDids.map((did) => getUserPrivate(did)))).filter(
+            (up): up is UserPrivate => up !== null,
         );
 
-        if (reviewers.length === 0) {
-            console.log("🔔 [NOTIFY] No reviewers found to notify for issue:", issue._id);
+        if (reviewerUserPrivates.length === 0) {
+            console.log("🔔 [NOTIFY] No reviewers (UserPrivate) found to notify for issue:", issue._id);
             return;
         }
 
-        console.log(`🔔 [NOTIFY] Sending issue_submitted_for_review to ${reviewers.length} reviewers`);
-        await sendNotifications("issue_submitted_for_review", reviewers, {
+        console.log(`🔔 [NOTIFY] Sending issue_submitted_for_review to ${reviewerUserPrivates.length} reviewers`);
+        await sendNotifications("issue_submitted_for_review", reviewerUserPrivates, {
             circle,
             user: submitter, // The user who triggered the notification (submitter)
             // Pass issue details directly, not nested under 'issue'
@@ -1095,19 +1147,26 @@ export async function notifyTaskSubmittedForReview(task: TaskDisplay, submitter:
         const circle = await getTaskCircle(task); // Renamed helper function
         if (!circle) return;
 
-        // Find users with review permission (excluding the submitter)
-        const reviewers = (await getAuthorizedMembers(circle, features.tasks?.review)).filter(
-            // Updated feature check
-            (user: Circle) => user.did !== submitter.did,
+        // Find DIDs of users with review permission (excluding the submitter)
+        const reviewerDids = (await getAuthorizedMembers(circle, features.tasks?.review)) // Updated feature check
+            .map((user) => user.did)
+            .filter((did): did is string => !!did && did !== submitter.did);
+
+        if (reviewerDids.length === 0) {
+            console.log("🔔 [NOTIFY] No reviewer DIDs found to notify for task:", task._id); // Updated message
+            return;
+        }
+        const reviewerUserPrivates = (await Promise.all(reviewerDids.map((did) => getUserPrivate(did)))).filter(
+            (up): up is UserPrivate => up !== null,
         );
 
-        if (reviewers.length === 0) {
-            console.log("🔔 [NOTIFY] No reviewers found to notify for task:", task._id); // Updated message
+        if (reviewerUserPrivates.length === 0) {
+            console.log("🔔 [NOTIFY] No reviewers (UserPrivate) found to notify for task:", task._id); // Updated message
             return;
         }
 
-        console.log(`🔔 [NOTIFY] Sending task_submitted_for_review to ${reviewers.length} reviewers`); // Updated message
-        await sendNotifications("task_submitted_for_review", reviewers, {
+        console.log(`🔔 [NOTIFY] Sending task_submitted_for_review to ${reviewerUserPrivates.length} reviewers`); // Updated message
+        await sendNotifications("task_submitted_for_review", reviewerUserPrivates, {
             // Updated notification type
             circle,
             user: submitter, // The user who triggered the notification (submitter)
@@ -1269,19 +1328,26 @@ export async function notifyGoalSubmittedForReview(goal: GoalDisplay, submitter:
         const circle = await getGoalCircle(goal); // Renamed helper function
         if (!circle) return;
 
-        // Find users with review permission (excluding the submitter)
-        const reviewers = (await getAuthorizedMembers(circle, features.goals?.review)).filter(
-            // Updated feature check
-            (user: Circle) => user.did !== submitter.did,
+        // Find DIDs of users with review permission (excluding the submitter)
+        const reviewerDids = (await getAuthorizedMembers(circle, features.goals?.review)) // Updated feature check
+            .map((user) => user.did)
+            .filter((did): did is string => !!did && did !== submitter.did);
+
+        if (reviewerDids.length === 0) {
+            console.log("🔔 [NOTIFY] No reviewer DIDs found to notify for goal:", goal._id); // Updated message
+            return;
+        }
+        const reviewerUserPrivates = (await Promise.all(reviewerDids.map((did) => getUserPrivate(did)))).filter(
+            (up): up is UserPrivate => up !== null,
         );
 
-        if (reviewers.length === 0) {
-            console.log("🔔 [NOTIFY] No reviewers found to notify for goal:", goal._id); // Updated message
+        if (reviewerUserPrivates.length === 0) {
+            console.log("🔔 [NOTIFY] No reviewers (UserPrivate) found to notify for goal:", goal._id); // Updated message
             return;
         }
 
-        console.log(`🔔 [NOTIFY] Sending goal_submitted_for_review to ${reviewers.length} reviewers`); // Updated message
-        await sendNotifications("goal_submitted_for_review", reviewers, {
+        console.log(`🔔 [NOTIFY] Sending goal_submitted_for_review to ${reviewerUserPrivates.length} reviewers`); // Updated message
+        await sendNotifications("goal_submitted_for_review", reviewerUserPrivates, {
             // Updated notification type
             circle,
             user: submitter, // The user who triggered the notification (submitter)
@@ -1381,5 +1447,116 @@ export async function notifyGoalStatusChanged( // Renamed function
         });
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyGoalStatusChanged:", error); // Updated message
+    }
+}
+
+/**
+ * Send notification when a goal is completed.
+ * Notifies all followers of the goal.
+ */
+export async function notifyGoalCompleted(goal: GoalDisplay, completer: Circle): Promise<void> {
+    try {
+        console.log("🔔 [NOTIFY] notifyGoalCompleted called:", {
+            goalId: goal._id,
+            completerDid: completer.did,
+        });
+        const circle = await getGoalCircle(goal);
+        if (!circle) return;
+
+        if (!goal.followers || goal.followers.length === 0) {
+            console.log("🔔 [NOTIFY] No followers to notify for completed goal:", goal._id);
+            return;
+        }
+
+        // Fetch UserPrivate details for all followers
+        const followerUsers = await getCirclesByDids(goal.followers);
+        const followerUserPrivates = (
+            await Promise.all(followerUsers.map((u) => (u.did ? getUserPrivate(u.did) : Promise.resolve(null))))
+        ).filter((up): up is UserPrivate => up !== null);
+
+        // Filter out the completer from the recipients
+        const recipients = followerUserPrivates.filter((follower) => follower.did !== completer.did);
+
+        if (recipients.length === 0) {
+            console.log("🔔 [NOTIFY] No recipients (after filtering completer) for completed goal:", goal._id);
+            return;
+        }
+
+        console.log(`🔔 [NOTIFY] Sending goal_completed to ${recipients.length} followers`);
+        await sendNotifications("goal_completed", recipients, {
+            circle,
+            user: completer, // The user who completed the goal
+            goalId: goal._id?.toString(),
+            goalTitle: goal.title,
+            goalResultSummary: goal.resultSummary, // Add result summary for context
+            // The link in the notification should ideally go to the goal's result display/post
+            // This might require the resultPostId to be part of the payload or handled by the client
+            resultPostId: goal.resultPostId,
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyGoalCompleted:", error);
+    }
+}
+
+/**
+ * Send notification when a proposal is converted into a goal.
+ * Notifies the proposal author (if different from actor) and users who could vote.
+ */
+export async function notifyProposalToGoal(
+    proposal: ProposalDisplay,
+    newGoal: GoalDisplay,
+    actor: Circle, // User who initiated the conversion
+): Promise<void> {
+    try {
+        console.log("🔔 [NOTIFY] notifyProposalToGoal called:", {
+            proposalId: proposal._id,
+            newGoalId: newGoal._id,
+            actorDid: actor.did,
+        });
+        const circle = await getProposalCircle(proposal); // Assuming goal is in the same circle
+        if (!circle) return;
+
+        const recipients: UserPrivate[] = [];
+        const recipientDids = new Set<string>();
+
+        // 1. Notify Proposal Author (if not the actor)
+        if (proposal.createdBy && proposal.createdBy !== actor.did) {
+            const author = await getUserPrivate(proposal.createdBy);
+            if (author) {
+                recipients.push(author);
+                recipientDids.add(author.did!);
+            } else {
+                console.warn(`🔔 [NOTIFY] Proposal author not found for proposal_to_goal: ${proposal.createdBy}`);
+            }
+        }
+
+        // 2. Notify users who were authorized to vote on the proposal (excluding actor and already added author)
+        const potentialVoters = await getAuthorizedMembers(circle, features.proposals.vote);
+        for (const pv of potentialVoters) {
+            if (pv.did && pv.did !== actor.did && !recipientDids.has(pv.did)) {
+                const voterUserPrivate = await getUserPrivate(pv.did);
+                if (voterUserPrivate) {
+                    recipients.push(voterUserPrivate);
+                    recipientDids.add(voterUserPrivate.did!);
+                }
+            }
+        }
+
+        if (recipients.length === 0) {
+            console.log("🔔 [NOTIFY] No recipients for proposal_to_goal notification:", proposal._id);
+            return;
+        }
+
+        console.log(`🔔 [NOTIFY] Sending proposal_to_goal to ${recipients.length} users`);
+        await sendNotifications("proposal_to_goal", recipients, {
+            circle,
+            user: actor, // The user who converted the proposal
+            proposalId: proposal._id?.toString(),
+            proposalName: proposal.name,
+            goalId: newGoal._id?.toString(),
+            goalTitle: newGoal.title,
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyProposalToGoal:", error);
     }
 }

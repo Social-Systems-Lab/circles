@@ -17,7 +17,8 @@ export const SAFE_TASK_PROJECTION = {
     createdBy: 1,
     createdAt: 1,
     updatedAt: 1,
-    resolvedAt: 1,
+    // resolvedAt: 1, // Replaced by completedAt for goals
+    completedAt: 1, // Added for goal completion
     title: 1,
     description: 1,
     stage: 1,
@@ -28,6 +29,9 @@ export const SAFE_TASK_PROJECTION = {
     targetDate: 1,
     proposalId: 1, // Added proposalId
     followers: 1, // Added followers
+    resultSummary: 1, // Added for goal completion
+    resultImages: 1, // Added for goal completion
+    resultPostId: 1, // Added for goal completion
 } as const;
 
 /**
@@ -167,6 +171,71 @@ export const getActiveGoalsByCircleId = async (circleId: string): Promise<GoalDi
         return goals;
     } catch (error) {
         console.error("Error getting active goals by circle ID:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get completed goals for a circle.
+ * Filters results based on the user's group membership and the goal's userGroups.
+ * @param circleId The ID of the circle
+ * @param userDid The DID of the user requesting the goals (for visibility checks)
+ * @returns Array of completed goals the user is allowed to see
+ */
+export const getCompletedGoalsByCircleId = async (circleId: string, userDid: string): Promise<GoalDisplay[]> => {
+    try {
+        const goals = (await Goals.aggregate([
+            // 1) Match on circleId and 'completed' stage
+            {
+                $match: {
+                    circleId,
+                    stage: "completed",
+                },
+            },
+            // 2) Lookup author details (same as getGoalsByCircleId)
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { authorDid: "$createdBy" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$did", "$$authorDid"] },
+                                        { $eq: ["$circleType", "user"] },
+                                        { $ne: ["$$authorDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" },
+                            },
+                        },
+                    ],
+                    as: "authorDetails",
+                },
+            },
+            { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: false } },
+            // 3) Final projection (same as getGoalsByCircleId)
+            {
+                $project: {
+                    ...SAFE_TASK_PROJECTION,
+                    _id: { $toString: "$_id" },
+                    author: "$authorDetails",
+                },
+            },
+            // 4) Sort by completion date (newest first), then creation date
+            { $sort: { completedAt: -1, createdAt: -1 } },
+        ]).toArray()) as GoalDisplay[];
+
+        // TODO: Add fine-grained visibility filtering based on userDid and goal.userGroups if needed
+        return goals;
+    } catch (error) {
+        console.error("Error getting completed goals by circle ID:", error);
         throw error;
     }
 };
@@ -457,11 +526,15 @@ export const changeGoalStage = async (goalId: string, newStage: GoalStage): Prom
         const updates: Partial<Goal> = { stage: newStage, updatedAt: new Date() }; // Updated type
         const unsetFields: any = {};
 
-        if (newStage === "resolved") {
-            updates.resolvedAt = new Date();
+        if (newStage === "completed") {
+            // Changed from "resolved"
+            updates.completedAt = new Date(); // Assuming we use completedAt now
+            // If you still want to use resolvedAt for 'completed' stage:
+            // updates.resolvedAt = new Date();
         } else {
-            // If moving out of resolved, ensure resolvedAt is unset
-            unsetFields.resolvedAt = "";
+            // If moving out of completed, ensure completedAt (or resolvedAt) is unset
+            unsetFields.completedAt = ""; // Assuming we use completedAt now
+            // unsetFields.resolvedAt = "";
         }
 
         const updateOp: any = { $set: updates };

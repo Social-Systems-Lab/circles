@@ -13,9 +13,22 @@ import { Feeds, Posts, Goals, GoalMembers } from "@/lib/data/db"; // Import DB c
 import { Post } from "@/models/models"; // Import Post type (Removed duplicate Goal)
 import { createPost } from "@/lib/data/feed"; // Import createPost
 import { ObjectId } from "mongodb"; // Import ObjectId
-import { getGoalsByCircleId, getGoalById, createGoal, updateGoal, deleteGoal, changeGoalStage } from "@/lib/data/goal";
+import {
+    getGoalsByCircleId,
+    getGoalById,
+    createGoal,
+    updateGoal,
+    deleteGoal,
+    changeGoalStage,
+    getCompletedGoalsByCircleId, // Added
+} from "@/lib/data/goal";
 import { getMembers } from "@/lib/data/member";
-import { notifyGoalSubmittedForReview, notifyGoalApproved, notifyGoalStatusChanged } from "@/lib/data/notifications";
+import {
+    notifyGoalSubmittedForReview,
+    notifyGoalApproved,
+    notifyGoalStatusChanged,
+    notifyGoalCompleted, // Added for goal completion
+} from "@/lib/data/notifications";
 
 import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
 
@@ -68,6 +81,53 @@ export async function getGoalsAction(circleHandle: string): Promise<GetGoalsActi
         return defaultResult;
     }
 }
+
+/**
+ * Get all completed goals for a circle
+ * @param circleHandle The handle of the circle
+ * @returns Array of completed goals
+ */
+export async function getCompletedGoalsAction(circleHandle: string): Promise<GetGoalsActionResult> {
+    const defaultResult: GetGoalsActionResult = {
+        goals: [],
+    };
+
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            // Consider if unauthenticated users can see completed goals or if this should throw/return empty.
+            // For now, aligning with getGoalsAction and requiring authentication.
+            throw new Error("User not authenticated");
+        }
+        // user object might not be strictly needed if getCompletedGoalsByCircleId only needs userDid for visibility.
+        // const user = await getUserByDid(userDid);
+        // if (!user) {
+        //     throw new Error("User not found");
+        // }
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) {
+            throw new Error("Circle not found");
+        }
+        const circleId = circle._id!.toString();
+
+        const canViewGoals = await isAuthorized(userDid, circleId, features.goals.view);
+        if (!canViewGoals) {
+            return defaultResult; // Or throw error if preferred for actions
+        }
+
+        // Get all displayable completed goals
+        const completedGoals = await getCompletedGoalsByCircleId(circle._id as string, userDid);
+
+        return {
+            goals: completedGoals,
+        };
+    } catch (error) {
+        console.error("Error getting completed goals:", error);
+        return defaultResult; // Or rethrow/handle differently
+    }
+}
+
 /**
  * Get a single goal by ID
  * @param circleHandle The handle of the circle
@@ -155,6 +215,11 @@ const createGoalSchema = z.object({
 const updateGoalSchema = createGoalSchema.extend({
     // Renamed schema
     // Updates use the same base fields
+});
+
+const completeGoalSchema = z.object({
+    resultSummary: z.string().min(1, "Result summary is required"),
+    resultImages: z.array(z.any()).optional(), // Allow files or existing Media objects initially
 });
 
 // --- Action Functions ---
@@ -387,7 +452,7 @@ export async function updateGoalAction(
             circle._id as string,
             features.goals?.moderate || "goals_moderate",
         );
-        const canEdit = (isAuthor && goal.stage === "review") || (canModerate && goal.stage !== "resolved");
+        const canEdit = (isAuthor && goal.stage === "review") || (canModerate && goal.stage !== "completed");
         if (!canEdit) return { success: false, message: "Not authorized to update this goal at its current stage" };
 
         // --- Parse Location ---
@@ -622,11 +687,11 @@ export async function changeGoalStageAction( // Renamed function
             canChange = true; // Moderators can likely do any valid transition
         } else if (currentStage === "review" && newStage === "open") {
             canChange = canReview; // User needs review permission
-        } else if (currentStage === "open" && newStage === "resolved") {
-            // Changed target stage from inProgress to resolved
+        } else if (currentStage === "open" && newStage === "completed") {
+            // Changed target stage from inProgress to completed
             canChange = canResolve;
-        } else if (currentStage === "resolved" && newStage === "open") {
-            // Allow moving back from Resolved to Open
+        } else if (currentStage === "completed" && newStage === "open") {
+            // Allow moving back from Completed to Open
             canChange = canResolve;
         }
         // Removed transitions involving "inProgress"
@@ -928,5 +993,165 @@ export async function getGoalFollowDataAction(
     } catch (error) {
         console.error("Error getting goal follow data:", error);
         return null;
+    }
+}
+
+/**
+ * Complete a goal, setting its stage to 'completed' and recording results.
+ * @param circleHandle The handle of the circle
+ * @param goalId The ID of the goal to complete
+ * @param formData The form data containing resultSummary and resultImages
+ * @returns Success status and message
+ */
+export async function completeGoalAction(
+    circleHandle: string,
+    goalId: string,
+    formData: FormData,
+): Promise<{ success: boolean; message?: string; resultPostId?: string }> {
+    try {
+        const validatedData = completeGoalSchema.safeParse({
+            resultSummary: formData.get("resultSummary"),
+            resultImages: formData.getAll("resultImages"),
+        });
+
+        if (!validatedData.success) {
+            console.error("Validation Error (completeGoalAction):", validatedData.error.errors);
+            return {
+                success: false,
+                message: `Invalid input: ${validatedData.error.errors.map((e) => e.message).join(", ")}`,
+            };
+        }
+        const data = validatedData.data;
+
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) return { success: false, message: "User not authenticated" };
+        const user = await getUserByDid(userDid);
+        if (!user) return { success: false, message: "User data not found" };
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle || !circle._id) return { success: false, message: "Circle not found" };
+        const circleId = circle._id.toString();
+
+        const goal = await getGoalById(goalId, userDid);
+        if (!goal) return { success: false, message: "Goal not found" };
+
+        if (goal.stage !== "open") {
+            return { success: false, message: "Goal must be in 'open' stage to be completed." };
+        }
+
+        const canComplete = await isAuthorized(userDid, circleId, features.goals?.resolve || "goals_resolve");
+        if (!canComplete) {
+            return { success: false, message: "Not authorized to complete this goal." };
+        }
+
+        // --- Handle Result Image Uploads ---
+        let uploadedResultImages: Media[] = [];
+        const resultImageFiles = (data.resultImages || []).filter(isFile);
+
+        if (resultImageFiles.length > 0) {
+            const uploadPromises = resultImageFiles.map(async (file) => {
+                const fileNamePrefix = `goal_result_image_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                return await saveFile(file, fileNamePrefix, circleId, true);
+            });
+            const uploadResults = await Promise.all(uploadPromises);
+            uploadedResultImages = uploadResults.map(
+                (result: StorageFileInfo): Media => ({
+                    name: result.originalName || "Uploaded Result Image",
+                    type:
+                        resultImageFiles.find((f) => f.name === result.originalName)?.type ||
+                        "application/octet-stream",
+                    fileInfo: {
+                        url: result.url,
+                        fileName: result.fileName,
+                        originalName: result.originalName,
+                    },
+                }),
+            );
+        }
+        // --- End Result Image Uploads ---
+
+        // --- Create "Victory" Post ---
+        let victoryPostId: string | undefined = undefined;
+        const feed = await Feeds.findOne({ circleId: circleId }); // Find a default/general feed
+        if (!feed) {
+            console.warn(`No feed found for circle ${circleId} to create victory post for goal ${goalId}.`);
+            // Decide if this is a critical failure or if we can proceed without it.
+            // For now, let's allow proceeding but log it.
+        } else {
+            const victoryPostData: Omit<Post, "_id"> = {
+                feedId: feed._id.toString(),
+                createdBy: userDid, // User completing the goal authors the victory post
+                createdAt: new Date(),
+                content: data.resultSummary, // The result summary becomes the post content
+                media: uploadedResultImages, // Attach uploaded result images
+                postType: "goal", // Or a new type like "goal_result" if needed for distinction
+                parentItemId: goalId,
+                parentItemType: "goal", // Linking back to the goal
+                userGroups: goal.userGroups || [], // Inherit user groups from goal
+                comments: 0,
+                reactions: {},
+            };
+            try {
+                const createdVictoryPost = await createPost(victoryPostData);
+                if (createdVictoryPost && createdVictoryPost._id) {
+                    victoryPostId = createdVictoryPost._id.toString();
+                    console.log(`Victory post ${victoryPostId} created for completed goal ${goalId}`);
+                } else {
+                    console.error(`Failed to create victory post for goal ${goalId}`);
+                }
+            } catch (postError) {
+                console.error(`Error creating victory post for goal ${goalId}:`, postError);
+            }
+        }
+        // --- End Victory Post Creation ---
+
+        // --- Update Goal with completion details ---
+        const goalUpdateData: Partial<Goal> = {
+            stage: "completed",
+            completedAt: new Date(),
+            resultSummary: data.resultSummary,
+            resultImages: uploadedResultImages, // Storing the media array on the goal itself
+            resultPostId: victoryPostId, // Link to the victory post
+            updatedAt: new Date(), // updateGoal function also sets this, but good to be explicit
+        };
+
+        const updateSuccess = await updateGoal(goalId, goalUpdateData);
+
+        if (!updateSuccess) {
+            // Attempt to delete uploaded images if goal update fails?
+            if (uploadedResultImages.length > 0) {
+                const deletePromises = uploadedResultImages.map((img) => deleteFile(img.fileInfo.url));
+                await Promise.all(deletePromises).catch((err) =>
+                    console.error("Failed to clean up result images after goal completion failure:", err),
+                );
+            }
+            // Attempt to delete victory post if created?
+            if (victoryPostId) {
+                await Posts.deleteOne({ _id: new ObjectId(victoryPostId) });
+                console.log(`Cleaned up victory post ${victoryPostId} after goal completion failure.`);
+            }
+            return { success: false, message: "Failed to update goal as completed." };
+        }
+
+        // --- Trigger Notification ---
+        const completedGoal = await getGoalById(goalId, userDid); // Fetch the fully updated goal
+        if (completedGoal && user) {
+            notifyGoalCompleted(completedGoal, user); // User is the one who completed it
+        } else {
+            console.error("🔔 [ACTION] Failed to fetch completed goal for notification:", goalId);
+        }
+
+        revalidatePath(`/circles/${circleHandle}/goals`);
+        revalidatePath(`/circles/${circleHandle}/goals/${goalId}`);
+        if (victoryPostId) {
+            revalidatePath(`/circles/${circleHandle}/feed`); // Revalidate feed if victory post created
+            // Potentially revalidate the specific post page if a direct link is common
+            // revalidatePath(`/circles/${circleHandle}/feed/${feed?._id.toString()}/post/${victoryPostId}`);
+        }
+
+        return { success: true, message: "Goal completed successfully!", resultPostId: victoryPostId };
+    } catch (error) {
+        console.error("Error completing goal:", error);
+        return { success: false, message: "An unexpected error occurred while completing the goal." };
     }
 }

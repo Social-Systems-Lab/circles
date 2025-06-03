@@ -845,6 +845,8 @@ export type NotificationType =
     | "goal_submitted_for_review"
     | "goal_approved"
     | "goal_status_changed"
+    | "goal_completed" // A goal has been marked as completed
+    | "proposal_to_goal" // A proposal has been converted to a goal
     // Ranking Notifications
     | "ranking_stale_reminder" // User's ranking list is stale, reminder sent
     | "ranking_grace_period_ended" // User's ranking list is past grace period
@@ -890,6 +892,8 @@ export const notificationTypeValues = [
     "goal_submitted_for_review",
     "goal_approved",
     "goal_status_changed",
+    "goal_completed",
+    "proposal_to_goal",
     "ranking_stale_reminder",
     "ranking_grace_period_ended",
     // Summary Types (for user configuration)
@@ -959,7 +963,13 @@ export const summaryNotificationTypeDetails: Record<
     GOALS_ALL: {
         label: "Goals",
         moduleHandle: "goals",
-        mapsTo: ["goal_submitted_for_review", "goal_approved", "goal_status_changed"],
+        mapsTo: [
+            "goal_submitted_for_review",
+            "goal_approved",
+            "goal_status_changed",
+            "goal_completed",
+            "proposal_to_goal",
+        ],
     },
 };
 
@@ -1156,7 +1166,7 @@ export interface TaskDisplay extends Task {
 }
 
 // Goal stages
-export const goalStageSchema = z.enum(["review", "open", "resolved"]); // Removed "inProgress"
+export const goalStageSchema = z.enum(["review", "open", "completed"]); // Replaced "resolved" with "completed"
 export type GoalStage = z.infer<typeof goalStageSchema>;
 
 // Goal model
@@ -1166,7 +1176,8 @@ export const goalSchema = z.object({
     createdBy: didSchema,
     createdAt: z.date(),
     updatedAt: z.date().optional(), // Track updates
-    resolvedAt: z.date().optional(), // Track resolution time
+    resolvedAt: z.date().optional(), // Track resolution time - consider renaming to completedAt or removing if stage 'completed' implies this
+    completedAt: z.date().optional(), // Explicitly for completion
     title: z.string(),
     description: z.string(),
     stage: goalStageSchema.default("review"), // Use goalStageSchema
@@ -1177,6 +1188,10 @@ export const goalSchema = z.object({
     images: z.array(mediaSchema).optional(), // Optional images/media attached to the goal
     proposalId: z.string().optional(), // Optional link to the proposal this goal was created from
     followers: z.array(didSchema).optional(), // Array of user DIDs following the goal
+    // Fields for completed goal result
+    resultSummary: z.string().optional(),
+    resultImages: z.array(mediaSchema).optional(),
+    resultPostId: z.string().optional(), // ID of the "victory" post associated with the completed goal
 });
 
 export type Goal = z.infer<typeof goalSchema>;
@@ -1186,4 +1201,9 @@ export interface GoalDisplay extends Goal {
     author: Circle; // Creator's details
     circle?: Circle; // Circle details
     // Removed rank?: number;
+    // Ensure new fields are available if needed for display
+    // completedAt?: Date;
+    // resultSummary?: string;
+    // resultImages?: Media[];
+    // resultPostId?: string;
 }

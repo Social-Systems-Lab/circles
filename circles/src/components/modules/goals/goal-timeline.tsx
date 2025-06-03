@@ -1,9 +1,9 @@
 // src/components/modules/goals/goal-timeline.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useTransition } from "react";
 import { GoalDisplay, Circle, GoalPermissions, GoalStage } from "@/models/models";
-import { getGoalsAction } from "@/app/circles/[handle]/goals/actions";
+import { getGoalsAction, getCompletedGoalsAction } from "@/app/circles/[handle]/goals/actions"; // Added getCompletedGoalsAction
 import { Loader2, CalendarIcon, Plus, Clock, Target } from "lucide-react"; // Added Target icon
 import { Card, CardContent } from "@/components/ui/card";
 import Image from "next/image";
@@ -160,22 +160,111 @@ const groupGoalsByDate = (goals: GoalDisplay[], sortDirection: "asc" | "desc" = 
 };
 
 const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initialGoalsData, canCreateGoal }) => {
-    const [allGoals, setAllGoals] = useState<GoalDisplay[]>(initialGoalsData?.goals || []);
-    const [isLoading, setIsLoading] = useState(!initialGoalsData);
+    // Initialize active goals from initialGoalsData, filtering for 'review' or 'open'
+    const [activeGoalsData, setActiveGoalsData] = useState<GoalDisplay[]>(
+        initialGoalsData?.goals?.filter((g) => g.stage === "review" || g.stage === "open") || [],
+    );
+    // Initialize completed goals from initialGoalsData, filtering for 'completed'
+    const [completedGoalsData, setCompletedGoalsData] = useState<GoalDisplay[]>(
+        initialGoalsData?.goals?.filter((g) => g.stage === "completed") || [],
+    );
+
+    // Determine initial loading state based on whether initialGoalsData was provided and if it contained relevant goals
+    const [isLoadingActive, setIsLoadingActive] = useState(
+        !initialGoalsData ||
+            (initialGoalsData?.goals?.filter((g) => g.stage === "review" || g.stage === "open").length === 0 &&
+                activeGoalsData.length === 0),
+    );
+    const [isLoadingCompleted, setIsLoadingCompleted] = useState(
+        !initialGoalsData ||
+            (initialGoalsData?.goals?.filter((g) => g.stage === "completed").length === 0 &&
+                completedGoalsData.length === 0),
+    );
+
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
     const router = useRouter();
+    const [isPending, startTransition] = useTransition();
 
     // Check if tasks module is enabled
     const tasksModuleEnabled = useMemo(() => circle.enabledModules?.includes("tasks"), [circle.enabledModules]);
 
+    // Effect to fetch data when tab changes or if initial data for that tab was missing/empty
+    useEffect(() => {
+        const fetchGoals = async () => {
+            if (activeTab === "active") {
+                // Fetch active goals only if they weren't loaded initially or if the activeGoalsData is empty
+                if (
+                    (!initialGoalsData ||
+                        initialGoalsData.goals?.filter((g) => g.stage === "review" || g.stage === "open").length ===
+                            0) &&
+                    activeGoalsData.length === 0
+                ) {
+                    setIsLoadingActive(true);
+                    setError(null);
+                    try {
+                        const result = await getGoalsAction(circle.handle as string);
+                        setActiveGoalsData(
+                            result.goals?.filter((g) => g.stage === "review" || g.stage === "open") || [],
+                        );
+                    } catch (err) {
+                        console.error("Error fetching active goals:", err);
+                        setError("Failed to load active goals.");
+                    } finally {
+                        setIsLoadingActive(false);
+                    }
+                } else if (initialGoalsData && activeGoalsData.length === 0) {
+                    // If initialGoalsData was provided but resulted in empty activeGoalsData (e.g. all goals were completed)
+                    setActiveGoalsData(
+                        initialGoalsData.goals?.filter((g) => g.stage === "review" || g.stage === "open") || [],
+                    );
+                    setIsLoadingActive(false); // No need to fetch if initial data was processed
+                } else {
+                    setIsLoadingActive(false); // Already loaded or has initial data
+                }
+            } else if (activeTab === "completed") {
+                // Fetch completed goals only if they weren't loaded initially or if completedGoalsData is empty
+                if (
+                    (!initialGoalsData ||
+                        initialGoalsData.goals?.filter((g) => g.stage === "completed").length === 0) &&
+                    completedGoalsData.length === 0
+                ) {
+                    setIsLoadingCompleted(true);
+                    setError(null);
+                    try {
+                        const result = await getCompletedGoalsAction(circle.handle as string);
+                        setCompletedGoalsData(result.goals || []);
+                    } catch (err) {
+                        console.error("Error fetching completed goals:", err);
+                        setError("Failed to load completed goals.");
+                    } finally {
+                        setIsLoadingCompleted(false);
+                    }
+                } else if (initialGoalsData && completedGoalsData.length === 0) {
+                    // If initialGoalsData was provided but resulted in empty completedGoalsData
+                    setCompletedGoalsData(initialGoalsData.goals?.filter((g) => g.stage === "completed") || []);
+                    setIsLoadingCompleted(false);
+                } else {
+                    setIsLoadingCompleted(false); // Already loaded
+                }
+            }
+        };
+
+        startTransition(() => {
+            fetchGoals();
+        });
+        // Depend on activeTab and circle.handle. initialGoalsData is used for initial setup.
+        // Not including activeGoalsData/completedGoalsData in deps to avoid re-fetching when they are set.
+    }, [activeTab, circle.handle, initialGoalsData]);
+
     const displayedGoals = useMemo(() => {
         if (activeTab === "active") {
-            return allGoals.filter((goal) => goal.stage !== "resolved");
+            return activeGoalsData;
         } else {
-            return allGoals.filter((goal) => goal.stage === "resolved");
+            // activeTab === "completed"
+            return completedGoalsData;
         }
-    }, [allGoals, activeTab]);
+    }, [activeGoalsData, completedGoalsData, activeTab]);
 
     const handleCreateGoal = (targetDate?: string) => {
         const url = `/circles/${circle.handle}/goals/create${targetDate ? `?targetDate=${targetDate}` : ""}`;
@@ -275,14 +364,22 @@ const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initia
         );
     };
 
-    if (isLoading) {
+    const isLoadingCurrentTab =
+        (activeTab === "active" && isLoadingActive) || (activeTab === "completed" && isLoadingCompleted);
+
+    if (isLoadingCurrentTab && displayedGoals.length === 0) {
+        // Show loader only if no data yet for the tab
         return (
             <div className="flex items-center justify-center p-8">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
         );
     }
-    if (error) {
+
+    // We might not want to show a global error if one tab fails but the other has data.
+    // Error handling can be per-tab or a general message if both fail.
+    if (error && displayedGoals.length === 0) {
+        // Show error if no data for current tab and error exists
         return <div className="p-8 text-center text-red-600">{error}</div>;
     }
 
