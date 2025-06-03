@@ -898,29 +898,30 @@ export async function getGoalFollowDataAction(
     goalId: string,
 ): Promise<{ isFollowing: boolean; followerCount: number } | null> {
     try {
-        const userDid = await getAuthenticatedUserDid();
-        // User doesn't need to be authenticated to get total follower count,
-        // but isFollowing will be false if not authenticated.
-
-        let userId: string | undefined;
-        if (userDid) {
-            const user = await getUserByDid(userDid);
-            if (user && user._id) {
-                userId = user._id.toString();
-            }
-        }
+        const userDid = await getAuthenticatedUserDid(); // Current authenticated user's DID
 
         if (!ObjectId.isValid(goalId)) {
             console.error("Invalid goalId provided to getGoalFollowDataAction");
             return null;
         }
 
-        const followerCount = await GoalMembers.countDocuments({ goalId });
+        // Fetch the goal document which should now include the 'followers' array
+        // Assuming getGoalById is modified or already returns the followers array
+        // Note: getGoalById might need userDid for its own permission checks,
+        // but for follower logic, we primarily need the goal's data.
+        const goal = await getGoalById(goalId, userDid); // Pass userDid if getGoalById requires it for access
+
+        if (!goal) {
+            console.error(`Goal not found for ID: ${goalId} in getGoalFollowDataAction`);
+            return { isFollowing: false, followerCount: 0 }; // Or null if preferred for "not found"
+        }
+
+        const followers = goal.followers || []; // Default to empty array if undefined
+        const followerCount = followers.length;
 
         let isFollowing = false;
-        if (userId) {
-            const existingFollow = await GoalMembers.findOne({ userId, goalId });
-            isFollowing = !!existingFollow;
+        if (userDid) {
+            isFollowing = followers.includes(userDid);
         }
 
         return { isFollowing, followerCount };
