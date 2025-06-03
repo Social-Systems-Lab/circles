@@ -16,30 +16,15 @@ import {
 } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
+// Input is no longer directly used for file upload here
 import { useToast } from "@/components/ui/use-toast";
 import { completeGoalAction } from "@/app/circles/[handle]/goals/actions";
-import { GoalDisplay } from "@/models/models"; // Assuming GoalDisplay is the correct type for a goal object
+import { GoalDisplay, Media } from "@/models/models"; // Media might not be needed here if only uploading
+import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
 
 const completeGoalFormSchema = z.object({
-    resultSummary: z.string().min(1, "Result summary is required."),
-    resultImages: z
-        .custom<FileList>((val) => val instanceof FileList, "Please select images.")
-        .optional()
-        .refine(
-            (files) =>
-                !files || files.length === 0 ? true : Array.from(files).every((file) => file.size <= 5 * 1024 * 1024),
-            `Each file size should be less than 5MB.`,
-        )
-        .refine(
-            (files) =>
-                !files || files.length === 0
-                    ? true
-                    : Array.from(files).every((file) =>
-                          ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type),
-                      ),
-            "Only .jpg, .png, .webp, and .gif formats are supported.",
-        ),
+    resultSummary: z.string().min(1, { message: "Result summary is required." }),
+    resultImages: z.array(z.instanceof(File)).optional(), // Expecting an array of File objects
 });
 
 type CompleteGoalFormValues = z.infer<typeof completeGoalFormSchema>;
@@ -68,10 +53,12 @@ export function CompleteGoalDialog({ goal, circleHandle, children, onGoalComplet
         startTransition(async () => {
             const formData = new FormData();
             formData.append("resultSummary", values.resultSummary);
-            if (values.resultImages) {
-                Array.from(values.resultImages).forEach((file) => {
+
+            if (values.resultImages && values.resultImages.length > 0) {
+                // values.resultImages is now an array of File objects
+                for (const file of values.resultImages) {
                     formData.append("resultImages", file);
-                });
+                }
             }
 
             try {
@@ -134,11 +121,17 @@ export function CompleteGoalDialog({ goal, circleHandle, children, onGoalComplet
                                 <FormItem>
                                     <FormLabel>Result Images (Optional)</FormLabel>
                                     <FormControl>
-                                        <Input
-                                            type="file"
-                                            multiple
-                                            accept="image/jpeg,image/png,image/webp,image/gif"
-                                            onChange={(e) => field.onChange(e.target.files)}
+                                        <MultiImageUploader
+                                            initialImages={[]} // No initial images when completing
+                                            onChange={(items: ImageItem[]) => {
+                                                // Extract File objects from ImageItem[]
+                                                const files = items
+                                                    .map((item) => item.file)
+                                                    .filter((file) => file instanceof File) as File[];
+                                                field.onChange(files.length > 0 ? files : undefined); // Pass array of files or undefined
+                                            }}
+                                            maxImages={5}
+                                            previewMode="compact"
                                         />
                                     </FormControl>
                                     <FormMessage />

@@ -509,8 +509,42 @@ const GoalDetail: React.FC<GoalDetailProps> = ({
                     </div>
                 )}
 
+                {/* Goal Result Section */}
+                {goal.stage === "completed" && (
+                    <div className="mt-6 border-t pt-6">
+                        <h3 className="mb-2 text-xl font-semibold text-green-700">Goal Completed!</h3>
+                        {goal.completedAt && (
+                            <p className="mb-4 text-sm text-muted-foreground">
+                                Completed on: {format(new Date(goal.completedAt), "PPPp")}
+                            </p>
+                        )}
+                        {goal.resultSummary && (
+                            <div className="mb-4">
+                                <h4 className="text-md mb-1 font-semibold">Outcome Summary</h4>
+                                <div className="prose max-w-none">
+                                    <RichText content={goal.resultSummary} />
+                                </div>
+                            </div>
+                        )}
+                        {goal.resultImages && goal.resultImages.length > 0 && (
+                            <div className="mb-4">
+                                <h4 className="text-md mb-2 font-semibold">Result Images</h4>
+                                <ImageThumbnailCarousel images={goal.resultImages} className="w-full" />
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Action Buttons Section */}
-                {renderGoalActions() && (
+                {renderGoalActions() &&
+                    goal.stage !== "completed" && ( // Hide actions if completed, unless specific reopen action
+                        <div className="mt-6 border-t pt-6">
+                            <h3 className="mb-4 text-lg font-semibold">Actions</h3>
+                            {renderGoalActions()}
+                        </div>
+                    )}
+                {/* Special case for reopen button if goal is completed */}
+                {goal.stage === "completed" && permissions.canResolve && (
                     <div className="mt-6 border-t pt-6">
                         <h3 className="mb-4 text-lg font-semibold">Actions</h3>
                         {renderGoalActions()}
