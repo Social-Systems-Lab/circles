@@ -197,6 +197,15 @@ export function PostForm({
         [itemKey],
     );
 
+    const handleCircleSelected = useCallback(
+        (circle: Circle | null) => {
+            setSelectedCircleId(circle?._id || null);
+            setSelectedCircle(circle);
+            setUserGroups(["everyone"]);
+        },
+        [setSelectedCircleId, setSelectedCircle, setUserGroups], // State setters are stable, can be []
+    );
+
     useEffect(() => {
         if (selectedCircleId) {
             if (user.did && user._id === selectedCircleId) {
@@ -501,16 +510,7 @@ export function PostForm({
     return (
         <div {...getRootProps()} className="flex h-full flex-col p-4">
             <div className="mb-4">
-                {itemDetail && (
-                    <CircleSelector
-                        onCircleSelected={(circle: Circle | null) => {
-                            setSelectedCircleId(circle?._id || null);
-                            setSelectedCircle(circle);
-                            setUserGroups(["everyone"]);
-                        }}
-                        itemType={itemDetail}
-                    />
-                )}
+                {itemDetail && <CircleSelector onCircleSelected={handleCircleSelected} itemType={itemDetail} />}
             </div>
 
             {selectedCircleId && (

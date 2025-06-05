@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
@@ -46,7 +46,33 @@ export function GlobalCreateButton() {
 
     // Helper to manage open state for individual dialogs based on selectedItemTypeForCreation
     const isSpecificDialogOpen = (itemKey: CreatableItemKey) => selectedItemTypeForCreation === itemKey;
-    const setSpecificDialogClose = () => setSelectedItemTypeForCreation(null);
+
+    const setSpecificDialogClose = useCallback(() => {
+        setSelectedItemTypeForCreation(null);
+    }, [setSelectedItemTypeForCreation]); // setSelectedItemTypeForCreation is stable
+
+    // Memoized onOpenChange handlers for individual dialogs
+    const createDialogOnOpenChange = useCallback(
+        (open: boolean) => {
+            if (!open) {
+                setSpecificDialogClose();
+            }
+        },
+        [setSpecificDialogClose],
+    );
+
+    const communityDialogOnOpenChange = useCallback(
+        (open: boolean) => {
+            setCreateCommunityOpen(open);
+            if (!open) {
+                // If closing community dialog specifically, ensure main selection is also cleared
+                // This might be redundant if success/cancel also calls setSpecificDialogClose or similar
+                // but good for explicit closure.
+                setSelectedItemTypeForCreation(null);
+            }
+        },
+        [setCreateCommunityOpen, setSelectedItemTypeForCreation],
+    );
 
     return (
         <>
@@ -87,31 +113,31 @@ export function GlobalCreateButton() {
             {/* Render specific creation dialogs based on selectedItemTypeForCreation */}
             <CreateTaskDialog
                 isOpen={isSpecificDialogOpen("task")}
-                onOpenChange={(open) => !open && setSpecificDialogClose()}
+                onOpenChange={createDialogOnOpenChange}
                 onSuccess={(id) => handleItemCreatedSuccess("task", id)}
                 itemKey="task"
             />
             <CreateGoalDialog
                 isOpen={isSpecificDialogOpen("goal")}
-                onOpenChange={(open) => !open && setSpecificDialogClose()}
+                onOpenChange={createDialogOnOpenChange}
                 onSuccess={(id) => handleItemCreatedSuccess("goal", id)}
                 itemKey="goal"
             />
             <CreateIssueDialog
                 isOpen={isSpecificDialogOpen("issue")}
-                onOpenChange={(open) => !open && setSpecificDialogClose()}
+                onOpenChange={createDialogOnOpenChange}
                 onSuccess={(id) => handleItemCreatedSuccess("issue", id)}
                 itemKey="issue"
             />
             <CreateProposalDialog
                 isOpen={isSpecificDialogOpen("proposal")}
-                onOpenChange={(open) => !open && setSpecificDialogClose()}
+                onOpenChange={createDialogOnOpenChange}
                 onSuccess={(id) => handleItemCreatedSuccess("proposal", id)}
                 itemKey="proposal"
             />
             <CreatePostDialog
                 isOpen={isSpecificDialogOpen("post")}
-                onOpenChange={(open) => !open && setSpecificDialogClose()}
+                onOpenChange={createDialogOnOpenChange}
                 onSuccess={(id) => handleItemCreatedSuccess("post", id)}
                 itemKey="post"
             />
@@ -119,7 +145,7 @@ export function GlobalCreateButton() {
             {/* Community and Project dialogs remain as they were for now */}
             <CreateCommunityDialog
                 isOpen={isCreateCommunityOpen}
-                onOpenChange={setCreateCommunityOpen}
+                onOpenChange={communityDialogOnOpenChange}
                 onSuccess={(id) => handleItemCreatedSuccess("community", id)}
                 // itemKey="community" // No longer needed by CreateCommunityDialog
             />

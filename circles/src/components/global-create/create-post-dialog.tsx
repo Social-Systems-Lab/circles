@@ -32,6 +32,13 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({ isOpen, onOp
         }
     }, [isOpen]);
 
+    // Effect to handle closing the dialog if itemKey is incorrect or itemDetail is missing
+    useEffect(() => {
+        if (isOpen && (itemKey !== "post" || !itemDetail)) {
+            onOpenChange(false);
+        }
+    }, [isOpen, itemKey, itemDetail, onOpenChange]);
+
     const handleFormSuccess = (postId?: string) => {
         onSuccess(postId);
         onOpenChange(false); // Close this dialog
@@ -41,9 +48,9 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({ isOpen, onOp
         onOpenChange(false);
     };
 
+    // Conditional rendering based on itemKey and itemDetail, but side effect moved to useEffect
     if (itemKey !== "post" || !itemDetail) {
-        if (isOpen) onOpenChange(false); // Close if wrong itemKey somehow
-        return null;
+        return null; // Render nothing if conditions aren't met, useEffect handles closing
     }
 
     // PostForm's onSubmit now expects (formData, targetCircleId)
