@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Circle, UserPrivate } from "@/models/models";
+import { UserPrivate } from "@/models/models"; // Circle removed
 import { IssueForm } from "@/components/modules/issues/issue-form";
 import { CreatableItemDetail, CreatableItemKey, creatableItemsList } from "./global-create-dialog-content";
-import CircleSelector from "./circle-selector";
+// CircleSelector import removed
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 
@@ -18,15 +18,13 @@ interface CreateIssueDialogProps {
 
 export const CreateIssueDialog: React.FC<CreateIssueDialogProps> = ({ isOpen, onOpenChange, onSuccess, itemKey }) => {
     const [user] = useAtom(userAtom);
-    const [selectedCircle, setSelectedCircle] = useState<Circle | null>(null);
-
     const itemDetail = creatableItemsList.find((item: CreatableItemDetail) => item.key === itemKey);
 
     useEffect(() => {
-        if (!isOpen) {
-            setSelectedCircle(null);
+        if (isOpen && (itemKey !== "issue" || !itemDetail)) {
+            onOpenChange(false);
         }
-    }, [isOpen]);
+    }, [isOpen, itemKey, itemDetail, onOpenChange]);
 
     const handleFormSuccess = (issueId?: string) => {
         onSuccess(issueId);
@@ -38,7 +36,6 @@ export const CreateIssueDialog: React.FC<CreateIssueDialogProps> = ({ isOpen, on
     };
 
     if (itemKey !== "issue" || !itemDetail) {
-        if (isOpen) onOpenChange(false);
         return null;
     }
 
@@ -47,40 +44,22 @@ export const CreateIssueDialog: React.FC<CreateIssueDialogProps> = ({ isOpen, on
             <DialogContent
                 className="sm:max-w-[600px] md:max-w-[750px] lg:max-w-[900px]"
                 onInteractOutside={(e) => {
-                    e.preventDefault();
+                    // e.preventDefault();
                 }}
             >
                 <DialogHeader>
                     <DialogTitle>Create New {itemDetail.title}</DialogTitle>
-                    {selectedCircle && (
-                        <DialogDescription>
-                            {`Creating in '${selectedCircle.name || selectedCircle.handle}'`}
-                        </DialogDescription>
-                    )}
                 </DialogHeader>
 
                 {!user && <p className="p-4 text-red-500">Please log in to create an issue.</p>}
 
-                {user && (
-                    <div className="pt-4">
-                        <CircleSelector itemType={itemDetail} onCircleSelected={setSelectedCircle} />
-
-                        {selectedCircle && (
-                            <div className="mt-4">
-                                <IssueForm
-                                    circle={selectedCircle}
-                                    circleHandle={selectedCircle.handle!}
-                                    onFormSubmitSuccess={handleFormSuccess}
-                                    onCancel={handleCancel}
-                                />
-                            </div>
-                        )}
-                        {!selectedCircle && itemDetail && (
-                            <p className="p-4 text-sm text-muted-foreground">
-                                Please select a circle to create the {itemDetail.key}.
-                            </p>
-                        )}
-                    </div>
+                {user && itemDetail && (
+                    <IssueForm
+                        user={user as UserPrivate}
+                        itemDetail={itemDetail}
+                        onFormSubmitSuccess={handleFormSuccess}
+                        onCancel={handleCancel}
+                    />
                 )}
             </DialogContent>
         </Dialog>

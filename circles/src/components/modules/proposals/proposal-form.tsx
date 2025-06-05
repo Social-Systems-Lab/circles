@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react"; // Added useEffect
+import React, { useState, useEffect, useCallback } from "react"; // Added useCallback
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Circle, Media, Proposal, ProposalStage, Location } from "@/models/models"; // Added Location
+import { Circle, Media, Proposal, ProposalStage, Location, UserPrivate } from "@/models/models"; // Added UserPrivate
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, Info, MapPinIcon, MapPin } from "lucide-react"; // Added MapPinIcon, MapPin
+import { Loader2, Info, MapPinIcon, MapPin } from "lucide-react";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader"; // Import ImageItem
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRouter } from "next/navigation";
@@ -19,8 +19,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { getFullLocationName } from "@/lib/utils"; // Added getFullLocationName
 import { ProposalStageTimeline } from "./proposal-stage-timeline";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-// Import Server Actions
 import { createProposalAction, updateProposalAction } from "@/app/circles/[handle]/proposals/actions";
+import CircleSelector from "@/components/global-create/circle-selector"; // Added CircleSelector
+import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Added CreatableItemDetail
 
 // Form schema for creating/editing a proposal
 const proposalFormSchema = z.object({
@@ -37,71 +38,88 @@ type ProposalFormValues = Omit<z.infer<typeof proposalFormSchema>, "images" | "l
 };
 
 interface ProposalFormProps {
-    circle: Circle; // Keep circle for handle/ID access if needed, or pass handle directly
-    proposal?: Proposal; // If provided, we're editing an existing proposal
-    // Remove onSubmit prop
-    circleHandle: string; // Pass handle for action call
-    proposalId?: string; // Pass proposalId if editing
-    onFormSubmitSuccess?: (proposalId?: string) => void; // For dialog usage
-    onCancel?: () => void; // For dialog usage
+    user: UserPrivate;
+    itemDetail: CreatableItemDetail;
+    proposal?: Proposal;
+    proposalId?: string;
+    onFormSubmitSuccess?: (proposalId?: string) => void;
+    onCancel?: () => void;
+    // circle and circleHandle removed
 }
 
 export const ProposalForm: React.FC<ProposalFormProps> = ({
-    circle,
+    user,
+    itemDetail,
     proposal,
-    circleHandle,
     proposalId,
     onFormSubmitSuccess,
     onCancel,
 }) => {
+    const [selectedCircle, setSelectedCircle] = useState<Circle | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [location, setLocation] = useState<Location | undefined>(proposal?.location); // Added location state
-    const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false); // Added dialog state
+    const [location, setLocation] = useState<Location | undefined>(proposal?.location);
+    const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
     const { toast } = useToast();
     const router = useRouter();
     const isEditing = !!proposal;
 
-    // Initialize form with existing proposal data if editing
     const form = useForm<ProposalFormValues>({
         resolver: zodResolver(proposalFormSchema),
         defaultValues: {
             name: proposal?.name || "",
             background: proposal?.background || "",
             decisionText: proposal?.decisionText || "",
-            images: proposal?.images || [], // Pass existing images
-            location: proposal?.location, // Initialize location
+            images: proposal?.images || [],
+            location: proposal?.location,
         },
     });
 
-    // Initialize location state when proposal data is available (for edit mode)
+    useEffect(() => {
+        if (isEditing && proposal && proposal.circleId && user.memberships) {
+            const owningCircle = user.memberships.find((m) => m.circleId === proposal.circleId)?.circle;
+            if (owningCircle) {
+                setSelectedCircle(owningCircle);
+            }
+        }
+    }, [isEditing, proposal, user]);
+
     useEffect(() => {
         if (proposal?.location) {
             setLocation(proposal.location);
         }
     }, [proposal?.location]);
 
-    // Handle image updates from MultiImageUploader
+    const handleCircleSelected = useCallback(
+        (circle: Circle | null) => {
+            setSelectedCircle(circle);
+            form.reset({
+                ...form.getValues(),
+            });
+        },
+        [form, setSelectedCircle],
+    );
+
     const handleImageChange = (items: ImageItem[]) => {
-        // Map ImageItem[] back to (File | Media)[] for the form state
         const formImages: (File | Media)[] = items
             .map((item) => {
                 if (item.file) {
-                    return item.file; // It's a new File
+                    return item.file;
                 } else if (item.existingMediaUrl) {
-                    // Find the original Media object from the proposal prop
                     return proposal?.images?.find((img) => img.fileInfo.url === item.existingMediaUrl) || null;
                 }
-                return null; // Should not happen if item is valid
+                return null;
             })
-            .filter((img): img is File | Media => img !== null); // Filter out any nulls
-
+            .filter((img): img is File | Media => img !== null);
         form.setValue("images", formImages, { shouldValidate: true });
     };
 
     const handleSubmit = async (values: ProposalFormValues) => {
+        if (!selectedCircle || !selectedCircle.handle) {
+            toast({ title: "Error", description: "Please select a circle.", variant: "destructive" });
+            return;
+        }
         setIsSubmitting(true);
 
-        // Construct FormData here
         const formData = new FormData();
         formData.append("name", values.name);
         formData.append("background", values.background);
@@ -126,11 +144,10 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
 
         try {
             let result: { success: boolean; message?: string; proposalId?: string };
-            // Call the appropriate server action directly
             if (isEditing && proposalId) {
-                result = await updateProposalAction(circleHandle, proposalId, formData);
+                result = await updateProposalAction(selectedCircle.handle, proposalId, formData);
             } else {
-                result = await createProposalAction(circleHandle, formData);
+                result = await createProposalAction(selectedCircle.handle, formData);
             }
 
             if (result.success) {
@@ -146,12 +163,11 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
                     onFormSubmitSuccess(result.proposalId);
                 } else {
                     const navigateToId = isEditing ? proposalId : result.proposalId;
-                    if (navigateToId) {
-                        router.push(`/circles/${circleHandle}/proposals/${navigateToId}`);
-                        router.refresh(); // Refresh page data
-                    } else {
-                        // Fallback if ID is missing (shouldn't happen in success case)
-                        router.push(`/circles/${circleHandle}/proposals`);
+                    if (navigateToId && selectedCircle.handle) {
+                        router.push(`/circles/${selectedCircle.handle}/proposals/${navigateToId}`);
+                        router.refresh();
+                    } else if (selectedCircle.handle) {
+                        router.push(`/circles/${selectedCircle.handle}/proposals`);
                         router.refresh();
                     }
                 }
@@ -374,10 +390,14 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
                                         <Button
                                             type="button"
                                             variant="outline"
-                                            onClick={() =>
-                                                // When !isEditing, proposal is undefined, so path is just to proposals list for the circle
-                                                router.push(`/circles/${circleHandle}/proposals`)
-                                            }
+                                            onClick={() => {
+                                                if (selectedCircle && selectedCircle.handle) {
+                                                    router.push(`/circles/${selectedCircle.handle}/proposals`);
+                                                } else if (typeof onCancel === "function") {
+                                                    // Fallback if in dialog and circle not yet selected
+                                                    onCancel();
+                                                }
+                                            }}
                                             disabled={isSubmitting}
                                         >
                                             Cancel

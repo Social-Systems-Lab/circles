@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Circle, GoalDisplay, UserPrivate } from "@/models/models";
+import { GoalDisplay, UserPrivate } from "@/models/models"; // Circle removed as it's handled in TaskForm
 import { TaskForm } from "@/components/modules/tasks/task-form";
-import { CreatableItemDetail, CreatableItemKey } from "./global-create-dialog-content"; // Assuming CreatableItemKey is exported
-import CircleSelector from "./circle-selector"; // To be embedded here
+import { CreatableItemDetail, CreatableItemKey } from "./global-create-dialog-content";
+// CircleSelector import removed, will be in TaskForm
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 // Placeholder for actual item details if not passed fully
@@ -20,20 +20,19 @@ interface CreateTaskDialogProps {
 
 export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({ isOpen, onOpenChange, onSuccess, itemKey }) => {
     const [user] = useAtom(userAtom);
-    const [selectedCircle, setSelectedCircle] = useState<Circle | null>(null);
 
     // Find the full item detail for context (e.g., title for dialog)
     const itemDetail = creatableItemsList.find((item: CreatableItemDetail) => item.key === itemKey);
 
+    // Effect to close dialog if itemKey is incorrect or itemDetail is missing
     useEffect(() => {
-        // Reset selected circle when dialog is closed externally
-        if (!isOpen) {
-            setSelectedCircle(null);
+        if (isOpen && (itemKey !== "task" || !itemDetail)) {
+            onOpenChange(false);
         }
-    }, [isOpen]);
+    }, [isOpen, itemKey, itemDetail, onOpenChange]);
 
     const handleFormSuccess = (taskId?: string) => {
-        onSuccess(taskId); // Call main success handler (e.g., for toast)
+        onSuccess(taskId);
         onOpenChange(false); // Close this dialog
     };
 
@@ -42,58 +41,38 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({ isOpen, onOp
     };
 
     if (itemKey !== "task" || !itemDetail) {
-        // This check might be redundant if GlobalCreateButton ensures correct dialog is opened
-        // but good for safety.
-        if (isOpen) onOpenChange(false); // Close if wrong item
-        return null;
+        return null; // Render nothing if conditions aren't met, useEffect handles closing
     }
 
-    // TODO: Fetch goals for the selectedCircle if goals module is enabled
-    const goalsForCircle: GoalDisplay[] = [];
-    const goalsModuleEnabled = selectedCircle?.enabledModules?.includes("goals") || false;
+    // goalsForCircle and goalsModuleEnabled will be determined within TaskForm based on selected circle
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent
                 className="sm:max-w-[600px] md:max-w-[750px] lg:max-w-[900px]"
                 onInteractOutside={(e) => {
-                    e.preventDefault();
+                    // Allow closing by clicking outside if needed, or keep preventDefault
+                    // e.preventDefault();
                 }}
             >
                 <DialogHeader>
                     <DialogTitle>Create New {itemDetail.title}</DialogTitle>
-                    {selectedCircle && (
-                        <DialogDescription>
-                            {`Creating in '${selectedCircle.name || selectedCircle.handle}'`}
-                        </DialogDescription>
-                    )}
+                    {/* Description can be simplified or removed as CircleSelector is inside TaskForm */}
                 </DialogHeader>
 
                 {!user && <p className="p-4 text-red-500">Please log in to create a task.</p>}
 
-                {user && (
-                    <div className="pt-4">
-                        <CircleSelector itemType={itemDetail} onCircleSelected={setSelectedCircle} />
-
-                        {selectedCircle && (
-                            <div className="mt-4">
-                                <TaskForm
-                                    circle={selectedCircle}
-                                    circleHandle={selectedCircle.handle!}
-                                    goals={goalsForCircle}
-                                    goalsModuleEnabled={goalsModuleEnabled}
-                                    onFormSubmitSuccess={handleFormSuccess}
-                                    onCancel={handleCancel}
-                                />
-                            </div>
-                        )}
-                        {!selectedCircle && itemDetail && (
-                            <p className="p-4 text-sm text-muted-foreground">
-                                Please select a circle to create the {itemDetail.key}.
-                            </p>
-                        )}
-                    </div>
-                )}
+                {user &&
+                    itemDetail && ( // Ensure itemDetail is available
+                        <TaskForm
+                            user={user as UserPrivate} // Pass user to TaskForm
+                            itemDetail={itemDetail} // Pass itemDetail for CircleSelector
+                            // goals and goalsModuleEnabled will be handled by TaskForm
+                            onFormSubmitSuccess={handleFormSuccess}
+                            onCancel={handleCancel}
+                            // Removed circle and circleHandle, TaskForm will manage this
+                        />
+                    )}
             </DialogContent>
         </Dialog>
     );
