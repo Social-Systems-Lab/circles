@@ -18,6 +18,7 @@ import { Metadata } from "next";
 import { getDefaultCircle } from "@/lib/data/circle";
 import { MapboxInitializer } from "@/components/map/map-initializer";
 import { SupportButton } from "@/components/layout/support-button";
+import { FeedPostDialog } from "@/components/global-create/feed-post-dialog"; // Import FeedPostDialog
 
 // Disable caching for this layout to prevent the "hard refresh bug"
 export const dynamic = "force-dynamic";
@@ -61,7 +62,6 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
                         <div className="fixed right-6 top-4 z-40">
                             <ProfileMenu />
                         </div>
-
                         <Toaster />
                         <Authenticator />
                         <ImageGallery />
@@ -69,6 +69,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
                         {process.env.NODE_ENV !== "development" && <MatrixSync />}
                         <MapboxInitializer mapboxKey={serverConfig.mapboxKey} />
                         <SupportButton />
+                        <FeedPostDialog /> {/* Add FeedPostDialog here */}
                     </main>
                     <Script id="version-check">
                         {`

@@ -10,6 +10,7 @@ import {
     AuthInfo,
     MatrixUserCache,
     UserSettings,
+    Feed, // Added Feed
 } from "@/models/models";
 import { atom } from "jotai";
 import { RoomData } from "./client-matrix";
@@ -39,3 +40,11 @@ export const userSettingsAtom = atomWithStorage<UserSettings>("userSettings", {
     feedTab: "following",
     circlesTab: "following",
 });
+
+export type CreatePostDialogAtomProps = {
+    isOpen: boolean;
+    circle?: Circle; // The circle context for the post
+    feed?: Feed; // The feed context for the post
+};
+
+export const createPostDialogAtom = atom<CreatePostDialogAtomProps>({ isOpen: false });

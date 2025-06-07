@@ -8,7 +8,9 @@ import { Circle, UserPrivate, Feature } from "@/models/models"; // Added Feature
 import { CreatableItemDetail } from "./global-create-dialog-content";
 import { features, modules as moduleInfos } from "@/lib/data/constants";
 import { isAuthorized } from "@/lib/auth/client-auth"; // Assuming this can be used or adapted
-import { Label } from "../ui/label";
+// import { Label } from "../ui/label"; // Label removed
+import { CirclePicture } from "../modules/circles/circle-picture"; // Import CirclePicture
+import { ChevronDown } from "lucide-react"; // Ensure ChevronDown is imported
 
 interface CircleSelectorProps {
     itemType: CreatableItemDetail;
@@ -34,6 +36,7 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
             selectedCircle &&
             userCircle &&
             selectedCircle._id === userCircle._id &&
+            itemType && // Ensure itemType is defined
             !selectedCircle.enabledModules?.includes(itemType.moduleHandle)
         ) {
             setShowEnableModuleMessage(true);
@@ -55,7 +58,10 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
         setIsLoading(true);
         const currentUserCircle = user as UserPrivate;
         const allUserMemberships = currentUserCircle.memberships || [];
-        const potentialCircles: Circle[] = [...allUserMemberships.map((mem) => mem.circle)].filter(Boolean);
+        // Ensure mem.circle is not null before adding to potentialCircles
+        const potentialCircles: Circle[] = allUserMemberships
+            .map((mem) => mem.circle)
+            .filter((circle): circle is Circle => circle !== null && circle !== undefined);
 
         const featureToAuth = (features[itemType.moduleHandle as keyof typeof features] as any)?.[
             itemType.createFeatureHandle
@@ -76,7 +82,6 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
 
             if (circle._id === currentUserCircle._id) {
                 // User's own circle: always allow selection, message will indicate if module needs enabling.
-                // Permission is implicitly true for user's own circle for creatable items.
                 return true;
             } else {
                 // Other circles: module must be enabled, and user must have permission.
@@ -109,13 +114,20 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
         if (initialSelectedCircle) {
             setSelectedCircleId(initialSelectedCircle._id);
         } else {
-            setSelectedCircleId(undefined);
+            // If no initial circle could be determined, and there are selectable circles, select the first one.
+            // Otherwise, if initialSelectedCircleId was provided but not found, it remains undefined.
+            if (!initialSelectedCircleId && filteredAndProcessedCircles.length > 0) {
+                initialSelectedCircle = filteredAndProcessedCircles[0];
+                setSelectedCircleId(initialSelectedCircle._id);
+            } else if (!initialSelectedCircleId) {
+                setSelectedCircleId(undefined);
+            }
         }
 
         onCircleSelected(initialSelectedCircle);
         updateModuleEnableMessage(initialSelectedCircle, currentUserCircle);
         setIsLoading(false);
-    }, [user, itemType, onCircleSelected]); // onCircleSelected is stable due to useCallback in parent
+    }, [user, itemType, onCircleSelected, initialSelectedCircleId]);
 
     const handleSelectionChange = (circleId: string) => {
         const circle = selectableCircles.find((c) => c._id === circleId);
@@ -128,47 +140,57 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
         }
     };
 
+    const currentlySelectedCircle = useMemo(() => {
+        return selectableCircles.find((c) => c._id === selectedCircleId);
+    }, [selectedCircleId, selectableCircles]);
+
     if (isLoading) {
-        return <div className="p-4 text-sm text-muted-foreground">Loading circles...</div>;
+        return <div className="p-1 text-xs text-muted-foreground">Loading...</div>;
     }
 
-    // itemType might be null briefly if parent component is setting up
     if (!itemType) {
-        return <div className="p-4 text-sm text-muted-foreground">Initializing...</div>;
+        return <div className="p-1 text-xs text-muted-foreground">Initializing...</div>;
     }
 
     const moduleName = moduleInfos.find((m) => m.handle === itemType.moduleHandle)?.name || itemType.moduleHandle;
 
     if (selectableCircles.length === 0) {
-        return (
-            <div className="p-4 text-sm text-red-600">
-                {`No valid circles found to create a ${itemType.key}. Ensure the '${moduleName}' module is enabled in a circle you belong to and you have permission, or select your user profile.`}
-            </div>
-        );
+        return <div className="p-1 text-xs text-red-500">{`No circles to create ${itemType.key}.`}</div>;
     }
 
     return (
-        <div>
-            <Label htmlFor="circle-select">Create in:</Label>
-            <Select value={selectedCircleId} onValueChange={handleSelectionChange}>
-                <SelectTrigger id="circle-select" className="mt-2 w-full">
-                    <SelectValue placeholder="Select a circle..." />
+        <div className="flex flex-col">
+            <Select value={selectedCircleId || ""} onValueChange={handleSelectionChange}>
+                <SelectTrigger
+                    id="circle-select"
+                    className="h-auto justify-start border-0 p-1 text-xs hover:bg-gray-100 focus:ring-0 focus:ring-offset-0 data-[placeholder]:text-muted-foreground"
+                >
+                    {currentlySelectedCircle ? (
+                        <div className="flex items-center gap-1">
+                            <CirclePicture circle={currentlySelectedCircle} size="14px" />
+                            <span className="truncate">{currentlySelectedCircle.name}</span>
+                            <ChevronDown className="ml-auto h-3 w-3 opacity-50" />
+                        </div>
+                    ) : (
+                        <SelectValue placeholder="Select circle..." />
+                    )}
                 </SelectTrigger>
                 <SelectContent>
                     {selectableCircles.map((circle) => (
-                        <SelectItem key={circle._id} value={circle._id}>
-                            {/* TODO: Add CirclePicture here */}
-                            {circle.name || circle.handle}{" "}
-                            {circle._id === user?._id ? "(Your User Profile)" : `(${circle.circleType || "Circle"})`}
+                        <SelectItem key={circle._id} value={circle._id} className="text-xs">
+                            <div className="flex items-center gap-2">
+                                <CirclePicture circle={circle} size="16px" />
+                                <span>{circle.name || circle.handle}</span>
+                                {circle._id === user?._id && (
+                                    <span className="text-xs text-muted-foreground">(You)</span>
+                                )}
+                            </div>
                         </SelectItem>
                     ))}
                 </SelectContent>
             </Select>
             {showEnableModuleMessage && (
-                <p className="mt-2 text-xs text-blue-600">
-                    The &quot;{moduleName}&quot; module is not currently enabled on your user profile. It will be
-                    enabled automatically if you proceed.
-                </p>
+                <p className="mt-1 text-xs text-blue-600">The "{moduleName}" module will be enabled.</p>
             )}
         </div>
     );
