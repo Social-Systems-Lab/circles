@@ -525,6 +525,7 @@ export function PostForm({
                                             onCircleSelected={handleCircleSelected}
                                             itemType={itemDetail}
                                             initialSelectedCircleId={initialSelectedCircleId}
+                                            variant="condensed" // Add variant prop
                                         />
                                     </div>
                                 )}

@@ -1,12 +1,15 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react"; // Added useEffect
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { GlobalCreateDialogContent, CreatableItemKey } from "@/components/global-create/global-create-dialog-content";
 import { motion } from "framer-motion";
 import { useToast } from "@/components/ui/use-toast";
+import { useAtom } from "jotai"; // Added useAtom
+import { userAtom, createPostDialogAtom } from "@/lib/data/atoms"; // Added createPostDialogAtom and userAtom
+import { Circle, Feed, UserPrivate } from "@/models/models"; // Added Circle, Feed, UserPrivate
 
 // Import specific dialog components (assuming they are refactored to be full dialogs)
 // TODO: These imports will need to point to the actual refactored dialog components
@@ -14,11 +17,15 @@ import { CreateTaskDialog } from "@/components/global-create/create-task-dialog"
 import { CreateGoalDialog } from "@/components/global-create/create-goal-dialog";
 import { CreateIssueDialog } from "@/components/global-create/create-issue-dialog";
 import { CreateProposalDialog } from "@/components/global-create/create-proposal-dialog";
-import { CreatePostDialog } from "@/components/global-create/create-post-dialog";
+// CreatePostDialog import will be removed as FeedPostDialog handles this globally
+// import { CreatePostDialog } from "@/components/global-create/create-post-dialog";
 import { CreateCommunityDialog } from "@/components/global-create/create-community-dialog"; // Updated Import
 
 export function GlobalCreateButton() {
     const [isMainDialogOpen, setIsMainDialogOpen] = useState(false);
+    const [user] = useAtom(userAtom); // Get user from atom
+    const [, setCreatePostDialogState] = useAtom(createPostDialogAtom); // Atom for FeedPostDialog
+    const [userFeed, setUserFeed] = useState<Feed | null>(null);
     const { toast } = useToast();
 
     // State to manage which specific creation dialog to open
@@ -39,8 +46,26 @@ export function GlobalCreateButton() {
         // setCreateProjectOpen(false); // Removed project state setter
     };
 
-    const handleSelectItemType = (itemKey: CreatableItemKey) => {
-        setSelectedItemTypeForCreation(itemKey);
+    const handleSelectItemType = async (itemKey: CreatableItemKey) => {
+        if (itemKey === "post") {
+            if (user && userFeed) {
+                setCreatePostDialogState({
+                    isOpen: true,
+                    circle: user as Circle, // Use user's own circle context
+                    feed: userFeed, // Use user's own feed context
+                });
+                setSelectedItemTypeForCreation(null); // Don't trigger the old CreatePostDialog
+            } else {
+                // Handle case where user or userFeed is not available
+                toast({
+                    title: "Cannot create post",
+                    description: "User or feed information is missing.",
+                    variant: "destructive",
+                });
+            }
+        } else {
+            setSelectedItemTypeForCreation(itemKey);
+        }
         // Main dialog is already closed by GlobalCreateDialogContent's handleItemClick
     };
 
@@ -135,12 +160,7 @@ export function GlobalCreateButton() {
                 onSuccess={(id) => handleItemCreatedSuccess("proposal", id)}
                 itemKey="proposal"
             />
-            <CreatePostDialog
-                isOpen={isSpecificDialogOpen("post")}
-                onOpenChange={createDialogOnOpenChange}
-                onSuccess={(id) => handleItemCreatedSuccess("post", id)}
-                itemKey="post"
-            />
+            {/* CreatePostDialog instance removed, FeedPostDialog will be used via atom */}
 
             {/* Community and Project dialogs remain as they were for now */}
             <CreateCommunityDialog

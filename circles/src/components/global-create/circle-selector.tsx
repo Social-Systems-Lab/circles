@@ -4,26 +4,26 @@ import React, { useEffect, useState, useMemo } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
-import { Circle, UserPrivate, Feature } from "@/models/models"; // Added Feature import
+import { Circle, UserPrivate, Feature } from "@/models/models";
 import { CreatableItemDetail } from "./global-create-dialog-content";
 import { features, modules as moduleInfos } from "@/lib/data/constants";
-import { isAuthorized } from "@/lib/auth/client-auth"; // Assuming this can be used or adapted
-// import { Label } from "../ui/label"; // Label removed
-import { CirclePicture } from "../modules/circles/circle-picture"; // Import CirclePicture
-import { ChevronDown } from "lucide-react"; // Ensure ChevronDown is imported
+import { isAuthorized } from "@/lib/auth/client-auth";
+import { Label } from "../ui/label"; // Re-imported Label
+import { CirclePicture } from "../modules/circles/circle-picture";
+import { ChevronDown } from "lucide-react";
 
 interface CircleSelectorProps {
     itemType: CreatableItemDetail;
     onCircleSelected: (circle: Circle | null) => void;
     initialSelectedCircleId?: string;
-    // We might need to pass down the full list of user's circles/memberships to avoid re-fetching
-    // For now, let's assume we fetch/derive it here.
+    variant?: "standard" | "condensed"; // New variant prop
 }
 
 export const CircleSelector: React.FC<CircleSelectorProps> = ({
     itemType,
     onCircleSelected,
     initialSelectedCircleId,
+    variant = "standard", // Default to standard variant
 }) => {
     const [user] = useAtom(userAtom);
     const [selectableCircles, setSelectableCircles] = useState<Circle[]>([]);
@@ -36,7 +36,7 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
             selectedCircle &&
             userCircle &&
             selectedCircle._id === userCircle._id &&
-            itemType && // Ensure itemType is defined
+            itemType &&
             !selectedCircle.enabledModules?.includes(itemType.moduleHandle)
         ) {
             setShowEnableModuleMessage(true);
@@ -58,7 +58,6 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
         setIsLoading(true);
         const currentUserCircle = user as UserPrivate;
         const allUserMemberships = currentUserCircle.memberships || [];
-        // Ensure mem.circle is not null before adding to potentialCircles
         const potentialCircles: Circle[] = allUserMemberships
             .map((mem) => mem.circle)
             .filter((circle): circle is Circle => circle !== null && circle !== undefined);
@@ -81,10 +80,8 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
             if (!circle || !circle.handle) return false;
 
             if (circle._id === currentUserCircle._id) {
-                // User's own circle: always allow selection, message will indicate if module needs enabling.
                 return true;
             } else {
-                // Other circles: module must be enabled, and user must have permission.
                 const moduleEnabled = circle.enabledModules?.includes(itemType.moduleHandle);
                 if (!moduleEnabled) return false;
                 return isAuthorized(user, circle, featureToAuth as Feature);
@@ -114,8 +111,6 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
         if (initialSelectedCircle) {
             setSelectedCircleId(initialSelectedCircle._id);
         } else {
-            // If no initial circle could be determined, and there are selectable circles, select the first one.
-            // Otherwise, if initialSelectedCircleId was provided but not found, it remains undefined.
             if (!initialSelectedCircleId && filteredAndProcessedCircles.length > 0) {
                 initialSelectedCircle = filteredAndProcessedCircles[0];
                 setSelectedCircleId(initialSelectedCircle._id);
@@ -158,18 +153,33 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
         return <div className="p-1 text-xs text-red-500">{`No circles to create ${itemType.key}.`}</div>;
     }
 
+    const standardTriggerClasses = "mt-2 w-full"; // Standard trigger with top margin
+    const condensedTriggerClasses =
+        "h-auto p-1 text-xs hover:bg-gray-100 focus:ring-0 focus:ring-offset-0 border-0 justify-start data-[placeholder]:text-muted-foreground";
+
     return (
         <div className="flex flex-col">
+            {variant === "standard" && (
+                <Label htmlFor="circle-select" className="mb-1 text-xs text-muted-foreground">
+                    Create in:
+                </Label>
+            )}
             <Select value={selectedCircleId || ""} onValueChange={handleSelectionChange}>
                 <SelectTrigger
                     id="circle-select"
-                    className="h-auto justify-start border-0 p-1 text-xs hover:bg-gray-100 focus:ring-0 focus:ring-offset-0 data-[placeholder]:text-muted-foreground"
+                    className={variant === "condensed" ? condensedTriggerClasses : standardTriggerClasses}
                 >
                     {currentlySelectedCircle ? (
-                        <div className="flex items-center gap-1">
-                            <CirclePicture circle={currentlySelectedCircle} size="14px" />
-                            <span className="truncate">{currentlySelectedCircle.name}</span>
-                            <ChevronDown className="ml-auto h-3 w-3 opacity-50" />
+                        <div className={`flex items-center gap-1 ${variant === "condensed" ? "w-full" : ""}`}>
+                            <CirclePicture
+                                circle={currentlySelectedCircle}
+                                size={variant === "condensed" ? "14px" : "16px"}
+                            />
+                            <span className={`truncate ${variant === "condensed" ? "flex-grow" : ""}`}>
+                                {currentlySelectedCircle.name}
+                            </span>
+                            {/* {variant === "condensed" && <ChevronDown className="h-3 w-3 opacity-50" />} */}
+                            {/* Only show custom chevron in condensed, standard will use default */}
                         </div>
                     ) : (
                         <SelectValue placeholder="Select circle..." />
@@ -190,7 +200,9 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
                 </SelectContent>
             </Select>
             {showEnableModuleMessage && (
-                <p className="mt-1 text-xs text-blue-600">The "{moduleName}" module will be enabled.</p>
+                <p className={`mt-1 text-xs text-blue-600 ${variant === "condensed" ? "text-center" : ""}`}>
+                    The &quot;{moduleName}&quot; module will be enabled.
+                </p>
             )}
         </div>
     );
