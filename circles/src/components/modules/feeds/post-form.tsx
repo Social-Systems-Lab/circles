@@ -164,6 +164,7 @@ type PostFormProps = {
     moduleHandle: string;
     createFeatureHandle: string;
     itemKey: CreatableItemKey;
+    initialSelectedCircleId?: string;
 };
 
 export function PostForm({
@@ -175,10 +176,11 @@ export function PostForm({
     moduleHandle,
     createFeatureHandle,
     itemKey,
+    initialSelectedCircleId,
 }: PostFormProps) {
     const [postContent, setPostContent] = useState(initialPost?.content || "");
     const [showPollCreator, setShowPollCreator] = useState(false);
-    const [selectedCircleId, setSelectedCircleId] = useState<string | null>(null);
+    const [selectedCircleId, setSelectedCircleId] = useState<string | null>(initialSelectedCircleId || null);
     const [selectedCircle, setSelectedCircle] = useState<Circle | null>(null);
     const [images, setImages] = useState<ImageItem[]>([]);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -509,27 +511,28 @@ export function PostForm({
 
     return (
         <div {...getRootProps()} className="flex h-full flex-col p-4">
-            <div className="mb-4">
-                {itemDetail && <CircleSelector onCircleSelected={handleCircleSelected} itemType={itemDetail} />}
-            </div>
-
-            {selectedCircleId && (
-                <div className="flex flex-grow flex-col overflow-hidden">
-                    <div className="mb-[5px] flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                            <UserPicture name={user?.name} picture={user?.picture?.url} size="40px" />
-                            <div>
-                                <div className="text-sm font-semibold">{user?.name}</div>
-                                <div className="flex flex-row items-center justify-center gap-[4px]">
-                                    <div className="text-xs text-gray-500">Post in</div>
-                                    <div className="flex items-center gap-1">
-                                        <CirclePicture circle={selectedCircle || user} size="14px" />
-                                        <span className="text-xs">{(selectedCircle || user).name}</span>
+            <div className="flex flex-grow flex-col overflow-hidden">
+                {/* Header section */}
+                <div className="mb-[5px] flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                        <UserPicture name={user?.name} picture={user?.picture?.url} size="40px" />
+                        <div>
+                            <div className="text-sm font-semibold">{user?.name}</div>
+                            <div className="mt-1 flex flex-row items-center justify-start gap-2">
+                                {itemDetail && (
+                                    <div className="min-w-[150px] flex-shrink">
+                                        <CircleSelector
+                                            onCircleSelected={handleCircleSelected}
+                                            itemType={itemDetail}
+                                            initialSelectedCircleId={initialSelectedCircleId}
+                                        />
                                     </div>
+                                )}
+                                {selectedCircle && (
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        className="ml-2 h-6 p-0 pl-1 text-xs hover:bg-gray-100"
+                                        className="h-auto p-1 text-xs hover:bg-gray-100"
                                         onClick={() => setIsUserGroupsDialogOpen(true)}
                                         disabled={!selectedCircleId}
                                     >
@@ -543,380 +546,387 @@ export function PostForm({
                                             <ChevronDown className="h-3 w-3" />
                                         </div>
                                     </Button>
-                                </div>
+                                )}
                             </div>
                         </div>
                     </div>
-                    <div className="max-h-[calc(60vh-50px)] flex-grow overflow-y-auto pr-2">
-                        <MentionsInput
-                            value={postContent}
-                            onChange={(e) => setPostContent(e.target.value)}
-                            placeholder="Share your story..."
-                            className="flex-grow"
-                            autoFocus
-                            style={postMentionsInputStyle}
-                        >
-                            <Mention
-                                trigger="@"
-                                data={handleMentionQuery}
-                                style={defaultMentionStyle}
-                                displayTransform={(id, display) => `${display}`}
-                                renderSuggestion={renderCircleSuggestion}
-                                markup="[__display__](/circles/__id__)"
-                            />
-                        </MentionsInput>
-                        {isPreviewLoading && (
-                            <div className="mt-4 flex items-center justify-center rounded-lg border p-4">
-                                <Loader2 className="mr-2 h-5 w-5 animate-spin text-gray-500" />
-                                <span className="text-gray-500">Loading preview...</span>
-                            </div>
-                        )}
-                        {linkPreview && !isPreviewLoading && !internalPreview && (
-                            <Card className="relative mt-4 overflow-hidden">
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="absolute right-1 top-1 z-10 h-6 w-6 rounded-full bg-gray-900/50 text-white hover:bg-gray-700/70 hover:text-white"
-                                    onClick={removeLinkPreview}
-                                    aria-label="Remove link preview"
-                                >
-                                    <X className="h-4 w-4" />
-                                </Button>
-                                <a href={linkPreview.url} target="_blank" rel="noopener noreferrer" className="block">
-                                    <CardContent className="flex flex-col gap-2 p-0 md:flex-row">
-                                        {linkPreview.image && (
-                                            <div className="relative h-32 w-full flex-shrink-0 md:h-auto md:w-40">
-                                                <Image
-                                                    src={linkPreview.image}
-                                                    alt={linkPreview.title || "Link preview image"}
-                                                    fill
-                                                    className="object-cover"
-                                                    sizes="(max-width: 768px) 100vw, 160px"
-                                                />
-                                            </div>
-                                        )}
-                                        <div className="flex flex-col justify-center p-3">
-                                            <div className="text-sm font-semibold text-gray-600">
-                                                {new URL(linkPreview.url).hostname}
-                                            </div>
-                                            <div className="mt-1 line-clamp-2 font-medium">{linkPreview.title}</div>
-                                            {linkPreview.description && (
-                                                <div className="mt-1 line-clamp-2 text-sm text-gray-500">
-                                                    {linkPreview.description}
+                </div>
+
+                {/* Conditional Content Area */}
+                {selectedCircleId && (
+                    <>
+                        <div className="max-h-[calc(60vh-100px)] flex-grow overflow-y-auto pr-2">
+                            <MentionsInput
+                                value={postContent}
+                                onChange={(e) => setPostContent(e.target.value)}
+                                placeholder="Share your story..."
+                                className="flex-grow"
+                                autoFocus
+                                style={postMentionsInputStyle}
+                            >
+                                <Mention
+                                    trigger="@"
+                                    data={handleMentionQuery}
+                                    style={defaultMentionStyle}
+                                    displayTransform={(id, display) => `${display}`}
+                                    renderSuggestion={renderCircleSuggestion}
+                                    markup="[__display__](/circles/__id__)"
+                                />
+                            </MentionsInput>
+                            {isPreviewLoading && (
+                                <div className="mt-4 flex items-center justify-center rounded-lg border p-4">
+                                    <Loader2 className="mr-2 h-5 w-5 animate-spin text-gray-500" />
+                                    <span className="text-gray-500">Loading preview...</span>
+                                </div>
+                            )}
+                            {linkPreview && !isPreviewLoading && !internalPreview && (
+                                <Card className="relative mt-4 overflow-hidden">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="absolute right-1 top-1 z-10 h-6 w-6 rounded-full bg-gray-900/50 text-white hover:bg-gray-700/70 hover:text-white"
+                                        onClick={removeLinkPreview}
+                                        aria-label="Remove link preview"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                    <a
+                                        href={linkPreview.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="block"
+                                    >
+                                        <CardContent className="flex flex-col gap-2 p-0 md:flex-row">
+                                            {linkPreview.image && (
+                                                <div className="relative h-32 w-full flex-shrink-0 md:h-auto md:w-40">
+                                                    <Image
+                                                        src={linkPreview.image}
+                                                        alt={linkPreview.title || "Link preview image"}
+                                                        fill
+                                                        className="object-cover"
+                                                        sizes="(max-width: 768px) 100vw, 160px"
+                                                    />
                                                 </div>
                                             )}
-                                        </div>
-                                    </CardContent>
-                                </a>
-                            </Card>
-                        )}
-                        {internalPreview && !isInternalPreviewLoading && !linkPreview && (
-                            <Card className="relative mt-4 overflow-hidden">
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="absolute right-1 top-1 z-10 h-6 w-6 rounded-full bg-gray-900/50 text-white hover:bg-gray-700/70 hover:text-white"
-                                    onClick={removeLinkPreview}
-                                    aria-label="Remove link preview"
-                                >
-                                    <X className="h-4 w-4" />
-                                </Button>
-                                <div className="flex items-center space-x-3 p-3">
-                                    {internalPreview.type === "circle" && (
-                                        <>
-                                            <Avatar className="h-10 w-10 rounded-md">
-                                                <AvatarImage
-                                                    src={(internalPreview.data as Circle).picture?.url}
-                                                    alt={(internalPreview.data as Circle).name}
-                                                />
-                                                <AvatarFallback>
-                                                    <Users className="h-5 w-5" />
-                                                </AvatarFallback>
-                                            </Avatar>
-                                            <div>
-                                                <div className="text-xs text-gray-500">Circle</div>
-                                                <div className="font-medium">
-                                                    {(internalPreview.data as Circle).name}
+                                            <div className="flex flex-col justify-center p-3">
+                                                <div className="text-sm font-semibold text-gray-600">
+                                                    {new URL(linkPreview.url).hostname}
                                                 </div>
+                                                <div className="mt-1 line-clamp-2 font-medium">{linkPreview.title}</div>
+                                                {linkPreview.description && (
+                                                    <div className="mt-1 line-clamp-2 text-sm text-gray-500">
+                                                        {linkPreview.description}
+                                                    </div>
+                                                )}
                                             </div>
-                                        </>
-                                    )}
-                                    {internalPreview.type === "post" && (
-                                        <>
-                                            <Avatar className="h-10 w-10 rounded-full">
-                                                <AvatarImage
-                                                    src={(internalPreview.data as PostDisplay).author?.picture?.url}
-                                                    alt={(internalPreview.data as PostDisplay).author?.name}
-                                                />
-                                                <AvatarFallback>
-                                                    {(internalPreview.data as PostDisplay).author?.name?.charAt(0) ||
-                                                        "?"}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                            <div>
-                                                <div className="text-xs text-gray-500">
-                                                    Post by {(internalPreview.data as PostDisplay).author?.name}
+                                        </CardContent>
+                                    </a>
+                                </Card>
+                            )}
+                            {internalPreview && !isInternalPreviewLoading && !linkPreview && (
+                                <Card className="relative mt-4 overflow-hidden">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="absolute right-1 top-1 z-10 h-6 w-6 rounded-full bg-gray-900/50 text-white hover:bg-gray-700/70 hover:text-white"
+                                        onClick={removeLinkPreview}
+                                        aria-label="Remove link preview"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                    <div className="flex items-center space-x-3 p-3">
+                                        {internalPreview.type === "circle" && (
+                                            <>
+                                                <Avatar className="h-10 w-10 rounded-md">
+                                                    <AvatarImage
+                                                        src={(internalPreview.data as Circle).picture?.url}
+                                                        alt={(internalPreview.data as Circle).name}
+                                                    />
+                                                    <AvatarFallback>
+                                                        <Users className="h-5 w-5" />
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div>
+                                                    <div className="text-xs text-gray-500">Circle</div>
+                                                    <div className="font-medium">
+                                                        {(internalPreview.data as Circle).name}
+                                                    </div>
                                                 </div>
-                                                <p className="text-sm text-gray-800">
-                                                    {truncateText((internalPreview.data as PostDisplay).content!, 100)}
-                                                </p>
-                                            </div>
-                                        </>
-                                    )}
-                                    {internalPreview.type === "proposal" && (
-                                        <>
-                                            <Avatar className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-100 text-blue-700">
-                                                <CircleHelp className="h-5 w-5" />
-                                            </Avatar>
-                                            <div>
-                                                <div className="text-xs text-gray-500">Proposal</div>
-                                                <div className="font-medium">
-                                                    {(internalPreview.data as ProposalDisplay).name}
+                                            </>
+                                        )}
+                                        {internalPreview.type === "post" && (
+                                            <>
+                                                <Avatar className="h-10 w-10 rounded-full">
+                                                    <AvatarImage
+                                                        src={(internalPreview.data as PostDisplay).author?.picture?.url}
+                                                        alt={(internalPreview.data as PostDisplay).author?.name}
+                                                    />
+                                                    <AvatarFallback>
+                                                        {(internalPreview.data as PostDisplay).author?.name?.charAt(
+                                                            0,
+                                                        ) || "?"}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div>
+                                                    <div className="text-xs text-gray-500">
+                                                        Post by {(internalPreview.data as PostDisplay).author?.name}
+                                                    </div>
+                                                    <p className="text-sm text-gray-800">
+                                                        {truncateText(
+                                                            (internalPreview.data as PostDisplay).content!,
+                                                            100,
+                                                        )}
+                                                    </p>
                                                 </div>
-                                                <p className="text-sm text-gray-600">
-                                                    Status:{" "}
-                                                    <span className="font-semibold">
-                                                        {(internalPreview.data as ProposalDisplay).stage}
-                                                    </span>
-                                                </p>
-                                            </div>
-                                        </>
-                                    )}
-                                    {internalPreview.type === "issue" && (
-                                        <>
-                                            <Avatar className="flex h-10 w-10 items-center justify-center rounded-md bg-orange-100 text-orange-700">
-                                                <AlertCircle className="h-5 w-5" />
-                                            </Avatar>
-                                            <div>
-                                                <div className="text-xs text-gray-500">Issue</div>
-                                                <div className="font-medium">
-                                                    {(internalPreview.data as IssueDisplay).title}
+                                            </>
+                                        )}
+                                        {internalPreview.type === "proposal" && (
+                                            <>
+                                                <Avatar className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-100 text-blue-700">
+                                                    <CircleHelp className="h-5 w-5" />
+                                                </Avatar>
+                                                <div>
+                                                    <div className="text-xs text-gray-500">Proposal</div>
+                                                    <div className="font-medium">
+                                                        {(internalPreview.data as ProposalDisplay).name}
+                                                    </div>
+                                                    <p className="text-sm text-gray-600">
+                                                        Status:{" "}
+                                                        <span className="font-semibold">
+                                                            {(internalPreview.data as ProposalDisplay).stage}
+                                                        </span>
+                                                    </p>
                                                 </div>
-                                                <p className="text-sm text-gray-600">
-                                                    Status:{" "}
-                                                    <span className="font-semibold">
-                                                        {(internalPreview.data as IssueDisplay).stage}
-                                                    </span>
-                                                </p>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                            </Card>
-                        )}
-                        {images.length > 0 && (
-                            <div className="relative mt-4">
-                                <Carousel setApi={setCarouselApi}>
-                                    <CarouselContent>
-                                        {images.map((image, index) => (
-                                            <CarouselItem key={index} className="relative">
-                                                <img
-                                                    src={image.preview}
-                                                    alt={`Uploaded image ${index + 1}`}
-                                                    className="h-48 w-full rounded-lg object-cover"
-                                                />
-                                                <Button
-                                                    variant="destructive"
-                                                    size="icon"
-                                                    className="absolute right-2 top-2 rounded-full"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        removeImage(index);
-                                                    }}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </CarouselItem>
+                                            </>
+                                        )}
+                                        {internalPreview.type === "issue" && (
+                                            <>
+                                                <Avatar className="flex h-10 w-10 items-center justify-center rounded-md bg-orange-100 text-orange-700">
+                                                    <AlertCircle className="h-5 w-5" />
+                                                </Avatar>
+                                                <div>
+                                                    <div className="text-xs text-gray-500">Issue</div>
+                                                    <div className="font-medium">
+                                                        {(internalPreview.data as IssueDisplay).title}
+                                                    </div>
+                                                    <p className="text-sm text-gray-600">
+                                                        Status:{" "}
+                                                        <span className="font-semibold">
+                                                            {(internalPreview.data as IssueDisplay).stage}
+                                                        </span>
+                                                    </p>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </Card>
+                            )}
+                            {images.length > 0 && (
+                                <div className="relative mt-4">
+                                    <Carousel setApi={setCarouselApi}>
+                                        <CarouselContent>
+                                            {images.map((image, index) => (
+                                                <CarouselItem key={index} className="relative">
+                                                    <img
+                                                        src={image.preview}
+                                                        alt={`Uploaded image ${index + 1}`}
+                                                        className="h-48 w-full rounded-lg object-cover"
+                                                    />
+                                                    <Button
+                                                        variant="destructive"
+                                                        size="icon"
+                                                        className="absolute right-2 top-2 rounded-full"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            removeImage(index);
+                                                        }}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </CarouselItem>
+                                            ))}
+                                        </CarouselContent>
+                                        <CarouselPrevious />
+                                        <CarouselNext />
+                                    </Carousel>
+                                    <div className="mt-2 flex justify-center">
+                                        {images.map((_, index) => (
+                                            <button
+                                                key={index}
+                                                onClick={() => carouselApi?.scrollTo(index)}
+                                                className={`mx-1 h-2 w-2 rounded-full ${
+                                                    index === currentImageIndex ? "bg-blue-500" : "bg-gray-300"
+                                                }`}
+                                            />
                                         ))}
-                                    </CarouselContent>
-                                    <CarouselPrevious />
-                                    <CarouselNext />
-                                </Carousel>
-                                <div className="mt-2 flex justify-center">
-                                    {images.map((_, index) => (
-                                        <button
-                                            key={index}
-                                            onClick={() => carouselApi?.scrollTo(index)}
-                                            className={`mx-1 h-2 w-2 rounded-full ${
-                                                index === currentImageIndex ? "bg-blue-500" : "bg-gray-300"
-                                            }`}
-                                        />
-                                    ))}
+                                    </div>
                                 </div>
-                            </div>
-                        )}
-                        {location && (
-                            <div className="mt-4 flex flex-row items-center justify-center rounded-lg bg-gray-100 p-4 pl-3">
-                                <MapPin className={`mr-3 h-5 w-5`} style={{ color: "#c3224d" }} />
-                                {getFullLocationName(location)}
-                            </div>
-                        )}
-                        {showPollCreator && (
-                            <div className="mt-4 rounded-lg bg-gray-100 p-4">
-                                <p className="text-sm text-gray-600">📊 Poll creator placeholder</p>
-                            </div>
-                        )}
-                    </div>
-                    <div className="mt-4 flex items-center justify-between border-t pt-4">
-                        <div className="flex space-x-2">
-                            <div>
-                                <input {...getInputProps()} className="hidden" id="image-picker-input" />
+                            )}
+                            {location && (
+                                <div className="mt-4 flex flex-row items-center justify-center rounded-lg bg-gray-100 p-4 pl-3">
+                                    <MapPin className={`mr-3 h-5 w-5`} style={{ color: "#c3224d" }} />
+                                    {getFullLocationName(location)}
+                                </div>
+                            )}
+                            {showPollCreator && (
+                                <div className="mt-4 rounded-lg bg-gray-100 p-4">
+                                    <p className="text-sm text-gray-600">📊 Poll creator placeholder</p>
+                                </div>
+                            )}
+                        </div>
+                        <div className="mt-4 flex items-center justify-between border-t pt-4">
+                            <div className="flex space-x-2">
+                                <div>
+                                    <input {...getInputProps()} className="hidden" id="image-picker-input" />
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="rounded-full"
+                                        onClick={() => {
+                                            document.getElementById("image-picker-input")?.click();
+                                        }}
+                                    >
+                                        <ImageIcon className="h-5 w-5 text-gray-500" />
+                                    </Button>
+                                </div>
                                 <Button
                                     variant="ghost"
                                     size="icon"
                                     className="rounded-full"
-                                    onClick={() => {
-                                        document.getElementById("image-picker-input")?.click();
-                                    }}
+                                    onClick={() => setIsLocationDialogOpen(true)}
                                 >
-                                    <ImageIcon className="h-5 w-5 text-gray-500" />
+                                    <MapPinIcon className="h-5 w-5 text-gray-500" />
                                 </Button>
                             </div>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="rounded-full"
-                                onClick={() => setIsLocationDialogOpen(true)}
-                            >
-                                <MapPinIcon className="h-5 w-5 text-gray-500" />
-                            </Button>
-                        </div>
-                        <div className="space-x-2">
-                            <Button variant="ghost" className="text-gray-500" onClick={onCancel}>
-                                Cancel
-                            </Button>
-                            <Button
-                                className="rounded-full bg-blue-500 px-6 text-white hover:bg-blue-600"
-                                onClick={handleSubmit}
-                                disabled={isActuallySubmitting || isPreviewLoading || isInternalPreviewLoading}
-                            >
-                                {isActuallySubmitting ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        {initialPost ? "Updating..." : "Posting..."}
-                                    </>
-                                ) : (
-                                    <>{initialPost ? "Update" : "Post"}</>
-                                )}
-                            </Button>
-                        </div>
-                    </div>
-                    {dragging && (
-                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-gray-200 bg-opacity-50">
-                            <p className="text-lg font-semibold text-gray-700">Drop images here</p>
-                        </div>
-                    )}
-                    <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
-                        <DialogContent
-                            className="z-[111]"
-                            onInteractOutside={(e) => {
-                                e.preventDefault();
-                            }}
-                        >
-                            <DialogHeader>
-                                <DialogTitle>Select Location</DialogTitle>
-                            </DialogHeader>
-                            <LocationPicker value={location!} onChange={setLocation} />
-                            <div className="mt-4 flex justify-end">
-                                <Button variant="secondary" onClick={() => setIsLocationDialogOpen(false)}>
+                            <div className="space-x-2">
+                                <Button variant="ghost" className="text-gray-500" onClick={onCancel}>
                                     Cancel
                                 </Button>
                                 <Button
-                                    variant="default"
-                                    onClick={() => setIsLocationDialogOpen(false)}
-                                    className="ml-2"
+                                    className="rounded-full bg-blue-500 px-6 text-white hover:bg-blue-600"
+                                    onClick={handleSubmit}
+                                    disabled={isActuallySubmitting || isPreviewLoading || isInternalPreviewLoading}
                                 >
-                                    Set Location
+                                    {isActuallySubmitting ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            {initialPost ? "Updating..." : "Posting..."}
+                                        </>
+                                    ) : (
+                                        <>{initialPost ? "Update" : "Post"}</>
+                                    )}
                                 </Button>
                             </div>
-                        </DialogContent>
-                    </Dialog>
-                    <Dialog open={isUserGroupsDialogOpen} onOpenChange={setIsUserGroupsDialogOpen}>
-                        <DialogContent
-                            className="z-[111] max-w-md"
-                            onInteractOutside={(e) => {
-                                e.preventDefault();
-                            }}
-                        >
-                            <DialogHeader>
-                                <DialogTitle className="text-center text-xl font-bold">
-                                    Who can see your post?
-                                </DialogTitle>
-                            </DialogHeader>
-                            <div className="mt-2 space-y-4">
-                                <div className="text-sm text-gray-600">
-                                    Your post will be visible in feeds, on your profile, and in search results.
+                        </div>
+                        {dragging && (
+                            <div className="absolute inset-0 z-50 flex items-center justify-center bg-gray-200 bg-opacity-50">
+                                <p className="text-lg font-semibold text-gray-700">Drop images here</p>
+                            </div>
+                        )}
+                        <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
+                            <DialogContent
+                                className="z-[111]"
+                                onInteractOutside={(e) => {
+                                    e.preventDefault();
+                                }}
+                            >
+                                <DialogHeader>
+                                    <DialogTitle>Select Location</DialogTitle>
+                                </DialogHeader>
+                                <LocationPicker value={location!} onChange={setLocation} />
+                                <div className="mt-4 flex justify-end">
+                                    <Button variant="secondary" onClick={() => setIsLocationDialogOpen(false)}>
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        variant="default"
+                                        onClick={() => setIsLocationDialogOpen(false)}
+                                        className="ml-2"
+                                    >
+                                        Set Location
+                                    </Button>
                                 </div>
-                                <div className="text-sm text-gray-600">
-                                    Your default audience is <span className="font-semibold">Everyone</span> but you can
-                                    change the audience for this post.
+                            </DialogContent>
+                        </Dialog>
+                    </>
+                )}
+            </div>{" "}
+            {/* Closes "flex flex-grow flex-col overflow-hidden" */}
+            {/* UserGroups Dialog is a direct child of the root div */}
+            <Dialog open={isUserGroupsDialogOpen} onOpenChange={setIsUserGroupsDialogOpen}>
+                <DialogContent
+                    className="z-[111] max-w-md"
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
+                    <DialogHeader>
+                        <DialogTitle className="text-center text-xl font-bold">Who can see your post?</DialogTitle>
+                    </DialogHeader>
+                    <div className="mt-2 space-y-4">
+                        <div className="text-sm text-gray-600">
+                            Your post will be visible in feeds, on your profile, and in search results.
+                        </div>
+                        <div className="text-sm text-gray-600">
+                            Your default audience is <span className="font-semibold">Everyone</span> but you can change
+                            the audience for this post.
+                        </div>
+                        <div className="max-h-[300px] space-y-3 overflow-y-auto py-2">
+                            <div className="flex items-center rounded-lg p-2 hover:bg-gray-100">
+                                <div className="mr-3 flex h-10 w-10 items-center justify-center rounded-full bg-gray-200">
+                                    <Globe className="h-5 w-5 text-gray-700" />
                                 </div>
-                                <div className="max-h-[300px] space-y-3 overflow-y-auto py-2">
-                                    <div className="flex items-center rounded-lg p-2 hover:bg-gray-100">
+                                <div className="flex-1">
+                                    <div className="font-medium">Everyone</div>
+                                    <div className="text-xs text-gray-500">Everyone on and outside MakeCircles</div>
+                                </div>
+                                <div className="ml-2">
+                                    <input
+                                        type="radio"
+                                        id="group-everyone"
+                                        name="visibility"
+                                        className="h-4 w-4 text-blue-600"
+                                        checked={userGroups.includes("everyone")}
+                                        onChange={() => setUserGroups(["everyone"])}
+                                    />
+                                </div>
+                            </div>
+                            {getAvailableUserGroups()
+                                .filter((group) => group !== "everyone")
+                                .map((group) => (
+                                    <div key={group} className="flex items-center rounded-lg p-2 hover:bg-gray-100">
                                         <div className="mr-3 flex h-10 w-10 items-center justify-center rounded-full bg-gray-200">
-                                            <Globe className="h-5 w-5 text-gray-700" />
+                                            <Users className="h-5 w-5 text-gray-700" />
                                         </div>
                                         <div className="flex-1">
-                                            <div className="font-medium">Everyone</div>
+                                            <div className="font-medium">{getUserGroupName(group)}</div>
                                             <div className="text-xs text-gray-500">
-                                                Everyone on and outside MakeCircles
+                                                Only {getUserGroupName(group)?.toLowerCase()} of{" "}
+                                                {(selectedCircle || user).name}
                                             </div>
                                         </div>
                                         <div className="ml-2">
                                             <input
                                                 type="radio"
-                                                id="group-everyone"
+                                                id={`group-${group}`}
                                                 name="visibility"
                                                 className="h-4 w-4 text-blue-600"
-                                                checked={userGroups.includes("everyone")}
-                                                onChange={() => setUserGroups(["everyone"])}
+                                                checked={userGroups.includes(group) && !userGroups.includes("everyone")}
+                                                onChange={() => setUserGroups([group])}
                                             />
                                         </div>
                                     </div>
-                                    {getAvailableUserGroups()
-                                        .filter((group) => group !== "everyone")
-                                        .map((group) => (
-                                            <div
-                                                key={group}
-                                                className="flex items-center rounded-lg p-2 hover:bg-gray-100"
-                                            >
-                                                <div className="mr-3 flex h-10 w-10 items-center justify-center rounded-full bg-gray-200">
-                                                    <Users className="h-5 w-5 text-gray-700" />
-                                                </div>
-                                                <div className="flex-1">
-                                                    <div className="font-medium">{getUserGroupName(group)}</div>
-                                                    <div className="text-xs text-gray-500">
-                                                        Only {getUserGroupName(group)?.toLowerCase()} of{" "}
-                                                        {(selectedCircle || user).name}
-                                                    </div>
-                                                </div>
-                                                <div className="ml-2">
-                                                    <input
-                                                        type="radio"
-                                                        id={`group-${group}`}
-                                                        name="visibility"
-                                                        className="h-4 w-4 text-blue-600"
-                                                        checked={
-                                                            userGroups.includes(group) &&
-                                                            !userGroups.includes("everyone")
-                                                        }
-                                                        onChange={() => setUserGroups([group])}
-                                                    />
-                                                </div>
-                                            </div>
-                                        ))}
-                                </div>
-                            </div>
-                            <DialogFooter className="flex justify-between sm:justify-between">
-                                <Button variant="ghost" onClick={() => setIsUserGroupsDialogOpen(false)}>
-                                    Cancel
-                                </Button>
-                                <Button onClick={() => setIsUserGroupsDialogOpen(false)}>Done</Button>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
-                </div>
-            )}
+                                ))}
+                        </div>
+                    </div>
+                    <DialogFooter className="flex justify-between sm:justify-between">
+                        <Button variant="ghost" onClick={() => setIsUserGroupsDialogOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={() => setIsUserGroupsDialogOpen(false)}>Done</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

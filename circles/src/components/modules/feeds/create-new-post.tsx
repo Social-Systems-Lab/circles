@@ -81,11 +81,13 @@ export function CreateNewPost({ circle, feed }: CreateNewPostProps) {
                 </div>
                 {user && (
                     <PostForm
-                        circle={circle}
-                        feed={feed}
                         user={user as UserPrivate}
                         onSubmit={handleSubmit}
                         onCancel={() => setIsOpen(false)}
+                        itemKey="post"
+                        moduleHandle="feed"
+                        createFeatureHandle="post"
+                        initialSelectedCircleId={circle._id} // Pass the current circle's ID
                     />
                 )}
             </DialogContent>

@@ -13,14 +13,19 @@ import { Label } from "../ui/label";
 interface CircleSelectorProps {
     itemType: CreatableItemDetail;
     onCircleSelected: (circle: Circle | null) => void;
+    initialSelectedCircleId?: string;
     // We might need to pass down the full list of user's circles/memberships to avoid re-fetching
     // For now, let's assume we fetch/derive it here.
 }
 
-export const CircleSelector: React.FC<CircleSelectorProps> = ({ itemType, onCircleSelected }) => {
+export const CircleSelector: React.FC<CircleSelectorProps> = ({
+    itemType,
+    onCircleSelected,
+    initialSelectedCircleId,
+}) => {
     const [user] = useAtom(userAtom);
     const [selectableCircles, setSelectableCircles] = useState<Circle[]>([]);
-    const [selectedCircleId, setSelectedCircleId] = useState<string | undefined>(undefined);
+    const [selectedCircleId, setSelectedCircleId] = useState<string | undefined>(initialSelectedCircleId);
     const [isLoading, setIsLoading] = useState(true);
     const [showEnableModuleMessage, setShowEnableModuleMessage] = useState(false);
 
@@ -84,13 +89,24 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({ itemType, onCirc
         setSelectableCircles(filteredAndProcessedCircles);
 
         let initialSelectedCircle: Circle | null = null;
-        if (filteredAndProcessedCircles.length > 0) {
+
+        if (initialSelectedCircleId) {
+            const preselected = filteredAndProcessedCircles.find((c) => c._id === initialSelectedCircleId);
+            if (preselected) {
+                initialSelectedCircle = preselected;
+            }
+        }
+
+        if (!initialSelectedCircle && filteredAndProcessedCircles.length > 0) {
             const userOwnCircleIsSelectable = filteredAndProcessedCircles.find((c) => c._id === currentUserCircle._id);
             if (userOwnCircleIsSelectable) {
                 initialSelectedCircle = userOwnCircleIsSelectable;
             } else {
                 initialSelectedCircle = filteredAndProcessedCircles[0];
             }
+        }
+
+        if (initialSelectedCircle) {
             setSelectedCircleId(initialSelectedCircle._id);
         } else {
             setSelectedCircleId(undefined);
