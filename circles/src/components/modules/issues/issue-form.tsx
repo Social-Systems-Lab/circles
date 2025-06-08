@@ -17,7 +17,6 @@ import { useRouter } from "next/navigation";
 import LocationPicker from "@/components/forms/location-picker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getFullLocationName } from "@/lib/utils";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createIssueAction, updateIssueAction } from "@/app/circles/[handle]/issues/actions";
 import CircleSelector from "@/components/global-create/circle-selector"; // Added CircleSelector
 import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Added CreatableItemDetail
@@ -195,9 +194,16 @@ export const IssueForm: React.FC<IssueFormProps> = ({
         <div className="formatted mx-auto w-full">
             {" "}
             {/* Outer div's padding removed */}
-            <Card className="w-full">
-                <CardHeader>
-                    <CardTitle>{isEditing ? "Edit Issue" : "Submit New Issue"}</CardTitle>
+            <div className="w-full">
+                {" "}
+                {/* Replaced Card with div */}
+                <div className="p-6">
+                    {" "}
+                    {/* Replaced CardHeader with div and padding */}
+                    <h3 className="mb-2 text-2xl font-semibold leading-none tracking-tight">
+                        {isEditing ? "Edit Issue" : "Submit New Issue"}
+                    </h3>{" "}
+                    {/* Replaced CardTitle */}
                     {!isEditing &&
                         itemDetail && ( // Show CircleSelector only when creating new
                             <div className="pb-4 pt-2">
@@ -205,19 +211,25 @@ export const IssueForm: React.FC<IssueFormProps> = ({
                             </div>
                         )}
                     {selectedCircle && !isEditing && (
-                        <CardDescription>
+                        <p className="text-sm text-muted-foreground">
+                            {" "}
+                            {/* Replaced CardDescription */}
                             {`Describe the issue you want to report in '${selectedCircle.name || selectedCircle.handle}'.`}
-                        </CardDescription>
+                        </p>
                     )}
                     {isEditing && (
-                        <CardDescription>
+                        <p className="text-sm text-muted-foreground">
+                            {" "}
+                            {/* Replaced CardDescription */}
                             Update the issue details below.
                             {selectedCircle && ` In '${selectedCircle.name || selectedCircle.handle}'.`}
-                        </CardDescription>
+                        </p>
                     )}
-                </CardHeader>
+                </div>
                 {selectedCircle || isEditing ? ( // Show form if a circle is selected OR if editing
-                    <CardContent>
+                    <div className="p-6 pt-0">
+                        {" "}
+                        {/* Replaced CardContent with div and padding */}
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-0 md:space-y-0">
                                 {" "}
@@ -361,17 +373,20 @@ export const IssueForm: React.FC<IssueFormProps> = ({
                                 </div>
                             </form>
                         </Form>
-                    </CardContent>
+                    </div>
                 ) : (
                     !isEditing && ( // Show this message only when creating new and no circle selected
-                        <CardContent>
+                        <div className="p-6 pt-0">
+                            {" "}
+                            {/* Replaced CardContent with div and padding */}
                             <div className="pb-4 pt-4 text-center text-muted-foreground">
                                 Please select a circle above to create the issue in.
                             </div>
-                        </CardContent>
+                        </div>
                     )
                 )}
-            </Card>
+            </div>{" "}
+            {/* End Replaced Card */}
             <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
                 <DialogContent
                     onInteractOutside={(e) => {

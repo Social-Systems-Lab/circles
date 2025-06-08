@@ -59,9 +59,8 @@ export const CreateGoalDialog: React.FC<CreateGoalDialogProps> = ({
             >
                 {/* DialogHeader removed as GoalForm now provides its own card-based header */}
                 {/* The title logic (proposal vs new) is handled within GoalForm's CardTitle */}
-
+                <DialogTitle className="hidden">Create New Goal</DialogTitle> {/* Hidden for accessibility */}
                 {!user && <p className="p-4 text-red-500">Please log in to create a goal.</p>}
-
                 {user && itemDetail && (
                     <GoalForm
                         user={user as UserPrivate}

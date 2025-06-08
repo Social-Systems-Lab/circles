@@ -18,7 +18,6 @@ import LocationPicker from "@/components/forms/location-picker"; // Added Locati
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"; // Added Dialog components
 import { getFullLocationName } from "@/lib/utils"; // Added getFullLocationName
 import { ProposalStageTimeline } from "./proposal-stage-timeline";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createProposalAction, updateProposalAction } from "@/app/circles/[handle]/proposals/actions";
 import CircleSelector from "@/components/global-create/circle-selector"; // Added CircleSelector
 import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Added CreatableItemDetail
@@ -208,12 +207,19 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
         <div className="formatted mx-auto w-full">
             {" "}
             {/* Outer div's padding removed */}
-            <Card className="w-full">
-                <CardHeader>
-                    <CardTitle>{isEditing ? "Edit Proposal" : "Create New Proposal"}</CardTitle>
+            <div className="w-full">
+                {" "}
+                {/* Replaced Card with div */}
+                <div className="p-6">
+                    {" "}
+                    {/* Replaced CardHeader with div and padding */}
+                    <h3 className="mb-2 text-2xl font-semibold leading-none tracking-tight">
+                        {isEditing ? "Edit Proposal" : "Create New Proposal"}
+                    </h3>{" "}
+                    {/* Replaced CardTitle */}
                     {!isEditing &&
                         itemDetail && ( // Show CircleSelector only when creating new
-                            <div className="pb-4 pt-2">
+                            <div className="pt-2">
                                 <CircleSelector
                                     itemType={itemDetail}
                                     onCircleSelected={handleCircleSelected}
@@ -222,35 +228,38 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
                             </div>
                         )}
                     {selectedCircle && !isEditing && (
-                        <CardDescription>
+                        <p className="text-sm text-muted-foreground">
+                            {" "}
+                            {/* Replaced CardDescription */}
                             {`Fill in the details for your new proposal in '${selectedCircle.name || selectedCircle.handle}'.`}
-                        </CardDescription>
+                        </p>
                     )}
                     {isEditing && (
-                        <CardDescription>
+                        <p className="text-sm text-muted-foreground">
+                            {" "}
+                            {/* Replaced CardDescription */}
                             Update your proposal details below.
                             {/* For editing, selectedCircle is derived from proposal.circleId, so this part of description is fine */}
                             {selectedCircle && ` In '${selectedCircle.name || selectedCircle.handle}'.`}
-                        </CardDescription>
+                        </p>
                     )}
-                </CardHeader>
-
+                </div>
                 {isEditing &&
                     proposal?.stage && ( // Show timeline only when editing, moved below header
-                        <CardContent className="pb-4 pt-0">
+                        <div className="p-6 pb-4 pt-0">
                             {" "}
-                            {/* Adjust padding if needed */}
+                            {/* Replaced CardContent with div and padding */} {/* Adjust padding if needed */}
                             <div className="mb-6 ml-4 mr-4">
                                 {" "}
                                 {/* Timeline might need margin adjustments */}
                                 <ProposalStageTimeline currentStage={proposal.stage} />
                             </div>
-                        </CardContent>
+                        </div>
                     )}
-
                 {selectedCircle ? (
-                    <CardContent className={isEditing && proposal?.stage ? "pt-0" : ""}>
+                    <div className={`p-6 ${isEditing && proposal?.stage ? "pt-0" : ""}`}>
                         {" "}
+                        {/* Replaced CardContent with div and padding */}{" "}
                         {/* Remove CardContent top padding if timeline was shown */}
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-0 md:space-y-0">
@@ -474,20 +483,23 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
                                 </div>
                             </form>
                         </Form>
-                    </CardContent>
+                    </div>
                 ) : (
                     // Message if no circle is selected (primarily for create mode)
                     !isEditing && (
-                        <CardContent>
+                        <div className="p-6 pt-0">
+                            {" "}
+                            {/* Replaced CardContent with div and padding */}
                             <div className="pb-4 pt-4 text-center text-muted-foreground">
                                 {itemDetail
                                     ? "Please select a circle above to create the proposal in."
                                     : "Loading form..."}
                             </div>
-                        </CardContent>
+                        </div>
                     )
                 )}
-            </Card>
+            </div>{" "}
+            {/* End Replaced Card */}
             {/* Location Dialog */}
             <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
                 <DialogContent

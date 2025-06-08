@@ -18,7 +18,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import LocationPicker from "@/components/forms/location-picker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getFullLocationName } from "@/lib/utils";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createTaskAction, updateTaskAction } from "@/app/circles/[handle]/tasks/actions";
 import CircleSelector from "@/components/global-create/circle-selector"; // Added CircleSelector
 import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Added CreatableItemDetail
@@ -246,10 +245,17 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     return (
         // Outer div's padding removed, dialog will handle it. Max-width might also be dialog's concern.
         <div className="formatted mx-auto w-full">
-            <Card className="w-full">
-                <CardHeader>
-                    <CardTitle>{isEditing ? "Edit Task" : "Create New Task"}</CardTitle>
-                    {/* CircleSelector moved into CardHeader or top of CardContent */}
+            <div className="w-full">
+                {" "}
+                {/* Replaced Card with div */}
+                <div className="p-6">
+                    {" "}
+                    {/* Replaced CardHeader with div and padding */}
+                    <h3 className="mb-2 text-2xl font-semibold leading-none tracking-tight">
+                        {isEditing ? "Edit Task" : "Create New Task"}
+                    </h3>{" "}
+                    {/* Replaced CardTitle */}
+                    {/* CircleSelector moved into this section */}
                     {!isEditing && ( // Only show selector if creating new
                         <div className="pb-4 pt-2">
                             {" "}
@@ -263,19 +269,25 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                     )}
                     {selectedCircle &&
                         !isEditing && ( // Show description only if circle is selected and creating
-                            <CardDescription>
+                            <p className="text-sm text-muted-foreground">
+                                {" "}
+                                {/* Replaced CardDescription */}
                                 {`Describe the task you want to create in '${selectedCircle.name || selectedCircle.handle}'.`}
-                            </CardDescription>
+                            </p>
                         )}
                     {isEditing && ( // Show description for editing
-                        <CardDescription>
+                        <p className="text-sm text-muted-foreground">
+                            {" "}
+                            {/* Replaced CardDescription */}
                             Update the task details below.
                             {selectedCircle && ` In '${selectedCircle.name || selectedCircle.handle}'.`}
-                        </CardDescription>
+                        </p>
                     )}
-                </CardHeader>
+                </div>
                 {selectedCircle ? (
-                    <CardContent>
+                    <div className="p-6 pt-0">
+                        {" "}
+                        {/* Replaced CardContent with div and padding */}
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-0 md:space-y-0">
                                 {" "}
@@ -444,19 +456,21 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                 </div>
                             </form>
                         </Form>
-                    </CardContent>
+                    </div>
                 ) : (
                     // Show this message if no circle is selected (primarily for create mode)
                     !isEditing && (
-                        <CardContent>
+                        <div className="p-6 pt-0">
+                            {" "}
+                            {/* Replaced CardContent with div and padding */}
                             <div className="pb-4 pt-4 text-center text-muted-foreground">
                                 Please select a circle above to create the task in.
                             </div>
-                        </CardContent>
+                        </div>
                     )
                 )}
-            </Card>
-
+            </div>{" "}
+            {/* End Replaced Card */}
             <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
                 <DialogContent
                     onInteractOutside={(e) => {

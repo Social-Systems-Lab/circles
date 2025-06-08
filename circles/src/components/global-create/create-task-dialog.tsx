@@ -63,9 +63,8 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                 }}
             >
                 {/* DialogHeader removed as TaskForm now provides its own card-based header */}
-
+                <DialogTitle className="hidden">Create New Task</DialogTitle> {/* Hidden for accessibility */}
                 {!user && <p className="p-4 text-red-500">Please log in to create a task.</p>}
-
                 {user &&
                     itemDetail && ( // Ensure itemDetail is available
                         <TaskForm

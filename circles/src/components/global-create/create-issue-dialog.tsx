@@ -48,9 +48,8 @@ export const CreateIssueDialog: React.FC<CreateIssueDialogProps> = ({ isOpen, on
                 }}
             >
                 {/* DialogHeader removed as IssueForm now provides its own card-based header */}
-
+                <DialogTitle className="hidden">Create New Issue</DialogTitle> {/* Hidden for accessibility */}
                 {!user && <p className="p-4 text-red-500">Please log in to create an issue.</p>}
-
                 {user && itemDetail && (
                     <IssueForm
                         user={user as UserPrivate}

@@ -21,7 +21,6 @@ import { cn } from "@/lib/utils"; // Added cn for conditional classes
 import LocationPicker from "@/components/forms/location-picker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getFullLocationName } from "@/lib/utils";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createGoalAction, updateGoalAction } from "@/app/circles/[handle]/goals/actions";
 import { createGoalFromProposalAction } from "@/app/circles/[handle]/proposals/actions";
 import CircleSelector from "@/components/global-create/circle-selector"; // Added CircleSelector
@@ -259,16 +258,22 @@ export const GoalForm: React.FC<GoalFormProps> = ({
         <div className="formatted mx-auto w-full">
             {" "}
             {/* Outer div's padding removed */}
-            <Card className="w-full">
-                <CardHeader>
-                    <CardTitle>
+            <div className="w-full">
+                {" "}
+                {/* Replaced Card with div */}
+                <div className="p-6">
+                    {" "}
+                    {/* Replaced CardHeader with div and padding */}
+                    <h3 className="mb-2 text-2xl font-semibold leading-none tracking-tight">
+                        {" "}
+                        {/* Replaced CardTitle */}
                         {isEditing
                             ? "Edit Goal"
                             : proposal
                               ? `Create Goal from Proposal: ${proposal.name}`
                               : "Create New Goal"}
-                    </CardTitle>
-                    {/* CircleSelector moved into CardHeader or top of CardContent */}
+                    </h3>
+                    {/* CircleSelector moved into this section */}
                     {itemDetail &&
                         !isEditing &&
                         !(proposal && proposal.circle) && ( // Show selector if creating new and not pre-selected by proposal
@@ -283,19 +288,25 @@ export const GoalForm: React.FC<GoalFormProps> = ({
                             </div>
                         )}
                     {selectedCircle && !isEditing && (
-                        <CardDescription>
+                        <p className="text-sm text-muted-foreground">
+                            {" "}
+                            {/* Replaced CardDescription */}
                             {`Describe the goal you want to create in '${selectedCircle.name || selectedCircle.handle}'.`}
-                        </CardDescription>
+                        </p>
                     )}
                     {isEditing && (
-                        <CardDescription>
+                        <p className="text-sm text-muted-foreground">
+                            {" "}
+                            {/* Replaced CardDescription */}
                             Update the goal details below.
                             {selectedCircle && ` In '${selectedCircle.name || selectedCircle.handle}'.`}
-                        </CardDescription>
+                        </p>
                     )}
-                </CardHeader>
+                </div>
                 {selectedCircle ? (
-                    <CardContent>
+                    <div className="p-6 pt-0">
+                        {" "}
+                        {/* Replaced CardContent with div and padding */}
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-0 md:space-y-0">
                                 {" "}
@@ -479,18 +490,21 @@ export const GoalForm: React.FC<GoalFormProps> = ({
                                 </div>
                             </form>
                         </Form>
-                    </CardContent>
+                    </div>
                 ) : (
                     // Show this message if no circle is selected (primarily for create mode)
                     !isEditing && ( // Only show if not editing
-                        <CardContent>
+                        <div className="p-6 pt-0">
+                            {" "}
+                            {/* Replaced CardContent with div and padding */}
                             <div className="pb-4 pt-4 text-center text-muted-foreground">
                                 {itemDetail ? "Please select a circle above to create the goal in." : "Loading form..."}
                             </div>
-                        </CardContent>
+                        </div>
                     )
                 )}
-            </Card>
+            </div>{" "}
+            {/* End Replaced Card */}
             <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
                 <DialogContent
                     onInteractOutside={(e) => {

@@ -55,9 +55,8 @@ export const CreateProposalDialog: React.FC<CreateProposalDialogProps> = ({
                 }}
             >
                 {/* DialogHeader removed as ProposalForm now provides its own card-based header */}
-
+                <DialogTitle className="hidden">Create New Proposal</DialogTitle> {/* Hidden for accessibility */}
                 {!user && <p className="p-4 text-red-500">Please log in to create a proposal.</p>}
-
                 {user && itemDetail && (
                     <ProposalForm
                         user={user as UserPrivate}
