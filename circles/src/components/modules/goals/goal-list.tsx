@@ -69,8 +69,9 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { useAtom } from "jotai";
 import { userAtom, contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
-import Link from "next/link";
+import Link from "next/link"; // Will be removed for the button
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { CreateGoalDialog } from "@/components/global-create/create-goal-dialog"; // Import CreateGoalDialog
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 
 interface GoalsListProps {
@@ -129,8 +130,8 @@ const getStageInfo = (stage: GoalStage) => {
         case "open":
             return { color: "bg-blue-200 text-blue-800", icon: Play, text: "Open" };
         // Removed "inProgress" case
-        case "resolved":
-            return { color: "bg-green-200 text-green-800", icon: CheckCircle, text: "Resolved" };
+        case "completed": // Changed from "resolved"
+            return { color: "bg-green-200 text-green-800", icon: CheckCircle, text: "Completed" }; // Changed text
         default:
             return { color: "bg-gray-200 text-gray-800", icon: Clock, text: "Unknown" };
     }
@@ -152,6 +153,7 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
     const [stageFilter, setStageFilter] = useState<GoalStage | "all">("all"); // Updated type
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+    const [isCreateGoalDialogOpen, setIsCreateGoalDialogOpen] = useState(false); // State for Create Goal Dialog
     // const [showRankModal, setShowRankModal] = useState(false); // Removed state for modal
     const isMobile = useIsMobile();
 
@@ -331,6 +333,17 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
     // Check create permission for the button using the user object
     const canCreateGoal = isAuthorized(user, circle, features.goals.create);
 
+    const handleCreateGoalSuccess = (goalId?: string) => {
+        toast({
+            title: "Goal Created",
+            description: "The new goal has been successfully created.",
+        });
+        setIsCreateGoalDialogOpen(false);
+        router.refresh(); // Refresh the list
+        // Optionally, navigate to the new goal:
+        // if (goalId) router.push(`/circles/${circle.handle}/goals/${goalId}`);
+    };
+
     return (
         <TooltipProvider>
             <div className="flex flex-1 flex-row justify-center">
@@ -345,13 +358,9 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
                                 onChange={(event) => table.getColumn("title")?.setFilterValue(event.target.value)}
                             />
                         </div>
-                        {canCreateGoal && ( // Renamed variable
-                            <Button asChild>
-                                <Link href={`/circles/${circle.handle}/goals/create`}>
-                                    {" "}
-                                    {/* Updated path */}
-                                    <Plus className="mr-2 h-4 w-4" /> Create Goal {/* Updated text */}
-                                </Link>
+                        {canCreateGoal && (
+                            <Button onClick={() => setIsCreateGoalDialogOpen(true)}>
+                                <Plus className="mr-2 h-4 w-4" /> Create Goal
                             </Button>
                         )}
                         {/* Removed Rank Button */}
@@ -367,7 +376,7 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
                                 <SelectItem value="review">Review</SelectItem>
                                 <SelectItem value="open">Open</SelectItem>
                                 {/* Removed In Progress SelectItem */}
-                                <SelectItem value="resolved">Resolved</SelectItem>
+                                <SelectItem value="completed">Completed</SelectItem> {/* Changed from "resolved" */}
                             </SelectContent>
                         </Select>
                     </div>
@@ -446,7 +455,7 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
                                                                                 `/circles/${circle.handle}/goals/${goal._id}/edit`,
                                                                             );
                                                                         }}
-                                                                        disabled={goal.stage === "resolved"}
+                                                                        disabled={goal.stage === "completed"} // Changed from "resolved"
                                                                     >
                                                                         Edit
                                                                     </DropdownMenuItem>
@@ -505,6 +514,17 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
+
+                    {/* Render CreateGoalDialog */}
+                    {canCreateGoal && (
+                        <CreateGoalDialog
+                            isOpen={isCreateGoalDialogOpen}
+                            onOpenChange={setIsCreateGoalDialogOpen}
+                            onSuccess={handleCreateGoalSuccess}
+                            itemKey="goal"
+                            initialSelectedCircleId={circle._id} // Pass current circle ID
+                        />
+                    )}
                 </div>
             </div>
         </TooltipProvider>

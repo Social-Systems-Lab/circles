@@ -15,8 +15,7 @@ interface CreateGoalDialogProps {
     onSuccess: (goalId?: string) => void;
     itemKey: CreatableItemKey;
     proposal?: ProposalDisplay; // Optional proposal to prefill from
-    // circle prop might be needed if we bypass CircleSelector when proposal is present
-    circle?: Circle; // If passed, this circle is used directly
+    initialSelectedCircleId?: string; // Changed from circle: Circle
 }
 
 export const CreateGoalDialog: React.FC<CreateGoalDialogProps> = ({
@@ -25,7 +24,7 @@ export const CreateGoalDialog: React.FC<CreateGoalDialogProps> = ({
     onSuccess,
     itemKey,
     proposal,
-    circle: preselectedCircle, // Renamed for clarity
+    initialSelectedCircleId, // Changed from circle
 }) => {
     const [user] = useAtom(userAtom);
     const itemDetail = creatableItemsList.find((item: CreatableItemDetail) => item.key === itemKey);
@@ -74,7 +73,7 @@ export const CreateGoalDialog: React.FC<CreateGoalDialogProps> = ({
                         onFormSubmitSuccess={handleFormSuccess}
                         onCancel={handleCancel}
                         proposal={proposal} // Pass optional proposal
-                        preselectedCircle={preselectedCircle} // Pass optional preselectedCircle
+                        initialSelectedCircleId={initialSelectedCircleId} // Pass down
                         // circle and circleHandle removed, GoalForm will manage this
                     />
                 )}

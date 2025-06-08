@@ -9,7 +9,8 @@ import { features } from "@/lib/data/constants";
 import { redirect } from "next/navigation";
 import { notFound } from "next/navigation"; // Import notFound
 import { UserPrivate } from "@/models/models"; // Import UserPrivate
-import { creatableItemsList, CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Added imports
+// Removed creatableItemsList import, only keep type
+import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content";
 
 type PageProps = {
     params: Promise<{ handle: string }>;
@@ -74,7 +75,17 @@ export default async function CreateGoalPage(props: PageProps) {
             {/* Render GoalForm, passing circle and circleHandle */}
             <GoalForm
                 user={user as UserPrivate}
-                itemDetail={creatableItemsList.find((item) => item.key === "goal") as CreatableItemDetail}
+                itemDetail={
+                    {
+                        // Define itemDetail for 'goal' locally
+                        key: "goal",
+                        title: "Goal",
+                        description: "",
+                        // icon property is now omitted
+                        moduleHandle: "goals",
+                        createFeatureHandle: "create",
+                    } as CreatableItemDetail
+                }
                 initialSelectedCircleId={circle._id}
             />
         </div>

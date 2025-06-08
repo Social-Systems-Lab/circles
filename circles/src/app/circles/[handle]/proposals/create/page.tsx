@@ -4,10 +4,12 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
+import { getUserPrivate } from "@/lib/data/user"; // Import getUserPrivate
 import { features } from "@/lib/data/constants";
 import { redirect } from "next/navigation";
 // No longer need createProposalAction import here
-import { Media } from "@/models/models"; // Import Media type
+import { Media, UserPrivate } from "@/models/models"; // Import Media type, UserPrivate
+import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Import CreatableItemDetail
 
 type PageProps = {
     params: Promise<{ handle: string }>;
@@ -17,9 +19,14 @@ export default async function CreateProposalPage(props: PageProps) {
     const params = await props.params;
     const circleHandle = params.handle;
 
-    // Get the current user DID
+    // Get the current user DID and full user object
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
+        redirect("/login");
+    }
+    const user = await getUserPrivate(userDid);
+    if (!user) {
+        console.error("Failed to fetch user details for DID:", userDid);
         redirect("/login");
     }
 
@@ -72,7 +79,21 @@ export default async function CreateProposalPage(props: PageProps) {
             </div>
 
             {/* Remove onSubmit, pass circleHandle */}
-            <ProposalForm circle={circle} circleHandle={circleHandle} />
+            <ProposalForm
+                user={user as UserPrivate}
+                itemDetail={
+                    {
+                        // Define itemDetail for 'proposal' locally
+                        key: "proposal",
+                        title: "Proposal",
+                        description: "",
+                        // icon property is now omitted
+                        moduleHandle: "proposals",
+                        createFeatureHandle: "create",
+                    } as CreatableItemDetail
+                }
+                initialSelectedCircleId={circle._id} // Pre-select current circle
+            />
         </div>
     );
 }

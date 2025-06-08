@@ -16,9 +16,16 @@ interface CreateTaskDialogProps {
     onOpenChange: (open: boolean) => void;
     onSuccess: (taskId?: string) => void; // Callback on successful task creation
     itemKey: CreatableItemKey; // To know we are creating a task and for CircleSelector
+    initialSelectedCircleId?: string; // Added to pre-select a circle
 }
 
-export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({ isOpen, onOpenChange, onSuccess, itemKey }) => {
+export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
+    isOpen,
+    onOpenChange,
+    onSuccess,
+    itemKey,
+    initialSelectedCircleId,
+}) => {
     const [user] = useAtom(userAtom);
 
     // Find the full item detail for context (e.g., title for dialog)
@@ -67,6 +74,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({ isOpen, onOp
                         <TaskForm
                             user={user as UserPrivate} // Pass user to TaskForm
                             itemDetail={itemDetail} // Pass itemDetail for CircleSelector
+                            initialSelectedCircleId={initialSelectedCircleId} // Pass down
                             // goals and goalsModuleEnabled will be handled by TaskForm
                             onFormSubmitSuccess={handleFormSuccess}
                             onCancel={handleCancel}

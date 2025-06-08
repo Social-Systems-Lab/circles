@@ -14,6 +14,7 @@ interface CreateProposalDialogProps {
     onOpenChange: (open: boolean) => void;
     onSuccess: (proposalId?: string) => void;
     itemKey: CreatableItemKey;
+    initialSelectedCircleId?: string; // Added to pre-select a circle
 }
 
 export const CreateProposalDialog: React.FC<CreateProposalDialogProps> = ({
@@ -21,6 +22,7 @@ export const CreateProposalDialog: React.FC<CreateProposalDialogProps> = ({
     onOpenChange,
     onSuccess,
     itemKey,
+    initialSelectedCircleId, // Added
 }) => {
     const [user] = useAtom(userAtom);
     const itemDetail = creatableItemsList.find((item: CreatableItemDetail) => item.key === itemKey);
@@ -62,6 +64,7 @@ export const CreateProposalDialog: React.FC<CreateProposalDialogProps> = ({
                     <ProposalForm
                         user={user as UserPrivate}
                         itemDetail={itemDetail}
+                        initialSelectedCircleId={initialSelectedCircleId} // Pass down
                         onFormSubmitSuccess={handleFormSuccess}
                         onCancel={handleCancel}
                     />

@@ -9,7 +9,7 @@ import { getUserPrivate } from "@/lib/data/user"; // Import getUserPrivate
 import { features } from "@/lib/data/constants";
 import { redirect } from "next/navigation";
 import { Media, UserPrivate } from "@/models/models"; // Import Media type, UserPrivate
-import { creatableItemsList, CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Added imports
+import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Keep type import
 
 type PageProps = {
     params: Promise<{ handle: string; proposalId: string }>;
@@ -103,7 +103,17 @@ export default async function EditProposalPage(props: PageProps) {
             {/* Remove onSubmit, pass circleHandle and proposalId */}
             <ProposalForm
                 user={user as UserPrivate}
-                itemDetail={creatableItemsList.find((item) => item.key === "proposal") as CreatableItemDetail}
+                itemDetail={
+                    {
+                        // Define itemDetail for 'proposal' locally
+                        key: "proposal",
+                        title: "Proposal",
+                        description: "",
+                        // icon property is now omitted
+                        moduleHandle: "proposals",
+                        createFeatureHandle: "create",
+                    } as CreatableItemDetail
+                }
                 proposal={proposal}
                 proposalId={proposalId}
                 // circle prop is not strictly needed by ProposalForm if user and proposal.circleId are used

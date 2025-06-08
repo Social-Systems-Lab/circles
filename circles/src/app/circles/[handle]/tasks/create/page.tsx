@@ -12,7 +12,7 @@ import { notFound } from "next/navigation";
 // Import the goals action
 import { getGoalsAction } from "@/app/circles/[handle]/goals/actions";
 import { GoalDisplay, UserPrivate } from "@/models/models"; // Import GoalDisplay type, UserPrivate
-import { creatableItemsList, CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Added imports
+import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Keep type import
 
 type PageProps = {
     params: Promise<{ handle: string }>;
@@ -73,6 +73,16 @@ export default async function CreateTaskPage(props: PageProps) {
     }
     // --- End Fetch Goals ---
 
+    // Define itemDetail for 'task' locally for server-side use
+    const taskItemDetail: CreatableItemDetail = {
+        key: "task",
+        title: "Task",
+        description: "",
+        // icon property is now omitted
+        moduleHandle: "tasks",
+        createFeatureHandle: "create",
+    };
+
     return (
         <div className="formatted flex h-full w-full flex-col">
             <div className="mb-4 flex items-center p-4">
@@ -87,7 +97,7 @@ export default async function CreateTaskPage(props: PageProps) {
             {/* Pass fetched goals to TaskForm */}
             <TaskForm
                 user={user as UserPrivate} // Pass user
-                itemDetail={creatableItemsList.find((item) => item.key === "task") as CreatableItemDetail} // Pass itemDetail for task
+                itemDetail={taskItemDetail} // Pass locally defined itemDetail for task
                 initialSelectedCircleId={circle._id} // Pass initialSelectedCircleId
                 // goals and goalsModuleEnabled are now handled within TaskForm based on selectedCircle
                 // goals={goals} // This will be fetched by TaskForm

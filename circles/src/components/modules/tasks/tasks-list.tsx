@@ -66,9 +66,10 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { useAtom } from "jotai";
 import { userAtom, contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
-import Link from "next/link";
+import Link from "next/link"; // Will be removed for the button
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import TaskPrioritizationModal from "./task-prioritization-modal"; // Import the modal
+import { CreateTaskDialog } from "@/components/global-create/create-task-dialog"; // Import CreateTaskDialog
 import { PiRanking, PiRankingBold, PiUser, PiUsersThree } from "react-icons/pi";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 
@@ -157,6 +158,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [showRankModal, setShowRankModal] = useState(false); // State for modal
+    const [isCreateTaskDialogOpen, setIsCreateTaskDialogOpen] = useState(false); // State for Create Task Dialog
     const isMobile = useIsMobile();
 
     const openAuthor = useCallback(
@@ -479,6 +481,17 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
         return null; // Prevent rendering until mounted
     }
 
+    const handleCreateTaskSuccess = (taskId?: string) => {
+        toast({
+            title: "Task Created",
+            description: "The new task has been successfully created.",
+        });
+        setIsCreateTaskDialogOpen(false);
+        router.refresh(); // Refresh the list
+        // Optionally, navigate to the new task:
+        // if (taskId) router.push(`/circles/${circle.handle}/tasks/${taskId}`);
+    };
+
     return (
         <TooltipProvider>
             <div className="flex flex-1 flex-row justify-center">
@@ -544,13 +557,9 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
                                 onChange={(event) => table.getColumn("title")?.setFilterValue(event.target.value)}
                             />
                         </div>
-                        {canCreateTask && ( // Renamed variable
-                            <Button asChild>
-                                <Link href={`/circles/${circle.handle}/tasks/create`}>
-                                    {" "}
-                                    {/* Updated path */}
-                                    <Plus className="mr-2 h-4 w-4" /> Create Task {/* Updated text */}
-                                </Link>
+                        {canCreateTask && (
+                            <Button onClick={() => setIsCreateTaskDialogOpen(true)}>
+                                <Plus className="mr-2 h-4 w-4" /> Create Task
                             </Button>
                         )}
                         {/* Add Rank Button */}
@@ -714,6 +723,17 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
                     {/* Render Prioritization Modal */}
                     {showRankModal && (
                         <TaskPrioritizationModal circle={circle} onClose={() => setShowRankModal(false)} />
+                    )}
+
+                    {/* Render CreateTaskDialog */}
+                    {canCreateTask && (
+                        <CreateTaskDialog
+                            isOpen={isCreateTaskDialogOpen}
+                            onOpenChange={setIsCreateTaskDialogOpen}
+                            onSuccess={handleCreateTaskSuccess}
+                            itemKey="task"
+                            initialSelectedCircleId={circle._id} // Pass current circle ID
+                        />
                     )}
                 </div>
             </div>

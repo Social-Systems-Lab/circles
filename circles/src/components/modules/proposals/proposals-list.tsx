@@ -42,13 +42,14 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 // Import the new draft action
-import { createProposalDraftAction, deleteProposalAction } from "@/app/circles/[handle]/proposals/actions"; // createGoalFromProposalAction will be added later
+import { deleteProposalAction } from "@/app/circles/[handle]/proposals/actions"; // Removed createProposalDraftAction
 import { UserPicture } from "../members/user-picture";
 import { motion } from "framer-motion";
 import CreateGoalDialog from "@/components/global-create/create-goal-dialog"; // Import CreateGoalDialog
+import { CreateProposalDialog } from "@/components/global-create/create-proposal-dialog"; // Import CreateProposalDialog
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
-import Link from "next/link"; // Import Link
+import Link from "next/link"; // Restored Link import
 import { CheckCircle, XCircle, ListOrdered, User as UserIcon } from "lucide-react"; // Import icons for outcome and ranking, UserIcon
 import { PiRankingBold, PiUsersThree } from "react-icons/pi"; // For aggregated rank icon, PiUsersThree
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // For tooltips
@@ -115,8 +116,9 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [stageFilter, setStageFilter] = useState<ProposalStage | "all">("all");
-    const [createProposalDialogOpen, setCreateProposalDialogOpen] = useState<boolean>(false);
-    const [newProposalName, setNewProposalName] = useState<string>("");
+    // const [createProposalDialogOpen, setCreateProposalDialogOpen] = useState<boolean>(false); // Replaced by isMainCreateProposalDialogOpen
+    // const [newProposalName, setNewProposalName] = useState<string>(""); // Replaced by form within dialog
+    const [isMainCreateProposalDialogOpen, setIsMainCreateProposalDialogOpen] = useState<boolean>(false); // New state for the main dialog
     const [isPrioritizationModalOpen, setIsPrioritizationModalOpen] = useState(false); // State for modal
     const [isCreateGoalDialogOpen, setIsCreateGoalDialogOpen] = useState(false); // State for Create Goal dialog
     const [hasMounted, setHasMounted] = useState(false);
@@ -236,7 +238,7 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
                     return (
                         <Link
                             href={`/circles/${circle.handle}/proposals/${proposal._id}`}
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e: React.MouseEvent) => e.stopPropagation()} // Added type for e
                             className="font-medium text-blue-600 hover:underline"
                         >
                             {info.getValue() as string}
@@ -389,39 +391,8 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
         });
     };
 
-    const onConfirmCreateProposal = async () => {
-        if (!newProposalName.trim()) {
-            toast({
-                title: "Error",
-                description: "Proposal name cannot be empty.",
-                variant: "destructive",
-            });
-            return;
-        }
-
-        startTransition(async () => {
-            // Call the new draft action, passing only the name
-            const result = await createProposalDraftAction(circle.handle!, newProposalName.trim());
-
-            // Check for proposalId in the result
-            if (result.success && result.proposalId) {
-                toast({
-                    title: "Success",
-                    description: "Proposal draft created. Redirecting to edit...",
-                });
-                setCreateProposalDialogOpen(false);
-                setNewProposalName(""); // Clear input
-                // Redirect to the edit page using the returned proposalId
-                router.push(`/circles/${circle.handle}/proposals/${result.proposalId}/edit`);
-            } else {
-                toast({
-                    title: "Error",
-                    description: result.message || "Failed to create proposal",
-                    variant: "destructive",
-                });
-            }
-        });
-    };
+    // This custom dialog logic is being replaced by CreateProposalDialog
+    // const onConfirmCreateProposal = async () => { ... };
 
     const openAuthor = (author: Circle) => {
         if (isCompact) {
@@ -462,9 +433,22 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
         });
     };
 
-    const handleCreateProposalClick = () => {
-        setNewProposalName(""); // Reset name field when opening dialog
-        setCreateProposalDialogOpen(true);
+    // const handleCreateProposalClick = () => { // Replaced by setIsMainCreateProposalDialogOpen(true)
+    //     setNewProposalName("");
+    //     setCreateProposalDialogOpen(true);
+    // };
+
+    const handleCreateProposalSuccess = (proposalId?: string) => {
+        toast({
+            title: "Proposal Created",
+            description: "The new proposal has been successfully created.",
+        });
+        setIsMainCreateProposalDialogOpen(false);
+        router.refresh(); // Refresh the list
+        if (proposalId) {
+            // Optionally navigate to the new proposal or its edit page
+            router.push(`/circles/${circle.handle}/proposals/${proposalId}/edit`);
+        }
     };
 
     return (
@@ -532,7 +516,7 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
                     </div>
                     <div className="flex items-center gap-2">
                         {hasMounted && canCreateProposal && (
-                            <Button onClick={handleCreateProposalClick}>
+                            <Button onClick={() => setIsMainCreateProposalDialogOpen(true)}>
                                 <Plus className="mr-2 h-4 w-4" /> Create Proposal
                             </Button>
                         )}
@@ -730,50 +714,16 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
                     </DialogContent>
                 </Dialog>
 
-                {/* Create Proposal Dialog */}
-                <Dialog open={createProposalDialogOpen} onOpenChange={setCreateProposalDialogOpen}>
-                    <DialogContent
-                        onInteractOutside={(e) => {
-                            e.preventDefault();
-                        }}
-                    >
-                        <DialogHeader>
-                            <DialogTitle>Create New Proposal</DialogTitle>
-                            <DialogDescription>
-                                Enter a name for your new proposal. You can add more details later.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="proposal-name" className="text-right">
-                                    Name
-                                </Label>
-                                <Input
-                                    id="proposal-name"
-                                    value={newProposalName}
-                                    onChange={(e: ChangeEvent<HTMLInputElement>) => setNewProposalName(e.target.value)}
-                                    className="col-span-3"
-                                    placeholder="Proposal Name"
-                                />
-                            </div>
-                        </div>
-                        <DialogFooter>
-                            <DialogClose asChild>
-                                <Button variant="outline">Cancel</Button>
-                            </DialogClose>
-                            <Button onClick={onConfirmCreateProposal} disabled={isPending || !newProposalName.trim()}>
-                                {isPending ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Creating...
-                                    </>
-                                ) : (
-                                    <>Create & Edit</>
-                                )}
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
+                {/* Create Proposal Dialog (Main one) */}
+                {canCreateProposal && (
+                    <CreateProposalDialog
+                        isOpen={isMainCreateProposalDialogOpen}
+                        onOpenChange={setIsMainCreateProposalDialogOpen}
+                        onSuccess={handleCreateProposalSuccess}
+                        itemKey="proposal"
+                        initialSelectedCircleId={circle._id}
+                    />
+                )}
 
                 {isPrioritizationModalOpen && (
                     <ProposalPrioritizationModal

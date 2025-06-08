@@ -23,7 +23,7 @@ export interface CreatableItemDetail {
     key: CreatableItemKey;
     title: string;
     description: string;
-    icon: React.ElementType;
+    icon?: React.ElementType; // Made icon optional
     moduleHandle: string; // Un-commented
     createFeatureHandle: string; // Un-commented
 }
@@ -131,7 +131,7 @@ export const GlobalCreateDialogContent: React.FC<GlobalCreateDialogContentProps>
                         <div
                             className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full ${iconColors[item.key]}`}
                         >
-                            <item.icon className="h-6 w-6" />
+                            {item.icon && <item.icon className="h-6 w-6" />} {/* Conditionally render icon */}
                         </div>
                         <div className="flex-grow">
                             <CardTitle className="text-lg font-semibold">{item.title}</CardTitle>
