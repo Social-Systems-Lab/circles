@@ -210,7 +210,7 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
             <div className="w-full">
                 {" "}
                 {/* Replaced Card with div */}
-                <div className="p-6">
+                <div className="p-6 pb-2">
                     {" "}
                     {/* Replaced CardHeader with div and padding */}
                     <h3 className="mb-2 text-2xl font-semibold leading-none tracking-tight">
@@ -257,7 +257,7 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
                         </div>
                     )}
                 {selectedCircle ? (
-                    <div className={`p-6 ${isEditing && proposal?.stage ? "pt-0" : ""}`}>
+                    <div className={`p-6 ${isEditing && proposal?.stage ? "pt-0" : "pt-0"}`}>
                         {" "}
                         {/* Replaced CardContent with div and padding */}{" "}
                         {/* Remove CardContent top padding if timeline was shown */}
