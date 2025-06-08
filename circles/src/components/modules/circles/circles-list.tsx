@@ -133,7 +133,6 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
                                 require("@/components/circle-wizard/create-circle-dialog").CreateCircleDialog,
                                 {
                                     parentCircleId: circle?._id,
-                                    isProjectsPage: isProjectsList,
                                 },
                             )}
                         </div>

@@ -214,10 +214,9 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-2xl font-bold">{circleData.isProjectsPage ? "Project" : "Community"} Profile</h2>
+                <h2 className="text-2xl font-bold">Community Profile</h2>
                 <p className="text-gray-500">
-                    Add details about your {circleData.isProjectsPage ? "project" : "community"} to help others
-                    understand what it&apos;s about.
+                    Add details about your community to help others understand what it&apos;s about.
                 </p>
             </div>
 
@@ -226,7 +225,7 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                 <div className="space-y-4">
                     <div className="space-y-2">
                         <Label className="flex items-center gap-2">
-                            <Camera className="h-4 w-4" /> {circleData.isProjectsPage ? "Project" : "Community"} Picture
+                            <Camera className="h-4 w-4" /> Community Picture
                         </Label>
                         <div className="relative mx-auto h-24 w-24 overflow-hidden rounded-full">
                             <CircleImageUpload
@@ -244,15 +243,13 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                             />
                         </div>
                         <p className="text-center text-xs text-gray-500">
-                            This appears on all of your {circleData.isProjectsPage ? "project" : "community"}&apos;s
-                            posts and comments
+                            This appears on all of your community&apos;s posts and comments
                         </p>
                     </div>
 
                     <div className="space-y-2">
                         <Label className="flex items-center gap-2">
-                            <ImageIcon className="h-4 w-4" /> {circleData.isProjectsPage ? "Project" : "Community"}{" "}
-                            Cover Pictures
+                            <ImageIcon className="h-4 w-4" /> Community Cover Pictures
                         </Label>
                         {/* Replace CircleImageUpload for cover with MultiImageUploader */}
                         <MultiImageUploader
@@ -281,8 +278,7 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                             dropzoneClassName="h-32" // Adjust dropzone height
                         />
                         <p className="text-center text-xs text-gray-500">
-                            Add images to showcase and represent your{" "}
-                            {circleData.isProjectsPage ? "project" : "community"}. Drag to reorder.
+                            Add images to showcase and represent your community. Drag to reorder.
                         </p>
                     </div>
                 </div>
@@ -296,7 +292,7 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                             name="description"
                             value={circleData.description}
                             onChange={handleTextChange}
-                            placeholder={`A brief description about this ${circleData.isProjectsPage ? "project" : "community"}`}
+                            placeholder={`A brief description about this community`}
                         />
                         <p className="text-xs text-gray-500">This short description appears in cards and previews</p>
                     </div>
@@ -308,13 +304,11 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                             name="content"
                             value={circleData.content}
                             onChange={handleTextChange}
-                            placeholder={`Tell more about this ${circleData.isProjectsPage ? "project" : "community"}, its goals, and what members can expect`}
+                            placeholder={`Tell more about this community, its goals, and what members can expect`}
                             className="h-36"
                         />
                         <p className="text-xs text-gray-500">
-                            This detailed description appears on your{" "}
-                            {circleData.isProjectsPage ? "project" : "community"}
-                            &apos;s page
+                            This detailed description appears on your community &apos;s page
                         </p>
                     </div>
                 </div>

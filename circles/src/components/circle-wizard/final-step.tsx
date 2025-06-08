@@ -46,19 +46,16 @@ export default function FinalStep({
             router.push(`/circles/${circleData.handle}`);
         } else {
             // Fallback further if no handle is available (should not happen if creation was successful)
-            router.push(circleData.isProjectsPage ? "/projects" : "/circles");
+            router.push("/circles");
         }
     };
 
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-2xl font-bold">
-                    Create Your {circleData.isProjectsPage ? "Project" : "Community"}
-                </h2>
+                <h2 className="text-2xl font-bold">Create Your Community</h2>
                 <p className="text-gray-500">
-                    You&apos;re all set! Review your {circleData.isProjectsPage ? "project" : "community"} details and
-                    create your {circleData.isProjectsPage ? "project" : "community"}.
+                    You&apos;re all set! Review your community details and create your community.
                 </p>
             </div>
 
@@ -69,8 +66,7 @@ export default function FinalStep({
                         <p className="text-lg font-medium">{circleData.name}</p>
                         <p className="text-sm text-gray-600">@{circleData.handle}</p>
                         <p className="text-sm text-gray-600">
-                            {circleData.isPublic ? "Public" : "Private"}{" "}
-                            {circleData.isProjectsPage ? "Project" : "Community"}
+                            {circleData.isPublic ? "Public" : "Private"} {"Community"}
                         </p>
                     </div>
 
@@ -139,7 +135,7 @@ export default function FinalStep({
 
                 <Button onClick={handleViewCircle} className="rounded-full">
                     <Check className="mr-2 h-4 w-4" />
-                    View {circleData.isProjectsPage ? "Project" : "Community"}
+                    View Community
                     <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
             </div>

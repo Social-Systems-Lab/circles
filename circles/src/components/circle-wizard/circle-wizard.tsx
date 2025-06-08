@@ -45,8 +45,6 @@ export type CircleWizardStepProps = {
 };
 
 interface CircleWizardProps {
-    // parentCircleId?: string; // Removed, as BasicInfoStep now handles parent selection
-    // isProjectsPage?: boolean; // Removed
     onComplete?: (createdCircleId?: string) => void; // Modified to pass createdCircleId
 }
 
@@ -90,7 +88,7 @@ export default function CircleWizard({ onComplete }: CircleWizardProps) {
             pictureFile: undefined, // Clear any lingering file object
         });
         setCurrentStepIndex(0); // Reset to the first step
-    }, [isOpen]); // Dependency array updated, isProjectsPage removed
+    }, [isOpen]);
 
     // Define the steps for the wizard
     const steps = useMemo(() => {

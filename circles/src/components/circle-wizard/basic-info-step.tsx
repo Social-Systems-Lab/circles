@@ -84,13 +84,13 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
 
         // Validate name
         if (!circleData.name.trim()) {
-            setNameError(`${circleData.isProjectsPage ? "Project" : "Community"} name is required`);
+            setNameError(`Community name is required`);
             isValid = false;
         }
 
         // Validate handle
         if (!circleData.handle.trim()) {
-            setHandleError(`${circleData.isProjectsPage ? "Project" : "Community"} handle is required`);
+            setHandleError(`Community handle is required`);
             isValid = false;
         } else if (!/^[a-zA-Z0-9\-]*$/.test(circleData.handle)) {
             setHandleError("Handle can only contain letters, numbers and hyphens (-)");
@@ -138,13 +138,8 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-2xl font-bold">
-                    Create a New {circleData.isProjectsPage ? "Project" : "Community"}
-                </h2>
-                <p className="text-gray-500">
-                    Let&apos;s start with the basic information for your{" "}
-                    {circleData.isProjectsPage ? "project" : "community"}.
-                </p>
+                <h2 className="text-2xl font-bold">Create a New Community</h2>
+                <p className="text-gray-500">Let&apos;s start with the basic information for your community.</p>
             </div>
 
             <div className="space-y-4">
@@ -161,25 +156,24 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
                         // selectedCircle and setSelectedCircle are not direct props of CircleSelector
                     />
                     <p className="text-xs text-gray-500">
-                        Select where this {circleData.isProjectsPage ? "project" : "community"} will be created.
-                        Defaults to your user.
+                        Select where this community will be created. Defaults to your profile.
                     </p>
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="name">{circleData.isProjectsPage ? "Project" : "Community"} Name</Label>
+                    <Label htmlFor="name">Community Name</Label>
                     <Input
                         id="name"
                         name="name"
                         value={circleData.name}
                         onChange={handleInputChange}
-                        placeholder={`Enter ${circleData.isProjectsPage ? "project" : "community"} name`}
+                        placeholder={`Enter community name`}
                     />
                     {nameError && <p className="text-sm text-red-500">{nameError}</p>}
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="handle">{circleData.isProjectsPage ? "Project" : "Community"} Handle</Label>
+                    <Label htmlFor="handle">Community Handle</Label>
                     <div className="flex items-center">
                         <span className="mr-1 text-gray-500">@</span>
                         <Input
@@ -187,22 +181,21 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
                             name="handle"
                             value={circleData.handle}
                             onChange={handleInputChange}
-                            placeholder={`${circleData.isProjectsPage ? "project" : "community"}-handle`}
+                            placeholder={`community-handle`}
                         />
                     </div>
                     <p className="text-xs text-gray-500">
-                        This will be used in the URL for your {circleData.isProjectsPage ? "project" : "community"}:
-                        circles/{circleData.handle || `${circleData.isProjectsPage ? "project" : "community"}-handle`}
+                        This will be used in the URL for your community: circles/community-handle
                     </p>
                     {handleError && <p className="text-sm text-red-500">{handleError}</p>}
                 </div>
 
                 <div className="flex items-center space-x-2">
                     <Switch id="isPublic" checked={circleData.isPublic} onCheckedChange={handleSwitchChange} />
-                    <Label htmlFor="isPublic">Public {circleData.isProjectsPage ? "Project" : "Community"}</Label>
+                    <Label htmlFor="isPublic">Public Community</Label>
                     <p className="text-xs text-gray-500">
                         {circleData.isPublic
-                            ? `Anyone can follow this ${circleData.isProjectsPage ? "project" : "community"} without approval`
+                            ? `Anyone can follow this community without approval`
                             : `New followers will need approval`}
                     </p>
                 </div>
@@ -216,7 +209,7 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
                             Saving...
                         </>
                     ) : (
-                        `Create ${circleData.isProjectsPage ? "Project" : "Community"}`
+                        `Create Community`
                     )}
                 </Button>
             </div>

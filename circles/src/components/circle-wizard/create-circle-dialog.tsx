@@ -8,12 +8,7 @@ import CircleWizard from "./circle-wizard";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { DialogTitle, DialogHeader } from "@/components/ui/dialog";
 
-type CreateCircleDialogProps = {
-    // parentCircleId?: string; // Removed
-    isProjectsPage?: boolean;
-};
-
-export function CreateCircleDialog({ isProjectsPage = false }: CreateCircleDialogProps) {
+export function CreateCircleDialog() {
     // parentCircleId removed from props
     const [isOpen, setIsOpen] = useState(false);
     const isCompact = useIsCompact();
@@ -26,7 +21,7 @@ export function CreateCircleDialog({ isProjectsPage = false }: CreateCircleDialo
                     className={isCompact ? "h-[32px] w-[32px] p-0" : "gap-2"}
                 >
                     <Plus className="h-4 w-4" />
-                    {isCompact ? "" : `Create ${isProjectsPage ? "Project" : "Community"}`}
+                    {isCompact ? "" : `Create Community`}
                 </Button>
             </DialogTrigger>
             <DialogContent
@@ -36,11 +31,10 @@ export function CreateCircleDialog({ isProjectsPage = false }: CreateCircleDialo
                 }}
             >
                 <div className="hidden">
-                    <DialogTitle>{`Create ${isProjectsPage ? "Project" : "Community"}`}</DialogTitle>
+                    <DialogTitle>{`Create Community`}</DialogTitle>
                 </div>
                 <CircleWizard
                     // parentCircleId={parentCircleId} // Removed
-                    isProjectsPage={isProjectsPage}
                     onComplete={() => setIsOpen(false)} // This is compatible, createdCircleId will be ignored
                 />
             </DialogContent>
