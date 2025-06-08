@@ -52,17 +52,13 @@ export const CreateGoalDialog: React.FC<CreateGoalDialogProps> = ({
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent
-                className="sm:max-w-[600px] md:max-w-[750px] lg:max-w-[900px]"
+                className="max-h-[90vh] overflow-y-auto sm:max-w-[600px] md:max-w-[750px] lg:max-w-[900px]"
                 onInteractOutside={(e) => {
                     // e.preventDefault();
                 }}
             >
-                <DialogHeader>
-                    <DialogTitle>
-                        {proposal ? `Create Goal from Proposal: ${proposal.name}` : `Create New ${itemDetail.title}`}
-                    </DialogTitle>
-                    {/* Description can be simplified or removed as CircleSelector is inside GoalForm */}
-                </DialogHeader>
+                {/* DialogHeader removed as GoalForm now provides its own card-based header */}
+                {/* The title logic (proposal vs new) is handled within GoalForm's CardTitle */}
 
                 {!user && <p className="p-4 text-red-500">Please log in to create a goal.</p>}
 

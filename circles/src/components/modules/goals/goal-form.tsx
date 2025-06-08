@@ -256,64 +256,130 @@ export const GoalForm: React.FC<GoalFormProps> = ({
     // The form itself depends on `selectedCircle`.
 
     return (
-        <div className="formatted mx-auto max-w-[700px] p-4">
-            {itemDetail && ( // Only show selector if itemDetail is available
-                <div className="mb-6">
-                    <CircleSelector
-                        itemType={itemDetail}
-                        onCircleSelected={handleCircleSelected}
-                        initialSelectedCircleId={derivedInitialSelectedCircleId}
-                    />
-                </div>
-            )}
-
-            {selectedCircle ? (
-                <Card className="mb-6">
-                    <CardHeader>
-                        <CardTitle>
-                            {isEditing
-                                ? "Edit Goal"
-                                : proposal
-                                  ? `Create Goal from Proposal: ${proposal.name}`
-                                  : "Create New Goal"}
-                        </CardTitle>
+        <div className="formatted mx-auto w-full">
+            {" "}
+            {/* Outer div's padding removed */}
+            <Card className="w-full">
+                <CardHeader>
+                    <CardTitle>
+                        {isEditing
+                            ? "Edit Goal"
+                            : proposal
+                              ? `Create Goal from Proposal: ${proposal.name}`
+                              : "Create New Goal"}
+                    </CardTitle>
+                    {/* CircleSelector moved into CardHeader or top of CardContent */}
+                    {itemDetail &&
+                        !isEditing &&
+                        !(proposal && proposal.circle) && ( // Show selector if creating new and not pre-selected by proposal
+                            <div className="pb-4 pt-2">
+                                {" "}
+                                {/* Added padding for selector */}
+                                <CircleSelector
+                                    itemType={itemDetail}
+                                    onCircleSelected={handleCircleSelected}
+                                    initialSelectedCircleId={derivedInitialSelectedCircleId}
+                                />
+                            </div>
+                        )}
+                    {selectedCircle && !isEditing && (
                         <CardDescription>
-                            {isEditing ? "Update the goal details below." : "Describe the goal you want to create."}
+                            {`Describe the goal you want to create in '${selectedCircle.name || selectedCircle.handle}'.`}
+                        </CardDescription>
+                    )}
+                    {isEditing && (
+                        <CardDescription>
+                            Update the goal details below.
                             {selectedCircle && ` In '${selectedCircle.name || selectedCircle.handle}'.`}
                         </CardDescription>
-                    </CardHeader>
+                    )}
+                </CardHeader>
+                {selectedCircle ? (
                     <CardContent>
                         <Form {...form}>
-                            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-                                <FormField
-                                    control={form.control}
-                                    name="title"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Goal Title</FormLabel>
-                                            <FormControl>
-                                                <Input
-                                                    placeholder="e.g., Organize team meeting"
-                                                    {...field}
-                                                    disabled={isSubmitting}
-                                                />
-                                            </FormControl>
-                                            <FormDescription>A short, clear title for the goal.</FormDescription>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-
+                            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-0 md:space-y-0">
+                                {" "}
+                                {/* Adjusted y-spacing for grid */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-6">
+                                    {" "}
+                                    {/* Grid container */}
+                                    <FormField
+                                        control={form.control}
+                                        name="title"
+                                        render={({ field }) => (
+                                            <FormItem className="py-3 md:py-4">
+                                                <FormLabel>Goal Title</FormLabel>
+                                                <FormControl>
+                                                    <Input
+                                                        placeholder="e.g., Organize team meeting"
+                                                        {...field}
+                                                        disabled={isSubmitting}
+                                                    />
+                                                </FormControl>
+                                                <FormDescription>A short, clear title for the goal.</FormDescription>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="targetDate"
+                                        render={({ field }) => (
+                                            <FormItem className="flex flex-col py-3 md:py-4">
+                                                <FormLabel>Target Date (Optional)</FormLabel>
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <FormControl>
+                                                            <Button
+                                                                variant={"outline"}
+                                                                className={cn(
+                                                                    "w-full pl-3 text-left font-normal md:w-[240px]", // Full width on mobile
+                                                                    !field.value && "text-muted-foreground",
+                                                                )}
+                                                                disabled={isSubmitting}
+                                                            >
+                                                                {field.value ? (
+                                                                    format(field.value, "PPP")
+                                                                ) : (
+                                                                    <span>Pick a date</span>
+                                                                )}
+                                                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                                            </Button>
+                                                        </FormControl>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-auto p-0" align="start">
+                                                        <Calendar
+                                                            mode="single"
+                                                            selected={field.value}
+                                                            onSelect={field.onChange}
+                                                            disabled={(date: Date) =>
+                                                                date < new Date("1900-01-01") || isSubmitting
+                                                            }
+                                                            initialFocus
+                                                        />
+                                                    </PopoverContent>
+                                                </Popover>
+                                                <FormDescription>
+                                                    Set an optional target completion date for this goal.
+                                                </FormDescription>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>{" "}
+                                {/* End grid container for first row */}
                                 <FormField
                                     control={form.control}
                                     name="description"
                                     render={({ field }) => (
-                                        <FormItem>
+                                        <FormItem className="py-3 md:col-span-2 md:py-4">
+                                            {" "}
+                                            {/* Spans 2 columns on md+ */}
                                             <FormLabel>Description</FormLabel>
                                             <FormControl>
                                                 <Textarea
                                                     placeholder="Provide details about the goal, goals, and any relevant context..."
-                                                    className="min-h-[200px]"
+                                                    className="min-h-[150px] md:min-h-[200px]" // Adjusted height
                                                     {...field}
                                                     disabled={isSubmitting}
                                                 />
@@ -323,12 +389,13 @@ export const GoalForm: React.FC<GoalFormProps> = ({
                                         </FormItem>
                                     )}
                                 />
-
                                 <FormField
                                     control={form.control}
                                     name="images"
                                     render={({ field }) => (
-                                        <FormItem>
+                                        <FormItem className="py-3 md:col-span-2 md:py-4">
+                                            {" "}
+                                            {/* Spans 2 columns on md+ */}
                                             <FormLabel>Attach Images (Optional)</FormLabel>
                                             <FormControl>
                                                 <MultiImageUploader
@@ -345,53 +412,6 @@ export const GoalForm: React.FC<GoalFormProps> = ({
                                         </FormItem>
                                     )}
                                 />
-
-                                <FormField
-                                    control={form.control}
-                                    name="targetDate"
-                                    render={({ field }) => (
-                                        <FormItem className="flex flex-col">
-                                            <FormLabel>Target Date (Optional)</FormLabel>
-                                            <Popover>
-                                                <PopoverTrigger asChild>
-                                                    <FormControl>
-                                                        <Button
-                                                            variant={"outline"}
-                                                            className={cn(
-                                                                "w-[240px] pl-3 text-left font-normal",
-                                                                !field.value && "text-muted-foreground",
-                                                            )}
-                                                            disabled={isSubmitting}
-                                                        >
-                                                            {field.value ? (
-                                                                format(field.value, "PPP")
-                                                            ) : (
-                                                                <span>Pick a date</span>
-                                                            )}
-                                                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                                        </Button>
-                                                    </FormControl>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="w-auto p-0" align="start">
-                                                    <Calendar
-                                                        mode="single"
-                                                        selected={field.value}
-                                                        onSelect={field.onChange}
-                                                        disabled={(date: Date) =>
-                                                            date < new Date("1900-01-01") || isSubmitting
-                                                        }
-                                                        initialFocus
-                                                    />
-                                                </PopoverContent>
-                                            </Popover>
-                                            <FormDescription>
-                                                Set an optional target completion date for this goal.
-                                            </FormDescription>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-
                                 {location && (
                                     <div className="mt-4 flex flex-row items-center justify-start rounded-lg border bg-muted/40 p-3">
                                         <MapPin className={`mr-2 h-4 w-4 text-primary`} />
@@ -400,7 +420,6 @@ export const GoalForm: React.FC<GoalFormProps> = ({
                                         </span>
                                     </div>
                                 )}
-
                                 <div className="flex items-center justify-between pt-4">
                                     <div className="flex space-x-1">
                                         <TooltipProvider delayDuration={100}>
@@ -461,13 +480,17 @@ export const GoalForm: React.FC<GoalFormProps> = ({
                             </form>
                         </Form>
                     </CardContent>
-                </Card>
-            ) : (
-                <div className="pt-4 text-center text-muted-foreground">
-                    {itemDetail ? "Please select a circle above to create the goal in." : "Loading form..."}
-                </div>
-            )}
-
+                ) : (
+                    // Show this message if no circle is selected (primarily for create mode)
+                    !isEditing && ( // Only show if not editing
+                        <CardContent>
+                            <div className="pb-4 pt-4 text-center text-muted-foreground">
+                                {itemDetail ? "Please select a circle above to create the goal in." : "Loading form..."}
+                            </div>
+                        </CardContent>
+                    )
+                )}
+            </Card>
             <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
                 <DialogContent
                     onInteractOutside={(e) => {

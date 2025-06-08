@@ -192,54 +192,74 @@ export const IssueForm: React.FC<IssueFormProps> = ({
     };
 
     return (
-        <div className="formatted mx-auto max-w-[700px] p-4">
-            {!isEditing && itemDetail && (
-                <div className="mb-6">
-                    <CircleSelector itemType={itemDetail} onCircleSelected={handleCircleSelected} />
-                </div>
-            )}
-
-            {selectedCircle || isEditing ? ( // Show form if a circle is selected OR if editing (circle comes from issue)
-                <Card className="mb-6">
-                    <CardHeader>
-                        <CardTitle>{isEditing ? "Edit Issue" : "Submit New Issue"}</CardTitle>
+        <div className="formatted mx-auto w-full">
+            {" "}
+            {/* Outer div's padding removed */}
+            <Card className="w-full">
+                <CardHeader>
+                    <CardTitle>{isEditing ? "Edit Issue" : "Submit New Issue"}</CardTitle>
+                    {!isEditing &&
+                        itemDetail && ( // Show CircleSelector only when creating new
+                            <div className="pb-4 pt-2">
+                                <CircleSelector itemType={itemDetail} onCircleSelected={handleCircleSelected} />
+                            </div>
+                        )}
+                    {selectedCircle && !isEditing && (
                         <CardDescription>
-                            {isEditing ? "Update the issue details below." : "Describe the issue you want to report."}
+                            {`Describe the issue you want to report in '${selectedCircle.name || selectedCircle.handle}'.`}
+                        </CardDescription>
+                    )}
+                    {isEditing && (
+                        <CardDescription>
+                            Update the issue details below.
                             {selectedCircle && ` In '${selectedCircle.name || selectedCircle.handle}'.`}
                         </CardDescription>
-                    </CardHeader>
+                    )}
+                </CardHeader>
+                {selectedCircle || isEditing ? ( // Show form if a circle is selected OR if editing
                     <CardContent>
                         <Form {...form}>
-                            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-                                <FormField
-                                    control={form.control}
-                                    name="title"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Issue Title</FormLabel>
-                                            <FormControl>
-                                                <Input
-                                                    placeholder="e.g., Coffee machine broken"
-                                                    {...field}
-                                                    disabled={isSubmitting}
-                                                />
-                                            </FormControl>
-                                            <FormDescription>A short, clear title for the issue.</FormDescription>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-
+                            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-0 md:space-y-0">
+                                {" "}
+                                {/* Adjusted y-spacing */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-6">
+                                    {" "}
+                                    {/* Grid container */}
+                                    <FormField
+                                        control={form.control}
+                                        name="title"
+                                        render={({ field }) => (
+                                            <FormItem className="py-3 md:col-span-1 md:py-4">
+                                                {" "}
+                                                {/* Title in first column */}
+                                                <FormLabel>Issue Title</FormLabel>
+                                                <FormControl>
+                                                    <Input
+                                                        placeholder="e.g., Coffee machine broken"
+                                                        {...field}
+                                                        disabled={isSubmitting}
+                                                    />
+                                                </FormControl>
+                                                <FormDescription>A short, clear title for the issue.</FormDescription>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    {/* Empty div for spacing or other elements if needed in the second column */}
+                                    <div className="hidden md:col-span-1 md:block"></div>
+                                </div>
                                 <FormField
                                     control={form.control}
                                     name="description"
                                     render={({ field }) => (
-                                        <FormItem>
+                                        <FormItem className="py-3 md:col-span-2 md:py-4">
+                                            {" "}
+                                            {/* Description spans two columns */}
                                             <FormLabel>Description</FormLabel>
                                             <FormControl>
                                                 <Textarea
                                                     placeholder="Provide details about the issue, where it is, and why it needs attention..."
-                                                    className="min-h-[200px]"
+                                                    className="min-h-[150px] md:min-h-[200px]"
                                                     {...field}
                                                     disabled={isSubmitting}
                                                 />
@@ -249,12 +269,13 @@ export const IssueForm: React.FC<IssueFormProps> = ({
                                         </FormItem>
                                     )}
                                 />
-
                                 <FormField
                                     control={form.control}
                                     name="images"
                                     render={({ field }) => (
-                                        <FormItem>
+                                        <FormItem className="py-3 md:col-span-2 md:py-4">
+                                            {" "}
+                                            {/* Images span two columns */}
                                             <FormLabel>Attach Images (Optional)</FormLabel>
                                             <FormControl>
                                                 <MultiImageUploader
@@ -271,7 +292,6 @@ export const IssueForm: React.FC<IssueFormProps> = ({
                                         </FormItem>
                                     )}
                                 />
-
                                 {location && (
                                     <div className="mt-4 flex flex-row items-center justify-start rounded-lg border bg-muted/40 p-3">
                                         <MapPin className={`mr-2 h-4 w-4 text-primary`} />
@@ -280,7 +300,6 @@ export const IssueForm: React.FC<IssueFormProps> = ({
                                         </span>
                                     </div>
                                 )}
-
                                 <div className="flex items-center justify-between pt-4">
                                     <div className="flex space-x-1">
                                         <TooltipProvider delayDuration={100}>
@@ -305,7 +324,7 @@ export const IssueForm: React.FC<IssueFormProps> = ({
                                     </div>
 
                                     <div className="flex space-x-4">
-                                        {onCancel ? (
+                                        {typeof onCancel === "function" && ( // Explicit check for function
                                             <Button
                                                 type="button"
                                                 variant="outline"
@@ -314,23 +333,27 @@ export const IssueForm: React.FC<IssueFormProps> = ({
                                             >
                                                 Cancel
                                             </Button>
-                                        ) : !isEditing ? (
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                onClick={() => {
-                                                    if (selectedCircle && selectedCircle.handle) {
-                                                        router.push(`/circles/${selectedCircle.handle}/issues`);
-                                                    } else if (typeof onCancel === "function") {
-                                                        onCancel();
-                                                    }
-                                                }}
-                                                disabled={isSubmitting}
-                                            >
-                                                Cancel
-                                            </Button>
-                                        ) : null}
-                                        <Button type="submit" disabled={isSubmitting || !selectedCircle}>
+                                        )}
+                                        {!onCancel &&
+                                            !isEditing && ( // Show navigation cancel if no onCancel and not editing
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    onClick={() => {
+                                                        if (selectedCircle && selectedCircle.handle) {
+                                                            router.push(`/circles/${selectedCircle.handle}/issues`);
+                                                        }
+                                                        // No onCancel to call here in this branch
+                                                    }}
+                                                    disabled={isSubmitting}
+                                                >
+                                                    Cancel
+                                                </Button>
+                                            )}
+                                        <Button
+                                            type="submit"
+                                            disabled={isSubmitting || (!isEditing && !selectedCircle)}
+                                        >
                                             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                                             {isEditing ? "Update Issue" : "Submit Issue"}
                                         </Button>
@@ -339,14 +362,16 @@ export const IssueForm: React.FC<IssueFormProps> = ({
                             </form>
                         </Form>
                     </CardContent>
-                </Card>
-            ) : (
-                !isEditing && ( // Show this message only when creating new and no circle selected
-                    <div className="pt-4 text-center text-muted-foreground">
-                        Please select a circle above to create the issue in.
-                    </div>
-                )
-            )}
+                ) : (
+                    !isEditing && ( // Show this message only when creating new and no circle selected
+                        <CardContent>
+                            <div className="pb-4 pt-4 text-center text-muted-foreground">
+                                Please select a circle above to create the issue in.
+                            </div>
+                        </CardContent>
+                    )
+                )}
+            </Card>
             <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
                 <DialogContent
                     onInteractOutside={(e) => {

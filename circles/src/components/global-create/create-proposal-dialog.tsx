@@ -49,14 +49,12 @@ export const CreateProposalDialog: React.FC<CreateProposalDialogProps> = ({
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent
-                className="sm:max-w-[600px] md:max-w-[750px] lg:max-w-[900px]"
+                className="max-h-[90vh] overflow-y-auto sm:max-w-[600px] md:max-w-[750px] lg:max-w-[900px]"
                 onInteractOutside={(e) => {
                     // e.preventDefault();
                 }}
             >
-                <DialogHeader>
-                    <DialogTitle>Create New {itemDetail.title}</DialogTitle>
-                </DialogHeader>
+                {/* DialogHeader removed as ProposalForm now provides its own card-based header */}
 
                 {!user && <p className="p-4 text-red-500">Please log in to create a proposal.</p>}
 

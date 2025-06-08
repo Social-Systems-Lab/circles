@@ -205,43 +205,64 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
     }, [isEditing, initialSelectedCircleId]);
 
     return (
-        <div className="formatted mx-auto max-w-[700px]">
-            {!isEditing &&
-                itemDetail && ( // Show CircleSelector only when creating new and itemDetail is present
-                    <div className="mb-6">
-                        <CircleSelector
-                            itemType={itemDetail}
-                            onCircleSelected={handleCircleSelected}
-                            initialSelectedCircleId={derivedInitialSelectedCircleId}
-                        />
-                    </div>
-                )}
-
-            {isEditing &&
-                proposal?.stage && ( // Show timeline only when editing
-                    <div className="mb-12 ml-4 mr-4">
-                        <ProposalStageTimeline currentStage={proposal.stage} />
-                    </div>
-                )}
-
-            {selectedCircle ? ( // Main form content renders if a circle is selected
-                <Card className="mb-6">
-                    <CardHeader>
-                        <CardTitle>{isEditing ? "Edit Proposal" : "Create New Proposal"}</CardTitle>
+        <div className="formatted mx-auto w-full">
+            {" "}
+            {/* Outer div's padding removed */}
+            <Card className="w-full">
+                <CardHeader>
+                    <CardTitle>{isEditing ? "Edit Proposal" : "Create New Proposal"}</CardTitle>
+                    {!isEditing &&
+                        itemDetail && ( // Show CircleSelector only when creating new
+                            <div className="pb-4 pt-2">
+                                <CircleSelector
+                                    itemType={itemDetail}
+                                    onCircleSelected={handleCircleSelected}
+                                    initialSelectedCircleId={derivedInitialSelectedCircleId}
+                                />
+                            </div>
+                        )}
+                    {selectedCircle && !isEditing && (
                         <CardDescription>
-                            {isEditing
-                                ? "Update your proposal details below."
-                                : `Fill in the details for your new proposal in '${selectedCircle.name || selectedCircle.handle}'.`}
+                            {`Fill in the details for your new proposal in '${selectedCircle.name || selectedCircle.handle}'.`}
                         </CardDescription>
-                    </CardHeader>
-                    <CardContent>
+                    )}
+                    {isEditing && (
+                        <CardDescription>
+                            Update your proposal details below.
+                            {/* For editing, selectedCircle is derived from proposal.circleId, so this part of description is fine */}
+                            {selectedCircle && ` In '${selectedCircle.name || selectedCircle.handle}'.`}
+                        </CardDescription>
+                    )}
+                </CardHeader>
+
+                {isEditing &&
+                    proposal?.stage && ( // Show timeline only when editing, moved below header
+                        <CardContent className="pb-4 pt-0">
+                            {" "}
+                            {/* Adjust padding if needed */}
+                            <div className="mb-6 ml-4 mr-4">
+                                {" "}
+                                {/* Timeline might need margin adjustments */}
+                                <ProposalStageTimeline currentStage={proposal.stage} />
+                            </div>
+                        </CardContent>
+                    )}
+
+                {selectedCircle ? (
+                    <CardContent className={isEditing && proposal?.stage ? "pt-0" : ""}>
+                        {" "}
+                        {/* Remove CardContent top padding if timeline was shown */}
                         <Form {...form}>
-                            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+                            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-0 md:space-y-0">
+                                {" "}
+                                {/* Adjusted y-spacing */}
                                 <FormField
                                     control={form.control}
                                     name="name"
                                     render={({ field }) => (
-                                        <FormItem>
+                                        <FormItem className="py-3 md:py-4">
+                                            {" "}
+                                            {/* Added padding */}
                                             <FormLabel>Proposal Name</FormLabel>
                                             <FormControl>
                                                 <Input
@@ -257,13 +278,14 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
                                         </FormItem>
                                     )}
                                 />
-
                                 {/* Decision Text Field */}
                                 <FormField
                                     control={form.control}
                                     name="decisionText"
                                     render={({ field }) => (
-                                        <FormItem>
+                                        <FormItem className="py-3 md:py-4">
+                                            {" "}
+                                            {/* Added padding */}
                                             <FormLabel className="flex items-center">
                                                 Decision Text
                                                 <TooltipProvider delayDuration={100}>
@@ -298,13 +320,14 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
                                         </FormItem>
                                     )}
                                 />
-
                                 {/* Background Field */}
                                 <FormField
                                     control={form.control}
                                     name="background"
                                     render={({ field }) => (
-                                        <FormItem>
+                                        <FormItem className="py-3 md:py-4">
+                                            {" "}
+                                            {/* Added padding */}
                                             <FormLabel className="flex items-center">
                                                 Background
                                                 <TooltipProvider delayDuration={100}>
@@ -338,13 +361,14 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
                                         </FormItem>
                                     )}
                                 />
-
                                 {/* Image Uploader Field */}
                                 <FormField
                                     control={form.control}
                                     name="images"
                                     render={({ field }) => (
-                                        <FormItem>
+                                        <FormItem className="py-3 md:py-4">
+                                            {" "}
+                                            {/* Added padding */}
                                             <FormLabel>Attach Images (Optional)</FormLabel>
                                             <FormControl>
                                                 <MultiImageUploader
@@ -365,7 +389,6 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
                                         </FormItem>
                                     )}
                                 />
-
                                 {/* Display Selected Location */}
                                 {location && (
                                     <div className="mt-4 flex flex-row items-center justify-start rounded-lg border bg-muted/40 p-3">
@@ -375,7 +398,6 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
                                         </span>
                                     </div>
                                 )}
-
                                 {/* Action Buttons */}
                                 <div className="flex items-center justify-between pt-4">
                                     {/* Left side: Icons */}
@@ -453,16 +475,19 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
                             </form>
                         </Form>
                     </CardContent>
-                </Card>
-            ) : (
-                // Message if no circle is selected (primarily for create mode)
-                !isEditing && (
-                    <div className="pt-4 text-center text-muted-foreground">
-                        {itemDetail ? "Please select a circle above to create the proposal in." : "Loading form..."}
-                    </div>
-                )
-            )}
-
+                ) : (
+                    // Message if no circle is selected (primarily for create mode)
+                    !isEditing && (
+                        <CardContent>
+                            <div className="pb-4 pt-4 text-center text-muted-foreground">
+                                {itemDetail
+                                    ? "Please select a circle above to create the proposal in."
+                                    : "Loading form..."}
+                            </div>
+                        </CardContent>
+                    )
+                )}
+            </Card>
             {/* Location Dialog */}
             <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
                 <DialogContent

@@ -56,16 +56,13 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent
-                className="sm:max-w-[600px] md:max-w-[750px] lg:max-w-[900px]"
+                className="max-h-[90vh] overflow-y-auto sm:max-w-[600px] md:max-w-[750px] lg:max-w-[900px]"
                 onInteractOutside={(e) => {
                     // Allow closing by clicking outside if needed, or keep preventDefault
                     // e.preventDefault();
                 }}
             >
-                <DialogHeader>
-                    <DialogTitle>Create New {itemDetail.title}</DialogTitle>
-                    {/* Description can be simplified or removed as CircleSelector is inside TaskForm */}
-                </DialogHeader>
+                {/* DialogHeader removed as TaskForm now provides its own card-based header */}
 
                 {!user && <p className="p-4 text-red-500">Please log in to create a task.</p>}
 
