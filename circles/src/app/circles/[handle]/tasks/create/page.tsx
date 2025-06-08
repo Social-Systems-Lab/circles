@@ -4,13 +4,15 @@ import { TaskForm } from "@/components/modules/tasks/task-form";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
+import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth"; // Reverted to getAuthenticatedUserDid
+import { getUserPrivate } from "@/lib/data/user"; // Import getUserPrivate
 import { features } from "@/lib/data/constants";
 import { redirect } from "next/navigation";
 import { notFound } from "next/navigation";
 // Import the goals action
 import { getGoalsAction } from "@/app/circles/[handle]/goals/actions";
-import { GoalDisplay } from "@/models/models"; // Import GoalDisplay type
+import { GoalDisplay, UserPrivate } from "@/models/models"; // Import GoalDisplay type, UserPrivate
+import { creatableItemsList, CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Added imports
 
 type PageProps = {
     params: Promise<{ handle: string }>;
@@ -23,6 +25,12 @@ export default async function CreateTaskPage(props: PageProps) {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         redirect("/login");
+    }
+    const user = await getUserPrivate(userDid); // Get full user object using userDid
+    if (!user) {
+        // This case should ideally not happen if userDid is valid, but good to handle
+        console.error("Failed to fetch user details for DID:", userDid);
+        redirect("/login"); // Or show an error page
     }
 
     const circle = await getCircleByHandle(circleHandle);
@@ -78,10 +86,12 @@ export default async function CreateTaskPage(props: PageProps) {
             </div>
             {/* Pass fetched goals to TaskForm */}
             <TaskForm
-                circle={circle}
-                circleHandle={circleHandle}
-                goals={goals} // Pass goals as prop
-                goalsModuleEnabled={goalsModuleEnabled} // Pass flag
+                user={user as UserPrivate} // Pass user
+                itemDetail={creatableItemsList.find((item) => item.key === "task") as CreatableItemDetail} // Pass itemDetail for task
+                initialSelectedCircleId={circle._id} // Pass initialSelectedCircleId
+                // goals and goalsModuleEnabled are now handled within TaskForm based on selectedCircle
+                // goals={goals} // This will be fetched by TaskForm
+                // goalsModuleEnabled={goalsModuleEnabled} // This will be determined by TaskForm
             />
         </div>
     );

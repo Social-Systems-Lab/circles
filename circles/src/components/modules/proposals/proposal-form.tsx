@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react"; // Added useCallback
+import React, { useState, useEffect, useCallback, useMemo } from "react"; // Added useCallback, useMemo
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -42,6 +42,7 @@ interface ProposalFormProps {
     itemDetail: CreatableItemDetail;
     proposal?: Proposal;
     proposalId?: string;
+    initialSelectedCircleId?: string; // Added for consistency, though primarily for create pages
     onFormSubmitSuccess?: (proposalId?: string) => void;
     onCancel?: () => void;
     // circle and circleHandle removed
@@ -52,6 +53,7 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
     itemDetail,
     proposal,
     proposalId,
+    initialSelectedCircleId, // Added
     onFormSubmitSuccess,
     onCancel,
 }) => {
@@ -75,13 +77,16 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
     });
 
     useEffect(() => {
-        if (isEditing && proposal && proposal.circleId && user.memberships) {
+        if (isEditing && proposal && proposal.circleId && user?.memberships) {
+            // Added user null check for safety
             const owningCircle = user.memberships.find((m) => m.circleId === proposal.circleId)?.circle;
             if (owningCircle) {
                 setSelectedCircle(owningCircle);
             }
         }
-    }, [isEditing, proposal, user]);
+        // For !isEditing, CircleSelector will handle initial selection if initialSelectedCircleId is provided
+        // or pick a default.
+    }, [isEditing, proposal, user, initialSelectedCircleId]); // Added initialSelectedCircleId to dependencies
 
     useEffect(() => {
         if (proposal?.location) {
@@ -189,236 +194,274 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
         }
     };
 
+    // Determine initial circle ID for CircleSelector if creating new
+    const derivedInitialSelectedCircleId = useMemo(() => {
+        if (!isEditing && initialSelectedCircleId) {
+            return initialSelectedCircleId;
+        }
+        // In edit mode, selectedCircle is set by the useEffect above.
+        // For global create, initialSelectedCircleId will be undefined, CircleSelector picks default.
+        return undefined;
+    }, [isEditing, initialSelectedCircleId]);
+
     return (
         <div className="formatted mx-auto max-w-[700px]">
-            {isEditing && proposal.stage && (
-                <div className="mb-12 ml-4 mr-4">
-                    <ProposalStageTimeline currentStage={proposal.stage} />
-                </div>
-            )}
+            {!isEditing &&
+                itemDetail && ( // Show CircleSelector only when creating new and itemDetail is present
+                    <div className="mb-6">
+                        <CircleSelector
+                            itemType={itemDetail}
+                            onCircleSelected={handleCircleSelected}
+                            initialSelectedCircleId={derivedInitialSelectedCircleId}
+                        />
+                    </div>
+                )}
 
-            <Card className="mb-6">
-                <CardHeader>
-                    <CardTitle>{isEditing ? "Edit Proposal" : "Create New Proposal"}</CardTitle>
-                    <CardDescription>
-                        {isEditing
-                            ? "Update your proposal details below."
-                            : "Fill in the details for your new proposal."}
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Form {...form}>
-                        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-                            <FormField
-                                control={form.control}
-                                name="name"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Proposal Name</FormLabel>
-                                        <FormControl>
-                                            <Input
-                                                placeholder="Enter a clear, descriptive name for your proposal"
-                                                {...field}
+            {isEditing &&
+                proposal?.stage && ( // Show timeline only when editing
+                    <div className="mb-12 ml-4 mr-4">
+                        <ProposalStageTimeline currentStage={proposal.stage} />
+                    </div>
+                )}
+
+            {selectedCircle ? ( // Main form content renders if a circle is selected
+                <Card className="mb-6">
+                    <CardHeader>
+                        <CardTitle>{isEditing ? "Edit Proposal" : "Create New Proposal"}</CardTitle>
+                        <CardDescription>
+                            {isEditing
+                                ? "Update your proposal details below."
+                                : `Fill in the details for your new proposal in '${selectedCircle.name || selectedCircle.handle}'.`}
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Form {...form}>
+                            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+                                <FormField
+                                    control={form.control}
+                                    name="name"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Proposal Name</FormLabel>
+                                            <FormControl>
+                                                <Input
+                                                    placeholder="Enter a clear, descriptive name for your proposal"
+                                                    {...field}
+                                                    disabled={isSubmitting}
+                                                />
+                                            </FormControl>
+                                            <FormDescription>
+                                                A concise title that clearly communicates the purpose of your proposal.
+                                            </FormDescription>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                {/* Decision Text Field */}
+                                <FormField
+                                    control={form.control}
+                                    name="decisionText"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel className="flex items-center">
+                                                Decision Text
+                                                <TooltipProvider delayDuration={100}>
+                                                    <Tooltip>
+                                                        <TooltipTrigger className="ml-1 cursor-help">
+                                                            <Info className="h-4 w-4 text-muted-foreground" />
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="right" className="max-w-xs">
+                                                            <p className="text-sm">
+                                                                Clearly state what you want decided. For example,
+                                                                &quot;Work towards building a neighborhood composting
+                                                                station by summer&quot; or &quot;Get a water boiler for
+                                                                the kitchen&quot; Keep this statement concise and
+                                                                explicit.
+                                                            </p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                            </FormLabel>
+                                            <FormControl>
+                                                <Textarea
+                                                    placeholder="Clearly state the specific action or decision being proposed."
+                                                    className="min-h-[100px]" // Shorter than background
+                                                    {...field}
+                                                    disabled={isSubmitting}
+                                                />
+                                            </FormControl>
+                                            <FormDescription>
+                                                This is the core statement that participants will vote on.
+                                            </FormDescription>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                {/* Background Field */}
+                                <FormField
+                                    control={form.control}
+                                    name="background"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel className="flex items-center">
+                                                Background
+                                                <TooltipProvider delayDuration={100}>
+                                                    <Tooltip>
+                                                        <TooltipTrigger className="ml-1 cursor-help">
+                                                            <Info className="h-4 w-4 text-muted-foreground" />
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="right" className="max-w-xs">
+                                                            <p className="text-sm">
+                                                                Provide relevant context or history that explains why
+                                                                you’re making this proposal. Include any data,
+                                                                references, or story so that reviewers and voters
+                                                                understand the problem or rationale behind your request.
+                                                            </p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                            </FormLabel>
+                                            <FormControl>
+                                                <Textarea
+                                                    placeholder="Explain the context, reasons, and supporting details for your proposal..."
+                                                    className="min-h-[250px]"
+                                                    {...field}
+                                                    disabled={isSubmitting}
+                                                />
+                                            </FormControl>
+                                            <FormDescription>
+                                                Provide the necessary context and justification for your proposal.
+                                            </FormDescription>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                {/* Image Uploader Field */}
+                                <FormField
+                                    control={form.control}
+                                    name="images"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Attach Images (Optional)</FormLabel>
+                                            <FormControl>
+                                                <MultiImageUploader
+                                                    // Pass existing Media objects directly from the proposal data
+                                                    initialImages={proposal?.images || []}
+                                                    onChange={handleImageChange} // This function accepts ImageItem[] and updates form state
+                                                    maxImages={5} // Correct prop name
+                                                    // maxSizeMB is not a prop of MultiImageUploader, remove it
+                                                    previewMode="compact" // As requested
+                                                    // disabled prop is not available, remove it
+                                                />
+                                            </FormControl>
+                                            <FormDescription>
+                                                Upload relevant images to support the background information (max 5
+                                                files, 5MB each).
+                                            </FormDescription>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                {/* Display Selected Location */}
+                                {location && (
+                                    <div className="mt-4 flex flex-row items-center justify-start rounded-lg border bg-muted/40 p-3">
+                                        <MapPin className={`mr-2 h-4 w-4 text-primary`} />
+                                        <span className="text-sm text-muted-foreground">
+                                            {getFullLocationName(location)}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {/* Action Buttons */}
+                                <div className="flex items-center justify-between pt-4">
+                                    {/* Left side: Icons */}
+                                    <div className="flex space-x-1">
+                                        {/* Image Picker Trigger (already part of MultiImageUploader) */}
+                                        {/* Location Picker Trigger */}
+                                        <TooltipProvider delayDuration={100}>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="rounded-full"
+                                                        onClick={() => setIsLocationDialogOpen(true)}
+                                                        disabled={isSubmitting}
+                                                    >
+                                                        <MapPinIcon className="h-5 w-5 text-gray-500" />
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                    <p>Add Location</p>
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
+                                        {/* Add other icons here if needed */}
+                                    </div>
+
+                                    {/* Right side: Cancel/Submit */}
+                                    <div className="flex space-x-4">
+                                        {/* Conditional rendering for Cancel button */}
+                                        {typeof onCancel === "function" && (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={onCancel} // Directly use onCancel here
                                                 disabled={isSubmitting}
-                                            />
-                                        </FormControl>
-                                        <FormDescription>
-                                            A concise title that clearly communicates the purpose of your proposal.
-                                        </FormDescription>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-
-                            {/* Decision Text Field */}
-                            <FormField
-                                control={form.control}
-                                name="decisionText"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel className="flex items-center">
-                                            Decision Text
-                                            <TooltipProvider delayDuration={100}>
-                                                <Tooltip>
-                                                    <TooltipTrigger className="ml-1 cursor-help">
-                                                        <Info className="h-4 w-4 text-muted-foreground" />
-                                                    </TooltipTrigger>
-                                                    <TooltipContent side="right" className="max-w-xs">
-                                                        <p className="text-sm">
-                                                            Clearly state what you want decided. For example, &quot;Work
-                                                            towards building a neighborhood composting station by
-                                                            summer&quot; or &quot;Get a water boiler for the
-                                                            kitchen&quot; Keep this statement concise and explicit.
-                                                        </p>
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            </TooltipProvider>
-                                        </FormLabel>
-                                        <FormControl>
-                                            <Textarea
-                                                placeholder="Clearly state the specific action or decision being proposed."
-                                                className="min-h-[100px]" // Shorter than background
-                                                {...field}
-                                                disabled={isSubmitting}
-                                            />
-                                        </FormControl>
-                                        <FormDescription>
-                                            This is the core statement that participants will vote on.
-                                        </FormDescription>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-
-                            {/* Background Field */}
-                            <FormField
-                                control={form.control}
-                                name="background"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel className="flex items-center">
-                                            Background
-                                            <TooltipProvider delayDuration={100}>
-                                                <Tooltip>
-                                                    <TooltipTrigger className="ml-1 cursor-help">
-                                                        <Info className="h-4 w-4 text-muted-foreground" />
-                                                    </TooltipTrigger>
-                                                    <TooltipContent side="right" className="max-w-xs">
-                                                        <p className="text-sm">
-                                                            Provide relevant context or history that explains why you’re
-                                                            making this proposal. Include any data, references, or story
-                                                            so that reviewers and voters understand the problem or
-                                                            rationale behind your request.
-                                                        </p>
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            </TooltipProvider>
-                                        </FormLabel>
-                                        <FormControl>
-                                            <Textarea
-                                                placeholder="Explain the context, reasons, and supporting details for your proposal..."
-                                                className="min-h-[250px]"
-                                                {...field}
-                                                disabled={isSubmitting}
-                                            />
-                                        </FormControl>
-                                        <FormDescription>
-                                            Provide the necessary context and justification for your proposal.
-                                        </FormDescription>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-
-                            {/* Image Uploader Field */}
-                            <FormField
-                                control={form.control}
-                                name="images"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Attach Images (Optional)</FormLabel>
-                                        <FormControl>
-                                            <MultiImageUploader
-                                                // Pass existing Media objects directly from the proposal data
-                                                initialImages={proposal?.images || []}
-                                                onChange={handleImageChange} // This function accepts ImageItem[] and updates form state
-                                                maxImages={5} // Correct prop name
-                                                // maxSizeMB is not a prop of MultiImageUploader, remove it
-                                                previewMode="compact" // As requested
-                                                // disabled prop is not available, remove it
-                                            />
-                                        </FormControl>
-                                        <FormDescription>
-                                            Upload relevant images to support the background information (max 5 files,
-                                            5MB each).
-                                        </FormDescription>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-
-                            {/* Display Selected Location */}
-                            {location && (
-                                <div className="mt-4 flex flex-row items-center justify-start rounded-lg border bg-muted/40 p-3">
-                                    <MapPin className={`mr-2 h-4 w-4 text-primary`} />
-                                    <span className="text-sm text-muted-foreground">
-                                        {getFullLocationName(location)}
-                                    </span>
-                                </div>
-                            )}
-
-                            {/* Action Buttons */}
-                            <div className="flex items-center justify-between pt-4">
-                                {/* Left side: Icons */}
-                                <div className="flex space-x-1">
-                                    {/* Image Picker Trigger (already part of MultiImageUploader) */}
-                                    {/* Location Picker Trigger */}
-                                    <TooltipProvider delayDuration={100}>
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
+                                            >
+                                                Cancel
+                                            </Button>
+                                        )}
+                                        {!onCancel &&
+                                            !isEditing && ( // Show navigation cancel if no onCancel and not editing
                                                 <Button
                                                     type="button"
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="rounded-full"
-                                                    onClick={() => setIsLocationDialogOpen(true)}
+                                                    variant="outline"
+                                                    onClick={() => {
+                                                        if (selectedCircle && selectedCircle.handle) {
+                                                            router.push(`/circles/${selectedCircle.handle}/proposals`);
+                                                        }
+                                                        // No onCancel to call here in this branch
+                                                    }}
                                                     disabled={isSubmitting}
                                                 >
-                                                    <MapPinIcon className="h-5 w-5 text-gray-500" />
+                                                    Cancel
                                                 </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent>
-                                                <p>Add Location</p>
-                                            </TooltipContent>
-                                        </Tooltip>
-                                    </TooltipProvider>
-                                    {/* Add other icons here if needed */}
-                                </div>
-
-                                {/* Right side: Cancel/Submit */}
-                                <div className="flex space-x-4">
-                                    {onCancel ? (
+                                            )}
                                         <Button
-                                            type="button"
-                                            variant="outline"
-                                            onClick={onCancel}
-                                            disabled={isSubmitting}
+                                            type="submit"
+                                            disabled={isSubmitting || (!isEditing && !selectedCircle)}
                                         >
-                                            Cancel
+                                            {" "}
+                                            {/* Disable submit if creating and no circle selected */}
+                                            {isSubmitting ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    {isEditing ? "Updating..." : "Creating..."}
+                                                </>
+                                            ) : (
+                                                <>{isEditing ? "Update Proposal" : "Create Proposal"}</>
+                                            )}
                                         </Button>
-                                    ) : !isEditing ? ( // Only show router-based cancel if not editing and not in dialog
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            onClick={() => {
-                                                if (selectedCircle && selectedCircle.handle) {
-                                                    router.push(`/circles/${selectedCircle.handle}/proposals`);
-                                                } else if (typeof onCancel === "function") {
-                                                    // Fallback if in dialog and circle not yet selected
-                                                    onCancel();
-                                                }
-                                            }}
-                                            disabled={isSubmitting}
-                                        >
-                                            Cancel
-                                        </Button>
-                                    ) : null}
-                                    <Button type="submit" disabled={isSubmitting}>
-                                        {isSubmitting ? (
-                                            <>
-                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                {isEditing ? "Updating..." : "Creating..."}
-                                            </>
-                                        ) : (
-                                            <>{isEditing ? "Update Proposal" : "Create Proposal"}</>
-                                        )}
-                                    </Button>
+                                    </div>
                                 </div>
-                            </div>
-                        </form>
-                    </Form>
-                </CardContent>
-            </Card>
+                            </form>
+                        </Form>
+                    </CardContent>
+                </Card>
+            ) : (
+                // Message if no circle is selected (primarily for create mode)
+                !isEditing && (
+                    <div className="pt-4 text-center text-muted-foreground">
+                        {itemDetail ? "Please select a circle above to create the proposal in." : "Loading form..."}
+                    </div>
+                )
+            )}
 
             {/* Location Dialog */}
             <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>

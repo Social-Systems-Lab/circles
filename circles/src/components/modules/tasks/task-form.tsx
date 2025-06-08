@@ -44,6 +44,7 @@ interface TaskFormProps {
     itemDetail: CreatableItemDetail; // Added itemDetail
     task?: Task;
     taskId?: string;
+    initialSelectedCircleId?: string; // Added initialSelectedCircleId
     // goals and goalsModuleEnabled will be fetched/determined internally
     onFormSubmitSuccess?: (taskId?: string) => void;
     onCancel?: () => void;
@@ -55,6 +56,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     itemDetail,
     task,
     taskId,
+    initialSelectedCircleId, // Added initialSelectedCircleId
     onFormSubmitSuccess,
     onCancel,
 }) => {
@@ -245,7 +247,11 @@ export const TaskForm: React.FC<TaskFormProps> = ({
         <div className="formatted mx-auto max-w-[700px] p-4">
             {/* CircleSelector at the top */}
             <div className="mb-6">
-                <CircleSelector itemType={itemDetail} onCircleSelected={handleCircleSelected} />
+                <CircleSelector
+                    itemType={itemDetail}
+                    onCircleSelected={handleCircleSelected}
+                    initialSelectedCircleId={initialSelectedCircleId} // Pass initialSelectedCircleId
+                />
             </div>
 
             {selectedCircle ? (

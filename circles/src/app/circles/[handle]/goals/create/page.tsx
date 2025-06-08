@@ -4,9 +4,12 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
+import { getUserPrivate } from "@/lib/data/user"; // Import getUserPrivate
 import { features } from "@/lib/data/constants";
 import { redirect } from "next/navigation";
 import { notFound } from "next/navigation"; // Import notFound
+import { UserPrivate } from "@/models/models"; // Import UserPrivate
+import { creatableItemsList, CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Added imports
 
 type PageProps = {
     params: Promise<{ handle: string }>;
@@ -20,6 +23,11 @@ export default async function CreateGoalPage(props: PageProps) {
     // Get the current user DID
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
+        redirect("/login");
+    }
+    const user = await getUserPrivate(userDid); // Get full user object
+    if (!user) {
+        console.error("Failed to fetch user details for DID:", userDid);
         redirect("/login");
     }
 
@@ -64,7 +72,11 @@ export default async function CreateGoalPage(props: PageProps) {
                 <h1 className="text-2xl font-bold">Create New Goal</h1> {/* Updated text */}
             </div>
             {/* Render GoalForm, passing circle and circleHandle */}
-            <GoalForm circle={circle} circleHandle={circleHandle} /> {/* Use GoalForm */}
+            <GoalForm
+                user={user as UserPrivate}
+                itemDetail={creatableItemsList.find((item) => item.key === "goal") as CreatableItemDetail}
+                initialSelectedCircleId={circle._id}
+            />
         </div>
     );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react"; // Added useCallback
+import React, { useState, useEffect, useCallback, useMemo } from "react"; // Added useCallback, useMemo
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -52,7 +52,7 @@ interface GoalFormProps {
     onFormSubmitSuccess?: (goalId?: string) => void;
     onCancel?: () => void;
     proposal?: ProposalDisplay; // Keep for prefilling from proposal
-    preselectedCircle?: Circle; // Keep for pre-selecting circle
+    initialSelectedCircleId?: string; // Added: To guide CircleSelector
     // initialData is effectively replaced by proposal prop for prefilling logic
 }
 
@@ -64,7 +64,7 @@ export const GoalForm: React.FC<GoalFormProps> = ({
     onFormSubmitSuccess,
     onCancel,
     proposal, // Received from parent dialog
-    preselectedCircle, // Received from parent dialog
+    initialSelectedCircleId: initialCircleIdFromProps, // Renamed for clarity
 }) => {
     const [selectedCircle, setSelectedCircle] = useState<Circle | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -107,17 +107,20 @@ export const GoalForm: React.FC<GoalFormProps> = ({
         defaultValues: initialFormData,
     });
 
-    // Effect to set selectedCircle if preselectedCircle or proposal.circle is provided
-    useEffect(() => {
-        if (preselectedCircle) {
-            setSelectedCircle(preselectedCircle);
-        } else if (proposal && proposal.circle) {
-            setSelectedCircle(proposal.circle as Circle);
+    // Determine the initial circle ID to pass to CircleSelector
+    const derivedInitialSelectedCircleId = useMemo(() => {
+        if (initialCircleIdFromProps) {
+            return initialCircleIdFromProps;
         }
-        // If editing an existing goal, and no preselectedCircle/proposal,
-        // CircleSelector will handle showing options.
-        // If task.circle was available, we could set it here for editing.
-    }, [preselectedCircle, proposal]);
+        if (proposal && proposal.circle) {
+            return proposal.circle._id;
+        }
+        if (isEditing && goal && goal.circleId) {
+            // Assuming goal object might have circleId when editing
+            return goal.circleId;
+        }
+        return undefined;
+    }, [initialCircleIdFromProps, proposal, goal, isEditing]);
 
     useEffect(() => {
         if (goal?.location) {
@@ -248,19 +251,23 @@ export const GoalForm: React.FC<GoalFormProps> = ({
         }
     };
 
-    // Determine if CircleSelector should be shown:
-    // Not editing, AND no preselectedCircle, AND no proposal with an embedded circle.
-    const showCircleSelector = !isEditing && !preselectedCircle && !(proposal && proposal.circle);
+    // CircleSelector is shown if not editing and no proposal with an embedded circle that would pre-select it.
+    // Or, more simply, always show if itemDetail is present, and let CircleSelector handle its own visibility/state.
+    // The form itself depends on `selectedCircle`.
 
     return (
         <div className="formatted mx-auto max-w-[700px] p-4">
-            {showCircleSelector && itemDetail && (
+            {itemDetail && ( // Only show selector if itemDetail is available
                 <div className="mb-6">
-                    <CircleSelector itemType={itemDetail} onCircleSelected={handleCircleSelected} />
+                    <CircleSelector
+                        itemType={itemDetail}
+                        onCircleSelected={handleCircleSelected}
+                        initialSelectedCircleId={derivedInitialSelectedCircleId}
+                    />
                 </div>
             )}
 
-            {selectedCircle || preselectedCircle || (proposal && proposal.circle) ? (
+            {selectedCircle ? (
                 <Card className="mb-6">
                     <CardHeader>
                         <CardTitle>
@@ -418,31 +425,33 @@ export const GoalForm: React.FC<GoalFormProps> = ({
                                     </div>
 
                                     <div className="flex space-x-4">
-                                        {onCancel ? (
+                                        {/* Conditional rendering for Cancel button */}
+                                        {typeof onCancel === "function" && (
                                             <Button
                                                 type="button"
                                                 variant="outline"
-                                                onClick={onCancel}
+                                                onClick={onCancel} // Directly use onCancel here
                                                 disabled={isSubmitting}
                                             >
                                                 Cancel
                                             </Button>
-                                        ) : !isEditing ? (
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                onClick={() => {
-                                                    if (selectedCircle && selectedCircle.handle) {
-                                                        router.push(`/circles/${selectedCircle.handle}/goals`);
-                                                    } else if (typeof onCancel === "function") {
-                                                        onCancel();
-                                                    }
-                                                }}
-                                                disabled={isSubmitting}
-                                            >
-                                                Cancel
-                                            </Button>
-                                        ) : null}
+                                        )}
+                                        {!onCancel &&
+                                            !isEditing && ( // Show navigation cancel if no onCancel and not editing
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    onClick={() => {
+                                                        if (selectedCircle && selectedCircle.handle) {
+                                                            router.push(`/circles/${selectedCircle.handle}/goals`);
+                                                        }
+                                                        // No onCancel to call here in this branch
+                                                    }}
+                                                    disabled={isSubmitting}
+                                                >
+                                                    Cancel
+                                                </Button>
+                                            )}
                                         <Button type="submit" disabled={isSubmitting || !selectedCircle}>
                                             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                                             {isEditing ? "Update Goal" : "Create Goal"}
@@ -453,12 +462,9 @@ export const GoalForm: React.FC<GoalFormProps> = ({
                         </Form>
                     </CardContent>
                 </Card>
-            ) : !showCircleSelector && !selectedCircle ? (
-                <div className="pt-4 text-center text-muted-foreground">Circle information is being determined...</div>
-            ) : null}
-            {showCircleSelector && !selectedCircle && (
+            ) : (
                 <div className="pt-4 text-center text-muted-foreground">
-                    Please select a circle above to create the goal in.
+                    {itemDetail ? "Please select a circle above to create the goal in." : "Loading form..."}
                 </div>
             )}
 

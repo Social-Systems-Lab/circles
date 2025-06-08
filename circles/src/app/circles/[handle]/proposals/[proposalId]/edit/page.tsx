@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
+import { getUserPrivate } from "@/lib/data/user"; // Import getUserPrivate
 import { features } from "@/lib/data/constants";
 import { redirect } from "next/navigation";
-import { Media } from "@/models/models"; // Import Media type
+import { Media, UserPrivate } from "@/models/models"; // Import Media type, UserPrivate
+import { creatableItemsList, CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Added imports
 
 type PageProps = {
     params: Promise<{ handle: string; proposalId: string }>;
@@ -18,10 +20,15 @@ export default async function EditProposalPage(props: PageProps) {
     const circleHandle = params.handle;
     const proposalId = params.proposalId;
 
-    // Get the current user DID
+    // Get the current user DID and full user object
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         redirect("/login");
+    }
+    const user = await getUserPrivate(userDid);
+    if (!user) {
+        console.error("Failed to fetch user details for DID:", userDid);
+        redirect("/login"); // Or show an error page
     }
 
     // Get the circle
@@ -94,7 +101,14 @@ export default async function EditProposalPage(props: PageProps) {
             </div>
 
             {/* Remove onSubmit, pass circleHandle and proposalId */}
-            <ProposalForm circle={circle} proposal={proposal} circleHandle={circleHandle} proposalId={proposalId} />
+            <ProposalForm
+                user={user as UserPrivate}
+                itemDetail={creatableItemsList.find((item) => item.key === "proposal") as CreatableItemDetail}
+                proposal={proposal}
+                proposalId={proposalId}
+                // circle prop is not strictly needed by ProposalForm if user and proposal.circleId are used
+                // circleHandle is also not directly used by ProposalForm if selectedCircle is set correctly
+            />
         </div>
     );
 }
