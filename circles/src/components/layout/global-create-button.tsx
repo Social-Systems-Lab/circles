@@ -10,6 +10,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useAtom } from "jotai"; // Added useAtom
 import { userAtom, createPostDialogAtom } from "@/lib/data/atoms"; // Added createPostDialogAtom and userAtom
 import { Circle, Feed, UserPrivate } from "@/models/models"; // Added Circle, Feed, UserPrivate
+import { getPublicUserFeedAction } from "@/components/modules/feeds/actions"; // Changed to server action
 
 // Import specific dialog components (assuming they are refactored to be full dialogs)
 // TODO: These imports will need to point to the actual refactored dialog components
@@ -27,6 +28,24 @@ export function GlobalCreateButton() {
     const [, setCreatePostDialogState] = useAtom(createPostDialogAtom); // Atom for FeedPostDialog
     const [userFeed, setUserFeed] = useState<Feed | null>(null);
     const { toast } = useToast();
+
+    useEffect(() => {
+        const fetchUserFeed = async () => {
+            if (user?.did) {
+                try {
+                    const feed = await getPublicUserFeedAction(user.did); // Use server action
+                    setUserFeed(feed);
+                } catch (error) {
+                    console.error("Failed to fetch user feed:", error);
+                    setUserFeed(null); // Ensure it's null on error
+                }
+            } else {
+                setUserFeed(null); // Clear feed if no user
+            }
+        };
+
+        fetchUserFeed();
+    }, [user]); // Re-run when user changes
 
     // State to manage which specific creation dialog to open
     const [selectedItemTypeForCreation, setSelectedItemTypeForCreation] = useState<CreatableItemKey | null>(null);

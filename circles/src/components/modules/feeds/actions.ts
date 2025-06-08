@@ -24,8 +24,9 @@ import {
     getFeedsByCircleId,
     getPostsFromMultipleFeedsWithMetrics,
     getPublicFeeds,
+    getPublicUserFeed, // Added getPublicUserFeed
     createFeed,
-    createDefaultFeed, // Added createFeed
+    createDefaultFeed,
 } from "@/lib/data/feed";
 import { saveFile, isFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -1082,6 +1083,16 @@ export async function getFeedByHandleAction(circleId: string, feedHandle: string
         return feed;
     } catch (error) {
         console.error("Error getting feed by handle:", error);
+        return null;
+    }
+}
+
+export async function getPublicUserFeedAction(userDid: string): Promise<Feed | null> {
+    try {
+        const feed = await getPublicUserFeed(userDid);
+        return feed;
+    } catch (error) {
+        console.error("Error in getPublicUserFeedAction:", error);
         return null;
     }
 }

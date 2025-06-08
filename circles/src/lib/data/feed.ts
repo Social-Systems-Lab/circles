@@ -30,10 +30,12 @@ export const getFeedsByCircleId = async (circleId: string): Promise<Feed[]> => {
 };
 
 export async function getPublicFeeds(): Promise<Feed[]> {
+    // Keep this export
     const feeds = await Feeds.find({ userGroups: "everyone" }).toArray();
     return feeds;
 }
 
+// Make sure getPublicUserFeed is also exported
 export const getPublicUserFeed = async (userDid: string): Promise<Feed | null> => {
     const user = await getUserByDid(userDid);
     if (!user) {
