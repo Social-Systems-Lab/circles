@@ -19,15 +19,17 @@ export function FeedPostDialog() {
         setDialogState({ isOpen: false });
     };
 
-    const handleSubmit = async (formData: FormData) => {
-        if (!dialogState.circle?._id) {
-            toast({ title: "Error", description: "Circle context is missing.", variant: "destructive" });
+    const handleSubmit = async (formData: FormData, targetCircleId?: string) => {
+        // Added targetCircleId parameter
+        const finalCircleId = targetCircleId || dialogState.circle?._id; // Use targetCircleId if available
+
+        if (!finalCircleId) {
+            toast({ title: "Error", description: "Circle ID is missing.", variant: "destructive" });
             return;
         }
-        // The PostForm's onSubmit callback provides the selectedCircleId as a second argument,
-        // but we are only using the formData it passes.
-        // We need to ensure circleId is on the formData for createPostAction.
-        formData.append("circleId", dialogState.circle._id);
+        // Ensure circleId is on the formData for createPostAction.
+        // PostForm's onSubmit provides the most up-to-date circleId.
+        formData.append("circleId", finalCircleId);
 
         startTransition(async () => {
             const response = await createPostAction(formData);
