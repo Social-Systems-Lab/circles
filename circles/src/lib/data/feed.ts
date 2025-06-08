@@ -106,10 +106,10 @@ export const getFeeds = async (circleId: string): Promise<Feed[]> => {
     return feeds;
 };
 
-export const createDefaultFeed = async (circleId: string): Promise<void> => {
+export const createDefaultFeed = async (circleId: string): Promise<Feed | null> => {
     let circle = await getCircleById(circleId);
     if (!circle) {
-        return;
+        return null;
     }
 
     // Only create a single default feed per circle
@@ -124,6 +124,8 @@ export const createDefaultFeed = async (circleId: string): Promise<void> => {
         };
         defaultFeed = await createFeed(defaultFeed);
     }
+
+    return defaultFeed;
 };
 
 export const createPost = async (post: Post): Promise<Post> => {

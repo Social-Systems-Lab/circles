@@ -24,6 +24,8 @@ import {
     getFeedsByCircleId,
     getPostsFromMultipleFeedsWithMetrics,
     getPublicFeeds,
+    createFeed,
+    createDefaultFeed, // Added createFeed
 } from "@/lib/data/feed";
 import { saveFile, isFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -370,10 +372,18 @@ export async function createPostAction(
         // +++ End Internal Link Preview Data Extraction +++
 
         // Get the default feed for this circle
-        const feed = await getFeedByHandle(circleId, "default");
+        let feed = await getFeedByHandle(circleId, "default"); // Changed to let
+
         if (!feed) {
-            return { success: false, message: "Default feed not found for this circle" };
+            // Create a default feed if it doesn't exist
+            console.log(`Default feed not found for circle ${circleId}, creating one.`);
+            feed = await createDefaultFeed(circleId);
+            if (!feed) {
+                return { success: false, message: "Failed to create default feed for this circle" };
+            }
         }
+
+        console.log("Creating post in feed", feed._id, "for circle", circleId, "by user", userDid);
 
         const feedId = feed._id.toString();
         const authorized = await isAuthorized(userDid, circleId, features.feed.post);

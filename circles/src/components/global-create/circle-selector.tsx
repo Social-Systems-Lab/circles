@@ -185,7 +185,7 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
                         <SelectValue placeholder="Select circle..." />
                     )}
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[120]">
                     {selectableCircles.map((circle) => (
                         <SelectItem key={circle._id} value={circle._id} className="text-xs">
                             <div className="flex items-center gap-2">

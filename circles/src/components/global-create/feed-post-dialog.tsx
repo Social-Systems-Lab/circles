@@ -24,15 +24,13 @@ export function FeedPostDialog() {
             toast({ title: "Error", description: "Circle context is missing.", variant: "destructive" });
             return;
         }
-        // The PostForm already appends selectedCircleId to formData if initialSelectedCircleId is passed.
-        // However, createPostAction expects the target circleId as a separate argument if not on formData.
-        // For clarity and consistency with how PostForm works, we can rely on it being on formData.
-        // Or, ensure targetCircleId is explicitly passed if createPostAction requires it differently.
+        // The PostForm's onSubmit callback provides the selectedCircleId as a second argument,
+        // but we are only using the formData it passes.
+        // We need to ensure circleId is on the formData for createPostAction.
+        formData.append("circleId", dialogState.circle._id);
 
         startTransition(async () => {
-            const response = await createPostAction(formData); // Assuming createPostAction can get circleId from formData or it's implicitly handled.
-            // If createPostAction needs circleId explicitly, it should be:
-            // const response = await createPostAction(formData, dialogState.circle!._id);
+            const response = await createPostAction(formData);
 
             if (!response.success) {
                 toast({
