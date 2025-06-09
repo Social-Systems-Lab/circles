@@ -42,7 +42,7 @@ interface ProposalFormProps {
     proposal?: Proposal;
     proposalId?: string;
     initialSelectedCircleId?: string; // Added for consistency, though primarily for create pages
-    onFormSubmitSuccess?: (proposalId?: string) => void;
+    onFormSubmitSuccess?: (data: { id?: string; circleHandle?: string }) => void; // Updated to include circleHandle
     onCancel?: () => void;
     // circle and circleHandle removed
 }
@@ -164,7 +164,7 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
 
                 // Navigate after success
                 if (onFormSubmitSuccess) {
-                    onFormSubmitSuccess(result.proposalId);
+                    onFormSubmitSuccess({ id: result.proposalId, circleHandle: selectedCircle.handle }); // Pass circleHandle
                 } else {
                     const navigateToId = isEditing ? proposalId : result.proposalId;
                     if (navigateToId && selectedCircle.handle) {

@@ -438,16 +438,19 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
     //     setCreateProposalDialogOpen(true);
     // };
 
-    const handleCreateProposalSuccess = (proposalId?: string) => {
+    const handleCreateProposalSuccess = (data: { id?: string; circleHandle?: string }) => {
         toast({
             title: "Proposal Created",
             description: "The new proposal has been successfully created.",
         });
         setIsMainCreateProposalDialogOpen(false);
         router.refresh(); // Refresh the list
-        if (proposalId) {
-            // Optionally navigate to the new proposal or its edit page
-            router.push(`/circles/${circle.handle}/proposals/${proposalId}/edit`);
+        if (data.id && data.circleHandle) {
+            // Navigate to the new proposal's edit page
+            router.push(`/circles/${data.circleHandle}/proposals/${data.id}/edit`);
+        } else if (data.id) {
+            // Fallback if circleHandle is somehow not passed
+            router.push(`/circles/${circle.handle}/proposals/${data.id}/edit`);
         }
     };
 
@@ -742,14 +745,22 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
                         onOpenChange={setIsCreateGoalDialogOpen}
                         // circle={circle} // CreateGoalDialog gets circle via CircleSelector or if passed directly to GoalForm
                         itemKey="goal" // Assuming 'goal' is the correct key
-                        onSuccess={(goalId) => {
+                        onSuccess={(data) => {
+                            // Updated to receive data object
                             // Handle successful goal creation, e.g., refresh data or show toast
-                            console.log("Goal created with ID:", goalId);
+                            console.log("Goal created with ID:", data.id, "in circle:", data.circleHandle);
                             setIsCreateGoalDialogOpen(false); // Close dialog
                             router.refresh(); // Refresh the page to show updated proposal stage
+                            if (data.id && data.circleHandle) {
+                                router.push(`/circles/${data.circleHandle}/goals/${data.id}`);
+                            } else if (data.id) {
+                                // Fallback if circleHandle is somehow not passed
+                                router.push(`/circles/${circle.handle}/goals/${data.id}`);
+                            }
                         }}
                         // We will modify CreateGoalDialog to accept 'proposal' prop later
-                        // proposal={selectedProposal}
+                        proposal={selectedProposal} // Pass the selected proposal to prefill the goal form
+                        initialSelectedCircleId={circle._id} // Pass current circle ID
                     />
                 )}
             </div>

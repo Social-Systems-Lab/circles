@@ -481,15 +481,20 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
         return null; // Prevent rendering until mounted
     }
 
-    const handleCreateTaskSuccess = (taskId?: string) => {
+    const handleCreateTaskSuccess = (data: { id?: string; circleHandle?: string }) => {
         toast({
             title: "Task Created",
             description: "The new task has been successfully created.",
         });
         setIsCreateTaskDialogOpen(false);
         router.refresh(); // Refresh the list
-        // Optionally, navigate to the new task:
-        // if (taskId) router.push(`/circles/${circle.handle}/tasks/${taskId}`);
+        // Navigate to the new task:
+        if (data.id && data.circleHandle) {
+            router.push(`/circles/${data.circleHandle}/tasks/${data.id}`);
+        } else if (data.id) {
+            // Fallback if circleHandle is somehow not passed
+            router.push(`/circles/${circle.handle}/tasks/${data.id}`);
+        }
     };
 
     return (

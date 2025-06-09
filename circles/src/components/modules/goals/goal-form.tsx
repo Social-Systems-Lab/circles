@@ -48,7 +48,7 @@ interface GoalFormProps {
     itemDetail: CreatableItemDetail;
     goal?: Goal;
     goalId?: string;
-    onFormSubmitSuccess?: (goalId?: string) => void;
+    onFormSubmitSuccess?: (data: { id?: string; circleHandle?: string }) => void; // Updated to include circleHandle
     onCancel?: () => void;
     proposal?: ProposalDisplay; // Keep for prefilling from proposal
     initialSelectedCircleId?: string; // Added: To guide CircleSelector
@@ -222,7 +222,7 @@ export const GoalForm: React.FC<GoalFormProps> = ({
                 });
 
                 if (onFormSubmitSuccess) {
-                    onFormSubmitSuccess(result.goalId);
+                    onFormSubmitSuccess({ id: result.goalId, circleHandle: selectedCircle.handle }); // Pass circleHandle
                 } else {
                     const navigateToId = isEditing ? goalId : result.goalId;
                     if (navigateToId && selectedCircle.handle) {

@@ -39,7 +39,7 @@ interface IssueFormProps {
     itemDetail: CreatableItemDetail;
     issue?: Issue;
     issueId?: string;
-    onFormSubmitSuccess?: (issueId?: string) => void;
+    onFormSubmitSuccess?: (data: { id?: string; circleHandle?: string }) => void; // Updated to include circleHandle
     onCancel?: () => void;
     // circle and circleHandle removed
 }
@@ -162,7 +162,7 @@ export const IssueForm: React.FC<IssueFormProps> = ({
                 });
 
                 if (onFormSubmitSuccess) {
-                    onFormSubmitSuccess(result.issueId);
+                    onFormSubmitSuccess({ id: result.issueId, circleHandle: selectedCircle.handle }); // Pass circleHandle
                 } else {
                     const navigateToId = isEditing ? issueId : result.issueId;
                     if (navigateToId && selectedCircle.handle) {

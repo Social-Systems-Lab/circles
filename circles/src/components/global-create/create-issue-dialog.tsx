@@ -12,7 +12,7 @@ import { userAtom } from "@/lib/data/atoms";
 interface CreateIssueDialogProps {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
-    onSuccess: (issueId?: string) => void;
+    onSuccess: (data: { id?: string; circleHandle?: string }) => void; // Updated to include circleHandle
     itemKey: CreatableItemKey;
 }
 
@@ -26,8 +26,9 @@ export const CreateIssueDialog: React.FC<CreateIssueDialogProps> = ({ isOpen, on
         }
     }, [isOpen, itemKey, itemDetail, onOpenChange]);
 
-    const handleFormSuccess = (issueId?: string) => {
-        onSuccess(issueId);
+    const handleFormSuccess = (data: { id?: string; circleHandle?: string }) => {
+        // Updated to receive object
+        onSuccess(data); // Pass the whole object
         onOpenChange(false);
     };
 

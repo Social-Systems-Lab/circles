@@ -14,7 +14,7 @@ import { creatableItemsList } from "./global-create-dialog-content";
 interface CreateTaskDialogProps {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
-    onSuccess: (taskId?: string) => void; // Callback on successful task creation
+    onSuccess: (data: { id?: string; circleHandle?: string }) => void; // Updated to include circleHandle
     itemKey: CreatableItemKey; // To know we are creating a task and for CircleSelector
     initialSelectedCircleId?: string; // Added to pre-select a circle
 }
@@ -38,8 +38,9 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
         }
     }, [isOpen, itemKey, itemDetail, onOpenChange]);
 
-    const handleFormSuccess = (taskId?: string) => {
-        onSuccess(taskId);
+    const handleFormSuccess = (data: { id?: string; circleHandle?: string }) => {
+        // Updated to receive object
+        onSuccess(data); // Pass the whole object
         onOpenChange(false); // Close this dialog
     };
 

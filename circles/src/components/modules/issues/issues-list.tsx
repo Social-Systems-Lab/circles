@@ -345,15 +345,20 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
     // Check create permission for the button using the user object
     const canCreateIssue = isAuthorized(user, circle, features.issues.create);
 
-    const handleCreateIssueSuccess = (issueId?: string) => {
+    const handleCreateIssueSuccess = (data: { id?: string; circleHandle?: string }) => {
         toast({
             title: "Issue Created",
             description: "The new issue has been successfully created.",
         });
         setIsCreateIssueDialogOpen(false);
         router.refresh(); // Refresh the list
-        // Optionally, navigate to the new issue:
-        // if (issueId) router.push(`/circles/${circle.handle}/issues/${issueId}`);
+        // Navigate to the new issue:
+        if (data.id && data.circleHandle) {
+            router.push(`/circles/${data.circleHandle}/issues/${data.id}`);
+        } else if (data.id) {
+            // Fallback if circleHandle is somehow not passed, though it should be
+            router.push(`/circles/${circle.handle}/issues/${data.id}`);
+        }
     };
 
     return (

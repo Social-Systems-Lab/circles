@@ -12,7 +12,7 @@ import { userAtom } from "@/lib/data/atoms";
 interface CreateGoalDialogProps {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
-    onSuccess: (goalId?: string) => void;
+    onSuccess: (data: { id?: string; circleHandle?: string }) => void; // Updated to include circleHandle
     itemKey: CreatableItemKey;
     proposal?: ProposalDisplay; // Optional proposal to prefill from
     initialSelectedCircleId?: string; // Changed from circle: Circle
@@ -36,8 +36,9 @@ export const CreateGoalDialog: React.FC<CreateGoalDialogProps> = ({
         }
     }, [isOpen, itemKey, itemDetail, onOpenChange]);
 
-    const handleFormSuccess = (goalId?: string) => {
-        onSuccess(goalId);
+    const handleFormSuccess = (data: { id?: string; circleHandle?: string }) => {
+        // Updated to receive object
+        onSuccess(data); // Pass the whole object
         onOpenChange(false);
     };
 

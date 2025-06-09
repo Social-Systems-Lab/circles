@@ -15,6 +15,7 @@ import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import CreateGoalDialog from "@/components/global-create/create-goal-dialog"; // Import CreateGoalDialog
 
 interface GoalTimelineProps {
     circle: Circle;
@@ -185,6 +186,7 @@ const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initia
     const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
+    const [isCreateGoalDialogOpen, setIsCreateGoalDialogOpen] = useState(false); // State for dialog
 
     // Check if tasks module is enabled
     const tasksModuleEnabled = useMemo(() => circle.enabledModules?.includes("tasks"), [circle.enabledModules]);
@@ -266,9 +268,20 @@ const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initia
         }
     }, [activeGoalsData, completedGoalsData, activeTab]);
 
-    const handleCreateGoal = (targetDate?: string) => {
-        const url = `/circles/${circle.handle}/goals/create${targetDate ? `?targetDate=${targetDate}` : ""}`;
-        router.push(url);
+    const handleCreateGoal = () => {
+        // targetDate removed for dialog usage
+        setIsCreateGoalDialogOpen(true);
+    };
+
+    const handleCreateGoalSuccess = (data: { id?: string; circleHandle?: string }) => {
+        setIsCreateGoalDialogOpen(false);
+        router.refresh();
+        if (data.id && data.circleHandle) {
+            router.push(`/circles/${data.circleHandle}/goals/${data.id}`);
+        } else if (data.id) {
+            // Fallback if circleHandle is somehow not passed, though it should be from GoalForm
+            router.push(`/circles/${circle.handle}/goals/${data.id}`);
+        }
     };
 
     // Helper function to render the timeline content for a given set of goals
@@ -426,6 +439,17 @@ const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initia
                         {renderTimelineContent(displayedGoals, "completed")}
                     </TabsContent>
                 </Tabs>
+
+                {canCreateGoal && (
+                    <CreateGoalDialog
+                        isOpen={isCreateGoalDialogOpen}
+                        onOpenChange={setIsCreateGoalDialogOpen}
+                        onSuccess={handleCreateGoalSuccess}
+                        itemKey="goal" // Assuming 'goal' is the correct key for CreatableItemDetail
+                        initialSelectedCircleId={circle._id} // Pass current circle ID
+                        // proposal prop is not needed here
+                    />
+                )}
             </div>
         </div>
     );

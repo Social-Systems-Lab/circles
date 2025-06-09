@@ -333,15 +333,20 @@ const GoalsList: React.FC<GoalsListProps> = ({ goalsData, circle, permissions })
     // Check create permission for the button using the user object
     const canCreateGoal = isAuthorized(user, circle, features.goals.create);
 
-    const handleCreateGoalSuccess = (goalId?: string) => {
+    const handleCreateGoalSuccess = (data: { id?: string; circleHandle?: string }) => {
         toast({
             title: "Goal Created",
             description: "The new goal has been successfully created.",
         });
         setIsCreateGoalDialogOpen(false);
         router.refresh(); // Refresh the list
-        // Optionally, navigate to the new goal:
-        // if (goalId) router.push(`/circles/${circle.handle}/goals/${goalId}`);
+        // Navigate to the new goal:
+        if (data.id && data.circleHandle) {
+            router.push(`/circles/${data.circleHandle}/goals/${data.id}`);
+        } else if (data.id) {
+            // Fallback if circleHandle is somehow not passed
+            router.push(`/circles/${circle.handle}/goals/${data.id}`);
+        }
     };
 
     return (

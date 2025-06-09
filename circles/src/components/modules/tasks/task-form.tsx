@@ -45,7 +45,7 @@ interface TaskFormProps {
     taskId?: string;
     initialSelectedCircleId?: string; // Added initialSelectedCircleId
     // goals and goalsModuleEnabled will be fetched/determined internally
-    onFormSubmitSuccess?: (taskId?: string) => void;
+    onFormSubmitSuccess?: (data: { id?: string; circleHandle?: string }) => void; // Updated to include circleHandle
     onCancel?: () => void;
     // circle and circleHandle removed
 }
@@ -214,7 +214,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                 });
 
                 if (onFormSubmitSuccess) {
-                    onFormSubmitSuccess(result.taskId);
+                    onFormSubmitSuccess({ id: result.taskId, circleHandle: selectedCircle.handle }); // Pass circleHandle
                 } else {
                     const navigateToId = isEditing ? taskId : result.taskId;
                     if (navigateToId && selectedCircle.handle) {

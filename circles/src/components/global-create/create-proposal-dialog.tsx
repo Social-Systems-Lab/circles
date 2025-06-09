@@ -12,7 +12,7 @@ import { userAtom } from "@/lib/data/atoms";
 interface CreateProposalDialogProps {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
-    onSuccess: (proposalId?: string) => void;
+    onSuccess: (data: { id?: string; circleHandle?: string }) => void; // Updated to include circleHandle
     itemKey: CreatableItemKey;
     initialSelectedCircleId?: string; // Added to pre-select a circle
 }
@@ -33,8 +33,9 @@ export const CreateProposalDialog: React.FC<CreateProposalDialogProps> = ({
         }
     }, [isOpen, itemKey, itemDetail, onOpenChange]);
 
-    const handleFormSuccess = (proposalId?: string) => {
-        onSuccess(proposalId);
+    const handleFormSuccess = (data: { id?: string; circleHandle?: string }) => {
+        // Updated to receive object
+        onSuccess(data); // Pass the whole object
         onOpenChange(false);
     };
 

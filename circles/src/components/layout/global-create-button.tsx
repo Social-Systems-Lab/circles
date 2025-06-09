@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useEffect } from "react"; // Added useEffect
+import { useRouter } from "next/navigation"; // Import useRouter
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
@@ -54,15 +55,34 @@ export function GlobalCreateButton() {
     const [isCreateCommunityOpen, setCreateCommunityOpen] = useState(false);
     // const [isCreateProjectOpen, setCreateProjectOpen] = useState(false); // Removed project state
 
-    const handleItemCreatedSuccess = (itemKey: CreatableItemKey, createdItemId?: string) => {
+    const handleItemCreatedSuccess = (itemKey: CreatableItemKey, data?: { id?: string; circleHandle?: string }) => {
         toast({
             title: `${itemKey.charAt(0).toUpperCase() + itemKey.slice(1)} created successfully!`,
         });
-        // Close the specific dialog by resetting the selected item type
         setSelectedItemTypeForCreation(null);
-        // Also ensure community/project dialogs are closed if they were open
         setCreateCommunityOpen(false);
-        // setCreateProjectOpen(false); // Removed project state setter
+
+        if (data?.id && data?.circleHandle) {
+            // Map itemKey to path segment
+            const pathSegmentMap: Record<CreatableItemKey, string | null> = {
+                post: "post", // Or the correct path for posts if different
+                task: "tasks",
+                goal: "goals",
+                issue: "issues",
+                proposal: "proposals",
+                community: "circles", // Or specific community view if exists
+                project: null, // Project creation might have a different flow or path
+            };
+            const pathSegment = pathSegmentMap[itemKey];
+            if (pathSegment) {
+                // For community, the ID is the handle itself, so the path is simpler
+                if (itemKey === "community") {
+                    router.push(`/circles/${data.id}`);
+                } else {
+                    router.push(`/circles/${data.circleHandle}/${pathSegment}/${data.id}`);
+                }
+            }
+        }
     };
 
     const handleSelectItemType = async (itemKey: CreatableItemKey) => {
@@ -158,25 +178,25 @@ export function GlobalCreateButton() {
             <CreateTaskDialog
                 isOpen={isSpecificDialogOpen("task")}
                 onOpenChange={createDialogOnOpenChange}
-                onSuccess={(id) => handleItemCreatedSuccess("task", id)}
+                onSuccess={(id) => handleItemCreatedSuccess("task", { id })}
                 itemKey="task"
             />
             <CreateGoalDialog
                 isOpen={isSpecificDialogOpen("goal")}
                 onOpenChange={createDialogOnOpenChange}
-                onSuccess={(id) => handleItemCreatedSuccess("goal", id)}
+                onSuccess={(data) => handleItemCreatedSuccess("goal", data)} // Pass the data object
                 itemKey="goal"
             />
             <CreateIssueDialog
                 isOpen={isSpecificDialogOpen("issue")}
                 onOpenChange={createDialogOnOpenChange}
-                onSuccess={(id) => handleItemCreatedSuccess("issue", id)}
+                onSuccess={(id) => handleItemCreatedSuccess("issue", { id })}
                 itemKey="issue"
             />
             <CreateProposalDialog
                 isOpen={isSpecificDialogOpen("proposal")}
                 onOpenChange={createDialogOnOpenChange}
-                onSuccess={(id) => handleItemCreatedSuccess("proposal", id)}
+                onSuccess={(id) => handleItemCreatedSuccess("proposal", { id })}
                 itemKey="proposal"
             />
             {/* CreatePostDialog instance removed, FeedPostDialog will be used via atom */}
@@ -185,7 +205,7 @@ export function GlobalCreateButton() {
             <CreateCommunityDialog
                 isOpen={isCreateCommunityOpen}
                 onOpenChange={communityDialogOnOpenChange}
-                onSuccess={(id) => handleItemCreatedSuccess("community", id)}
+                onSuccess={(id) => handleItemCreatedSuccess("community", { id })} // Pass id as an object
                 // itemKey="community" // No longer needed by CreateCommunityDialog
             />
             {/* Removed Project Dialog instance */}
