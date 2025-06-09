@@ -210,7 +210,7 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
             <div className="w-full">
                 {" "}
                 {/* Replaced Card with div */}
-                <div className="p-6 pb-2">
+                <div className="p-6 pb-0">
                     {" "}
                     {/* Replaced CardHeader with div and padding */}
                     <h3 className="mb-2 text-2xl font-semibold leading-none tracking-tight">
@@ -227,22 +227,6 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
                                 />
                             </div>
                         )}
-                    {selectedCircle && !isEditing && (
-                        <p className="text-sm text-muted-foreground">
-                            {" "}
-                            {/* Replaced CardDescription */}
-                            {`Fill in the details for your new proposal in '${selectedCircle.name || selectedCircle.handle}'.`}
-                        </p>
-                    )}
-                    {isEditing && (
-                        <p className="text-sm text-muted-foreground">
-                            {" "}
-                            {/* Replaced CardDescription */}
-                            Update your proposal details below.
-                            {/* For editing, selectedCircle is derived from proposal.circleId, so this part of description is fine */}
-                            {selectedCircle && ` In '${selectedCircle.name || selectedCircle.handle}'.`}
-                        </p>
-                    )}
                 </div>
                 {isEditing &&
                     proposal?.stage && ( // Show timeline only when editing, moved below header

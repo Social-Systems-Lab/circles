@@ -248,7 +248,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             <div className="w-full">
                 {" "}
                 {/* Replaced Card with div */}
-                <div className="p-6">
+                <div className="p-6 pb-0">
                     {" "}
                     {/* Replaced CardHeader with div and padding */}
                     <h3 className="mb-2 text-2xl font-semibold leading-none tracking-tight">
@@ -266,22 +266,6 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                 initialSelectedCircleId={initialSelectedCircleId}
                             />
                         </div>
-                    )}
-                    {selectedCircle &&
-                        !isEditing && ( // Show description only if circle is selected and creating
-                            <p className="text-sm text-muted-foreground">
-                                {" "}
-                                {/* Replaced CardDescription */}
-                                {`Describe the task you want to create in '${selectedCircle.name || selectedCircle.handle}'.`}
-                            </p>
-                        )}
-                    {isEditing && ( // Show description for editing
-                        <p className="text-sm text-muted-foreground">
-                            {" "}
-                            {/* Replaced CardDescription */}
-                            Update the task details below.
-                            {selectedCircle && ` In '${selectedCircle.name || selectedCircle.handle}'.`}
-                        </p>
                     )}
                 </div>
                 {selectedCircle ? (

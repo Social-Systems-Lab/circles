@@ -197,7 +197,7 @@ export const IssueForm: React.FC<IssueFormProps> = ({
             <div className="w-full">
                 {" "}
                 {/* Replaced Card with div */}
-                <div className="p-6">
+                <div className="p-6 pb-0">
                     {" "}
                     {/* Replaced CardHeader with div and padding */}
                     <h3 className="mb-2 text-2xl font-semibold leading-none tracking-tight">
@@ -210,21 +210,6 @@ export const IssueForm: React.FC<IssueFormProps> = ({
                                 <CircleSelector itemType={itemDetail} onCircleSelected={handleCircleSelected} />
                             </div>
                         )}
-                    {selectedCircle && !isEditing && (
-                        <p className="text-sm text-muted-foreground">
-                            {" "}
-                            {/* Replaced CardDescription */}
-                            {`Describe the issue you want to report in '${selectedCircle.name || selectedCircle.handle}'.`}
-                        </p>
-                    )}
-                    {isEditing && (
-                        <p className="text-sm text-muted-foreground">
-                            {" "}
-                            {/* Replaced CardDescription */}
-                            Update the issue details below.
-                            {selectedCircle && ` In '${selectedCircle.name || selectedCircle.handle}'.`}
-                        </p>
-                    )}
                 </div>
                 {selectedCircle || isEditing ? ( // Show form if a circle is selected OR if editing
                     <div className="p-6 pt-0">

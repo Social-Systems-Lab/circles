@@ -261,7 +261,7 @@ export const GoalForm: React.FC<GoalFormProps> = ({
             <div className="w-full">
                 {" "}
                 {/* Replaced Card with div */}
-                <div className="p-6">
+                <div className="p-6 pb-0">
                     {" "}
                     {/* Replaced CardHeader with div and padding */}
                     <h3 className="mb-2 text-2xl font-semibold leading-none tracking-tight">
@@ -287,21 +287,6 @@ export const GoalForm: React.FC<GoalFormProps> = ({
                                 />
                             </div>
                         )}
-                    {selectedCircle && !isEditing && (
-                        <p className="text-sm text-muted-foreground">
-                            {" "}
-                            {/* Replaced CardDescription */}
-                            {`Describe the goal you want to create in '${selectedCircle.name || selectedCircle.handle}'.`}
-                        </p>
-                    )}
-                    {isEditing && (
-                        <p className="text-sm text-muted-foreground">
-                            {" "}
-                            {/* Replaced CardDescription */}
-                            Update the goal details below.
-                            {selectedCircle && ` In '${selectedCircle.name || selectedCircle.handle}'.`}
-                        </p>
-                    )}
                 </div>
                 {selectedCircle ? (
                     <div className="p-6 pt-0">
