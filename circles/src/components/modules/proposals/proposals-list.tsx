@@ -446,11 +446,11 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
         setIsMainCreateProposalDialogOpen(false);
         router.refresh(); // Refresh the list
         if (data.id && data.circleHandle) {
-            // Navigate to the new proposal's edit page
-            router.push(`/circles/${data.circleHandle}/proposals/${data.id}/edit`);
+            // Navigate to the new proposal's detail page
+            router.push(`/circles/${data.circleHandle}/proposals/${data.id}`);
         } else if (data.id) {
             // Fallback if circleHandle is somehow not passed
-            router.push(`/circles/${circle.handle}/proposals/${data.id}/edit`);
+            router.push(`/circles/${circle.handle}/proposals/${data.id}`);
         }
     };
 

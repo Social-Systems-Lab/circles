@@ -178,7 +178,7 @@ export function GlobalCreateButton() {
             <CreateTaskDialog
                 isOpen={isSpecificDialogOpen("task")}
                 onOpenChange={createDialogOnOpenChange}
-                onSuccess={(id) => handleItemCreatedSuccess("task", { id })}
+                onSuccess={(data) => handleItemCreatedSuccess("task", data)}
                 itemKey="task"
             />
             <CreateGoalDialog
@@ -190,13 +190,13 @@ export function GlobalCreateButton() {
             <CreateIssueDialog
                 isOpen={isSpecificDialogOpen("issue")}
                 onOpenChange={createDialogOnOpenChange}
-                onSuccess={(id) => handleItemCreatedSuccess("issue", { id })}
+                onSuccess={(data) => handleItemCreatedSuccess("issue", data)}
                 itemKey="issue"
             />
             <CreateProposalDialog
                 isOpen={isSpecificDialogOpen("proposal")}
                 onOpenChange={createDialogOnOpenChange}
-                onSuccess={(id) => handleItemCreatedSuccess("proposal", { id })}
+                onSuccess={(data) => handleItemCreatedSuccess("proposal", data)}
                 itemKey="proposal"
             />
             {/* CreatePostDialog instance removed, FeedPostDialog will be used via atom */}
