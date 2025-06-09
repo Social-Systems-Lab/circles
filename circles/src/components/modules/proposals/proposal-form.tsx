@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card"; // Added Card imports
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -204,19 +205,12 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
     }, [isEditing, initialSelectedCircleId]);
 
     return (
-        <div className="formatted mx-auto w-full">
-            {" "}
-            {/* Outer div's padding removed */}
-            <div className="w-full">
-                {" "}
-                {/* Replaced Card with div */}
-                <div className="p-6 pb-0">
-                    {" "}
-                    {/* Replaced CardHeader with div and padding */}
+        <>
+            <Card className="formatted mx-auto w-full">
+                <CardHeader className="p-6 pb-0">
                     <h3 className="mb-2 text-2xl font-semibold leading-none tracking-tight">
                         {isEditing ? "Edit Proposal" : "Create New Proposal"}
-                    </h3>{" "}
-                    {/* Replaced CardTitle */}
+                    </h3>
                     {!isEditing &&
                         itemDetail && ( // Show CircleSelector only when creating new
                             <div className="pt-2">
@@ -227,28 +221,21 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
                                 />
                             </div>
                         )}
-                </div>
+                </CardHeader>
                 {isEditing &&
                     proposal?.stage && ( // Show timeline only when editing, moved below header
-                        <div className="p-6 pb-4 pt-0">
-                            {" "}
-                            {/* Replaced CardContent with div and padding */} {/* Adjust padding if needed */}
+                        <CardContent className="p-6 pb-4 pt-0"> {/* Adjust padding if needed */}
                             <div className="mb-6 ml-4 mr-4">
-                                {" "}
                                 {/* Timeline might need margin adjustments */}
                                 <ProposalStageTimeline currentStage={proposal.stage} />
                             </div>
-                        </div>
+                        </CardContent>
                     )}
                 {selectedCircle ? (
-                    <div className={`p-6 ${isEditing && proposal?.stage ? "pt-0" : "pt-0"}`}>
-                        {" "}
-                        {/* Replaced CardContent with div and padding */}{" "}
+                    <CardContent className={`p-6 ${isEditing && proposal?.stage ? "pt-0" : "pt-0"}`}>
                         {/* Remove CardContent top padding if timeline was shown */}
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-0 md:space-y-0">
-                                {" "}
-                                {/* Adjusted y-spacing */}
                                 <FormField
                                     control={form.control}
                                     name="name"
@@ -482,8 +469,7 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
                         </div>
                     )
                 )}
-            </div>{" "}
-            {/* End Replaced Card */}
+            </Card>
             {/* Location Dialog */}
             <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
                 <DialogContent
@@ -511,6 +497,6 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
                     </div>
                 </DialogContent>
             </Dialog>
-        </div>
+        </>
     );
 };

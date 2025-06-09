@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card"; // Added Card imports
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -264,18 +265,10 @@ export const GoalForm: React.FC<GoalFormProps> = ({
     // The form itself depends on `selectedCircle`.
 
     return (
-        <div className="formatted mx-auto w-full">
-            {" "}
-            {/* Outer div's padding removed */}
-            <div className="w-full">
-                {" "}
-                {/* Replaced Card with div */}
-                <div className="p-6 pb-0">
-                    {" "}
-                    {/* Replaced CardHeader with div and padding */}
+        <>
+            <Card className="formatted mx-auto w-full">
+                <CardHeader className="p-6 pb-0">
                     <h3 className="mb-2 text-2xl font-semibold leading-none tracking-tight">
-                        {" "}
-                        {/* Replaced CardTitle */}
                         {isEditing
                             ? "Edit Goal"
                             : proposal
@@ -287,8 +280,6 @@ export const GoalForm: React.FC<GoalFormProps> = ({
                         !isEditing &&
                         !(proposal && proposal.circle) && ( // Show selector if creating new and not pre-selected by proposal
                             <div className="pb-4 pt-2">
-                                {" "}
-                                {/* Added padding for selector */}
                                 <CircleSelector
                                     itemType={itemDetail}
                                     onCircleSelected={handleCircleSelected}
@@ -296,17 +287,13 @@ export const GoalForm: React.FC<GoalFormProps> = ({
                                 />
                             </div>
                         )}
-                </div>
+                </CardHeader>
                 {selectedCircle ? (
-                    <div className="p-6 pt-0">
-                        {" "}
-                        {/* Replaced CardContent with div and padding */}
+                    <CardContent className="p-6 pt-0">
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-0 md:space-y-0">
-                                {" "}
                                 {/* Adjusted y-spacing for grid */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-6">
-                                    {" "}
                                     {/* Grid container */}
                                     <FormField
                                         control={form.control}
@@ -378,7 +365,6 @@ export const GoalForm: React.FC<GoalFormProps> = ({
                                     name="description"
                                     render={({ field }) => (
                                         <FormItem className="py-3 md:col-span-2 md:py-4">
-                                            {" "}
                                             {/* Spans 2 columns on md+ */}
                                             <FormLabel>Description</FormLabel>
                                             <FormControl>
@@ -399,7 +385,6 @@ export const GoalForm: React.FC<GoalFormProps> = ({
                                     name="images"
                                     render={({ field }) => (
                                         <FormItem className="py-3 md:col-span-2 md:py-4">
-                                            {" "}
                                             {/* Spans 2 columns on md+ */}
                                             <FormLabel>Attach Images (Optional)</FormLabel>
                                             <FormControl>
@@ -484,21 +469,18 @@ export const GoalForm: React.FC<GoalFormProps> = ({
                                 </div>
                             </form>
                         </Form>
-                    </div>
+                    </CardContent>
                 ) : (
                     // Show this message if no circle is selected (primarily for create mode)
                     !isEditing && ( // Only show if not editing
-                        <div className="p-6 pt-0">
-                            {" "}
-                            {/* Replaced CardContent with div and padding */}
+                        <CardContent className="p-6 pt-0">
                             <div className="pb-4 pt-4 text-center text-muted-foreground">
                                 {itemDetail ? "Please select a circle above to create the goal in." : "Loading form..."}
                             </div>
-                        </div>
+                        </CardContent>
                     )
                 )}
-            </div>{" "}
-            {/* End Replaced Card */}
+            </Card>
             <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
                 <DialogContent
                     onInteractOutside={(e) => {
@@ -525,6 +507,6 @@ export const GoalForm: React.FC<GoalFormProps> = ({
                     </div>
                 </DialogContent>
             </Dialog>
-        </div>
+        </>
     );
 };

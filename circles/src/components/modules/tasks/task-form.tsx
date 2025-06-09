@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card"; // Added Card imports
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -244,23 +245,15 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     };
 
     return (
-        // Outer div's padding removed, dialog will handle it. Max-width might also be dialog's concern.
-        <div className="formatted mx-auto w-full">
-            <div className="w-full">
-                {" "}
-                {/* Replaced Card with div */}
-                <div className="p-6 pb-0">
-                    {" "}
-                    {/* Replaced CardHeader with div and padding */}
+        <>
+            <Card className="formatted mx-auto w-full">
+                <CardHeader className="p-6 pb-0">
                     <h3 className="mb-2 text-2xl font-semibold leading-none tracking-tight">
                         {isEditing ? "Edit Task" : "Create New Task"}
-                    </h3>{" "}
-                    {/* Replaced CardTitle */}
+                    </h3>
                     {/* CircleSelector moved into this section */}
                     {!isEditing && ( // Only show selector if creating new
                         <div className="pb-4 pt-2">
-                            {" "}
-                            {/* Added padding for selector */}
                             <CircleSelector
                                 itemType={itemDetail}
                                 onCircleSelected={handleCircleSelected}
@@ -268,25 +261,19 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                             />
                         </div>
                     )}
-                </div>
+                </CardHeader>
                 {selectedCircle ? (
-                    <div className="p-6 pt-0">
-                        {" "}
-                        {/* Replaced CardContent with div and padding */}
+                    <CardContent className="p-6 pt-0">
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-0 md:space-y-0">
-                                {" "}
                                 {/* Adjusted y-spacing for grid */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-6">
-                                    {" "}
                                     {/* Grid container */}
                                     <FormField
                                         control={form.control}
                                         name="title"
                                         render={({ field }) => (
                                             <FormItem className="py-3 md:py-4">
-                                                {" "}
-                                                {/* Added padding */}
                                                 <FormLabel>Task Title</FormLabel>
                                                 <FormControl>
                                                     <Input
@@ -307,8 +294,6 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                             name="goalId"
                                             render={({ field }) => (
                                                 <FormItem className="py-3 md:py-4">
-                                                    {" "}
-                                                    {/* Added padding */}
                                                     <FormLabel>Assign to Goal (Optional)</FormLabel>
                                                     <Select
                                                         onValueChange={field.onChange}
@@ -352,8 +337,6 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                     name="description"
                                     render={({ field }) => (
                                         <FormItem className="py-3 md:col-span-2 md:py-4">
-                                            {" "}
-                                            {/* Spans 2 columns on md+ */}
                                             <FormLabel>Description</FormLabel>
                                             <FormControl>
                                                 <Textarea
@@ -373,8 +356,6 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                     name="images"
                                     render={({ field }) => (
                                         <FormItem className="py-3 md:col-span-2 md:py-4">
-                                            {" "}
-                                            {/* Spans 2 columns on md+ */}
                                             <FormLabel>Attach Images (Optional)</FormLabel>
                                             <FormControl>
                                                 <MultiImageUploader
@@ -441,21 +422,18 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                 </div>
                             </form>
                         </Form>
-                    </div>
+                    </CardContent>
                 ) : (
                     // Show this message if no circle is selected (primarily for create mode)
                     !isEditing && (
-                        <div className="p-6 pt-0">
-                            {" "}
-                            {/* Replaced CardContent with div and padding */}
+                        <CardContent className="p-6 pt-0">
                             <div className="pb-4 pt-4 text-center text-muted-foreground">
                                 Please select a circle above to create the task in.
                             </div>
-                        </div>
+                        </CardContent>
                     )
                 )}
-            </div>{" "}
-            {/* End Replaced Card */}
+            </Card>
             <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
                 <DialogContent
                     onInteractOutside={(e) => {
@@ -484,6 +462,6 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                     </div>
                 </DialogContent>
             </Dialog>
-        </div>
+        </>
     );
 };

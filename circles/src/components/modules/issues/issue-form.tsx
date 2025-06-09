@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card"; // Added Card imports
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -196,30 +197,21 @@ export const IssueForm: React.FC<IssueFormProps> = ({
     };
 
     return (
-        <div className="formatted mx-auto w-full">
-            {" "}
-            {/* Outer div's padding removed */}
-            <div className="w-full">
-                {" "}
-                {/* Replaced Card with div */}
-                <div className="p-6 pb-0">
-                    {" "}
-                    {/* Replaced CardHeader with div and padding */}
+        <>
+            <Card className="formatted mx-auto w-full">
+                <CardHeader className="p-6 pb-0">
                     <h3 className="mb-2 text-2xl font-semibold leading-none tracking-tight">
                         {isEditing ? "Edit Issue" : "Submit New Issue"}
-                    </h3>{" "}
-                    {/* Replaced CardTitle */}
+                    </h3>
                     {!isEditing &&
                         itemDetail && ( // Show CircleSelector only when creating new
                             <div className="pb-4 pt-2">
                                 <CircleSelector itemType={itemDetail} onCircleSelected={handleCircleSelected} />
                             </div>
                         )}
-                </div>
+                </CardHeader>
                 {selectedCircle || isEditing ? ( // Show form if a circle is selected OR if editing
-                    <div className="p-6 pt-0">
-                        {" "}
-                        {/* Replaced CardContent with div and padding */}
+                    <CardContent className="p-6 pt-0">
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-0 md:space-y-0">
                                 {" "}
@@ -363,20 +355,17 @@ export const IssueForm: React.FC<IssueFormProps> = ({
                                 </div>
                             </form>
                         </Form>
-                    </div>
+                    </CardContent>
                 ) : (
                     !isEditing && ( // Show this message only when creating new and no circle selected
-                        <div className="p-6 pt-0">
-                            {" "}
-                            {/* Replaced CardContent with div and padding */}
+                        <CardContent className="p-6 pt-0">
                             <div className="pb-4 pt-4 text-center text-muted-foreground">
                                 Please select a circle above to create the issue in.
                             </div>
-                        </div>
+                        </CardContent>
                     )
                 )}
-            </div>{" "}
-            {/* End Replaced Card */}
+            </Card>
             <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
                 <DialogContent
                     onInteractOutside={(e) => {
@@ -403,6 +392,6 @@ export const IssueForm: React.FC<IssueFormProps> = ({
                     </div>
                 </DialogContent>
             </Dialog>
-        </div>
+        </>
     );
 };
