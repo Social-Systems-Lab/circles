@@ -12,7 +12,7 @@ import { getAuthenticatedUserDid, getAuthorizedMembers, isAuthorized } from "@/l
 import { features } from "@/lib/data/constants";
 import { saveFile } from "@/lib/data/storage";
 import { revalidatePath } from "next/cache";
-import { getUser, getUserById, getUserPrivate } from "@/lib/data/user";
+import { getUser, getUserById, getUserPrivate, getPrivateUserByDid } from "@/lib/data/user";
 import { notifyNewMember, sendNotifications } from "@/lib/data/matrix";
 
 type CircleActionResponse = {
@@ -77,7 +77,17 @@ export const followCircle = async (circle: Circle, answers?: Record<string, stri
 
             // send a notification to all users that have permission to accept requests
             let user = await getUser(userDid);
-            await sendNotifications("follow_request", members, { circle: updatedCircle, user });
+            // Convert Circle[] to UserPrivate[]
+            const recipientUsers: UserPrivate[] = [];
+            for (const memberCircle of members) {
+                if (memberCircle.did) {
+                    const userPrivate = await getUserPrivate(memberCircle.did); // Changed to getUserPrivate
+                    if (userPrivate) {
+                        recipientUsers.push(userPrivate);
+                    }
+                }
+            }
+            await sendNotifications("follow_request", recipientUsers, { circle: updatedCircle, user });
 
             return {
                 success: true,

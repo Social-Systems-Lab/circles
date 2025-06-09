@@ -479,12 +479,12 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
             </Dialog>
 
             <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
-                <DialogContent>
-                    <DialogHeader
-                        onInteractOutside={(e) => {
-                            e.preventDefault();
-                        }}
-                    >
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
+                    <DialogHeader>
                         <DialogTitle>Assign Issue</DialogTitle>
                         <DialogDescription>
                             Select a member to assign this issue to, or assign it to yourself.
