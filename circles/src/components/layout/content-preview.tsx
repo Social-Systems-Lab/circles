@@ -291,8 +291,8 @@ export const ContentPreview: React.FC = () => {
                 // Render IssueDetail in preview mode
                 const issue = contentPreview!.content as IssueDisplay;
                 const props = contentPreview!.props as { circle: Circle; permissions: IssuePermissions }; // Get props
-                if (!props.circle || !props.permissions) {
-                    console.error("Issue preview missing circle or permissions data:", issue, props);
+                if (!props || !props.circle || !props.permissions) {
+                    console.error("Issue preview missing props, circle, or permissions data:", issue, props);
                     return (
                         <div className="p-4 text-red-500">
                             Error: Missing circle or permissions data for issue preview.

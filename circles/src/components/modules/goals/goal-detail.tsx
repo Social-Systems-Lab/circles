@@ -256,7 +256,7 @@ const GoalDetail: React.FC<GoalDetailProps> = ({
 
     const canEditGoal =
         (isAuthor && goal.stage === "review") || (permissions.canModerate && goal.stage !== "completed");
-    const canDeleteGoal = (isAuthor || permissions.canModerate) && goal.stage !== "completed";
+    const canDeleteGoal = isAuthor || permissions.canModerate;
     const canCompleteGoal = (isAuthor || permissions.canResolve) && goal.stage === "open";
 
     const handleFollowToggle = () => {

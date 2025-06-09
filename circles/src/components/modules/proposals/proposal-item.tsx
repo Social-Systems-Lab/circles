@@ -662,7 +662,7 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                     onOpenChange={setCreateGoalDialogOpen}
                     itemKey="goal"
                     proposal={proposal}
-                    // circle={circle} // Pass the circle from ProposalItemProps
+                    initialSelectedCircleId={circle._id} // Pass the circle ID
                     onSuccess={(goalId) => {
                         toast({ title: "Success", description: "Goal created from proposal." });
                         setCreateGoalDialogOpen(false);
