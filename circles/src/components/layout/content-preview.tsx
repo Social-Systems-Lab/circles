@@ -271,14 +271,34 @@ export const ContentPreview: React.FC = () => {
                     </div>
                 );
             case "user":
-            case "circle":
+            case "circle": {
+                const circleData = contentPreview!.content as WithMetric<Circle>;
+                if (!circleData || !circleData.handle) {
+                    // Basic validation for circle data
+                    console.error("User/Circle preview missing valid circle data:", circleData);
+                    return <div className="p-4 text-red-500">Error: Invalid data for User/Circle preview.</div>;
+                }
+                return (
+                    <div className="custom-scrollbar h-full overflow-y-auto">
+                        <CirclePreview circle={circleData} circleType={contentPreview.type} />
+                    </div>
+                );
+            }
             case "proposal": {
                 // Render ProposalItem in preview mode
                 const proposal = contentPreview!.content as ProposalDisplay;
-                const props = contentPreview!.props as { circle: Circle }; // Get props
+                const props = contentPreview!.props as { circle: Circle } | undefined;
+                if (!props) {
+                    console.error("Proposal preview missing props data:", proposal);
+                    return <div className="p-4 text-red-500">Error: Missing props data for proposal preview.</div>;
+                }
                 if (!props.circle) {
-                    console.error("Proposal preview missing circle data:", proposal);
-                    return <div className="p-4 text-red-500">Error: Missing circle data for proposal preview.</div>;
+                    console.error("Proposal preview missing circle data in props:", proposal, props);
+                    return (
+                        <div className="p-4 text-red-500">
+                            Error: Missing circle data in props for proposal preview.
+                        </div>
+                    );
                 }
                 return (
                     <div className="custom-scrollbar h-full overflow-y-auto">
@@ -290,9 +310,13 @@ export const ContentPreview: React.FC = () => {
             case "issue": {
                 // Render IssueDetail in preview mode
                 const issue = contentPreview!.content as IssueDisplay;
-                const props = contentPreview!.props as { circle: Circle; permissions: IssuePermissions }; // Get props
-                if (!props || !props.circle || !props.permissions) {
-                    console.error("Issue preview missing props, circle, or permissions data:", issue, props);
+                const props = contentPreview!.props as { circle: Circle; permissions: IssuePermissions } | undefined;
+                if (!props) {
+                    console.error("Issue preview missing props data:", issue);
+                    return <div className="p-4 text-red-500">Error: Missing props data for issue preview.</div>;
+                }
+                if (!props.circle || !props.permissions) {
+                    console.error("Issue preview missing circle or permissions data in props:", issue, props);
                     return (
                         <div className="p-4 text-red-500">
                             Error: Missing circle or permissions data for issue preview.
@@ -309,10 +333,10 @@ export const ContentPreview: React.FC = () => {
                     <div className="custom-scrollbar h-full overflow-y-auto">
                         <IssueDetail
                             issue={issue}
-                            circle={props.circle}
-                            permissions={props.permissions}
-                            currentUserDid={currentUserDid} // Pass the current user's DID
-                            isPreview={true} // Pass the isPreview flag
+                            circle={props.circle} // Safe
+                            permissions={props.permissions} // Safe
+                            currentUserDid={currentUserDid}
+                            isPreview={true}
                         />
                     </div>
                 );
@@ -320,9 +344,13 @@ export const ContentPreview: React.FC = () => {
             case "task": {
                 // Render TaskDetail in preview mode
                 const task = contentPreview!.content as TaskDisplay;
-                const props = contentPreview!.props as { circle: Circle; permissions: TaskPermissions }; // Get props
+                const props = contentPreview!.props as { circle: Circle; permissions: TaskPermissions } | undefined;
+                if (!props) {
+                    console.error("Task preview missing props data:", task);
+                    return <div className="p-4 text-red-500">Error: Missing props data for task preview.</div>;
+                }
                 if (!props.circle || !props.permissions) {
-                    console.error("Task preview missing circle or permissions data:", task, props);
+                    console.error("Task preview missing circle or permissions data in props:", task, props);
                     return (
                         <div className="p-4 text-red-500">
                             Error: Missing circle or permissions data for task preview.
@@ -338,24 +366,38 @@ export const ContentPreview: React.FC = () => {
                     <div className="custom-scrollbar h-full overflow-y-auto">
                         <TaskDetail
                             task={task}
-                            circle={props.circle}
-                            permissions={props.permissions}
+                            circle={props.circle} // Safe
+                            permissions={props.permissions} // Safe
                             currentUserDid={currentUserDid}
                             isPreview={true}
                         />
                     </div>
                 );
             }
-            case "post":
+            case "post": {
+                const props = contentPreview.props as PostItemProps | undefined;
+                if (!props) {
+                    console.error("Post preview missing props data:", contentPreview.content, props);
+                    return <div className="p-4 text-red-500">Error: Missing props data for post preview.</div>;
+                }
+                if (!props.post || !props.circle) {
+                    console.error(
+                        "Post preview missing essential post or circle data in props:",
+                        contentPreview.content,
+                        props,
+                    );
+                    return <div className="p-4 text-red-500">Error: Missing data for post preview.</div>;
+                }
                 return (
                     <PostPreview
-                        post={(contentPreview.props! as PostItemProps).post}
-                        circle={(contentPreview.props! as PostItemProps).circle}
-                        feed={(contentPreview.props! as PostItemProps).feed}
-                        initialComments={(contentPreview.props! as PostItemProps).initialComments}
-                        initialShowAllComments={(contentPreview.props! as PostItemProps).initialShowAllComments}
+                        post={props.post}
+                        circle={props.circle}
+                        feed={props.feed}
+                        initialComments={props.initialComments}
+                        initialShowAllComments={props.initialShowAllComments}
                     />
                 );
+            }
         }
     };
 
