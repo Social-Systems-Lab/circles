@@ -464,7 +464,7 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
                             <div className="mb-3 rounded border bg-blue-50 p-3 text-sm text-blue-800 shadow-sm">
                                 <p className="flex items-center">
                                     <PiUsersThree className="mr-2 h-5 w-5 flex-shrink-0" />
-                                    You've ranked these proposals.{" "}
+                                    You&apos;ve ranked these proposals.{" "}
                                     <span>
                                         {" "}
                                         Currently,{" "}
@@ -501,7 +501,7 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
                             <div className="mb-4 rounded border border-green-400 bg-green-50 p-3 text-sm text-green-800 shadow-sm">
                                 <p className="flex items-center">
                                     <CheckCircle2 className="mr-2 h-5 w-5 flex-shrink-0 text-green-600" />
-                                    Nicely done! You've ranked all available proposals.
+                                    Nicely done! You&apos;ve ranked all available proposals.
                                 </p>
                             </div>
                         )}
@@ -695,8 +695,8 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
                         <DialogHeader>
                             <DialogTitle>Delete Proposal</DialogTitle>
                             <DialogDescription>
-                                Are you sure you want to delete the proposal "{selectedProposal?.name}"? This action
-                                cannot be undone.
+                                Are you sure you want to delete the proposal &quot;{selectedProposal?.name}&quot;? This
+                                action cannot be undone.
                             </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>

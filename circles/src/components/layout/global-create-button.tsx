@@ -24,6 +24,7 @@ import { CreateProposalDialog } from "@/components/global-create/create-proposal
 import { CreateCommunityDialog } from "@/components/global-create/create-community-dialog"; // Updated Import
 
 export function GlobalCreateButton() {
+    const router = useRouter(); // Initialize router
     const [isMainDialogOpen, setIsMainDialogOpen] = useState(false);
     const [user] = useAtom(userAtom); // Get user from atom
     const [, setCreatePostDialogState] = useAtom(createPostDialogAtom); // Atom for FeedPostDialog
@@ -71,7 +72,6 @@ export function GlobalCreateButton() {
                 issue: "issues",
                 proposal: "proposals",
                 community: "circles", // Or specific community view if exists
-                project: null, // Project creation might have a different flow or path
             };
             const pathSegment = pathSegmentMap[itemKey];
             if (pathSegment) {

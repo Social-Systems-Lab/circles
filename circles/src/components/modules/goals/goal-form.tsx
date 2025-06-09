@@ -241,6 +241,7 @@ export const GoalForm: React.FC<GoalFormProps> = ({
                 setIsSubmitting(false);
             }
         } catch (error) {
+            console.error("Error submitting goal form:", error);
             toast({
                 title: "Error",
                 description: "An unexpected error occurred. Please try again.",
