@@ -46,11 +46,7 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
     const [user] = useAtom(userAtom);
     const isCompact = useIsCompact();
     const isMobile = useIsMobile();
-    const canCreateSubcircle = isAuthorized(
-        user,
-        circle,
-        isProjectsList ? features.projects.create : features.communities.create,
-    );
+    const canCreateSubcircle = isAuthorized(user, circle, features.communities.create);
     const router = useRouter();
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [searchQuery, setSearchQuery] = useState("");
@@ -99,7 +95,7 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
         }
 
         let contentPreviewData: ContentPreviewData = {
-            type: circle?.circleType === "user" ? "user" : circle?.circleType === "project" ? "project" : "circle",
+            type: circle?.circleType === "user" ? "user" : "circle",
             content: circle,
         };
 

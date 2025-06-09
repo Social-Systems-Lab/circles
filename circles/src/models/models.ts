@@ -12,7 +12,7 @@ export const handleSchema = z
     .regex(/^[a-zA-Z0-9\-]*$/, { message: "Handle can only contain letters, numbers and hyphens (-)." });
 
 export const accountTypeSchema = z.enum(["user", "organization"]);
-export const circleTypeSchema = z.enum(["user", "circle"]);
+export const circleTypeSchema = z.enum(["user", "circle", "project"]);
 export const emailSchema = z.string().email({ message: "Enter valid email" });
 
 const DEFAULT_MAX_IMAGE_FILE_SIZE = 5000000; // 5MB
