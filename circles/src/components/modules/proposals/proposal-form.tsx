@@ -17,7 +17,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useRouter } from "next/navigation";
 import LocationPicker from "@/components/forms/location-picker"; // Added LocationPicker
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"; // Added Dialog components
-import { getFullLocationName } from "@/lib/utils"; // Added getFullLocationName
+import { getFullLocationName, cn } from "@/lib/utils"; // Added getFullLocationName and cn
 import { ProposalStageTimeline } from "./proposal-stage-timeline";
 import { createProposalAction, updateProposalAction } from "@/app/circles/[handle]/proposals/actions";
 import CircleSelector from "@/components/global-create/circle-selector"; // Added CircleSelector
@@ -224,7 +224,9 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
                 </CardHeader>
                 {isEditing &&
                     proposal?.stage && ( // Show timeline only when editing, moved below header
-                        <CardContent className="p-6 pb-4 pt-0"> {/* Adjust padding if needed */}
+                        <CardContent className="p-6 pb-4 pt-0">
+                            {" "}
+                            {/* Adjust padding if needed */}
                             <div className="mb-6 ml-4 mr-4">
                                 {/* Timeline might need margin adjustments */}
                                 <ProposalStageTimeline currentStage={proposal.stage} />
@@ -232,7 +234,7 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
                         </CardContent>
                     )}
                 {selectedCircle ? (
-                    <CardContent className={`p-6 ${isEditing && proposal?.stage ? "pt-0" : "pt-0"}`}>
+                    <CardContent className={cn("p-6", isEditing && proposal?.stage && "pt-0")}>
                         {/* Remove CardContent top padding if timeline was shown */}
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-0 md:space-y-0">
@@ -454,19 +456,17 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
                                 </div>
                             </form>
                         </Form>
-                    </div>
+                    </CardContent>
                 ) : (
                     // Message if no circle is selected (primarily for create mode)
                     !isEditing && (
-                        <div className="p-6 pt-0">
-                            {" "}
-                            {/* Replaced CardContent with div and padding */}
+                        <CardContent className="p-6 pt-0">
                             <div className="pb-4 pt-4 text-center text-muted-foreground">
                                 {itemDetail
                                     ? "Please select a circle above to create the proposal in."
                                     : "Loading form..."}
                             </div>
-                        </div>
+                        </CardContent>
                     )
                 )}
             </Card>
