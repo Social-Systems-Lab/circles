@@ -10,6 +10,9 @@ import { features } from "@/lib/data/constants";
 import { redirect } from "next/navigation";
 import { notFound } from "next/navigation";
 import { ObjectId } from "mongodb";
+import { UserPrivate } from "@/models/models"; // Added import
+import { getUserPrivate } from "@/lib/data/user"; // Corrected function name
+import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Added import
 // Import the goals action
 import { getGoalsAction } from "@/app/circles/[handle]/goals/actions";
 import { GoalDisplay } from "@/models/models"; // Import GoalDisplay type
@@ -30,6 +33,14 @@ export default async function EditTaskPage(props: PageProps) {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         redirect("/login");
+    }
+
+    // Fetch user profile
+    const userProfile = await getUserPrivate(userDid); // Corrected function call
+    if (!userProfile) {
+        // Handle case where user profile is not found, e.g., redirect or show error
+        console.error("User profile not found for DID:", userDid);
+        notFound(); // Or redirect to an error page
     }
 
     const circle = await getCircleByHandle(circleHandle);
@@ -81,6 +92,16 @@ export default async function EditTaskPage(props: PageProps) {
     }
     // --- End Fetch Goals ---
 
+    // Define itemDetail for TaskForm
+    const itemDetailForTaskForm: CreatableItemDetail = {
+        key: "task",
+        title: "Task", // TaskForm will display "Edit Task" based on `isEditing`
+        description: "Edit an existing task.", // Placeholder description
+        moduleHandle: "tasks", // From creatableItemsList definition
+        createFeatureHandle: "create", // From creatableItemsList definition
+        // icon: CheckSquare, // Optional: could import CheckSquare from lucide-react if needed
+    };
+
     return (
         <div className="formatted flex h-full w-full flex-col">
             <div className="mb-4 flex items-center p-4">
@@ -94,12 +115,11 @@ export default async function EditTaskPage(props: PageProps) {
             </div>
             {/* Pass fetched goals and task to TaskForm */}
             <TaskForm
+                user={userProfile}
+                itemDetail={itemDetailForTaskForm}
                 circle={circle}
-                circleHandle={circleHandle}
                 task={task}
                 taskId={task._id} // Pass string ID
-                goals={goals} // Pass goals prop
-                goalsModuleEnabled={goalsModuleEnabled} // Pass flag
             />
         </div>
     );

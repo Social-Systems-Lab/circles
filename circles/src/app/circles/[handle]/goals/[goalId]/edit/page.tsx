@@ -95,6 +95,7 @@ export default async function EditGoalPage(props: PageProps) {
                 goal={goal}
                 goalId={goalId} // Use the string goalId from params
                 initialSelectedCircleId={circle._id.toString()} // Pass circle's ID as string
+                circle={circle} // Pass the fetched circle object
                 // onFormSubmitSuccess={(data) => {
                 //  if (data.id && data.circleHandle) {
                 //    router.push(`/circles/${data.circleHandle}/goals/${data.id}`);

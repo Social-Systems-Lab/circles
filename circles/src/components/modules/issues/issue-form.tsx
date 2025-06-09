@@ -41,6 +41,7 @@ interface IssueFormProps {
     issueId?: string;
     onFormSubmitSuccess?: (data: { id?: string; circleHandle?: string }) => void; // Updated to include circleHandle
     onCancel?: () => void;
+    circle?: Circle; // Added for editing context
     // circle and circleHandle removed
 }
 
@@ -51,6 +52,7 @@ export const IssueForm: React.FC<IssueFormProps> = ({
     issueId,
     onFormSubmitSuccess,
     onCancel,
+    circle: circleProp, // Added for editing
 }) => {
     const [selectedCircle, setSelectedCircle] = useState<Circle | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -72,13 +74,16 @@ export const IssueForm: React.FC<IssueFormProps> = ({
 
     // Effect to set selectedCircle if editing an existing issue
     useEffect(() => {
-        if (isEditing && issue && issue.circleId && user.memberships) {
+        if (isEditing && circleProp) {
+            setSelectedCircle(circleProp);
+        } else if (isEditing && issue && issue.circleId && user?.memberships) {
+            // Fallback if circleProp not directly passed but user context is available
             const owningCircle = user.memberships.find((m) => m.circleId === issue.circleId)?.circle;
             if (owningCircle) {
                 setSelectedCircle(owningCircle);
             }
         }
-    }, [isEditing, issue, user]);
+    }, [isEditing, issue, user, circleProp, setSelectedCircle]);
 
     useEffect(() => {
         if (issue?.location) {

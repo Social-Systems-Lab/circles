@@ -52,6 +52,7 @@ interface GoalFormProps {
     onCancel?: () => void;
     proposal?: ProposalDisplay; // Keep for prefilling from proposal
     initialSelectedCircleId?: string; // Added: To guide CircleSelector
+    circle?: Circle; // Added for editing context
     // initialData is effectively replaced by proposal prop for prefilling logic
 }
 
@@ -64,6 +65,7 @@ export const GoalForm: React.FC<GoalFormProps> = ({
     onCancel,
     proposal, // Received from parent dialog
     initialSelectedCircleId: initialCircleIdFromProps, // Renamed for clarity
+    circle: circleProp, // Added for editing
 }) => {
     const [selectedCircle, setSelectedCircle] = useState<Circle | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -126,6 +128,12 @@ export const GoalForm: React.FC<GoalFormProps> = ({
             setLocation(goal.location);
         }
     }, [goal?.location]);
+
+    useEffect(() => {
+        if (isEditing && circleProp) {
+            setSelectedCircle(circleProp);
+        }
+    }, [isEditing, circleProp, setSelectedCircle]);
 
     // Callback for CircleSelector
     const handleCircleSelected = useCallback(

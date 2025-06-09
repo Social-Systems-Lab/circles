@@ -44,6 +44,7 @@ interface TaskFormProps {
     task?: Task;
     taskId?: string;
     initialSelectedCircleId?: string; // Added initialSelectedCircleId
+    circle?: Circle; // Added for editing context
     // goals and goalsModuleEnabled will be fetched/determined internally
     onFormSubmitSuccess?: (data: { id?: string; circleHandle?: string }) => void; // Updated to include circleHandle
     onCancel?: () => void;
@@ -56,6 +57,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     task,
     taskId,
     initialSelectedCircleId, // Added initialSelectedCircleId
+    circle: circleProp, // Added for editing
     onFormSubmitSuccess,
     onCancel,
 }) => {
@@ -105,11 +107,10 @@ export const TaskForm: React.FC<TaskFormProps> = ({
         // If editing, set the initial selectedCircle from the task's circle
         // This assumes task object has circle information or we can derive it.
         // For now, if editing, CircleSelector will handle initial selection based on user's circles.
-        // If `task.circle` was available, we could do:
-        // if (isEditing && task.circle) {
-        //     setSelectedCircle(task.circle as Circle);
-        // }
-    }, [task?.location, isEditing]);
+        if (isEditing && circleProp) {
+            setSelectedCircle(circleProp);
+        }
+    }, [task?.location, isEditing, circleProp, setSelectedCircle]);
 
     useEffect(() => {
         if (selectedCircle?.handle) {

@@ -9,6 +9,9 @@ import { features } from "@/lib/data/constants";
 import { redirect } from "next/navigation";
 import { notFound } from "next/navigation";
 import { ObjectId } from "mongodb";
+import { UserPrivate } from "@/models/models"; // Added import
+import { getUserPrivate } from "@/lib/data/user"; // Corrected function name
+import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Added import
 
 type PageProps = {
     params: Promise<{ handle: string; issueId: string }>;
@@ -28,6 +31,14 @@ export default async function EditIssuePage(props: PageProps) {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         redirect("/login");
+    }
+
+    // Fetch user profile
+    const userProfile = await getUserPrivate(userDid); // Corrected function call
+    if (!userProfile) {
+        // Handle case where user profile is not found, e.g., redirect or show error
+        console.error("User profile not found for DID:", userDid);
+        notFound(); // Or redirect to an error page
     }
 
     // Get the circle
@@ -59,6 +70,16 @@ export default async function EditIssuePage(props: PageProps) {
         );
     }
 
+    // Define itemDetail for IssueForm
+    const itemDetailForIssueForm: CreatableItemDetail = {
+        key: "issue",
+        title: "Issue", // IssueForm will display "Edit Issue" based on `isEditing`
+        description: "Edit an existing issue.", // Placeholder description
+        moduleHandle: "issues", // From creatableItemsList definition
+        createFeatureHandle: "create", // From creatableItemsList definition
+        // icon: AlertTriangle, // Optional: could import AlertTriangle from lucide-react
+    };
+
     return (
         <div className="formatted flex h-full w-full flex-col">
             <div className="mb-4 flex items-center p-4">
@@ -72,7 +93,13 @@ export default async function EditIssuePage(props: PageProps) {
             </div>
 
             {/* Render IssueForm, passing circle, circleHandle, and the existing issue */}
-            <IssueForm circle={circle} circleHandle={circleHandle} issue={issue} issueId={issue._id} />
+            <IssueForm
+                user={userProfile}
+                itemDetail={itemDetailForIssueForm}
+                circle={circle}
+                issue={issue}
+                issueId={issue._id}
+            />
         </div>
     );
 }
