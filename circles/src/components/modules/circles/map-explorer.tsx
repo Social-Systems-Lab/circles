@@ -77,7 +77,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const isMobile = useIsMobile();
     const { windowWidth, windowHeight } = useWindowDimensions();
     const router = useRouter();
-    const [viewMode, setViewMode] = useState<ViewMode>("cards");
+    const [viewMode, setViewMode] = useState<ViewMode>("explore");
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [allSearchResults, setAllSearchResults] = useState<WithMetric<Circle>[]>([]);
@@ -95,7 +95,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const filterCirclesByCategory = useCallback((circles: WithMetric<Circle>[], category: string | null) => {
         // ... (no changes) ...
         if (!category) return circles;
-        const typeToFilter = category === "circles" ? "circle" : category === "projects" ? "project" : "user";
+        const typeToFilter = category === "circles" ? "circle" : "user";
         return circles.filter((c) => c.circleType === typeToFilter);
     }, []);
 
@@ -130,7 +130,6 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         };
         allSearchResults?.forEach((result) => {
             if (result.circleType === "circle") counts.circles++;
-            else if (result.circleType === "project") counts.projects++;
             else if (result.circleType === "user") counts.users++;
         });
         return counts;
