@@ -66,6 +66,7 @@ import { useAtom } from "jotai"; // Added jotai import
 import { userAtom, contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms"; // Removed ContentPreviewData from here
 import Link from "next/link";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // For assignee tooltip
+import { CreateIssueDialog } from "@/components/global-create/create-issue-dialog"; // Import CreateIssueDialog
 
 // Define Permissions type based on what IssuesModule passes
 type IssuePermissions = {
@@ -131,6 +132,7 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
     const [stageFilter, setStageFilter] = useState<IssueStage | "all">("all");
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+    const [isCreateIssueDialogOpen, setIsCreateIssueDialogOpen] = useState(false); // State for Create Issue Dialog
     // Add assignee filter state if needed later
     // const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
 
@@ -343,6 +345,17 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
     // Check create permission for the button using the user object
     const canCreateIssue = isAuthorized(user, circle, features.issues.create);
 
+    const handleCreateIssueSuccess = (issueId?: string) => {
+        toast({
+            title: "Issue Created",
+            description: "The new issue has been successfully created.",
+        });
+        setIsCreateIssueDialogOpen(false);
+        router.refresh(); // Refresh the list
+        // Optionally, navigate to the new issue:
+        // if (issueId) router.push(`/circles/${circle.handle}/issues/${issueId}`);
+    };
+
     return (
         <TooltipProvider>
             <div className="flex flex-1 flex-row justify-center">
@@ -356,10 +369,8 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
                             />
                         </div>
                         {canCreateIssue && (
-                            <Button asChild>
-                                <Link href={`/circles/${circle.handle}/issues/create`}>
-                                    <Plus className="mr-2 h-4 w-4" /> Create Issue
-                                </Link>
+                            <Button onClick={() => setIsCreateIssueDialogOpen(true)}>
+                                <Plus className="mr-2 h-4 w-4" /> Create Issue
                             </Button>
                         )}
                         <Select
@@ -509,6 +520,17 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
+
+                    {/* Render CreateIssueDialog */}
+                    {canCreateIssue && (
+                        <CreateIssueDialog
+                            isOpen={isCreateIssueDialogOpen}
+                            onOpenChange={setIsCreateIssueDialogOpen}
+                            onSuccess={handleCreateIssueSuccess}
+                            itemKey="issue"
+                            initialSelectedCircleId={circle._id}
+                        />
+                    )}
                 </div>
             </div>
         </TooltipProvider>
