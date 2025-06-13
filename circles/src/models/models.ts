@@ -852,6 +852,8 @@ export type NotificationType =
     // Ranking Notifications
     | "ranking_stale_reminder" // User's ranking list is stale, reminder sent
     | "ranking_grace_period_ended" // User's ranking list is past grace period
+    // User management notifications
+    | "user_verified" // User has been verified by an admin
     // Consolidated Summary Notification Types
     | "COMMUNITY_FOLLOW_REQUEST" // Replaces follow_request
     | "COMMUNITY_NEW_FOLLOWER" // Replaces new_follower
@@ -898,6 +900,7 @@ export const notificationTypeValues = [
     "proposal_to_goal",
     "ranking_stale_reminder",
     "ranking_grace_period_ended",
+    "user_verified",
     // Summary Types (for user configuration)
     "COMMUNITY_FOLLOW_REQUEST",
     "COMMUNITY_NEW_FOLLOWER",
@@ -919,6 +922,7 @@ export const summaryNotificationTypes = [
     "ISSUES_ALL",
     "TASKS_ALL",
     "GOALS_ALL",
+    "ACCOUNT_ALL",
 ] as const;
 export type SummaryNotificationType = (typeof summaryNotificationTypes)[number];
 
@@ -972,6 +976,11 @@ export const summaryNotificationTypeDetails: Record<
             "goal_completed",
             "proposal_to_goal",
         ],
+    },
+    ACCOUNT_ALL: {
+        label: "Account",
+        moduleHandle: "account",
+        mapsTo: ["user_verified"],
     },
 };
 

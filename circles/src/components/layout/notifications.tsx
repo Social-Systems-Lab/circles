@@ -318,6 +318,9 @@ export const Notifications = () => {
             case "follow_accepted":
                 router.push(`/circles/${notification.circle?.handle}`);
                 break;
+            case "user_verified":
+                router.push(`/`);
+                break;
 
             // Post/Comment related notifications - Check for parent item first
             case "post_comment":

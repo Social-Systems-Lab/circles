@@ -655,6 +655,8 @@ function deriveBody(notificationType: NotificationType, payload: { [key: string]
             return `You have new items to rank in ${circleName}.`;
         case "ranking_grace_period_ended":
             return `Your ranking in ${circleName} is no longer being counted.`;
+        case "user_verified":
+            return `Congratulations! Your account has been verified.`;
         default:
             const exhaustiveCheck = notificationType;
             console.warn(`Unhandled notification type in deriveBody: ${exhaustiveCheck}`);

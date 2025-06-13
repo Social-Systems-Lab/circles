@@ -7,6 +7,8 @@ import { Circle } from "@/models/models";
 import { ObjectId } from "mongodb";
 import { getAuthenticatedUserDid, getServerPublicKey } from "@/lib/auth/auth";
 import { getUserPrivate } from "@/lib/data/user";
+import { sendNotifications } from "@/lib/data/matrix";
+import { sendEmail } from "@/lib/data/email";
 import { GlobalServerSettingsFormData, globalServerSettingsValidationSchema } from "./global-server-settings-schema";
 import { getServerSettings, registerServer, updateServerSettings, urlIsLocal } from "@/lib/data/server-settings";
 import { ServerSettings } from "@/models/models";
@@ -151,13 +153,36 @@ export async function toggleUserVerification(userId: string, isVerified: boolean
     if (!userDid) {
         throw new Error("Unauthorized: You do not have permission to access this resource.");
     }
-    let user = await getUserPrivate(userDid);
-    if (!user.isAdmin) {
+    let adminUser = await getUserPrivate(userDid);
+    if (!adminUser.isAdmin) {
         throw new Error("Unauthorized: You do not have permission to access this resource.");
     }
 
     try {
         await Circles.updateOne({ _id: new ObjectId(userId) }, { $set: { isVerified } });
+
+        if (isVerified) {
+            const userToNotify = await getUserPrivate(userId);
+            if (userToNotify) {
+                // Send in-app notification
+                await sendNotifications("user_verified", [userToNotify], {
+                    userName: userToNotify.name,
+                });
+
+                // Send email
+                if (userToNotify.email) {
+                    await sendEmail({
+                        to: userToNotify.email,
+                        templateAlias: "account-verified", // This is a placeholder, replace with the actual template name
+                        templateModel: {
+                            name: userToNotify.name,
+                            actionUrl: `${process.env.CIRCLES_URL || "http://localhost:3000"}/`, // Link to the user's profile or dashboard
+                        },
+                    });
+                }
+            }
+        }
+
         revalidatePath("/admin");
         return {
             success: true,
