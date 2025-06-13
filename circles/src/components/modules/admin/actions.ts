@@ -39,6 +39,7 @@ export async function getEntitiesByType(type: "circle" | "user" | "project") {
                     createdAt: 1,
                     members: 1,
                     isAdmin: 1,
+                    isVerified: 1,
                 },
             },
         ).toArray();
@@ -140,6 +141,34 @@ export async function getSuperAdmins() {
     } catch (error) {
         console.error("Error fetching super admins:", error);
         throw new Error("Failed to fetch super admins");
+    }
+}
+
+// Toggle user verification status
+export async function toggleUserVerification(userId: string, isVerified: boolean) {
+    // check if user is admin
+    let userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        throw new Error("Unauthorized: You do not have permission to access this resource.");
+    }
+    let user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        throw new Error("Unauthorized: You do not have permission to access this resource.");
+    }
+
+    try {
+        await Circles.updateOne({ _id: new ObjectId(userId) }, { $set: { isVerified } });
+        revalidatePath("/admin");
+        return {
+            success: true,
+            message: `User ${isVerified ? "verified" : "unverified"} successfully`,
+        };
+    } catch (error) {
+        console.error("Error updating user verification status:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to update user verification status",
+        };
     }
 }
 

@@ -19,7 +19,7 @@ import { getGroupedUserNotificationSettings } from "@/lib/actions/notificationSe
 
 export const getAllUsers = async (): Promise<Circle[]> => {
     let circles: Circle[] = await Circles.find(
-        { circleType: "user" },
+        { circleType: "user", isVerified: true },
         {
             projection: {
                 _id: 1,

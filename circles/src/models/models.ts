@@ -433,6 +433,8 @@ export const circleSchema = z.object({
     isEmailVerified: z.boolean().optional(),
     emailVerificationToken: z.string().nullable().optional(),
     emailVerificationTokenExpiry: z.date().nullable().optional(),
+    // Platform-level verification
+    isVerified: z.boolean().optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;

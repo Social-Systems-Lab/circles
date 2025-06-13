@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react"; // Added useTransition
-import { getEntitiesByType, deleteEntity } from "../actions";
+import { getEntitiesByType, deleteEntity, toggleUserVerification } from "../actions";
 import { initiatePasswordReset } from "@/lib/auth/actions"; // Import the new action
 import { Circle } from "@/models/models";
 import { Button } from "@/components/ui/button";
-import { Trash2, RefreshCw, Search, KeyRound } from "lucide-react"; // Added KeyRound icon
+import { Trash2, RefreshCw, Search, KeyRound, CheckCircle, XCircle } from "lucide-react"; // Added KeyRound icon
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -40,6 +40,7 @@ export default function UsersTab() {
     const [resetLink, setResetLink] = useState(""); // State to store the reset link
     const [resettingUser, setResettingUser] = useState<Circle | null>(null); // State to store user being reset
     const [isResetting, startResetTransition] = useTransition(); // Transition for reset action
+    const [isVerifying, startVerifyTransition] = useTransition();
     const { toast } = useToast();
 
     useEffect(() => {
@@ -97,6 +98,37 @@ export default function UsersTab() {
             setDeleteDialogOpen(false);
             setUserToDelete(null);
         }
+    };
+
+    const handleToggleVerification = async (user: Circle) => {
+        if (!user._id) return;
+
+        startVerifyTransition(async () => {
+            try {
+                const result = await toggleUserVerification(user._id, !user.isVerified);
+
+                if (result.success) {
+                    toast({
+                        title: "Success",
+                        description: result.message,
+                    });
+                    // Update local state
+                    setUsers(users.map((u) => (u._id === user._id ? { ...u, isVerified: !u.isVerified } : u)));
+                } else {
+                    toast({
+                        title: "Error",
+                        description: result.message,
+                        variant: "destructive",
+                    });
+                }
+            } catch (error) {
+                toast({
+                    title: "Error",
+                    description: "Failed to toggle user verification",
+                    variant: "destructive",
+                });
+            }
+        });
     };
 
     const handleResetPasswordClick = async (user: Circle) => {
@@ -179,6 +211,7 @@ export default function UsersTab() {
                                 <TableHead>Handle</TableHead>
                                 <TableHead>Email</TableHead>
                                 <TableHead>Admin</TableHead>
+                                <TableHead>Verified</TableHead>
                                 <TableHead>Created</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
@@ -186,7 +219,7 @@ export default function UsersTab() {
                         <TableBody>
                             {filteredUsers.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                                    <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                                         {searchTerm ? "No users found matching your search" : "No users found"}
                                     </TableCell>
                                 </TableRow>
@@ -219,6 +252,17 @@ export default function UsersTab() {
                                             )}
                                         </TableCell>
                                         <TableCell>
+                                            {user.isVerified ? (
+                                                <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
+                                                    Yes
+                                                </span>
+                                            ) : (
+                                                <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-800">
+                                                    No
+                                                </span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
                                             {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "Unknown"}
                                         </TableCell>
                                         <TableCell className="space-x-1 text-right">
@@ -234,6 +278,22 @@ export default function UsersTab() {
                                                     <RefreshCw className="h-4 w-4 animate-spin" />
                                                 ) : (
                                                     <KeyRound className="h-4 w-4 text-blue-500" />
+                                                )}
+                                            </Button>
+                                            {/* Verify Button */}
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => handleToggleVerification(user)}
+                                                disabled={isVerifying}
+                                                title={user.isVerified ? "Unverify User" : "Verify User"}
+                                            >
+                                                {isVerifying ? (
+                                                    <RefreshCw className="h-4 w-4 animate-spin" />
+                                                ) : user.isVerified ? (
+                                                    <XCircle className="h-4 w-4 text-yellow-500" />
+                                                ) : (
+                                                    <CheckCircle className="h-4 w-4 text-green-500" />
                                                 )}
                                             </Button>
                                             {/* Delete Button */}

@@ -304,6 +304,13 @@ export const isAuthorized = async (
     circleId: string,
     featureInput: Feature,
 ): Promise<boolean> => {
+    if (userDid) {
+        const user = await Circles.findOne({ did: userDid });
+        if (user && !user.isVerified && !user.isAdmin) {
+            return false;
+        }
+    }
+
     let circle = await Circles.findOne({ _id: new ObjectId(circleId) });
     if (!circle) return false;
 
