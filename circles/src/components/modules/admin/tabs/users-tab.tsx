@@ -29,6 +29,9 @@ import {
     DialogClose,
 } from "@/components/ui/dialog"; // Import Dialog components
 import { Copy } from "lucide-react"; // Import Copy icon
+import { useSetAtom } from "jotai";
+import { contentPreviewAtom } from "@/lib/data/atoms";
+import { getUserByDidAction } from "../actions";
 
 export default function UsersTab() {
     const [users, setUsers] = useState<Circle[]>([]);
@@ -42,6 +45,7 @@ export default function UsersTab() {
     const [isResetting, startResetTransition] = useTransition(); // Transition for reset action
     const [isVerifying, startVerifyTransition] = useTransition();
     const { toast } = useToast();
+    const setContentPreview = useSetAtom(contentPreviewAtom);
 
     useEffect(() => {
         fetchUsers();
@@ -180,6 +184,11 @@ export default function UsersTab() {
             user.email?.toLowerCase().includes(searchTerm.toLowerCase()),
     );
 
+    const handlePreview = async (did: string) => {
+        const user = await getUserByDidAction(did);
+        setContentPreview({ type: "user", content: user });
+    };
+
     return (
         <div className="space-y-4">
             <div className="mb-4 flex items-center justify-between">
@@ -227,15 +236,22 @@ export default function UsersTab() {
                                 filteredUsers.map((user) => (
                                     <TableRow key={user._id}>
                                         <TableCell className="font-medium">
-                                            <div className="flex items-center">
+                                            <div className="flex items-center gap-2">
                                                 {user.picture && (
                                                     <img
                                                         src={user.picture.url}
                                                         alt={user.name}
-                                                        className="mr-2 h-8 w-8 rounded-full object-cover"
+                                                        className="h-8 w-8 rounded-full object-cover"
                                                     />
                                                 )}
                                                 {user.name}
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handlePreview(user.did!)}
+                                                >
+                                                    Preview
+                                                </Button>
                                             </div>
                                         </TableCell>
                                         <TableCell>{user.handle}</TableCell>

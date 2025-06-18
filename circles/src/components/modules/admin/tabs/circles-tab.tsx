@@ -18,6 +18,9 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useSetAtom } from "jotai";
+import { contentPreviewAtom } from "@/lib/data/atoms";
+import { getCircleByIdAction } from "../actions";
 
 export default function CirclesTab() {
     const [circles, setCircles] = useState<Circle[]>([]);
@@ -26,6 +29,7 @@ export default function CirclesTab() {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [circleToDelete, setCircleToDelete] = useState<Circle | null>(null);
     const { toast } = useToast();
+    const setContentPreview = useSetAtom(contentPreviewAtom);
 
     useEffect(() => {
         fetchCircles();
@@ -91,6 +95,11 @@ export default function CirclesTab() {
             circle.description?.toLowerCase().includes(searchTerm.toLowerCase()),
     );
 
+    const handlePreview = async (id: string) => {
+        const circle = await getCircleByIdAction(id);
+        setContentPreview({ type: "circle", content: circle });
+    };
+
     return (
         <div className="space-y-4">
             <div className="mb-4 flex items-center justify-between">
@@ -139,15 +148,22 @@ export default function CirclesTab() {
                                 filteredCircles.map((circle) => (
                                     <TableRow key={circle._id}>
                                         <TableCell className="font-medium">
-                                            <div className="flex items-center">
+                                            <div className="flex items-center gap-2">
                                                 {circle.picture && (
                                                     <img
                                                         src={circle.picture.url}
                                                         alt={circle.name}
-                                                        className="mr-2 h-8 w-8 rounded-full object-cover"
+                                                        className="h-8 w-8 rounded-full object-cover"
                                                     />
                                                 )}
                                                 {circle.name}
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handlePreview(circle._id!)}
+                                                >
+                                                    Preview
+                                                </Button>
                                             </div>
                                         </TableCell>
                                         <TableCell>{circle.handle}</TableCell>

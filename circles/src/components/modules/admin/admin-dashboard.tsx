@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button"; // Import Button
 import { triggerReindexAction } from "./actions"; // Import the new action
 import CirclesTab from "./tabs/circles-tab";
 import UsersTab from "./tabs/users-tab";
-import ProjectsTab from "./tabs/projects-tab";
 import SuperAdminsTab from "./tabs/super-admins-tab";
 import VerificationRequestsTab from "./tabs/verification-requests-tab";
 import { toast } from "sonner"; // Import toast for feedback
@@ -52,7 +51,6 @@ export default function AdminDashboard({ serverSettings }: AdminDashboardProps) 
                 <TabsTrigger value="circles">Circles</TabsTrigger>
                 <TabsTrigger value="users">Users</TabsTrigger>
                 <TabsTrigger value="verification-requests">Verification Requests</TabsTrigger>
-                <TabsTrigger value="projects">Projects</TabsTrigger>
                 <TabsTrigger value="super-admins">Super Admins</TabsTrigger>
             </TabsList>
 
@@ -83,13 +81,6 @@ export default function AdminDashboard({ serverSettings }: AdminDashboardProps) 
                 <div className="mb-8">
                     <h2 className="mb-2 text-xl font-semibold">Verification Requests</h2>
                     <VerificationRequestsTab />
-                </div>
-            </TabsContent>
-
-            <TabsContent value="projects" className="space-y-4">
-                <div className="mb-8">
-                    <h2 className="mb-2 text-xl font-semibold">Manage Projects</h2>
-                    <ProjectsTab />
                 </div>
             </TabsContent>
 

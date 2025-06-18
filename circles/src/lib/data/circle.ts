@@ -262,6 +262,14 @@ export const getCircleById = async (id: string | null, criteria?: any): Promise<
     return circle;
 };
 
+export const getCircleByDid = async (did: string): Promise<Circle> => {
+    let circle = (await Circles.findOne({ did: did }, { projection: SAFE_CIRCLE_PROJECTION })) as Circle;
+    if (circle?._id) {
+        circle._id = circle._id.toString();
+    }
+    return circle;
+};
+
 export const updateCircle = async (circle: Partial<Circle>, authenticatedUserDid: string): Promise<void> => {
     const { _id, ...circleWithoutId } = circle;
     if (!_id) {

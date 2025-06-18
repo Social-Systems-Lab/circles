@@ -11,15 +11,29 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
 import Link from "next/link";
+import { UserPicture } from "../../members/user-picture";
+import { useSetAtom } from "jotai";
+import { contentPreviewAtom } from "@/lib/data/atoms";
+import { getUserByDidAction } from "@/components/modules/admin/actions";
+
+type VerificationRequestWithUser = VerificationRequest & {
+    user: {
+        name: string;
+        picture: {
+            url: string;
+        };
+    };
+};
 
 export default function VerificationRequestsTab() {
-    const [requests, setRequests] = useState<VerificationRequest[]>([]);
+    const [requests, setRequests] = useState<VerificationRequestWithUser[]>([]);
     const { toast } = useToast();
+    const setContentPreview = useSetAtom(contentPreviewAtom);
 
     useEffect(() => {
         const fetchRequests = async () => {
             const fetchedRequests = await getVerificationRequests();
-            setRequests(fetchedRequests);
+            setRequests(fetchedRequests as VerificationRequestWithUser[]);
         };
         fetchRequests();
     }, []);
@@ -40,6 +54,11 @@ export default function VerificationRequestsTab() {
         });
     };
 
+    const handlePreview = async (did: string) => {
+        const user = await getUserByDidAction(did);
+        setContentPreview({ type: "user", content: user });
+    };
+
     return (
         <Table>
             <TableHeader>
@@ -53,9 +72,15 @@ export default function VerificationRequestsTab() {
                 {requests.map((request) => (
                     <TableRow key={request._id}>
                         <TableCell>
-                            <Link href={`/circles/${request.userDid}`} target="_blank">
-                                {request.userDid}
-                            </Link>
+                            <div className="flex items-center gap-2">
+                                <UserPicture name={request.user.name} picture={request.user.picture.url} />
+                                <Link href={`/circles/${request.userDid}`} target="_blank">
+                                    {request.user.name}
+                                </Link>
+                                <Button variant="ghost" size="sm" onClick={() => handlePreview(request.userDid)}>
+                                    Preview
+                                </Button>
+                            </div>
                         </TableCell>
                         <TableCell>{new Date(request.requestedAt).toLocaleString()}</TableCell>
                         <TableCell>

@@ -14,6 +14,8 @@ import { getServerSettings, registerServer, updateServerSettings, urlIsLocal } f
 import { ServerSettings, VerificationRequest } from "@/models/models";
 import { upsertVdbCollections } from "@/lib/data/vdb"; // Import the re-indexing function
 import { db } from "@/lib/data/db";
+import { getCircleById } from "@/lib/data/circle";
+import { getUserByDid } from "@/lib/data/user";
 
 // Get all circles of a specific type
 export async function getEntitiesByType(type: "circle" | "user" | "project") {
@@ -346,8 +348,32 @@ export async function getVerificationRequests() {
     }
 
     const verificationCollection = db.collection<VerificationRequest>("verifications");
-    const requests = await verificationCollection.find({ status: "pending" }).toArray();
-    return requests;
+    const requests = await verificationCollection
+        .aggregate([
+            { $match: { status: "pending" } },
+            {
+                $lookup: {
+                    from: "circles",
+                    localField: "userDid",
+                    foreignField: "did",
+                    as: "user",
+                },
+            },
+            { $unwind: "$user" },
+            {
+                $project: {
+                    _id: { $toString: "$_id" },
+                    userDid: 1,
+                    requestedAt: 1,
+                    user: {
+                        name: "$user.name",
+                        picture: "$user.picture",
+                    },
+                },
+            },
+        ])
+        .toArray();
+    return requests as (VerificationRequest & { user: { name: string; picture: { url: string } } })[];
 }
 
 export async function approveVerificationRequest(id: string) {
@@ -392,4 +418,12 @@ export async function rejectVerificationRequest(id: string) {
     );
 
     revalidatePath("/admin");
+}
+
+export async function getCircleByIdAction(id: string) {
+    return await getCircleById(id);
+}
+
+export async function getUserByDidAction(did: string) {
+    return await getUserByDid(did);
 }
