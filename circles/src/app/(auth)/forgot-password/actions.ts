@@ -49,7 +49,7 @@ export async function requestPasswordResetAction(email: string): Promise<Request
                     templateModel: {
                         name: user.name || "User",
                         actionUrl: resetLink,
-                        product_name: "MakeCircles", // Or from process.env
+                        product_name: "Kamooni", // Or from process.env
                         product_url: process.env.CIRCLES_URL || "http://localhost:3000",
                         support_url: `${process.env.CIRCLES_URL || "http://localhost:3000"}/support`, // Example, adjust as needed
                         company_name: "Social Systems Lab", // Or from process.env

@@ -172,7 +172,7 @@ export const getMetricsForCircles = async (circles: WithMetric<Circle>[], userDi
 
 export const createDefaultCircle = (): Circle => {
     let circle: Circle = {
-        name: "MakeCircles",
+        name: "Kamooni",
         description: "Connect. Collaborate. Create Change.",
         handle: "default",
         picture: { url: "/images/default-picture.png" },

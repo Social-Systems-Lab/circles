@@ -46,7 +46,7 @@ export const sendEmail = async (options: EmailOptions): Promise<void> => {
 
     // Add common variables that might be useful in all templates
     (message.TemplateModel as any).product_url = process.env.CIRCLES_URL || "http://localhost:3000";
-    (message.TemplateModel as any).product_name = "MakeCircles";
+    (message.TemplateModel as any).product_name = "Kamooni";
     (message.TemplateModel as any).company_name = "Social Systems Lab";
     (message.TemplateModel as any).company_address = "Illerstigen 8, 170 71 Solna, Sweden";
     (message.TemplateModel as any).name = templateModel.name || "User"; // Default to "User" if not provided

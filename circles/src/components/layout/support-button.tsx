@@ -47,7 +47,7 @@ export const SupportButton = () => {
                         >
                             Join WhatsApp Support Chat
                         </a>
-                        <p className="text-xm">MakeCircles v{process.env.version}</p>
+                        <p className="text-xm">Kamooni v{process.env.version}</p>
                     </div>
                 </PopoverContent>
             </Popover>

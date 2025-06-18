@@ -11,8 +11,9 @@ import { sendNotifications } from "@/lib/data/matrix";
 import { sendEmail } from "@/lib/data/email";
 import { GlobalServerSettingsFormData, globalServerSettingsValidationSchema } from "./global-server-settings-schema";
 import { getServerSettings, registerServer, updateServerSettings, urlIsLocal } from "@/lib/data/server-settings";
-import { ServerSettings } from "@/models/models";
+import { ServerSettings, VerificationRequest } from "@/models/models";
 import { upsertVdbCollections } from "@/lib/data/vdb"; // Import the re-indexing function
+import { db } from "@/lib/data/db";
 
 // Get all circles of a specific type
 export async function getEntitiesByType(type: "circle" | "user" | "project") {
@@ -332,4 +333,63 @@ export async function getPlatformStats() {
         console.error("Error fetching platform stats:", error);
         throw new Error("Failed to fetch platform statistics");
     }
+}
+
+export async function getVerificationRequests() {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        throw new Error("Unauthorized");
+    }
+    const user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        throw new Error("Unauthorized");
+    }
+
+    const verificationCollection = db.collection<VerificationRequest>("verifications");
+    const requests = await verificationCollection.find({ status: "pending" }).toArray();
+    return requests;
+}
+
+export async function approveVerificationRequest(id: string) {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        throw new Error("Unauthorized");
+    }
+    const user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        throw new Error("Unauthorized");
+    }
+
+    const verificationCollection = db.collection<VerificationRequest>("verifications");
+    const request = await verificationCollection.findOne({ _id: new ObjectId(id) });
+    if (!request) {
+        throw new Error("Request not found");
+    }
+
+    await Circles.updateOne({ did: request.userDid }, { $set: { isVerified: true } });
+    await verificationCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status: "approved", reviewedAt: new Date(), reviewedBy: user.did } },
+    );
+
+    revalidatePath("/admin");
+}
+
+export async function rejectVerificationRequest(id: string) {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        throw new Error("Unauthorized");
+    }
+    const user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        throw new Error("Unauthorized");
+    }
+
+    const verificationCollection = db.collection<VerificationRequest>("verifications");
+    await verificationCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status: "rejected", reviewedAt: new Date(), reviewedBy: user.did } },
+    );
+
+    revalidatePath("/admin");
 }

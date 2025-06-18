@@ -879,7 +879,7 @@ export function PostForm({
                                 </div>
                                 <div className="flex-1">
                                     <div className="font-medium">Everyone</div>
-                                    <div className="text-xs text-gray-500">Everyone on and outside MakeCircles</div>
+                                    <div className="text-xs text-gray-500">Everyone on and outside Kamooni</div>
                                 </div>
                                 <div className="ml-2">
                                     <input

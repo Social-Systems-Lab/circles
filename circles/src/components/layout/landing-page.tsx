@@ -63,7 +63,7 @@ export default function LandingPage() {
             <main className="w-screen max-w-6xl">
                 {/* Hero */}
                 <div className="m-4 flex flex-row items-center justify-center gap-2 md:mb-4 md:flex-col">
-                    <Image src="/images/makecircles.png" alt="MakeCircles Logo" width={450} height={120} />
+                    <Image src="/images/makecircles.png" alt="Kamooni Logo" width={450} height={120} />
                 </div>
 
                 {/* Features */}

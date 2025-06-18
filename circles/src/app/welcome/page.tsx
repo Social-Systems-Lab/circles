@@ -25,7 +25,7 @@ export default async function Welcome() {
                 {/* Content */}
                 <div className="relative z-10">
                     <h1 className="mb-4 font-bebas text-5xl text-[#175848] md:text-6xl lg:text-7xl">
-                        MakeCircles - The Social Impact Network
+                        Kamooni - The Social Impact Network
                     </h1>
                     <p className="mb-8 inline-block rounded-md bg-white/60 px-4 py-1 text-xl">
                         No Ads, No Big Tech, Non-Profit and Open-Source
@@ -91,14 +91,14 @@ export default async function Welcome() {
                 </div>
             </section>
 
-            {/* Building MakeCircles - With different background color */}
+            {/* Building Kamooni - With different background color */}
             <section className="w-full bg-[#FEF9E8] px-4 py-16 md:px-8">
                 <div className="mx-auto max-w-4xl">
                     <h2 className="mb-6 font-bebas text-4xl text-[#175848] md:text-5xl">
-                        That&apos;s Why We Are Building MakeCircles
+                        That&apos;s Why We Are Building Kamooni
                     </h2>
                     <p className="mb-8 text-lg">
-                        MakeCircles is designed for the Changemakers of the world, because you are needed now more than
+                        Kamooni is designed for the Changemakers of the world, because you are needed now more than
                         ever. We want to give you the tools, resources, connections and agency to accomplish your goals.
                         A platform that allows you to do your work in an open, transparent and collaborative way. No
                         advertising, spying, manipulation or selling of user data. Quite to the contrary, our goal is
@@ -108,14 +108,14 @@ export default async function Welcome() {
                 </div>
             </section>
 
-            {/* What can MakeCircles Do */}
+            {/* What can Kamooni Do */}
             <section className="w-full px-4 py-16 md:px-8">
                 <div className="mx-auto max-w-4xl">
-                    <h2 className="mb-6 font-bebas text-4xl text-[#175848] md:text-5xl">What can MakeCircles Do?</h2>
+                    <h2 className="mb-6 font-bebas text-4xl text-[#175848] md:text-5xl">What can Kamooni Do?</h2>
                     <p className="mb-8 text-lg">
-                        MakeCircles is currently in our <strong>beta testing phase</strong>. This means we are not ready
-                        for public use as we need to test the platform for bugs and also have a number of new features
-                        and improvements to do. That said, we already have all the{" "}
+                        Kamooni is currently in our <strong>beta testing phase</strong>. This means we are not ready for
+                        public use as we need to test the platform for bugs and also have a number of new features and
+                        improvements to do. That said, we already have all the{" "}
                         <strong>basic social functionality</strong> in place and then some.
                     </p>
                     <p className="mb-8 text-lg">
@@ -126,8 +126,8 @@ export default async function Welcome() {
                         <strong>allocate tasks</strong> to users to make more progress. We have a number of other
                         democratic governance functions we will add and test before we go public, as well as privacy
                         functions, video conferencing, crowd funding, resource sharing and more. We have also designed
-                        MakeCircles to <strong>give our users control</strong> over themselves and their communities.
-                        You decide who you share what information with and give what access to.
+                        Kamooni to <strong>give our users control</strong> over themselves and their communities. You
+                        decide who you share what information with and give what access to.
                     </p>
                     <div className="relative mt-16 flex items-center justify-center rounded-lg border border-gray-300 p-8">
                         <video
@@ -156,8 +156,8 @@ export default async function Welcome() {
                         platform, invite some friends. Then, create a project or a community circle and test the
                         features. Let us know about the issues you come across and if you have any ideas for new
                         features or better designs, create a proposal and we&apos;ll add it to the public vote.{" "}
-                        <strong>MakeCircles is a co-creative platform</strong>. We are designing it to work for you, and
-                        you are the best judge of what that means.
+                        <strong>Kamooni is a co-creative platform</strong>. We are designing it to work for you, and you
+                        are the best judge of what that means.
                     </p>
                     <p className="mb-8 text-lg">
                         If you are as inspired by this as we are, there are many other ways to help out too. Developers,
@@ -213,7 +213,7 @@ export default async function Welcome() {
             <section className="w-full bg-[#FEF9E8] px-4 py-16 md:px-8">
                 <div className="mx-auto max-w-4xl">
                     <h2 className="mb-6 font-bebas text-4xl text-[#175848] md:text-5xl">Tell Me More...</h2>
-                    <p className="mb-8 text-lg">Still wondering why you should join MakeCircles as a test pilot?</p>
+                    <p className="mb-8 text-lg">Still wondering why you should join Kamooni as a test pilot?</p>
 
                     <div className="formatted space-y-4">
                         <Accordion type="single" collapsible className="w-full">
@@ -244,11 +244,11 @@ export default async function Welcome() {
                                 <AccordionTrigger className="flex items-center px-4 py-3  pb-0">
                                     <div className="flex items-center">
                                         <Plus size={16} className="mr-2 text-[#FAAE3C]" />
-                                        <span>Who is behind MakeCircles?</span>
+                                        <span>Who is behind Kamooni?</span>
                                     </div>
                                 </AccordionTrigger>
                                 <AccordionContent className="px-4 py-3">
-                                    MakeCircles is built and maintained by the team at Social Systems Lab, which is a
+                                    Kamooni is built and maintained by the team at Social Systems Lab, which is a
                                     subsidiary of the not-for-profit Social Systems Foundation. You can read more about
                                     us <Link href="https://www.socialsystems.io/">here</Link>.
                                 </AccordionContent>
@@ -258,16 +258,16 @@ export default async function Welcome() {
                                 <AccordionTrigger className="flex items-center px-4 py-3  pb-0">
                                     <div className="flex items-center">
                                         <Plus size={16} className="mr-2 text-[#FAAE3C]" />
-                                        <span>How is MakeCircles funded?</span>
+                                        <span>How is Kamooni funded?</span>
                                     </div>
                                 </AccordionTrigger>
                                 <AccordionContent className="px-4 py-3">
-                                    MakeCircles is currently funded by the Foundation and by individual donations. The
-                                    long-term goal is that MakeCircles will fund itself through voluntary paid
-                                    memberships and brokerage fees, as donations are not necessarily a viable business
-                                    model in the longer term. Members will not receive more services than non-members,
-                                    but they will given a vote in all decisions about the platform and will also get to
-                                    decide where their share of any profits are allocated.
+                                    Kamooni is currently funded by the Foundation and by individual donations. The
+                                    long-term goal is that Kamooni will fund itself through voluntary paid memberships
+                                    and brokerage fees, as donations are not necessarily a viable business model in the
+                                    longer term. Members will not receive more services than non-members, but they will
+                                    given a vote in all decisions about the platform and will also get to decide where
+                                    their share of any profits are allocated.
                                 </AccordionContent>
                             </AccordionItem>
 
@@ -281,12 +281,12 @@ export default async function Welcome() {
                                     </div>
                                 </AccordionTrigger>
                                 <AccordionContent className="px-4 py-3">
-                                    MakeCircles is designed to have a direct impact on the real world. This can be
-                                    achieved in numerous ways, such as through crowdfunding, volunteering or asset
-                                    sharing. Of course, this will only become significant if a lot of people use
-                                    MakeCircles for this purpose, but even before that, you can use the platform to
-                                    create personal goals, projects and task and organize your personal life, which is
-                                    very much part of the real world.
+                                    Kamooni is designed to have a direct impact on the real world. This can be achieved
+                                    in numerous ways, such as through crowdfunding, volunteering or asset sharing. Of
+                                    course, this will only become significant if a lot of people use Kamooni for this
+                                    purpose, but even before that, you can use the platform to create personal goals,
+                                    projects and task and organize your personal life, which is very much part of the
+                                    real world.
                                 </AccordionContent>
                             </AccordionItem>
 
@@ -311,8 +311,8 @@ export default async function Welcome() {
                                     thriving communities with sufficiently funded projects made possible by volunteers
                                     and making use of available local resources. Do we want to pay our coworkers a
                                     decent salary? Obviously we do, but nothing excessive as the purpose is to maximize
-                                    the return to the communities that make MakeCircles possible. Our accounting will
-                                    always be open, to make sure we live up to this promise.
+                                    the return to the communities that make Kamooni possible. Our accounting will always
+                                    be open, to make sure we live up to this promise.
                                 </AccordionContent>
                             </AccordionItem>
                         </Accordion>

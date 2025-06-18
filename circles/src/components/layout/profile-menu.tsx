@@ -16,6 +16,7 @@ import { UserPicture } from "../modules/members/user-picture";
 import { Bell, MessageCircle } from "lucide-react";
 import { UserToolboxTab } from "@/models/models";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import { VerifyAccountButton } from "../modules/auth/verify-account-button";
 
 const ProfileMenuBar = () => {
     const router = useRouter();
@@ -145,6 +146,7 @@ const ProfileMenuBar = () => {
                             >
                                 <UserPicture name={user?.name} picture={user?.picture?.url} size="40px" />
                             </Button>
+                            {!user.isVerified && <VerifyAccountButton />}
                         </>
                     )}
                 </div>

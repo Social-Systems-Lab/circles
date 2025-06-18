@@ -10,6 +10,7 @@ import CirclesTab from "./tabs/circles-tab";
 import UsersTab from "./tabs/users-tab";
 import ProjectsTab from "./tabs/projects-tab";
 import SuperAdminsTab from "./tabs/super-admins-tab";
+import VerificationRequestsTab from "./tabs/verification-requests-tab";
 import { toast } from "sonner"; // Import toast for feedback
 
 interface AdminDashboardProps {
@@ -50,6 +51,7 @@ export default function AdminDashboard({ serverSettings }: AdminDashboardProps) 
                 <TabsTrigger value="operations">Server Operations</TabsTrigger> {/* New Tab Trigger */}
                 <TabsTrigger value="circles">Circles</TabsTrigger>
                 <TabsTrigger value="users">Users</TabsTrigger>
+                <TabsTrigger value="verification-requests">Verification Requests</TabsTrigger>
                 <TabsTrigger value="projects">Projects</TabsTrigger>
                 <TabsTrigger value="super-admins">Super Admins</TabsTrigger>
             </TabsList>
@@ -74,6 +76,13 @@ export default function AdminDashboard({ serverSettings }: AdminDashboardProps) 
                 <div className="mb-8">
                     <h2 className="mb-2 text-xl font-semibold">Manage Users</h2>
                     <UsersTab />
+                </div>
+            </TabsContent>
+
+            <TabsContent value="verification-requests" className="space-y-4">
+                <div className="mb-8">
+                    <h2 className="mb-2 text-xl font-semibold">Verification Requests</h2>
+                    <VerificationRequestsTab />
                 </div>
             </TabsContent>
 

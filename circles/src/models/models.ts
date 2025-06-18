@@ -439,6 +439,17 @@ export const circleSchema = z.object({
 
 export type Circle = z.infer<typeof circleSchema>;
 
+export const verificationRequestSchema = z.object({
+    _id: z.any().optional(),
+    userDid: didSchema,
+    status: z.enum(["pending", "approved", "rejected"]).default("pending"),
+    requestedAt: z.date(),
+    reviewedAt: z.date().optional(),
+    reviewedBy: didSchema.optional(), // Admin who reviewed the request
+});
+
+export type VerificationRequest = z.infer<typeof verificationRequestSchema>;
+
 export const serverSettingsSchema = z.object({
     _id: z.any().optional(),
     name: z.string().optional(),
@@ -854,6 +865,7 @@ export type NotificationType =
     | "ranking_grace_period_ended" // User's ranking list is past grace period
     // User management notifications
     | "user_verified" // User has been verified by an admin
+    | "user_verification_request" // User has requested verification
     // Consolidated Summary Notification Types
     | "COMMUNITY_FOLLOW_REQUEST" // Replaces follow_request
     | "COMMUNITY_NEW_FOLLOWER" // Replaces new_follower
@@ -901,6 +913,7 @@ export const notificationTypeValues = [
     "ranking_stale_reminder",
     "ranking_grace_period_ended",
     "user_verified",
+    "user_verification_request",
     // Summary Types (for user configuration)
     "COMMUNITY_FOLLOW_REQUEST",
     "COMMUNITY_NEW_FOLLOWER",

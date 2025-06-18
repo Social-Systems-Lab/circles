@@ -28,6 +28,19 @@ import { getGoalById } from "./goal"; // Import getGoalById
 import { features } from "./constants";
 import { getAuthorizedMembers } from "../auth/auth"; // Import the function to get authorized members
 
+export async function sendVerificationRequestNotification(user: Circle, admins: UserPrivate[]): Promise<void> {
+    try {
+        console.log(`🔔 [NOTIFY] Sending user_verification_request to ${admins.length} admins`);
+        await sendNotifications("user_verification_request", admins, {
+            user,
+            messageBody: `User ${user.name} (@${user.handle}) has requested account verification.`,
+            url: `/admin?tab=users`,
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in sendVerificationRequestNotification:", error);
+    }
+}
+
 /**
  * Send a notification when someone comments on a user's post, goal, task, etc.
  */

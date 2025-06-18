@@ -145,7 +145,7 @@ export async function getLinkPreviewAction(url: string): Promise<{
         const previewDataResponse = await getLinkPreview(url, {
             timeout: 5000, // Set a timeout (e.g., 5 seconds)
             headers: {
-                "User-Agent": "MakeCirclesBot/1.0 (+https://makecircles.com/bot)", // Identify the bot
+                "User-Agent": "KamooniBot/1.0 (+https://kamooni.org/bot)", // Identify the bot
                 "Accept-Language": "en-US,en;q=0.9", // Prefer English content
             },
             followRedirects: `follow`, // Follow redirects
