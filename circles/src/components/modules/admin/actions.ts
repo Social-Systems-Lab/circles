@@ -8,6 +8,7 @@ import { ObjectId } from "mongodb";
 import { getAuthenticatedUserDid, getServerPublicKey } from "@/lib/auth/auth";
 import { getUserPrivate } from "@/lib/data/user";
 import { sendNotifications } from "@/lib/data/matrix";
+import { sendUserVerificationRejectedNotification, sendUserVerifiedNotification } from "@/lib/data/notifications";
 import { sendEmail } from "@/lib/data/email";
 import { GlobalServerSettingsFormData, globalServerSettingsValidationSchema } from "./global-server-settings-schema";
 import { getServerSettings, registerServer, updateServerSettings, urlIsLocal } from "@/lib/data/server-settings";
@@ -171,22 +172,7 @@ export async function toggleUserVerification(userId: string, isVerified: boolean
             })) as UserPrivate;
 
             if (userToNotify) {
-                // Send in-app notification
-                await sendNotifications("user_verified", [userToNotify], {
-                    userName: userToNotify.name,
-                });
-
-                // Send email
-                if (userToNotify.email) {
-                    await sendEmail({
-                        to: userToNotify.email,
-                        templateAlias: "account-verification", // This is a placeholder, replace with the actual template name
-                        templateModel: {
-                            name: userToNotify.name,
-                            actionUrl: `${process.env.CIRCLES_URL || "http://localhost:3000"}/`, // Link to the user's profile or dashboard
-                        },
-                    });
-                }
+                await sendUserVerifiedNotification(userToNotify);
             }
         }
 
@@ -401,9 +387,7 @@ export async function approveVerificationRequest(id: string) {
 
     const userToNotify = await getUserPrivate(request.userDid);
     if (userToNotify) {
-        await sendNotifications("user_verified", [userToNotify], {
-            userName: userToNotify.name,
-        });
+        await sendUserVerifiedNotification(userToNotify);
     }
 
     revalidatePath("/admin");
@@ -420,10 +404,20 @@ export async function rejectVerificationRequest(id: string) {
     }
 
     const verificationCollection = db.collection<VerificationRequest>("verifications");
+    const request = await verificationCollection.findOne({ _id: new ObjectId(id) });
+    if (!request) {
+        throw new Error("Request not found");
+    }
+
     await verificationCollection.updateOne(
         { _id: new ObjectId(id) },
         { $set: { status: "rejected", reviewedAt: new Date(), reviewedBy: user.did } },
     );
+
+    const userToNotify = await getUserPrivate(request.userDid);
+    if (userToNotify) {
+        await sendUserVerificationRejectedNotification(userToNotify);
+    }
 
     revalidatePath("/admin");
 }

@@ -41,6 +41,32 @@ export async function sendVerificationRequestNotification(user: Circle, admins: 
     }
 }
 
+export async function sendUserVerifiedNotification(user: UserPrivate): Promise<void> {
+    try {
+        console.log(`🔔 [NOTIFY] Sending user_verified notification to ${user.name}`);
+        await sendNotifications("user_verified", [user], {
+            user,
+            messageBody: "Congratulations! Your account has been verified.",
+            url: `/`,
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in sendUserVerifiedNotification:", error);
+    }
+}
+
+export async function sendUserVerificationRejectedNotification(user: UserPrivate): Promise<void> {
+    try {
+        console.log(`🔔 [NOTIFY] Sending user_verification_rejected notification to ${user.name}`);
+        await sendNotifications("user_verification_rejected", [user], {
+            user,
+            messageBody: "Your account verification request has been rejected.",
+            url: `/`,
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in sendUserVerificationRejectedNotification:", error);
+    }
+}
+
 /**
  * Send a notification when someone comments on a user's post, goal, task, etc.
  */

@@ -866,6 +866,7 @@ export type NotificationType =
     // User management notifications
     | "user_verified" // User has been verified by an admin
     | "user_verification_request" // User has requested verification
+    | "user_verification_rejected" // User has requested verification - REJECTED
     // Consolidated Summary Notification Types
     | "COMMUNITY_FOLLOW_REQUEST" // Replaces follow_request
     | "COMMUNITY_NEW_FOLLOWER" // Replaces new_follower
@@ -914,6 +915,7 @@ export const notificationTypeValues = [
     "ranking_grace_period_ended",
     "user_verified",
     "user_verification_request",
+    "user_verification_rejected",
     // Summary Types (for user configuration)
     "COMMUNITY_FOLLOW_REQUEST",
     "COMMUNITY_NEW_FOLLOWER",
