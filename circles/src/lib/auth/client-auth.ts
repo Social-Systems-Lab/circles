@@ -44,7 +44,7 @@ export const hasHigherAccess = (
  * @returns True if the user is authorized, false otherwise
  */
 export const isAuthorized = (user: UserPrivate | undefined, circle: Circle, feature: Feature): boolean => {
-    if (feature.needsToBeVerified && !user?.isVerified) {
+    if (feature.needsToBeVerified && !user?.isVerified && user?._id !== circle._id) {
         return false;
     }
 

@@ -12,6 +12,7 @@ export const features = {
             description: "Edit circle user groups of same level members",
             defaultUserGroups: ["admins"],
             module: "general",
+            needsToBeVerified: true,
         } as Feature,
         edit_lower_user_groups: {
             name: "Edit Lower Member User Groups",
@@ -19,6 +20,7 @@ export const features = {
             description: "Edit circle user groups of lower members",
             defaultUserGroups: ["admins", "moderators"],
             module: "general",
+            needsToBeVerified: true,
         } as Feature,
         remove_same_level_members: {
             name: "Remove Same Level Members",
@@ -26,6 +28,7 @@ export const features = {
             description: "Remove same level members from the circle",
             defaultUserGroups: ["admins"],
             module: "general",
+            needsToBeVerified: true,
         } as Feature,
         remove_lower_members: {
             name: "Remove Lower Members",
@@ -33,6 +36,7 @@ export const features = {
             description: "Remove lower members from the circle",
             defaultUserGroups: ["admins", "moderators"],
             module: "general",
+            needsToBeVerified: true,
         } as Feature,
         manage_membership_requests: {
             name: "Manage Follow Requests",
@@ -40,6 +44,7 @@ export const features = {
             description: "Manage requests to follow the circle",
             defaultUserGroups: ["admins", "moderators"],
             module: "general",
+            needsToBeVerified: true,
         } as Feature,
     },
     feed: {
@@ -82,7 +87,6 @@ export const features = {
             description: "View the chat messages",
             defaultUserGroups: ["admins", "moderators", "members", "everyone"],
             module: "chat",
-            needsToBeVerified: true,
         } as Feature,
         moderate: {
             name: "Moderate Chat",
@@ -90,6 +94,7 @@ export const features = {
             description: "Moderate chat messages in the chat",
             defaultUserGroups: ["admins", "moderators"],
             module: "chat",
+            needsToBeVerified: true,
         } as Feature,
     },
     followers: {
@@ -123,6 +128,7 @@ export const features = {
             description: "Delete a community",
             defaultUserGroups: ["admins"],
             module: "communities",
+            needsToBeVerified: true,
         } as Feature,
     },
     goals: {
@@ -140,6 +146,7 @@ export const features = {
             description: "Edit existing goals",
             defaultUserGroups: ["admins", "moderators"],
             module: "goals",
+            needsToBeVerified: true,
         } as Feature,
         create: {
             name: "Create Goals",
@@ -147,6 +154,7 @@ export const features = {
             description: "Submit a new goal",
             defaultUserGroups: ["admins", "moderators"],
             module: "goals",
+            needsToBeVerified: true,
         } as Feature,
         review: {
             name: "Review Goals",
@@ -154,6 +162,7 @@ export const features = {
             description: "Review submitted goals and move them to Open",
             defaultUserGroups: ["admins", "moderators"],
             module: "goals",
+            needsToBeVerified: true,
         } as Feature,
         resolve: {
             name: "Resolve Goals",
@@ -161,6 +170,7 @@ export const features = {
             description: "Mark goals as resolved or change their stage",
             defaultUserGroups: ["admins", "moderators"],
             module: "goals",
+            needsToBeVerified: true,
         } as Feature,
         moderate: {
             name: "Moderate Goals",
@@ -168,6 +178,7 @@ export const features = {
             description: "Edit or delete any goal",
             defaultUserGroups: ["admins"],
             module: "goals",
+            needsToBeVerified: true,
         } as Feature,
         comment: {
             name: "Comment on Goals",
@@ -175,6 +186,7 @@ export const features = {
             description: "Add comments to goals",
             defaultUserGroups: ["admins", "moderators", "members", "everyone"],
             module: "goals",
+            needsToBeVerified: true,
         } as Feature,
         rank: {
             name: "Rank Goals",
@@ -182,6 +194,7 @@ export const features = {
             description: "Create and manage a ranking of goals",
             defaultUserGroups: ["admins", "moderators", "members"],
             module: "goals",
+            needsToBeVerified: true,
         } as Feature,
         follow: {
             name: "Follow Goals",
@@ -206,6 +219,7 @@ export const features = {
             description: "Edit existing tasks",
             defaultUserGroups: ["admins", "moderators"],
             module: "tasks",
+            needsToBeVerified: true,
         } as Feature,
         create: {
             name: "Create Tasks",
@@ -213,6 +227,7 @@ export const features = {
             description: "Submit a new task",
             defaultUserGroups: ["admins", "moderators"],
             module: "tasks",
+            needsToBeVerified: true,
         } as Feature,
         review: {
             name: "Review Tasks",
@@ -220,6 +235,7 @@ export const features = {
             description: "Review submitted tasks and move them to Open",
             defaultUserGroups: ["admins", "moderators"],
             module: "tasks",
+            needsToBeVerified: true,
         } as Feature,
         assign: {
             name: "Assign Tasks",
@@ -227,6 +243,7 @@ export const features = {
             description: "Assign a task to a user",
             defaultUserGroups: ["admins", "moderators"],
             module: "tasks",
+            needsToBeVerified: true,
         } as Feature,
         resolve: {
             name: "Resolve Tasks",
@@ -234,6 +251,7 @@ export const features = {
             description: "Mark tasks as resolved or change their stage",
             defaultUserGroups: ["admins", "moderators"],
             module: "tasks",
+            needsToBeVerified: true,
         } as Feature,
         moderate: {
             name: "Moderate Tasks",
@@ -241,6 +259,7 @@ export const features = {
             description: "Edit or delete any task",
             defaultUserGroups: ["admins"],
             module: "tasks",
+            needsToBeVerified: true,
         } as Feature,
         comment: {
             name: "Comment on Tasks",
@@ -248,6 +267,7 @@ export const features = {
             description: "Add comments to tasks",
             defaultUserGroups: ["admins", "moderators", "members", "everyone"],
             module: "tasks",
+            needsToBeVerified: true,
         } as Feature,
         rank: {
             name: "Rank Tasks",
@@ -255,6 +275,7 @@ export const features = {
             description: "Create and manage a ranking of tasks",
             defaultUserGroups: ["admins", "moderators", "members"],
             module: "tasks",
+            needsToBeVerified: true,
         } as Feature,
     },
     proposals: {
@@ -271,6 +292,7 @@ export const features = {
             description: "Create a new proposal",
             defaultUserGroups: ["admins", "moderators", "members"],
             module: "proposals",
+            needsToBeVerified: true,
         } as Feature,
         review: {
             name: "Review Proposals",
@@ -278,6 +300,7 @@ export const features = {
             description: "Review proposals and move them to voting stage",
             defaultUserGroups: ["admins", "moderators"],
             module: "proposals",
+            needsToBeVerified: true,
         } as Feature,
         vote: {
             name: "Vote on Proposals",
@@ -285,6 +308,7 @@ export const features = {
             description: "Vote on proposals in the voting stage",
             defaultUserGroups: ["admins", "moderators", "members"],
             module: "proposals",
+            needsToBeVerified: true,
         } as Feature,
         resolve: {
             name: "Resolve Proposals",
@@ -292,6 +316,7 @@ export const features = {
             description: "Mark proposals as resolved (accepted/rejected)",
             defaultUserGroups: ["admins", "moderators"],
             module: "proposals",
+            needsToBeVerified: true,
         } as Feature,
         moderate: {
             name: "Moderate Proposals",
@@ -299,6 +324,7 @@ export const features = {
             description: "Edit or delete any proposal",
             defaultUserGroups: ["admins"],
             module: "proposals",
+            needsToBeVerified: true,
         } as Feature,
         rank: {
             name: "Rank Proposals",
@@ -306,6 +332,7 @@ export const features = {
             description: "Create and manage a ranking of proposals",
             defaultUserGroups: ["admins", "moderators", "members"], // Same as tasks/goals
             module: "proposals",
+            needsToBeVerified: true,
         } as Feature,
     },
     issues: {
@@ -322,6 +349,7 @@ export const features = {
             description: "Edit existing issues",
             defaultUserGroups: ["admins", "moderators"], // Default: Mods+ can update (or creator?)
             module: "issues",
+            needsToBeVerified: true,
         } as Feature,
         create: {
             name: "Create Issues",
@@ -329,6 +357,7 @@ export const features = {
             description: "Submit a new issue",
             defaultUserGroups: ["admins", "moderators", "members"], // Default: Members+ can create
             module: "issues",
+            needsToBeVerified: true,
         } as Feature,
         review: {
             name: "Review Issues",
@@ -336,6 +365,7 @@ export const features = {
             description: "Review submitted issues and move them to Open",
             defaultUserGroups: ["admins", "moderators"], // Default: Mods+ can review
             module: "issues",
+            needsToBeVerified: true,
         } as Feature,
         assign: {
             name: "Assign Issues",
@@ -343,6 +373,7 @@ export const features = {
             description: "Assign an issue to a user",
             defaultUserGroups: ["admins", "moderators"], // Default: Mods+ can assign (can be opened up)
             module: "issues",
+            needsToBeVerified: true,
         } as Feature,
         resolve: {
             name: "Resolve Issues",
@@ -350,6 +381,7 @@ export const features = {
             description: "Mark issues as resolved or change their stage",
             defaultUserGroups: ["admins", "moderators"], // Default: Mods+ can resolve (or assignee)
             module: "issues",
+            needsToBeVerified: true,
         } as Feature,
         moderate: {
             name: "Moderate Issues",
@@ -357,6 +389,7 @@ export const features = {
             description: "Edit or delete any issue",
             defaultUserGroups: ["admins"], // Default: Admins only
             module: "issues",
+            needsToBeVerified: true,
         } as Feature,
         comment: {
             name: "Comment on Issues",
@@ -364,6 +397,7 @@ export const features = {
             description: "Add comments to issues",
             defaultUserGroups: ["admins", "moderators", "members", "everyone"], // Default: All who can view can comment
             module: "issues",
+            needsToBeVerified: true,
         } as Feature,
         rank: {
             name: "Rank Issues",
@@ -371,6 +405,7 @@ export const features = {
             description: "Create and manage a ranking of issues",
             defaultUserGroups: ["admins", "moderators", "members"], // Same as tasks/goals/proposals
             module: "issues",
+            needsToBeVerified: true,
         } as Feature,
     },
     settings: {
@@ -387,6 +422,7 @@ export const features = {
             description: "Edit circle about settings",
             defaultUserGroups: ["admins"],
             module: "settings",
+            needsToBeVerified: true,
         } as Feature,
         edit_user_groups: {
             name: "Edit User Groups",
@@ -394,6 +430,7 @@ export const features = {
             description: "Edit user groups settings",
             defaultUserGroups: ["admins"],
             module: "settings",
+            needsToBeVerified: true,
         } as Feature,
         edit_pages: {
             name: "Edit Pages",
@@ -401,6 +438,7 @@ export const features = {
             description: "Edit pages settings",
             defaultUserGroups: ["admins"],
             module: "settings",
+            needsToBeVerified: true,
         } as Feature,
         edit_access_rules: {
             name: "Edit Access Rules",
@@ -408,6 +446,7 @@ export const features = {
             description: "Edit circle access rules settings",
             defaultUserGroups: ["admins"],
             module: "settings",
+            needsToBeVerified: true,
         } as Feature,
         edit_causes_and_skills: {
             name: "Edit Causes and Skills",
@@ -415,6 +454,7 @@ export const features = {
             description: "Edit causes and skills",
             defaultUserGroups: ["admins"],
             module: "settings",
+            needsToBeVerified: true,
         } as Feature,
         edit_questionnaire: {
             name: "Edit Questionnaire",
@@ -422,6 +462,7 @@ export const features = {
             description: "Edit questionnaire settings",
             defaultUserGroups: ["admins"],
             module: "settings",
+            needsToBeVerified: true,
         } as Feature,
         edit_critical_settings: {
             name: "Edit Critical Settings",
@@ -429,6 +470,7 @@ export const features = {
             description: "Edit critical and sensitive settings",
             defaultUserGroups: ["admins"],
             module: "settings",
+            needsToBeVerified: true,
         } as Feature,
     },
     home: {

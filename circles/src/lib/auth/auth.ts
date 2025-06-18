@@ -306,7 +306,7 @@ export const isAuthorized = async (
 ): Promise<boolean> => {
     if (userDid) {
         const user = await Circles.findOne({ did: userDid });
-        if (featureInput.needsToBeVerified && !user?.isVerified) {
+        if (featureInput.needsToBeVerified && !user?.isVerified && user?._id.toString() !== circleId) {
             return false;
         }
     }
