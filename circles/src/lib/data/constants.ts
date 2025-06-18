@@ -56,6 +56,7 @@ export const features = {
             description: "Create a post in the feed",
             defaultUserGroups: ["admins", "moderators", "members"],
             module: "feed",
+            needsToBeVerified: true,
         } as Feature,
         comment: {
             name: "Comment",
@@ -63,6 +64,7 @@ export const features = {
             description: "Comment on posts in the feed",
             defaultUserGroups: ["admins", "moderators", "members", "everyone"],
             module: "feed",
+            needsToBeVerified: true,
         } as Feature,
         moderate: {
             name: "Moderate Feed",
@@ -70,6 +72,7 @@ export const features = {
             description: "Moderate posts in the feed",
             defaultUserGroups: ["admins", "moderators"],
             module: "feed",
+            needsToBeVerified: true,
         } as Feature,
     },
     chat: {
@@ -79,6 +82,7 @@ export const features = {
             description: "View the chat messages",
             defaultUserGroups: ["admins", "moderators", "members", "everyone"],
             module: "chat",
+            needsToBeVerified: true,
         } as Feature,
         moderate: {
             name: "Moderate Chat",
@@ -111,6 +115,7 @@ export const features = {
             description: "Create a new circle",
             defaultUserGroups: ["admins", "moderators", "members"],
             module: "communities",
+            needsToBeVerified: true,
         } as Feature,
         delete: {
             name: "Delete Community",

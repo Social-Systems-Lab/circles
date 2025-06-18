@@ -156,6 +156,7 @@ export const featureSchema = z.object({
     handle: handleSchema,
     description: z.string(),
     defaultUserGroups: z.array(z.string()).optional(),
+    needsToBeVerified: z.boolean().optional(),
 });
 
 export type Feature = z.infer<typeof featureSchema>;
