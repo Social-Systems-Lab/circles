@@ -16,6 +16,27 @@ import { defaultUserGroupsForUser, getDefaultAccessRules, getDefaultModules } fr
 import { SAFE_CIRCLE_PROJECTION, getCircleById } from "./circle"; // Added getCircleById import
 import { getEnabledModules } from "../auth/client-auth";
 import { getGroupedUserNotificationSettings } from "@/lib/actions/notificationSettings";
+import { VerificationRequest } from "@/models/models";
+import { db } from "./db";
+
+export const getVerificationStatus = async (userDid: string): Promise<"verified" | "pending" | "unverified"> => {
+    const user = await getUserByDid(userDid);
+    if (user.isVerified) {
+        return "verified";
+    }
+
+    const verificationCollection = db.collection<VerificationRequest>("verifications");
+    const existingRequest = await verificationCollection.findOne({
+        userDid: userDid,
+        status: "pending",
+    });
+
+    if (existingRequest) {
+        return "pending";
+    }
+
+    return "unverified";
+};
 
 export const getAllUsers = async (): Promise<Circle[]> => {
     let circles: Circle[] = await Circles.find(

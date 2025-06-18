@@ -10,14 +10,23 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
-import { requestVerification } from "@/lib/actions/verification";
 import { useActionState, useEffect, useState } from "react";
 import { useToast } from "@/components/ui/use-toast";
+import { requestVerification, getVerificationStatus } from "./actions";
 
 export function VerifyAccountButton() {
     const [state, formAction] = useActionState(requestVerification, { message: "" });
     const [open, setOpen] = useState(false);
     const { toast } = useToast();
+    const [verificationStatus, setVerificationStatus] = useState<"verified" | "pending" | "unverified">("unverified");
+
+    useEffect(() => {
+        const fetchStatus = async () => {
+            const status = await getVerificationStatus();
+            setVerificationStatus(status);
+        };
+        fetchStatus();
+    }, []);
 
     useEffect(() => {
         if (state.message) {
@@ -25,13 +34,22 @@ export function VerifyAccountButton() {
                 title: state.message,
             });
             setOpen(false);
+            if (state.message === "Verification request submitted successfully.") {
+                setVerificationStatus("pending");
+            }
         }
     }, [state, toast]);
+
+    if (verificationStatus === "verified") {
+        return null;
+    }
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button variant="outline">Verify Account</Button>
+                <Button variant="outline" disabled={verificationStatus === "pending"}>
+                    {verificationStatus === "pending" ? "Pending Approval" : "Verify Account"}
+                </Button>
             </DialogTrigger>
             <DialogContent>
                 <DialogHeader>

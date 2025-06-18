@@ -8,6 +8,15 @@ import { ObjectId } from "mongodb";
 import { sendEmail } from "@/lib/data/email";
 import { getUserPrivate } from "@/lib/data/user";
 import { sendVerificationRequestNotification } from "@/lib/data/notifications";
+import { getVerificationStatus as getStatus } from "@/lib/data/user";
+
+export async function getVerificationStatus() {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        throw new Error("User not authenticated.");
+    }
+    return await getStatus(userDid);
+}
 
 const requestVerificationSchema = z.object({});
 
