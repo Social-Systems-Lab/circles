@@ -29,18 +29,11 @@ export default function GlobalNav() {
                     <Link href="/">
                         <div className="group relative ml-4 mr-4 flex flex-shrink-0 flex-col items-center justify-center md:mb-4 md:ml-0 md:mr-0 md:mt-4">
                             <div className="relative">
-                                {/* <div className="animate-pulse-slow absolute -inset-0 rounded-full bg-primary/30"></div> */}
-                                {/* First ripple ring */}
-                                <div className="absolute -inset-1 z-[-1] animate-ripple rounded-full border-8 border-primary/20"></div>
-                                {/* Second ripple ring with delay */}
-                                <div className="absolute -inset-1 z-[-1] animate-ripple-delay rounded-full border-8 border-primary/20"></div>
-                                <div className="absolute -inset-1 z-[-1] animate-ripple-delay-2 rounded-full border-8 border-primary/20"></div>
-
-                                <div className="relative h-[40px] w-[40px] transform cursor-pointer transition-all duration-300 hover:scale-110">
+                                <div className="relative h-[50px] w-[50px] transform cursor-pointer">
                                     <Image
-                                        src={"/images/circles-picture.svg"}
+                                        src={"/images/logo.png"}
                                         alt="Logo"
-                                        className="h-[40px] w-[40px] overflow-hidden rounded-full bg-white object-cover shadow-md transition-shadow duration-300 hover:shadow-xl"
+                                        className="h-[50px] w-[50px] overflow-hidden rounded-full bg-white object-cover"
                                         width={100}
                                         height={100}
                                     />

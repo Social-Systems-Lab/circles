@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { Circles } from "@/lib/data/db";
 import { deleteCircle } from "@/lib/data/circle";
-import { Circle } from "@/models/models";
+import { Circle, UserPrivate } from "@/models/models";
 import { ObjectId } from "mongodb";
 import { getAuthenticatedUserDid, getServerPublicKey } from "@/lib/auth/auth";
 import { getUserPrivate } from "@/lib/data/user";
@@ -162,7 +162,11 @@ export async function toggleUserVerification(userId: string, isVerified: boolean
         await Circles.updateOne({ _id: new ObjectId(userId) }, { $set: { isVerified } });
 
         if (isVerified) {
-            const userToNotify = await getUserPrivate(userId);
+            const userToNotify = (await Circles.findOne({
+                _id: new ObjectId(userId),
+                circleType: "user",
+            })) as UserPrivate;
+
             if (userToNotify) {
                 // Send in-app notification
                 await sendNotifications("user_verified", [userToNotify], {
@@ -173,7 +177,7 @@ export async function toggleUserVerification(userId: string, isVerified: boolean
                 if (userToNotify.email) {
                     await sendEmail({
                         to: userToNotify.email,
-                        templateAlias: "account-verified", // This is a placeholder, replace with the actual template name
+                        templateAlias: "account-verification", // This is a placeholder, replace with the actual template name
                         templateModel: {
                             name: userToNotify.name,
                             actionUrl: `${process.env.CIRCLES_URL || "http://localhost:3000"}/`, // Link to the user's profile or dashboard
