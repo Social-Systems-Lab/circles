@@ -22,6 +22,7 @@ type VerificationRequestWithUser = VerificationRequest & {
         picture: {
             url: string;
         };
+        email: string;
     };
 };
 
@@ -64,26 +65,29 @@ export default function VerificationRequestsTab() {
             <TableHeader>
                 <TableRow>
                     <TableHead>User</TableHead>
+                    <TableHead>Email</TableHead>
                     <TableHead>Requested At</TableHead>
                     <TableHead>Actions</TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>
                 {requests.map((request) => (
-                    <TableRow key={request._id}>
+                    <TableRow
+                        key={request._id}
+                        onClick={() => handlePreview(request.userDid)}
+                        className="cursor-pointer"
+                    >
                         <TableCell>
                             <div className="flex items-center gap-2">
                                 <UserPicture name={request.user.name} picture={request.user.picture.url} />
                                 <Link href={`/circles/${request.userDid}`} target="_blank">
                                     {request.user.name}
                                 </Link>
-                                <Button variant="ghost" size="sm" onClick={() => handlePreview(request.userDid)}>
-                                    Preview
-                                </Button>
                             </div>
                         </TableCell>
+                        <TableCell>{request.user.email}</TableCell>
                         <TableCell>{new Date(request.requestedAt).toLocaleString()}</TableCell>
-                        <TableCell>
+                        <TableCell className="space-x-2">
                             <Button onClick={() => handleApprove(request._id)}>Approve</Button>
                             <Button variant="destructive" onClick={() => handleReject(request._id)}>
                                 Reject

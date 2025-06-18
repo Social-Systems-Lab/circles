@@ -368,12 +368,13 @@ export async function getVerificationRequests() {
                     user: {
                         name: "$user.name",
                         picture: "$user.picture",
+                        email: "$user.email",
                     },
                 },
             },
         ])
         .toArray();
-    return requests as (VerificationRequest & { user: { name: string; picture: { url: string } } })[];
+    return requests as (VerificationRequest & { user: { name: string; picture: { url: string }; email: string } })[];
 }
 
 export async function approveVerificationRequest(id: string) {
@@ -397,6 +398,13 @@ export async function approveVerificationRequest(id: string) {
         { _id: new ObjectId(id) },
         { $set: { status: "approved", reviewedAt: new Date(), reviewedBy: user.did } },
     );
+
+    const userToNotify = await getUserPrivate(request.userDid);
+    if (userToNotify) {
+        await sendNotifications("user_verified", [userToNotify], {
+            userName: userToNotify.name,
+        });
+    }
 
     revalidatePath("/admin");
 }
