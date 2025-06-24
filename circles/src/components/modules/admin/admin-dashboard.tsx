@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GlobalServerSettingsForm } from "./global-server-settings-form"; // Import the new form
-import { ServerSettings } from "@/models/models";
+import { Circle, ServerSettings } from "@/models/models";
 import { Button } from "@/components/ui/button"; // Import Button
 import { triggerReindexAction } from "./actions"; // Import the new action
 import CirclesTab from "./tabs/circles-tab";
@@ -14,9 +14,10 @@ import { toast } from "sonner"; // Import toast for feedback
 
 interface AdminDashboardProps {
     serverSettings: ServerSettings;
+    circles: Circle[];
 }
 
-export default function AdminDashboard({ serverSettings }: AdminDashboardProps) {
+export default function AdminDashboard({ serverSettings, circles }: AdminDashboardProps) {
     const [activeTab, setActiveTab] = useState("server-settings");
     const [isReindexing, setIsReindexing] = useState(false);
     const [reindexStatusMessage, setReindexStatusMessage] = useState<string | null>(null);
@@ -66,7 +67,7 @@ export default function AdminDashboard({ serverSettings }: AdminDashboardProps) 
             <TabsContent value="circles" className="space-y-4">
                 <div className="mb-8">
                     <h2 className="mb-2 text-xl font-semibold">Manage Circles</h2>
-                    <CirclesTab />
+                    <CirclesTab circles={circles} />
                 </div>
             </TabsContent>
 

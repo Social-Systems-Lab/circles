@@ -47,6 +47,10 @@ const settingsForms: SettingsForm[] = [
         name: "Server",
         handle: "server-settings",
     },
+    {
+        name: "Subscription",
+        handle: "subscription",
+    },
 ];
 
 export type SettingsLayoutWrapperProps = {
