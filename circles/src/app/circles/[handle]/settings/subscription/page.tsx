@@ -1,7 +1,12 @@
 import { getCircleByHandle } from "@/lib/data/circle";
 import SubscriptionForm from "./subscription-form";
 
-export default async function SubscriptionPage({ params }: { params: { handle: string } }) {
+type SubscriptionProps = {
+    params: Promise<{ handle: string }>;
+};
+
+export default async function SubscriptionPage(props: SubscriptionProps) {
+    const params = await props.params;
     const circle = await getCircleByHandle(params.handle);
 
     if (!circle) {

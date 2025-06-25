@@ -46,7 +46,9 @@ export async function getPlans() {
     });
 
     if (!response.ok) {
-        throw new Error("Failed to fetch plans");
+        const errorText = await response.text();
+        console.error("Failed to fetch plans:", errorText);
+        throw new Error(`Failed to fetch plans: ${errorText}`);
     }
 
     return response.json();
