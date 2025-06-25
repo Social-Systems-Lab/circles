@@ -219,6 +219,7 @@ export default function UsersTab() {
                                 <TableHead>Name</TableHead>
                                 <TableHead>Handle</TableHead>
                                 <TableHead>Email</TableHead>
+                                <TableHead>Subscription</TableHead>
                                 <TableHead>Admin</TableHead>
                                 <TableHead>Verified</TableHead>
                                 <TableHead>Created</TableHead>
@@ -228,7 +229,7 @@ export default function UsersTab() {
                         <TableBody>
                             {filteredUsers.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                                    <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                                         {searchTerm ? "No users found matching your search" : "No users found"}
                                     </TableCell>
                                 </TableRow>
@@ -256,6 +257,7 @@ export default function UsersTab() {
                                         </TableCell>
                                         <TableCell>{user.handle}</TableCell>
                                         <TableCell>{user.email || "No email"}</TableCell>
+                                        <TableCell>{user.subscription?.status ?? "Inactive"}</TableCell>
                                         <TableCell>
                                             {user.isAdmin ? (
                                                 <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
