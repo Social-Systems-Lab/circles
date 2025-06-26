@@ -1,363 +1,327 @@
-// main app home aggregate feed
-import LandingPage from "@/components/layout/landing-page";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Button } from "@/components/ui/button";
-import { ExternalLink, Play, Plus } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { ChevronRight } from "lucide-react";
+import { Montserrat, Noto_Serif } from "next/font/google";
+import { cn } from "@/lib/utils";
 
-export default async function Welcome() {
+const montserrat = Montserrat({
+    subsets: ["latin"],
+    variable: "--font-montserrat",
+});
+
+const notoSerif = Noto_Serif({
+    subsets: ["latin"],
+    variable: "--font-noto-serif",
+});
+
+export default function KamooniLandingPage() {
+    const faqItems = [
+        {
+            question: "Do I have to pay to join?",
+            answer: "Kamooni is free to join and participate in some ways, we&apos;re happy. But by becoming a founding member, you get a vote on how the community is run and help us keep the platform ad-free and independent.",
+        },
+        {
+            question: "What makes Kamooni different from other social platforms?",
+            answer: "Kamooni is designed for social impact, focusing on collaboration, empowerment, and real-world change. It's community-owned, ad-free, and prioritizes user data privacy and ethical technology. We aim to connect individuals with a right to privacy and tools designed to empower, not pacify, you.",
+        },
+        {
+            question: "How is my data protected?",
+            answer: "We are committed to strong data protection principles. Your data is not sold to third parties, and we are transparent about how we use information to improve the platform. As a community-governed platform, data policies will be decided with member input.",
+        },
+    ];
+
     return (
-        <main className="flex min-h-screen flex-col items-center">
-            {/* Hero Section with Background Image */}
-            <section className="relative w-full px-4 py-24 text-center md:py-32">
-                {/* Background Image */}
-                <div className="absolute inset-0 z-0">
+        <div
+            className={cn(
+                "text-kam-gray-dark flex min-h-screen flex-col bg-white",
+                montserrat.variable,
+                notoSerif.variable,
+            )}
+        >
+            {/* Header */}
+            <header className="sticky top-0 z-50 bg-white shadow-sm">
+                <div className="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
+                    <Link href="/" className="group flex items-center">
+                        <Image
+                            src="/kamooni-icon.png"
+                            alt="Kamooni Logo Icon"
+                            width={40}
+                            height={40}
+                            className="h-8 w-auto transition-opacity duration-150 group-hover:opacity-80 sm:h-10"
+                        />
+                        <div className="ml-2 transition-opacity duration-150 group-hover:opacity-80">
+                            <span className="text-kam-gray-dark text-xl font-semibold">Kamooni</span>
+                            <span className="text-kam-gray-dark/70 -mt-1 block text-xs">the social impact network</span>
+                        </div>
+                    </Link>
+                    <Button className="bg-kam-button-red-orange hover:bg-kam-button-red-orange/90 px-4 py-2 text-sm text-white">
+                        Login/Join
+                    </Button>
+                </div>
+            </header>
+
+            {/* Hero Section */}
+            <section className="bg-kam-hero-yellow relative overflow-hidden py-16 text-center sm:py-24">
+                {/* Background Flowers */}
+                <div
+                    className="pointer-events-none absolute -left-[80px] -top-[60px] h-[300px] w-[300px] rotate-12 transform opacity-60 
+                      sm:-left-[90px] sm:-top-[70px] sm:h-[350px] sm:w-[350px] 
+                      md:-left-[100px] md:-top-[80px] md:h-[400px] md:w-[400px]"
+                >
                     <Image
-                        src="/images/world-map-dots.png"
-                        alt="World Map Dots"
+                        src="/images/flower-bg.png"
+                        alt="Background Flower Top Left"
                         fill
-                        className="object-cover opacity-60"
-                        priority
+                        className="object-contain"
+                    />
+                </div>
+                <div
+                    className="pointer-events-none absolute -bottom-[60px] -right-[80px] h-[300px] w-[300px] -rotate-12 transform opacity-60
+                      sm:-bottom-[70px] sm:-right-[90px] sm:h-[350px] sm:w-[350px]
+                      md:-bottom-[80px] md:-right-[100px] md:h-[400px] md:w-[400px]"
+                >
+                    <Image
+                        src="/images/flower-bg.png"
+                        alt="Background Flower Bottom Right"
+                        fill
+                        className="object-contain"
                     />
                 </div>
 
-                {/* Content */}
-                <div className="relative z-10">
-                    <h1 className="mb-4 font-bebas text-5xl text-[#175848] md:text-6xl lg:text-7xl">
-                        Kamooni - The Social Impact Network
+                <div className="container relative z-10 mx-auto px-4 sm:px-6 lg:px-8">
+                    <Image
+                        src="/images/logo-white.png"
+                        alt="Kamooni Hero Icon"
+                        width={400}
+                        height={382}
+                        className="mx-auto mb-4 h-36 w-auto sm:h-44 lg:h-48"
+                    />
+                    <h1 className="mb-6 text-4xl font-bold text-white drop-shadow-[0_2px_3px_rgba(0,0,0,0.3)] sm:text-5xl">
+                        Kamooni
                     </h1>
-                    <p className="mb-8 inline-block rounded-md bg-white/60 px-4 py-1 text-xl">
-                        No Ads, No Big Tech, Non-Profit and Open-Source
+                    <p className="mb-8 text-xl text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)] sm:text-2xl">
+                        No Ads. No Big Tech. Ethical and Open-Source
                     </p>
+                    <Button className="bg-kam-button-red-orange hover:bg-kam-button-red-orange/90 mb-4 px-8 py-3 text-lg text-white">
+                        Test Pilot Signup <ChevronRight className="ml-2 h-5 w-5" />
+                    </Button>
+                </div>
+            </section>
 
-                    <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
-                        {/* <Link href="/explore">
-                            <Button className="rounded bg-[#FAAE3C] px-8 py-6 text-white hover:bg-[#FAAE3C]/90">
-                                Explore the platform
-                            </Button>
-                        </Link> */}
-                        <Link href="/signup">
+            {/* Most networks distract */}
+            <section className="bg-white py-12 sm:py-20">
+                <div className="container mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+                    <h2 className="text-kam-gray-dark mb-6 text-center text-3xl font-bold sm:text-4xl">
+                        Most social media distracts. <span className="text-kam-yellow block">We connect.</span>
+                    </h2>
+                    <div className="text-left">
+                        <p className="text-kam-gray-dark/80 mb-4 text-lg leading-relaxed">
+                            In a world full of noise, disconnection, and doomscrolling, we offer something different.
+                            Changemakers need more than likes and shares. They need real-world impact. They need
+                            funding. They need resources. But, most of all, they need each other. Kamooni is designed
+                            and built to help us find each other and get things done together.
+                        </p>
+                        <div className="mt-8 text-center">
                             <Button
                                 variant="outline"
-                                className="rounded bg-[#FAAE3C] px-8 py-6 text-white hover:bg-[#FAAE3C]/90"
+                                className="border-kam-button-red-orange text-kam-button-red-orange hover:bg-kam-button-red-orange text-md px-6 py-2 hover:text-white"
                             >
-                                Test Pilot Sign-up
+                                13 Reasons to Join
                             </Button>
-                        </Link>
-                    </div>
-                </div>
-            </section>
-
-            {/* Why Make Circles - Thinner like a footer */}
-            <section className="w-full bg-[#2B463C] px-4 py-4 text-white md:px-8">
-                <div className="mx-auto flex max-w-4xl items-center justify-between">
-                    <h2 className="mb-0 mt-0 pb-0 pt-0 font-bebas text-lg">Why Make Circles?</h2>
-                    <a
-                        href="https://www.socialsystems.io/wp-content/uploads/2025/03/MakeCircles.pdf"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-[#FAAE3C] hover:underline"
-                    >
-                        read more
-                    </a>
-                </div>
-            </section>
-
-            {/* Social Media Problems */}
-            <section className="w-full px-4 py-16 md:px-8">
-                <div className="mx-auto max-w-4xl">
-                    <h2 className="mb-6 font-bebas text-4xl text-[#175848] md:text-5xl">
-                        Social Media is not designed to improve your life or the world
-                    </h2>
-                    <p className="mb-8 text-lg">
-                        After over two decades it is clear that the cost of our dominant privately owned social networks
-                        far outweigh their benefits. We seem to have more relationships but they are also more tenuous
-                        and fragile. We have plentiful access to tailor-made entertainment, but it is tailored to seize
-                        and hold our attention, not to nourish our spirits or sharpen our minds. Distraction has
-                        replaced depth resulting in less real social engagement, worse mental and physical health,
-                        increasing societal conflict and ever decreasing personal agency. Our every move online is
-                        monitored and algorithmically optimized to propel us in whatever direction will generate the
-                        platform more profit, irrespectively of if it is to our detriment or not.
-                    </p>
-
-                    <div className="my-12 text-center">
-                        <h3 className="mb-4 font-sans text-2xl italic md:text-3xl">
-                            In one sentence, social media platforms were never designed for us, they were designed
-                            against us
-                        </h3>
-                    </div>
-                    <p className="mb-8 text-lg">But it doesn&apos;t have to be this way.</p>
-                </div>
-            </section>
-
-            {/* Building Kamooni - With different background color */}
-            <section className="w-full bg-[#FEF9E8] px-4 py-16 md:px-8">
-                <div className="mx-auto max-w-4xl">
-                    <h2 className="mb-6 font-bebas text-4xl text-[#175848] md:text-5xl">
-                        That&apos;s Why We Are Building Kamooni
-                    </h2>
-                    <p className="mb-8 text-lg">
-                        Kamooni is designed for the Changemakers of the world, because you are needed now more than
-                        ever. We want to give you the tools, resources, connections and agency to accomplish your goals.
-                        A platform that allows you to do your work in an open, transparent and collaborative way. No
-                        advertising, spying, manipulation or selling of user data. Quite to the contrary, our goal is
-                        that you own and control all your data and all your relationships and, ultimately, all your
-                        funding streams.
-                    </p>
-                </div>
-            </section>
-
-            {/* What can Kamooni Do */}
-            <section className="w-full px-4 py-16 md:px-8">
-                <div className="mx-auto max-w-4xl">
-                    <h2 className="mb-6 font-bebas text-4xl text-[#175848] md:text-5xl">What can Kamooni Do?</h2>
-                    <p className="mb-8 text-lg">
-                        Kamooni is currently in our <strong>beta testing phase</strong>. This means we are not ready for
-                        public use as we need to test the platform for bugs and also have a number of new features and
-                        improvements to do. That said, we already have all the{" "}
-                        <strong>basic social functionality</strong> in place and then some.
-                    </p>
-                    <p className="mb-8 text-lg">
-                        For instance, we have an <strong>integrated geographical interface</strong>, that allows you to
-                        create and pin circles to a map, or use it to{" "}
-                        <strong>find projects, events, people and opportunities</strong> both locally and globally. It
-                        is also possible to write and <strong>vote on proposals</strong> or create and{" "}
-                        <strong>allocate tasks</strong> to users to make more progress. We have a number of other
-                        democratic governance functions we will add and test before we go public, as well as privacy
-                        functions, video conferencing, crowd funding, resource sharing and more. We have also designed
-                        Kamooni to <strong>give our users control</strong> over themselves and their communities. You
-                        decide who you share what information with and give what access to.
-                    </p>
-                    <div className="relative mt-16 flex items-center justify-center rounded-lg border border-gray-300 p-8">
-                        <video
-                            className="aspect-video w-full max-w-md rounded"
-                            controls
-                            poster="/images/video-thumbnail.jpg"
-                        >
-                            <source src="/videos/intro.mp4" type="video/mp4" />
-                            Your browser does not support the video tag.
-                        </video>
-                        <div className="absolute bottom-4 right-4 bg-[#FAAE3C] p-2 text-white">
-                            <p className="text-xs">Tom</p>
-                            <p className="text-xs">Talking</p>
-                            <p className="text-xs">Sense</p>
                         </div>
                     </div>
                 </div>
             </section>
 
-            {/* How You can help */}
-            <section className="w-full bg-[#FEF9E8] px-4 py-16 md:px-8">
-                <div className="mx-auto max-w-4xl">
-                    <h2 className="mb-6 font-bebas text-4xl text-[#175848] md:text-5xl">How You can help</h2>
-                    <p className="mb-8 text-lg">
-                        There are a number of ways you can help. First, <strong>create a profile</strong>, explore the
-                        platform, invite some friends. Then, create a project or a community circle and test the
-                        features. Let us know about the issues you come across and if you have any ideas for new
-                        features or better designs, create a proposal and we&apos;ll add it to the public vote.{" "}
-                        <strong>Kamooni is a co-creative platform</strong>. We are designing it to work for you, and you
-                        are the best judge of what that means.
-                    </p>
-                    <p className="mb-8 text-lg">
-                        If you are as inspired by this as we are, there are many other ways to help out too. Developers,
-                        designers, marketers, community leaders, project owners, funders, we&apos;d love to have you on
-                        the team. Please visit <strong>Social Systems Lab&apos;s</strong>{" "}
-                        <Link href="https://www.socialsystems.io">webpage</Link> for more info.
-                    </p>
-
-                    <div className="mt-12 flex flex-col justify-center gap-4 sm:flex-row">
-                        <Link href="https://makecircles.socialsystems.io/">
-                            <Button className="rounded bg-[#2B463C] px-8 py-6 text-white hover:bg-[#175848]">
-                                Test Pilot Sign-up
+            {/* Tools for Transformation */}
+            <section className="bg-kam-hero-yellow py-12 sm:py-20">
+                <div className="container mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+                    <h2 className="text-kam-gray-dark mb-6 text-center text-3xl font-bold sm:text-4xl">
+                        Tools for Transformation
+                    </h2>
+                    <div className="text-left">
+                        <p className="text-kam-gray-dark mb-4 text-lg leading-relaxed">
+                            Kamooni is designed for autonomy, empowerment, collaboration and action: we provide a unique
+                            combination of tools for individuals, projects, and teams, and a map-based interface to find
+                            and connect with people doing complementary work nearby. This includes tools for governance,
+                            decision-making, community organizing, a research & systems thinking work bench, and ways to
+                            share skills, time, volunteer and material assets.
+                        </p>
+                        <p className="text-kam-gray-dark mb-8 text-lg leading-relaxed">
+                            <span className="font-semibold">We are currently in Test Pilot phase.</span> We are still
+                            shaping this thing together with our founding members. If you are a changemaker, a community
+                            organizer, a researcher, a systems thinker: come look. Help us shape Kamooni with you and
+                            for you.
+                        </p>
+                        <div className="mt-8 text-center">
+                            <Button className="bg-kam-button-red-orange hover:bg-kam-button-red-orange/90 px-8 py-3 text-lg text-white">
+                                Test Pilot Signup <ChevronRight className="ml-2 h-5 w-5" />
                             </Button>
-                        </Link>
-                        <Link href="https://www.socialsystems.io/participate/">
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* Who Dis? */}
+            <section className="bg-white py-12 sm:py-20">
+                <div className="container mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+                    <h2 className="text-kam-gray-dark mb-6 text-center text-3xl font-bold sm:text-4xl">Who Dis?</h2>
+                    <div className="text-left">
+                        <p className="text-kam-gray-dark/80 mb-4 text-lg leading-relaxed">
+                            We&apos;re a small, independent, not-for-profit called the{" "}
+                            <span className="font-semibold">Social Systems Foundation</span>, and supported by the
+                            community we serve.
+                        </p>
+                        <p className="text-kam-gray-dark/80 mb-8 text-lg leading-relaxed">
+                            No VCs. No corporate funding. No ads. No extractive growth. 100% organic free-range,
+                            grass-fed, non-GMO, gluten-free, cruelty-free, community-governed good. If that resonates,
+                            you&apos;re already one of us. Come say hi.
+                        </p>
+                        <div className="mt-8 text-center">
                             <Button
                                 variant="outline"
-                                className="rounded border-[#2B463C] px-8 py-6 text-[#2B463C] hover:bg-[#FEF9E8]"
+                                className="border-kam-button-red-orange text-kam-button-red-orange hover:bg-kam-button-red-orange text-md px-6 py-2 hover:text-white"
+                            >
+                                Meet the team
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* Wait, no ads... */}
+            <section className="bg-kam-hero-yellow py-12 sm:py-20">
+                <div className="container mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+                    <h2 className="text-kam-gray-dark mb-6 text-center text-3xl font-bold sm:text-4xl">
+                        Wait, no ads... <span className="block text-white">Who is paying for this?</span>
+                    </h2>
+                    <div className="text-left">
+                        <p className="text-kam-gray-dark mb-4 text-lg leading-relaxed">
+                            You are. But not in a sneaky way, in an up-front way. If our calculations pan out, as long
+                            as enough people become founding members, we can keep Kamooni free for everyone to use,
+                            forever. We call this <span className="font-semibold">Community-Supported Software</span>.
+                        </p>
+                        <p className="text-kam-gray-dark mb-4 text-lg leading-relaxed">
+                            But there is more to this story. As a member you get a vote on how the community is run. And
+                            the platform is designed to help you create, organize, and manage your own projects and
+                            communities, with tools for funding, governance, and resource sharing.
+                        </p>
+                        <p className="text-kam-gray-dark mb-8 text-lg leading-relaxed">
+                            Our ultimate goal however, is for Kamooni to become fully distributed with our open source
+                            technology, so that any community can run their own instance, completely independently from
+                            us. If you like what we&apos;re doing and want to help us share the load with us, join the
+                            tribe as a Founding Member for €5 per month.
+                        </p>
+                        <div className="mt-8 flex flex-col items-center space-y-4 text-center">
+                            <Button className="bg-kam-button-red-orange hover:bg-kam-button-red-orange/90 w-full px-8 py-3 text-lg text-white sm:w-auto">
+                                Become a Founding Member
+                            </Button>
+                            <Button
+                                variant="link"
+                                className="text-kam-button-red-orange hover:text-kam-button-red-orange/80 w-full sm:w-auto"
+                            >
+                                Lifetink I need a bit more convincing...
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* This sounds great! */}
+            <section className="bg-white py-12 sm:py-20">
+                <div className="container mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+                    <h2 className="text-kam-gray-dark mb-6 text-center text-3xl font-bold sm:text-4xl">
+                        This sounds great! <span className="text-kam-yellow block">How can I help?</span>
+                    </h2>
+                    <div className="text-left">
+                        <p className="text-kam-gray-dark/80 mb-8 text-lg leading-relaxed">
+                            Thanks! We&apos;re pretty pleased with it. If we say so ourselves. But we could definitely
+                            use a hand. We always need help with coding, design, testing, community organizing, and just
+                            generally spreading the word. If you&apos;ve got some spare cycles and want to help us build
+                            this thing, join our test pilots or come visit our Discord server for some watercooler
+                            powwows and reach out to us if anything hits your spot!
+                        </p>
+                        <div className="mt-8 text-center">
+                            <Button
+                                variant="outline"
+                                className="border-kam-button-red-orange text-kam-button-red-orange hover:bg-kam-button-red-orange text-md px-6 py-2 hover:text-white"
                             >
                                 Other ways to help
                             </Button>
-                        </Link>
+                        </div>
                     </div>
                 </div>
             </section>
 
-            {/* Who do we think we are */}
-            <section className="w-full px-4 py-16 md:px-8">
-                <div className="mx-auto max-w-4xl">
-                    <h2 className="mb-6 font-bebas text-4xl text-[#175848] md:text-5xl">Who do we think we are?</h2>
-                    <p className="mb-8 text-lg">
-                        We are a small team with big visions running a not-for profit, oligarch-free platform designed
-                        to outcompete the best of its for-profit competitors. The project custodian is The Social
-                        Systems Foundation that is committed to open-source technology to serve humanity and the planet.
-                        You can read more about us on Social Systems Lab&apos;s webpage, and if you share our vision and
-                        are interested in joining our motley crew of Changemakers, we&apos;d most definitely welcome the
-                        conversation. Just send us a message!
-                    </p>
-                    <div className="mt-8 flex justify-center">
-                        <Link href="https://www.socialsystems.io/our_people/">
-                            <Button
-                                variant="outline"
-                                className="rounded border-[#2B463C] px-8 py-6 text-[#2B463C] hover:border-[#FAAE3C] hover:bg-[#FAAE3C] hover:text-white"
-                            >
-                                About us
-                            </Button>
-                        </Link>
-                    </div>
-                </div>
-            </section>
-
-            {/* Tell Me More */}
-            <section className="w-full bg-[#FEF9E8] px-4 py-16 md:px-8">
-                <div className="mx-auto max-w-4xl">
-                    <h2 className="mb-6 font-bebas text-4xl text-[#175848] md:text-5xl">Tell Me More...</h2>
-                    <p className="mb-8 text-lg">Still wondering why you should join Kamooni as a test pilot?</p>
-
-                    <div className="formatted space-y-4">
-                        <Accordion type="single" collapsible className="w-full">
-                            <AccordionItem value="item-1" className="mb-4 rounded-md border border-gray-300">
-                                <AccordionTrigger className="flex items-center px-4 py-3  pb-0">
-                                    <div className="flex items-center">
-                                        <Plus size={16} className="mr-2 text-[#FAAE3C]" />
-                                        <span>Why should I use my valuable time to improve your product?</span>
-                                    </div>
+            {/* FAQ Section */}
+            <section className="bg-kam-hero-yellow py-12 sm:py-20">
+                <div className="container mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+                    <h2 className="text-kam-gray-dark mb-10 text-center text-3xl font-bold sm:text-4xl">FAQ</h2>
+                    <Accordion type="single" collapsible className="w-full text-left">
+                        {faqItems.map((item, index) => (
+                            <AccordionItem value={`item-${index + 1}`} key={index} className="border-b border-white/70">
+                                <AccordionTrigger className="text-kam-gray-dark py-4 text-left text-lg font-medium hover:no-underline">
+                                    {item.question}
                                 </AccordionTrigger>
-                                <AccordionContent className="px-4 py-3">
-                                    Well, it&apos;s not exactly our product in the sense that we, not you, own it and
-                                    that we, not you, will profit from it. Rather it is our product in the sense that it
-                                    is both yours and ours and is designed to benefit all of us. Yes, legally the
-                                    platform is owned by Social Systems Lab, which in turn is completely owned by the
-                                    Foundation, but it is designed to benefit you as a user. You get to help turn it
-                                    into something truly useful that you control by voting on the features you most want
-                                    to see. And if it creates a surplus, these funds will be returned back into the
-                                    ecosystem through your &apos;Altruistic Wallet&apos;, which you can then allocate to
-                                    projects you wish to support. In addition, the platform is also completely
-                                    open-source, and you are more than welcome to set up your own circle server and
-                                    develop it on your own in whatever direction you choose, should you not be happy
-                                    with the direction things go.
+                                <AccordionContent className="text-md text-kam-gray-dark pb-4 pt-2 leading-relaxed">
+                                    {item.answer}
                                 </AccordionContent>
                             </AccordionItem>
-
-                            <AccordionItem value="item-2" className="mb-4 rounded-md border border-gray-300">
-                                <AccordionTrigger className="flex items-center px-4 py-3  pb-0">
-                                    <div className="flex items-center">
-                                        <Plus size={16} className="mr-2 text-[#FAAE3C]" />
-                                        <span>Who is behind Kamooni?</span>
-                                    </div>
-                                </AccordionTrigger>
-                                <AccordionContent className="px-4 py-3">
-                                    Kamooni is built and maintained by the team at Social Systems Lab, which is a
-                                    subsidiary of the not-for-profit Social Systems Foundation. You can read more about
-                                    us <Link href="https://www.socialsystems.io/">here</Link>.
-                                </AccordionContent>
-                            </AccordionItem>
-
-                            <AccordionItem value="item-3" className="mb-4 rounded-md border border-gray-300">
-                                <AccordionTrigger className="flex items-center px-4 py-3  pb-0">
-                                    <div className="flex items-center">
-                                        <Plus size={16} className="mr-2 text-[#FAAE3C]" />
-                                        <span>How is Kamooni funded?</span>
-                                    </div>
-                                </AccordionTrigger>
-                                <AccordionContent className="px-4 py-3">
-                                    Kamooni is currently funded by the Foundation and by individual donations. The
-                                    long-term goal is that Kamooni will fund itself through voluntary paid memberships
-                                    and brokerage fees, as donations are not necessarily a viable business model in the
-                                    longer term. Members will not receive more services than non-members, but they will
-                                    given a vote in all decisions about the platform and will also get to decide where
-                                    their share of any profits are allocated.
-                                </AccordionContent>
-                            </AccordionItem>
-
-                            <AccordionItem value="item-4" className="mb-4 rounded-md border border-gray-300">
-                                <AccordionTrigger className="flex items-center px-4 py-3 pb-0">
-                                    <div className="flex items-center">
-                                        <Plus size={16} className="mr-2 text-[#FAAE3C]" />
-                                        <span>
-                                            Will anything I contribute here have any influence on the real world?
-                                        </span>
-                                    </div>
-                                </AccordionTrigger>
-                                <AccordionContent className="px-4 py-3">
-                                    Kamooni is designed to have a direct impact on the real world. This can be achieved
-                                    in numerous ways, such as through crowdfunding, volunteering or asset sharing. Of
-                                    course, this will only become significant if a lot of people use Kamooni for this
-                                    purpose, but even before that, you can use the platform to create personal goals,
-                                    projects and task and organize your personal life, which is very much part of the
-                                    real world.
-                                </AccordionContent>
-                            </AccordionItem>
-
-                            <AccordionItem value="item-5" className="mb-4 rounded-md border border-gray-300">
-                                <AccordionTrigger className="flex items-center px-4 py-3  pb-0">
-                                    <div className="flex items-center">
-                                        <Plus size={16} className="mr-2 text-[#FAAE3C]" />
-                                        <span>
-                                            How do I know I&apos;m not helping to create a platform that will eventually
-                                            sell out for profit?
-                                        </span>
-                                    </div>
-                                </AccordionTrigger>
-                                <AccordionContent className="px-4 py-3">
-                                    A legitimate concern. That does seem to be the way these things go in this day and
-                                    age, so saying &quot;Just trust us&quot; won&apos;t really make much difference. But
-                                    we are fully owned by a non-profit foundation, we are completely open-source and we
-                                    are actively building tools that will connect our users in a peer-to-peer manner,
-                                    which means we won&apos;t be able to hold your data, your relationships or your
-                                    funding hostage. Which in turn means we will have little to no value should someone
-                                    want to make an offer for the platform and network. Instead, the profits we seek are
-                                    thriving communities with sufficiently funded projects made possible by volunteers
-                                    and making use of available local resources. Do we want to pay our coworkers a
-                                    decent salary? Obviously we do, but nothing excessive as the purpose is to maximize
-                                    the return to the communities that make Kamooni possible. Our accounting will always
-                                    be open, to make sure we live up to this promise.
-                                </AccordionContent>
-                            </AccordionItem>
-                        </Accordion>
+                        ))}
+                    </Accordion>
+                    <div className="mt-10 text-center">
+                        <Button
+                            variant="outline"
+                            className="border-kam-button-red-orange text-kam-button-red-orange hover:bg-kam-button-red-orange text-md px-6 py-2 hover:text-white"
+                        >
+                            More Questions?
+                        </Button>
                     </div>
                 </div>
             </section>
 
             {/* Footer */}
-            <section className="w-full bg-[#FEF9E8] px-4 py-8 md:px-8">
-                <div className="mx-auto flex max-w-4xl flex-wrap justify-center gap-4">
-                    <Link href="https://www.socialsystems.io/">
-                        <Button variant="outline" className="border-none bg-[#FAAE3C] text-white hover:bg-[#FAAE3C]/90">
-                            <ExternalLink size={16} className="mr-2" />
-                            <span>Social Systems Lab</span>
-                        </Button>
-                    </Link>
-                    <Link href="https://www.socialsystems.io/foundation/">
-                        <Button variant="outline" className="border-none bg-[#FAAE3C] text-white hover:bg-[#FAAE3C]/90">
-                            Foundation
-                        </Button>
-                    </Link>
-                    <Link href="https://www.socialsystems.io/partners/">
-                        <Button variant="outline" className="border-none bg-[#FAAE3C] text-white hover:bg-[#FAAE3C]/90">
-                            Partners
-                        </Button>
-                    </Link>
-                    <Link href="https://vibeapp.dev/">
-                        <Button variant="outline" className="border-none bg-[#FAAE3C] text-white hover:bg-[#FAAE3C]/90">
-                            Vibe
-                        </Button>
-                    </Link>
-                    <Link href="https://www.socialsystems.io/participate/">
-                        <Button variant="outline" className="border-none bg-[#2B463C] text-white hover:bg-[#175848]">
-                            Participate
-                        </Button>
-                    </Link>
+            <footer className="bg-kam-gray-dark py-10 text-white sm:py-16">
+                <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="grid grid-cols-2 gap-8 text-center md:grid-cols-3 lg:grid-cols-6 lg:text-left">
+                        {[
+                            { label: "Social Systems Lab", href: "https://socialsystems.io" },
+                            { label: "The Foundation", href: "https://www.socialsystems.io/foundation/" },
+                            { label: "Partners", href: "https://www.socialsystems.io/partners/" },
+                            { label: "Manifesto", href: "https://vibeapp.dev/manifesto" },
+                            { label: "Contact", href: "https://www.socialsystems.io/contact/" },
+                        ].map((link) => (
+                            <div key={link.label} className="mb-4 lg:mb-0">
+                                <Link href={link.href} target="_blank" rel="noopener noreferrer">
+                                    <Button
+                                        variant="link"
+                                        className="text-kam-yellow hover:text-kam-yellow/80 w-full justify-center rounded-md bg-transparent p-2 text-sm capitalize hover:bg-white/10"
+                                    >
+                                        {link.label}
+                                    </Button>
+                                </Link>
+                            </div>
+                        ))}
+                        <div className="col-span-2 flex items-center justify-center md:col-span-3 lg:col-span-1 lg:justify-end">
+                            <Link
+                                href="https://www.socialsystems.io/participate"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <Button className="bg-kam-yellow hover:bg-kam-yellow/90 text-kam-gray-dark w-full px-6 py-2 text-sm font-semibold sm:w-auto">
+                                    Participate
+                                </Button>
+                            </Link>
+                        </div>
+                    </div>
+                    <div className="border-kam-gray-medium/30 text-kam-gray-light/70 mt-10 border-t pt-8 text-center text-sm">
+                        <p>&copy; {new Date().getFullYear()} Kamooni. All rights reserved.</p>
+                        <p className="mt-1">Social Systems Foundation</p>
+                    </div>
                 </div>
-            </section>
-        </main>
-
-        // <div className="flex flex-1 flex-row justify-center overflow-hidden">
-        //     <div className="flex max-w-[1100px] flex-1 flex-col items-center justify-center md:mb-4 md:mt-16">
-        //         {/* <div className="mb-4 mt-4 flex max-w-[1100px] flex-1 flex-col items-center justify-center md:mt-16"> */}
-        //         <LandingPage />
-        //     </div>
-        // </div>
+            </footer>
+        </div>
     );
 }

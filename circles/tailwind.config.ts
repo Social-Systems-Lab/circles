@@ -16,7 +16,8 @@ const config = {
         },
         extend: {
             fontFamily: {
-                sans: ["var(--font-wix-display)", ...fontFamily.sans],
+                sans: ["Montserrat", "sans-serif"],
+                serif: ["Noto Serif", "serif"],
                 bebas: ["var(--font-bebas-neue)"],
             },
             colors: {
@@ -54,6 +55,20 @@ const config = {
                     DEFAULT: "hsl(var(--card))",
                     foreground: "hsl(var(--card-foreground))",
                 },
+                "kam-yellow": "#f4b740",
+                "kam-red": "#e57373", // Original red, keeping for reference
+                "kam-green": "#819977", // Original green, keeping for reference
+                "kam-beige": "#e0d6b3",
+                "kam-gray": {
+                    light: "#eeeede",
+                    medium: "#d1d5db",
+                    dark: "#4b5563",
+                    DEFAULT: "#4b5563",
+                },
+                "kam-hero-yellow": "#fdcc5f",
+                "kam-alt-bg": "#f4efb7", // This was changed to kam-hero-yellow in page.tsx
+                "kam-postcard-green": "#5c7a52",
+                "kam-button-red-orange": "#f47566", // New button color
             },
             borderRadius: {
                 lg: "var(--radius)",
