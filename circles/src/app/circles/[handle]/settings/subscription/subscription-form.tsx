@@ -7,11 +7,14 @@ import { Circle } from "@/models/models";
 
 type Plan = {
     id: string;
-    name: string;
+    type: string;
     amount: string;
-    interval: string;
-    description: string;
+    formatted_amount: string;
     currency: string;
+    interval: string;
+    campaign: {
+        name: string;
+    };
     [key: string]: any;
 };
 
@@ -38,43 +41,28 @@ export default function SubscriptionForm({ circle }: { circle: Circle }) {
     };
 
     return (
-        <div className="flex-1 p-8 pt-6">
-            <div className="space-y-8">
-                <div>
-                    <h1 className="text-3xl font-bold">Subscription</h1>
-                    <p className="text-muted-foreground">
-                        Choose a plan to support the circle and get access to exclusive content.
-                    </p>
-                </div>
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                    {plans.map((plan) => (
-                        <Card key={plan.id} className="flex flex-col">
-                            <CardHeader>
-                                <CardTitle>{plan.name}</CardTitle>
-                                <CardDescription>{plan.name}</CardDescription>
-                            </CardHeader>
-                            <CardContent className="flex-grow">
-                                <div className="flex items-baseline justify-center">
-                                    <span className="text-4xl font-bold">
-                                        {plan.currency &&
-                                            new Intl.NumberFormat("en-US", {
-                                                style: "currency",
-                                                currency: plan.currency,
-                                            }).format(parseFloat(plan.amount))}
-                                    </span>
-                                    <span className="ml-1 text-xl font-normal text-muted-foreground">
-                                        /{plan.interval}
-                                    </span>
-                                </div>
-                            </CardContent>
-                            <div className="p-6 pt-0">
-                                <Button onClick={() => handleSubscribe(plan.id)} className="w-full">
-                                    Subscribe
-                                </Button>
-                            </div>
-                        </Card>
-                    ))}
-                </div>
+        <div className="container py-6">
+            <h1 className="mb-6 text-2xl font-bold">Subscription</h1>
+            <p className="mb-6 text-muted-foreground">
+                Choose a plan to support the circle and get access to exclusive content.
+            </p>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {plans.map((plan) => (
+                    <Card key={plan.id} className="flex flex-col">
+                        <CardHeader>
+                            <CardTitle>{plan.campaign.name}</CardTitle>
+                            <CardDescription>
+                                {plan.formatted_amount} / {plan.type}
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex-grow"></CardContent>
+                        <div className="p-6 pt-0">
+                            <Button onClick={() => handleSubscribe(plan.id)} className="w-full">
+                                Subscribe
+                            </Button>
+                        </div>
+                    </Card>
+                ))}
             </div>
         </div>
     );

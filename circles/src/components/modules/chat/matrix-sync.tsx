@@ -12,7 +12,7 @@ import {
 } from "@/lib/data/atoms";
 import { RoomData, startSync } from "@/lib/data/client-matrix";
 import { useAtom } from "jotai";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { fetchAndCacheMatrixUsers } from "./chat-room";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { getUserPrivateAction } from "../home/actions";
@@ -27,6 +27,12 @@ export const MatrixSync = () => {
     const roomMessagesRef = useRef(roomMessages);
     const [matrixUserCache, setMatrixUserCache] = useAtom(matrixUserCacheAtom);
     const matrixUserCacheRef = useRef(matrixUserCache);
+
+    // Fixes hydration errors
+    const [isMounted, setIsMounted] = useState(false);
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
