@@ -44,9 +44,12 @@ export async function POST(req: NextRequest) {
             if (event.event_name === "donation.created" && event.donation?.recurring === true) {
                 console.log("Detected a recurring donation. Handling as a new subscription.");
                 await handleNewSubscription(event.donation);
-            } else if (event.event_name === "plan.updated" && event.plan?.status === "cancelled") {
-                console.log("Detected a cancelled plan. Handling as a subscription cancellation.");
-                await handleSubscriptionCancelled(event.plan);
+            } else if (event.event_name === "plan.updated") {
+                console.log("Detected a plan update. Handling as a subscription update.");
+                await handlePlanUpdate(event.plan);
+            } else if (event.event_name === "plan.created") {
+                console.log("Detected a plan creation. Handling as a subscription update.");
+                await handlePlanUpdate(event.plan);
             } else {
                 console.log(`Unhandled event: ${event.event_name}. Skipping.`);
             }
@@ -95,26 +98,29 @@ async function handleNewSubscription(donation: any) {
     );
 }
 
-async function handleSubscriptionCancelled(plan: any) {
+async function handlePlanUpdate(plan: any) {
     const {
         donor: { email },
+        status,
+        last_donation_date: lastDonationDate,
     } = plan;
 
     const circles = await db.collection("circles");
     const user = await circles.findOne({ email: email, circleType: "user" });
 
     if (!user) {
-        console.error(`User with email ${email} not found for cancellation.`);
+        console.error(`User with email ${email} not found for plan update.`);
         return;
     }
 
-    console.log(`Found user ${user.name} (${user._id}) for subscription cancellation.`);
+    console.log(`Found user ${user.name} (${user._id}) for plan update.`);
 
     await circles.updateOne(
         { _id: user._id },
         {
             $set: {
-                "subscription.status": "cancelled",
+                "subscription.status": status,
+                "subscription.lastPaymentDate": new Date(lastDonationDate),
             },
         },
     );

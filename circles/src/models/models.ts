@@ -448,6 +448,7 @@ export const circleSchema = z.object({
             amount: z.number().optional(),
             currency: z.string().optional(),
             startDate: z.date().optional(),
+            lastPaymentDate: z.date().optional(),
         })
         .optional(),
     manualMember: z.boolean().optional(),

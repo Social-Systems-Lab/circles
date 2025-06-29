@@ -9,6 +9,7 @@ import { Circle } from "@/models/models";
 
 export default function SubscriptionForm({ circle }: { circle: Circle }) {
     const [showDonorbox, setShowDonorbox] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
 
     const foundingMemberPlan = {
         id: "the-founding-campaign?", // From the iframe src
