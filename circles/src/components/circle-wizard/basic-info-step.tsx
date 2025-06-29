@@ -199,6 +199,27 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
                             : `New followers will need approval`}
                     </p>
                 </div>
+
+                <div className="space-y-2 rounded-lg border border-yellow-300 bg-yellow-50 p-4">
+                    <h3 className="font-semibold text-yellow-800">Become a Member!</h3>
+                    <p className="text-sm text-yellow-700">
+                        Support the platform and get a verified badge by becoming a member.
+                    </p>
+                    <Button
+                        variant="link"
+                        className="p-0 text-yellow-800"
+                        onClick={() => {
+                            // Assuming the user settings page is at /circles/handle/settings
+                            // and the subscription tab is available there.
+                            // This might need to be adjusted based on the actual routing.
+                            if (user) {
+                                window.open(`/circles/${user.handle}/settings/subscription`, "_blank");
+                            }
+                        }}
+                    >
+                        Learn more about membership
+                    </Button>
+                </div>
             </div>
 
             <div className="flex justify-end">

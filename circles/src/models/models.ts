@@ -446,6 +446,7 @@ export const circleSchema = z.object({
             amount: z.number().optional(),
         })
         .optional(),
+    manualMember: z.boolean().optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;

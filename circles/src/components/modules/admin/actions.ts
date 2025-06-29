@@ -429,3 +429,20 @@ export async function getCircleByIdAction(id: string) {
 export async function getUserByDidAction(did: string) {
     return await getUserByDid(did);
 }
+
+export async function toggleManualMembership(userId: string, manualMember: boolean) {
+    try {
+        const users = await db.collection("circles");
+        const result = await users.updateOne({ _id: new ObjectId(userId) }, { $set: { manualMember } });
+
+        if (result.modifiedCount === 0) {
+            return { success: false, message: "User not found or membership status unchanged." };
+        }
+
+        return { success: true, message: `User manual membership status set to ${manualMember}.` };
+    } catch (error) {
+        console.error("Error toggling manual membership:", error);
+        const message = error instanceof Error ? error.message : "An unexpected error occurred.";
+        return { success: false, message };
+    }
+}

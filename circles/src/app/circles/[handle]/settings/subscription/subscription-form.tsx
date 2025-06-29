@@ -19,52 +19,62 @@ type Plan = {
 };
 
 export default function SubscriptionForm({ circle }: { circle: Circle }) {
-    const [plans, setPlans] = useState<Plan[]>([]);
+    const [plan, setPlan] = useState<Plan | null>(null);
 
     useEffect(() => {
-        async function fetchPlans() {
+        async function fetchPlan() {
             try {
                 const plansData = await getPlans();
-                setPlans(plansData);
+                if (plansData && plansData.length > 0) {
+                    setPlan(plansData[0]);
+                }
             } catch (error) {
                 console.error(error);
             }
         }
 
-        fetchPlans();
+        fetchPlan();
     }, []);
 
-    const handleSubscribe = async (planId: string) => {
-        if (circle) {
-            await createSubscription(circle._id!, planId);
+    const handleSubscribe = async () => {
+        if (circle && plan) {
+            await createSubscription(circle._id!, plan.id);
         }
     };
 
+    const isMember = circle.subscription?.status === "active";
+
     return (
         <div className="container py-6">
-            <h1 className="mb-6 text-2xl font-bold">Subscription</h1>
-            <p className="mb-6 text-muted-foreground">
-                Choose a plan to support the circle and get access to exclusive content.
-            </p>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {plans.map((plan) => (
-                    <Card key={plan.id} className="flex flex-col">
-                        <CardHeader>
-                            <CardTitle>{plan.campaign.name}</CardTitle>
-                            <CardDescription>
-                                {plan.formatted_amount} / {plan.type}
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="flex-grow"></CardContent>
-                        <div className="p-6 pt-0">
-                            <Button onClick={() => handleSubscribe(plan.id)} className="w-full">
-                                Subscribe
-                            </Button>
-                        </div>
-                        <pre>{JSON.stringify(plan, null, 2)}</pre>
-                    </Card>
-                ))}
-            </div>
+            <h1 className="mb-6 text-2xl font-bold">Membership</h1>
+            {isMember ? (
+                <div>
+                    <p className="mb-6 text-muted-foreground">You are a member. Thank you for your support!</p>
+                    <pre>{JSON.stringify(circle.subscription, null, 2)}</pre>
+                </div>
+            ) : (
+                <div>
+                    <p className="mb-6 text-muted-foreground">
+                        Become a member to support the circle and get access to exclusive content.
+                    </p>
+                    {plan && (
+                        <Card className="flex flex-col">
+                            <CardHeader>
+                                <CardTitle>{plan.campaign.name}</CardTitle>
+                                <CardDescription>
+                                    {plan.formatted_amount} / {plan.type}
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="flex-grow"></CardContent>
+                            <div className="p-6 pt-0">
+                                <Button onClick={handleSubscribe} className="w-full">
+                                    Become a Member
+                                </Button>
+                            </div>
+                        </Card>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
