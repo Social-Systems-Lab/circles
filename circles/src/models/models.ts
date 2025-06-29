@@ -441,9 +441,13 @@ export const circleSchema = z.object({
         .object({
             donorboxPlanId: z.string().optional(),
             donorboxSubscriptionId: z.string().optional(),
+            donorboxDonationId: z.string().optional(),
+            donorboxDonorId: z.string().optional(),
             status: z.enum(["active", "inactive", "cancelled"]).optional(),
             endsAt: z.date().optional(),
             amount: z.number().optional(),
+            currency: z.string().optional(),
+            startDate: z.date().optional(),
         })
         .optional(),
     manualMember: z.boolean().optional(),

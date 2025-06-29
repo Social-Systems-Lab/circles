@@ -11,27 +11,37 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
     }
 
-    const signature = req.headers.get("x-donorbox-signature");
+    const signatureHeader = req.headers.get("donorbox-signature");
+    if (!signatureHeader) {
+        return NextResponse.json({ error: "Missing signature" }, { status: 401 });
+    }
+
+    const [timestamp, signature] = signatureHeader.split(",");
     const body = await req.text();
 
-    const expectedSignature = crypto.createHmac("sha256", DONORBOX_WEBHOOK_SECRET).update(body).digest("hex");
+    const expectedSignature = crypto
+        .createHmac("sha256", DONORBOX_WEBHOOK_SECRET)
+        .update(`${timestamp}.${body}`)
+        .digest("hex");
 
     if (signature !== expectedSignature) {
         return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
-    const event = JSON.parse(body);
+    const events = JSON.parse(body);
 
     try {
-        switch (event.type) {
-            case "subscription.updated":
-                await handleSubscriptionUpdated(event.data);
-                break;
-            case "subscription.cancelled":
-                await handleSubscriptionCancelled(event.data);
-                break;
-            default:
-                console.log(`Unhandled event type: ${event.type}`);
+        for (const event of events) {
+            switch (event.action) {
+                case "new":
+                    if (event.recurring) {
+                        await handleNewSubscription(event);
+                    }
+                    break;
+                // Add cases for other events as needed
+                default:
+                    console.log(`Unhandled event action: ${event.action}`);
+            }
         }
     } catch (error) {
         console.error("Error processing webhook:", error);
@@ -41,55 +51,34 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ status: "ok" });
 }
 
-async function handleSubscriptionUpdated(subscription: any) {
+async function handleNewSubscription(donation: any) {
     const {
-        id: donorboxSubscriptionId,
-        plan_id: donorboxPlanId,
-        status,
-        ends_at: endsAt,
+        id: donorboxDonationId,
+        donor: { id: donorboxDonorId },
         amount,
-        supporter: { custom_fields },
-    } = subscription;
-    const circleId = custom_fields.find((field: any) => field.name === "circleId")?.value;
+        currency,
+        donation_date: donationDate,
+        questions,
+    } = donation;
 
-    if (!circleId) {
+    const circleIdQuestion = questions.find((q: any) => q.question === "circleId");
+    if (!circleIdQuestion) {
         console.error("circleId not found in custom fields");
         return;
     }
+    const circleId = circleIdQuestion.answer;
 
     const circles = await db.collection("circles");
     await circles.updateOne(
         { _id: new ObjectId(circleId) },
         {
             $set: {
-                "subscription.donorboxPlanId": donorboxPlanId,
-                "subscription.donorboxSubscriptionId": donorboxSubscriptionId,
-                "subscription.status": status,
-                "subscription.endsAt": endsAt ? new Date(endsAt) : null,
+                "subscription.donorboxDonationId": donorboxDonationId,
+                "subscription.donorboxDonorId": donorboxDonorId,
+                "subscription.status": "active",
                 "subscription.amount": parseFloat(amount),
-            },
-        },
-    );
-}
-
-async function handleSubscriptionCancelled(subscription: any) {
-    const {
-        id: donorboxSubscriptionId,
-        supporter: { custom_fields },
-    } = subscription;
-    const circleId = custom_fields.find((field: any) => field.name === "circleId")?.value;
-
-    if (!circleId) {
-        console.error("circleId not found in custom fields");
-        return;
-    }
-
-    const circles = await db.collection("circles");
-    await circles.updateOne(
-        { _id: new ObjectId(circleId) },
-        {
-            $set: {
-                "subscription.status": "cancelled",
+                "subscription.currency": currency,
+                "subscription.startDate": new Date(donationDate),
             },
         },
     );
