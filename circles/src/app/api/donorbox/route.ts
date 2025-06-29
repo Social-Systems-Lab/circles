@@ -41,11 +41,11 @@ export async function POST(req: NextRequest) {
             console.log("Processing event:", JSON.stringify(event, null, 2));
 
             // A new subscription should be a recurring donation.
-            if (event.recurring === true) {
+            if (event.event_name === "donation.created" && event.donation?.recurring === true) {
                 console.log("Detected a recurring donation. Handling as a new subscription.");
-                await handleNewSubscription(event);
+                await handleNewSubscription(event.donation);
             } else {
-                console.log("Event is not a recurring donation. Skipping subscription handling.");
+                console.log("Event is not a new recurring donation. Skipping subscription handling.");
             }
         }
     } catch (error) {
@@ -59,25 +59,28 @@ export async function POST(req: NextRequest) {
 async function handleNewSubscription(donation: any) {
     const {
         id: donorboxDonationId,
-        donor: { id: donorboxDonorId },
+        donor: { id: donorboxDonorId, email },
         amount,
         currency,
         donation_date: donationDate,
-        questions,
+        plan_id: donorboxPlanId,
     } = donation;
 
-    const circleIdQuestion = questions.find((q: any) => q.question === "circleId");
-    if (!circleIdQuestion) {
-        console.error("circleId not found in webhook questions payload");
+    const circles = await db.collection("circles");
+    const user = await circles.findOne({ email: email, circleType: "user" });
+
+    if (!user) {
+        console.error(`User with email ${email} not found.`);
         return;
     }
-    const circleId = circleIdQuestion.answer;
 
-    const circles = await db.collection("circles");
+    console.log(`Found user ${user.name} (${user._id}) for subscription update.`);
+
     await circles.updateOne(
-        { _id: new ObjectId(circleId) },
+        { _id: user._id },
         {
             $set: {
+                "subscription.donorboxPlanId": donorboxPlanId.toString(),
                 "subscription.donorboxDonationId": donorboxDonationId,
                 "subscription.donorboxDonorId": donorboxDonorId,
                 "subscription.status": "active",
