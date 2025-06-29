@@ -61,6 +61,7 @@ export default function SubscriptionForm({ circle }: { circle: Circle }) {
                                 Subscribe
                             </Button>
                         </div>
+                        <pre>{JSON.stringify(plan, null, 2)}</pre>
                     </Card>
                 ))}
             </div>
