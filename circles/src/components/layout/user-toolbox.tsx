@@ -104,27 +104,32 @@ export const UserToolbox = () => {
                             <AvatarFallback>{user?.name?.charAt(0)}</AvatarFallback>
                         </Avatar>
                     </Link>
-                    <Link href={`/circles/${user?.handle}`}>
-                        <div>
+                    <div>
+                        <Link href={`/circles/${user?.handle}`}>
                             <div className="font-semibold">{user?.name}</div>
                             <p className="text-sm text-muted-foreground">@{user?.handle}</p>
-                            <div className="mt-2">
-                                {user?.subscription?.status === "active" || user?.manualMember ? (
-                                    <Link href={`/circles/${user?.handle}/settings/subscription`}>
-                                        <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
-                                            Founding Member
-                                        </span>
-                                    </Link>
-                                ) : (
-                                    <Link href={`/circles/${user?.handle}/settings/subscription`}>
-                                        <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-800">
-                                            Free Member
-                                        </span>
-                                    </Link>
-                                )}
-                            </div>
+                        </Link>
+                        <div className="mt-2">
+                            {user?.subscription?.status === "active" || user?.manualMember ? (
+                                <Link href={`/circles/${user?.handle}/settings/subscription`}>
+                                    <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+                                        <img
+                                            src="/images/member-badge.png"
+                                            alt="Member Badge"
+                                            className="mr-1 h-4 w-4"
+                                        />
+                                        Founding Member
+                                    </span>
+                                </Link>
+                            ) : (
+                                <Link href={`/circles/${user?.handle}/settings/subscription`}>
+                                    <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-800">
+                                        Free Member
+                                    </span>
+                                </Link>
+                            )}
                         </div>
-                    </Link>
+                    </div>
                 </div>
             </CardHeader>
             <CardContent className="p-0">

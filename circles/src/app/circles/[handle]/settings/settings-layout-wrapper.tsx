@@ -3,6 +3,8 @@
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { Circle, UserAndCircleInfo } from "@/models/models";
 import { FormNav, NavItem } from "@/components/forms/form-nav";
+import { useAtom } from "jotai";
+import { userAtom } from "@/lib/data/atoms";
 import { getUserOrCircleInfo } from "@/lib/utils/form";
 
 type SettingsForm = {
@@ -61,10 +63,18 @@ export type SettingsLayoutWrapperProps = {
 export const SettingsLayoutWrapper = ({ children, circle }: SettingsLayoutWrapperProps) => {
     const isCompact = useIsCompact();
     const isUser = circle.circleType === "user";
-    const navItems = settingsForms.map((item) => ({
-        name: getUserOrCircleInfo(item.name, isUser),
-        handle: item.handle,
-    })) as NavItem[];
+    const [user] = useAtom(userAtom);
+    const navItems = settingsForms
+        .filter((item) => {
+            if (item.handle === "subscription") {
+                return user?.handle === circle.handle;
+            }
+            return true;
+        })
+        .map((item) => ({
+            name: getUserOrCircleInfo(item.name, isUser),
+            handle: item.handle,
+        })) as NavItem[];
 
     return (
         <div

@@ -44,14 +44,14 @@ export default function SubscriptionForm({ circle }: { circle: Circle }) {
     const memberPlan = plans.find((p) => p.id === circle.subscription?.donorboxPlanId);
 
     return (
-        <div className="container mx-auto py-12">
+        <div className="formatted container mx-auto py-12">
             <div className="text-center">
                 <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-6xl">Become a Kamooni Member</h1>
                 <p className="mt-6 text-lg leading-8 text-gray-600">
                     Support the development of Kamooni and get access to exclusive features.
                 </p>
             </div>
-            <div className="mt-16 grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-2">
+            <div className="formatted mt-16 grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-2">
                 <Card className="flex flex-col rounded-3xl p-8">
                     <CardHeader>
                         <CardTitle className="text-2xl font-bold">Free</CardTitle>
@@ -79,55 +79,53 @@ export default function SubscriptionForm({ circle }: { circle: Circle }) {
                         </Button>
                     </div>
                 </Card>
-                {plans
-                    .filter((p) => p.campaign.name.includes("Founding Member"))
-                    .map((plan) => (
-                        <Card key={plan.id} className="flex flex-col rounded-3xl bg-purple-50 p-8">
-                            <CardHeader>
-                                <div className="flex items-center justify-between">
-                                    <CardTitle className="text-2xl font-bold">{plan.campaign.name}</CardTitle>
-                                    <img src="/images/member-badge.png" alt="Member Badge" className="h-8 w-8" />
-                                </div>
-                                <CardDescription>
-                                    {plan.formatted_amount} / {plan.interval}
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="flex-grow space-y-4">
-                                <ul className="space-y-2">
-                                    <li className="flex items-center">
-                                        <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
-                                        All features from the Free plan
-                                    </li>
-                                    <li className="flex items-center">
-                                        <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
-                                        Verified Badge
-                                    </li>
-                                    <li className="flex items-center">
-                                        <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
-                                        Early access to new features
-                                    </li>
-                                    <li className="flex items-center">
-                                        <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
-                                        Direct support
-                                    </li>
-                                </ul>
-                            </CardContent>
-                            <div className="p-6 pt-0">
-                                {isMember && circle.subscription?.donorboxPlanId === plan.id ? (
-                                    <Button variant="outline" className="w-full" disabled>
-                                        Current Plan
-                                    </Button>
-                                ) : (
-                                    <Button
-                                        onClick={() => handleSubscribe(plan.id)}
-                                        className="w-full bg-purple-600 text-white hover:bg-purple-700"
-                                    >
-                                        Become a Member
-                                    </Button>
-                                )}
+                {plans.map((plan) => (
+                    <Card key={plan.id} className="flex flex-col rounded-3xl bg-purple-50 p-8">
+                        <CardHeader>
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-2xl font-bold">{plan.campaign.name}</CardTitle>
+                                <img src="/images/member-badge.png" alt="Member Badge" className="h-8 w-8" />
                             </div>
-                        </Card>
-                    ))}
+                            <CardDescription>
+                                {plan.formatted_amount} / {plan.interval}
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex-grow space-y-4">
+                            <ul className="space-y-2">
+                                <li className="flex items-center">
+                                    <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
+                                    All features from the Free plan
+                                </li>
+                                <li className="flex items-center">
+                                    <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
+                                    Verified Badge
+                                </li>
+                                <li className="flex items-center">
+                                    <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
+                                    Early access to new features
+                                </li>
+                                <li className="flex items-center">
+                                    <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
+                                    Direct support
+                                </li>
+                            </ul>
+                        </CardContent>
+                        <div className="p-6 pt-0">
+                            {isMember && circle.subscription?.donorboxPlanId === plan.id ? (
+                                <Button variant="outline" className="w-full" disabled>
+                                    Current Plan
+                                </Button>
+                            ) : (
+                                <Button
+                                    onClick={() => handleSubscribe(plan.id)}
+                                    className="w-full bg-purple-600 text-white hover:bg-purple-700"
+                                >
+                                    Become a Member
+                                </Button>
+                            )}
+                        </div>
+                    </Card>
+                ))}
             </div>
             {isMember && memberPlan && (
                 <div className="mt-16 text-center">
@@ -138,6 +136,7 @@ export default function SubscriptionForm({ circle }: { circle: Circle }) {
                     <p className="mt-2 text-muted-foreground">Your subscription is {circle.subscription?.status}.</p>
                 </div>
             )}
+            <pre>{JSON.stringify(plans, null, 2)}</pre>
         </div>
     );
 }
