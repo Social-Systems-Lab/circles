@@ -34,16 +34,18 @@ export async function POST(req: NextRequest) {
     }
 
     try {
+        console.log("--- Donorbox Webhook Received ---");
+        console.log("Payload:", JSON.stringify(events, null, 2));
+
         for (const event of events) {
-            switch (event.action) {
-                case "new":
-                    if (event.recurring) {
-                        await handleNewSubscription(event);
-                    }
-                    break;
-                // Add cases for other events as needed
-                default:
-                    console.log(`Unhandled event action: ${event.action}`);
+            console.log("Processing event:", JSON.stringify(event, null, 2));
+
+            // A new subscription should be a recurring donation.
+            if (event.recurring === true) {
+                console.log("Detected a recurring donation. Handling as a new subscription.");
+                await handleNewSubscription(event);
+            } else {
+                console.log("Event is not a recurring donation. Skipping subscription handling.");
             }
         }
     } catch (error) {
