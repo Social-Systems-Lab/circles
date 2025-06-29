@@ -1,11 +1,17 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react"; // Added useTransition
-import { getEntitiesByType, deleteEntity, toggleUserVerification, toggleManualMembership } from "../actions";
+import {
+    getEntitiesByType,
+    deleteEntity,
+    toggleUserVerification,
+    toggleManualMembership,
+    refreshSubscriptionStatus,
+} from "../actions";
 import { initiatePasswordReset } from "@/lib/auth/actions"; // Import the new action
 import { Circle } from "@/models/models";
 import { Button } from "@/components/ui/button";
-import { Trash2, RefreshCw, Search, KeyRound, CheckCircle, XCircle, UserCheck, UserX } from "lucide-react"; // Added KeyRound icon
+import { Trash2, RefreshCw, Search, KeyRound, CheckCircle, XCircle, UserCheck, UserX, RefreshCcw } from "lucide-react"; // Added KeyRound icon
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -45,6 +51,7 @@ export default function UsersTab() {
     const [isResetting, startResetTransition] = useTransition(); // Transition for reset action
     const [isVerifying, startVerifyTransition] = useTransition();
     const [isTogglingMember, startMemberToggleTransition] = useTransition();
+    const [isRefreshingSub, startRefreshingSubTransition] = useTransition();
     const { toast } = useToast();
     const setContentPreview = useSetAtom(contentPreviewAtom);
 
@@ -221,6 +228,43 @@ export default function UsersTab() {
         setContentPreview({ type: "user", content: user });
     };
 
+    const handleRefreshSubscription = async (user: Circle) => {
+        if (!user._id) return;
+
+        startRefreshingSubTransition(async () => {
+            try {
+                const result = await refreshSubscriptionStatus(user._id);
+
+                if (result.success) {
+                    toast({
+                        title: "Success",
+                        description: result.message,
+                    });
+                    // Update local state
+                    setUsers(
+                        users.map((u) =>
+                            u._id === user._id
+                                ? { ...u, subscription: result.subscription, isMember: result.isMember }
+                                : u,
+                        ),
+                    );
+                } else {
+                    toast({
+                        title: "Error",
+                        description: result.message,
+                        variant: "destructive",
+                    });
+                }
+            } catch (error) {
+                toast({
+                    title: "Error",
+                    description: "Failed to refresh subscription",
+                    variant: "destructive",
+                });
+            }
+        });
+    };
+
     return (
         <div className="space-y-4">
             <div className="mb-4 flex items-center justify-between">
@@ -376,6 +420,20 @@ export default function UsersTab() {
                                                     <UserX className="h-4 w-4 text-yellow-500" />
                                                 ) : (
                                                     <UserCheck className="h-4 w-4 text-green-500" />
+                                                )}
+                                            </Button>
+                                            {/* Refresh Subscription Button */}
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => handleRefreshSubscription(user)}
+                                                disabled={isRefreshingSub}
+                                                title="Refresh Subscription"
+                                            >
+                                                {isRefreshingSub ? (
+                                                    <RefreshCw className="h-4 w-4 animate-spin" />
+                                                ) : (
+                                                    <RefreshCcw className="h-4 w-4 text-blue-500" />
                                                 )}
                                             </Button>
                                             {/* Delete Button */}

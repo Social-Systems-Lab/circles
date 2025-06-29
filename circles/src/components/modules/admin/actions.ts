@@ -446,3 +446,61 @@ export async function toggleManualMembership(userId: string, manualMember: boole
         return { success: false, message };
     }
 }
+
+export async function refreshSubscriptionStatus(userId: string) {
+    try {
+        const user = await Circles.findOne({ _id: new ObjectId(userId) });
+        if (!user) {
+            return { success: false, message: "User not found" };
+        }
+
+        const donorboxDonorId = user.subscription?.donorboxDonorId;
+        if (!donorboxDonorId) {
+            return { success: false, message: "User does not have a Donorbox donor ID." };
+        }
+
+        const response = await fetch(`https://donorbox.org/api/v1/donors/${donorboxDonorId}/subscriptions`, {
+            headers: {
+                Authorization: `Basic ${Buffer.from(
+                    `${process.env.DONORBOX_API_USER}:${process.env.DONORBOX_API_KEY}`,
+                ).toString("base64")}`,
+            },
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error("Donorbox API error:", errorData);
+            return { success: false, message: "Failed to fetch subscription status from Donorbox." };
+        }
+
+        const subscriptions = await response.json();
+        const activeSubscription = subscriptions.find((sub: any) => sub.status === "active");
+
+        const isMember = !!activeSubscription;
+        const subscriptionData = activeSubscription
+            ? {
+                  donorboxPlanId: activeSubscription.plan_id,
+                  donorboxSubscriptionId: activeSubscription.id,
+                  status: "active" as "active" | "inactive" | "cancelled",
+                  amount: activeSubscription.amount,
+                  currency: activeSubscription.currency,
+                  startDate: new Date(activeSubscription.created_at),
+                  lastPaymentDate: new Date(activeSubscription.last_payment_date),
+              }
+            : { status: "inactive" as "active" | "inactive" | "cancelled" };
+
+        await Circles.updateOne({ _id: new ObjectId(userId) }, { $set: { isMember, subscription: subscriptionData } });
+
+        revalidatePath("/admin");
+        return {
+            success: true,
+            message: "Subscription status refreshed successfully.",
+            isMember,
+            subscription: subscriptionData,
+        };
+    } catch (error) {
+        console.error("Error refreshing subscription status:", error);
+        const message = error instanceof Error ? error.message : "An unexpected error occurred.";
+        return { success: false, message };
+    }
+}

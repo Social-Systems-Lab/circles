@@ -110,7 +110,7 @@ export const UserToolbox = () => {
                             <p className="text-sm text-muted-foreground">@{user?.handle}</p>
                         </Link>
                         <div className="mt-2">
-                            {user?.subscription?.status === "active" || user?.manualMember ? (
+                            {user?.isMember ? (
                                 <Link href={`/circles/${user?.handle}/settings/subscription`}>
                                     <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
                                         <img

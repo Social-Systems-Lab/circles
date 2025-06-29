@@ -13,6 +13,7 @@ import {
 } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { UserPicture } from "../modules/members/user-picture";
+import UserBadge from "../modules/users/user-badge";
 import { Bell, MessageCircle } from "lucide-react";
 import { UserToolboxTab } from "@/models/models";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
@@ -146,6 +147,7 @@ const ProfileMenuBar = () => {
                             >
                                 <UserPicture name={user?.name} picture={user?.picture?.url} size="40px" />
                             </Button>
+                            {/* <UserBadge user={user} /> */}
                             {!user.isVerified && <VerifyAccountButton />}
                         </>
                     )}

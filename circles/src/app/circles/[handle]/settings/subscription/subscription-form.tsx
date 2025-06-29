@@ -6,8 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Circle } from "@/models/models";
+import { useAtom } from "jotai";
+import { userAtom } from "@/lib/data/atoms";
 
-export default function SubscriptionForm({ circle }: { circle: Circle }) {
+export default function SubscriptionForm() {
+    const [user] = useAtom(userAtom);
     const [showDonorbox, setShowDonorbox] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
 
@@ -20,7 +23,15 @@ export default function SubscriptionForm({ circle }: { circle: Circle }) {
         interval: "monthly",
     };
 
-    const isMember = circle.subscription?.status === "active" || circle.manualMember;
+    const isMember = user?.isMember;
+
+    const handleManageSubscription = () => {
+        const donorboxDonorId = user?.subscription?.donorboxDonorId;
+        console.log(JSON.stringify(user?.subscription, null, 2));
+        if (donorboxDonorId) {
+            window.open(`https://donorbox.org/user_session/new?donor_id=${donorboxDonorId}`, "_blank");
+        }
+    };
 
     return (
         <div className="formatted container mx-auto py-12">
@@ -90,8 +101,8 @@ export default function SubscriptionForm({ circle }: { circle: Circle }) {
                     </CardContent>
                     <div className="p-6 pt-0">
                         {isMember ? (
-                            <Button variant="outline" className="w-full" disabled>
-                                Current Plan
+                            <Button variant="outline" className="w-full" onClick={handleManageSubscription}>
+                                Manage Subscription
                             </Button>
                         ) : (
                             <Dialog open={showDonorbox} onOpenChange={setShowDonorbox}>
@@ -108,10 +119,10 @@ export default function SubscriptionForm({ circle }: { circle: Circle }) {
                                         <Script src="https://donorbox.org/widget.js" strategy="lazyOnload" />
                                         <iframe
                                             src={`https://donorbox.org/embed/${foundingMemberPlan.id}&email=${encodeURIComponent(
-                                                circle.email!,
-                                            )}&custom_fields[circleId]=${circle._id!}`}
+                                                user?.email!,
+                                            )}&custom_fields[circleId]=${user?._id!}`}
                                             name="donorbox"
-                                            allowpaymentrequest="allowpaymentrequest"
+                                            allowFullScreen
                                             seamless={true}
                                             frameBorder="0"
                                             scrolling="no"

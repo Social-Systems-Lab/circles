@@ -8,7 +8,7 @@ type UserBadgeProps = {
 };
 
 export default function UserBadge({ user }: UserBadgeProps) {
-    const isMember = user.subscription?.status === "active" || user.manualMember;
+    const isMember = user.isMember;
     const isVerified = user.isVerified;
 
     return (
