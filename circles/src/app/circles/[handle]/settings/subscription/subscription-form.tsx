@@ -7,19 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Circle } from "@/models/models";
 
-type Plan = {
-    id: string;
-    type: string;
-    amount: string;
-    formatted_amount: string;
-    currency: string;
-    interval: string;
-    campaign: {
-        name: string;
-    };
-    [key: string]: any;
-};
-
 export default function SubscriptionForm({ circle }: { circle: Circle }) {
     const [showDonorbox, setShowDonorbox] = useState(false);
 
@@ -28,7 +15,7 @@ export default function SubscriptionForm({ circle }: { circle: Circle }) {
         campaign: {
             name: "Founding Member",
         },
-        formatted_amount: "55.77 kr",
+        formatted_amount: "$1+",
         interval: "monthly",
     };
 
@@ -152,7 +139,6 @@ export default function SubscriptionForm({ circle }: { circle: Circle }) {
                     <p className="mt-2 text-muted-foreground">Thank you for your support!</p>
                 </div>
             )}
-            <pre>{JSON.stringify(plans, null, 2)}</pre>
         </div>
     );
 }
