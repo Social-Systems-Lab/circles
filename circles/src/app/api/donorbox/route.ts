@@ -44,8 +44,11 @@ export async function POST(req: NextRequest) {
             if (event.event_name === "donation.created" && event.donation?.recurring === true) {
                 console.log("Detected a recurring donation. Handling as a new subscription.");
                 await handleNewSubscription(event.donation);
+            } else if (event.event_name === "plan.updated" && event.plan?.status === "cancelled") {
+                console.log("Detected a cancelled plan. Handling as a subscription cancellation.");
+                await handleSubscriptionCancelled(event.plan);
             } else {
-                console.log("Event is not a new recurring donation. Skipping subscription handling.");
+                console.log(`Unhandled event: ${event.event_name}. Skipping.`);
             }
         }
     } catch (error) {
@@ -87,6 +90,31 @@ async function handleNewSubscription(donation: any) {
                 "subscription.amount": parseFloat(amount),
                 "subscription.currency": currency,
                 "subscription.startDate": new Date(donationDate),
+            },
+        },
+    );
+}
+
+async function handleSubscriptionCancelled(plan: any) {
+    const {
+        donor: { email },
+    } = plan;
+
+    const circles = await db.collection("circles");
+    const user = await circles.findOne({ email: email, circleType: "user" });
+
+    if (!user) {
+        console.error(`User with email ${email} not found for cancellation.`);
+        return;
+    }
+
+    console.log(`Found user ${user.name} (${user._id}) for subscription cancellation.`);
+
+    await circles.updateOne(
+        { _id: user._id },
+        {
+            $set: {
+                "subscription.status": "cancelled",
             },
         },
     );
