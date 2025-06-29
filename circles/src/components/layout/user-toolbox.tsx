@@ -108,6 +108,21 @@ export const UserToolbox = () => {
                         <div>
                             <div className="font-semibold">{user?.name}</div>
                             <p className="text-sm text-muted-foreground">@{user?.handle}</p>
+                            <div className="mt-2">
+                                {user?.subscription?.status === "active" || user?.manualMember ? (
+                                    <Link href={`/circles/${user?.handle}/settings/subscription`}>
+                                        <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+                                            Founding Member
+                                        </span>
+                                    </Link>
+                                ) : (
+                                    <Link href={`/circles/${user?.handle}/settings/subscription`}>
+                                        <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-800">
+                                            Free Member
+                                        </span>
+                                    </Link>
+                                )}
+                            </div>
                         </div>
                     </Link>
                 </div>
