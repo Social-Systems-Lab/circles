@@ -28,7 +28,10 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
-    const events = JSON.parse(body);
+    let events = JSON.parse(body);
+    if (!Array.isArray(events)) {
+        events = [events];
+    }
 
     try {
         for (const event of events) {
@@ -63,7 +66,7 @@ async function handleNewSubscription(donation: any) {
 
     const circleIdQuestion = questions.find((q: any) => q.question === "circleId");
     if (!circleIdQuestion) {
-        console.error("circleId not found in custom fields");
+        console.error("circleId not found in webhook questions payload");
         return;
     }
     const circleId = circleIdQuestion.answer;
