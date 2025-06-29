@@ -87,6 +87,7 @@ async function handleNewSubscription(donation: any) {
         {
             $set: {
                 isMember: true,
+                isVerified: true,
                 "subscription.donorboxPlanId": donorboxPlanId.toString(),
                 "subscription.donorboxDonationId": donorboxDonationId,
                 "subscription.donorboxDonorId": donorboxDonorId,
@@ -121,6 +122,7 @@ async function handlePlanUpdate(plan: any) {
         {
             $set: {
                 isMember: status === "active",
+                isVerified: status === "active",
                 "subscription.status": status,
                 "subscription.lastPaymentDate": new Date(lastDonationDate),
             },

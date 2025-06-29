@@ -1,6 +1,7 @@
 import { getCircleByHandle } from "@/lib/data/circle";
 import SubscriptionForm from "./subscription-form";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
+import { Circle } from "@/models/models";
 import { getUserPrivate } from "@/lib/data/user";
 
 type SubscriptionProps = {
@@ -17,5 +18,5 @@ export default async function SubscriptionPage(props: SubscriptionProps) {
         return <div>Unauthorized</div>;
     }
 
-    return <SubscriptionForm circle={circle} />;
+    return <SubscriptionForm circle={user} />;
 }

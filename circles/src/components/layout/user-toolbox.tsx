@@ -21,6 +21,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { Circle, MemberDisplay, UserToolboxTab } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { logOut } from "../auth/actions";
+import { VerifyAccountButton } from "../modules/auth/verify-account-button";
 import { Notifications } from "./notifications";
 import Link from "next/link";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
@@ -122,11 +123,7 @@ export const UserToolbox = () => {
                                     </span>
                                 </Link>
                             ) : (
-                                <Link href={`/circles/${user?.handle}/settings/subscription`}>
-                                    <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-800">
-                                        Free Member
-                                    </span>
-                                </Link>
+                                <VerifyAccountButton />
                             )}
                         </div>
                     </div>

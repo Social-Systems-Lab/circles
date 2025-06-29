@@ -6,11 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Circle } from "@/models/models";
-import { useAtom } from "jotai";
-import { userAtom } from "@/lib/data/atoms";
 
-export default function SubscriptionForm() {
-    const [user] = useAtom(userAtom);
+export default function SubscriptionForm({ circle: user }: { circle: Circle }) {
     const [showDonorbox, setShowDonorbox] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
 
@@ -23,7 +20,7 @@ export default function SubscriptionForm() {
         interval: "monthly",
     };
 
-    const isMember = user?.isMember;
+    const isMember = user.isMember;
 
     const handleManageSubscription = () => {
         const donorboxDonorId = user?.subscription?.donorboxDonorId;
@@ -119,8 +116,8 @@ export default function SubscriptionForm() {
                                         <Script src="https://donorbox.org/widget.js" strategy="lazyOnload" />
                                         <iframe
                                             src={`https://donorbox.org/embed/${foundingMemberPlan.id}&email=${encodeURIComponent(
-                                                user?.email!,
-                                            )}&custom_fields[circleId]=${user?._id!}`}
+                                                user.email!,
+                                            )}&custom_fields[circleId]=${user._id!}`}
                                             name="donorbox"
                                             allowFullScreen
                                             seamless={true}

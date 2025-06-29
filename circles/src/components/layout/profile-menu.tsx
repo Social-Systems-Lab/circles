@@ -13,7 +13,6 @@ import {
 } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { UserPicture } from "../modules/members/user-picture";
-import UserBadge from "../modules/users/user-badge";
 import { Bell, MessageCircle } from "lucide-react";
 import { UserToolboxTab } from "@/models/models";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
@@ -141,14 +140,26 @@ const ProfileMenuBar = () => {
                             </Button>
 
                             <Button
-                                className="h-auto w-auto rounded-full p-0"
+                                className="relative h-auto w-auto rounded-full p-0"
                                 variant="ghost"
                                 onClick={() => router.push(`/circles/${user?.handle}`)}
                             >
                                 <UserPicture name={user?.name} picture={user?.picture?.url} size="40px" />
+                                {user.isMember && (
+                                    <img
+                                        src="/images/member-badge.png"
+                                        alt="Member Badge"
+                                        className="absolute bottom-0 right-0 h-4 w-4"
+                                    />
+                                )}
+                                {!user.isMember && user.isVerified && (
+                                    <img
+                                        src="/images/verified-badge.png"
+                                        alt="Verified Badge"
+                                        className="absolute bottom-0 right-0 h-4 w-4"
+                                    />
+                                )}
                             </Button>
-                            {/* <UserBadge user={user} /> */}
-                            {!user.isVerified && <VerifyAccountButton />}
                         </>
                     )}
                 </div>
