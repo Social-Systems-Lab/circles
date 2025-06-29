@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
-import { getPlans, createSubscription } from "./actions";
+import Script from "next/script";
+import { createSubscription } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Circle } from "@/models/models";
 
 type Plan = {
@@ -19,29 +21,18 @@ type Plan = {
 };
 
 export default function SubscriptionForm({ circle }: { circle: Circle }) {
-    const [plans, setPlans] = useState<Plan[]>([]);
+    const [showDonorbox, setShowDonorbox] = useState(false);
 
-    useEffect(() => {
-        async function fetchPlans() {
-            try {
-                const plansData = await getPlans();
-                setPlans(plansData);
-            } catch (error) {
-                console.error(error);
-            }
-        }
-
-        fetchPlans();
-    }, []);
-
-    const handleSubscribe = async (planId: string) => {
-        if (circle) {
-            await createSubscription(circle._id!, planId);
-        }
+    const foundingMemberPlan = {
+        id: "the-founding-campaign?", // From the iframe src
+        campaign: {
+            name: "Founding Member",
+        },
+        formatted_amount: "55.77 kr",
+        interval: "monthly",
     };
 
-    const isMember = circle.subscription?.status === "active";
-    const memberPlan = plans.find((p) => p.id === circle.subscription?.donorboxPlanId);
+    const isMember = circle.subscription?.status === "active" || circle.manualMember;
 
     return (
         <div className="formatted container mx-auto py-12">
@@ -79,61 +70,86 @@ export default function SubscriptionForm({ circle }: { circle: Circle }) {
                         </Button>
                     </div>
                 </Card>
-                {plans.map((plan) => (
-                    <Card key={plan.id} className="flex flex-col rounded-3xl bg-purple-50 p-8">
-                        <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-2xl font-bold">{plan.campaign.name}</CardTitle>
-                                <img src="/images/member-badge.png" alt="Member Badge" className="h-8 w-8" />
-                            </div>
-                            <CardDescription>
-                                {plan.formatted_amount} / {plan.interval}
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="flex-grow space-y-4">
-                            <ul className="space-y-2">
-                                <li className="flex items-center">
-                                    <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
-                                    All features from the Free plan
-                                </li>
-                                <li className="flex items-center">
-                                    <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
-                                    Verified Badge
-                                </li>
-                                <li className="flex items-center">
-                                    <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
-                                    Early access to new features
-                                </li>
-                                <li className="flex items-center">
-                                    <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
-                                    Direct support
-                                </li>
-                            </ul>
-                        </CardContent>
-                        <div className="p-6 pt-0">
-                            {isMember && circle.subscription?.donorboxPlanId === plan.id ? (
-                                <Button variant="outline" className="w-full" disabled>
-                                    Current Plan
-                                </Button>
-                            ) : (
-                                <Button
-                                    onClick={() => handleSubscribe(plan.id)}
-                                    className="w-full bg-purple-600 text-white hover:bg-purple-700"
-                                >
-                                    Become a Member
-                                </Button>
-                            )}
+                <Card className="flex flex-col rounded-3xl bg-purple-50 p-8">
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="text-2xl font-bold">{foundingMemberPlan.campaign.name}</CardTitle>
+                            <img src="/images/member-badge.png" alt="Member Badge" className="h-8 w-8" />
                         </div>
-                    </Card>
-                ))}
+                        <CardDescription>
+                            {foundingMemberPlan.formatted_amount} / {foundingMemberPlan.interval}
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex-grow space-y-4">
+                        <ul className="space-y-2">
+                            <li className="flex items-center">
+                                <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
+                                All features from the Free plan
+                            </li>
+                            <li className="flex items-center">
+                                <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
+                                Verified Badge
+                            </li>
+                            <li className="flex items-center">
+                                <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
+                                Early access to new features
+                            </li>
+                            <li className="flex items-center">
+                                <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
+                                Direct support
+                            </li>
+                        </ul>
+                    </CardContent>
+                    <div className="p-6 pt-0">
+                        {isMember ? (
+                            <Button variant="outline" className="w-full" disabled>
+                                Current Plan
+                            </Button>
+                        ) : (
+                            <Dialog open={showDonorbox} onOpenChange={setShowDonorbox}>
+                                <DialogTrigger asChild>
+                                    <Button className="w-full bg-purple-600 text-white hover:bg-purple-700">
+                                        Become a Member
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-lg">
+                                    <DialogHeader>
+                                        <DialogTitle>Become a Founding Member</DialogTitle>
+                                    </DialogHeader>
+                                    <div className="mt-4">
+                                        <Script src="https://donorbox.org/widget.js" strategy="lazyOnload" />
+                                        <iframe
+                                            src={`https://donorbox.org/embed/${foundingMemberPlan.id}&email=${encodeURIComponent(
+                                                circle.email!,
+                                            )}&custom_fields[circleId]=${circle._id!}`}
+                                            name="donorbox"
+                                            allowpaymentrequest="allowpaymentrequest"
+                                            seamless={true}
+                                            frameBorder="0"
+                                            scrolling="no"
+                                            height="900px"
+                                            width="100%"
+                                            style={{
+                                                maxWidth: "500px",
+                                                minWidth: "250px",
+                                                maxHeight: "none!important",
+                                            }}
+                                            allow="payment"
+                                        ></iframe>
+                                    </div>
+                                </DialogContent>
+                            </Dialog>
+                        )}
+                    </div>
+                </Card>
             </div>
-            {isMember && memberPlan && (
+            {isMember && (
                 <div className="mt-16 text-center">
                     <h2 className="text-2xl font-bold">Your Current Plan</h2>
                     <p className="mt-4 text-lg">
-                        You are subscribed to the <span className="font-bold">{memberPlan.campaign.name}</span> plan.
+                        You are a <span className="font-bold">Founding Member</span>.
                     </p>
-                    <p className="mt-2 text-muted-foreground">Your subscription is {circle.subscription?.status}.</p>
+                    <p className="mt-2 text-muted-foreground">Thank you for your support!</p>
                 </div>
             )}
             <pre>{JSON.stringify(plans, null, 2)}</pre>
