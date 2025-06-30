@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { db } from "@/lib/data/db";
 import { ObjectId } from "mongodb";
+import { sendUserBecomesMemberNotification } from "@/lib/data/notifications";
+import { getUserPrivate } from "@/lib/data/user";
 
 const DONORBOX_WEBHOOK_SECRET = process.env.DONORBOX_WEBHOOK_SECRET;
 
@@ -82,6 +84,8 @@ async function handleNewSubscription(donation: any) {
 
     console.log(`Found user ${user.name} (${user._id}) for subscription update.`);
 
+    const wasMember = user.isMember;
+
     await circles.updateOne(
         { _id: user._id },
         {
@@ -98,6 +102,13 @@ async function handleNewSubscription(donation: any) {
             },
         },
     );
+
+    if (!wasMember) {
+        const userPrivate = await getUserPrivate(user.did);
+        if (userPrivate) {
+            await sendUserBecomesMemberNotification(userPrivate);
+        }
+    }
 }
 
 async function handlePlanUpdate(plan: any) {
@@ -117,15 +128,25 @@ async function handlePlanUpdate(plan: any) {
 
     console.log(`Found user ${user.name} (${user._id}) for plan update.`);
 
+    const wasMember = user.isMember;
+    const isNowMember = status === "active";
+
     await circles.updateOne(
         { _id: user._id },
         {
             $set: {
-                isMember: status === "active",
-                isVerified: status === "active",
+                isMember: isNowMember,
+                isVerified: isNowMember,
                 "subscription.status": status,
                 "subscription.lastPaymentDate": new Date(lastDonationDate),
             },
         },
     );
+
+    if (isNowMember && !wasMember) {
+        const userPrivate = await getUserPrivate(user.did);
+        if (userPrivate) {
+            await sendUserBecomesMemberNotification(userPrivate);
+        }
+    }
 }

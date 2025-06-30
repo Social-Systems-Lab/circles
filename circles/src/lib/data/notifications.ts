@@ -54,6 +54,19 @@ export async function sendUserVerifiedNotification(user: UserPrivate): Promise<v
     }
 }
 
+export async function sendUserBecomesMemberNotification(user: UserPrivate): Promise<void> {
+    try {
+        console.log(`🔔 [NOTIFY] Sending user_becomes_member notification to ${user.name}`);
+        await sendNotifications("user_becomes_member", [user], {
+            user,
+            messageBody: "Congratulations! You are now a founding member.",
+            url: `/`,
+        });
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in sendUserBecomesMemberNotification:", error);
+    }
+}
+
 export async function sendUserVerificationRejectedNotification(user: UserPrivate): Promise<void> {
     try {
         console.log(`🔔 [NOTIFY] Sending user_verification_rejected notification to ${user.name}`);

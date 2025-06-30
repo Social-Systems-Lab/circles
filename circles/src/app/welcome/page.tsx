@@ -276,10 +276,10 @@ export default function KamooniLandingPage() {
                         </p>
                         <p className="mb-8 text-lg leading-relaxed text-kam-gray-dark">
                             That said, Kamooni is currently in its{" "}
-                            <span className="font-semibold">Test Pilot phase</span>. We're still shaping this
-                            thing—carefully, collaboratively. If you're an activist, a project steward, a volunteer, a
-                            community organizer, a researcher, a systems thinker, we'd love to shape Kamooni with you
-                            and for you.
+                            <span className="font-semibold">Test Pilot phase</span>. We&apos;re still shaping this
+                            thing—carefully, collaboratively. If you&apos;re an activist, a project steward, a
+                            volunteer, a community organizer, a researcher, a systems thinker, we&apos;d love to shape
+                            Kamooni with you and for you.
                         </p>
                         <div className="mt-8 text-center">
                             <Link href="/signup">
@@ -306,7 +306,7 @@ export default function KamooniLandingPage() {
                             Just open-source tools built in the service of something better. Something greater.
                         </p>
                         <p className="text-lg leading-relaxed text-kam-gray-dark/80">
-                            If that resonates, you're already one of us. Come say hi.
+                            If that resonates, you&apos;re already one of us. Come say hi.
                         </p>
                     </div>
                 </div>
@@ -321,8 +321,8 @@ export default function KamooniLandingPage() {
                     <div className="text-left">
                         <p className="mb-4 text-lg leading-relaxed text-kam-gray-dark">
                             You are. But not in a sneaky way. In an up-front way. If our calculations pan out, as long
-                            as one user out of ten becomes a contributing member, we'll have the funds we need to keep
-                            the lights on and the change supported.
+                            as one user out of ten becomes a contributing member, we&apos;ll have the funds we need to
+                            keep the lights on and the change supported.
                         </p>
                         <p className="mb-4 text-lg leading-relaxed text-kam-gray-dark">
                             But there is more to this story. As a member you get a vote on how the community is run, how
@@ -332,8 +332,8 @@ export default function KamooniLandingPage() {
                         <p className="mb-8 text-lg leading-relaxed text-kam-gray-dark">
                             Our ultimate goal is for Kamooni to become fully distributed, with our members providing all
                             the bandwidth and storage for the network to work entirely autonomously. But for now, our
-                            paying members are carrying the network. If you'd like to share the load with us, join the
-                            tribe as a Founding Member by donating $1 or more per month.
+                            paying members are carrying the network. If you&apos;d like to share the load with us, join
+                            the tribe as a Founding Member by donating $1 or more per month.
                         </p>
                         <div className="mt-8 flex flex-col items-center space-y-4 text-center">
                             <Link href="/signup">
@@ -354,10 +354,10 @@ export default function KamooniLandingPage() {
                     </h2>
                     <div className="text-left">
                         <p className="mb-8 text-lg leading-relaxed text-kam-gray-dark/80">
-                            Thanks! We're pretty pleased with it, if we say so ourselves, but we could definitely use
-                            some help. Obviously, funding is always an issue, but we could use help in most areas, such
-                            as development, UX-design, marketing, outreach, onboarding and more. Check out the lab's
-                            website for some useful pointers and reach out to us if anything hits your spot!
+                            Thanks! We&apos;re pretty pleased with it, if we say so ourselves, but we could definitely
+                            use some help. Obviously, funding is always an issue, but we could use help in most areas,
+                            such as development, UX-design, marketing, outreach, onboarding and more. Check out the
+                            lab&apos;s website for some useful pointers and reach out to us if anything hits your spot!
                         </p>
                     </div>
                 </div>
