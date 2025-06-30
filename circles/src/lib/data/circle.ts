@@ -91,7 +91,22 @@ export const getDefaultCircle = async (inServerConfig: ServerSettings | null = n
 export const getSwipeCircles = async (): Promise<Circle[]> => {
     let circles: Circle[] = [];
 
-    circles = await Circles.find({}, { projection: SAFE_CIRCLE_PROJECTION }).toArray();
+    circles = await Circles.find(
+        {
+            $or: [
+                { circleType: { $ne: "user" } },
+                {
+                    $and: [
+                        { circleType: "user" },
+                        {
+                            $or: [{ isVerified: true }, { isMember: true }],
+                        },
+                    ],
+                },
+            ],
+        },
+        { projection: SAFE_CIRCLE_PROJECTION },
+    ).toArray();
 
     circles.forEach((circle: Circle) => {
         if (circle._id) {
