@@ -40,7 +40,7 @@ export default function SubscriptionForm({ circle: user }: { circle: Circle }) {
                         <CardDescription>$0 / forever</CardDescription>
                     </CardHeader>
                     <CardContent className="flex-grow space-y-4">
-                        <ul className="space-y-2">
+                        <ul className="space-y-2 text-left">
                             <li className="flex items-center">
                                 <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
                                 Basic features
@@ -68,7 +68,7 @@ export default function SubscriptionForm({ circle: user }: { circle: Circle }) {
                         <CardDescription>Donate monthly ($1 or more)</CardDescription>
                     </CardHeader>
                     <CardContent className="flex-grow space-y-4">
-                        <ul className="space-y-2">
+                        <ul className="space-y-2 text-left">
                             <li className="flex items-center">
                                 <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
                                 All features from the Free plan
@@ -95,7 +95,7 @@ export default function SubscriptionForm({ circle: user }: { circle: Circle }) {
                                         Become a Member
                                     </Button>
                                 </DialogTrigger>
-                                <DialogContent className="max-w-lg">
+                                <DialogContent className="z-[600] max-w-lg">
                                     <DialogHeader>
                                         <DialogTitle>Become a Founding Member</DialogTitle>
                                     </DialogHeader>
