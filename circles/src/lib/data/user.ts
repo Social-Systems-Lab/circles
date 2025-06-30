@@ -40,7 +40,10 @@ export const getVerificationStatus = async (userDid: string): Promise<"verified"
 
 export const getAllUsers = async (): Promise<Circle[]> => {
     let circles: Circle[] = await Circles.find(
-        { circleType: "user", isVerified: true },
+        {
+            circleType: "user",
+            $or: [{ isVerified: true }, { isMember: true }],
+        },
         {
             projection: {
                 _id: 1,

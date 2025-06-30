@@ -275,6 +275,13 @@ export async function getPostsFromMultipleFeeds(
         },
         { $unwind: "$authorDetails" },
 
+        // Filter for verified or member authors
+        {
+            $match: {
+                $or: [{ "authorDetails.isVerified": true }, { "authorDetails.isMember": true }],
+            },
+        },
+
         // Lookup user reactions
         {
             $lookup: {
@@ -705,6 +712,13 @@ export const getPosts = async (
             },
         },
         { $unwind: "$authorDetails" },
+
+        // Filter for verified or member authors
+        {
+            $match: {
+                $or: [{ "authorDetails.isVerified": true }, { "authorDetails.isMember": true }],
+            },
+        },
 
         // Lookup for reactions on the post
         {
