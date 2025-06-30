@@ -20,7 +20,7 @@ export default function KamooniLandingPage() {
     const faqItems = [
         {
             question: "Do I have to pay to join?",
-            answer: "Kamooni is free to join and participate in some ways, we&apos;re happy. But by becoming a founding member, you get a vote on how the community is run and help us keep the platform ad-free and independent.",
+            answer: "Kamooni is free to join and participate in some ways, we're happy. But by becoming a founding member, you get a vote on how the community is run and help us keep the platform ad-free and independent.",
         },
         {
             question: "What makes Kamooni different from other social platforms?",
@@ -45,7 +45,7 @@ export default function KamooniLandingPage() {
                 <div className="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
                     <Link href="/" className="group flex items-center">
                         <Image
-                            src="/kamooni-icon.png"
+                            src="/images/logo.png"
                             alt="Kamooni Logo Icon"
                             width={40}
                             height={40}
@@ -104,9 +104,11 @@ export default function KamooniLandingPage() {
                     <p className="mb-8 text-xl text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)] sm:text-2xl">
                         No Ads. No Big Tech. Ethical and Open-Source
                     </p>
-                    <Button className="mb-4 bg-kam-button-red-orange px-8 py-3 text-lg text-white hover:bg-kam-button-red-orange/90">
-                        Test Pilot Signup <ChevronRight className="ml-2 h-5 w-5" />
-                    </Button>
+                    <Link href="/signup">
+                        <Button className="mb-4 bg-kam-button-red-orange px-8 py-3 text-lg text-white hover:bg-kam-button-red-orange/90">
+                            Test Pilot Signup <ChevronRight className="ml-2 h-5 w-5" />
+                        </Button>
+                    </Link>
                 </div>
             </section>
 
@@ -156,15 +158,17 @@ export default function KamooniLandingPage() {
                         </p>
                         <p className="mb-8 text-lg leading-relaxed text-kam-gray-dark">
                             That said, Kamooni is currently in its{" "}
-                            <span className="font-semibold">Test Pilot phase</span>. We’re still shaping this
-                            thing—carefully, collaboratively. If you’re an activist, a project steward, a volunteer, a
-                            community organizer, a researcher, a systems thinker, we’d love to shape Kamooni with you
-                            and for you.
+                            <span className="font-semibold">Test Pilot phase</span>. We&apos;re still shaping this
+                            thing—carefully, collaboratively. If you&apos;re an activist, a project steward, a
+                            volunteer, a community organizer, a researcher, a systems thinker, wevd love to shape
+                            Kamooni with you and for you.
                         </p>
                         <div className="mt-8 text-center">
-                            <Button className="bg-kam-button-red-orange px-8 py-3 text-lg text-white hover:bg-kam-button-red-orange/90">
-                                Test Pilot Signup <ChevronRight className="ml-2 h-5 w-5" />
-                            </Button>
+                            <Link href="/signup">
+                                <Button className="bg-kam-button-red-orange px-8 py-3 text-lg text-white hover:bg-kam-button-red-orange/90">
+                                    Test Pilot Signup <ChevronRight className="ml-2 h-5 w-5" />
+                                </Button>
+                            </Link>
                         </div>
                     </div>
                 </div>
@@ -176,23 +180,16 @@ export default function KamooniLandingPage() {
                     <h2 className="mb-6 text-center text-3xl font-bold text-kam-gray-dark sm:text-4xl">Who Dis?</h2>
                     <div className="text-left">
                         <p className="mb-4 text-lg leading-relaxed text-kam-gray-dark/80">
-                            We&apos;re a small, independent, not-for-profit called the{" "}
-                            <span className="font-semibold">Social Systems Foundation</span>, and supported by the
-                            community we serve.
+                            We are a small, independent team stewarded by the Social Systems Foundation, and supported
+                            by the community we serve.
                         </p>
-                        <p className="mb-8 text-lg leading-relaxed text-kam-gray-dark/80">
-                            No VCs. No corporate funding. No ads. No extractive growth. 100% organic free-range,
-                            grass-fed, non-GMO, gluten-free, cruelty-free, community-governed good. If that resonates,
-                            you&apos;re already one of us. Come say hi.
+                        <p className="mb-4 text-lg leading-relaxed text-kam-gray-dark/80">
+                            No VCs. No founders cashing out. No extractive growth. One hundred per cent oligarch-free.
+                            Just open-source tools built in the service of something better. Something greater.
                         </p>
-                        <div className="mt-8 text-center">
-                            <Button
-                                variant="outline"
-                                className="text-md border-kam-button-red-orange px-6 py-2 text-kam-button-red-orange hover:bg-kam-button-red-orange hover:text-white"
-                            >
-                                Meet the team
-                            </Button>
-                        </div>
+                        <p className="text-lg leading-relaxed text-kam-gray-dark/80">
+                            If that resonates, you&apos;re already one of us. Come say hi.
+                        </p>
                     </div>
                 </div>
             </section>
@@ -205,31 +202,27 @@ export default function KamooniLandingPage() {
                     </h2>
                     <div className="text-left">
                         <p className="mb-4 text-lg leading-relaxed text-kam-gray-dark">
-                            You are. But not in a sneaky way, in an up-front way. If our calculations pan out, as long
-                            as enough people become founding members, we can keep Kamooni free for everyone to use,
-                            forever. We call this <span className="font-semibold">Community-Supported Software</span>.
+                            You are. But not in a sneaky way. In an up-front way. If our calculations pan out, as long
+                            as one user out of ten becomes a contributing member, we&apos;ll have the funds we need to
+                            keep the lights on and the change supported.
                         </p>
                         <p className="mb-4 text-lg leading-relaxed text-kam-gray-dark">
-                            But there is more to this story. As a member you get a vote on how the community is run. And
-                            the platform is designed to help you create, organize, and manage your own projects and
-                            communities, with tools for funding, governance, and resource sharing.
+                            But there is more to this story. As a member you get a vote on how the community is run, how
+                            the platform is developed and where we spend any profits we make. This happens through the
+                            Altruistic Wallet, another cool technology we are developing at the lab.
                         </p>
                         <p className="mb-8 text-lg leading-relaxed text-kam-gray-dark">
-                            Our ultimate goal however, is for Kamooni to become fully distributed with our open source
-                            technology, so that any community can run their own instance, completely independently from
-                            us. If you like what we&apos;re doing and want to help us share the load with us, join the
-                            tribe as a Founding Member for €5 per month.
+                            Our ultimate goal is for Kamooni to become fully distributed, with our members providing all
+                            the bandwidth and storage for the network to work entirely autonomously. But for now, our
+                            paying members are carrying the network. If you&apos;d like to share the load with us, join
+                            the tribe as a Founding Member by donating $1 or more per month.
                         </p>
                         <div className="mt-8 flex flex-col items-center space-y-4 text-center">
-                            <Button className="w-full bg-kam-button-red-orange px-8 py-3 text-lg text-white hover:bg-kam-button-red-orange/90 sm:w-auto">
-                                Become a Founding Member
-                            </Button>
-                            <Button
-                                variant="link"
-                                className="w-full text-kam-button-red-orange hover:text-kam-button-red-orange/80 sm:w-auto"
-                            >
-                                I think I need a bit more convincing...
-                            </Button>
+                            <Link href="/signup">
+                                <Button className="w-full bg-kam-button-red-orange px-8 py-3 text-lg text-white hover:bg-kam-button-red-orange/90 sm:w-auto">
+                                    Become a Founding Member
+                                </Button>
+                            </Link>
                         </div>
                     </div>
                 </div>
@@ -243,20 +236,11 @@ export default function KamooniLandingPage() {
                     </h2>
                     <div className="text-left">
                         <p className="mb-8 text-lg leading-relaxed text-kam-gray-dark/80">
-                            Thanks! We&apos;re pretty pleased with it. If we say so ourselves. But we could definitely
-                            use a hand. We always need help with coding, design, testing, community organizing, and just
-                            generally spreading the word. If you&apos;ve got some spare cycles and want to help us build
-                            this thing, join our test pilots or come visit our Discord server for some watercooler
-                            powwows and reach out to us if anything hits your spot!
+                            Thanks! We&apos;re pretty pleased with it, if we say so ourselves, but we could definitely
+                            use some help. Obviously, funding is always an issue, but we could use help in most areas,
+                            such as development, UX-design, marketing, outreach, onboarding and more. Check out the
+                            lab&apos;s website for some useful pointers and reach out to us if anything hits your spot!
                         </p>
-                        <div className="mt-8 text-center">
-                            <Button
-                                variant="outline"
-                                className="text-md border-kam-button-red-orange px-6 py-2 text-kam-button-red-orange hover:bg-kam-button-red-orange hover:text-white"
-                            >
-                                Other ways to help
-                            </Button>
-                        </div>
                     </div>
                 </div>
             </section>
