@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Circle } from "@/models/models";
+import Image from "next/image";
 
 export default function SubscriptionForm({ circle: user }: { circle: Circle }) {
     const [showDonorbox, setShowDonorbox] = useState(false);
@@ -31,15 +32,9 @@ export default function SubscriptionForm({ circle: user }: { circle: Circle }) {
     };
 
     return (
-        <div className="formatted container mx-auto py-12">
-            <div className="text-center">
-                <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-6xl">Become a Kamooni Member</h1>
-                <p className="mt-6 text-lg leading-8 text-gray-600">
-                    Support the development of Kamooni and get access to exclusive features.
-                </p>
-            </div>
-            <div className="formatted mt-16 grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-2">
-                <Card className="flex flex-col rounded-3xl p-8">
+        <div className="formatted container mx-auto">
+            <div className="formatted mt-2 grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-2">
+                <Card className="flex flex-col rounded-3xl p-4">
                     <CardHeader>
                         <CardTitle className="text-2xl font-bold">Free</CardTitle>
                         <CardDescription>$0 / forever</CardDescription>
@@ -48,33 +43,29 @@ export default function SubscriptionForm({ circle: user }: { circle: Circle }) {
                         <ul className="space-y-2">
                             <li className="flex items-center">
                                 <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
-                                Own your profile
+                                Basic features
                             </li>
                             <li className="flex items-center">
                                 <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
-                                Own your content
-                            </li>
-                            <li className="flex items-center">
-                                <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
-                                Own your network
+                                Verify your account to unlock access
                             </li>
                         </ul>
                     </CardContent>
-                    <div className="p-6 pt-0">
-                        <Button variant="outline" className="w-full">
-                            Current Plan
-                        </Button>
-                    </div>
-                </Card>
-                <Card className="flex flex-col rounded-3xl bg-purple-50 p-8">
-                    <CardHeader>
-                        <div className="flex items-center justify-between">
-                            <CardTitle className="text-2xl font-bold">{foundingMemberPlan.campaign.name}</CardTitle>
-                            <img src="/images/member-badge.png" alt="Member Badge" className="h-8 w-8" />
+                    {!isMember && (
+                        <div className="p-6 pt-0">
+                            <Button variant="outline" className="w-full">
+                                Current Plan
+                            </Button>
                         </div>
-                        <CardDescription>
-                            {foundingMemberPlan.formatted_amount} / {foundingMemberPlan.interval}
-                        </CardDescription>
+                    )}
+                </Card>
+                <Card className="relative flex flex-col rounded-3xl bg-purple-50 p-4">
+                    <CardHeader>
+                        <CardTitle className="text-2xl font-bold">Founding Member</CardTitle>
+                        <div className="absolute right-4 top-4">
+                            <Image src="/images/member-badge.png" alt="Member Badge" width={32} height={32} />
+                        </div>
+                        <CardDescription>Donate monthly ($1 or more)</CardDescription>
                     </CardHeader>
                     <CardContent className="flex-grow space-y-4">
                         <ul className="space-y-2">
@@ -84,15 +75,11 @@ export default function SubscriptionForm({ circle: user }: { circle: Circle }) {
                             </li>
                             <li className="flex items-center">
                                 <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
-                                Verified Badge
+                                Founder Badge
                             </li>
                             <li className="flex items-center">
                                 <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
                                 Early access to new features
-                            </li>
-                            <li className="flex items-center">
-                                <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
-                                Direct support
                             </li>
                         </ul>
                     </CardContent>
@@ -139,7 +126,7 @@ export default function SubscriptionForm({ circle: user }: { circle: Circle }) {
                     </div>
                 </Card>
             </div>
-            {isMember && (
+            {/* {isMember && (
                 <div className="mt-16 text-center">
                     <h2 className="text-2xl font-bold">Your Current Plan</h2>
                     <p className="mt-4 text-lg">
@@ -147,7 +134,7 @@ export default function SubscriptionForm({ circle: user }: { circle: Circle }) {
                     </p>
                     <p className="mt-2 text-muted-foreground">Thank you for your support!</p>
                 </div>
-            )}
+            )} */}
         </div>
     );
 }

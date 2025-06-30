@@ -1061,6 +1061,7 @@ export type GroupedNotificationSettings = Record<
 export const ONBOARDING_STEPS = [
     "welcome",
     "terms",
+    "member",
     "mission",
     "profile",
     "location",

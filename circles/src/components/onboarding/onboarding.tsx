@@ -8,6 +8,7 @@ import { authInfoAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import WelcomeStep from "./welcome-step";
 import TermsStep from "./terms-step";
+import MemberStep from "./member-step";
 import MissionStep from "./mission-step";
 import CausesStep from "./causes-step";
 import SkillsStep from "./skills-step";
@@ -16,7 +17,7 @@ import ProfileStep from "./profile-step";
 import ProfileLocationStep from "./profile-location-step";
 import FinalStep from "./final-step";
 import ProfileSummary from "./profile-summary";
-import { Cause, ONBOARDING_STEPS, OnboardingStep, Skill } from "@/models/models";
+import { Cause, Circle, ONBOARDING_STEPS, OnboardingStep, Skill } from "@/models/models";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { causes, skills } from "@/lib/data/causes-skills";
 
@@ -44,6 +45,7 @@ export type OnboardingStepProps = {
     setUserData: React.Dispatch<React.SetStateAction<OnboardingUserData | undefined>>;
     nextStep: () => void;
     prevStep: () => void;
+    circle: Circle;
 };
 
 export default function Onboarding() {
@@ -61,6 +63,7 @@ export default function Onboarding() {
         const stepComponents: Record<string, React.ComponentType<OnboardingStepProps>> = {
             welcome: WelcomeStep,
             terms: TermsStep,
+            member: MemberStep,
             mission: MissionStep,
             profile: ProfileStep,
             location: ProfileLocationStep,
@@ -168,6 +171,8 @@ export default function Onboarding() {
                 return "Welcome to Kamooni";
             case "terms":
                 return "Terms and Privacy";
+            case "member":
+                return "Become a Member";
             case "mission":
                 return "Your Mission";
             case "profile":
@@ -251,6 +256,7 @@ export default function Onboarding() {
                                         setUserData={setUserData}
                                         nextStep={nextStep}
                                         prevStep={prevStep}
+                                        circle={user as Circle}
                                     />
                                 </motion.div>
                             </AnimatePresence>
