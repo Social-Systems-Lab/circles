@@ -16,7 +16,13 @@ import {
 import { Circle } from "@/models/models";
 import Image from "next/image";
 
-export default function SubscriptionForm({ circle: user }: { circle: Circle }) {
+export default function SubscriptionForm({
+    circle: user,
+    onDialogClose,
+}: {
+    circle: Circle;
+    onDialogClose?: () => void;
+}) {
     const [showDonorbox, setShowDonorbox] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
 
@@ -97,7 +103,15 @@ export default function SubscriptionForm({ circle: user }: { circle: Circle }) {
                                 Manage Subscription
                             </Button>
                         ) : (
-                            <Dialog open={showDonorbox} onOpenChange={setShowDonorbox}>
+                            <Dialog
+                                open={showDonorbox}
+                                onOpenChange={(isOpen) => {
+                                    setShowDonorbox(isOpen);
+                                    if (!isOpen && onDialogClose) {
+                                        onDialogClose();
+                                    }
+                                }}
+                            >
                                 <DialogTrigger asChild>
                                     <Button className="w-full bg-purple-600 text-white hover:bg-purple-700">
                                         Become a Member
