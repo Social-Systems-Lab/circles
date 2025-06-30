@@ -4,6 +4,7 @@ import { db } from "@/lib/data/db";
 import { ObjectId } from "mongodb";
 import { sendUserBecomesMemberNotification } from "@/lib/data/notifications";
 import { getUserPrivate } from "@/lib/data/user";
+import { sendEmail } from "@/lib/data/email";
 
 const DONORBOX_WEBHOOK_SECRET = process.env.DONORBOX_WEBHOOK_SECRET;
 
@@ -107,6 +108,14 @@ async function handleNewSubscription(donation: any) {
         const userPrivate = await getUserPrivate(user.did);
         if (userPrivate) {
             await sendUserBecomesMemberNotification(userPrivate);
+            await sendEmail({
+                to: user.email,
+                templateAlias: "new-member-welcome",
+                templateModel: {
+                    name: user.name,
+                    action_url: process.env.CIRCLES_URL || "http://localhost:3000",
+                },
+            });
         }
     }
 }
@@ -147,6 +156,14 @@ async function handlePlanUpdate(plan: any) {
         const userPrivate = await getUserPrivate(user.did);
         if (userPrivate) {
             await sendUserBecomesMemberNotification(userPrivate);
+            await sendEmail({
+                to: user.email,
+                templateAlias: "new-member-welcome",
+                templateModel: {
+                    name: user.name,
+                    action_url: process.env.CIRCLES_URL || "http://localhost:3000",
+                },
+            });
         }
     }
 }
