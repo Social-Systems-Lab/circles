@@ -563,10 +563,10 @@ export function PostForm({
                     <>
                         <div className="max-h-[calc(60vh-100px)] flex-grow overflow-y-auto pr-2">
                             {!user.isVerified && (
-                                <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                                <div className="formatted mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
                                     <div className="flex items-center">
                                         <Info className="mr-2 h-5 w-5 flex-shrink-0" />
-                                        <p>
+                                        <p className="mt-0 pt-0" style={{ paddingTop: 0, marginTop: 0 }}>
                                             Your account is not verified. Posts from unverified accounts are not shown
                                             in the public feeds until the account is verified.
                                         </p>
