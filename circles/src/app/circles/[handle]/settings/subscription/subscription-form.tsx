@@ -4,7 +4,15 @@ import Script from "next/script";
 import { createSubscription } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+    DialogPortal,
+    DialogOverlay,
+} from "@/components/ui/dialog";
 import { Circle } from "@/models/models";
 import Image from "next/image";
 
@@ -95,32 +103,37 @@ export default function SubscriptionForm({ circle: user }: { circle: Circle }) {
                                         Become a Member
                                     </Button>
                                 </DialogTrigger>
-                                <DialogContent className="z-[600] max-w-lg">
-                                    <DialogHeader>
-                                        <DialogTitle>Become a Founding Member</DialogTitle>
-                                    </DialogHeader>
-                                    <div className="mt-4">
-                                        <Script src="https://donorbox.org/widget.js" strategy="lazyOnload" />
-                                        <iframe
-                                            src={`https://donorbox.org/embed/${foundingMemberPlan.id}&email=${encodeURIComponent(
-                                                user.email!,
-                                            )}&custom_fields[circleId]=${user._id!}`}
-                                            name="donorbox"
-                                            allowFullScreen
-                                            seamless={true}
-                                            frameBorder="0"
-                                            scrolling="no"
-                                            height="900px"
-                                            width="100%"
-                                            style={{
-                                                maxWidth: "500px",
-                                                minWidth: "250px",
-                                                maxHeight: "none!important",
-                                            }}
-                                            allow="payment"
-                                        ></iframe>
-                                    </div>
-                                </DialogContent>
+                                <DialogPortal>
+                                    <DialogOverlay className="z-[550] bg-black/60" />
+                                    <DialogContent className="z-[600] max-w-lg">
+                                        <DialogHeader>
+                                            <DialogTitle>Become a Founding Member</DialogTitle>
+                                        </DialogHeader>
+                                        <div className="mt-4">
+                                            <Script src="https://donorbox.org/widget.js" strategy="lazyOnload" />
+                                            <iframe
+                                                src={`https://donorbox.org/embed/${
+                                                    foundingMemberPlan.id
+                                                }&email=${encodeURIComponent(
+                                                    user.email!,
+                                                )}&custom_fields[circleId]=${user._id!}`}
+                                                name="donorbox"
+                                                allowFullScreen
+                                                seamless={true}
+                                                frameBorder="0"
+                                                scrolling="no"
+                                                height="900px"
+                                                width="100%"
+                                                style={{
+                                                    maxWidth: "500px",
+                                                    minWidth: "250px",
+                                                    maxHeight: "none!important",
+                                                }}
+                                                allow="payment"
+                                            ></iframe>
+                                        </div>
+                                    </DialogContent>
+                                </DialogPortal>
                             </Dialog>
                         )}
                     </div>

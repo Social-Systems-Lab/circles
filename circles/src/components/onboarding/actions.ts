@@ -460,6 +460,33 @@ export const completeWelcomeStep = async (circleId: string): Promise<SaveMission
     }
 };
 
+// Mark member step as completed
+export const completeMemberStep = async (circleId: string): Promise<SaveMissionActionResponse> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in" };
+    }
+
+    try {
+        // Add member step to completedOnboardingSteps
+        let user = await getUserByDid(userDid);
+        let circle: Partial<Circle> = {
+            _id: circleId,
+            completedOnboardingSteps: user.completedOnboardingSteps ?? [],
+        };
+
+        if (!circle.completedOnboardingSteps?.includes("member")) {
+            circle.completedOnboardingSteps?.push("member");
+        }
+
+        await updateCircle(circle, userDid);
+        return { success: true, message: "Member step completed" };
+    } catch (error) {
+        console.log("error", error);
+        return { success: false, message: "Failed to update step status" };
+    }
+};
+
 // Mark final step as completed
 export const completeFinalStep = async (circleId: string): Promise<SaveMissionActionResponse> => {
     const userDid = await getAuthenticatedUserDid();
