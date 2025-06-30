@@ -1,5 +1,7 @@
+"use client";
 import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ChevronRight } from "lucide-react";
@@ -17,20 +19,136 @@ const notoSerif = Noto_Serif({
 });
 
 export default function KamooniLandingPage() {
+    const [showAllFaqs, setShowAllFaqs] = useState(false);
+
     const faqItems = [
         {
-            question: "Do I have to pay to join?",
-            answer: "Kamooni is free to join and participate in some ways, we're happy. But by becoming a founding member, you get a vote on how the community is run and help us keep the platform ad-free and independent.",
+            question: "What is Kamooni?",
+            answer: "Kamooni is a social network for changemakers—people who want to build a better world together. It's a place to connect, collaborate, and contribute to meaningful projects, locally or globally.",
         },
         {
-            question: "What makes Kamooni different from other social platforms?",
-            answer: "Kamooni is designed for social impact, focusing on collaboration, empowerment, and real-world change. It's community-owned, ad-free, and prioritizes user data privacy and ethical technology. We aim to connect individuals with a right to privacy and tools designed to empower, not pacify, you.",
+            question: "Is Kamooni just another social media platform?",
+            answer: "Not at all. Unlike traditional social media, Kamooni is focused on action, not distraction. It's designed to help people do things together—whether that's volunteering, organizing, or building local solutions.",
         },
         {
-            question: "How is my data protected?",
-            answer: "We are committed to strong data protection principles. Your data is not sold to third parties, and we are transparent about how we use information to improve the platform. As a community-governed platform, data policies will be decided with member input.",
+            question: "Who is Kamooni for?",
+            answer: "Kamooni is for anyone who wants to make a difference—activists, organizers, volunteers, community leaders, creatives, social entrepreneurs, and everyday people looking to contribute. It is a community for people who want to make life a little better for everyone, not just themselves.",
+        },
+        {
+            question: "How does Kamooni work?",
+            answer: "You create a profile, share your mission, causes, and skills, and Kamooni helps match you with people, projects, and opportunities through a map-based interface and shared interests.",
+        },
+        {
+            question: "What makes Kamooni different from other networks for good?",
+            answer: "Kamooni gives you more control over your data, your connections, and your impact. It's values-driven, open-source, and supports direct collaboration, not just awareness or funding. It's basically designed to empower you, not hold you hostage and monetise you in different ways. It also has a very cool map-based interface.",
+        },
+        {
+            question: "What can I do on Kamooni?",
+            answer: "In the current version of Kamooni, you can do most everything you'd expect to do on your run-of-the-mill social networking platform, with a few twists. You can create a profile and groups, we call them circles, but you have a lot more control over the access and look of these. We have a built-in task manager to help you and your team get the job done. You can create proposals and have your community vote on them. We have a map-based interface that allows you to explore and connect in an entirely different way. To mention a few features. \n\nOver the next weeks and months, we'll be upgrading the profile pages, adding advanced governance features, such as liquid democracy through delegates, integrated video, a virtue ledger that keeps track of all the tasks you perform, advanced crowdfunding features, local resource sharing, video conferencing with a map view, data layers for the atlas, hosted circles for individuals and orgs that want more control and customisation, community fact checking, proof of humanity and more. \n\nIf you are reading this and joining as a member, you'll be one of the Kamooni Founders. This means you will be able to influence the design and development of the platform significantly.",
+        },
+        {
+            question: "What does the name “Kamooni” mean?",
+            answer: '“Kamooni” is loosely based on the Latin communis, meaning "common, public, general, shared by all or many". The name reflects our belief in collective action, sharing and mutual support.',
+        },
+        {
+            question: "Is Kamooni free to use?",
+            answer: "This is our ambition. The purpose of Kamooni is to create a better society for all, and that should be free for all who actively contribute to this vision. Unfortunately, we still have bills to pay, so we are asking for a small membership fee from those who can afford it, starting at €1 per month. This helps keep the platform ethical and ad-free, and free for as many users as possible. With ten per cent of Kamooni’s users becoming members, we should have enough funds to keep it open for everyone else.",
+        },
+        {
+            question: "Why should I pay to use Kamooni?",
+            answer: "Your membership supports a community-run platform with no corporate surveillance, no ads, and no data harvesting. As a paying member, you'll be making it possible for others to use the platform free of charge. As a member of Kamooni, you also get to vote directly on the direction and development of the network and the platform. Something that can be especially impactful this early on in our development.\n\nWe estimate that one paying member will be enough to support ten non-paying users on Kamooni. If the number of non-paying users increases more than 10:1, we'll put them on a waiting list. However, as a member, you'll be allowed to invite a number of friends who can jump the queue and become instantly active. The number of invites you get depends on how much you donate. For instance, €5 per month will give you four invites that you can send to friends if there is a waiting list.\n\nFinally, as a member, you get an “altruistic” dividend on all profits we make. These funds can't be spent on you personally, though, but you do get to decide which projects on the platform these funds should support. This will all happen through something we call the Altruistic Wallet, which is something else that only members will have access to.",
+        },
+        {
+            question: "What’s the Altruistic Wallet?",
+            answer: "It's a new kind of digital wallet where you can donate time, money, or resources—but only to others. It tracks your contributions, helps build your reputation, and supports trustworthy projects. The Altruistic Wallet is designed to be a stand-alone app that anyone can use on any platform that integrates with it. It is still under development, but we plan to release an early version to our members later this year.",
+        },
+        {
+            question: "How do I know I can trust the people and projects on Kamooni?",
+            answer: "Kamooni uses a reputation system based on real contributions. Profiles show how people and projects have helped others, not just likes or flashy bios. We are also designing a system of human verification to avoid fake projects created by AI. Ultimately, it is your call who you choose to trust, but we are laying the groundwork for a system that rewards people who live up to their promises and keep their word.",
+        },
+        {
+            question: "How is Kamooni moderated?",
+            answer: "Community standards are enforced collaboratively. You decide who can contact you, and the network itself verifies trustworthy users through contribution history and network endorsements.",
+        },
+        {
+            question: "Is Kamooni safe?",
+            answer: "As safe as we can make it. You're in full control of your visibility and who can reach out to you. There are also community-driven safety mechanisms to flag abuse or bad actors. As we progress along our roadmap, we'll also integrate with Vibe, which will give you exceptional control over your data.",
+        },
+        {
+            question: "Do I need to be part of a group to join?",
+            answer: "Nope. You can join as an individual and find like-hearted people or projects on your own. Of course, you can also invite others and create your own “Circle.”",
+        },
+        {
+            question: "What’s a Circle?",
+            answer: "A Circle is a space on Kamooni—it can be a project, a community group, a campaign, or just a place to gather people. You control the settings and membership of all circles you create or are the administrator of.",
+        },
+        {
+            question: "What kind of causes can I support on Kamooni?",
+            answer: "Anything from climate action, education, mutual aid, housing, regenerative farming, digital rights, mental health, and beyond. If it makes the world better, it belongs here.",
+        },
+        {
+            question: "I don’t have money. Can I still contribute?",
+            answer: "Absolutely. You can offer time, skills, advice, or even lend tools or space. Kamooni values all kinds of contributions, not just cash.",
+        },
+        {
+            question: "Can I use Kamooni for my local community project?",
+            answer: "Yes! That's exactly what it's for. Whether it's a local cleanup, food distribution, or community garden, Kamooni helps you organize and find support.",
+        },
+        {
+            question: "How does the map feature work?",
+            answer: "You can see where people and projects are around you—or around the world. Filter by skills, needs, or causes and reach out to collaborate.",
+        },
+        {
+            question: "How do I build a good reputation on Kamooni?",
+            answer: "By helping others. The more you contribute—whether with time, resources, or advice—the more trust you earn. Your contributions are recorded and verified by the community.",
+        },
+        {
+            question: "Will my data be sold or used for ads?",
+            answer: "Never. Kamooni is committed to privacy and ethics. Your data belongs to you, and we'll never sell it or use it to manipulate your behaviour.",
+        },
+        {
+            question: "Is Kamooni open source?",
+            answer: "Yes. We believe in transparency and community ownership. Developers and technologists are welcome to help build the platform with us.",
+        },
+        {
+            question: "Can I suggest features or improvements?",
+            answer: "Yes, please! Kamooni is co-created with the community. Your feedback helps shape the roadmap and future of the platform.",
+        },
+        {
+            question: "What’s coming next for Kamooni?",
+            answer: "We're building peer-to-peer messaging, democratic governance tools, video conferencing, and ways to vote on how platform revenues are reinvested. And yes—profit-sharing too.",
+        },
+        {
+            question: "Who is behind Kamooni?",
+            answer: "Kamooni is built by a global network of activists, designers, and technologists through the Social Systems Lab. But most importantly, you are part of shaping it.",
+        },
+        {
+            question: "Is Kamooni global or local?",
+            answer: "Both. You can work with people nearby—or join international movements. Kamooni helps you scale from the village to the planet.",
+        },
+        {
+            question: "Can I host my own version of Kamooni?",
+            answer: "Eventually yes—Kamooni will support federated hosting, allowing communities to run their own instances of the platform while still being connected.",
+        },
+        {
+            question: "How do I get started?",
+            answer: "Just create a profile, add your mission and skills, and explore the map. You'll find people, projects, or tasks to jump into right away.",
+        },
+        {
+            question: "How do I invite others?",
+            answer: "You can send invites directly from your profile or Circle. Sharing your Kamooni link on social media is also a great way to grow the network.",
+        },
+        {
+            question: "How can I help Kamooni succeed?",
+            answer: "Become a member, use the platform, tell your friends, and if you have time or skills—join our volunteer team. Kamooni grows stronger with every person who contributes.",
+        },
+        {
+            question: "What is a Founding Member?",
+            answer: "A Founding Member is someone who joins Kamooni at an early stage when we need you the most. As a founder, you'll be joining this journey pretty much from the start and will have a lot of opportunities to shape both the culture and practices of our community as well as the platform itself. We will be working closely with our members when developing tools and practices alike, so your voice will be heard and your vote will count. \n\nAs a Founding Member, you will get the title “Founder” on your profile for the duration of your membership in Kamooni.",
         },
     ];
+
+    const displayedFaqs = showAllFaqs ? faqItems : faqItems.slice(0, 3);
 
     return (
         <div
@@ -41,7 +159,7 @@ export default function KamooniLandingPage() {
             )}
         >
             {/* Header */}
-            <header className="sticky top-0 z-50 bg-white shadow-sm">
+            <header className="sticky top-0 z-20 bg-white shadow-sm">
                 <div className="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
                     <Link href="/" className="group flex items-center">
                         <Image
@@ -56,9 +174,9 @@ export default function KamooniLandingPage() {
                             <span className="-mt-1 block text-xs text-kam-gray-dark/70">the social impact network</span>
                         </div>
                     </Link>
-                    <Button className="bg-kam-button-red-orange px-4 py-2 text-sm text-white hover:bg-kam-button-red-orange/90">
+                    {/* <Button className="bg-kam-button-red-orange px-4 py-2 text-sm text-white hover:bg-kam-button-red-orange/90">
                         Login/Join
-                    </Button>
+                    </Button> */}
                 </div>
             </header>
 
@@ -128,14 +246,14 @@ export default function KamooniLandingPage() {
                         <p className="text-lg leading-relaxed text-kam-gray-dark/80">
                             Kamooni is designed and built to help us find each other and get things done together.
                         </p>
-                        <div className="mt-8 text-center">
+                        {/* <div className="mt-8 text-center">
                             <Button
                                 variant="outline"
                                 className="text-md border-kam-button-red-orange px-6 py-2 text-kam-button-red-orange hover:bg-kam-button-red-orange hover:text-white"
                             >
                                 13 Reasons to Join
                             </Button>
-                        </div>
+                        </div> */}
                     </div>
                 </div>
             </section>
@@ -158,10 +276,10 @@ export default function KamooniLandingPage() {
                         </p>
                         <p className="mb-8 text-lg leading-relaxed text-kam-gray-dark">
                             That said, Kamooni is currently in its{" "}
-                            <span className="font-semibold">Test Pilot phase</span>. We&apos;re still shaping this
-                            thing—carefully, collaboratively. If you&apos;re an activist, a project steward, a
-                            volunteer, a community organizer, a researcher, a systems thinker, wevd love to shape
-                            Kamooni with you and for you.
+                            <span className="font-semibold">Test Pilot phase</span>. We're still shaping this
+                            thing—carefully, collaboratively. If you're an activist, a project steward, a volunteer, a
+                            community organizer, a researcher, a systems thinker, we'd love to shape Kamooni with you
+                            and for you.
                         </p>
                         <div className="mt-8 text-center">
                             <Link href="/signup">
@@ -188,7 +306,7 @@ export default function KamooniLandingPage() {
                             Just open-source tools built in the service of something better. Something greater.
                         </p>
                         <p className="text-lg leading-relaxed text-kam-gray-dark/80">
-                            If that resonates, you&apos;re already one of us. Come say hi.
+                            If that resonates, you're already one of us. Come say hi.
                         </p>
                     </div>
                 </div>
@@ -203,8 +321,8 @@ export default function KamooniLandingPage() {
                     <div className="text-left">
                         <p className="mb-4 text-lg leading-relaxed text-kam-gray-dark">
                             You are. But not in a sneaky way. In an up-front way. If our calculations pan out, as long
-                            as one user out of ten becomes a contributing member, we&apos;ll have the funds we need to
-                            keep the lights on and the change supported.
+                            as one user out of ten becomes a contributing member, we'll have the funds we need to keep
+                            the lights on and the change supported.
                         </p>
                         <p className="mb-4 text-lg leading-relaxed text-kam-gray-dark">
                             But there is more to this story. As a member you get a vote on how the community is run, how
@@ -214,8 +332,8 @@ export default function KamooniLandingPage() {
                         <p className="mb-8 text-lg leading-relaxed text-kam-gray-dark">
                             Our ultimate goal is for Kamooni to become fully distributed, with our members providing all
                             the bandwidth and storage for the network to work entirely autonomously. But for now, our
-                            paying members are carrying the network. If you&apos;d like to share the load with us, join
-                            the tribe as a Founding Member by donating $1 or more per month.
+                            paying members are carrying the network. If you'd like to share the load with us, join the
+                            tribe as a Founding Member by donating $1 or more per month.
                         </p>
                         <div className="mt-8 flex flex-col items-center space-y-4 text-center">
                             <Link href="/signup">
@@ -236,10 +354,10 @@ export default function KamooniLandingPage() {
                     </h2>
                     <div className="text-left">
                         <p className="mb-8 text-lg leading-relaxed text-kam-gray-dark/80">
-                            Thanks! We&apos;re pretty pleased with it, if we say so ourselves, but we could definitely
-                            use some help. Obviously, funding is always an issue, but we could use help in most areas,
-                            such as development, UX-design, marketing, outreach, onboarding and more. Check out the
-                            lab&apos;s website for some useful pointers and reach out to us if anything hits your spot!
+                            Thanks! We're pretty pleased with it, if we say so ourselves, but we could definitely use
+                            some help. Obviously, funding is always an issue, but we could use help in most areas, such
+                            as development, UX-design, marketing, outreach, onboarding and more. Check out the lab's
+                            website for some useful pointers and reach out to us if anything hits your spot!
                         </p>
                     </div>
                 </div>
@@ -250,7 +368,7 @@ export default function KamooniLandingPage() {
                 <div className="container mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
                     <h2 className="mb-10 text-center text-3xl font-bold text-kam-gray-dark sm:text-4xl">FAQ</h2>
                     <Accordion type="single" collapsible className="w-full text-left">
-                        {faqItems.map((item, index) => (
+                        {displayedFaqs.map((item, index) => (
                             <AccordionItem value={`item-${index + 1}`} key={index} className="border-b border-white/70">
                                 <AccordionTrigger className="py-4 text-left text-lg font-medium text-kam-gray-dark hover:no-underline">
                                     {item.question}
@@ -265,8 +383,9 @@ export default function KamooniLandingPage() {
                         <Button
                             variant="outline"
                             className="text-md border-kam-button-red-orange px-6 py-2 text-kam-button-red-orange hover:bg-kam-button-red-orange hover:text-white"
+                            onClick={() => setShowAllFaqs(!showAllFaqs)}
                         >
-                            More Questions?
+                            {showAllFaqs ? "Show Less" : "More Questions?"}
                         </Button>
                     </div>
                 </div>
