@@ -4,14 +4,14 @@ services:
         env_file:
             - .env
         environment:
-            - SYNAPSE_SERVER_NAME=${CIRCLES_DOMAIN}
+            - SYNAPSE_SERVER_NAME=${MATRIX_DOMAIN}
         volumes:
             - synapse_data:/data
         entrypoint:
             [
                 "/bin/sh",
                 "-c",
-                "chown -R 991:991 /data && python -m synapse.app.homeserver --generate-config -c /data/homeserver.yaml -H ${CIRCLES_DOMAIN} --report-stats=yes",
+                "chown -R 991:991 /data && python -m synapse.app.homeserver --generate-config -c /data/homeserver.yaml -H ${MATRIX_DOMAIN} --report-stats=yes",
             ]
         networks:
             - webnet

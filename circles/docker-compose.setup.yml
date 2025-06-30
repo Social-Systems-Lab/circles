@@ -6,7 +6,7 @@ services:
         env_file:
             - .env
         environment:
-            - SYNAPSE_SERVER_NAME=${CIRCLES_DOMAIN}
+            - SYNAPSE_SERVER_NAME=${MATRIX_DOMAIN}
             - SYNAPSE_REPORT_STATS=yes
         volumes:
             - synapse_data:/data
