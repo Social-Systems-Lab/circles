@@ -51,7 +51,7 @@ import {
 import { revalidatePath } from "next/cache";
 import { getCircleById, getCirclePath, getCirclesBySearchQuery, getCircleByHandle } from "@/lib/data/circle"; // Added getCircleByHandle
 import { getLinkPreview } from "link-preview-js"; // Removed LinkPreview import
-import { getUserByDid, getUserById, getUserPrivate } from "@/lib/data/user";
+import { getUserByDid, getUserById, getUserPrivate, getVerificationStatus } from "@/lib/data/user";
 import { redirect } from "next/navigation";
 import {
     notifyPostComment,
@@ -1095,4 +1095,14 @@ export async function getPublicUserFeedAction(userDid: string): Promise<Feed | n
         console.error("Error in getPublicUserFeedAction:", error);
         return null;
     }
+}
+
+export async function getVerificationStatusAction(): Promise<"verified" | "pending" | "unverified"> {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        // Return "unverified" for guests or unauthenticated users
+        return "unverified";
+    }
+    // getVerificationStatus is already available from user.ts and handles the logic
+    return await getVerificationStatus(userDid);
 }

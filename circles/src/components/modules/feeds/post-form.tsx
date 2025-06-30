@@ -58,14 +58,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { userAtom } from "@/lib/data/atoms";
-import { getLinkPreviewAction, getInternalLinkPreviewData, InternalLinkPreviewResult } from "./actions";
+import {
+    getLinkPreviewAction,
+    getInternalLinkPreviewData,
+    InternalLinkPreviewResult,
+    getVerificationStatusAction,
+} from "./actions";
 import { useToast } from "@/components/ui/use-toast";
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import InternalLinkPreview from "./InternalLinkPreview";
 import { truncateText } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { AlertCircle, CircleHelp } from "lucide-react";
+import { AlertCircle, CircleHelp, Info } from "lucide-react";
 
 function debounce<F extends (...args: any[]) => any>(
     func: F,
@@ -557,6 +562,17 @@ export function PostForm({
                 {selectedCircleId && (
                     <>
                         <div className="max-h-[calc(60vh-100px)] flex-grow overflow-y-auto pr-2">
+                            {!user.isVerified && (
+                                <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                                    <div className="flex items-center">
+                                        <Info className="mr-2 h-5 w-5 flex-shrink-0" />
+                                        <p>
+                                            Your account is not verified. Posts from unverified accounts are not shown
+                                            in the public feeds until the account is verified.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                             <MentionsInput
                                 value={postContent}
                                 onChange={(e) => setPostContent(e.target.value)}

@@ -13,8 +13,11 @@ import {
 import { useActionState, useEffect, useState } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { requestVerification, getVerificationStatus } from "./actions";
+import { useAtom } from "jotai";
+import { userAtom } from "@/lib/data/atoms";
 
 export function VerifyAccountButton() {
+    const [user] = useAtom(userAtom);
     const [state, formAction] = useActionState(requestVerification, { message: "" });
     const [open, setOpen] = useState(false);
     const { toast } = useToast();
@@ -39,6 +42,10 @@ export function VerifyAccountButton() {
             }
         }
     }, [state, toast]);
+
+    if (user?.isVerified) {
+        return null; // User is already verified, no button needed
+    }
 
     if (verificationStatus === "verified") {
         return null;
