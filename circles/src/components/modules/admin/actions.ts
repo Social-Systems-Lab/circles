@@ -447,6 +447,106 @@ export async function toggleManualMembership(userId: string, manualMember: boole
     }
 }
 
+export async function syncAllDonorboxSubscriptions() {
+    // Check if user is admin
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "Unauthorized: You must be logged in." };
+    }
+    const user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        return { success: false, message: "Unauthorized: You do not have permission." };
+    }
+
+    console.log("Admin triggered sync of all Donorbox subscriptions...");
+
+    try {
+        let allPlans: any[] = [];
+        let page = 1;
+        const perPage = 100;
+        let hasMore = true;
+
+        while (hasMore) {
+            const response = await fetch(`https://donorbox.org/api/v1/plans?page=${page}&per_page=${perPage}`, {
+                headers: {
+                    Authorization: `Basic ${Buffer.from(
+                        `${process.env.DONORBOX_API_USER}:${process.env.DONORBOX_API_KEY}`,
+                    ).toString("base64")}`,
+                },
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.error("Donorbox API error:", errorData);
+                return { success: false, message: "Failed to fetch plans from Donorbox." };
+            }
+
+            const plans = await response.json();
+            if (plans.length > 0) {
+                allPlans = allPlans.concat(plans);
+                page++;
+            } else {
+                hasMore = false;
+            }
+        }
+
+        let updatedCount = 0;
+        let errorCount = 0;
+
+        const dbUsers = await Circles.find({ circleType: "user" }).toArray();
+        const userMap = new Map(dbUsers.map((u) => [u.email, u]));
+        const processedUserIds = new Set();
+
+        for (const plan of allPlans) {
+            try {
+                const userToUpdate = userMap.get(plan.donor.email);
+                if (userToUpdate) {
+                    processedUserIds.add(userToUpdate._id.toString());
+                    const isMember = plan.status === "active";
+                    const subscriptionData = {
+                        donorboxPlanId: plan.id,
+                        donorboxDonorId: plan.donor.id,
+                        status: plan.status,
+                        amount: plan.amount,
+                        currency: plan.currency,
+                        startDate: new Date(plan.started_at),
+                        lastPaymentDate: new Date(plan.last_donation_date),
+                    };
+
+                    await Circles.updateOne(
+                        { _id: userToUpdate._id },
+                        { $set: { isMember, isVerified: isMember, subscription: subscriptionData } },
+                    );
+                    updatedCount++;
+                }
+            } catch (e) {
+                console.error(`Error processing plan for donor ${plan.donor.email}:`, e);
+                errorCount++;
+            }
+        }
+
+        // Handle users who were members but are no longer in the active plans
+        for (const dbUser of dbUsers) {
+            if (dbUser.isMember && !processedUserIds.has(dbUser._id.toString())) {
+                await Circles.updateOne(
+                    { _id: dbUser._id },
+                    { $set: { isMember: false, "subscription.status": "inactive" } },
+                );
+                updatedCount++;
+            }
+        }
+
+        const message = `Subscription sync completed. Processed: ${updatedCount}, Errors: ${errorCount}.`;
+        console.log(message);
+        revalidatePath("/admin");
+        return { success: true, message };
+    } catch (error) {
+        console.error("Error during Donorbox sync:", error);
+        const message = error instanceof Error ? error.message : "Failed to complete Donorbox sync.";
+        return { success: false, message };
+    }
+}
+
 export async function refreshSubscriptionStatus(userId: string) {
     try {
         const user = await Circles.findOne({ _id: new ObjectId(userId) });

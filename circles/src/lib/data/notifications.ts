@@ -27,15 +27,20 @@ import { getTaskById } from "./task"; // Import getTaskById
 import { getGoalById } from "./goal"; // Import getGoalById
 import { features } from "./constants";
 import { getAuthorizedMembers } from "../auth/auth"; // Import the function to get authorized members
+import { sanitizeObjectForJSON } from "../utils/sanitize";
 
 export async function sendVerificationRequestNotification(user: Circle, admins: UserPrivate[]): Promise<void> {
     try {
         console.log(`🔔 [NOTIFY] Sending user_verification_request to ${admins.length} admins`);
-        await sendNotifications("user_verification_request", admins, {
-            user,
-            messageBody: `User ${user.name} (@${user.handle}) has requested account verification.`,
-            url: `/admin?tab=users`,
-        });
+        await sendNotifications(
+            "user_verification_request",
+            admins,
+            sanitizeObjectForJSON({
+                user,
+                messageBody: `User ${user.name} (@${user.handle}) has requested account verification.`,
+                url: `/admin?tab=users`,
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in sendVerificationRequestNotification:", error);
     }
@@ -44,11 +49,15 @@ export async function sendVerificationRequestNotification(user: Circle, admins: 
 export async function sendUserVerifiedNotification(user: UserPrivate): Promise<void> {
     try {
         console.log(`🔔 [NOTIFY] Sending user_verified notification to ${user.name}`);
-        await sendNotifications("user_verified", [user], {
-            user,
-            messageBody: "Congratulations! Your account has been verified.",
-            url: `/`,
-        });
+        await sendNotifications(
+            "user_verified",
+            [user],
+            sanitizeObjectForJSON({
+                user,
+                messageBody: "Congratulations! Your account has been verified.",
+                url: `/`,
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in sendUserVerifiedNotification:", error);
     }
@@ -57,11 +66,15 @@ export async function sendUserVerifiedNotification(user: UserPrivate): Promise<v
 export async function sendUserBecomesMemberNotification(user: UserPrivate): Promise<void> {
     try {
         console.log(`🔔 [NOTIFY] Sending user_becomes_member notification to ${user.name}`);
-        await sendNotifications("user_becomes_member", [user], {
-            user,
-            messageBody: "Congratulations! You are now a founding member.",
-            url: `/`,
-        });
+        await sendNotifications(
+            "user_becomes_member",
+            [user],
+            sanitizeObjectForJSON({
+                user,
+                messageBody: "Congratulations! You are now a founding member.",
+                url: `/`,
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in sendUserBecomesMemberNotification:", error);
     }
@@ -70,11 +83,15 @@ export async function sendUserBecomesMemberNotification(user: UserPrivate): Prom
 export async function sendUserVerificationRejectedNotification(user: UserPrivate): Promise<void> {
     try {
         console.log(`🔔 [NOTIFY] Sending user_verification_rejected notification to ${user.name}`);
-        await sendNotifications("user_verification_rejected", [user], {
-            user,
-            messageBody: "Your account verification request has been rejected.",
-            url: `/`,
-        });
+        await sendNotifications(
+            "user_verification_rejected",
+            [user],
+            sanitizeObjectForJSON({
+                user,
+                messageBody: "Your account verification request has been rejected.",
+                url: `/`,
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in sendUserVerificationRejectedNotification:", error);
     }
@@ -154,13 +171,17 @@ async function notifyRegularPostComment(post: Post, comment: Comment, commenter:
 
     // Send notification
     console.log("🔔 [NOTIFY] Sending post_comment notification to:", postAuthor.name);
-    await sendNotifications("post_comment", [postAuthorPrivate], {
-        circle,
-        user: commenter,
-        post,
-        comment,
-        postId: post._id?.toString(),
-    });
+    await sendNotifications(
+        "post_comment",
+        [postAuthorPrivate],
+        sanitizeObjectForJSON({
+            circle,
+            user: commenter,
+            post,
+            comment,
+            postId: post._id?.toString(),
+        }),
+    );
 }
 
 /**
@@ -217,14 +238,18 @@ async function notifyRegularCommentReply(
 
     // Send notification
     console.log("🔔 [NOTIFY] Sending comment_reply notification to:", commentAuthor.name);
-    await sendNotifications("comment_reply", [commentAuthorPrivate], {
-        circle,
-        user: replier,
-        post,
-        comment: reply,
-        postId: post._id?.toString(),
-        commentId: parentComment._id?.toString(),
-    });
+    await sendNotifications(
+        "comment_reply",
+        [commentAuthorPrivate],
+        sanitizeObjectForJSON({
+            circle,
+            user: replier,
+            post,
+            comment: reply,
+            postId: post._id?.toString(),
+            commentId: parentComment._id?.toString(),
+        }),
+    );
 }
 
 /**
@@ -342,18 +367,25 @@ async function notifyParentItemComment(post: Post, comment: Comment, commenter: 
 
     // Send notification (reuse post_comment type, but payload indicates parent item)
     console.log(`🔔 [NOTIFY] Sending ${itemType}_comment notification to ${recipients.length} recipients`);
-    await sendNotifications("post_comment", recipients, {
-        circle,
-        user: commenter, // The user who commented
-        post, // The shadow post (contains parentItemId, parentItemType)
-        comment,
-        // Populate specific fields based on itemType for sendNotifications payload
-        ...(itemType === "goal" && { goalId: itemId, goalTitle: (parentItem as GoalDisplay).title }),
-        ...(itemType === "task" && { taskId: itemId, taskTitle: (parentItem as TaskDisplay).title }),
-        ...(itemType === "issue" && { issueId: itemId, issueTitle: (parentItem as IssueDisplay).title }),
-        ...(itemType === "proposal" && { proposalId: itemId, proposalName: (parentItem as ProposalDisplay).name }),
-        postId: post._id?.toString(), // Keep postId as fallback/context
-    });
+    await sendNotifications(
+        "post_comment",
+        recipients,
+        sanitizeObjectForJSON({
+            circle,
+            user: commenter, // The user who commented
+            post, // The shadow post (contains parentItemId, parentItemType)
+            comment,
+            // Populate specific fields based on itemType for sendNotifications payload
+            ...(itemType === "goal" && { goalId: itemId, goalTitle: (parentItem as GoalDisplay).title }),
+            ...(itemType === "task" && { taskId: itemId, taskTitle: (parentItem as TaskDisplay).title }),
+            ...(itemType === "issue" && { issueId: itemId, issueTitle: (parentItem as IssueDisplay).title }),
+            ...(itemType === "proposal" && {
+                proposalId: itemId,
+                proposalName: (parentItem as ProposalDisplay).name,
+            }),
+            postId: post._id?.toString(), // Keep postId as fallback/context
+        }),
+    );
 }
 
 /**
@@ -461,19 +493,26 @@ async function notifyParentItemCommentReply(
 
     // Send notification (reuse comment_reply type, but payload indicates parent item)
     console.log(`🔔 [NOTIFY] Sending ${itemType}_comment_reply notification to ${recipients.length} recipients`);
-    await sendNotifications("comment_reply", recipients, {
-        circle,
-        user: replier, // The user who replied
-        post, // The shadow post
-        comment: reply, // The reply itself
-        // Populate specific fields based on itemType for sendNotifications payload
-        ...(itemType === "goal" && { goalId: itemId, goalTitle: (parentItem as GoalDisplay).title }),
-        ...(itemType === "task" && { taskId: itemId, taskTitle: (parentItem as TaskDisplay).title }),
-        ...(itemType === "issue" && { issueId: itemId, issueTitle: (parentItem as IssueDisplay).title }),
-        ...(itemType === "proposal" && { proposalId: itemId, proposalName: (parentItem as ProposalDisplay).name }),
-        postId: post._id?.toString(), // Keep postId as fallback/context
-        commentId: parentComment._id?.toString(), // ID of the comment being replied to
-    });
+    await sendNotifications(
+        "comment_reply",
+        recipients,
+        sanitizeObjectForJSON({
+            circle,
+            user: replier, // The user who replied
+            post, // The shadow post
+            comment: reply, // The reply itself
+            // Populate specific fields based on itemType for sendNotifications payload
+            ...(itemType === "goal" && { goalId: itemId, goalTitle: (parentItem as GoalDisplay).title }),
+            ...(itemType === "task" && { taskId: itemId, taskTitle: (parentItem as TaskDisplay).title }),
+            ...(itemType === "issue" && { issueId: itemId, issueTitle: (parentItem as IssueDisplay).title }),
+            ...(itemType === "proposal" && {
+                proposalId: itemId,
+                proposalName: (parentItem as ProposalDisplay).name,
+            }),
+            postId: post._id?.toString(), // Keep postId as fallback/context
+            commentId: parentComment._id?.toString(), // ID of the comment being replied to
+        }),
+    );
 }
 
 /**
@@ -496,13 +535,17 @@ export async function notifyPostLike(postId: string, reactor: Circle, reactionTy
     let circle = await getCircleById(feed?.circleId!);
 
     // Send notification
-    await sendNotifications("post_like", [postAuthorPrivate], {
-        circle,
-        user: reactor,
-        post,
-        reaction: reactionType,
-        postId: post._id?.toString(),
-    });
+    await sendNotifications(
+        "post_like",
+        [postAuthorPrivate],
+        sanitizeObjectForJSON({
+            circle,
+            user: reactor,
+            post,
+            reaction: reactionType,
+            postId: post._id?.toString(),
+        }),
+    );
 }
 
 /**
@@ -559,16 +602,20 @@ export async function notifyCommentLike(
     // --- End parent item check ---
 
     // Send notification
-    await sendNotifications("comment_like", [commentAuthorPrivate], {
-        circle,
-        user: reactor,
-        post,
-        comment,
-        reaction: reactionType,
-        postId: post._id?.toString(),
-        commentId: comment._id?.toString(),
-        ...parentItemPayload, // Spread the parent item details into the payload
-    });
+    await sendNotifications(
+        "comment_like",
+        [commentAuthorPrivate],
+        sanitizeObjectForJSON({
+            circle,
+            user: reactor,
+            post,
+            comment,
+            reaction: reactionType,
+            postId: post._id?.toString(),
+            commentId: comment._id?.toString(),
+            ...parentItemPayload, // Spread the parent item details into the payload
+        }),
+    );
 }
 
 /**
@@ -594,12 +641,16 @@ export async function notifyPostMentions(post: Post, author: Circle, mentionedCi
     let circle = await getCircleById(feed?.circleId!);
 
     // Send notifications to all mentioned users
-    await sendNotifications("post_mention", mentionedUserPrivates, {
-        circle,
-        user: author,
-        post,
-        postId: post._id?.toString(),
-    });
+    await sendNotifications(
+        "post_mention",
+        mentionedUserPrivates,
+        sanitizeObjectForJSON({
+            circle,
+            user: author,
+            post,
+            postId: post._id?.toString(),
+        }),
+    );
 }
 
 /**
@@ -667,15 +718,19 @@ export async function notifyCommentMentions(
     // --- End parent item check ---
 
     // Send notifications to all mentioned users
-    await sendNotifications("comment_mention", mentionedUserPrivates, {
-        circle,
-        user: author,
-        post,
-        comment,
-        postId: post._id?.toString(),
-        commentId: comment._id?.toString(),
-        ...parentItemPayloadMention, // Spread the parent item details into the payload
-    });
+    await sendNotifications(
+        "comment_mention",
+        mentionedUserPrivates,
+        sanitizeObjectForJSON({
+            circle,
+            user: author,
+            post,
+            comment,
+            postId: post._id?.toString(),
+            commentId: comment._id?.toString(),
+            ...parentItemPayloadMention, // Spread the parent item details into the payload
+        }),
+    );
 }
 
 // --- Proposal Notifications ---
@@ -727,12 +782,16 @@ export async function notifyProposalSubmittedForReview(proposal: ProposalDisplay
         }
 
         console.log(`🔔 [NOTIFY] Sending proposal_submitted_for_review to ${reviewerUserPrivates.length} reviewers`);
-        await sendNotifications("proposal_submitted_for_review", reviewerUserPrivates, {
-            circle,
-            user: submitter, // The user who triggered the notification (submitter)
-            proposalId: proposal._id?.toString(),
-            proposalName: proposal.name,
-        });
+        await sendNotifications(
+            "proposal_submitted_for_review",
+            reviewerUserPrivates,
+            sanitizeObjectForJSON({
+                circle,
+                user: submitter, // The user who triggered the notification (submitter)
+                proposalId: proposal._id?.toString(),
+                proposalName: proposal.name,
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyProposalSubmittedForReview:", error);
     }
@@ -769,12 +828,16 @@ export async function notifyProposalMovedToVoting(proposal: ProposalDisplay, app
         }
 
         console.log(`🔔 [NOTIFY] Sending proposal_moved_to_voting to ${voterUserPrivates.length} voters`);
-        await sendNotifications("proposal_moved_to_voting", voterUserPrivates, {
-            circle,
-            user: approver, // The user who triggered the notification (approver)
-            proposalId: proposal._id?.toString(),
-            proposalName: proposal.name,
-        });
+        await sendNotifications(
+            "proposal_moved_to_voting",
+            voterUserPrivates,
+            sanitizeObjectForJSON({
+                circle,
+                user: approver, // The user who triggered the notification (approver)
+                proposalId: proposal._id?.toString(),
+                proposalName: proposal.name,
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyProposalMovedToVoting:", error);
     }
@@ -806,12 +869,16 @@ export async function notifyProposalApprovedForVoting(proposal: ProposalDisplay,
         if (!circle) return;
 
         console.log("🔔 [NOTIFY] Sending proposal_approved_for_voting to author:", author.name);
-        await sendNotifications("proposal_approved_for_voting", [author], {
-            circle,
-            user: approver, // The user who triggered the notification (approver)
-            proposalId: proposal._id?.toString(),
-            proposalName: proposal.name,
-        });
+        await sendNotifications(
+            "proposal_approved_for_voting",
+            [author],
+            sanitizeObjectForJSON({
+                circle,
+                user: approver, // The user who triggered the notification (approver)
+                proposalId: proposal._id?.toString(),
+                proposalName: proposal.name,
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyProposalApprovedForVoting:", error);
     }
@@ -865,15 +932,19 @@ export async function notifyProposalResolvedAuthor(proposal: ProposalDisplay, re
         const message = formatProposalResolutionMessage(proposal, "Your proposal");
 
         console.log("🔔 [NOTIFY] Sending proposal_resolved to author:", author.name);
-        await sendNotifications("proposal_resolved", [author], {
-            circle,
-            user: resolver, // The user who triggered the notification (resolver)
-            proposalId: proposal._id?.toString(),
-            proposalName: proposal.name,
-            proposalOutcome: proposal.outcome,
-            proposalResolvedAtStage: proposal.resolvedAtStage,
-            messageBody: message, // Send pre-formatted message
-        });
+        await sendNotifications(
+            "proposal_resolved",
+            [author],
+            sanitizeObjectForJSON({
+                circle,
+                user: resolver, // The user who triggered the notification (resolver)
+                proposalId: proposal._id?.toString(),
+                proposalName: proposal.name,
+                proposalOutcome: proposal.outcome,
+                proposalResolvedAtStage: proposal.resolvedAtStage,
+                messageBody: message, // Send pre-formatted message
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyProposalResolvedAuthor:", error);
     }
@@ -913,15 +984,19 @@ export async function notifyProposalResolvedVoters(proposal: ProposalDisplay, re
         const message = formatProposalResolutionMessage(proposal, "The proposal");
 
         console.log(`🔔 [NOTIFY] Sending proposal_resolved_voter to ${voterUserPrivates.length} voters`);
-        await sendNotifications("proposal_resolved_voter", voterUserPrivates, {
-            circle,
-            user: resolver, // The user who triggered the notification (resolver)
-            proposalId: proposal._id?.toString(),
-            proposalName: proposal.name,
-            proposalOutcome: proposal.outcome,
-            proposalResolvedAtStage: proposal.resolvedAtStage,
-            messageBody: message, // Send pre-formatted message
-        });
+        await sendNotifications(
+            "proposal_resolved_voter",
+            voterUserPrivates,
+            sanitizeObjectForJSON({
+                circle,
+                user: resolver, // The user who triggered the notification (resolver)
+                proposalId: proposal._id?.toString(),
+                proposalName: proposal.name,
+                proposalOutcome: proposal.outcome,
+                proposalResolvedAtStage: proposal.resolvedAtStage,
+                messageBody: message, // Send pre-formatted message
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyProposalResolvedVoters:", error);
     }
@@ -953,12 +1028,16 @@ export async function notifyProposalVote(proposal: ProposalDisplay, voter: Circl
         if (!circle) return;
 
         console.log("🔔 [NOTIFY] Sending proposal_vote to author:", author.name);
-        await sendNotifications("proposal_vote", [author], {
-            circle,
-            user: voter, // The user who triggered the notification (voter)
-            proposalId: proposal._id?.toString(),
-            proposalName: proposal.name,
-        });
+        await sendNotifications(
+            "proposal_vote",
+            [author],
+            sanitizeObjectForJSON({
+                circle,
+                user: voter, // The user who triggered the notification (voter)
+                proposalId: proposal._id?.toString(),
+                proposalName: proposal.name,
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyProposalVote:", error);
     }
@@ -1046,13 +1125,17 @@ export async function notifyIssueSubmittedForReview(issue: IssueDisplay, submitt
         }
 
         console.log(`🔔 [NOTIFY] Sending issue_submitted_for_review to ${reviewerUserPrivates.length} reviewers`);
-        await sendNotifications("issue_submitted_for_review", reviewerUserPrivates, {
-            circle,
-            user: submitter, // The user who triggered the notification (submitter)
-            // Pass issue details directly, not nested under 'issue'
-            issueId: issue._id?.toString(),
-            issueTitle: issue.title,
-        });
+        await sendNotifications(
+            "issue_submitted_for_review",
+            reviewerUserPrivates,
+            sanitizeObjectForJSON({
+                circle,
+                user: submitter, // The user who triggered the notification (submitter)
+                // Pass issue details directly, not nested under 'issue'
+                issueId: issue._id?.toString(),
+                issueTitle: issue.title,
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyIssueSubmittedForReview:", error);
     }
@@ -1084,13 +1167,17 @@ export async function notifyIssueApproved(issue: IssueDisplay, approver: Circle)
         if (!circle) return;
 
         console.log("🔔 [NOTIFY] Sending issue_approved to author:", author.name);
-        await sendNotifications("issue_approved", [author], {
-            circle,
-            user: approver, // The user who triggered the notification (approver)
-            // Pass issue details directly
-            issueId: issue._id?.toString(),
-            issueTitle: issue.title,
-        });
+        await sendNotifications(
+            "issue_approved",
+            [author],
+            sanitizeObjectForJSON({
+                circle,
+                user: approver, // The user who triggered the notification (approver)
+                // Pass issue details directly
+                issueId: issue._id?.toString(),
+                issueTitle: issue.title,
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyIssueApproved:", error);
     }
@@ -1116,14 +1203,18 @@ export async function notifyIssueAssigned(issue: IssueDisplay, assigner: Circle,
         if (!circle) return;
 
         console.log("🔔 [NOTIFY] Sending issue_assigned to assignee:", assignee.name);
-        await sendNotifications("issue_assigned", [assignee], {
-            circle,
-            user: assigner, // The user who triggered the notification (assigner)
-            // Pass issue details directly
-            issueId: issue._id?.toString(),
-            issueTitle: issue.title,
-            assigneeName: assignee.name, // Add assignee name for context
-        });
+        await sendNotifications(
+            "issue_assigned",
+            [assignee],
+            sanitizeObjectForJSON({
+                circle,
+                user: assigner, // The user who triggered the notification (assigner)
+                // Pass issue details directly
+                issueId: issue._id?.toString(),
+                issueTitle: issue.title,
+                assigneeName: assignee.name, // Add assignee name for context
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyIssueAssigned:", error);
     }
@@ -1171,15 +1262,19 @@ export async function notifyIssueStatusChanged(
         }
 
         console.log(`🔔 [NOTIFY] Sending issue_status_changed to ${recipients.length} recipients`);
-        await sendNotifications("issue_status_changed", recipients, {
-            circle,
-            user: changer, // The user who triggered the notification (changer)
-            // Pass issue details directly
-            issueId: issue._id?.toString(),
-            issueTitle: issue.title,
-            issueOldStage: oldStage,
-            issueNewStage: issue.stage,
-        });
+        await sendNotifications(
+            "issue_status_changed",
+            recipients,
+            sanitizeObjectForJSON({
+                circle,
+                user: changer, // The user who triggered the notification (changer)
+                // Pass issue details directly
+                issueId: issue._id?.toString(),
+                issueTitle: issue.title,
+                issueOldStage: oldStage,
+                issueNewStage: issue.stage,
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyIssueStatusChanged:", error);
     }
@@ -1218,14 +1313,18 @@ export async function notifyTaskSubmittedForReview(task: TaskDisplay, submitter:
         }
 
         console.log(`🔔 [NOTIFY] Sending task_submitted_for_review to ${reviewerUserPrivates.length} reviewers`); // Updated message
-        await sendNotifications("task_submitted_for_review", reviewerUserPrivates, {
-            // Updated notification type
-            circle,
-            user: submitter, // The user who triggered the notification (submitter)
-            // Pass task details directly
-            taskId: task._id?.toString(), // Renamed property
-            taskTitle: task.title, // Renamed property
-        });
+        await sendNotifications(
+            "task_submitted_for_review",
+            reviewerUserPrivates,
+            sanitizeObjectForJSON({
+                // Updated notification type
+                circle,
+                user: submitter, // The user who triggered the notification (submitter)
+                // Pass task details directly
+                taskId: task._id?.toString(), // Renamed property
+                taskTitle: task.title, // Renamed property
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskSubmittedForReview:", error); // Updated message
     }
@@ -1259,14 +1358,18 @@ export async function notifyTaskApproved(task: TaskDisplay, approver: Circle): P
         if (!circle) return;
 
         console.log("🔔 [NOTIFY] Sending task_approved to author:", author.name); // Updated message
-        await sendNotifications("task_approved", [author], {
-            // Updated notification type
-            circle,
-            user: approver, // The user who triggered the notification (approver)
-            // Pass task details directly
-            taskId: task._id?.toString(), // Renamed property
-            taskTitle: task.title, // Renamed property
-        });
+        await sendNotifications(
+            "task_approved",
+            [author],
+            sanitizeObjectForJSON({
+                // Updated notification type
+                circle,
+                user: approver, // The user who triggered the notification (approver)
+                // Pass task details directly
+                taskId: task._id?.toString(), // Renamed property
+                taskTitle: task.title, // Renamed property
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskApproved:", error); // Updated message
     }
@@ -1294,15 +1397,19 @@ export async function notifyTaskAssigned(task: TaskDisplay, assigner: Circle, as
         if (!circle) return;
 
         console.log("🔔 [NOTIFY] Sending task_assigned to assignee:", assignee.name); // Updated message
-        await sendNotifications("task_assigned", [assignee], {
-            // Updated notification type
-            circle,
-            user: assigner, // The user who triggered the notification (assigner)
-            // Pass task details directly
-            taskId: task._id?.toString(), // Renamed property
-            taskTitle: task.title, // Renamed property
-            assigneeName: assignee.name, // Add assignee name for context
-        });
+        await sendNotifications(
+            "task_assigned",
+            [assignee],
+            sanitizeObjectForJSON({
+                // Updated notification type
+                circle,
+                user: assigner, // The user who triggered the notification (assigner)
+                // Pass task details directly
+                taskId: task._id?.toString(), // Renamed property
+                taskTitle: task.title, // Renamed property
+                assigneeName: assignee.name, // Add assignee name for context
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskAssigned:", error); // Updated message
     }
@@ -1351,16 +1458,20 @@ export async function notifyTaskStatusChanged( // Renamed function
         }
 
         console.log(`🔔 [NOTIFY] Sending task_status_changed to ${recipients.length} recipients`); // Updated message
-        await sendNotifications("task_status_changed", recipients, {
-            // Updated notification type
-            circle,
-            user: changer, // The user who triggered the notification (changer)
-            // Pass task details directly
-            taskId: task._id?.toString(), // Renamed property
-            taskTitle: task.title, // Renamed property
-            taskOldStage: oldStage, // Renamed property
-            taskNewStage: task.stage, // Renamed property
-        });
+        await sendNotifications(
+            "task_status_changed",
+            recipients,
+            sanitizeObjectForJSON({
+                // Updated notification type
+                circle,
+                user: changer, // The user who triggered the notification (changer)
+                // Pass task details directly
+                taskId: task._id?.toString(), // Renamed property
+                taskTitle: task.title, // Renamed property
+                taskOldStage: oldStage, // Renamed property
+                taskNewStage: task.stage, // Renamed property
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskStatusChanged:", error); // Updated message
     }
@@ -1399,14 +1510,18 @@ export async function notifyGoalSubmittedForReview(goal: GoalDisplay, submitter:
         }
 
         console.log(`🔔 [NOTIFY] Sending goal_submitted_for_review to ${reviewerUserPrivates.length} reviewers`); // Updated message
-        await sendNotifications("goal_submitted_for_review", reviewerUserPrivates, {
-            // Updated notification type
-            circle,
-            user: submitter, // The user who triggered the notification (submitter)
-            // Pass goal details directly
-            goalId: goal._id?.toString(), // Renamed property
-            goalTitle: goal.title, // Renamed property
-        });
+        await sendNotifications(
+            "goal_submitted_for_review",
+            reviewerUserPrivates,
+            sanitizeObjectForJSON({
+                // Updated notification type
+                circle,
+                user: submitter, // The user who triggered the notification (submitter)
+                // Pass goal details directly
+                goalId: goal._id?.toString(), // Renamed property
+                goalTitle: goal.title, // Renamed property
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyGoalSubmittedForReview:", error); // Updated message
     }
@@ -1440,14 +1555,18 @@ export async function notifyGoalApproved(goal: GoalDisplay, approver: Circle): P
         if (!circle) return;
 
         console.log("🔔 [NOTIFY] Sending goal_approved to author:", author.name); // Updated message
-        await sendNotifications("goal_approved", [author], {
-            // Updated notification type
-            circle,
-            user: approver, // The user who triggered the notification (approver)
-            // Pass goal details directly
-            goalId: goal._id?.toString(), // Renamed property
-            goalTitle: goal.title, // Renamed property
-        });
+        await sendNotifications(
+            "goal_approved",
+            [author],
+            sanitizeObjectForJSON({
+                // Updated notification type
+                circle,
+                user: approver, // The user who triggered the notification (approver)
+                // Pass goal details directly
+                goalId: goal._id?.toString(), // Renamed property
+                goalTitle: goal.title, // Renamed property
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyGoalApproved:", error); // Updated message
     }
@@ -1487,16 +1606,20 @@ export async function notifyGoalStatusChanged( // Renamed function
         }
 
         console.log(`🔔 [NOTIFY] Sending goal_status_changed to ${recipients.length} recipients`); // Updated message
-        await sendNotifications("goal_status_changed", recipients, {
-            // Updated notification type
-            circle,
-            user: changer, // The user who triggered the notification (changer)
-            // Pass goal details directly
-            goalId: goal._id?.toString(), // Renamed property
-            goalTitle: goal.title, // Renamed property
-            goalOldStage: oldStage, // Renamed property
-            goalNewStage: goal.stage, // Renamed property
-        });
+        await sendNotifications(
+            "goal_status_changed",
+            recipients,
+            sanitizeObjectForJSON({
+                // Updated notification type
+                circle,
+                user: changer, // The user who triggered the notification (changer)
+                // Pass goal details directly
+                goalId: goal._id?.toString(), // Renamed property
+                goalTitle: goal.title, // Renamed property
+                goalOldStage: oldStage, // Renamed property
+                goalNewStage: goal.stage, // Renamed property
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyGoalStatusChanged:", error); // Updated message
     }
@@ -1535,16 +1658,20 @@ export async function notifyGoalCompleted(goal: GoalDisplay, completer: Circle):
         }
 
         console.log(`🔔 [NOTIFY] Sending goal_completed to ${recipients.length} followers`);
-        await sendNotifications("goal_completed", recipients, {
-            circle,
-            user: completer, // The user who completed the goal
-            goalId: goal._id?.toString(),
-            goalTitle: goal.title,
-            goalResultSummary: goal.resultSummary, // Add result summary for context
-            // The link in the notification should ideally go to the goal's result display/post
-            // This might require the resultPostId to be part of the payload or handled by the client
-            resultPostId: goal.resultPostId,
-        });
+        await sendNotifications(
+            "goal_completed",
+            recipients,
+            sanitizeObjectForJSON({
+                circle,
+                user: completer, // The user who completed the goal
+                goalId: goal._id?.toString(),
+                goalTitle: goal.title,
+                goalResultSummary: goal.resultSummary, // Add result summary for context
+                // The link in the notification should ideally go to the goal's result display/post
+                // This might require the resultPostId to be part of the payload or handled by the client
+                resultPostId: goal.resultPostId,
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyGoalCompleted:", error);
     }
@@ -1600,14 +1727,18 @@ export async function notifyProposalToGoal(
         }
 
         console.log(`🔔 [NOTIFY] Sending proposal_to_goal to ${recipients.length} users`);
-        await sendNotifications("proposal_to_goal", recipients, {
-            circle,
-            user: actor, // The user who converted the proposal
-            proposalId: proposal._id?.toString(),
-            proposalName: proposal.name,
-            goalId: newGoal._id?.toString(),
-            goalTitle: newGoal.title,
-        });
+        await sendNotifications(
+            "proposal_to_goal",
+            recipients,
+            sanitizeObjectForJSON({
+                circle,
+                user: actor, // The user who converted the proposal
+                proposalId: proposal._id?.toString(),
+                proposalName: proposal.name,
+                goalId: newGoal._id?.toString(),
+                goalTitle: newGoal.title,
+            }),
+        );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyProposalToGoal:", error);
     }
