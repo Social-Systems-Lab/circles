@@ -23,6 +23,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { MoreHorizontal } from "lucide-react";
+import Link from "next/link";
+import { VerifyAccountButton } from "../auth/verify-account-button";
 
 type HomeContentProps = {
     circle: Circle;
@@ -131,6 +133,22 @@ export default function HomeContent({ circle, authorizedToEdit }: HomeContentPro
                                 circle.name
                             )}
                         </h4>
+                        <div className="flex items-center gap-2 pt-1">
+                            {circle.isMember ? (
+                                <Link href={`/circles/${circle.handle}/settings/subscription`}>
+                                    <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+                                        <img
+                                            src="/images/member-badge.png"
+                                            alt="Member Badge"
+                                            className="mr-1 h-4 w-4"
+                                        />
+                                        Founding Member
+                                    </span>
+                                </Link>
+                            ) : (
+                                <VerifyAccountButton />
+                            )}
+                        </div>
                         {(circle.description || circle.mission) && (
                             <div className="line-clamp-1 pb-1 text-gray-600">
                                 {authorizedToEdit ? (

@@ -82,6 +82,7 @@ import { over, set } from "lodash";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import RichText from "./RichText";
+import UserBadge from "../users/user-badge";
 import { motion } from "framer-motion";
 import { ListFilter } from "@/components/utils/list-filter";
 import { useRouter } from "next/navigation";
@@ -723,7 +724,7 @@ export const PostItem = ({
                                         handleAuthorClick(post.author);
                                     }}
                                 >
-                                    {post.author?.name}
+                                    <UserBadge user={post.author} />
                                     {userGroupName && (
                                         <Badge variant="secondary" className="ml-2">
                                             {userGroupName}
@@ -1332,7 +1333,7 @@ const CommentItem = ({
                                     className="cursor-pointer text-sm font-semibold"
                                     onClick={() => handleAuthorClick(comment.author)}
                                 >
-                                    {comment.author.name}
+                                    <UserBadge user={comment.author} />
                                 </div>
                                 {isEditing ? (
                                     <>

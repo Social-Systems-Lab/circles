@@ -492,6 +492,8 @@ export async function getPostsFromMultipleFeeds(
                     description: "$authorDetails.description",
                     images: "$authorDetails.images",
                     handle: "$authorDetails.handle",
+                    isVerified: "$authorDetails.isVerified",
+                    isMember: "$authorDetails.isMember",
                 },
 
                 userReaction: { $arrayElemAt: ["$userReaction.reactionType", 0] },
@@ -886,6 +888,8 @@ export const getPosts = async (
                     description: "$authorDetails.description",
                     images: "$authorDetails.images",
                     handle: "$authorDetails.handle",
+                    isVerified: "$authorDetails.isVerified",
+                    isMember: "$authorDetails.isMember",
                 },
                 userReaction: { $arrayElemAt: ["$userReaction.reactionType", 0] },
 
