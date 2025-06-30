@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Circle } from "@/models/models";
 import Image from "next/image";
+import { useToast } from "@/components/ui/use-toast";
 
 export default function SubscriptionForm({
     circle: user,
@@ -107,8 +108,10 @@ export default function SubscriptionForm({
                                 open={showDonorbox}
                                 onOpenChange={(isOpen) => {
                                     setShowDonorbox(isOpen);
-                                    if (!isOpen && onDialogClose) {
-                                        onDialogClose();
+                                    if (!isOpen) {
+                                        if (onDialogClose) {
+                                            onDialogClose();
+                                        }
                                     }
                                 }}
                             >
