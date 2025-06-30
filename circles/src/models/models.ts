@@ -894,7 +894,8 @@ export type NotificationType =
     | "PROPOSALS_ALL" // Covers all proposal notifications
     | "ISSUES_ALL" // Covers all issue notifications
     | "TASKS_ALL" // Covers all task notifications AND ranking_stale_reminder, ranking_grace_period_ended
-    | "GOALS_ALL"; // Covers all goal notifications
+    | "GOALS_ALL" // Covers all goal notifications
+    | "ACCOUNT_ALL";
 
 // Helper array for NotificationType values
 // Note: Granular types are kept for backend sending logic, but UI will use summary types.
@@ -944,6 +945,7 @@ export const notificationTypeValues = [
     "ISSUES_ALL",
     "TASKS_ALL",
     "GOALS_ALL",
+    "ACCOUNT_ALL",
 ] as const;
 
 export const notificationTypeSchema = z.enum(notificationTypeValues);
