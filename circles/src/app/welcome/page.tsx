@@ -35,7 +35,7 @@ export default function KamooniLandingPage() {
     return (
         <div
             className={cn(
-                "text-kam-gray-dark flex min-h-screen flex-col bg-white",
+                "flex min-h-screen flex-col bg-white text-kam-gray-dark",
                 montserrat.variable,
                 notoSerif.variable,
             )}
@@ -52,18 +52,18 @@ export default function KamooniLandingPage() {
                             className="h-8 w-auto transition-opacity duration-150 group-hover:opacity-80 sm:h-10"
                         />
                         <div className="ml-2 transition-opacity duration-150 group-hover:opacity-80">
-                            <span className="text-kam-gray-dark text-xl font-semibold">Kamooni</span>
-                            <span className="text-kam-gray-dark/70 -mt-1 block text-xs">the social impact network</span>
+                            <span className="text-xl font-semibold text-kam-gray-dark">Kamooni</span>
+                            <span className="-mt-1 block text-xs text-kam-gray-dark/70">the social impact network</span>
                         </div>
                     </Link>
-                    <Button className="bg-kam-button-red-orange hover:bg-kam-button-red-orange/90 px-4 py-2 text-sm text-white">
+                    <Button className="bg-kam-button-red-orange px-4 py-2 text-sm text-white hover:bg-kam-button-red-orange/90">
                         Login/Join
                     </Button>
                 </div>
             </header>
 
             {/* Hero Section */}
-            <section className="bg-kam-hero-yellow relative overflow-hidden py-16 text-center sm:py-24">
+            <section className="relative overflow-hidden bg-kam-hero-yellow py-16 text-center sm:py-24">
                 {/* Background Flowers */}
                 <div
                     className="pointer-events-none absolute -left-[80px] -top-[60px] h-[300px] w-[300px] rotate-12 transform opacity-60 
@@ -104,7 +104,7 @@ export default function KamooniLandingPage() {
                     <p className="mb-8 text-xl text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)] sm:text-2xl">
                         No Ads. No Big Tech. Ethical and Open-Source
                     </p>
-                    <Button className="bg-kam-button-red-orange hover:bg-kam-button-red-orange/90 mb-4 px-8 py-3 text-lg text-white">
+                    <Button className="mb-4 bg-kam-button-red-orange px-8 py-3 text-lg text-white hover:bg-kam-button-red-orange/90">
                         Test Pilot Signup <ChevronRight className="ml-2 h-5 w-5" />
                     </Button>
                 </div>
@@ -113,20 +113,23 @@ export default function KamooniLandingPage() {
             {/* Most networks distract */}
             <section className="bg-white py-12 sm:py-20">
                 <div className="container mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-                    <h2 className="text-kam-gray-dark mb-6 text-center text-3xl font-bold sm:text-4xl">
-                        Most social media distracts. <span className="text-kam-yellow block">We connect.</span>
+                    <h2 className="mb-6 text-center text-3xl font-bold text-kam-gray-dark sm:text-4xl">
+                        Most social media distracts. <span className="block text-kam-yellow">We connect.</span>
                     </h2>
                     <div className="text-left">
-                        <p className="text-kam-gray-dark/80 mb-4 text-lg leading-relaxed">
-                            In a world full of noise, disconnection, and doomscrolling, we offer something different.
-                            Changemakers need more than likes and shares. They need real-world impact. They need
-                            funding. They need resources. But, most of all, they need each other. Kamooni is designed
-                            and built to help us find each other and get things done together.
+                        <p className="mb-4 text-lg leading-relaxed text-kam-gray-dark/80">
+                            In a world full of noise, disconnection, and shallow engagement, Changemakers need more than
+                            likes and comment threads. They need tools to collaborate, build trust, and make real-world
+                            impact. They need funding. They need resources. But, most of all, they need each other. They
+                            need a community.
+                        </p>
+                        <p className="text-lg leading-relaxed text-kam-gray-dark/80">
+                            Kamooni is designed and built to help us find each other and get things done together.
                         </p>
                         <div className="mt-8 text-center">
                             <Button
                                 variant="outline"
-                                className="border-kam-button-red-orange text-kam-button-red-orange hover:bg-kam-button-red-orange text-md px-6 py-2 hover:text-white"
+                                className="text-md border-kam-button-red-orange px-6 py-2 text-kam-button-red-orange hover:bg-kam-button-red-orange hover:text-white"
                             >
                                 13 Reasons to Join
                             </Button>
@@ -138,25 +141,28 @@ export default function KamooniLandingPage() {
             {/* Tools for Transformation */}
             <section className="bg-kam-hero-yellow py-12 sm:py-20">
                 <div className="container mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-                    <h2 className="text-kam-gray-dark mb-6 text-center text-3xl font-bold sm:text-4xl">
+                    <h2 className="mb-6 text-center text-3xl font-bold text-kam-gray-dark sm:text-4xl">
                         Tools for Transformation
                     </h2>
                     <div className="text-left">
-                        <p className="text-kam-gray-dark mb-4 text-lg leading-relaxed">
-                            Kamooni is designed for autonomy, empowerment, collaboration and action: we provide a unique
-                            combination of tools for individuals, projects, and teams, and a map-based interface to find
-                            and connect with people doing complementary work nearby. This includes tools for governance,
-                            decision-making, community organizing, a research & systems thinking work bench, and ways to
-                            share skills, time, volunteer and material assets.
+                        <p className="mb-4 text-lg leading-relaxed text-kam-gray-dark">
+                            Kamooni is designed for autonomy, empowerment, collaboration and action. We provide a
+                            mission-based, customizable profile page, tools to create and manage communities, projects,
+                            and teams, and a map-based interface to find and connect with people doing meaningful work
+                            across the globe. We are also developing a new kind of trust system built on contributions,
+                            not popularity, and new tools for governance and profit sharing. We are also integrating a
+                            crowdfunding feature that lets you accept not only money but also volunteers and material
+                            assets.
                         </p>
-                        <p className="text-kam-gray-dark mb-8 text-lg leading-relaxed">
-                            <span className="font-semibold">We are currently in Test Pilot phase.</span> We are still
-                            shaping this thing together with our founding members. If you are a changemaker, a community
-                            organizer, a researcher, a systems thinker: come look. Help us shape Kamooni with you and
-                            for you.
+                        <p className="mb-8 text-lg leading-relaxed text-kam-gray-dark">
+                            That said, Kamooni is currently in its{" "}
+                            <span className="font-semibold">Test Pilot phase</span>. We’re still shaping this
+                            thing—carefully, collaboratively. If you’re an activist, a project steward, a volunteer, a
+                            community organizer, a researcher, a systems thinker, we’d love to shape Kamooni with you
+                            and for you.
                         </p>
                         <div className="mt-8 text-center">
-                            <Button className="bg-kam-button-red-orange hover:bg-kam-button-red-orange/90 px-8 py-3 text-lg text-white">
+                            <Button className="bg-kam-button-red-orange px-8 py-3 text-lg text-white hover:bg-kam-button-red-orange/90">
                                 Test Pilot Signup <ChevronRight className="ml-2 h-5 w-5" />
                             </Button>
                         </div>
@@ -167,14 +173,14 @@ export default function KamooniLandingPage() {
             {/* Who Dis? */}
             <section className="bg-white py-12 sm:py-20">
                 <div className="container mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-                    <h2 className="text-kam-gray-dark mb-6 text-center text-3xl font-bold sm:text-4xl">Who Dis?</h2>
+                    <h2 className="mb-6 text-center text-3xl font-bold text-kam-gray-dark sm:text-4xl">Who Dis?</h2>
                     <div className="text-left">
-                        <p className="text-kam-gray-dark/80 mb-4 text-lg leading-relaxed">
+                        <p className="mb-4 text-lg leading-relaxed text-kam-gray-dark/80">
                             We&apos;re a small, independent, not-for-profit called the{" "}
                             <span className="font-semibold">Social Systems Foundation</span>, and supported by the
                             community we serve.
                         </p>
-                        <p className="text-kam-gray-dark/80 mb-8 text-lg leading-relaxed">
+                        <p className="mb-8 text-lg leading-relaxed text-kam-gray-dark/80">
                             No VCs. No corporate funding. No ads. No extractive growth. 100% organic free-range,
                             grass-fed, non-GMO, gluten-free, cruelty-free, community-governed good. If that resonates,
                             you&apos;re already one of us. Come say hi.
@@ -182,7 +188,7 @@ export default function KamooniLandingPage() {
                         <div className="mt-8 text-center">
                             <Button
                                 variant="outline"
-                                className="border-kam-button-red-orange text-kam-button-red-orange hover:bg-kam-button-red-orange text-md px-6 py-2 hover:text-white"
+                                className="text-md border-kam-button-red-orange px-6 py-2 text-kam-button-red-orange hover:bg-kam-button-red-orange hover:text-white"
                             >
                                 Meet the team
                             </Button>
@@ -194,35 +200,35 @@ export default function KamooniLandingPage() {
             {/* Wait, no ads... */}
             <section className="bg-kam-hero-yellow py-12 sm:py-20">
                 <div className="container mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-                    <h2 className="text-kam-gray-dark mb-6 text-center text-3xl font-bold sm:text-4xl">
+                    <h2 className="mb-6 text-center text-3xl font-bold text-kam-gray-dark sm:text-4xl">
                         Wait, no ads... <span className="block text-white">Who is paying for this?</span>
                     </h2>
                     <div className="text-left">
-                        <p className="text-kam-gray-dark mb-4 text-lg leading-relaxed">
+                        <p className="mb-4 text-lg leading-relaxed text-kam-gray-dark">
                             You are. But not in a sneaky way, in an up-front way. If our calculations pan out, as long
                             as enough people become founding members, we can keep Kamooni free for everyone to use,
                             forever. We call this <span className="font-semibold">Community-Supported Software</span>.
                         </p>
-                        <p className="text-kam-gray-dark mb-4 text-lg leading-relaxed">
+                        <p className="mb-4 text-lg leading-relaxed text-kam-gray-dark">
                             But there is more to this story. As a member you get a vote on how the community is run. And
                             the platform is designed to help you create, organize, and manage your own projects and
                             communities, with tools for funding, governance, and resource sharing.
                         </p>
-                        <p className="text-kam-gray-dark mb-8 text-lg leading-relaxed">
+                        <p className="mb-8 text-lg leading-relaxed text-kam-gray-dark">
                             Our ultimate goal however, is for Kamooni to become fully distributed with our open source
                             technology, so that any community can run their own instance, completely independently from
                             us. If you like what we&apos;re doing and want to help us share the load with us, join the
                             tribe as a Founding Member for €5 per month.
                         </p>
                         <div className="mt-8 flex flex-col items-center space-y-4 text-center">
-                            <Button className="bg-kam-button-red-orange hover:bg-kam-button-red-orange/90 w-full px-8 py-3 text-lg text-white sm:w-auto">
+                            <Button className="w-full bg-kam-button-red-orange px-8 py-3 text-lg text-white hover:bg-kam-button-red-orange/90 sm:w-auto">
                                 Become a Founding Member
                             </Button>
                             <Button
                                 variant="link"
-                                className="text-kam-button-red-orange hover:text-kam-button-red-orange/80 w-full sm:w-auto"
+                                className="w-full text-kam-button-red-orange hover:text-kam-button-red-orange/80 sm:w-auto"
                             >
-                                Lifetink I need a bit more convincing...
+                                I think I need a bit more convincing...
                             </Button>
                         </div>
                     </div>
@@ -232,11 +238,11 @@ export default function KamooniLandingPage() {
             {/* This sounds great! */}
             <section className="bg-white py-12 sm:py-20">
                 <div className="container mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-                    <h2 className="text-kam-gray-dark mb-6 text-center text-3xl font-bold sm:text-4xl">
-                        This sounds great! <span className="text-kam-yellow block">How can I help?</span>
+                    <h2 className="mb-6 text-center text-3xl font-bold text-kam-gray-dark sm:text-4xl">
+                        This sounds great! <span className="block text-kam-yellow">How can I help?</span>
                     </h2>
                     <div className="text-left">
-                        <p className="text-kam-gray-dark/80 mb-8 text-lg leading-relaxed">
+                        <p className="mb-8 text-lg leading-relaxed text-kam-gray-dark/80">
                             Thanks! We&apos;re pretty pleased with it. If we say so ourselves. But we could definitely
                             use a hand. We always need help with coding, design, testing, community organizing, and just
                             generally spreading the word. If you&apos;ve got some spare cycles and want to help us build
@@ -246,7 +252,7 @@ export default function KamooniLandingPage() {
                         <div className="mt-8 text-center">
                             <Button
                                 variant="outline"
-                                className="border-kam-button-red-orange text-kam-button-red-orange hover:bg-kam-button-red-orange text-md px-6 py-2 hover:text-white"
+                                className="text-md border-kam-button-red-orange px-6 py-2 text-kam-button-red-orange hover:bg-kam-button-red-orange hover:text-white"
                             >
                                 Other ways to help
                             </Button>
@@ -258,14 +264,14 @@ export default function KamooniLandingPage() {
             {/* FAQ Section */}
             <section className="bg-kam-hero-yellow py-12 sm:py-20">
                 <div className="container mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-                    <h2 className="text-kam-gray-dark mb-10 text-center text-3xl font-bold sm:text-4xl">FAQ</h2>
+                    <h2 className="mb-10 text-center text-3xl font-bold text-kam-gray-dark sm:text-4xl">FAQ</h2>
                     <Accordion type="single" collapsible className="w-full text-left">
                         {faqItems.map((item, index) => (
                             <AccordionItem value={`item-${index + 1}`} key={index} className="border-b border-white/70">
-                                <AccordionTrigger className="text-kam-gray-dark py-4 text-left text-lg font-medium hover:no-underline">
+                                <AccordionTrigger className="py-4 text-left text-lg font-medium text-kam-gray-dark hover:no-underline">
                                     {item.question}
                                 </AccordionTrigger>
-                                <AccordionContent className="text-md text-kam-gray-dark pb-4 pt-2 leading-relaxed">
+                                <AccordionContent className="text-md pb-4 pt-2 leading-relaxed text-kam-gray-dark">
                                     {item.answer}
                                 </AccordionContent>
                             </AccordionItem>
@@ -274,7 +280,7 @@ export default function KamooniLandingPage() {
                     <div className="mt-10 text-center">
                         <Button
                             variant="outline"
-                            className="border-kam-button-red-orange text-kam-button-red-orange hover:bg-kam-button-red-orange text-md px-6 py-2 hover:text-white"
+                            className="text-md border-kam-button-red-orange px-6 py-2 text-kam-button-red-orange hover:bg-kam-button-red-orange hover:text-white"
                         >
                             More Questions?
                         </Button>
@@ -297,7 +303,7 @@ export default function KamooniLandingPage() {
                                 <Link href={link.href} target="_blank" rel="noopener noreferrer">
                                     <Button
                                         variant="link"
-                                        className="text-kam-yellow hover:text-kam-yellow/80 w-full justify-center rounded-md bg-transparent p-2 text-sm capitalize hover:bg-white/10"
+                                        className="w-full justify-center rounded-md bg-transparent p-2 text-sm capitalize text-kam-yellow hover:bg-white/10 hover:text-kam-yellow/80"
                                     >
                                         {link.label}
                                     </Button>
@@ -310,13 +316,13 @@ export default function KamooniLandingPage() {
                                 target="_blank"
                                 rel="noopener noreferrer"
                             >
-                                <Button className="bg-kam-yellow hover:bg-kam-yellow/90 text-kam-gray-dark w-full px-6 py-2 text-sm font-semibold sm:w-auto">
+                                <Button className="w-full bg-kam-yellow px-6 py-2 text-sm font-semibold text-kam-gray-dark hover:bg-kam-yellow/90 sm:w-auto">
                                     Participate
                                 </Button>
                             </Link>
                         </div>
                     </div>
-                    <div className="border-kam-gray-medium/30 text-kam-gray-light/70 mt-10 border-t pt-8 text-center text-sm">
+                    <div className="mt-10 border-t border-kam-gray-medium/30 pt-8 text-center text-sm text-kam-gray-light/70">
                         <p>&copy; {new Date().getFullYear()} Kamooni. All rights reserved.</p>
                         <p className="mt-1">Social Systems Foundation</p>
                     </div>
