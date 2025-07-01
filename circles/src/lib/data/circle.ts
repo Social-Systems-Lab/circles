@@ -169,7 +169,11 @@ export const getCirclesWithMetrics = async (
     return circles;
 };
 
-export const getMetricsForCircles = async (circles: WithMetric<Circle>[], userDid: string, sort?: SortingOptions) => {
+export const getMetricsForCircles = async (
+    circles: WithMetric<Circle>[],
+    userDid: string | undefined,
+    sort?: SortingOptions,
+) => {
     const currentDate = new Date();
     let user = undefined;
     if (userDid) {
