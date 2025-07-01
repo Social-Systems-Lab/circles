@@ -100,14 +100,14 @@ export default function HomeContent({ circle, authorizedToEdit }: HomeContentPro
                         <>
                             {isUser && circle._id !== user?._id && (
                                 <div className={`absolute left-0 top-0 flex flex-row gap-1 pt-2`}>
-                                    <MessageButton circle={circle} renderCompact={false} />
+                                    {user && <MessageButton circle={circle} renderCompact={false} />}
                                 </div>
                             )}
                             <div className={`absolute right-0 top-0 flex flex-row items-center gap-1 pt-2`}>
                                 {" "}
                                 {/* items-center added */}
                                 <InviteButton circle={circle} />
-                                <FollowButton circle={circle} />
+                                {user && <FollowButton circle={circle} />}
                                 {/* Consistent Bell Icon for Mobile View */}
                                 {circle._id && user && (
                                     <NotificationSettingsDialog // Changed Popover to Dialog
@@ -176,11 +176,11 @@ export default function HomeContent({ circle, authorizedToEdit }: HomeContentPro
                     <div className="flex-1"></div>
                     {!isCompact && (
                         <div className={`flex flex-row gap-1 pt-2`}>
-                            {isUser && circle._id !== user?._id && (
+                            {user && isUser && circle._id !== user?._id && (
                                 <MessageButton circle={circle} renderCompact={false} />
                             )}
                             <InviteButton circle={circle} />
-                            <FollowButton circle={circle} />
+                            {user && <FollowButton circle={circle} />}
                             {/* Add NotificationSettingsDialog for the current circle */}
                             {circle._id &&
                                 user && ( // Ensure circle ID and user are available

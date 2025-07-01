@@ -103,7 +103,7 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                     <Indicators metrics={circle.metrics} className="absolute left-2 top-2 z-10" content={circle} /> // Added z-10
                 )}
 
-                {circleType === "user" && circle._id !== user?._id && (
+                {user && circleType === "user" && circle._id !== user?._id && (
                     <div className="absolute bottom-[10px] left-2 flex flex-row">
                         <MessageButton circle={circle as Circle} renderCompact={false} />
                     </div>
@@ -125,7 +125,7 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                     </div>
                     <div className="absolute bottom-[-45px] right-2 flex flex-row gap-1">
                         <InviteButton circle={circle as Circle} renderCompact={true} />
-                        <FollowButton circle={circle as Circle} renderCompact={true} />
+                        {user && <FollowButton circle={circle as Circle} renderCompact={true} />}
                     </div>
 
                     <div className="absolute top-[-60px]">
