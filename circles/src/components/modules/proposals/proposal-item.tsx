@@ -663,12 +663,12 @@ export const ProposalItem: React.FC<ProposalItemProps> = ({ proposal, circle, is
                     itemKey="goal"
                     proposal={proposal}
                     initialSelectedCircleId={circle._id} // Pass the circle ID
-                    onSuccess={(goalId) => {
+                    onSuccess={(goalData) => {
                         toast({ title: "Success", description: "Goal created from proposal." });
                         setCreateGoalDialogOpen(false);
                         // router.refresh(); // Refresh might not be needed if navigating away
-                        if (goalId && circle?.handle) {
-                            router.push(`/circles/${circle.handle}/goals/${goalId}`);
+                        if (goalData && circle?.handle) {
+                            router.push(`/circles/${circle.handle}/goals/${goalData.id}`);
                         } else {
                             router.refresh(); // Fallback to refresh if navigation details are missing
                         }
