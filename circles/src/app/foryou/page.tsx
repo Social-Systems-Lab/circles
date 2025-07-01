@@ -17,15 +17,14 @@ export default async function ForYou(props: ForYouProps) {
     let activeTab = searchParams?.tab as string;
 
     const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        redirect("/welcome");
-    }
-
     let posts: PostDisplay[] = [];
 
     // Get user feed regardless of active tab, so it's available for posting in any tab
-    let userFeed = await getPublicUserFeed(userDid);
-    console.log("Getting user public feed for", userDid, userFeed?.handle);
+    let userFeed = null;
+    if (userDid) {
+        userFeed = await getPublicUserFeed(userDid);
+        console.log("Getting user public feed for", userDid, userFeed?.handle);
+    }
 
     if (activeTab === "following" || !activeTab) {
         console.log("Getting aggregate posts for user", userDid);

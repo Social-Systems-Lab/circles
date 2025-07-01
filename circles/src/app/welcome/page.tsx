@@ -227,6 +227,14 @@ export default function KamooniLandingPage() {
                             Test Pilot Signup <ChevronRight className="ml-2 h-5 w-5" />
                         </Button>
                     </Link>
+                    <Link href="/explore">
+                        <Button
+                            variant="outline"
+                            className="text-md ml-2 border-kam-button-red-orange px-6 py-2 text-kam-button-red-orange hover:bg-kam-button-red-orange hover:text-white"
+                        >
+                            Explore the platform
+                        </Button>
+                    </Link>
                 </div>
             </section>
 
@@ -246,14 +254,16 @@ export default function KamooniLandingPage() {
                         <p className="text-lg leading-relaxed text-kam-gray-dark/80">
                             Kamooni is designed and built to help us find each other and get things done together.
                         </p>
-                        {/* <div className="mt-8 text-center">
-                            <Button
-                                variant="outline"
-                                className="text-md border-kam-button-red-orange px-6 py-2 text-kam-button-red-orange hover:bg-kam-button-red-orange hover:text-white"
-                            >
-                                13 Reasons to Join
-                            </Button>
-                        </div> */}
+                        <div className="mt-8 text-center">
+                            <Link href="https://mrtimtim.medium.com/kamooni-community-for-changemakers-bba055a5ba75">
+                                <Button
+                                    variant="outline"
+                                    className="text-md border-kam-button-red-orange px-6 py-2 text-kam-button-red-orange hover:bg-kam-button-red-orange hover:text-white"
+                                >
+                                    Our Story
+                                </Button>
+                            </Link>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -308,6 +318,16 @@ export default function KamooniLandingPage() {
                         <p className="text-lg leading-relaxed text-kam-gray-dark/80">
                             If that resonates, you&apos;re already one of us. Come say hi.
                         </p>
+                        <div className="mt-8 text-center">
+                            <Link href="https://www.socialsystems.io/our_people/">
+                                <Button
+                                    variant="outline"
+                                    className="text-md border-kam-button-red-orange px-6 py-2 text-kam-button-red-orange hover:bg-kam-button-red-orange hover:text-white"
+                                >
+                                    Meet the Team
+                                </Button>
+                            </Link>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -327,7 +347,14 @@ export default function KamooniLandingPage() {
                         <p className="mb-4 text-lg leading-relaxed text-kam-gray-dark">
                             But there is more to this story. As a member you get a vote on how the community is run, how
                             the platform is developed and where we spend any profits we make. This happens through the
-                            Altruistic Wallet, another cool technology we are developing at the lab.
+                            <Link
+                                href="https://mrtimtim.medium.com/the-altruistic-wallet-9163f19a0946"
+                                className="text-kam-button-red-orange hover:underline"
+                            >
+                                {" "}
+                                Altruistic Wallet
+                            </Link>
+                            , another cool technology we are developing at the lab.
                         </p>
                         <p className="mb-8 text-lg leading-relaxed text-kam-gray-dark">
                             Our ultimate goal is for Kamooni to become fully distributed, with our members providing all
@@ -340,6 +367,12 @@ export default function KamooniLandingPage() {
                                 <Button className="w-full bg-kam-button-red-orange px-8 py-3 text-lg text-white hover:bg-kam-button-red-orange/90 sm:w-auto">
                                     Become a Founding Member
                                 </Button>
+                            </Link>
+                            <Link
+                                href="/docs/Seven Reasons to join Kamooni.pdf"
+                                className="text-sm text-kam-gray-dark hover:underline"
+                            >
+                                I think I need a little more convincing...
                             </Link>
                         </div>
                     </div>

@@ -8,16 +8,18 @@ import { userAtom } from "@/lib/data/atoms";
 import { useEffect } from "react";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
+import { usePathname } from "next/navigation";
+
 export default function GlobalNav() {
-    // hide nav if not logged in
     const [user, setUser] = useAtom(userAtom);
+    const pathname = usePathname();
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
             console.log("useEffect.GlobalNav.1");
         }
     }, []);
 
-    if (!user) {
+    if (!user && pathname === "/welcome") {
         return null;
     }
 
@@ -27,7 +29,7 @@ export default function GlobalNav() {
             <div className={`fixed bottom-0 z-[100] h-[72px] w-full bg-white shadow-lg md:top-0 md:h-full md:w-[72px]`}>
                 <div className={`flex h-[72px] flex-row items-center justify-center md:h-auto md:w-[72px] md:flex-col`}>
                     <Link href="/">
-                        <div className="group relative ml-4 mr-4 flex flex-shrink-0 flex-col items-center justify-center md:mb-4 md:ml-0 md:mr-0 md:mt-4">
+                        <div className="group relative ml-4 mr-4 hidden flex-shrink-0 flex-col items-center justify-center md:mb-4 md:ml-0 md:mr-0 md:mt-4 md:flex">
                             <div className="relative">
                                 <div className="relative h-[50px] w-[50px] transform cursor-pointer">
                                     <Image
