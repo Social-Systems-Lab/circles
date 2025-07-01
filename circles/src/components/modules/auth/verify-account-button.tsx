@@ -15,6 +15,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { requestVerification, getVerificationStatus } from "./actions";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
+import { useRouter } from "next/navigation";
 
 export function VerifyAccountButton() {
     const [user] = useAtom(userAtom);
@@ -22,6 +23,7 @@ export function VerifyAccountButton() {
     const [open, setOpen] = useState(false);
     const { toast } = useToast();
     const [verificationStatus, setVerificationStatus] = useState<"verified" | "pending" | "unverified">("unverified");
+    const router = useRouter();
 
     useEffect(() => {
         const fetchStatus = async () => {
@@ -51,6 +53,13 @@ export function VerifyAccountButton() {
         return null;
     }
 
+    const handleLearnMore = () => {
+        if (user) {
+            router.push(`/circles/${user.handle}/settings/subscription`);
+            setOpen(false);
+        }
+    };
+
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -65,6 +74,15 @@ export function VerifyAccountButton() {
                         {`By clicking 'Confirm,' you will send a request to the administrators to verify your account.
                         Please ensure your profile is complete to increase your chances of approval.`}
                     </DialogDescription>
+                    <div className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+                        <p>
+                            You can also support the platform and get a founding member badge by becoming a member.
+                            Members are automatically verified.
+                        </p>
+                        <Button variant="link" className="p-0 text-yellow-800" onClick={handleLearnMore}>
+                            Learn more about membership
+                        </Button>
+                    </div>
                 </DialogHeader>
                 <DialogFooter>
                     <form action={formAction}>
