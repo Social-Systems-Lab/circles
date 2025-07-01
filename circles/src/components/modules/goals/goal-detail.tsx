@@ -379,7 +379,7 @@ const GoalDetail: React.FC<GoalDetailProps> = ({
                     <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                         <div className="flex items-center">
                             <User className="mr-1 h-3 w-3" />
-                            Created by {goal.author.name}{" "}
+                            Created by {goal.author?.name || "Unknown"}{" "}
                             {goal.createdAt &&
                                 formatDistanceToNow(new Date(goal.createdAt), {
                                     addSuffix: true,
