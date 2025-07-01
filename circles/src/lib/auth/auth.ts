@@ -304,15 +304,20 @@ export const isAuthorized = async (
     circleId: string,
     featureInput: Feature,
 ): Promise<boolean> => {
+    let circle = await Circles.findOne({ _id: new ObjectId(circleId) });
+    if (!circle) return false;
+
     if (userDid) {
         const user = await Circles.findOne({ did: userDid });
-        if (featureInput.needsToBeVerified && !user?.isVerified && user?._id.toString() !== circleId) {
+        if (
+            featureInput.needsToBeVerified &&
+            !user?.isVerified &&
+            user?._id.toString() !== circleId &&
+            user?.did !== circle.createdBy
+        ) {
             return false;
         }
     }
-
-    let circle = await Circles.findOne({ _id: new ObjectId(circleId) });
-    if (!circle) return false;
 
     let feature: Feature;
     let featureHandle: string;

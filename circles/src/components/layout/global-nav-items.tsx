@@ -60,7 +60,7 @@ export default function GlobalNavItems() {
                 <Link href={"/foryou"}>
                     <motion.div
                         className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
-                            pathname === "/" ? "text-[#495cff]" : "text-[#696969]"
+                            pathname === "/foryou" ? "text-[#495cff]" : "text-[#696969]"
                         }`}
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.95 }}
