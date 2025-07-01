@@ -275,10 +275,10 @@ export async function getPostsFromMultipleFeeds(
         },
         { $unwind: "$authorDetails" },
 
-        // Filter for verified or member authors
+        // Filter for verified or member authors, or if the post is by the current user
         {
             $match: {
-                $or: [{ "authorDetails.isVerified": true }, { "authorDetails.isMember": true }],
+                $or: [{ "authorDetails.isVerified": true }, { "authorDetails.isMember": true }, { createdBy: userDid }],
             },
         },
 
@@ -713,10 +713,10 @@ export const getPosts = async (
         },
         { $unwind: "$authorDetails" },
 
-        // Filter for verified or member authors
+        // Filter for verified or member authors, or if the post is by the current user
         {
             $match: {
-                $or: [{ "authorDetails.isVerified": true }, { "authorDetails.isMember": true }],
+                $or: [{ "authorDetails.isVerified": true }, { "authorDetails.isMember": true }, { createdBy: userDid }],
             },
         },
 
