@@ -48,24 +48,6 @@ export default async function GoalsModule({ circle }: PageProps) {
     const canCreateGoal = await isAuthorized(userDid, circleId, features.goals.create);
     const canCreateTask = await isAuthorized(userDid, circleId, features.tasks.create);
 
-    // --- Optional Filtering (Keep or Remove based on requirements) ---
-    // Filter goals based on permissions before passing to the list component
-    // This example keeps the 'review' stage filtering
-    const filteredGoalsData = {
-        ...goalsData, // Keep other stats like hasUserRanked, totalRankers, unrankedCount
-        goals: goalsData.goals.filter((goal) => {
-            // Allow user to always see their own goals
-            if (goal.author.did === userDid) return true;
-
-            // Hide 'review' stage goals if user cannot review or moderate
-            if (goal.stage === "review" && !(canReviewGoal || canModerateGoal)) {
-                return false;
-            }
-            // Add other top-level filtering if needed
-            return true;
-        }),
-    };
-
     // Prepare permissions object for GoalsList
     const permissions: GoalPermissions = {
         canModerate: canModerateGoal,

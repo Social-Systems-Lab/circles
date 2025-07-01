@@ -54,6 +54,7 @@ export default function Onboarding() {
     const [currentStepIndex, setCurrentStepIndex] = useState(0);
     const [authInfo] = useAtom(authInfoAtom);
     const [hasClosedOnboarding, setHasClosedOnboarding] = useState(false);
+    const [forceShowOnboarding, setForceShowOnboarding] = useState(false);
 
     const [userData, setUserData] = useState<OnboardingUserData | undefined>(undefined);
 
@@ -72,8 +73,8 @@ export default function Onboarding() {
             final: FinalStep,
         };
 
-        if (!user || !user.completedOnboardingSteps) {
-            // First time - show all steps
+        if (forceShowOnboarding || !user || !user.completedOnboardingSteps) {
+            // First time or forced - show all steps
             return ONBOARDING_STEPS.map((stepId) => ({
                 id: stepId,
                 component: stepComponents[stepId],
@@ -117,7 +118,7 @@ export default function Onboarding() {
             component: stepComponents[stepId],
             title: getStepTitle(stepId),
         }));
-    }, [user?.did]); // intentionally only update once user changes
+    }, [user?.did, forceShowOnboarding]); // Update when user changes or when forcing show
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -215,7 +216,10 @@ export default function Onboarding() {
         return (
             <div
                 className="absolute right-0 top-0 z-[600] h-[30px] w-[30px] cursor-pointer"
-                onDoubleClick={() => setIsOpen(true)}
+                onDoubleClick={() => {
+                    setForceShowOnboarding(true);
+                    setIsOpen(true);
+                }}
             ></div>
         );
     }
@@ -244,21 +248,23 @@ export default function Onboarding() {
                         <div className="flex-1">
                             <Progress value={((currentStepIndex + 1) / totalSteps) * 100} className="mb-6" />
                             <AnimatePresence mode="wait">
-                                <motion.div
-                                    key={steps[currentStepIndex].id}
-                                    initial={{ opacity: 0, x: 20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -20 }}
-                                    transition={{ duration: 0.3 }}
-                                >
-                                    <CurrentStepComponent
-                                        userData={userData}
-                                        setUserData={setUserData}
-                                        nextStep={nextStep}
-                                        prevStep={prevStep}
-                                        circle={user as Circle}
-                                    />
-                                </motion.div>
+                                {CurrentStepComponent && (
+                                    <motion.div
+                                        key={steps[currentStepIndex].id}
+                                        initial={{ opacity: 0, x: 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -20 }}
+                                        transition={{ duration: 0.3 }}
+                                    >
+                                        <CurrentStepComponent
+                                            userData={userData}
+                                            setUserData={setUserData}
+                                            nextStep={nextStep}
+                                            prevStep={prevStep}
+                                            circle={user as Circle}
+                                        />
+                                    </motion.div>
+                                )}
                             </AnimatePresence>
                         </div>
                     </div>
