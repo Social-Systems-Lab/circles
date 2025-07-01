@@ -5,7 +5,7 @@ import React, { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import PageIcon from "../modules/page-icon";
 import { motion } from "framer-motion";
-import { userSettingsAtom } from "@/lib/data/atoms";
+import { userSettingsAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { IoChatbubbleOutline } from "react-icons/io5";
 import { LiaGlobeAfricaSolid } from "react-icons/lia";
@@ -18,7 +18,8 @@ import GlobalCreateButton from "./global-create-button";
 
 export default function GlobalNavItems() {
     const pathname = usePathname();
-    const [settings, setSettings] = useAtom(userSettingsAtom);
+    const [settings] = useAtom(userSettingsAtom);
+    const [user] = useAtom(userAtom);
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -102,30 +103,33 @@ export default function GlobalNavItems() {
                     </motion.div>
                 </Link>
 
-                <Link href={"/chat"}>
-                    <motion.div
-                        className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
-                            pathname === "/chat" ? "text-[#495cff]" : "text-[#696969]"
-                        }`}
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.95 }}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5, delay: 2 * 0.1 }}
-                    >
-                        <IoChatbubbleOutline size={"24px"} />
-                        <motion.span
-                            className="mt-[4px] text-[11px]"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ duration: 0.3, delay: 0.2 + 2 * 0.1 }}
-                        >
-                            Chat
-                        </motion.span>
-                    </motion.div>
-                </Link>
-
-                <GlobalCreateButton />
+                {user && (
+                    <>
+                        <Link href={"/chat"}>
+                            <motion.div
+                                className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
+                                    pathname === "/chat" ? "text-[#495cff]" : "text-[#696969]"
+                                }`}
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.95 }}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.5, delay: 2 * 0.1 }}
+                            >
+                                <IoChatbubbleOutline size={"24px"} />
+                                <motion.span
+                                    className="mt-[4px] text-[11px]"
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    transition={{ duration: 0.3, delay: 0.2 + 2 * 0.1 }}
+                                >
+                                    Chat
+                                </motion.span>
+                            </motion.div>
+                        </Link>
+                        <GlobalCreateButton />
+                    </>
+                )}
 
                 {/* <Link href={"/map"}>
                     <motion.div
