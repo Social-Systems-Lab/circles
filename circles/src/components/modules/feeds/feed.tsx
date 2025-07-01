@@ -68,7 +68,7 @@ export const FeedComponent = ({ circle, posts, feed }: FeedComponentProps) => {
 
 export type AggregateFeedComponentProps = {
     posts: PostDisplay[];
-    userFeed: Feed;
+    userFeed: Feed | null;
     activeTab: string;
 };
 
@@ -78,7 +78,7 @@ export const AggregateFeedComponent = ({ posts, userFeed, activeTab }: Aggregate
     const isMobile = useIsMobile();
 
     // check if authorized to post
-    const canPost = true;
+    const canPost = !!user && !!userFeed;
 
     const router = useRouter();
 
@@ -90,7 +90,7 @@ export const AggregateFeedComponent = ({ posts, userFeed, activeTab }: Aggregate
     if (posts.length === 0 && activeTab === "following") {
         return (
             <div className="flex h-full flex-col items-center justify-center">
-                {canPost && (
+                {canPost && userFeed && (
                     <div className="flex w-full pb-4">
                         {/* className="mt-6" */}
                         <CreateNewPost circle={user as Circle} feed={userFeed} />
@@ -120,7 +120,7 @@ export const AggregateFeedComponent = ({ posts, userFeed, activeTab }: Aggregate
             }}
         >
             <div className="flex w-full flex-col">
-                {canPost && (
+                {canPost && userFeed && (
                     <div>
                         {/* className="mt-6" */}
                         <CreateNewPost circle={user as Circle} feed={userFeed} />

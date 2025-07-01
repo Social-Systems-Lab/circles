@@ -242,7 +242,7 @@ export const deleteComment = async (commentId: string): Promise<void> => {
 // Function to get posts from multiple feeds
 export async function getPostsFromMultipleFeeds(
     feedIds: string[],
-    userDid: string,
+    userDid: string | undefined,
     limit: number,
     skip: number,
     sort?: SortingOptions,

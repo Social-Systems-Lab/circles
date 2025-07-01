@@ -14,9 +14,13 @@ type ForYouProps = {
 
 export default async function ForYou(props: ForYouProps) {
     const searchParams = await props.searchParams;
-    let activeTab = searchParams?.tab as string;
-
     const userDid = await getAuthenticatedUserDid();
+
+    let activeTab = searchParams?.tab as string;
+    if (!userDid && !activeTab) {
+        activeTab = "discover";
+    }
+
     let posts: PostDisplay[] = [];
 
     // Get user feed regardless of active tab, so it's available for posting in any tab
@@ -37,8 +41,10 @@ export default async function ForYou(props: ForYouProps) {
     return (
         <div className="flex flex-1 justify-center overflow-hidden">
             <div className="mb-4 mt-14 flex w-full max-w-[1100px] flex-col items-center md:ml-4 md:mr-4">
-                <FeedTabs currentTab={activeTab} />
-                <AggregateFeedComponent posts={posts} userFeed={userFeed!} activeTab={activeTab} />
+                {userDid && (
+                    <FeedTabs currentTab={activeTab} />
+                )}
+                <AggregateFeedComponent posts={posts} userFeed={userFeed} activeTab={activeTab} />
             </div>
         </div>
     );

@@ -65,7 +65,7 @@ import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
 
 // Global posts: posts from all public feeds
 export async function getGlobalPostsAction(
-    userDid: string,
+    userDid: string | undefined,
     limit: number,
     skip: number,
     sortingOptions?: SortingOptions,
@@ -78,16 +78,21 @@ export async function getGlobalPostsAction(
     const publicFeedIds = publicFeeds.map((feed) => feed._id.toString());
 
     // Use your existing function to get posts across multiple feeds with metrics
-    const posts = await getPostsFromMultipleFeedsWithMetrics(publicFeedIds, userDid, limit, skip, sortingOptions);
-    return posts;
+    if (userDid) {
+        return getPostsFromMultipleFeedsWithMetrics(publicFeedIds, userDid, limit, skip, sortingOptions);
+    }
+    return getPostsFromMultipleFeeds(publicFeedIds, undefined, limit, skip, sortingOptions);
 }
 
 export async function getAggregatePostsAction(
-    userDid: string,
+    userDid: string | undefined,
     limit: number,
     skip: number,
     sortingOptions?: SortingOptions,
 ): Promise<PostDisplay[]> {
+    if (!userDid) {
+        return getGlobalPostsAction(userDid, limit, skip, sortingOptions);
+    }
     // Get all circles the user is a member of
     const user = await getUserPrivate(userDid);
 
