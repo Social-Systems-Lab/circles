@@ -136,6 +136,12 @@ export const GoalForm: React.FC<GoalFormProps> = ({
         }
     }, [isEditing, circleProp, setSelectedCircle]);
 
+    useEffect(() => {
+        if (proposal && proposal.circle && !selectedCircle) {
+            setSelectedCircle(proposal.circle as Circle);
+        }
+    }, [proposal, selectedCircle]);
+
     // Callback for CircleSelector
     const handleCircleSelected = useCallback(
         (circle: Circle | null) => {
