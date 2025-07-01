@@ -162,25 +162,13 @@ const groupGoalsByDate = (goals: GoalDisplay[], sortDirection: "asc" | "desc" = 
 
 const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initialGoalsData, canCreateGoal }) => {
     // Initialize active goals from initialGoalsData, filtering for 'review' or 'open'
-    const [activeGoalsData, setActiveGoalsData] = useState<GoalDisplay[]>(
-        initialGoalsData?.goals?.filter((g) => g.stage === "review" || g.stage === "open") || [],
-    );
+    const [activeGoalsData, setActiveGoalsData] = useState<GoalDisplay[]>([]);
     // Initialize completed goals from initialGoalsData, filtering for 'completed'
-    const [completedGoalsData, setCompletedGoalsData] = useState<GoalDisplay[]>(
-        initialGoalsData?.goals?.filter((g) => g.stage === "completed") || [],
-    );
+    const [completedGoalsData, setCompletedGoalsData] = useState<GoalDisplay[]>([]);
 
     // Determine initial loading state based on whether initialGoalsData was provided and if it contained relevant goals
-    const [isLoadingActive, setIsLoadingActive] = useState(
-        !initialGoalsData ||
-            (initialGoalsData?.goals?.filter((g) => g.stage === "review" || g.stage === "open").length === 0 &&
-                activeGoalsData.length === 0),
-    );
-    const [isLoadingCompleted, setIsLoadingCompleted] = useState(
-        !initialGoalsData ||
-            (initialGoalsData?.goals?.filter((g) => g.stage === "completed").length === 0 &&
-                completedGoalsData.length === 0),
-    );
+    const [isLoadingActive, setIsLoadingActive] = useState(true);
+    const [isLoadingCompleted, setIsLoadingCompleted] = useState(true);
 
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
@@ -195,59 +183,28 @@ const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initia
     useEffect(() => {
         const fetchGoals = async () => {
             if (activeTab === "active") {
-                // Fetch active goals only if they weren't loaded initially or if the activeGoalsData is empty
-                if (
-                    (!initialGoalsData ||
-                        initialGoalsData.goals?.filter((g) => g.stage === "review" || g.stage === "open").length ===
-                            0) &&
-                    activeGoalsData.length === 0
-                ) {
-                    setIsLoadingActive(true);
-                    setError(null);
-                    try {
-                        const result = await getGoalsAction(circle.handle as string);
-                        setActiveGoalsData(
-                            result.goals?.filter((g) => g.stage === "review" || g.stage === "open") || [],
-                        );
-                    } catch (err) {
-                        console.error("Error fetching active goals:", err);
-                        setError("Failed to load active goals.");
-                    } finally {
-                        setIsLoadingActive(false);
-                    }
-                } else if (initialGoalsData && activeGoalsData.length === 0) {
-                    // If initialGoalsData was provided but resulted in empty activeGoalsData (e.g. all goals were completed)
-                    setActiveGoalsData(
-                        initialGoalsData.goals?.filter((g) => g.stage === "review" || g.stage === "open") || [],
-                    );
-                    setIsLoadingActive(false); // No need to fetch if initial data was processed
-                } else {
-                    setIsLoadingActive(false); // Already loaded or has initial data
+                setIsLoadingActive(true);
+                setError(null);
+                try {
+                    const result = await getGoalsAction(circle.handle as string);
+                    setActiveGoalsData(result.goals?.filter((g) => g.stage === "review" || g.stage === "open") || []);
+                } catch (err) {
+                    console.error("Error fetching active goals:", err);
+                    setError("Failed to load active goals.");
+                } finally {
+                    setIsLoadingActive(false);
                 }
             } else if (activeTab === "completed") {
-                // Fetch completed goals only if they weren't loaded initially or if completedGoalsData is empty
-                if (
-                    (!initialGoalsData ||
-                        initialGoalsData.goals?.filter((g) => g.stage === "completed").length === 0) &&
-                    completedGoalsData.length === 0
-                ) {
-                    setIsLoadingCompleted(true);
-                    setError(null);
-                    try {
-                        const result = await getCompletedGoalsAction(circle.handle as string);
-                        setCompletedGoalsData(result.goals || []);
-                    } catch (err) {
-                        console.error("Error fetching completed goals:", err);
-                        setError("Failed to load completed goals.");
-                    } finally {
-                        setIsLoadingCompleted(false);
-                    }
-                } else if (initialGoalsData && completedGoalsData.length === 0) {
-                    // If initialGoalsData was provided but resulted in empty completedGoalsData
-                    setCompletedGoalsData(initialGoalsData.goals?.filter((g) => g.stage === "completed") || []);
+                setIsLoadingCompleted(true);
+                setError(null);
+                try {
+                    const result = await getCompletedGoalsAction(circle.handle as string);
+                    setCompletedGoalsData(result.goals || []);
+                } catch (err) {
+                    console.error("Error fetching completed goals:", err);
+                    setError("Failed to load completed goals.");
+                } finally {
                     setIsLoadingCompleted(false);
-                } else {
-                    setIsLoadingCompleted(false); // Already loaded
                 }
             }
         };
@@ -255,9 +212,7 @@ const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initia
         startTransition(() => {
             fetchGoals();
         });
-        // Depend on activeTab and circle.handle. initialGoalsData is used for initial setup.
-        // Not including activeGoalsData/completedGoalsData in deps to avoid re-fetching when they are set.
-    }, [activeTab, circle.handle, initialGoalsData]);
+    }, [activeTab, circle.handle]);
 
     const displayedGoals = useMemo(() => {
         if (activeTab === "active") {

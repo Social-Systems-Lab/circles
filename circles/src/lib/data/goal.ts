@@ -80,7 +80,7 @@ export const getGoalsByCircleId = async (circleId: string, userDid: string): Pro
                 },
             },
             // We expect exactly one author, but if no match was found, it just won't unwind
-            { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: false } },
+            { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: true } },
 
             // 4) Final projection
             {
@@ -150,7 +150,7 @@ export const getActiveGoalsByCircleId = async (circleId: string): Promise<GoalDi
                     as: "authorDetails",
                 },
             },
-            { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: false } },
+            { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: true } },
 
             // 4) Final projection (same as getGoalsByCircleId)
             {
@@ -219,7 +219,7 @@ export const getCompletedGoalsByCircleId = async (circleId: string, userDid: str
                     as: "authorDetails",
                 },
             },
-            { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: false } },
+            { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: true } },
             // 3) Final projection (same as getGoalsByCircleId)
             {
                 $project: {
@@ -290,7 +290,7 @@ export const getGoalById = async (goalId: string, userDid?: string): Promise<Goa
                 },
             },
             // expect exactly one author, but if none found, it won't unwind
-            { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: false } },
+            { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: true } },
 
             // 4) Lookup circle details (if the Goal is associated with some circle _id).
             //    Typically you only have one circle doc with that _id, so no duplication.
