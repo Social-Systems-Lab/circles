@@ -58,25 +58,16 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
         if (name === "handle") setHandleError("");
 
         // Update the circle data
-        setCircleData((prev) => ({
-            ...prev,
-            [name]: value,
-        }));
+        setCircleData((prev) => ({ ...prev, [name]: value }));
 
         // If name is changed, auto-generate handle if handle is empty or was auto-generated
         if (name === "name" && (!circleData.handle || circleData.handle === generateSlug(circleData.name))) {
-            setCircleData((prev) => ({
-                ...prev,
-                handle: generateSlug(value),
-            }));
+            setCircleData((prev) => ({ ...prev, handle: generateSlug(value) }));
         }
     };
 
     const handleSwitchChange = (checked: boolean) => {
-        setCircleData((prev) => ({
-            ...prev,
-            isPublic: checked,
-        }));
+        setCircleData((prev) => ({ ...prev, isPublic: checked }));
     };
 
     const validateForm = (): boolean => {
@@ -118,10 +109,7 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
                 // If we created a new circle, store its ID
                 if (result.data && result.data.circle) {
                     const circle = result.data.circle;
-                    setCircleData((prev) => ({
-                        ...prev,
-                        _id: circle._id,
-                    }));
+                    setCircleData((prev) => ({ ...prev, _id: circle._id }));
                 }
                 nextStep();
             } else {
@@ -200,26 +188,28 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
                     </p>
                 </div>
 
-                <div className="space-y-2 rounded-lg border border-yellow-300 bg-yellow-50 p-4">
-                    <h3 className="font-semibold text-yellow-800">Become a Member!</h3>
-                    <p className="text-sm text-yellow-700">
-                        Support the platform and get a verified badge by becoming a member.
-                    </p>
-                    <Button
-                        variant="link"
-                        className="p-0 text-yellow-800"
-                        onClick={() => {
-                            // Assuming the user settings page is at /circles/handle/settings
-                            // and the subscription tab is available there.
-                            // This might need to be adjusted based on the actual routing.
-                            if (user) {
-                                window.open(`/circles/${user.handle}/settings/subscription`, "_blank");
-                            }
-                        }}
-                    >
-                        Learn more about membership
-                    </Button>
-                </div>
+                {!user?.isMember && (
+                    <div className="space-y-2 rounded-lg border border-yellow-300 bg-yellow-50 p-4">
+                        <h3 className="font-semibold text-yellow-800">Become a Member!</h3>
+                        <p className="text-sm text-yellow-700">
+                            Support the platform and get a verified badge by becoming a member.
+                        </p>
+                        <Button
+                            variant="link"
+                            className="p-0 text-yellow-800"
+                            onClick={() => {
+                                // Assuming the user settings page is at /circles/handle/settings
+                                // and the subscription tab is available there.
+                                // This might need to be adjusted based on the actual routing.
+                                if (user) {
+                                    window.open(`/circles/${user.handle}/settings/subscription`, "_blank");
+                                }
+                            }}
+                        >
+                            Learn more about membership
+                        </Button>
+                    </div>
+                )}
             </div>
 
             <div className="flex justify-end">
