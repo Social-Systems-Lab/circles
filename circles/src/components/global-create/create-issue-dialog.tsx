@@ -14,9 +14,16 @@ interface CreateIssueDialogProps {
     onOpenChange: (open: boolean) => void;
     onSuccess: (data: { id?: string; circleHandle?: string }) => void; // Updated to include circleHandle
     itemKey: CreatableItemKey;
+    initialSelectedCircleId?: string;
 }
 
-export const CreateIssueDialog: React.FC<CreateIssueDialogProps> = ({ isOpen, onOpenChange, onSuccess, itemKey }) => {
+export const CreateIssueDialog: React.FC<CreateIssueDialogProps> = ({
+    isOpen,
+    onOpenChange,
+    onSuccess,
+    itemKey,
+    initialSelectedCircleId,
+}) => {
     const [user] = useAtom(userAtom);
     const itemDetail = creatableItemsList.find((item: CreatableItemDetail) => item.key === itemKey);
 
@@ -57,6 +64,7 @@ export const CreateIssueDialog: React.FC<CreateIssueDialogProps> = ({ isOpen, on
                         itemDetail={itemDetail}
                         onFormSubmitSuccess={handleFormSuccess}
                         onCancel={handleCancel}
+                        initialSelectedCircleId={initialSelectedCircleId}
                     />
                 )}
             </DialogContent>

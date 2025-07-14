@@ -517,7 +517,7 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
                             onOpenChange={setIsCreateIssueDialogOpen}
                             onSuccess={handleCreateIssueSuccess}
                             itemKey="issue"
-                            // initialSelectedCircleId={circle._id}
+                            initialSelectedCircleId={circle._id}
                         />
                     )}
                 </div>
