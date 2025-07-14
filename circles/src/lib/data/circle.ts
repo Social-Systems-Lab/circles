@@ -8,6 +8,7 @@ import { getDefaultAccessRules, defaultUserGroups, getDefaultModules } from "./c
 import { getMetrics } from "../utils/metrics";
 import { deleteVbdCircle, deleteVbdPost, upsertVbdCircles } from "./vdb";
 import { createDefaultChatRooms, getChatRoomByHandle, updateChatRoom } from "./chat";
+import { createDefaultFeed } from "./feed";
 import path from "path";
 import fs from "fs";
 import { USERS_DIR } from "../auth/auth";
@@ -95,14 +96,7 @@ export const getSwipeCircles = async (): Promise<Circle[]> => {
         {
             $or: [
                 { circleType: { $ne: "user" } },
-                {
-                    $and: [
-                        { circleType: "user" },
-                        {
-                            $or: [{ isVerified: true }, { isMember: true }],
-                        },
-                    ],
-                },
+                { $and: [{ circleType: "user" }, { $or: [{ isVerified: true }, { isMember: true }] }] },
             ],
         },
         { projection: SAFE_CIRCLE_PROJECTION },
@@ -252,6 +246,13 @@ export const createCircle = async (circle: Circle, authenticatedUserDid: string)
         console.error("Failed to create chat rooms", e);
     }
 
+    // create default feed
+    try {
+        await createDefaultFeed(circle._id);
+    } catch (e) {
+        console.error("Failed to create default feed", e);
+    }
+
     return circle;
 };
 
@@ -372,10 +373,7 @@ export const findProjectByShadowPostId = async (postId: string): Promise<Circle 
     console.log("🔍 [DB] findProjectByShadowPostId query:", { postId });
 
     // Direct query for the project
-    let query = {
-        "metadata.commentPostId": postId,
-        circleType: "project" as CircleType,
-    };
+    let query = { "metadata.commentPostId": postId, circleType: "project" as CircleType };
 
     let project = (await Circles.findOne(query, { projection: SAFE_CIRCLE_PROJECTION })) as Circle;
 

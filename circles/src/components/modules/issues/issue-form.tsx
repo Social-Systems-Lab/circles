@@ -87,6 +87,12 @@ export const IssueForm: React.FC<IssueFormProps> = ({
     }, [isEditing, issue, user, circleProp, setSelectedCircle]);
 
     useEffect(() => {
+        if (circleProp) {
+            setSelectedCircle(circleProp);
+        }
+    }, [circleProp]);
+
+    useEffect(() => {
         if (issue?.location) {
             setLocation(issue.location);
         }
@@ -95,9 +101,7 @@ export const IssueForm: React.FC<IssueFormProps> = ({
     const handleCircleSelected = useCallback(
         (circle: Circle | null) => {
             setSelectedCircle(circle);
-            form.reset({
-                ...form.getValues(),
-            });
+            form.reset({ ...form.getValues() });
         },
         [form, setSelectedCircle],
     );
