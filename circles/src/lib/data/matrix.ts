@@ -193,10 +193,7 @@ async function getUserNotificationsRoom(user: UserPrivate): Promise<string> {
     try {
         const response = await fetch(
             `${MATRIX_URL}/_matrix/client/v3/directory/room/${encodeURIComponent(aliasWithHash)}`,
-            {
-                method: "GET",
-                headers: { Authorization: `Bearer ${adminAccessToken}` },
-            },
+            { method: "GET", headers: { Authorization: `Bearer ${adminAccessToken}` } },
         );
         if (response.ok) return (await response.json()).room_id;
     } catch (error) {
@@ -441,10 +438,44 @@ export async function sendNotifications(
         }
 
         const body = payload.messageBody || deriveBody(notificationType, payload);
-        const content = { msgtype: "m.text", body, notificationType, ...payload };
+        const content = { msgtype: "m.text", body, notificationType, ...sanitizeObject(payload) };
 
         await sendMessage(recipientDoc.matrixAccessToken, recipientDoc.matrixNotificationsRoomId, content);
     }
+}
+
+function sanitizeObject(obj: any): any {
+    if (obj === null || obj === undefined) {
+        return obj;
+    }
+
+    if (Array.isArray(obj)) {
+        return obj.map(sanitizeObject);
+    }
+
+    if (typeof obj === "object" && obj.constructor === Object) {
+        const newObj: { [key: string]: any } = {};
+        for (const key in obj) {
+            if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                newObj[key] = sanitizeObject(obj[key]);
+            }
+        }
+        return newObj;
+    }
+
+    if (obj._id && typeof obj._id !== "string") {
+        return { ...obj, _id: obj._id.toString() };
+    }
+
+    if (typeof obj === "number") {
+        return String(obj);
+    }
+
+    if (obj instanceof Date) {
+        return obj.toISOString();
+    }
+
+    return obj;
 }
 
 function sanitizeMedia(media: any): any {
@@ -461,41 +492,7 @@ function sanitizeMedia(media: any): any {
 }
 
 function sanitizeContent(obj: any): any {
-    if (!obj || typeof obj !== "object") return obj;
-    const sanitized = { ...obj } as any;
-    if (sanitized._id) sanitized._id = sanitized._id.toString();
-    if (sanitized.createdAt instanceof Date) sanitized.createdAt = sanitized.createdAt.toISOString();
-    if (sanitized.editedAt instanceof Date) sanitized.editedAt = sanitized.editedAt.toISOString();
-    if (typeof sanitized.comments === "number") sanitized.comments = Math.floor(sanitized.comments);
-    if (typeof sanitized.replies === "number") sanitized.replies = Math.floor(sanitized.replies);
-    if (sanitized.reactions && typeof sanitized.reactions === "object") {
-        const sanitizedReactions: { [key: string]: number | string } = {};
-        for (const key in sanitized.reactions) {
-            if (Object.prototype.hasOwnProperty.call(sanitized.reactions, key)) {
-                const value = sanitized.reactions[key];
-                if (typeof value === "number") {
-                    sanitizedReactions[key] = Math.floor(value);
-                } else {
-                    sanitizedReactions[key] = String(value);
-                }
-            }
-        }
-        sanitized.reactions = sanitizedReactions;
-    }
-    if (sanitized.author && typeof sanitized.author === "object") {
-        sanitized.author = sanitizeCircle(sanitized.author);
-    }
-    if (sanitized.parentComment && typeof sanitized.parentComment === "object") {
-        sanitized.parentComment = sanitizeContent(sanitized.parentComment);
-    }
-    if (Array.isArray(sanitized.media)) {
-        sanitized.media = sanitized.media.map(sanitizeMedia);
-    }
-    delete sanitized.password;
-    delete sanitized.matrixAccessToken;
-    delete sanitized.matrixPassword;
-    delete sanitized.parentItem;
-    return sanitized;
+    return sanitizeObject(obj);
 }
 
 function sanitizeCircle(circle: Circle): Partial<Circle> & { createdAt?: string } {
