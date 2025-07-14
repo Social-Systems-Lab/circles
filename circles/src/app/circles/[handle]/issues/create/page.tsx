@@ -10,9 +10,7 @@ import { notFound } from "next/navigation"; // Import notFound
 import { getUserPrivate } from "@/lib/data/user";
 import { CreatableItemDetail, creatableItemsList } from "@/components/global-create/global-create-dialog-content";
 
-type PageProps = {
-    params: Promise<{ handle: string }>;
-};
+type PageProps = { params: Promise<{ handle: string }> };
 
 export default async function CreateIssuePage(props: PageProps) {
     const params = await props.params;
@@ -79,7 +77,7 @@ export default async function CreateIssuePage(props: PageProps) {
             </div>
 
             {/* Render IssueForm, passing circle, user and itemDetail */}
-            <IssueForm circle={circle} user={user} itemDetail={issueItemDetail} />
+            <IssueForm circle={circle} user={user} itemDetail={issueItemDetail} initialSelectedCircleId={circle._id} />
         </div>
     );
 }

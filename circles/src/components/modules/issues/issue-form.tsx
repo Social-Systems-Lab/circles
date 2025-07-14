@@ -43,6 +43,7 @@ interface IssueFormProps {
     onFormSubmitSuccess?: (data: { id?: string; circleHandle?: string }) => void; // Updated to include circleHandle
     onCancel?: () => void;
     circle?: Circle; // Added for editing context
+    initialSelectedCircleId?: string;
     // circle and circleHandle removed
 }
 
@@ -54,6 +55,7 @@ export const IssueForm: React.FC<IssueFormProps> = ({
     onFormSubmitSuccess,
     onCancel,
     circle: circleProp, // Added for editing
+    initialSelectedCircleId,
 }) => {
     const [selectedCircle, setSelectedCircle] = useState<Circle | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -87,10 +89,15 @@ export const IssueForm: React.FC<IssueFormProps> = ({
     }, [isEditing, issue, user, circleProp, setSelectedCircle]);
 
     useEffect(() => {
-        if (circleProp) {
-            setSelectedCircle(circleProp);
+        if (!isEditing && initialSelectedCircleId && user?.memberships) {
+            const preselectedCircle = user.memberships
+                .map((m) => m.circle)
+                .find((c) => c?._id === initialSelectedCircleId);
+            if (preselectedCircle) {
+                setSelectedCircle(preselectedCircle);
+            }
         }
-    }, [circleProp]);
+    }, [isEditing, initialSelectedCircleId, user?.memberships]);
 
     useEffect(() => {
         if (issue?.location) {
@@ -210,7 +217,11 @@ export const IssueForm: React.FC<IssueFormProps> = ({
                     {!isEditing &&
                         itemDetail && ( // Show CircleSelector only when creating new
                             <div className="pb-4 pt-2">
-                                <CircleSelector itemType={itemDetail} onCircleSelected={handleCircleSelected} />
+                                <CircleSelector
+                                    itemType={itemDetail}
+                                    onCircleSelected={handleCircleSelected}
+                                    initialSelectedCircleId={initialSelectedCircleId}
+                                />
                             </div>
                         )}
                 </CardHeader>

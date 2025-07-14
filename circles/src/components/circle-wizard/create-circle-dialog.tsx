@@ -8,7 +8,7 @@ import CircleWizard from "./circle-wizard";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { DialogTitle, DialogHeader } from "@/components/ui/dialog";
 
-export function CreateCircleDialog() {
+export function CreateCircleDialog({ parentCircleId }: { parentCircleId?: string }) {
     // parentCircleId removed from props
     const [isOpen, setIsOpen] = useState(false);
     const isCompact = useIsCompact();
@@ -34,7 +34,7 @@ export function CreateCircleDialog() {
                     <DialogTitle>{`Create Community`}</DialogTitle>
                 </div>
                 <CircleWizard
-                    // parentCircleId={parentCircleId} // Removed
+                    initialParentCircleId={parentCircleId}
                     onComplete={() => setIsOpen(false)} // This is compatible, createdCircleId will be ignored
                 />
             </DialogContent>

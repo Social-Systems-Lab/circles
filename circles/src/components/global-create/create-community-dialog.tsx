@@ -8,6 +8,7 @@ import { CreatableItemKey, creatableItemsList, CreatableItemDetail } from "./glo
 import CircleSelector from "./circle-selector"; // This will be used by CircleWizard internally or passed to it
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
+import { getUserPrivateAction } from "@/components/modules/home/actions";
 
 interface CreateCommunityDialogProps {
     isOpen: boolean;
@@ -22,7 +23,7 @@ export const CreateCommunityDialog: React.FC<CreateCommunityDialogProps> = ({
     onSuccess,
     // itemKey, // Removed
 }) => {
-    const [user] = useAtom(userAtom);
+    const [user, setUser] = useAtom(userAtom);
     // This state would ideally be inside CircleWizard or passed to it if CircleSelector is embedded there.
     // For now, this dialog doesn't directly use CircleSelector itself, CircleWizard will.
     // const [selectedParentCircle, setSelectedParentCircle] = useState<Circle | null>(null);
@@ -36,9 +37,11 @@ export const CreateCommunityDialog: React.FC<CreateCommunityDialogProps> = ({
         }
     }, [isOpen]);
 
-    const handleWizardComplete = (createdCircleId?: string) => {
+    const handleWizardComplete = async (createdCircleId?: string) => {
         onSuccess(createdCircleId);
         onOpenChange(false);
+        let userData = await getUserPrivateAction();
+        setUser(userData);
     };
 
     // The cancel for CircleWizard is typically handled by its internal "Close" or "X" button,

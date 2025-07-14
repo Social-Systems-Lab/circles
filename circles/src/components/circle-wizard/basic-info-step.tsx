@@ -19,7 +19,13 @@ import {
     CreatableItemKey, // Added
 } from "@/components/global-create/global-create-dialog-content"; // Added
 
-export default function BasicInfoStep({ circleData, setCircleData, nextStep, prevStep }: CircleWizardStepProps) {
+export default function BasicInfoStep({
+    circleData,
+    setCircleData,
+    nextStep,
+    prevStep,
+    initialParentCircleId,
+}: CircleWizardStepProps) {
     const [isPending, startTransition] = useTransition();
     const [nameError, setNameError] = useState("");
     const [handleError, setHandleError] = useState("");
@@ -141,6 +147,7 @@ export default function BasicInfoStep({ circleData, setCircleData, nextStep, pre
                             ) as CreatableItemDetail;
                         }, [circleData.circleType])}
                         onCircleSelected={handleParentCircleSelected}
+                        initialSelectedCircleId={initialParentCircleId}
                         // selectedCircle and setSelectedCircle are not direct props of CircleSelector
                     />
                     <p className="text-xs text-gray-500">

@@ -91,14 +91,7 @@ const SortIcon = ({ sortDir }: { sortDir: string | boolean }) => {
 
 const tableRowVariants = {
     hidden: { opacity: 0, y: 20 },
-    visible: (i: number) => ({
-        opacity: 1,
-        y: 0,
-        transition: {
-            delay: i * 0.05,
-            duration: 0.3,
-        },
-    }),
+    visible: (i: number) => ({ opacity: 1, y: 0, transition: { delay: i * 0.05, duration: 0.3 } }),
 };
 
 // Helper function for stage badge styling and icons
@@ -265,13 +258,7 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
         state: {
             sorting,
             columnFilters,
-            columnVisibility: {
-                title: true,
-                stage: true,
-                assignee: true,
-                author: !isCompact,
-                createdAt: !isCompact,
-            },
+            columnVisibility: { title: true, stage: true, assignee: true, author: !isCompact, createdAt: !isCompact },
         },
     });
 
@@ -346,10 +333,7 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
     const canCreateIssue = isAuthorized(user, circle, features.issues.create);
 
     const handleCreateIssueSuccess = (data: { id?: string; circleHandle?: string }) => {
-        toast({
-            title: "Issue Created",
-            description: "The new issue has been successfully created.",
-        });
+        toast({ title: "Issue Created", description: "The new issue has been successfully created." });
         setIsCreateIssueDialogOpen(false);
         router.refresh(); // Refresh the list
         // Navigate to the new issue:

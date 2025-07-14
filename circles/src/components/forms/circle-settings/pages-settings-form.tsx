@@ -12,6 +12,9 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { savePages } from "@/app/circles/[handle]/settings/pages/actions";
 import { features, modules } from "@/lib/data/constants";
+import { useAtom } from "jotai";
+import { userAtom } from "@/lib/data/atoms";
+import { getUserPrivateAction } from "@/components/modules/home/actions";
 
 interface PagesSettingsFormProps {
     circle: Circle;
@@ -20,16 +23,14 @@ interface PagesSettingsFormProps {
 export function PagesSettingsForm({ circle }: PagesSettingsFormProps): React.ReactElement {
     const { toast } = useToast();
     const router = useRouter();
+    const [, setUser] = useAtom(userAtom);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Get all available modules from features
     const availableModules: ModuleInfo[] = modules;
 
     const form = useForm({
-        defaultValues: {
-            _id: circle._id,
-            enabledModules: circle.enabledModules || ["general", "settings"],
-        },
+        defaultValues: { _id: circle._id, enabledModules: circle.enabledModules || ["general", "settings"] },
     });
 
     const enabledModules = form.watch("enabledModules");
@@ -59,10 +60,9 @@ export function PagesSettingsForm({ circle }: PagesSettingsFormProps): React.Rea
 
             const result = await savePages(data);
             if (result.success) {
-                toast({
-                    title: "Success",
-                    description: "Modules settings updated successfully",
-                });
+                toast({ title: "Success", description: "Modules settings updated successfully" });
+                let userData = await getUserPrivateAction();
+                setUser(userData);
                 router.refresh();
             } else {
                 toast({
@@ -72,11 +72,7 @@ export function PagesSettingsForm({ circle }: PagesSettingsFormProps): React.Rea
                 });
             }
         } catch (error) {
-            toast({
-                title: "Error",
-                description: "An unexpected error occurred",
-                variant: "destructive",
-            });
+            toast({ title: "Error", description: "An unexpected error occurred", variant: "destructive" });
         } finally {
             setIsSubmitting(false);
         }

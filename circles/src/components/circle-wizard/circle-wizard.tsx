@@ -42,13 +42,15 @@ export type CircleWizardStepProps = {
     nextStep: () => void;
     prevStep: () => void;
     onComplete?: () => void;
+    initialParentCircleId?: string;
 };
 
 interface CircleWizardProps {
     onComplete?: (createdCircleId?: string) => void; // Modified to pass createdCircleId
+    initialParentCircleId?: string;
 }
 
-export default function CircleWizard({ onComplete }: CircleWizardProps) {
+export default function CircleWizard({ onComplete, initialParentCircleId }: CircleWizardProps) {
     const [isOpen, setIsOpen] = useState(true);
     const [currentStepIndex, setCurrentStepIndex] = useState(0);
     const router = useRouter();
@@ -193,6 +195,7 @@ export default function CircleWizard({ onComplete }: CircleWizardProps) {
                                         nextStep={nextStep}
                                         prevStep={prevStep}
                                         onComplete={onComplete}
+                                        initialParentCircleId={initialParentCircleId}
                                     />
                                 </motion.div>
                             </AnimatePresence>
