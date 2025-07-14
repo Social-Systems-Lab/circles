@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getCircleByHandle, getDefaultCircle } from "@/lib/data/circle";
+import { getCircleByHandle, getDefaultCircle, getCircleById } from "@/lib/data/circle";
 import { redirect } from "next/navigation";
 import HomeCover from "@/components/modules/home/home-cover";
 import HomeContent from "@/components/modules/home/home-content";
@@ -7,10 +7,7 @@ import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { CircleTabs } from "@/components/layout/circle-tabs";
 
-type Props = {
-    params: Promise<{ handle: string }>;
-    children: React.ReactNode;
-};
+type Props = { params: Promise<{ handle: string }>; children: React.ReactNode };
 
 export default async function RootLayout(props: Props) {
     const params = await props.params;
@@ -30,12 +27,13 @@ export default async function RootLayout(props: Props) {
     let authorizedToEdit = false;
     let userDid = await getAuthenticatedUserDid();
     authorizedToEdit = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_about);
+    const parentCircle = circle.parentCircleId ? await getCircleById(circle.parentCircleId) : undefined;
 
     return (
         <>
             <>
                 <HomeCover circle={circle} />
-                <HomeContent circle={circle} authorizedToEdit={authorizedToEdit} />
+                <HomeContent circle={circle} authorizedToEdit={authorizedToEdit} parentCircle={parentCircle} />
             </>
             <CircleTabs circle={circle} />
 
@@ -58,9 +56,5 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
     let description = circle.description ?? circle.mission;
     let icon = circle.picture?.url ?? "/images/default-picture.png";
 
-    return {
-        title: title,
-        description: description,
-        icons: [icon],
-    };
+    return { title: title, description: description, icons: [icon] };
 }

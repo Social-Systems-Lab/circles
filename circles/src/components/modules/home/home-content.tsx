@@ -26,12 +26,9 @@ import { MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import { VerifyAccountButton } from "../auth/verify-account-button";
 
-type HomeContentProps = {
-    circle: Circle;
-    authorizedToEdit: boolean;
-};
+type HomeContentProps = { circle: Circle; authorizedToEdit: boolean; parentCircle?: Circle };
 
-export default function HomeContent({ circle, authorizedToEdit }: HomeContentProps) {
+export default function HomeContent({ circle, authorizedToEdit, parentCircle }: HomeContentProps) {
     const isUser = circle?.circleType === "user";
     const memberCount = circle?.members ? (isUser ? circle.members - 1 : circle.members) : 0;
     const isCompact = useIsCompact();
@@ -133,6 +130,17 @@ export default function HomeContent({ circle, authorizedToEdit }: HomeContentPro
                                 circle.name
                             )}
                         </h4>
+                        {parentCircle && parentCircle?.circleType === "circle" && (
+                            <div className="mt-2 text-sm text-gray-500">
+                                Subcommunity of{" "}
+                                <Link
+                                    href={`/circles/${parentCircle.handle}`}
+                                    className="text-blue-500 hover:underline"
+                                >
+                                    {parentCircle.name}
+                                </Link>
+                            </div>
+                        )}
                         <div className="flex items-center gap-2 pt-1">
                             {circle.isMember ? (
                                 <Link href={`/circles/${circle.handle}/settings/subscription`}>
@@ -154,7 +162,7 @@ export default function HomeContent({ circle, authorizedToEdit }: HomeContentPro
                                 {authorizedToEdit ? (
                                     <EditableField
                                         id={circle.description ? "description" : "mission"}
-                                        value={(circle.description ?? circle.mission)!}
+                                        value={(circle.description || circle.mission)!}
                                         circleId={circle._id!}
                                         multiline
                                     />
