@@ -6,10 +6,7 @@ import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { Circle, SortingOptions } from "@/models/models";
 
-type PageProps = {
-    circle: Circle;
-    searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
-};
+type PageProps = { circle: Circle; searchParams?: Promise<{ [key: string]: string | string[] | undefined }> };
 
 export default async function CirclesModule(props: PageProps) {
     const circle = props.circle;
@@ -19,12 +16,7 @@ export default async function CirclesModule(props: PageProps) {
     let userDid = await getAuthenticatedUserDid();
 
     // get all circles or projects based on the page
-    let circles = await getCirclesWithMetrics(
-        userDid,
-        circle?._id,
-        searchParams?.sort as SortingOptions,
-        circle?.circleType,
-    );
+    let circles = await getCirclesWithMetrics(userDid, circle?._id, searchParams?.sort as SortingOptions, "circle");
 
     return (
         <ContentDisplayWrapper content={circles}>

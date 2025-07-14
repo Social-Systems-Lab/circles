@@ -113,9 +113,7 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
             <div className="mb-4 ml-4 mr-4 mt-4 flex max-w-[1100px] flex-1 flex-col">
                 <div
                     className="flex w-full flex-row items-center gap-2"
-                    style={{
-                        paddingRight: isCompact && !isMobile ? "16px" : "0",
-                    }}
+                    style={{ paddingRight: isCompact && !isMobile ? "16px" : "0" }}
                 >
                     <Input
                         placeholder={`Search ${isProjectsList ? "projects" : inUser ? "users" : "communities"}...`}
@@ -127,9 +125,7 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
                         <div className="flex h-9 items-center">
                             {React.createElement(
                                 require("@/components/circle-wizard/create-circle-dialog").CreateCircleDialog,
-                                {
-                                    parentCircleId: circle?._id,
-                                },
+                                { parentCircleId: circle?._id },
                             )}
                         </div>
                     )}
@@ -159,10 +155,7 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
                     initial="hidden"
                     animate="visible"
                     className="grid gap-6"
-                    style={{
-                        gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-                        gridAutoRows: "1fr",
-                    }}
+                    style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gridAutoRows: "1fr" }}
                 >
                     {/* fcfbf7 */}
                     <AnimatePresence mode="popLayout">

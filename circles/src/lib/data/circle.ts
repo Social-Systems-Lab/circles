@@ -120,7 +120,7 @@ export const getCircles = async (parentCircleId?: string, circleType?: CircleTyp
         ).toArray();
     } else {
         circles = await Circles.find(
-            { parentCircleId: parentCircleId, circleType: circleType ?? { $in: ["circle", "project"] } },
+            { parentCircleId: parentCircleId, circleType: circleType ?? "circle" },
             { projection: SAFE_CIRCLE_PROJECTION },
         ).toArray();
     }
@@ -147,6 +147,8 @@ export const getCirclesWithMetrics = async (
     circleType?: CircleType,
 ): Promise<WithMetric<Circle>[]> => {
     let circles = (await getCircles(parentCircleId, circleType)) as WithMetric<Circle>[];
+
+    console.log("🔍 [DB] getCirclesWithMetrics query:", { userDid, parentCircleId, sort, circleType });
     const currentDate = new Date();
     let user = undefined;
     if (userDid) {
@@ -160,6 +162,14 @@ export const getCirclesWithMetrics = async (
 
     // sort circles by rank
     circles.sort((a, b) => (a.metrics?.rank ?? 0) - (b.metrics?.rank ?? 0));
+
+    console.log("🔍 [DB] getCirclesWithMetrics result:", {
+        count: circles.length,
+        userDid,
+        parentCircleId,
+        sort,
+        circleType,
+    });
     return circles;
 };
 
