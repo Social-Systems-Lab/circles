@@ -3,7 +3,7 @@
 
 import { Dispatch, KeyboardEvent, SetStateAction, useCallback, useMemo, useTransition } from "react";
 import { Circle, ChatMessage, MatrixUserCache, ChatRoomDisplay } from "@/models/models";
-import { mapOpenAtom, matrixUserCacheAtom, roomMessagesAtom, userAtom } from "@/lib/data/atoms";
+import { mapOpenAtom, matrixUserCacheAtom, replyToMessageAtom, roomMessagesAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
@@ -16,7 +16,7 @@ import { sendRoomMessage, sendReadReceipt } from "@/lib/data/client-matrix";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { fetchMatrixUsers } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { IoArrowBack, IoSend } from "react-icons/io5";
+import { IoArrowBack, IoClose, IoSend, IoReturnUpBack } from "react-icons/io5";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { useRouter } from "next/navigation";
 import { generateColorFromString } from "@/lib/utils/color";
@@ -75,7 +75,30 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
             </span>
         );
     } else {
-        return <RichText content={message?.content?.body as string} />;
+        const body = message?.content?.body as string;
+        const isReply = body.includes("\n\n") && body.startsWith("> ");
+        const replyText = isReply ? body.substring(body.indexOf("\n\n") + 2) : body;
+        const originalMessage = isReply ? body.substring(body.indexOf("> ") + 2, body.indexOf("\n\n")) : "";
+        const originalAuthor = isReply ? originalMessage.substring(1, originalMessage.indexOf(">")) : "";
+
+        return (
+            <div>
+                {isReply && (
+                    <div className="mb-2 rounded-md border-l-4 border-gray-400 bg-[#f3f3f3] p-2 pl-2">
+                        <div
+                            className="text-xs font-semibold"
+                            style={{ color: generateColorFromString(originalAuthor) }}
+                        >
+                            {originalAuthor}
+                        </div>
+                        <p className="truncate text-sm text-gray-600">
+                            {originalMessage.substring(originalMessage.indexOf(">") + 2)}
+                        </p>
+                    </div>
+                )}
+                <RichText content={replyText} />
+            </div>
+        );
     }
 };
 
@@ -94,6 +117,29 @@ const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
 };
 
 const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, onMessagesRendered }) => {
+    const [, setReplyToMessage] = useAtom(replyToMessageAtom);
+    const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
+    const isMobile = useIsMobile();
+
+    const handleReply = (message: ChatMessage) => {
+        setReplyToMessage(message);
+    };
+
+    const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+
+    const handleTouchStart = (message: ChatMessage) => {
+        if (isMobile) {
+            longPressTimer.current = setTimeout(() => {
+                setHoveredMessageId(message.id);
+            }, 500); // 500ms for a long press
+        }
+    };
+
+    const handleTouchEnd = () => {
+        if (longPressTimer.current) {
+            clearTimeout(longPressTimer.current);
+        }
+    };
     const isSameDay = (date1: Date, date2: Date) => {
         return (
             date1.getFullYear() === date2.getFullYear() &&
@@ -164,7 +210,14 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                     );
                 } else {
                     acc.push(
-                        <div key={message.id} className={`mb-1 flex gap-4 ${isFirstInChain ? "mt-4" : "mt-1"}`}>
+                        <div
+                            key={message.id}
+                            className={`group relative mb-1 flex gap-4 ${isFirstInChain ? "mt-4" : "mt-1"}`}
+                            onMouseEnter={() => !isMobile && setHoveredMessageId(message.id)}
+                            onMouseLeave={() => !isMobile && setHoveredMessageId(null)}
+                            onTouchStart={() => handleTouchStart(message)}
+                            onTouchEnd={handleTouchEnd}
+                        >
                             {isFirstInChain ? (
                                 <CirclePicture
                                     circle={message.author!}
@@ -194,6 +247,13 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                     </span>
                                 )}
                             </div>
+                            {hoveredMessageId === message.id && (
+                                <div className="absolute bottom-0 right-0 mb-1 mr-1 flex gap-1 rounded-full bg-gray-200 p-1 shadow-md">
+                                    <Button variant="ghost" size="icon" onClick={() => handleReply(message)}>
+                                        <IoReturnUpBack className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            )}
                         </div>,
                     );
                 }
@@ -263,15 +323,22 @@ type ChatInputProps = {
 const ChatInput = ({ chatRoom }: ChatInputProps) => {
     const [user] = useAtom(userAtom);
     const [newMessage, setNewMessage] = useState("");
+    const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
     const isMobile = useIsMobile();
 
     const handleSendMessage = async () => {
         if (!user) return;
         if (newMessage.trim() !== "") {
             try {
-                // console.log("Sending message:", chatRoom.matrixRoomId, newMessage);
-                await sendRoomMessage(user.matrixAccessToken!, user.matrixUrl!, chatRoom.matrixRoomId!, newMessage);
+                await sendRoomMessage(
+                    user.matrixAccessToken!,
+                    user.matrixUrl!,
+                    chatRoom.matrixRoomId!,
+                    newMessage,
+                    replyToMessage || undefined,
+                );
                 setNewMessage("");
+                setReplyToMessage(null);
             } catch (error) {
                 console.error("Failed to send message:", error);
             }
@@ -286,37 +353,50 @@ const ChatInput = ({ chatRoom }: ChatInputProps) => {
     };
 
     return (
-        <>
-            <MentionsInput
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyDown={handleCommentKeyDown}
-                placeholder="Type a message..."
-                className="flex-grow rounded-[20px] bg-gray-100"
-                style={{
-                    ...defaultMentionsInputStyle,
-                    suggestions: {
-                        position: "absolute",
-                        bottom: "100%",
-                        marginBottom: "10px",
-                    },
-                }}
-            >
-                <Mention
-                    trigger="@"
-                    data={handleMentionQuery}
-                    style={defaultMentionStyle}
-                    displayTransform={(id, display) => `${display}`}
-                    renderSuggestion={renderCircleSuggestion}
-                    markup="[__display__](/circles/__id__)"
-                />
-            </MentionsInput>
-            {isMobile && (
-                <Button onClick={handleSendMessage} className="ml-2 rounded-full text-white">
-                    <IoSend />
-                </Button>
+        <div className="flex w-full flex-col">
+            {replyToMessage && (
+                <div className="mb-2 flex items-center justify-between rounded-lg bg-gray-200 p-2">
+                    <div className="flex-grow overflow-hidden">
+                        <div className="font-semibold text-gray-700">Replying to {replyToMessage.author.name}</div>
+                        <p className="truncate text-sm text-gray-600">{replyToMessage.content.body as string}</p>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => setReplyToMessage(null)}>
+                        <IoClose className="h-5 w-5" />
+                    </Button>
+                </div>
             )}
-        </>
+            <div className="flex w-full">
+                <MentionsInput
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyDown={handleCommentKeyDown}
+                    placeholder="Type a message..."
+                    className="flex-grow rounded-[20px] bg-gray-100"
+                    style={{
+                        ...defaultMentionsInputStyle,
+                        suggestions: {
+                            position: "absolute",
+                            bottom: "100%",
+                            marginBottom: "10px",
+                        },
+                    }}
+                >
+                    <Mention
+                        trigger="@"
+                        data={handleMentionQuery}
+                        style={defaultMentionStyle}
+                        displayTransform={(id, display) => `${display}`}
+                        renderSuggestion={renderCircleSuggestion}
+                        markup="[__display__](/circles/__id__)"
+                    />
+                </MentionsInput>
+                {isMobile && (
+                    <Button onClick={handleSendMessage} className="ml-2 rounded-full text-white">
+                        <IoSend />
+                    </Button>
+                )}
+            </div>
+        </div>
     );
 };
 

@@ -1,5 +1,5 @@
 // client-matrix.ts - helper functions for interacting with the Matrix API
-import { UserPrivate } from "@/models/models";
+import { ChatMessage, UserPrivate } from "@/models/models";
 
 export interface MatrixEvent {
     event_id: string;
@@ -116,6 +116,20 @@ export async function startSync(
                 for (const [syncRoomId, roomData] of Object.entries(data.rooms?.join || {})) {
                     const timelineEvents = roomData.timeline?.events || [];
 
+                    const messages = timelineEvents.map((event) => {
+                        const replyTo = event.content?.["m.relates_to"]?.["m.in_reply_to"];
+                        if (replyTo) {
+                            const originalMessage = timelineEvents.find((e) => e.event_id === replyTo.event_id);
+                            if (originalMessage) {
+                                return {
+                                    ...event,
+                                    replyTo: originalMessage,
+                                };
+                            }
+                        }
+                        return event;
+                    });
+
                     // Get read receipts specific to the current user
                     const readReceipts = roomData.ephemeral?.events.find(
                         (event) => event.type === "m.receipt",
@@ -146,11 +160,11 @@ export async function startSync(
                     lastReadTimestamps[syncRoomId] = latestReadTimestamp;
 
                     // Update latest message for the room
-                    if (timelineEvents.length > 0) {
-                        latestMessages[syncRoomId] = timelineEvents[timelineEvents.length - 1];
+                    if (messages.length > 0) {
+                        latestMessages[syncRoomId] = messages[messages.length - 1];
                     }
 
-                    rooms[syncRoomId] = roomData;
+                    rooms[syncRoomId] = { ...roomData, timeline: { events: messages } };
                 }
 
                 // Invoke callback with the collected data
@@ -213,8 +227,30 @@ export async function fetchRoomMessages(
     };
 }
 
-export async function sendRoomMessage(accessToken: string, matrixUrl: string, roomId: string, content: string) {
+export async function sendRoomMessage(
+    accessToken: string,
+    matrixUrl: string,
+    roomId: string,
+    content: string,
+    replyToMessage?: ChatMessage,
+) {
     const txnId = Date.now(); // Use a unique transaction ID
+
+    const messageContent: any = {
+        msgtype: "m.text",
+        body: content,
+    };
+
+    if (replyToMessage) {
+        messageContent["m.relates_to"] = {
+            "m.in_reply_to": {
+                event_id: replyToMessage.id,
+            },
+        };
+        messageContent.body = `> <${replyToMessage.author.name}> ${
+            (replyToMessage.content.body as string).split("\n")[0]
+        }\n\n${content}`;
+    }
 
     console.log("Sending message to room:", roomId);
     const response = await fetch(
@@ -225,10 +261,7 @@ export async function sendRoomMessage(accessToken: string, matrixUrl: string, ro
                 Authorization: `Bearer ${accessToken}`,
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-                msgtype: "m.text",
-                body: content,
-            }),
+            body: JSON.stringify(messageContent),
         },
     );
 

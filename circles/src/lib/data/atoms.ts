@@ -11,6 +11,7 @@ import {
     MatrixUserCache,
     UserSettings,
     Feed, // Added Feed
+    ChatMessage,
 } from "@/models/models";
 import { atom } from "jotai";
 import { RoomData } from "./client-matrix";
@@ -34,7 +35,7 @@ export const matrixUserCacheAtom = atom<MatrixUserCache>({});
 export const unreadCountsAtom = atom<Record<string, number>>({});
 export const latestMessagesAtom = atom<Record<string, any>>({});
 export const roomDataAtom = atom<Record<string, RoomData>>({});
-export const roomMessagesAtom = atom<Record<string, any[]>>({});
+export const roomMessagesAtom = atom<Record<string, ChatMessage[]>>({});
 export const lastReadTimestampsAtom = atom<Record<string, number>>({});
 export const userSettingsAtom = atomWithStorage<UserSettings>("userSettings", {
     feedTab: "following",
@@ -48,3 +49,5 @@ export type CreatePostDialogAtomProps = {
 };
 
 export const createPostDialogAtom = atom<CreatePostDialogAtomProps>({ isOpen: false });
+
+export const replyToMessageAtom = atom<ChatMessage | null>(null);
