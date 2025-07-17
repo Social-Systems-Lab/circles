@@ -330,6 +330,7 @@ export interface ChatMessage {
     unsigned?: Record<string, unknown>; // Unsigned fields from Matrix
     author: Circle; // User data from your database
     replyTo?: Partial<ChatMessage>; // The message this is a reply to
+    reactions?: Record<string, string[]>; // Aggregated reactions: { [emoji]: [senderId, ...] }
 }
 
 export const causeSchema = z.object({

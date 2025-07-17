@@ -12,11 +12,19 @@ import { CirclePicture } from "../circles/circle-picture";
 import RichText from "../feeds/RichText";
 import { Mention, MentionsInput } from "react-mentions";
 import { defaultMentionsInputStyle, defaultMentionStyle, handleMentionQuery } from "../feeds/post-list";
-import { sendRoomMessage, sendReadReceipt } from "@/lib/data/client-matrix";
+import { sendRoomMessage, sendReadReceipt, redactRoomMessage, sendReaction } from "@/lib/data/client-matrix";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { fetchMatrixUsers } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { IoArrowBack, IoClose, IoSend, IoReturnUpBack } from "react-icons/io5";
+import {
+    IoArrowBack,
+    IoClose,
+    IoSend,
+    IoReturnUpBack,
+    IoTrashOutline,
+    IoHappyOutline,
+    IoAddCircleOutline,
+} from "react-icons/io5";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { useRouter } from "next/navigation";
 import { generateColorFromString } from "@/lib/utils/color";
@@ -44,6 +52,9 @@ export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean
     const displayName = message.author?.name || message.createdBy;
     switch (message.type) {
         case "m.room.message":
+            if (!Object.keys(message.content).length) {
+                return <span className="italic text-gray-500">Message deleted</span>;
+            }
             return renderChatMessage(message, preview);
 
         case "m.room.member": {
@@ -75,7 +86,7 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
             </span>
         );
     } else {
-        const body = message?.content?.body as string;
+        const body = (message?.content?.body as string) || "";
         const isReply = body.includes("\n\n") && body.startsWith("> ");
         const replyText = isReply ? body.substring(body.indexOf("\n\n") + 2) : body;
         const originalMessage = isReply ? body.substring(body.indexOf("> ") + 2, body.indexOf("\n\n")) : "";
@@ -117,6 +128,7 @@ const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
 };
 
 const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, onMessagesRendered }) => {
+    const [user] = useAtom(userAtom);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
     const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
     const isMobile = useIsMobile();
@@ -126,6 +138,24 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
     };
 
     const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+
+    const handleDelete = async (message: ChatMessage) => {
+        if (!user?.matrixAccessToken || !user?.matrixUrl) return;
+        try {
+            await redactRoomMessage(user.matrixAccessToken, user.matrixUrl, message.roomId, message.id);
+        } catch (error) {
+            console.error("Failed to delete message:", error);
+        }
+    };
+
+    const handleReaction = async (message: ChatMessage, reaction: string) => {
+        if (!user?.matrixAccessToken || !user?.matrixUrl) return;
+        try {
+            await sendReaction(user.matrixAccessToken, user.matrixUrl, message.roomId, message.id, reaction);
+        } catch (error) {
+            console.error("Failed to send reaction:", error);
+        }
+    };
 
     const handleTouchStart = (message: ChatMessage) => {
         if (isMobile) {
@@ -212,7 +242,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                     acc.push(
                         <div
                             key={message.id}
-                            className={`group relative mb-1 flex gap-4 ${isFirstInChain ? "mt-4" : "mt-1"}`}
+                            className={`group mb-1 flex gap-4 ${isFirstInChain ? "mt-4" : "mt-1"}`}
                             onMouseEnter={() => !isMobile && setHoveredMessageId(message.id)}
                             onMouseLeave={() => !isMobile && setHoveredMessageId(null)}
                             onTouchStart={() => handleTouchStart(message)}
@@ -229,7 +259,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                 <div className="h-10 w-10 flex-shrink-0"></div>
                             )}
 
-                            <div className={`flex flex-col`}>
+                            <div className={`relative flex flex-col`}>
                                 <div className={`bg-white p-2 pr-4 shadow-md ${borderRadiusClass}`}>
                                     {isFirstInChain && (
                                         <div
@@ -240,20 +270,72 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                         </div>
                                     )}
                                     <MessageRenderer message={message} />
+                                    {message.reactions && Object.keys(message.reactions).length > 0 && (
+                                        <div className="mt-1 flex flex-wrap gap-1">
+                                            {Object.entries(message.reactions).map(([reaction, senders]) => (
+                                                <div
+                                                    key={reaction}
+                                                    className={`flex items-center rounded-full border bg-gray-100 px-2 py-0.5 text-xs ${
+                                                        senders.includes(user?.fullMatrixName || "")
+                                                            ? "border-blue-500"
+                                                            : "border-gray-300"
+                                                    }`}
+                                                    onClick={() => handleReaction(message, reaction)}
+                                                >
+                                                    <span>{reaction}</span>
+                                                    <span className="ml-1 text-gray-600">{senders.length}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                                 {isLastInChain && (
                                     <span className="mt-1 text-xs text-gray-500">
                                         {formatChatDate(new Date(message.createdAt))}
                                     </span>
                                 )}
+                                {hoveredMessageId === message.id && (
+                                    <div className="absolute -bottom-3 right-0 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-lg">
+                                        {user?.fullMatrixName === message.createdBy && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6"
+                                                onClick={() => handleDelete(message)}
+                                            >
+                                                <IoTrashOutline className="h-4 w-4" />
+                                            </Button>
+                                        )}
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6"
+                                            onClick={() => handleReply(message)}
+                                        >
+                                            <IoReturnUpBack className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6"
+                                            onClick={() => handleReaction(message, "👍")}
+                                        >
+                                            <IoHappyOutline className="h-4 w-4" />
+                                        </Button>
+                                        <div className="mx-1 h-4 w-px bg-gray-300"></div>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6"
+                                            onClick={() => {
+                                                /* TODO: more reactions */
+                                            }}
+                                        >
+                                            <IoAddCircleOutline className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                )}
                             </div>
-                            {hoveredMessageId === message.id && (
-                                <div className="absolute bottom-0 right-0 mb-1 mr-1 flex gap-1 rounded-full bg-gray-200 p-1 shadow-md">
-                                    <Button variant="ghost" size="icon" onClick={() => handleReply(message)}>
-                                        <IoReturnUpBack className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            )}
                         </div>,
                     );
                 }

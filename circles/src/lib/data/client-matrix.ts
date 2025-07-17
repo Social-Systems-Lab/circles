@@ -9,6 +9,7 @@ export interface MatrixEvent {
     origin_server_ts: number;
     unsigned?: any;
     state_key?: string;
+    redacts?: string;
 }
 
 export interface RoomData {
@@ -116,19 +117,40 @@ export async function startSync(
                 for (const [syncRoomId, roomData] of Object.entries(data.rooms?.join || {})) {
                     const timelineEvents = roomData.timeline?.events || [];
 
-                    const messages = timelineEvents.map((event) => {
-                        const replyTo = event.content?.["m.relates_to"]?.["m.in_reply_to"];
-                        if (replyTo) {
-                            const originalMessage = timelineEvents.find((e) => e.event_id === replyTo.event_id);
-                            if (originalMessage) {
-                                return {
-                                    ...event,
-                                    replyTo: originalMessage,
-                                };
+                    const redactionEvents = new Set(
+                        timelineEvents.filter((e) => e.type === "m.room.redaction").map((e) => e.redacts),
+                    );
+
+                    const messages = timelineEvents
+                        .filter((event) => !redactionEvents.has(event.event_id) && event.type !== "m.room.redaction")
+                        .map((event) => {
+                            const reactions: Record<string, string[]> = {};
+                            const reactionEvents = timelineEvents.filter(
+                                (e) =>
+                                    e.type === "m.reaction" && e.content?.["m.relates_to"]?.event_id === event.event_id,
+                            );
+
+                            for (const reactionEvent of reactionEvents) {
+                                const key = reactionEvent.content["m.relates_to"].key;
+                                if (!reactions[key]) {
+                                    reactions[key] = [];
+                                }
+                                reactions[key].push(reactionEvent.sender);
                             }
-                        }
-                        return event;
-                    });
+
+                            const replyTo = event.content?.["m.relates_to"]?.["m.in_reply_to"];
+                            if (replyTo) {
+                                const originalMessage = timelineEvents.find((e) => e.event_id === replyTo.event_id);
+                                if (originalMessage) {
+                                    return {
+                                        ...event,
+                                        replyTo: originalMessage,
+                                        reactions,
+                                    };
+                                }
+                            }
+                            return { ...event, reactions };
+                        });
 
                     // Get read receipts specific to the current user
                     const readReceipts = roomData.ephemeral?.events.find(
@@ -298,6 +320,68 @@ export const markMessagesAsRead = async (accessToken: string, matrixUrl: string,
         console.error("Error marking messages as read:", error);
     }
 };
+
+export async function redactRoomMessage(
+    accessToken: string,
+    matrixUrl: string,
+    roomId: string,
+    eventId: string,
+    reason: string = "Message deleted by user",
+) {
+    const txnId = Date.now();
+    const response = await fetch(
+        `${matrixUrl}/client/v3/rooms/${encodeURIComponent(roomId)}/redact/${encodeURIComponent(eventId)}/${txnId}`,
+        {
+            method: "PUT",
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ reason }),
+        },
+    );
+
+    if (!response.ok) {
+        throw new Error("Failed to delete message");
+    }
+
+    return await response.json();
+}
+
+export async function sendReaction(
+    accessToken: string,
+    matrixUrl: string,
+    roomId: string,
+    eventId: string,
+    reaction: string,
+) {
+    const txnId = Date.now();
+    const content = {
+        "m.relates_to": {
+            rel_type: "m.annotation",
+            event_id: eventId,
+            key: reaction,
+        },
+    };
+
+    const response = await fetch(
+        `${matrixUrl}/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.reaction/${txnId}`,
+        {
+            method: "PUT",
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(content),
+        },
+    );
+
+    if (!response.ok) {
+        throw new Error("Failed to send reaction");
+    }
+
+    return await response.json();
+}
 
 export const sendReadReceipt = async (accessToken: string, matrixUrl: string, roomId: string, eventId: string) => {
     const encodedRoomId = encodeURIComponent(roomId);
