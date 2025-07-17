@@ -22,7 +22,8 @@ import { BsEmojiSmile } from "react-icons/bs";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { useRouter } from "next/navigation";
 import { generateColorFromString } from "@/lib/utils/color";
-import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
+import { EmojiClickData } from "emoji-picker-react";
+import LazyEmojiPicker from "./LazyEmojiPicker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export const renderCircleSuggestion = (
@@ -141,29 +142,38 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
     const handleReaction = async (message: ChatMessage, emoji: string) => {
         if (!user?.matrixAccessToken || !user?.matrixUrl || !user.fullMatrixName) return;
 
-        const existingReaction = message.reactions?.[emoji]?.find((r) => r.sender === user.fullMatrixName);
+        const anyExistingReaction = Object.entries(message.reactions || {})
+            .map(([key, reactions]) => {
+                const userReaction = reactions.find((r) => r.sender === user.fullMatrixName);
+                return userReaction ? { ...userReaction, key } : null;
+            })
+            .find((r) => r !== null);
 
         // Optimistic UI Update
         setRoomMessages((prev) => {
             const newRooms = { ...prev };
-            const roomMessages = newRooms[message.roomId] || [];
+            const roomMessages = [...(newRooms[message.roomId] || [])];
             const messageIndex = roomMessages.findIndex((m) => m.id === message.id);
             if (messageIndex === -1) return prev;
 
             const updatedMessage = { ...roomMessages[messageIndex] };
             const reactions = { ...(updatedMessage.reactions || {}) };
 
-            if (existingReaction) {
-                // Remove reaction
-                reactions[emoji] = reactions[emoji].filter((r) => r.sender !== user.fullMatrixName);
-                if (reactions[emoji].length === 0) {
-                    delete reactions[emoji];
+            // Remove any existing reaction from the user
+            if (anyExistingReaction) {
+                reactions[anyExistingReaction.key] = reactions[anyExistingReaction.key].filter(
+                    (r) => r.sender !== user.fullMatrixName,
+                );
+                if (reactions[anyExistingReaction.key].length === 0) {
+                    delete reactions[anyExistingReaction.key];
                 }
-            } else {
-                // Add reaction
+            }
+
+            // Add the new reaction, unless it was the same as the one removed
+            if (!anyExistingReaction || anyExistingReaction.key !== emoji) {
                 const newReaction: ReactionAggregation = {
                     sender: user.fullMatrixName!,
-                    eventId: `temp-id-${Date.now()}`, // Temporary ID
+                    eventId: `temp-id-${Date.now()}`,
                 };
                 reactions[emoji] = [...(reactions[emoji] || []), newReaction];
             }
@@ -175,19 +185,22 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
         });
 
         try {
-            if (existingReaction) {
+            // If there was an old reaction, redact it first
+            if (anyExistingReaction) {
                 await redactRoomMessage(
                     user.matrixAccessToken,
                     user.matrixUrl,
                     message.roomId,
-                    existingReaction.eventId,
+                    anyExistingReaction.eventId,
                 );
-            } else {
+            }
+            // If the new reaction is different from the old one, send it
+            if (!anyExistingReaction || anyExistingReaction.key !== emoji) {
                 await sendReaction(user.matrixAccessToken, user.matrixUrl, message.roomId, message.id, emoji);
             }
         } catch (error) {
-            console.error("Failed to send reaction:", error);
-            // Revert UI on failure (or wait for sync to correct)
+            console.error("Failed to update reaction:", error);
+            // On failure, the state will be corrected by the next sync
         }
     };
 
@@ -360,7 +373,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                                 </Button>
                                             </PopoverTrigger>
                                             <PopoverContent className="w-auto border-none bg-transparent p-0">
-                                                <EmojiPicker
+                                                <LazyEmojiPicker
                                                     onEmojiClick={(emojiData: EmojiClickData) => {
                                                         handleReaction(message, emojiData.emoji);
                                                         setPickerOpenForMessage(null);

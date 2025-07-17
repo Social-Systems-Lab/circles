@@ -344,12 +344,12 @@ export async function redactRoomMessage(
     );
 
     if (!response.ok) {
-        throw new Error("Failed to delete message");
+        const errorBody = await response.text();
+        console.error("Failed to delete message:", response.status, errorBody);
+        throw new Error(`Failed to delete message: ${response.status}`);
     }
-
-    // Check if the response has content before trying to parse it
-    const text = await response.text();
-    return text ? JSON.parse(text) : {};
+    // Redaction responses are typically empty, so we don't try to parse JSON
+    return {};
 }
 
 export async function sendReaction(
