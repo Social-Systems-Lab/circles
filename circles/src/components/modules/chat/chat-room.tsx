@@ -16,15 +16,9 @@ import { sendRoomMessage, sendReadReceipt, redactRoomMessage, sendReaction } fro
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { fetchMatrixUsers } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-    IoArrowBack,
-    IoClose,
-    IoSend,
-    IoReturnUpBack,
-    IoTrashOutline,
-    IoHappyOutline,
-    IoAddCircleOutline,
-} from "react-icons/io5";
+import { IoArrowBack, IoClose, IoSend, IoTrashOutline, IoAddCircleOutline } from "react-icons/io5";
+import { MdReply } from "react-icons/md";
+import { BsEmojiSmile } from "react-icons/bs";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { useRouter } from "next/navigation";
 import { generateColorFromString } from "@/lib/utils/color";
@@ -119,6 +113,7 @@ type ChatMessagesProps = {
     messages: ChatMessage[];
     messagesEndRef?: React.RefObject<HTMLDivElement | null>;
     onMessagesRendered?: () => void;
+    handleDelete: (message: ChatMessage) => Promise<void>;
 };
 
 const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
@@ -127,7 +122,7 @@ const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
     return message1.author._id === message2.author._id;
 };
 
-const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, onMessagesRendered }) => {
+const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, onMessagesRendered, handleDelete }) => {
     const [user] = useAtom(userAtom);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
     const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
@@ -138,15 +133,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
     };
 
     const longPressTimer = useRef<NodeJS.Timeout | null>(null);
-
-    const handleDelete = async (message: ChatMessage) => {
-        if (!user?.matrixAccessToken || !user?.matrixUrl) return;
-        try {
-            await redactRoomMessage(user.matrixAccessToken, user.matrixUrl, message.roomId, message.id);
-        } catch (error) {
-            console.error("Failed to delete message:", error);
-        }
-    };
 
     const handleReaction = async (message: ChatMessage, reaction: string) => {
         if (!user?.matrixAccessToken || !user?.matrixUrl) return;
@@ -312,7 +298,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                             className="h-6 w-6"
                                             onClick={() => handleReply(message)}
                                         >
-                                            <IoReturnUpBack className="h-4 w-4" />
+                                            <MdReply className="h-4 w-4" />
                                         </Button>
                                         <Button
                                             variant="ghost"
@@ -320,7 +306,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                             className="h-6 w-6"
                                             onClick={() => handleReaction(message, "👍")}
                                         >
-                                            <IoHappyOutline className="h-4 w-4" />
+                                            <BsEmojiSmile className="h-4 w-4" />
                                         </Button>
                                         <div className="mx-1 h-4 w-px bg-gray-300"></div>
                                         <Button
@@ -535,8 +521,29 @@ export const ChatRoomComponent: React.FC<{
     const [mapOpen] = useAtom(mapOpenAtom);
     const [user, setUser] = useAtom(userAtom);
     const [matrixUserCache, setMatrixUserCache] = useAtom(matrixUserCacheAtom);
-    const [roomMessages] = useAtom(roomMessagesAtom);
+    const [roomMessages, setRoomMessages] = useAtom(roomMessagesAtom);
     const router = useRouter();
+
+    const handleDelete = async (message: ChatMessage) => {
+        if (window.confirm("Are you sure you want to delete this message?")) {
+            // Optimistic UI update
+            setRoomMessages((prev) => {
+                const newRoomMessages = { ...prev };
+                const currentRoomMessages = newRoomMessages[message.roomId] || [];
+                newRoomMessages[message.roomId] = currentRoomMessages.filter((m) => m.id !== message.id);
+                return newRoomMessages;
+            });
+
+            if (!user?.matrixAccessToken || !user?.matrixUrl) return;
+            try {
+                await redactRoomMessage(user.matrixAccessToken, user.matrixUrl, message.roomId, message.id);
+            } catch (error) {
+                console.error("Failed to delete message:", error);
+                // Revert UI update on failure by re-fetching or relying on sync
+                // For simplicity, we'll let the next sync correct the state
+            }
+        }
+    };
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -634,6 +641,7 @@ export const ChatRoomComponent: React.FC<{
                                     messages={messages}
                                     messagesEndRef={messagesEndRef}
                                     onMessagesRendered={handleMessagesRendered}
+                                    handleDelete={handleDelete}
                                 />
                             )}
                         </ScrollArea>
@@ -645,6 +653,7 @@ export const ChatRoomComponent: React.FC<{
                                     messages={messages}
                                     messagesEndRef={messagesEndRef}
                                     onMessagesRendered={handleMessagesRendered}
+                                    handleDelete={handleDelete}
                                 />
                             )}
                         </div>
