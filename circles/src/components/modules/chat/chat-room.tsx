@@ -290,7 +290,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                     acc.push(
                         <div
                             key={message.id}
-                            className={`group mb-1 flex gap-4 ${isFirstInChain ? "mt-4" : "mt-1"}`}
+                            className={`group relative mb-1 flex gap-4 ${isFirstInChain ? "mt-4" : "mt-1"} ${hoveredMessageId === message.id ? "z-10" : ""}`}
                             onMouseEnter={() => !isMobile && setHoveredMessageId(message.id)}
                             onMouseLeave={() => !isMobile && setHoveredMessageId(null)}
                             onTouchStart={() => handleTouchStart(message)}
@@ -307,7 +307,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                 <div className="h-10 w-10 flex-shrink-0"></div>
                             )}
 
-                            <div className={`relative flex max-w-full flex-col overflow-hidden`}>
+                            <div className="relative flex max-w-full flex-col overflow-hidden">
                                 <div className={`bg-white p-2 pr-4 shadow-md ${borderRadiusClass}`}>
                                     {isFirstInChain && (
                                         <div
@@ -342,49 +342,47 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                         {formatChatDate(new Date(message.createdAt))}
                                     </span>
                                 )}
-                                {(hoveredMessageId === message.id || pickerOpenForMessage === message.id) && (
-                                    <div className="absolute -bottom-3 right-0 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-lg">
-                                        {user?.fullMatrixName === message.createdBy && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-6 w-6"
-                                                onClick={() => handleDelete(message)}
-                                            >
-                                                <IoTrashOutline className="h-4 w-4" />
-                                            </Button>
-                                        )}
+                            </div>
+                            {(hoveredMessageId === message.id || pickerOpenForMessage === message.id) && (
+                                <div className="absolute -bottom-3 right-0 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-lg">
+                                    {user?.fullMatrixName === message.createdBy && (
                                         <Button
                                             variant="ghost"
                                             size="icon"
                                             className="h-6 w-6"
-                                            onClick={() => handleReply(message)}
+                                            onClick={() => handleDelete(message)}
                                         >
-                                            <MdReply className="h-4 w-4" />
+                                            <IoTrashOutline className="h-4 w-4" />
                                         </Button>
-                                        <Popover
-                                            open={pickerOpenForMessage === message.id}
-                                            onOpenChange={(isOpen) =>
-                                                setPickerOpenForMessage(isOpen ? message.id : null)
-                                            }
-                                        >
-                                            <PopoverTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-6 w-6">
-                                                    <BsEmojiSmile className="h-4 w-4" />
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-auto border-none bg-transparent p-0">
-                                                <LazyEmojiPicker
-                                                    onEmojiClick={(emojiData: EmojiClickData) => {
-                                                        handleReaction(message, emojiData.emoji);
-                                                        setPickerOpenForMessage(null);
-                                                    }}
-                                                />
-                                            </PopoverContent>
-                                        </Popover>
-                                    </div>
-                                )}
-                            </div>
+                                    )}
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6"
+                                        onClick={() => handleReply(message)}
+                                    >
+                                        <MdReply className="h-4 w-4" />
+                                    </Button>
+                                    <Popover
+                                        open={pickerOpenForMessage === message.id}
+                                        onOpenChange={(isOpen) => setPickerOpenForMessage(isOpen ? message.id : null)}
+                                    >
+                                        <PopoverTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="h-6 w-6">
+                                                <BsEmojiSmile className="h-4 w-4" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto border-none bg-transparent p-0">
+                                            <LazyEmojiPicker
+                                                onEmojiClick={(emojiData: EmojiClickData) => {
+                                                    handleReaction(message, emojiData.emoji);
+                                                    setPickerOpenForMessage(null);
+                                                }}
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
+                            )}
                         </div>,
                     );
                 }
@@ -580,6 +578,7 @@ export const ChatRoomComponent: React.FC<{
     const isCompact = useIsCompact();
     const [hideInput, setHideInput] = useState(false);
     const [inputWidth, setInputWidth] = useState<number | null>(null);
+    const [pillStyle, setPillStyle] = useState<React.CSSProperties>({});
     const isMobile = useIsMobile();
     const [isLoadingMessages, startLoadingMessagesTransition] = useTransition();
     const inputRef = useRef<HTMLDivElement>(null);
@@ -693,6 +692,23 @@ export const ChatRoomComponent: React.FC<{
         return () => window.removeEventListener("resize", updateInputWidth);
     }, [mapOpen]);
 
+    useEffect(() => {
+        const calculatePillPosition = () => {
+            const container = inputRef.current;
+            if (container) {
+                const rect = container.getBoundingClientRect();
+                setPillStyle({
+                    left: `${rect.left + rect.width / 2}px`,
+                    transform: "translateX(-50%)",
+                });
+            }
+        };
+
+        calculatePillPosition();
+        window.addEventListener("resize", calculatePillPosition);
+        return () => window.removeEventListener("resize", calculatePillPosition);
+    }, []);
+
     const handleMessagesRendered = () => {
         if (!userHasScrolledUp) {
             scrollToBottom();
@@ -711,7 +727,7 @@ export const ChatRoomComponent: React.FC<{
                 <div ref={inputRef} className="relative flex h-full w-full flex-col">
                     {!inToolbox && (
                         <Link href={`/circles/${circle.handle}`}>
-                            <div className="absolute left-1/2 top-4 z-10 -translate-x-1/2 transform cursor-pointer">
+                            <div className="fixed top-4 z-10 cursor-pointer" style={pillStyle}>
                                 <div className="flex items-center gap-2 rounded-full bg-white p-2 shadow-lg hover:bg-gray-100">
                                     <CirclePicture circle={circle} size="24px" />
                                     <span className="text-sm font-semibold">{circle.name}</span>

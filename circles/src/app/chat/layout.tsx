@@ -52,7 +52,7 @@ export default function ChatLayout({ children }: PropsWithChildren) {
             )}
 
             {/* main content: either the 'no chat selected' or the chosen chat */}
-            <main className={`${!isMobile ? "ml-[392px]" : ""}`}>{children}</main>
+            <main className={`${!isMobile ? "ml-[372px]" : ""}`}>{children}</main>
         </div>
     );
 }
