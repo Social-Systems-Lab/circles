@@ -36,19 +36,23 @@ export default function ChatLayout({ children }: PropsWithChildren) {
     const showChatList = !isMobile || !isDetailRoute;
 
     return (
-        <div className="flex h-screen">
+        <div>
             {showChatList && (
-                <aside className={`${isMobile ? "w-full" : "w-80 border-r border-gray-200"}  bg-white p-2`}>
+                <aside
+                    className={`${
+                        isMobile ? "w-full" : "fixed left-0 top-0 h-screen w-80 border-r border-gray-200 md:left-[72px]"
+                    } flex flex-col bg-white p-2`}
+                >
                     <h2 className="mb-4 mt-2 pl-2 pt-0 text-xl font-semibold">Chats</h2>
                     <ChatSearch />
-                    <ScrollArea>
+                    <ScrollArea className="flex-grow">
                         <ChatList chats={allChats} />
                     </ScrollArea>
                 </aside>
             )}
 
             {/* main content: either the 'no chat selected' or the chosen chat */}
-            <main className="flex-1">{children}</main>
+            <main className={`${!isMobile ? "ml-[392px]" : ""}`}>{children}</main>
         </div>
     );
 }
