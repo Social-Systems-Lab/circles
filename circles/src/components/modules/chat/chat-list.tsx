@@ -7,9 +7,10 @@ import { ChatRoom, ChatRoomDisplay } from "@/models/models";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import { LatestMessage } from "@/components/modules/chat/chat-room";
 import { latestMessagesAtom, unreadCountsAtom } from "@/lib/data/atoms";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import Image from "next/image";
+import clsx from "clsx";
 import { Button } from "@/components/ui/button";
 import emptyFeed from "@images/empty-feed.png";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
@@ -24,6 +25,8 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
     const [unreadCounts] = useAtom(unreadCountsAtom);
     const isMobile = useIsMobile();
     const router = useRouter();
+    const params = useParams();
+    const activeChatHandle = params.handle as string;
 
     const sortedChats = useMemo(() => {
         const chatsCopy = [...chats];
@@ -63,7 +66,12 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
                     return (
                         <div
                             key={chat._id}
-                            className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
+                            className={clsx(
+                                "m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100",
+                                {
+                                    "bg-gray-200 dark:bg-gray-700": activeChatHandle === chat.circle.handle,
+                                },
+                            )}
                             onClick={() => handleChatClick(chat)}
                         >
                             <div className="relative">

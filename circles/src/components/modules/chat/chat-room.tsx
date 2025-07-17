@@ -16,11 +16,12 @@ import { sendRoomMessage, sendReadReceipt, redactRoomMessage, sendReaction } fro
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { fetchMatrixUsers } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { IoArrowBack, IoClose, IoSend, IoTrashOutline, IoAddCircleOutline } from "react-icons/io5";
+import { IoArrowBack, IoClose, IoSend, IoTrashOutline, IoAddCircleOutline, IoArrowDown } from "react-icons/io5";
 import { MdReply } from "react-icons/md";
 import { BsEmojiSmile } from "react-icons/bs";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { generateColorFromString } from "@/lib/utils/color";
 import { EmojiClickData } from "emoji-picker-react";
 import LazyEmojiPicker from "./LazyEmojiPicker";
@@ -574,6 +575,8 @@ export const ChatRoomComponent: React.FC<{
 }> = ({ chatRoom, setSelectedChat, circle, inToolbox }) => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const [userHasScrolledUp, setUserHasScrolledUp] = useState(false);
     const isCompact = useIsCompact();
     const [hideInput, setHideInput] = useState(false);
     const [inputWidth, setInputWidth] = useState<number | null>(null);
@@ -638,16 +641,30 @@ export const ChatRoomComponent: React.FC<{
         }
     }, [chatRoom?.matrixRoomId, chatRoom?.name, messages, user?.matrixAccessToken, user?.matrixUrl]);
 
-    const scrollToBottom = () => {
-        // console.log("Scrolling to bottom");
+    const scrollToBottom = (behavior: "smooth" | "auto" = "auto") => {
         if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+            messagesEndRef.current.scrollIntoView({ behavior });
+        }
+    };
+
+    const handleScroll = () => {
+        const container = scrollContainerRef.current;
+        if (container) {
+            const { scrollTop, scrollHeight, clientHeight } = container;
+            // A threshold to decide if the user has scrolled up significantly
+            if (scrollHeight - scrollTop - clientHeight > 150) {
+                setUserHasScrolledUp(true);
+            } else {
+                setUserHasScrolledUp(false);
+            }
         }
     };
 
     useEffect(() => {
-        scrollToBottom();
-    }, [messages]);
+        if (!userHasScrolledUp) {
+            scrollToBottom("smooth");
+        }
+    }, [messages, userHasScrolledUp]);
 
     useEffect(() => {
         const roomId = chatRoom.matrixRoomId!;
@@ -677,7 +694,9 @@ export const ChatRoomComponent: React.FC<{
     }, [mapOpen]);
 
     const handleMessagesRendered = () => {
-        scrollToBottom();
+        if (!userHasScrolledUp) {
+            scrollToBottom();
+        }
     };
 
     return (
@@ -691,8 +710,10 @@ export const ChatRoomComponent: React.FC<{
             >
                 <div ref={inputRef} className="relative flex h-full w-full flex-col">
                     {inToolbox ? (
-                        <ScrollArea
-                            className="p-4"
+                        <div
+                            ref={scrollContainerRef}
+                            onScroll={handleScroll}
+                            className="overflow-y-auto p-4"
                             style={{
                                 height: "calc(100vh - 300px)",
                             }}
@@ -706,9 +727,13 @@ export const ChatRoomComponent: React.FC<{
                                     handleDelete={handleDelete}
                                 />
                             )}
-                        </ScrollArea>
+                        </div>
                     ) : (
-                        <div className="flex-grow p-4 pb-[144px]">
+                        <div
+                            ref={scrollContainerRef}
+                            onScroll={handleScroll}
+                            className="flex-grow overflow-y-auto p-4 pb-[144px]"
+                        >
                             {isLoadingMessages && <div className="text-center text-gray-500">Loading messages...</div>}
                             {!isLoadingMessages && (
                                 <ChatMessages
@@ -719,6 +744,17 @@ export const ChatRoomComponent: React.FC<{
                                 />
                             )}
                         </div>
+                    )}
+
+                    {userHasScrolledUp && (
+                        <Button
+                            variant="secondary"
+                            size="icon"
+                            className="absolute bottom-20 right-4 h-10 w-10 rounded-full shadow-lg"
+                            onClick={() => scrollToBottom("smooth")}
+                        >
+                            <IoArrowDown className="h-6 w-6" />
+                        </Button>
                     )}
 
                     <div
@@ -735,6 +771,16 @@ export const ChatRoomComponent: React.FC<{
                     </div>
                 </div>
             </div>
+            {!inToolbox && (
+                <Link href={`/circles/${circle.handle}`}>
+                    <div className="fixed left-1/2 top-4 -translate-x-1/2 transform cursor-pointer">
+                        <div className="flex items-center gap-2 rounded-full bg-white p-2 shadow-lg hover:bg-gray-100">
+                            <CirclePicture circle={circle} size="24px" />
+                            <span className="text-sm font-semibold">{circle.name}</span>
+                        </div>
+                    </div>
+                </Link>
+            )}
             {isMobile && !inToolbox && (
                 <Button
                     variant="ghost"

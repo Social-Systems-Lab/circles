@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import Image from "next/image";
 import { Circle } from "@/models/models";
 import { FaUsers } from "react-icons/fa";
 import EditableImage from "./editable-image";
 import EditableField from "./editable-field";
 import InviteButton from "./invite-button";
+import ChatButton from "./chat-button";
 import FollowButton from "./follow-button";
 import GalleryTrigger from "./gallery-trigger";
 import { useIsCompact } from "@/components/utils/use-is-compact";
@@ -33,6 +34,12 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle }: 
     const memberCount = circle?.members ? (isUser ? circle.members - 1 : circle.members) : 0;
     const isCompact = useIsCompact();
     const [user] = useAtom(userAtom);
+
+    const isMember = useMemo(() => {
+        if (!user) return false;
+        const membership = user.memberships?.find((m) => m.circleId === circle._id);
+        return membership ? true : false;
+    }, [circle._id, user]);
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -100,9 +107,9 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle }: 
                                     {user && <MessageButton circle={circle} renderCompact={false} />}
                                 </div>
                             )}
+
                             <div className={`absolute right-0 top-0 flex flex-row items-center gap-1 pt-2`}>
-                                {" "}
-                                {/* items-center added */}
+                                {user && circle.circleType === "circle" && isMember && <ChatButton circle={circle} />}
                                 <InviteButton circle={circle} />
                                 {user && <FollowButton circle={circle} />}
                                 {/* Consistent Bell Icon for Mobile View */}
@@ -187,6 +194,7 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle }: 
                             {user && isUser && circle._id !== user?._id && (
                                 <MessageButton circle={circle} renderCompact={false} />
                             )}
+                            {user && circle.circleType === "circle" && isMember && <ChatButton circle={circle} />}
                             <InviteButton circle={circle} />
                             {user && <FollowButton circle={circle} />}
                             {/* Add NotificationSettingsDialog for the current circle */}
