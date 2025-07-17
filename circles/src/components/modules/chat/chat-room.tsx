@@ -52,49 +52,17 @@ export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean
             return renderSystemMessage(`${displayName} ${action} the room.`);
         }
 
-        case "m.room.name": {
-            const name = (message.content as { name: string }).name;
-            return renderSystemMessage(`Room name changed to "${name}" by ${displayName}.`);
-        }
-
-        case "m.room.topic": {
-            const topic = (message.content as { topic: string }).topic;
-            return renderSystemMessage(`Room topic updated to "${topic}" by ${displayName}.`);
-        }
-
-        case "m.room.history_visibility": {
-            const visibility = (message.content as { history_visibility: string }).history_visibility;
-            return renderSystemMessage(`Room history visibility set to "${visibility}".`);
-        }
-
-        case "m.room.join_rules": {
-            const joinRule = (message.content as { join_rule: string }).join_rule;
-            return renderSystemMessage(`Room join rule updated to "${joinRule}".`);
-        }
-
-        case "m.room.canonical_alias": {
-            const alias = (message.content as { alias: string }).alias;
-            return renderSystemMessage(`Room alias set to "${alias}".`);
-        }
-
-        case "m.room.power_levels": {
-            const powerLevels = message.content as {
-                users_default?: number;
-                events_default?: number;
-                state_default?: number;
-            };
-            return renderSystemMessage(
-                `Room power levels updated. Default user level: ${powerLevels.users_default || 0}.`,
-            );
-        }
-
-        case "m.room.create": {
-            const creator = (message.content as { creator: string }).creator;
-            return renderSystemMessage(`Room created by ${displayName}.`);
-        }
+        case "m.room.name":
+        case "m.room.topic":
+        case "m.room.history_visibility":
+        case "m.room.join_rules":
+        case "m.room.canonical_alias":
+        case "m.room.power_levels":
+        case "m.room.create":
+            return null; // Hide these system messages
 
         default:
-            return renderSystemMessage(`Unknown event: ${message.type}`);
+            return null; // Hide unknown events as well
     }
 };
 
@@ -155,9 +123,9 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
         }
     };
 
-    const orderedMessages = [...messages].sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-    );
+    const orderedMessages = [...messages]
+        .filter((message) => message.type === "m.room.message" || message.type === "m.room.member")
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
     return (
         <div>
