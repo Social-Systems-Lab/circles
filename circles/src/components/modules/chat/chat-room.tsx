@@ -143,7 +143,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
 
                 if (isNewDate) {
                     acc.push(
-                        <div key={`date-${message.createdAt}`} className="my-2 text-center text-sm text-gray-500">
+                        <div key={`date-${message.createdAt}`} className="my-2 mt-4 text-center text-sm text-gray-500">
                             <span className="rounded-full bg-gray-200 px-2 py-1 shadow-md">
                                 {new Date(message.createdAt).toDateString()}
                             </span>
