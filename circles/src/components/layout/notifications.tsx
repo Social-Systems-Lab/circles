@@ -109,81 +109,87 @@ export const Notifications = () => {
         }
     }, []);
 
-    // Get raw notifications
-    const allNotifications = useMemo(() => {
+    // Get raw notifications and filter/map them in one go
+    const notifications = useMemo(() => {
         if (!user?.matrixNotificationsRoomId) return [];
 
         const notificationMsgs = roomMessages[user.matrixNotificationsRoomId] || [];
+
         return notificationMsgs
-            .map((msg) => {
-                // Generate grouping key based on notification type
-                let groupKey = "";
+            .reduce((acc: Notification[], msg) => {
+                // Type guard to ensure we have a valid notification message
+                if (
+                    msg.type !== "m.room.message" ||
+                    !msg.content ||
+                    typeof msg.content !== "object" ||
+                    !("notificationType" in msg.content) ||
+                    typeof (msg.content as any).notificationType !== "string"
+                ) {
+                    return acc;
+                }
+
+                const content = msg.content as any; // We've guarded, so we can cast
                 const createdAt = msg.createdAt instanceof Date ? msg.createdAt : new Date(msg.createdAt);
 
-                switch (msg.content?.notificationType) {
+                // Generate grouping key based on notification type
+                let groupKey = "";
+                switch (content.notificationType) {
                     case "post_like":
-                        groupKey = `post_like_${msg.content?.postId}`;
+                        groupKey = `post_like_${content.postId}`;
                         break;
                     case "comment_like":
-                        groupKey = `comment_like_${msg.content?.commentId}`;
+                        groupKey = `comment_like_${content.commentId}`;
                         break;
                     case "post_comment":
-                        groupKey = `post_comment_${msg.content?.postId}`;
+                        groupKey = `post_comment_${content.postId}`;
                         break;
                     case "comment_reply":
-                        groupKey = `comment_reply_${msg.content?.commentId}`;
+                        groupKey = `comment_reply_${content.commentId}`;
                         break;
                     case "post_mention":
-                        groupKey = `post_mention_${msg.content?.postId}`;
+                        groupKey = `post_mention_${content.postId}`;
                         break;
                     case "comment_mention":
-                        groupKey = `comment_mention_${msg.content?.commentId}`;
+                        groupKey = `comment_mention_${content.commentId}`;
                         break;
-                    // Proposal grouping
                     case "proposal_vote":
-                        groupKey = `proposal_vote_${msg.content?.proposalId}`;
+                        groupKey = `proposal_vote_${content.proposalId}`;
                         break;
                     default:
-                        // For other proposal types and non-groupable notifications, use unique ID
                         groupKey = msg.id;
                 }
 
-                let notification: Notification = {
+                const notification: Notification = {
                     id: msg.id,
                     type: msg.type,
-                    message: msg.content?.body || "New notification",
+                    message: content.body || "New notification",
                     time: timeSince(createdAt, false),
                     createdAt: createdAt,
-                    notificationType: msg.content?.notificationType,
-                    circle: msg.content?.circle,
-                    user: msg.content?.user,
-                    post: msg.content?.post,
-                    comment: msg.content?.comment,
-                    postId: msg.content?.postId,
-                    commentId: msg.content?.commentId,
-                    reaction: msg.content?.reaction,
-                    project: msg.content?.project,
-                    projectId: msg.content?.projectId,
-                    // Add proposal fields
-                    proposalId: msg.content?.proposalId,
-                    proposalName: msg.content?.proposalName,
-                    // Add issue fields
-                    issue: msg.content?.issue,
-                    issueId: msg.content?.issueId,
-                    issueTitle: msg.content?.issueTitle,
-                    previousStage: msg.content?.previousStage,
-                    newStage: msg.content?.newStage,
+                    notificationType: content.notificationType,
+                    circle: content.circle,
+                    user: content.user,
+                    post: content.post,
+                    comment: content.comment,
+                    postId: content.postId,
+                    commentId: content.commentId,
+                    reaction: content.reaction,
+                    project: content.project,
+                    projectId: content.projectId,
+                    proposalId: content.proposalId,
+                    proposalName: content.proposalName,
+                    issue: content.issue,
+                    issueId: content.issueId,
+                    issueTitle: content.issueTitle,
+                    previousStage: content.previousStage,
+                    newStage: content.newStage,
                     key: groupKey,
                 };
-                return notification;
-            })
-            .sort((a, b) => b?.createdAt?.getTime() - a?.createdAt?.getTime()); // Sort by newest first
-    }, [user?.matrixNotificationsRoomId, roomMessages]);
 
-    const notifications = useMemo(
-        () => allNotifications.filter((msg) => msg.type === "m.room.message"),
-        [allNotifications],
-    );
+                acc.push(notification);
+                return acc;
+            }, [])
+            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    }, [user?.matrixNotificationsRoomId, roomMessages]);
 
     // Group similar notifications
     const groupedNotifications = useMemo(() => {
