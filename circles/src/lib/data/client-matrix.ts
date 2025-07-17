@@ -124,7 +124,7 @@ export async function startSync(
                     const messages = timelineEvents
                         .filter((event) => !redactionEvents.has(event.event_id) && event.type !== "m.room.redaction")
                         .map((event) => {
-                            const reactions: Record<string, string[]> = {};
+                            const reactions: Record<string, { sender: string; eventId: string }[]> = {};
                             const reactionEvents = timelineEvents.filter(
                                 (e) =>
                                     e.type === "m.reaction" && e.content?.["m.relates_to"]?.event_id === event.event_id,
@@ -135,9 +135,11 @@ export async function startSync(
                                 if (!reactions[key]) {
                                     reactions[key] = [];
                                 }
-                                reactions[key].push(reactionEvent.sender);
+                                reactions[key].push({
+                                    sender: reactionEvent.sender,
+                                    eventId: reactionEvent.event_id,
+                                });
                             }
-
                             const replyTo = event.content?.["m.relates_to"]?.["m.in_reply_to"];
                             if (replyTo) {
                                 const originalMessage = timelineEvents.find((e) => e.event_id === replyTo.event_id);

@@ -2,7 +2,7 @@
 "use client";
 
 import { Dispatch, KeyboardEvent, SetStateAction, useCallback, useMemo, useTransition } from "react";
-import { Circle, ChatMessage, MatrixUserCache, ChatRoomDisplay } from "@/models/models";
+import { Circle, ChatMessage, MatrixUserCache, ChatRoomDisplay, ReactionAggregation } from "@/models/models";
 import { mapOpenAtom, matrixUserCacheAtom, replyToMessageAtom, roomMessagesAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,8 @@ import { BsEmojiSmile } from "react-icons/bs";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { useRouter } from "next/navigation";
 import { generateColorFromString } from "@/lib/utils/color";
+import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -126,6 +128,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
     const [user] = useAtom(userAtom);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
     const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
+    const [pickerOpenForMessage, setPickerOpenForMessage] = useState<string | null>(null);
+    const [, setRoomMessages] = useAtom(roomMessagesAtom);
     const isMobile = useIsMobile();
 
     const handleReply = (message: ChatMessage) => {
@@ -134,12 +138,56 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
 
     const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
-    const handleReaction = async (message: ChatMessage, reaction: string) => {
-        if (!user?.matrixAccessToken || !user?.matrixUrl) return;
+    const handleReaction = async (message: ChatMessage, emoji: string) => {
+        if (!user?.matrixAccessToken || !user?.matrixUrl || !user.fullMatrixName) return;
+
+        const existingReaction = message.reactions?.[emoji]?.find((r) => r.sender === user.fullMatrixName);
+
+        // Optimistic UI Update
+        setRoomMessages((prev) => {
+            const newRooms = { ...prev };
+            const roomMessages = newRooms[message.roomId] || [];
+            const messageIndex = roomMessages.findIndex((m) => m.id === message.id);
+            if (messageIndex === -1) return prev;
+
+            const updatedMessage = { ...roomMessages[messageIndex] };
+            const reactions = { ...(updatedMessage.reactions || {}) };
+
+            if (existingReaction) {
+                // Remove reaction
+                reactions[emoji] = reactions[emoji].filter((r) => r.sender !== user.fullMatrixName);
+                if (reactions[emoji].length === 0) {
+                    delete reactions[emoji];
+                }
+            } else {
+                // Add reaction
+                const newReaction: ReactionAggregation = {
+                    sender: user.fullMatrixName!,
+                    eventId: `temp-id-${Date.now()}`, // Temporary ID
+                };
+                reactions[emoji] = [...(reactions[emoji] || []), newReaction];
+            }
+
+            updatedMessage.reactions = reactions;
+            roomMessages[messageIndex] = updatedMessage;
+            newRooms[message.roomId] = roomMessages;
+            return newRooms;
+        });
+
         try {
-            await sendReaction(user.matrixAccessToken, user.matrixUrl, message.roomId, message.id, reaction);
+            if (existingReaction) {
+                await redactRoomMessage(
+                    user.matrixAccessToken,
+                    user.matrixUrl,
+                    message.roomId,
+                    existingReaction.eventId,
+                );
+            } else {
+                await sendReaction(user.matrixAccessToken, user.matrixUrl, message.roomId, message.id, emoji);
+            }
         } catch (error) {
             console.error("Failed to send reaction:", error);
+            // Revert UI on failure (or wait for sync to correct)
         }
     };
 
@@ -258,18 +306,18 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                     <MessageRenderer message={message} />
                                     {message.reactions && Object.keys(message.reactions).length > 0 && (
                                         <div className="mt-1 flex flex-wrap gap-1">
-                                            {Object.entries(message.reactions).map(([reaction, senders]) => (
+                                            {Object.entries(message.reactions).map(([reaction, reactions]) => (
                                                 <div
                                                     key={reaction}
                                                     className={`flex items-center rounded-full border bg-gray-100 px-2 py-0.5 text-xs ${
-                                                        senders.includes(user?.fullMatrixName || "")
+                                                        reactions.some((r) => r.sender === user?.fullMatrixName)
                                                             ? "border-blue-500"
                                                             : "border-gray-300"
                                                     }`}
                                                     onClick={() => handleReaction(message, reaction)}
                                                 >
                                                     <span>{reaction}</span>
-                                                    <span className="ml-1 text-gray-600">{senders.length}</span>
+                                                    <span className="ml-1 text-gray-600">{reactions.length}</span>
                                                 </div>
                                             ))}
                                         </div>
@@ -309,16 +357,26 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                             <BsEmojiSmile className="h-4 w-4" />
                                         </Button>
                                         <div className="mx-1 h-4 w-px bg-gray-300"></div>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6"
-                                            onClick={() => {
-                                                /* TODO: more reactions */
-                                            }}
+                                        <Popover
+                                            open={pickerOpenForMessage === message.id}
+                                            onOpenChange={(isOpen) =>
+                                                setPickerOpenForMessage(isOpen ? message.id : null)
+                                            }
                                         >
-                                            <IoAddCircleOutline className="h-4 w-4" />
-                                        </Button>
+                                            <PopoverTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-6 w-6">
+                                                    <IoAddCircleOutline className="h-4 w-4" />
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto border-none bg-transparent p-0">
+                                                <EmojiPicker
+                                                    onEmojiClick={(emojiData: EmojiClickData) => {
+                                                        handleReaction(message, emojiData.emoji);
+                                                        setPickerOpenForMessage(null);
+                                                    }}
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
                                     </div>
                                 )}
                             </div>
