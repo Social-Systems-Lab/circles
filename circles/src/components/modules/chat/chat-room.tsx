@@ -19,6 +19,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { IoArrowBack, IoSend } from "react-icons/io5";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { useRouter } from "next/navigation";
+import { generateColorFromString } from "@/lib/utils/color";
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -209,6 +210,14 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
 
                             <div className={`flex flex-col`}>
                                 <div className={`bg-white p-2 pr-4 shadow-md ${borderRadiusClass}`}>
+                                    {isFirstInChain && (
+                                        <div
+                                            className="text-xs font-semibold"
+                                            style={{ color: generateColorFromString(message.author.name || "") }}
+                                        >
+                                            {message.author.name}
+                                        </div>
+                                    )}
                                     <MessageRenderer message={message} />
                                 </div>
                                 {isLastInChain && (
