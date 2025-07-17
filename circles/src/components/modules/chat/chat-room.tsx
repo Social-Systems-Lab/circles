@@ -91,7 +91,7 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
         const originalAuthor = isReply ? originalMessage.substring(1, originalMessage.indexOf(">")) : "";
 
         return (
-            <div>
+            <div className="max-w-full overflow-hidden">
                 {isReply && (
                     <div className="mb-2 rounded-md border-l-4 border-gray-400 bg-[#f3f3f3] p-2 pl-2">
                         <div
@@ -307,7 +307,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                 <div className="h-10 w-10 flex-shrink-0"></div>
                             )}
 
-                            <div className={`relative flex flex-col`}>
+                            <div className={`relative flex max-w-full flex-col overflow-hidden`}>
                                 <div className={`bg-white p-2 pr-4 shadow-md ${borderRadiusClass}`}>
                                     {isFirstInChain && (
                                         <div
@@ -709,6 +709,16 @@ export const ChatRoomComponent: React.FC<{
                 }}
             >
                 <div ref={inputRef} className="relative flex h-full w-full flex-col">
+                    {!inToolbox && (
+                        <Link href={`/circles/${circle.handle}`}>
+                            <div className="absolute left-1/2 top-4 z-10 -translate-x-1/2 transform cursor-pointer">
+                                <div className="flex items-center gap-2 rounded-full bg-white p-2 shadow-lg hover:bg-gray-100">
+                                    <CirclePicture circle={circle} size="24px" />
+                                    <span className="text-sm font-semibold">{circle.name}</span>
+                                </div>
+                            </div>
+                        </Link>
+                    )}
                     {inToolbox ? (
                         <div
                             ref={scrollContainerRef}
@@ -771,21 +781,11 @@ export const ChatRoomComponent: React.FC<{
                     </div>
                 </div>
             </div>
-            {!inToolbox && (
-                <Link href={`/circles/${circle.handle}`}>
-                    <div className="fixed left-1/2 top-4 -translate-x-1/2 transform cursor-pointer">
-                        <div className="flex items-center gap-2 rounded-full bg-white p-2 shadow-lg hover:bg-gray-100">
-                            <CirclePicture circle={circle} size="24px" />
-                            <span className="text-sm font-semibold">{circle.name}</span>
-                        </div>
-                    </div>
-                </Link>
-            )}
             {isMobile && !inToolbox && (
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="fixed left-4 top-4 h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
+                    className="fixed left-4 top-4 z-20 h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
                     onClick={() => router.push("/chat")}
                 >
                     <IoArrowBack className="h-5 w-5" />
