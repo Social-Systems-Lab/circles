@@ -328,7 +328,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                         {formatChatDate(new Date(message.createdAt))}
                                     </span>
                                 )}
-                                {hoveredMessageId === message.id && (
+                                {(hoveredMessageId === message.id || pickerOpenForMessage === message.id) && (
                                     <div className="absolute -bottom-3 right-0 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-lg">
                                         {user?.fullMatrixName === message.createdBy && (
                                             <Button
@@ -348,15 +348,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                         >
                                             <MdReply className="h-4 w-4" />
                                         </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6"
-                                            onClick={() => handleReaction(message, "👍")}
-                                        >
-                                            <BsEmojiSmile className="h-4 w-4" />
-                                        </Button>
-                                        <div className="mx-1 h-4 w-px bg-gray-300"></div>
                                         <Popover
                                             open={pickerOpenForMessage === message.id}
                                             onOpenChange={(isOpen) =>
@@ -365,7 +356,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                         >
                                             <PopoverTrigger asChild>
                                                 <Button variant="ghost" size="icon" className="h-6 w-6">
-                                                    <IoAddCircleOutline className="h-4 w-4" />
+                                                    <BsEmojiSmile className="h-4 w-4" />
                                                 </Button>
                                             </PopoverTrigger>
                                             <PopoverContent className="w-auto border-none bg-transparent p-0">

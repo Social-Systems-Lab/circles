@@ -347,7 +347,9 @@ export async function redactRoomMessage(
         throw new Error("Failed to delete message");
     }
 
-    return await response.json();
+    // Check if the response has content before trying to parse it
+    const text = await response.text();
+    return text ? JSON.parse(text) : {};
 }
 
 export async function sendReaction(
@@ -382,7 +384,9 @@ export async function sendReaction(
         throw new Error("Failed to send reaction");
     }
 
-    return await response.json();
+    // Check if the response has content before trying to parse it
+    const text = await response.text();
+    return text ? JSON.parse(text) : {};
 }
 
 export const sendReadReceipt = async (accessToken: string, matrixUrl: string, roomId: string, eventId: string) => {
