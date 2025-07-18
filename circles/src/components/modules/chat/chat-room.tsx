@@ -430,7 +430,7 @@ export const LatestMessage: React.FC<LatestMessageProps> = ({ roomId, latestMess
                 picture: { url: "/placeholder.svg" },
             }
         );
-    }, [latestMessage?.sender, matrixUserCache, setMatrixUserCache]);
+    }, [latestMessage?.sender, matrixUserCache]);
 
     const formattedMessage = useMemo(() => {
         return {
