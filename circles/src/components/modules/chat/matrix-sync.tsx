@@ -10,7 +10,7 @@ import {
     matrixUserCacheAtom,
     lastReadTimestampsAtom,
 } from "@/lib/data/atoms";
-import { RoomData, startSync } from "@/lib/data/client-matrix";
+import { RoomData, startSync, fetchRoomMessages } from "@/lib/data/client-matrix";
 import { useAtom } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { fetchAndCacheMatrixUsers } from "./chat-room";
@@ -190,14 +190,17 @@ export const MatrixSync = () => {
                     content: event.content,
                     type: event.type,
                     author: updatedCache[event.sender] || { name: event.sender },
+                    reactions: event.reactions,
                 }));
 
-                newRoomMessages[roomId] = [
-                    ...(roomMessagesRef.current[roomId] || []),
-                    ...messages.filter(
-                        (msg) => !(roomMessagesRef.current[roomId] || []).some((existing) => existing.id === msg.id),
-                    ),
-                ];
+                const existingMessages = roomMessagesRef.current[roomId] || [];
+                const messageMap = new Map(existingMessages.map((msg) => [msg.id, msg]));
+
+                for (const msg of messages) {
+                    messageMap.set(msg.id, { ...(messageMap.get(msg.id) || {}), ...msg });
+                }
+
+                newRoomMessages[roomId] = Array.from(messageMap.values());
 
                 newRoomFound =
                     newRoomFound ||
@@ -216,7 +219,52 @@ export const MatrixSync = () => {
             setRoomMessages((prev) => ({ ...prev, ...newRoomMessages }));
         };
 
-        startSync(user.matrixAccessToken, user.matrixUrl!, user.matrixUsername!, handleSyncData);
+        const initialSync = async () => {
+            const syncToken = localStorage.getItem("syncToken");
+            if (!syncToken) {
+                console.log("No sync token found, performing initial sync...");
+                const roomIds = user.chatRoomMemberships?.map((m) => m.chatRoom.matrixRoomId) || [];
+                if (user.matrixNotificationsRoomId) {
+                    roomIds.push(user.matrixNotificationsRoomId);
+                }
+
+                for (const roomId of roomIds) {
+                    if (roomId) {
+                        try {
+                            const { messages: historicalMessages } = await fetchRoomMessages(
+                                user.matrixAccessToken!,
+                                user.matrixUrl!,
+                                roomId,
+                                50, // Fetch last 50 messages
+                            );
+
+                            const formattedMessages = historicalMessages.map((event: any) => ({
+                                id: event.event_id,
+                                roomId,
+                                createdBy: event.sender,
+                                createdAt: new Date(event.origin_server_ts),
+                                content: event.content,
+                                type: event.type,
+                                author: matrixUserCache[event.sender] || { name: event.sender },
+                                reactions: event.reactions,
+                            }));
+
+                            setRoomMessages((prev) => ({
+                                ...prev,
+                                [roomId]: [...(prev[roomId] || []), ...formattedMessages].sort(
+                                    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+                                ),
+                            }));
+                        } catch (error) {
+                            console.error(`Failed to fetch historical messages for room ${roomId}:`, error);
+                        }
+                    }
+                }
+            }
+            startSync(user.matrixAccessToken!, user.matrixUrl!, user.matrixUsername!, handleSyncData);
+        };
+
+        initialSync();
     }, [
         setLatestMessages,
         setUnreadCounts,

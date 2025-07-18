@@ -10,6 +10,7 @@ export interface MatrixEvent {
     unsigned?: any;
     state_key?: string;
     redacts?: string;
+    reactions?: any;
 }
 
 export interface RoomData {
