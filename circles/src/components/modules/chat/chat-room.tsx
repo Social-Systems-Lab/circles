@@ -710,7 +710,7 @@ export const ChatRoomComponent: React.FC<{
         calculatePillPosition();
         window.addEventListener("resize", calculatePillPosition);
         return () => window.removeEventListener("resize", calculatePillPosition);
-    }, []);
+    }, [messages]);
 
     const handleMessagesRendered = () => {
         if (!userHasScrolledUp) {
@@ -730,7 +730,7 @@ export const ChatRoomComponent: React.FC<{
                 <div ref={inputRef} className="relative flex h-full w-full flex-col">
                     {!inToolbox && (
                         <Link href={`/circles/${circle.handle}`}>
-                            <div className="fixed top-4 z-10 cursor-pointer" style={pillStyle}>
+                            <div className="z-12 fixed top-4 cursor-pointer" style={pillStyle}>
                                 <div className="flex items-center gap-2 rounded-full bg-white p-2 shadow-lg hover:bg-gray-100">
                                     <CirclePicture circle={circle} size="24px" />
                                     <span className="text-sm font-semibold">{circle.name}</span>
