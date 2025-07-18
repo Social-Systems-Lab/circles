@@ -307,7 +307,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                 <div className="h-10 w-10 flex-shrink-0"></div>
                             )}
 
-                            <div className="relative flex max-w-full flex-col overflow-hidden">
+                            <div className="relative flex min-w-[100px] max-w-full flex-col overflow-hidden">
                                 <div className={`bg-white p-2 pr-4 shadow-md ${borderRadiusClass}`}>
                                     {isFirstInChain && (
                                         <div
@@ -342,47 +342,50 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                         {formatChatDate(new Date(message.createdAt))}
                                     </span>
                                 )}
-                            </div>
-                            {(hoveredMessageId === message.id || pickerOpenForMessage === message.id) && (
-                                <div className="absolute -bottom-3 right-0 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-lg">
-                                    {user?.fullMatrixName === message.createdBy && (
+
+                                {(hoveredMessageId === message.id || pickerOpenForMessage === message.id) && (
+                                    <div className="absolute bottom-1 right-0 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm">
+                                        {user?.fullMatrixName === message.createdBy && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6"
+                                                onClick={() => handleDelete(message)}
+                                            >
+                                                <IoTrashOutline className="h-4 w-4" />
+                                            </Button>
+                                        )}
                                         <Button
                                             variant="ghost"
                                             size="icon"
                                             className="h-6 w-6"
-                                            onClick={() => handleDelete(message)}
+                                            onClick={() => handleReply(message)}
                                         >
-                                            <IoTrashOutline className="h-4 w-4" />
+                                            <MdReply className="h-4 w-4" />
                                         </Button>
-                                    )}
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-6 w-6"
-                                        onClick={() => handleReply(message)}
-                                    >
-                                        <MdReply className="h-4 w-4" />
-                                    </Button>
-                                    <Popover
-                                        open={pickerOpenForMessage === message.id}
-                                        onOpenChange={(isOpen) => setPickerOpenForMessage(isOpen ? message.id : null)}
-                                    >
-                                        <PopoverTrigger asChild>
-                                            <Button variant="ghost" size="icon" className="h-6 w-6">
-                                                <BsEmojiSmile className="h-4 w-4" />
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-auto border-none bg-transparent p-0">
-                                            <LazyEmojiPicker
-                                                onEmojiClick={(emojiData: EmojiClickData) => {
-                                                    handleReaction(message, emojiData.emoji);
-                                                    setPickerOpenForMessage(null);
-                                                }}
-                                            />
-                                        </PopoverContent>
-                                    </Popover>
-                                </div>
-                            )}
+                                        <Popover
+                                            open={pickerOpenForMessage === message.id}
+                                            onOpenChange={(isOpen) =>
+                                                setPickerOpenForMessage(isOpen ? message.id : null)
+                                            }
+                                        >
+                                            <PopoverTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-6 w-6">
+                                                    <BsEmojiSmile className="h-4 w-4" />
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto border-none bg-transparent p-0">
+                                                <LazyEmojiPicker
+                                                    onEmojiClick={(emojiData: EmojiClickData) => {
+                                                        handleReaction(message, emojiData.emoji);
+                                                        setPickerOpenForMessage(null);
+                                                    }}
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
+                                    </div>
+                                )}
+                            </div>
                         </div>,
                     );
                 }
