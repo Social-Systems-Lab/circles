@@ -515,8 +515,8 @@ export function PostForm({
     };
 
     return (
-        <div {...getRootProps()} className="flex h-full flex-col p-4">
-            <div className="flex flex-grow flex-col overflow-hidden">
+        <div {...getRootProps()} className="flex h-full flex-col">
+            <div className="flex flex-grow flex-col overflow-hidden p-4">
                 {/* Header section */}
                 <div className="mb-[5px] flex items-center justify-between">
                     <div className="flex items-center space-x-2">
@@ -561,7 +561,7 @@ export function PostForm({
                 {/* Conditional Content Area */}
                 {selectedCircleId && (
                     <>
-                        <div className="max-h-[calc(60vh-100px)] flex-grow overflow-y-auto pr-2">
+                        <div className="flex-grow overflow-y-auto pr-2">
                             {!user.isVerified && (
                                 <div className="formatted mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
                                     <div className="flex items-center">
@@ -791,7 +791,7 @@ export function PostForm({
                                 </div>
                             )}
                         </div>
-                        <div className="mt-4 flex items-center justify-between border-t pt-4">
+                        <div className="mt-auto flex items-center justify-between border-t pt-4">
                             <div className="flex space-x-2">
                                 <div>
                                     <input {...getInputProps()} className="hidden" id="image-picker-input" />

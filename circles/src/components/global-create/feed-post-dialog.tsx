@@ -57,10 +57,9 @@ export function FeedPostDialog() {
     return (
         <Dialog open={dialogState.isOpen} onOpenChange={handleClose}>
             <DialogContent
-                className="z-[110] rounded-[15px] bg-white p-0 sm:max-w-[425px] sm:rounded-[15px]"
+                className="z-[110] flex h-full flex-col rounded-[15px] bg-white p-0 sm:h-auto sm:max-w-[425px] sm:rounded-[15px]"
                 onInteractOutside={(e) => {
-                    // Allow closing by clicking outside if needed, or prevent it:
-                    // e.preventDefault();
+                    e.preventDefault();
                 }}
             >
                 <div className="hidden">
