@@ -50,7 +50,7 @@ export const CircleSidePanel: React.FC<CircleSidePanelProps> = ({ circle, isComp
         <div className={`rounded-lg bg-white p-4 ${isCompact ? "max-h-[200px] overflow-y-auto" : ""}`}>
             {circle.causes && circle.causes.length > 0 && (
                 <div>
-                    <h3 className="mb-2 text-lg font-semibold">Sustainable Development Goals (SDGs)</h3>
+                    <h3 className="mb-2 text-lg font-semibold">SDGs</h3>
                     <SdgList sdgHandles={circle.causes} />
                 </div>
             )}

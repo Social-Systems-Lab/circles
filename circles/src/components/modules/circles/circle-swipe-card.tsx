@@ -284,9 +284,7 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                         {/* SDGs */}
                         {circle.causes && circle.causes.length > 0 && (
                             <div className="mt-4">
-                                <h3 className="mb-1.5 text-xs font-medium uppercase text-gray-500">
-                                    Sustainable Development Goals (SDGs)
-                                </h3>
+                                <h3 className="mb-1.5 text-xs font-medium uppercase text-gray-500">SDGs</h3>
                                 <SdgList sdgHandles={circle.causes.slice(0, 8)} />
                             </div>
                         )}
