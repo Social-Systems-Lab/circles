@@ -1,19 +1,16 @@
 import Image from "next/image";
-import { Cause as SDG, Circle, Skill } from "@/models/models";
-import { sdgs } from "@/lib/data/sdgs";
+import { Circle, Skill } from "@/models/models";
 import { skills } from "@/lib/data/skills";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import SdgList from "../sdgs/SdgList";
 
 type CauseSkillItemProps = {
     handle: string;
-    type: "sdg" | "skill";
+    type: "skill";
 };
 
 const CauseSkillItem: React.FC<CauseSkillItemProps> = ({ handle, type }) => {
-    const item =
-        type == "sdg"
-            ? (sdgs.find((x) => x.handle === handle) as SDG)
-            : (skills.find((x) => x.handle === handle) as Skill);
+    const item = skills.find((x) => x.handle === handle) as Skill;
 
     if (!item) {
         return null;
@@ -26,8 +23,8 @@ const CauseSkillItem: React.FC<CauseSkillItemProps> = ({ handle, type }) => {
                     <Image src={item.picture.url} alt={item.name} width={40} height={40} className="rounded-full" />
                 </div>
             </HoverCardTrigger>
-            <HoverCardContent>
-                <h3 className="text-lg font-semibold">{item.name}</h3>
+            <HoverCardContent className="formatted">
+                <p className="text-lg font-semibold">{item.name}</p>
                 <p className="text-sm">{item.description}</p>
             </HoverCardContent>
         </HoverCard>
@@ -53,12 +50,8 @@ export const CircleSidePanel: React.FC<CircleSidePanelProps> = ({ circle, isComp
         <div className={`rounded-lg bg-white p-4 ${isCompact ? "max-h-[200px] overflow-y-auto" : ""}`}>
             {circle.causes && circle.causes.length > 0 && (
                 <div>
-                    <h3 className="mb-2 text-lg font-semibold">SDGs</h3>
-                    <div className="grid grid-cols-4 gap-2 pb-2">
-                        {circle.causes.map((sdg) => (
-                            <CauseSkillItem key={sdg} handle={sdg} type="sdg" />
-                        ))}
-                    </div>
+                    <h3 className="mb-2 text-lg font-semibold">Sustainable Development Goals (SDGs)</h3>
+                    <SdgList sdgHandles={circle.causes} />
                 </div>
             )}
             {circle.skills && circle.skills.length > 0 && (

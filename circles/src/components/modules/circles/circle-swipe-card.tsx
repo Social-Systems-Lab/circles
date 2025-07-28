@@ -21,6 +21,7 @@ import { sdgs } from "@/lib/data/sdgs";
 import { skills } from "@/lib/data/skills";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge"; // Import Badge for pills
+import SdgList from "../sdgs/SdgList";
 
 // Helper mappings for quick lookup
 const sdgMap = new Map(sdgs.map((s) => [s.handle, s]));
@@ -280,33 +281,13 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                             </div>
                         )} */}
 
-                        {/* SDGs Pills */}
+                        {/* SDGs */}
                         {circle.causes && circle.causes.length > 0 && (
                             <div className="mt-4">
-                                <h3 className="mb-1.5 text-xs font-medium uppercase text-gray-500">SDGs</h3>
-                                <div className="flex flex-wrap items-center gap-2">
-                                    {circle.causes.slice(0, 8).map((handle) => {
-                                        // Limit pills shown
-                                        const sdg = sdgMap.get(handle);
-                                        if (!sdg) return null;
-                                        return (
-                                            <Badge
-                                                key={handle}
-                                                variant="outline"
-                                                className="flex items-center gap-1.5 px-2 py-1"
-                                            >
-                                                <Image
-                                                    src={sdg.picture.url}
-                                                    alt="" // Alt handled by text
-                                                    width={16}
-                                                    height={16}
-                                                    className="h-4 w-4 rounded-full object-cover"
-                                                />
-                                                <span className="text-xs font-medium">{sdg.name}</span>
-                                            </Badge>
-                                        );
-                                    })}
-                                </div>
+                                <h3 className="mb-1.5 text-xs font-medium uppercase text-gray-500">
+                                    Sustainable Development Goals (SDGs)
+                                </h3>
+                                <SdgList sdgHandles={circle.causes.slice(0, 8)} />
                             </div>
                         )}
 

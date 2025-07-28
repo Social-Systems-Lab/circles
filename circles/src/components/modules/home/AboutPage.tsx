@@ -13,6 +13,7 @@ import { sdgs } from "@/lib/data/sdgs";
 import { skills } from "@/lib/data/skills";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import RichText from "../feeds/RichText";
+import SdgList from "../sdgs/SdgList";
 
 // Helper mappings for quick lookup
 const sdgMap = new Map(sdgs.map((s) => [s.handle, s]));
@@ -111,42 +112,8 @@ export default function AboutPage({ circle }: AboutPageProps) {
                             {/* SDGs */}
                             {circle.causes && circle.causes.length > 0 && (
                                 <div className="mb-6 w-full">
-                                    {" "}
-                                    {/* Increased mb */}
-                                    <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-                                        SDGs
-                                    </div>{" "}
-                                    {/* Increased mb */}
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        {circle.causes.map((handle) => {
-                                            const sdg = sdgMap.get(handle);
-                                            if (!sdg) return null;
-                                            return (
-                                                <Popover key={handle}>
-                                                    <PopoverTrigger>
-                                                        <Badge
-                                                            variant="outline"
-                                                            className="flex items-center gap-1.5 px-2.5 py-1.5" // Increased padding
-                                                        >
-                                                            <Image
-                                                                src={sdg.picture.url}
-                                                                alt=""
-                                                                width={20} // Increased size
-                                                                height={20} // Increased size
-                                                                className="h-5 w-5 rounded-full object-cover" // Increased size
-                                                            />
-                                                            <span className="text-sm font-medium">{sdg.name}</span>{" "}
-                                                            {/* Increased text size */}
-                                                        </Badge>
-                                                    </PopoverTrigger>
-                                                    <PopoverContent>
-                                                        <h3 className="font-bold">{sdg.name}</h3>
-                                                        <p>{sdg.description}</p>
-                                                    </PopoverContent>
-                                                </Popover>
-                                            );
-                                        })}
-                                    </div>
+                                    <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">SDGs</div>
+                                    <SdgList sdgHandles={circle.causes} />
                                 </div>
                             )}
 
