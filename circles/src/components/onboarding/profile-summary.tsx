@@ -1,6 +1,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { OnboardingUserData } from "./onboarding";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface ProfileSummaryProps {
     userData: OnboardingUserData;
@@ -20,11 +21,19 @@ export default function ProfileSummary({ userData }: ProfileSummaryProps) {
             <hr className="my-4" />
             <div>
                 <h3 className="text-md font-semibold">SDGs</h3>
-                <div className="mt-2 flex flex-wrap gap-2">
+                <div className="mt-2 grid grid-cols-3 gap-2">
                     {userData.selectedSdgs.map((sdg) => (
-                        <Badge key={sdg.handle} variant="outline">
-                            {sdg.name}
-                        </Badge>
+                        <Popover key={sdg.handle}>
+                            <PopoverTrigger>
+                                <div className="aspect-square overflow-hidden rounded-lg">
+                                    <img src={sdg.picture?.url} alt={sdg.name} className="h-full w-full object-cover" />
+                                </div>
+                            </PopoverTrigger>
+                            <PopoverContent>
+                                <h3 className="font-bold">{sdg.name}</h3>
+                                <p>{sdg.description}</p>
+                            </PopoverContent>
+                        </Popover>
                     ))}
                 </div>
             </div>

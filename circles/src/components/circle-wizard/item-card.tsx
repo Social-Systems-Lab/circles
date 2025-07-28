@@ -1,11 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Cause, Skill } from "@/models/models";
 import Image from "next/image";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Indicators from "../utils/indicators";
 import { sdgs } from "@/lib/data/sdgs";
 import { skills } from "@/lib/data/skills";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 type Item = Cause | Skill;
 
@@ -23,31 +24,55 @@ export const ItemGridCard = ({ item, isSelected, onToggle, isCause }: ItemGridCa
         <Card
             onClick={() => onToggle(item)}
             className={cn(
-                "relative cursor-pointer transition-all duration-200 hover:shadow-lg",
+                "formatted relative cursor-pointer transition-all duration-200 hover:shadow-lg",
                 isSelected ? "border-2 border-blue-500 shadow-lg" : "border",
+                isCause ? "overflow-hidden" : "",
             )}
         >
-            <CardHeader className="relative p-0">
-                <div className="relative mb-3 mt-1 h-[90px] w-[90px] rounded-full shadow-lg">
-                    {/* clip-sdg-100  */}
+            <CardHeader className="relative flex items-center justify-center p-0">
+                {isCause ? (
                     <Image
                         src={itemc?.picture?.url ?? "/images/default-picture.png"}
                         alt={item.name}
-                        width={100}
-                        height={100}
-                        className="h-full w-full rounded-full object-cover"
-                        style={{ clipPath: "url(#clip-sdg-100)" }}
+                        width={200}
+                        height={200}
+                        className="aspect-square w-full object-cover"
                     />
-                </div>
+                ) : (
+                    <div className="relative mb-3 mt-1 h-[90px] w-[90px] rounded-full shadow-lg">
+                        <Image
+                            src={itemc?.picture?.url ?? "/images/default-picture.png"}
+                            alt={item.name}
+                            width={100}
+                            height={100}
+                            className="h-full w-full rounded-full object-cover"
+                            style={{ clipPath: "url(#clip-sdg-100)" }}
+                        />
+                    </div>
+                )}
                 {isSelected && (
                     <div className="absolute right-2 top-2 rounded-full bg-white">
                         <CheckCircle className="h-6 w-6 text-blue-500" />
                     </div>
                 )}
             </CardHeader>
-            <CardContent className="p-4">
-                <CardTitle className="mb-2 text-base font-semibold">{item.name}</CardTitle>
-                <p className="text-xs text-gray-600">{item.description}</p>
+            <CardContent className="p-0">
+                {isCause ? (
+                    <Popover>
+                        <PopoverTrigger className="absolute inset-0">
+                            <span className="sr-only">View details for {item.name}</span>
+                        </PopoverTrigger>
+                        <PopoverContent>
+                            <h3 className="font-bold">{item.name}</h3>
+                            <p>{item.description}</p>
+                        </PopoverContent>
+                    </Popover>
+                ) : (
+                    <div className="p-4">
+                        <CardTitle className="mb-2 text-base font-semibold">{item.name}</CardTitle>
+                        <p className="text-xs text-gray-600">{item.description}</p>
+                    </div>
+                )}
             </CardContent>
         </Card>
     );

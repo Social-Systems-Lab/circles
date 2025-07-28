@@ -103,7 +103,9 @@ export default function SdgsStep({ circleData, setCircleData, nextStep, prevStep
     return (
         <div className="space-y-4">
             <h2 className="text-2xl font-bold">Choose SDGs</h2>
-            <p className="text-gray-500">Select SDGs that align with your community's mission:</p>
+            <p className="text-gray-500">
+                Select Sustainable Development Goals (SDGs) that align with your community&apos;s mission:
+            </p>
 
             <div className="relative">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 transform text-gray-400" />
@@ -137,7 +139,7 @@ export default function SdgsStep({ circleData, setCircleData, nextStep, prevStep
 
                 {visibleSdgs.length === 0 && (
                     <div className="col-span-3 py-8 text-center text-gray-500">
-                        No SDGs found matching "{sdgSearch}"
+                        No SDGs found matching &quot;{sdgSearch}&quot;
                     </div>
                 )}
             </ScrollArea>

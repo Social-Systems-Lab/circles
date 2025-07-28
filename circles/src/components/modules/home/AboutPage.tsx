@@ -1,15 +1,18 @@
 "use client";
 
 import React from "react";
-import { Circle } from "@/models/models";
-import { MapPin, Quote } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
-
+import { Circle } from "@/models/models";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MapPin, Quote } from "lucide-react";
+import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import CircleTags from "@/components/modules/circles/circle-tags";
 import { sdgs } from "@/lib/data/sdgs";
 import { skills } from "@/lib/data/skills";
 import { useIsCompact } from "@/components/utils/use-is-compact";
+import RichText from "../feeds/RichText";
 
 // Helper mappings for quick lookup
 const sdgMap = new Map(sdgs.map((s) => [s.handle, s]));
@@ -19,139 +22,172 @@ interface AboutPageProps {
     circle: Circle;
 }
 
-export const AboutPage: React.FC<AboutPageProps> = ({ circle }) => {
+export default function AboutPage({ circle }: AboutPageProps) {
     const isCompact = useIsCompact();
 
-    // Check if there is any content to display
-    const hasContent =
-        !!circle.description ||
+    // Check if sidebar has any content
+    const hasSidebarContent =
         !!circle.mission ||
         !!(circle.location && (circle.location.city || circle.location.region || circle.location.country)) ||
         !!(circle.causes && circle.causes.length > 0) ||
         !!(circle.skills && circle.skills.length > 0);
 
-    if (!hasContent) {
-        return (
-            <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-8 text-center">
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-700">No Information Yet</h2>
-                    <p className="mt-2 text-gray-500">This community hasn&apos;t shared any details yet.</p>
-                </div>
-            </div>
-        );
-    }
+    const hasMainContent = !!circle.content || !!circle.description;
 
     return (
-        <div className="custom-scrollbar h-full space-y-6 overflow-y-auto rounded-lg bg-white p-6">
-            {/* Mission and Description */}
-            <div className="space-y-4">
-                {circle.mission && (
-                    <div className="relative rounded-lg border bg-gray-50 p-4 pl-10 shadow-sm">
-                        <Quote className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                        <p className="text-lg italic text-gray-800">{circle.mission}</p>
+        <div className="formatted mx-auto max-w-[1100px] px-0 py-0 md:px-4 md:py-6">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                {/* --- Main Content Column --- */}
+                {/* Adjust column span based on sidebar visibility */}
+                <div className={hasSidebarContent ? "md:col-span-2" : "md:col-span-3"}>
+                    <div className={`bg-white p-6 ${isCompact ? "rounded-none" : "rounded-[15px] border-0 shadow-lg"}`}>
+                        {/* Main Content */}
+                        {hasMainContent ? (
+                            <>
+                                <h1 className="my-4">About</h1>
+                                {circle.content ? (
+                                    <RichText content={circle.content} />
+                                ) : (
+                                    <p className="mb-6 text-base">{circle.description}</p>
+                                )}
+                            </>
+                        ) : (
+                            // Default text if no content or description
+                            <>
+                                <h1 className="my-4">About</h1>
+                                <p className="mb-6 text-base text-muted-foreground">
+                                    This circle hasn&apos;t added a description yet.
+                                </p>
+                            </>
+                        )}
                     </div>
-                )}
-                {circle.description && (
-                    <div className="prose prose-lg max-w-none text-gray-700">
-                        <p>{circle.description}</p>
-                    </div>
-                )}
-            </div>
-
-            {/* Rich Content */}
-            {circle.content && (
-                <div className="prose prose-lg max-w-none rounded-lg border bg-gray-50/50 p-4 shadow-sm"></div>
-            )}
-
-            {/* Tags */}
-            {circle.interests && circle.interests.length > 0 && (
-                <div className="w-full">
-                    <h3 className="mb-3 text-xl font-semibold text-gray-800">Tags</h3>
-                    <CircleTags tags={circle.interests} />
                 </div>
-            )}
+                {/* --- Sidebar Column (Conditionally Rendered) --- */}
+                {hasSidebarContent && (
+                    <div className="md:col-span-1">
+                        <div
+                            className={`flex flex-col items-center bg-white p-6
+                        ${isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"}
+                        `}
+                        >
+                            {/* Mission */}
+                            {circle.mission && (
+                                <div className="mb-6 flex w-full flex-col text-sm text-muted-foreground">
+                                    {" "}
+                                    {/* Increased mb */}
+                                    <div className="mb-1.5 text-xs font-medium uppercase text-muted-foreground">
+                                        Mission
+                                    </div>
+                                    <div className="text-[15px] text-foreground">{circle.mission}</div>{" "}
+                                    {/* Increased text size */}
+                                </div>
+                            )}
 
-            {/* Details Grid */}
-            <div className={`grid grid-cols-1 gap-6 ${isCompact ? "" : "md:grid-cols-2"}`}>
-                {/* Location */}
-                {circle.location && (circle.location.city || circle.location.region || circle.location.country) && (
-                    <div className="w-full">
-                        <h3 className="mb-3 text-xl font-semibold text-gray-800">Location</h3>
-                        <div className="flex items-center text-lg text-gray-700">
-                            <MapPin className="mr-2 h-6 w-6 flex-shrink-0 text-gray-500" />
-                            <span>
-                                {[circle.location.city, circle.location.region, circle.location.country]
-                                    .filter(Boolean)
-                                    .join(", ")}
-                            </span>
+                            {/* Location */}
+                            {circle.location &&
+                                (circle.location.city || circle.location.region || circle.location.country) && (
+                                    <div className="mb-6 flex w-full flex-col text-sm text-muted-foreground">
+                                        {" "}
+                                        {/* Increased mb */}
+                                        <div className="mb-1.5 text-xs font-medium uppercase text-muted-foreground">
+                                            Location
+                                        </div>
+                                        <div className="flex flex-row items-center text-foreground">
+                                            {" "}
+                                            {/* Added text-foreground */}
+                                            <MapPin className="mr-1.5 h-5 w-5 flex-shrink-0 text-muted-foreground" />{" "}
+                                            {/* Increased icon size & color */}
+                                            <span className="text-[15px]">
+                                                {" "}
+                                                {/* Increased text size */}
+                                                {[circle.location.city, circle.location.region, circle.location.country]
+                                                    .filter(Boolean)
+                                                    .join(", ")}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+
+                            {/* SDGs */}
+                            {circle.causes && circle.causes.length > 0 && (
+                                <div className="mb-6 w-full">
+                                    {" "}
+                                    {/* Increased mb */}
+                                    <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                                        SDGs
+                                    </div>{" "}
+                                    {/* Increased mb */}
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {circle.causes.map((handle) => {
+                                            const sdg = sdgMap.get(handle);
+                                            if (!sdg) return null;
+                                            return (
+                                                <Popover key={handle}>
+                                                    <PopoverTrigger>
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="flex items-center gap-1.5 px-2.5 py-1.5" // Increased padding
+                                                        >
+                                                            <Image
+                                                                src={sdg.picture.url}
+                                                                alt=""
+                                                                width={20} // Increased size
+                                                                height={20} // Increased size
+                                                                className="h-5 w-5 rounded-full object-cover" // Increased size
+                                                            />
+                                                            <span className="text-sm font-medium">{sdg.name}</span>{" "}
+                                                            {/* Increased text size */}
+                                                        </Badge>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent>
+                                                        <h3 className="font-bold">{sdg.name}</h3>
+                                                        <p>{sdg.description}</p>
+                                                    </PopoverContent>
+                                                </Popover>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Skills/Needs */}
+                            {circle.skills && circle.skills.length > 0 && (
+                                <div className="w-full">
+                                    <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                                        {" "}
+                                        {/* Increased mb */}
+                                        {circle.circleType === "user" ? "Skills" : "Needs"}
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {circle.skills.map((handle) => {
+                                            const skill = skillMap.get(handle);
+                                            if (!skill) return null;
+                                            return (
+                                                <Badge
+                                                    key={handle}
+                                                    variant="outline"
+                                                    className="flex items-center gap-1.5 px-2.5 py-1.5" // Increased padding
+                                                >
+                                                    <Image
+                                                        src={skill.picture.url}
+                                                        alt=""
+                                                        width={20} // Increased size
+                                                        height={20} // Increased size
+                                                        className="h-5 w-5 rounded-full object-cover" // Increased size
+                                                    />
+                                                    <span className="text-sm font-medium">{skill.name}</span>{" "}
+                                                    {/* Increased text size */}
+                                                </Badge>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
-                )}
-
-                {/* SDGs */}
-                {circle.causes && circle.causes.length > 0 && (
-                    <div className="mb-6 w-full">
-                        <h3 className="mb-3 text-xl font-semibold text-gray-800">
-                            Sustainable Development Goals (SDGs)
-                        </h3>
-                        <div className="flex flex-wrap items-center gap-2">
-                            {circle.causes.map((handle) => {
-                                const sdg = sdgMap.get(handle);
-                                if (!sdg) return null;
-                                return (
-                                    <Badge
-                                        key={handle}
-                                        variant="outline"
-                                        className="flex items-center gap-2 rounded-full border-gray-300 px-3 py-1.5"
-                                    >
-                                        <Image
-                                            src={sdg.picture.url}
-                                            alt=""
-                                            width={20}
-                                            height={20}
-                                            className="h-5 w-5 rounded-full object-cover"
-                                        />
-                                        <span className="text-sm font-medium">{sdg.name}</span>{" "}
-                                        {/* Increased text size */}
-                                    </Badge>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
-
-                {/* Skills/Needs */}
-                {circle.skills && circle.skills.length > 0 && (
-                    <div className="w-full">
-                        <h3 className="mb-3 text-xl font-semibold text-gray-800">
-                            {circle.circleType === "user" ? "Skills" : "Needs"}
-                        </h3>
-                        <div className="flex flex-wrap items-center gap-2">
-                            {circle.skills.map((handle) => {
-                                const skill = skillMap.get(handle);
-                                if (!skill) return null;
-                                return (
-                                    <Badge
-                                        key={handle}
-                                        variant="outline"
-                                        className="flex items-center gap-2 rounded-full border-gray-300 px-3 py-1.5"
-                                    >
-                                        <Image
-                                            src={skill.picture.url}
-                                            alt=""
-                                            width={20}
-                                            height={20}
-                                            className="h-5 w-5 rounded-full object-cover"
-                                        />
-                                        <span className="text-sm font-medium">{skill.name}</span>{" "}
-                                        {/* Increased text size */}
-                                    </Badge>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
+                )}{" "}
+                {/* <-- Added missing closing parenthesis */}
             </div>
         </div>
     );
-};
+}

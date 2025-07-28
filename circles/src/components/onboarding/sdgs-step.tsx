@@ -86,7 +86,9 @@ function SdgsStep({ userData, setUserData, nextStep, prevStep }: OnboardingStepP
     return (
         <div className="space-y-4">
             <h2 className="mb-0 mt-0 text-2xl  font-semibold text-gray-800">Choose Your SDGs</h2>
-            <p className="text-gray-600">Select at least two SDGs that align with your mission:</p>
+            <p className="text-gray-600">
+                Select at least two Sustainable Development Goals (SDGs) that align with your mission:
+            </p>
             <div className="relative">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 transform text-gray-400" />
                 <Input
