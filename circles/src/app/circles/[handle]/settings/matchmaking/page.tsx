@@ -1,27 +1,28 @@
-import { MatchmakingSettingsForm } from "@/components/forms/circle-settings/matchmaking-settings-form";
 import { getCircleByHandle } from "@/lib/data/circle";
+import { MatchmakingSettingsForm } from "@/components/forms/circle-settings/matchmaking-settings-form";
+import { Separator } from "@/components/ui/separator";
 
-type PageProps = {
-    params: Promise<{ handle: string }>;
-    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+type MatchmakingSettingsProps = {
+    params: { handle: string };
 };
 
-export default async function MatchmakingSettingsPage(props: PageProps) {
-    const params = await props.params;
-    const { handle } = params;
-    const circle = await getCircleByHandle(handle);
+export default async function MatchmakingSettings(props: MatchmakingSettingsProps) {
+    const circle = await getCircleByHandle(props.params.handle);
 
     if (!circle) {
         return <div>Circle not found</div>;
     }
 
     return (
-        <div className="container py-6">
-            <h1 className="mb-6 text-2xl font-bold">Matchmaking Settings</h1>
-            <p className="mb-6 text-muted-foreground">
-                Configure your circle&apos;s causes and skills to improve matchmaking with potential members and other
-                circles.
-            </p>
+        <div className="space-y-6">
+            <div>
+                <h3 className="text-lg font-medium">Matchmaking</h3>
+                <p className="text-sm text-muted-foreground">
+                    Configure your circle&apos;s SDGs and skills to improve matchmaking with potential members and other
+                    circles.
+                </p>
+            </div>
+            <Separator />
             <MatchmakingSettingsForm circle={circle} />
         </div>
     );

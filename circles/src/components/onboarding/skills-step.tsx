@@ -15,7 +15,7 @@ import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { ItemGrid, ItemList } from "./item-card";
 import { useIsMobile } from "../utils/use-is-mobile";
-import { skills } from "@/lib/data/causes-skills";
+import { skills } from "@/lib/data/skills";
 
 function SkillsStep({ userData, setUserData, nextStep, prevStep }: OnboardingStepProps) {
     const [skillSearch, setSkillSearch] = useState("");

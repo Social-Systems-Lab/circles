@@ -703,7 +703,7 @@ export type FormFieldType =
     | "questionnaire"
     | "tags"
     | "location"
-    | "causes"
+    | "sdgs"
     | "skills"
     | "auto-handle";
 
@@ -1076,7 +1076,7 @@ export const ONBOARDING_STEPS = [
     "mission",
     "profile",
     "location",
-    "causes",
+    "sdgs",
     "skills",
     "final",
 ] as const;

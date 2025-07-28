@@ -1,10 +1,11 @@
 import { QdrantClient } from "@qdrant/js-client-rest";
-import { Cause, Skill, Circle, Post, MemberDisplay, PostDisplay } from "../../models/models";
+import { Cause as SDG, Skill, Circle, Post, MemberDisplay, PostDisplay } from "../../models/models";
 import { ObjectId } from "mongodb";
-import { Causes, Circles, Posts, Skills } from "./db";
+import { Circles, Posts, Skills } from "./db";
 import { getFullLocationName } from "../utils";
 import OpenAI from "openai";
-import { causes, skills } from "@/lib/data/causes-skills";
+import { sdgs } from "@/lib/data/sdgs";
+import { skills } from "@/lib/data/skills";
 import { getPostsForEmbedding } from "./feed";
 import { v5 as uuidv5 } from "uuid";
 
@@ -32,8 +33,8 @@ export const getOpenAiClient = () => {
     return openAiClient;
 };
 
-export type VbdCategories = "circles" | "causes" | "skills" | "posts";
-const vdbCollections = ["circles", "causes", "skills", "posts"];
+export type VbdCategories = "circles" | "sdgs" | "skills" | "posts";
+const vdbCollections = ["circles", "sdgs", "skills", "posts"];
 
 const getEmbeddings = async (textArray: string[]) => {
     try {
@@ -82,9 +83,9 @@ export const upsertVdbCollections = async () => {
     await upsertVbdPosts(posts);
     console.log(`${posts.length} posts upserted.`);
 
-    console.log("Upserting causes to Qdrant...");
-    await upsertVbdCauses();
-    console.log(`${causes.length} causes upserted.`);
+    console.log("Upserting sdgs to Qdrant...");
+    await upsertVbdSdgs();
+    console.log(`${sdgs.length} sdgs upserted.`);
 
     console.log("Upserting skills to Qdrant...");
     await upsertVbdSkills();
@@ -93,7 +94,7 @@ export const upsertVdbCollections = async () => {
 
 // Helper function to format a circle into readable text
 export const formatCircleForEmbedding = (circle: Circle) => {
-    const causeNames = getNamesFromHandles(circle.causes || [], causes);
+    const sdgNames = getNamesFromHandles(circle.causes || [], sdgs);
     const skillNames = getNamesFromHandles(circle.skills || [], skills);
 
     const skillsLabel = circle.circleType === "user" ? "offers" : "needs";
@@ -104,7 +105,7 @@ export const formatCircleForEmbedding = (circle: Circle) => {
       Description: ${circle.description ?? "N/A"}
       Mission: ${circle.mission ?? "N/A"}
       Location: ${circle.location ? getFullLocationName(circle.location) : "N/A"}
-      Causes: ${causeNames.length <= 0 ? "N/A" : causeNames.join(", ")}
+      SDGs: ${sdgNames.length <= 0 ? "N/A" : sdgNames.join(", ")}
       ${skillsLabel}: ${skillNames.length <= 0 ? "N/A" : skillNames.join(", ")}
       Content: ${circle.content ?? "N/A"}
     `;
@@ -128,15 +129,15 @@ export const formatSkillForEmbedding = (skill: Skill) => {
     `;
 };
 
-// Helper function to format a cause for embedding
-export const formatCauseForEmbedding = (cause: Cause) => {
+// Helper function to format a sdg for embedding
+export const formatSdgForEmbedding = (sdg: SDG) => {
     return `
-      Name: ${cause.name}
-      Description: ${cause.description ?? ""}
+      Name: ${sdg.name}
+      Description: ${sdg.description ?? ""}
     `;
 };
 
-// Utility function to map handles to names for causes or skills
+// Utility function to map handles to names for sdgs or skills
 const getNamesFromHandles = (handles: string[], data: any[]) => {
     return handles.map((handle) => {
         const item = data.find((d) => d.handle === handle);
@@ -146,7 +147,7 @@ const getNamesFromHandles = (handles: string[], data: any[]) => {
 
 const circleNs = "374c3b2f-be54-5c82-b3a1-f16f7b205cdc";
 const postNs = "425f7857-1b1b-5ddc-b797-bd12ff00023c";
-const causeNs = "2fb0c076-39d6-5c9b-b98d-24409f4ebfbc";
+const sdgNs = "2fb0c076-39d6-5c9b-b98d-24409f4ebfbc";
 const skillNs = "e8b887ec-5e3d-5383-9565-7fc72bb0e251";
 
 // Upsert function for circles
@@ -199,7 +200,7 @@ export const upsertVbdCircles = async (circles: Circle[]) => {
     await client.upsert("circles", { points: qdrantPoints });
 };
 
-// Repeat similar logic for posts, causes, and skills
+// Repeat similar logic for posts, sdgs, and skills
 export const upsertVbdPosts = async (posts: PostDisplay[]) => {
     const client = await getQdrantClient();
 
@@ -230,34 +231,34 @@ export const upsertVbdPosts = async (posts: PostDisplay[]) => {
     await client.upsert("posts", { points: qdrantPoints });
 };
 
-// Upsert function for causes
-export const upsertVbdCauses = async () => {
+// Upsert function for sdgs
+export const upsertVbdSdgs = async () => {
     const client = await getQdrantClient();
 
-    // Ensure all causes have valid `handle` fields
-    const validCauses = causes.filter((cause) => cause.handle);
-    if (validCauses.length <= 0) {
-        console.log("No valid causes to upsert.");
+    // Ensure all sdgs have valid `handle` fields
+    const validSdgs = sdgs.filter((sdg) => sdg.handle);
+    if (validSdgs.length <= 0) {
+        console.log("No valid sdgs to upsert.");
         return;
     }
 
-    console.log("Getting embeddings for causes...");
+    console.log("Getting embeddings for sdgs...");
 
-    const embeddings = await getEmbeddings(validCauses.map((cause) => formatCauseForEmbedding(cause)));
+    const embeddings = await getEmbeddings(validSdgs.map((sdg) => formatSdgForEmbedding(sdg)));
 
-    const qdrantPoints = validCauses.map((cause, i) => ({
-        id: uuidv5(cause.handle as string, causeNs), // Ensure handle is always a string
+    const qdrantPoints = validSdgs.map((sdg, i) => ({
+        id: uuidv5(sdg.handle as string, sdgNs), // Ensure handle is always a string
         vector: embeddings[i], // Ensure embedding is a valid number[]
         payload: {
-            name: cause.name,
-            description: cause.description,
+            name: sdg.name,
+            description: sdg.description,
         },
     }));
 
     console.log("Upserting embeddings...");
 
-    // Upsert into the 'causes' collection in Qdrant
-    await client.upsert("causes", { points: qdrantPoints });
+    // Upsert into the 'sdgs' collection in Qdrant
+    await client.upsert("sdgs", { points: qdrantPoints });
 };
 
 // Upsert function for skills

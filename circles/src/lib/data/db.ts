@@ -8,7 +8,7 @@ import {
     Post,
     Reaction,
     Comment,
-    Cause,
+    Cause as SDG,
     Skill,
     ChatRoom,
     ChatMessage,
@@ -44,7 +44,7 @@ let Feeds: Collection<Feed>;
 let Posts: Collection<Post>;
 let Comments: Collection<Comment>;
 let Reactions: Collection<Reaction>;
-let Causes: Collection<Cause>;
+let Sdgs: Collection<SDG>;
 let Skills: Collection<Skill>;
 let ChatRooms: Collection<ChatRoom>;
 let ChatMessages: Collection<ChatMessage>;
@@ -79,7 +79,7 @@ if (process.env.IS_BUILD !== "true") {
     Posts = db.collection<Post>("posts");
     Comments = db.collection<Comment>("comments");
     Reactions = db.collection<Reaction>("reactions");
-    Causes = db.collection<Cause>("causes");
+    Sdgs = db.collection<SDG>("sdgs");
     Skills = db.collection<Skill>("skills");
     ChatRooms = db.collection<ChatRoom>("chatRooms");
     ChatMessages = db.collection<ChatMessage>("chatMessages");
@@ -108,7 +108,7 @@ export {
     Comments,
     Reactions,
     Skills,
-    Causes,
+    Sdgs,
     ChatRooms,
     ChatMessages,
     ChatRoomMembers,

@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
-import { Causes, Circles, ServerSettingsCollection, Skills } from "./db";
+import { Sdgs, Circles, ServerSettingsCollection, Skills } from "./db";
 import { Circle, RegistryInfo, ServerSettings } from "@/models/models";
 import { createDefaultCircle } from "./circle";
 import { ObjectId } from "mongodb";
 import { createServerDid, getServerPublicKey, signRegisterServerChallenge } from "../auth/auth";
-import { causes, skills } from "@/lib/data/causes-skills";
+import { sdgs } from "@/lib/data/sdgs";
+import { skills } from "@/lib/data/skills";
 
 const ENV_TO_SETTINGS_MAP: Record<string, keyof ServerSettings> = {
     CIRCLES_INSTANCE_NAME: "name",
@@ -15,23 +16,23 @@ const ENV_TO_SETTINGS_MAP: Record<string, keyof ServerSettings> = {
     MAPBOX_API_KEY: "mapboxKey",
 };
 
-export const upsertCausesAndSkills = async () => {
+export const upsertSdgsAndSkills = async () => {
     try {
-        // Upsert causes
-        for (const cause of causes) {
-            await Causes.updateOne(
-                { handle: cause.handle }, // Find the document by handle
+        // Upsert sdgs
+        for (const sdg of sdgs) {
+            await Sdgs.updateOne(
+                { handle: sdg.handle }, // Find the document by handle
                 {
                     $set: {
-                        name: cause.name,
-                        picture: cause.picture,
-                        description: cause.description,
+                        name: sdg.name,
+                        picture: sdg.picture,
+                        description: sdg.description,
                     },
                 },
                 { upsert: true }, // Insert if it doesn't exist, update if it does
             );
         }
-        console.log("All causes upserted successfully.");
+        console.log("All sdgs upserted successfully.");
 
         // Upsert skills
         for (const skill of skills) {
@@ -49,7 +50,7 @@ export const upsertCausesAndSkills = async () => {
         }
         console.log("All skills upserted successfully.");
     } catch (error) {
-        console.error("Error upserting causes or skills:", error);
+        console.error("Error upserting sdgs or skills:", error);
     }
 };
 

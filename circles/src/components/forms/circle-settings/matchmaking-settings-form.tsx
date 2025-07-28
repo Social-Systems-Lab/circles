@@ -63,11 +63,11 @@ export function MatchmakingSettingsForm({ circle }: MatchmakingSettingsFormProps
             <form onSubmit={form.handleSubmit(onSubmit)} className="formatted space-y-6">
                 <Card>
                     <CardHeader>
-                        <CardTitle>Causes</CardTitle>
+                        <CardTitle>SDGs</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <p className="mb-4 text-sm text-muted-foreground">
-                            Select the causes that your circle is focused on. This helps connect your circle with others
+                            Select the SDGs that your circle is focused on. This helps connect your circle with others
                             who share similar interests.
                         </p>
                         <Controller
@@ -77,10 +77,10 @@ export function MatchmakingSettingsForm({ circle }: MatchmakingSettingsFormProps
                                 <DynamicField
                                     field={{
                                         name: "causes",
-                                        type: "causes",
-                                        label: "Causes",
-                                        placeholder: "Search causes...",
-                                        description: "Select the causes that your circle is focused on.",
+                                        type: "sdgs",
+                                        label: "SDGs",
+                                        placeholder: "Search SDGs...",
+                                        description: "Select the SDGs that your circle is focused on.",
                                     }}
                                     formField={field}
                                     control={form.control as unknown as Control}

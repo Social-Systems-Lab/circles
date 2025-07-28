@@ -9,6 +9,7 @@ import { features } from "@/lib/data/constants";
 import { isFile, saveFile, deleteFile } from "@/lib/data/storage";
 import { addMember } from "@/lib/data/member";
 import { revalidatePath } from "next/cache";
+import { CircleData } from "./circle-wizard";
 
 // This action handles both creating a new circle (when circleId is null)
 // and updating the basic info of an existing one.
@@ -80,6 +81,35 @@ export async function saveBasicInfoAction(
         } else {
             return { success: false, message: "Failed to save basic info. " + JSON.stringify(error) };
         }
+    }
+}
+
+export async function createCircleAction(circleData: CircleData, userDid: string) {
+    try {
+        const authorized = await isAuthorized(userDid, circleData.parentCircleId ?? "", features.communities.create);
+        if (!authorized) {
+            return { success: false, message: "You are not authorized to create new circles" };
+        }
+
+        const newCircle = await createCircle({ ...circleData, picture: { url: circleData.picture } }, userDid);
+        await addMember(userDid, newCircle._id!, ["admins", "moderators", "members"]);
+
+        if (circleData.parentCircleId) {
+            const userCircle = await getUser(userDid);
+            if (userCircle && userCircle._id === circleData.parentCircleId) {
+                const moduleToEnable = "communities";
+                await ensureModuleIsEnabledOnCircle(circleData.parentCircleId, moduleToEnable, userDid);
+            }
+        }
+
+        return {
+            success: true,
+            message: "Circle created successfully",
+            data: { circleId: newCircle._id, handle: newCircle.handle },
+        };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to create circle.";
+        return { success: false, message: message + " " + JSON.stringify(error) };
     }
 }
 

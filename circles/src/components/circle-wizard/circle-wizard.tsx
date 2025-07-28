@@ -9,7 +9,7 @@ import BasicInfoStep from "./basic-info-step";
 import MissionStep from "./mission-step";
 import ProfileStep from "./profile-step";
 import LocationStep from "./location-step";
-import CausesStep from "./causes-step";
+import SdgsStep from "./sdgs-step";
 import SkillsStep from "./skills-step";
 import FinalStep from "./final-step";
 import CircleSummary from "./circle-summary";
@@ -25,7 +25,7 @@ export type CircleData = {
     description: string;
     content: string;
     location?: Location;
-    selectedCauses: Cause[];
+    selectedSdgs: Cause[];
     selectedSkills: Skill[];
     picture: string; // Keep profile picture string for now
     // cover: string; // Remove cover string
@@ -62,7 +62,7 @@ export default function CircleWizard({ onComplete, initialParentCircleId }: Circ
         mission: "",
         description: "",
         content: "",
-        selectedCauses: [],
+        selectedSdgs: [],
         selectedSkills: [],
         picture: "/images/default-picture.png",
         images: [], // Initialize images as empty array
@@ -80,7 +80,7 @@ export default function CircleWizard({ onComplete, initialParentCircleId }: Circ
             mission: "",
             description: "",
             content: "",
-            selectedCauses: [],
+            selectedSdgs: [],
             selectedSkills: [],
             picture: "/images/default-picture.png", // Reset picture
             images: [], // Reset images
@@ -100,7 +100,7 @@ export default function CircleWizard({ onComplete, initialParentCircleId }: Circ
             MissionStep,
             ProfileStep,
             LocationStep,
-            CausesStep,
+            SdgsStep,
             SkillsStep,
             FinalStep,
         ];
@@ -126,7 +126,7 @@ export default function CircleWizard({ onComplete, initialParentCircleId }: Circ
             case 3:
                 return `${entityType} Location`;
             case 4:
-                return "Choose Causes";
+                return "Choose SDGs";
             case 5:
                 return "Choose Needs";
             case 6:

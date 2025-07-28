@@ -29,7 +29,8 @@ import { cn } from "@/lib/utils";
 import { FaLock } from "react-icons/fa6";
 import { FaCheck } from "react-icons/fa";
 import { features, modules } from "@/lib/data/constants";
-import { causes, skills } from "@/lib/data/causes-skills";
+import { sdgs } from "@/lib/data/sdgs";
+import { skills } from "@/lib/data/skills";
 import { CheckCircle2, ChevronDown, ChevronUp, Loader2, Search, XCircle } from "lucide-react";
 import { getMemberAccessLevel, isAuthorized } from "@/lib/auth/client-auth";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
@@ -37,7 +38,7 @@ import { Switch } from "../ui/switch";
 import { WithContext as ReactTags } from "react-tag-input";
 import { getUserOrCircleInfo } from "@/lib/utils/form";
 import LocationPicker from "./location-picker";
-import { fetchCausesMatchedToCircle, fetchSkillsMatchedToCircle } from "../onboarding/actions";
+import { fetchSdgsMatchedToCircle, fetchSkillsMatchedToCircle } from "../onboarding/actions";
 import { ScrollArea } from "../ui/scroll-area";
 import { ItemGridCard } from "../onboarding/item-card";
 import SelectedItemBadge from "../onboarding/selected-item-badge";
@@ -1033,7 +1034,7 @@ export const DynamicLocationField: React.FC<RenderFieldProps> = ({ field, formFi
 };
 
 interface ItemSelectionFieldProps extends RenderFieldProps {
-    itemType: "causes" | "skills";
+    itemType: "sdgs" | "skills";
 }
 
 const ItemSelectionField: React.FC<ItemSelectionFieldProps> = ({
@@ -1049,8 +1050,8 @@ const ItemSelectionField: React.FC<ItemSelectionFieldProps> = ({
     const [isPending, startTransition] = useTransition();
     const circleId = useWatch({ control, name: "_id" });
 
-    const initialItems = itemType === "causes" ? causes : skills;
-    const fetchMatchedItems = itemType === "causes" ? fetchCausesMatchedToCircle : fetchSkillsMatchedToCircle;
+    const initialItems = itemType === "sdgs" ? sdgs : skills;
+    const fetchMatchedItems = itemType === "sdgs" ? fetchSdgsMatchedToCircle : fetchSkillsMatchedToCircle;
 
     const visibleItems = useMemo(() => {
         if (searchText) {
@@ -1114,7 +1115,7 @@ const ItemSelectionField: React.FC<ItemSelectionFieldProps> = ({
                                 item={item}
                                 isSelected={(formField.value || []).includes(item.handle)}
                                 onToggle={() => handleItemToggle(item)}
-                                isCause={itemType === "causes"}
+                                isCause={itemType === "sdgs"}
                             />
                         ))}
                     </div>
@@ -1179,7 +1180,7 @@ export const DynamicField: React.FC<RenderFieldProps> = ({ field, formField, con
         case "location":
             return DynamicLocationField({ field, formField, control, readOnly, isUser });
         case "skills":
-        case "causes":
+        case "sdgs":
             return (
                 <ItemSelectionField
                     field={field}

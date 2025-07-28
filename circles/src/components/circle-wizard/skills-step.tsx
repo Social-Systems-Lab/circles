@@ -11,7 +11,7 @@ import { Skill } from "@/models/models";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { ItemGrid, ItemList } from "./item-card";
 import SelectedItemBadge from "./selected-item-badge";
-import { skills } from "@/lib/data/causes-skills";
+import { skills } from "@/lib/data/skills";
 
 export default function SkillsStep({
     circleData,

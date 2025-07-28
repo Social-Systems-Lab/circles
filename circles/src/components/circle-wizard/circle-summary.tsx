@@ -1,102 +1,53 @@
-"use client";
-
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { CircleData } from "./circle-wizard";
 import { Badge } from "@/components/ui/badge";
-import { MapPin } from "lucide-react";
+import { CircleData } from "./circle-wizard";
 
 interface CircleSummaryProps {
     circleData: CircleData;
 }
 
 export default function CircleSummary({ circleData }: CircleSummaryProps) {
-    const { name, handle, isPublic, mission, description, picture, images, selectedCauses, selectedSkills, location } =
-        circleData;
-
-    // Determine the cover image URL from the images array
-    const coverImageUrl =
-        circleData.images?.[0]?.preview ||
-        circleData.images?.[0]?.existingMediaUrl ||
-        circleData.images?.[0]?.fileInfo?.url ||
-        "/images/default-cover.png";
+    const { name, mission, selectedSdgs, selectedSkills, picture } = circleData;
 
     return (
-        <div className="sticky top-0 w-[240px] space-y-4 rounded-xl bg-white p-4 shadow-sm">
-            <div className="relative h-24 w-full overflow-hidden rounded-lg">
-                {/* Use coverImageUrl */}
-                <img src={coverImageUrl} alt="Cover" className="h-full w-full object-cover" />
-            </div>
-
-            <div className="relative -mt-12 flex flex-col items-center">
-                <Avatar className="border-blue absolute top-[-50px] h-16 w-16 border-white">
-                    <AvatarImage src={picture || "/images/default-picture.png"} alt={name} />
-                    <AvatarFallback>{name?.slice(0, 2) || "CI"}</AvatarFallback>
+        <div className="formatted w-64 rounded-lg bg-white p-4 shadow-md">
+            <div className="flex flex-col items-center">
+                <Avatar className="h-24 w-24">
+                    <AvatarImage src={picture} alt={name} />
+                    <AvatarFallback>{name ? name.charAt(0) : "C"}</AvatarFallback>
                 </Avatar>
-                <h3 className="mb-0 mt-3 pb-0 text-center text-lg font-semibold">{name || "Circle Name"}</h3>
-                <p className="mb-0 mt-0 text-sm text-gray-500" style={{ marginBottom: 0, marginTop: 0 }}>
-                    @{handle || "handle"}
-                </p>
-                <Badge variant={isPublic ? "default" : "outline"} className="mt-1">
-                    {isPublic ? "Public" : "Private"}
-                </Badge>
+                <h2 className="mt-4 text-xl font-semibold">{name || "Community Name"}</h2>
+                <p className="mt-2 text-center text-sm text-gray-600">{mission || "Community mission..."}</p>
             </div>
-
-            {location && (
-                <div className="flex items-center gap-1 text-sm text-gray-500">
-                    <MapPin className="h-4 w-4" />
-                    <span>{location.city || location.region || location.country || "Location not specified"}</span>
-                </div>
-            )}
-
-            {description && (
-                <div className="space-y-1">
-                    <div className="text-md m-0 p-0 pb-0 font-semibold uppercase text-gray-500">About</div>
-                    <p className="text-sm text-gray-700">{description}</p>
-                </div>
-            )}
-
-            {mission && (
-                <div className="space-y-1">
-                    <div className="text-md m-0 p-0 pb-0 font-semibold uppercase text-gray-500">Community Mission</div>
-                    <p className="text-sm italic text-gray-700">&quot;{mission}&quot;</p>
-                </div>
-            )}
-
-            {selectedCauses.length > 0 && (
-                <div className="space-y-1">
-                    <div className="text-md m-0 p-0 pb-0 font-semibold uppercase text-gray-500">Causes</div>
-                    <div className="flex flex-wrap gap-1">
-                        {selectedCauses.slice(0, 3).map((cause) => (
-                            <Badge key={cause.handle} variant="secondary" className="text-xs">
-                                {cause.name}
+            <hr className="my-4" />
+            <div>
+                <h3 className="text-md font-semibold">SDGs</h3>
+                <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedSdgs.length > 0 ? (
+                        selectedSdgs.map((sdg) => (
+                            <Badge key={sdg.handle} variant="outline">
+                                {sdg.name}
                             </Badge>
-                        ))}
-                        {selectedCauses.length > 3 && (
-                            <Badge variant="secondary" className="text-xs">
-                                +{selectedCauses.length - 3} more
-                            </Badge>
-                        )}
-                    </div>
+                        ))
+                    ) : (
+                        <p className="text-sm text-gray-500">No SDGs selected</p>
+                    )}
                 </div>
-            )}
-
-            {selectedSkills.length > 0 && (
-                <div className="space-y-1">
-                    <div className="text-md m-0 p-0 pb-1 font-semibold uppercase text-gray-500">Skills</div>
-                    <div className="flex flex-wrap gap-1">
-                        {selectedSkills.slice(0, 3).map((skill) => (
-                            <Badge key={skill.handle} variant="secondary" className="text-xs">
+            </div>
+            <div className="mt-4">
+                <h3 className="text-md font-semibold">Needs</h3>
+                <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedSkills.length > 0 ? (
+                        selectedSkills.map((skill) => (
+                            <Badge key={skill.handle} variant="outline">
                                 {skill.name}
                             </Badge>
-                        ))}
-                        {selectedSkills.length > 3 && (
-                            <Badge variant="secondary" className="text-xs">
-                                +{selectedSkills.length - 3} more
-                            </Badge>
-                        )}
-                    </div>
+                        ))
+                    ) : (
+                        <p className="text-sm text-gray-500">No needs selected</p>
+                    )}
                 </div>
-            )}
+            </div>
         </div>
     );
 }

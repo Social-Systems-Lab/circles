@@ -35,9 +35,10 @@ import IssueDetail from "../modules/issues/issue-detail";
 import TaskDetail from "../modules/tasks/task-detail"; // Added TaskDetail import
 import { MapPin, Quote } from "lucide-react";
 import { CirclePicture } from "../modules/circles/circle-picture";
-import { causes, skills } from "@/lib/data/causes-skills";
+import { sdgs } from "@/lib/data/sdgs";
+import { skills } from "@/lib/data/skills";
 
-const causeMap = new Map(causes.map((c) => [c.handle, c]));
+const sdgMap = new Map(sdgs.map((s) => [s.handle, s]));
 const skillMap = new Map(skills.map((s) => [s.handle, s]));
 
 export const PostPreview = ({ post, circle, feed, initialComments, initialShowAllComments }: PostItemProps) => {
@@ -165,15 +166,15 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
 
                         {circle.description && <p className="text-sm text-gray-600">{circle.description}</p>}
 
-                        {/* Causes Pills */}
+                        {/* SDGs Pills */}
                         {circle.causes && circle.causes.length > 0 && (
                             <div className="mt-4">
-                                <h3 className="mb-1.5 text-xs font-medium uppercase text-gray-500">Causes</h3>
+                                <h3 className="mb-1.5 text-xs font-medium uppercase text-gray-500">SDGs</h3>
                                 <div className="flex flex-wrap items-center gap-2">
                                     {circle.causes.slice(0, 8).map((handle) => {
                                         // Limit pills shown
-                                        const cause = causeMap.get(handle);
-                                        if (!cause) return null;
+                                        const sdg = sdgMap.get(handle);
+                                        if (!sdg) return null;
                                         return (
                                             <Badge
                                                 key={handle}
@@ -181,13 +182,13 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                                                 className="flex items-center gap-1.5 px-2 py-1"
                                             >
                                                 <Image
-                                                    src={cause.picture.url}
+                                                    src={sdg.picture.url}
                                                     alt="" // Alt handled by text
                                                     width={16}
                                                     height={16}
                                                     className="h-4 w-4 rounded-full object-cover"
                                                 />
-                                                <span className="text-xs font-medium">{cause.name}</span>
+                                                <span className="text-xs font-medium">{sdg.name}</span>
                                             </Badge>
                                         );
                                     })}

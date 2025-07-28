@@ -10,7 +10,7 @@ import WelcomeStep from "./welcome-step";
 import TermsStep from "./terms-step";
 import MemberStep from "./member-step";
 import MissionStep from "./mission-step";
-import CausesStep from "./causes-step";
+import SdgsStep from "./sdgs-step";
 import SkillsStep from "./skills-step";
 import QuestsStep from "./quests-step";
 import ProfileStep from "./profile-step";
@@ -19,7 +19,8 @@ import FinalStep from "./final-step";
 import ProfileSummary from "./profile-summary";
 import { Cause, Circle, ONBOARDING_STEPS, OnboardingStep, Skill } from "@/models/models";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
-import { causes, skills } from "@/lib/data/causes-skills";
+import { sdgs } from "@/lib/data/sdgs";
+import { skills } from "@/lib/data/skills";
 
 export type Quest = {
     id: number;
@@ -34,7 +35,7 @@ export type Quest = {
 export type OnboardingUserData = {
     name: string;
     mission: string;
-    selectedCauses: Cause[];
+    selectedSdgs: Cause[];
     selectedSkills: Skill[];
     selectedQuests: Quest[];
     picture: string;
@@ -68,7 +69,7 @@ export default function Onboarding() {
             mission: MissionStep,
             profile: ProfileStep,
             location: ProfileLocationStep,
-            causes: CausesStep,
+            sdgs: SdgsStep,
             skills: SkillsStep,
             final: FinalStep,
         };
@@ -145,7 +146,7 @@ export default function Onboarding() {
             const newData = {
                 name: user.name || "",
                 mission: user.mission || "",
-                selectedCauses: user.causes?.map((x) => causes.find((y) => y.handle === x) as Cause) ?? [],
+                selectedSdgs: user.causes?.map((x) => sdgs.find((y) => y.handle === x)).filter(Boolean) as Cause[],
                 selectedSkills: user.skills?.map((x) => skills.find((y) => y.handle === x) as Skill) ?? [],
                 selectedQuests: prev?.selectedQuests ?? [],
                 picture: user.picture?.url || "/images/default-user-picture.png",
@@ -180,8 +181,8 @@ export default function Onboarding() {
                 return "About You";
             case "location":
                 return "Your Location";
-            case "causes":
-                return "Choose Your Causes";
+            case "sdgs":
+                return "Choose Your SDGs";
             case "skills":
                 return "Your Skills and Powers";
             case "final":

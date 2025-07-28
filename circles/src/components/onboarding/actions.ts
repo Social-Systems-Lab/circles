@@ -3,11 +3,12 @@
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { countCirclesAndUsers, getCirclePath, updateCircle, getCircleById } from "@/lib/data/circle"; // Added getCircleById
 import { features } from "@/lib/data/constants";
-import { causes, skills } from "@/lib/data/causes-skills";
+import { sdgs } from "@/lib/data/sdgs";
+import { skills } from "@/lib/data/skills";
 import { getUserByDid, getUserByHandle } from "@/lib/data/user";
 import { getQdrantClient, getVbdCircleById } from "@/lib/data/vdb";
 import {
-    Cause,
+    Cause as SDG,
     Circle,
     FileInfo,
     Media,
@@ -73,15 +74,12 @@ export const getPlatformMetrics = async (): Promise<PlatformMetrics> => {
     return await countCirclesAndUsers();
 };
 
-type SaveCausesActionResponse = {
+type SaveSdgsActionResponse = {
     success: boolean;
     message: string;
 };
 
-export const saveCausesAction = async (
-    causes: string[] | undefined,
-    circleId: string,
-): Promise<SaveCausesActionResponse> => {
+export const saveSdgsAction = async (sdgs: string[] | undefined, circleId: string): Promise<SaveSdgsActionResponse> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to edit circle settings" };
@@ -90,7 +88,7 @@ export const saveCausesAction = async (
     try {
         let circle: Partial<Circle> = {
             _id: circleId,
-            causes,
+            causes: sdgs,
         };
 
         // check if user is authorized to edit circle settings
@@ -99,11 +97,11 @@ export const saveCausesAction = async (
             return { success: false, message: "You are not authorized to edit circle settings" };
         }
 
-        // add causes step to completedOnboardingSteps
+        // add sdgs step to completedOnboardingSteps
         let user = await getUserByDid(userDid);
         circle.completedOnboardingSteps = user.completedOnboardingSteps ?? [];
-        if (!circle.completedOnboardingSteps.includes("causes")) {
-            circle.completedOnboardingSteps.push("causes");
+        if (!circle.completedOnboardingSteps.includes("sdgs")) {
+            circle.completedOnboardingSteps.push("sdgs");
         }
 
         await updateCircle(circle, userDid);
@@ -126,7 +124,7 @@ export const saveCausesAction = async (
 export const saveSkillsAction = async (
     skills: string[] | undefined,
     circleId: string,
-): Promise<SaveCausesActionResponse> => {
+): Promise<SaveSdgsActionResponse> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to edit circle settings" };
@@ -168,53 +166,53 @@ export const saveSkillsAction = async (
     }
 };
 
-type FetchCausesResponse = {
+type FetchSdgsResponse = {
     success: boolean;
-    causes: WithMetric<Cause>[];
+    sdgs: WithMetric<SDG>[];
     message?: string;
 };
 
-export const fetchCausesMatchedToCircle = async (circleId: string): Promise<FetchCausesResponse> => {
+export const fetchSdgsMatchedToCircle = async (circleId: string): Promise<FetchSdgsResponse> => {
     try {
         const client = await getQdrantClient();
 
         // Get the circle by ID (using the `retrieve` method)
         const circleObject = await getVbdCircleById(circleId);
         if (!circleObject || !circleObject.vector) {
-            // Return all causes if no circle vector is found
-            return { success: true, causes: causes as WithMetric<Cause>[] };
+            // Return all sdgs if no circle vector is found
+            return { success: true, sdgs: sdgs as WithMetric<SDG>[] };
         }
 
         const circleVector = circleObject.vector as number[];
 
-        // Perform the search for causes near the circle's vector
-        const response = await client.search("causes", {
+        // Perform the search for sdgs near the circle's vector
+        const response = await client.search("sdgs", {
             vector: circleVector,
             limit: 100,
         });
 
-        // Map the response to the Cause type
-        const causesMatched: WithMetric<Cause>[] = response.map((item: any) => {
-            const matchedCause = causes.find((cause: any) => cause.name === item.payload.name); // TODO fix so we store handle in db
+        // Map the response to the SDG type
+        const sdgsMatched: WithMetric<SDG>[] = response.map((item: any) => {
+            const matchedSdg = sdgs.find((sdg: any) => sdg.name === item.payload.name); // TODO fix so we store handle in db
             const metrics: Metrics = { similarity: item.score ?? 1 }; // Use the score as the "similarity" metric
 
             return {
-                handle: matchedCause?.handle,
+                handle: matchedSdg?.handle,
                 name: item.payload.name,
                 description: item.payload.description,
-                picture: matchedCause?.picture ?? "",
+                picture: matchedSdg?.picture ?? "",
                 metrics,
-            } as WithMetric<Cause>;
+            } as WithMetric<SDG>;
         });
 
-        if (causesMatched.length === 0) {
-            return { success: true, causes: causes as WithMetric<Cause>[] };
+        if (sdgsMatched.length === 0) {
+            return { success: true, sdgs: sdgs as WithMetric<SDG>[] };
         }
 
-        return { success: true, causes: causesMatched as WithMetric<Cause>[] };
+        return { success: true, sdgs: sdgsMatched as WithMetric<SDG>[] };
     } catch (error) {
-        console.error("Error fetching causes:", error);
-        return { success: true, causes: causes as WithMetric<Cause>[] };
+        console.error("Error fetching sdgs:", error);
+        return { success: true, sdgs: sdgs as WithMetric<SDG>[] };
     }
 };
 type FetchSkillsResponse = {
@@ -255,7 +253,7 @@ export const fetchSkillsMatchedToCircle = async (circleId: string): Promise<Fetc
         });
 
         if (skillsMatched.length === 0) {
-            return { success: true, skills: skills as WithMetric<Cause>[] };
+            return { success: true, skills: skills as WithMetric<SDG>[] };
         }
 
         return { success: true, skills: skillsMatched as WithMetric<Skill>[] };

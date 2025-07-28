@@ -1,41 +1,34 @@
-// CircleSidePanel.tsx
-import React from "react";
-import { Cause, Circle, Skill } from "@/models/models";
-import { causes, skills } from "@/lib/data/causes-skills";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import Image from "next/image";
-import { HoverCardArrow } from "@radix-ui/react-hover-card";
+import { Cause as SDG, Circle, Skill } from "@/models/models";
+import { sdgs } from "@/lib/data/sdgs";
+import { skills } from "@/lib/data/skills";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 
 type CauseSkillItemProps = {
     handle: string;
-    type: "cause" | "skill";
+    type: "sdg" | "skill";
 };
 
-export const CauseSkillItem = ({ handle, type }: CauseSkillItemProps) => {
+const CauseSkillItem: React.FC<CauseSkillItemProps> = ({ handle, type }) => {
     const item =
-        type == "cause"
-            ? (causes.find((x) => x.handle === handle) as Cause)
+        type == "sdg"
+            ? (sdgs.find((x) => x.handle === handle) as SDG)
             : (skills.find((x) => x.handle === handle) as Skill);
 
-    if (!item) return null;
+    if (!item) {
+        return null;
+    }
 
     return (
-        <HoverCard openDelay={200}>
+        <HoverCard>
             <HoverCardTrigger>
-                <Image
-                    src={item.picture.url}
-                    alt={item.name}
-                    width={50}
-                    height={50}
-                    className="rounded-full shadow-lg"
-                />
-            </HoverCardTrigger>
-            <HoverCardContent className="z-[500] w-[300px] border-0 bg-[#333333] p-2 pt-[6px]">
-                <HoverCardArrow className="text-[#333333]" fill="#333333" color="#333333" />
-                <div className="text-[14px] text-white">
-                    <div className="font-bold">{item.name}</div>
-                    <div className="flex items-center gap-2 text-[12px]">{item.description}</div>
+                <div className="flex h-[42px] w-[42px] items-center justify-center rounded-full bg-gray-200">
+                    <Image src={item.picture.url} alt={item.name} width={40} height={40} className="rounded-full" />
                 </div>
+            </HoverCardTrigger>
+            <HoverCardContent>
+                <h3 className="text-lg font-semibold">{item.name}</h3>
+                <p className="text-sm">{item.description}</p>
             </HoverCardContent>
         </HoverCard>
     );
@@ -43,59 +36,41 @@ export const CauseSkillItem = ({ handle, type }: CauseSkillItemProps) => {
 
 interface CircleSidePanelProps {
     circle: Circle;
-    isCompact: boolean;
+    isCompact?: boolean;
 }
 
 export const CircleSidePanel: React.FC<CircleSidePanelProps> = ({ circle, isCompact }) => {
     if ((!circle.causes || circle.causes.length <= 0) && (!circle.skills || circle.skills.length <= 0)) {
         return (
-            <div
-                className={`${isCompact ? "order-2 flex flex-col gap-3" : "mt-[70px] flex w-[300px] flex-col gap-3"}`}
-            ></div>
+            <div className="rounded-lg bg-white p-4 text-center text-gray-500">
+                <h3 className="text-lg font-semibold">No SDGs or Skills</h3>
+                <p className="text-sm">This circle has not specified any SDGs or skills.</p>
+            </div>
         );
     }
 
     return (
-        <div
-            className={`m-4 rounded-[15px] bg-white p-4 shadow-lg ${isCompact ? "order-2 flex flex-col gap-3" : "mt-[70px] flex w-[300px] flex-col gap-3"}`}
-        >
+        <div className={`rounded-lg bg-white p-4 ${isCompact ? "max-h-[200px] overflow-y-auto" : ""}`}>
             {circle.causes && circle.causes.length > 0 && (
                 <div>
-                    <div className="mb-2 flex items-center text-sm font-semibold">Causes</div>
+                    <h3 className="mb-2 text-lg font-semibold">SDGs</h3>
                     <div className="grid grid-cols-4 gap-2 pb-2">
-                        {circle.causes.map((cause) => (
-                            <CauseSkillItem key={cause} handle={cause} type="cause" />
+                        {circle.causes.map((sdg) => (
+                            <CauseSkillItem key={sdg} handle={sdg} type="sdg" />
                         ))}
                     </div>
                 </div>
             )}
-
             {circle.skills && circle.skills.length > 0 && (
                 <div>
-                    <div className="mb-2 flex items-center text-sm font-semibold">Skills</div>
-                    <div className="grid grid-cols-4 gap-2 pb-2">
+                    <h3 className="mb-2 text-lg font-semibold">Skills</h3>
+                    <div className="grid grid-cols-4 gap-2">
                         {circle.skills.map((skill) => (
                             <CauseSkillItem key={skill} handle={skill} type="skill" />
                         ))}
                     </div>
                 </div>
             )}
-
-            {/* {circle.interests && circle.interests.length > 0 && (
-                <div className="flex flex-col justify-start rounded-lg bg-[#f7f7f7] p-4">
-                    <div className="mb-2 font-semibold">Interests</div>
-                    <CircleTags tags={circle.interests} showAll={true} isCompact={isCompact} />
-                </div>
-            )}
-
-            {circle.offers_needs && circle.offers_needs.length > 0 && (
-                <div className="flex flex-col justify-start rounded-lg bg-[#f7f7f7] p-4">
-                    <div className="mb-2 font-semibold">{circle.circleType === "user" ? "Offers" : "Needs"}</div>
-                    <CircleTags tags={circle.offers_needs} showAll={true} isCompact={isCompact} />
-                </div>
-            )} */}
         </div>
     );
 };
-
-export default CircleSidePanel;

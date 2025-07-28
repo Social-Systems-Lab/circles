@@ -1,109 +1,111 @@
-// item-card.tsx
-"use client";
-
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Cause, Skill } from "@/models/models";
 import Image from "next/image";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Badge } from "@/components/ui/badge";
+import { CheckCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
 import Indicators from "../utils/indicators";
-import { causes, skills } from "@/lib/data/causes-skills";
+import { sdgs } from "@/lib/data/sdgs";
+import { skills } from "@/lib/data/skills";
 
-type ItemGridCardProps = {
-    item: any;
+type Item = Cause | Skill;
+
+interface ItemGridCardProps {
+    item: Item;
     isSelected: boolean;
-    onToggle: (item: any) => void;
-    isCause: boolean;
-};
+    onToggle: (item: Item) => void;
+    isCause?: boolean;
+}
+
 export const ItemGridCard = ({ item, isSelected, onToggle, isCause }: ItemGridCardProps) => {
-    let itemc = isCause ? causes.find((x) => x.name === item.name) : skills.find((x) => x.name === item.name);
+    let itemc = isCause ? sdgs.find((x) => x.name === item.name) : skills.find((x) => x.name === item.name);
 
     return (
         <Card
-            className={`cursor-pointer border-0 shadow-lg transition-all ${isSelected ? "ring ring-[#66a5ff]" : ""}`}
             onClick={() => onToggle(item)}
+            className={cn(
+                "relative cursor-pointer transition-all duration-200 hover:shadow-lg",
+                isSelected ? "border-2 border-blue-500 shadow-lg" : "border",
+            )}
         >
-            <CardContent className="relative flex flex-col items-center p-2 text-center">
-                {itemc?.picture && (
-                    <div className="relative mb-3 mt-1 h-[90px] w-[90px] rounded-full shadow-lg">
-                        <Image
-                            src={itemc.picture.url}
-                            alt={item.name}
-                            width={90}
-                            height={90}
-                            className="rounded-full"
-                        />
+            <CardHeader className="relative p-0">
+                <div className="relative mb-3 mt-1 h-[90px] w-[90px] rounded-full shadow-lg">
+                    {/* clip-sdg-100  */}
+                    <Image
+                        src={itemc?.picture?.url ?? "/images/default-picture.png"}
+                        alt={item.name}
+                        width={100}
+                        height={100}
+                        className="h-full w-full rounded-full object-cover"
+                        style={{ clipPath: "url(#clip-sdg-100)" }}
+                    />
+                </div>
+                {isSelected && (
+                    <div className="absolute right-2 top-2 rounded-full bg-white">
+                        <CheckCircle className="h-6 w-6 text-blue-500" />
                     </div>
                 )}
+            </CardHeader>
+            <CardContent className="p-4">
+                <CardTitle className="mb-2 text-base font-semibold">{item.name}</CardTitle>
+                <p className="text-xs text-gray-600">{item.description}</p>
+            </CardContent>
+        </Card>
+    );
+};
 
-                <h3 className="mb-0 mt-0  text-sm font-semibold">{item.name}</h3>
-                <p className="mt-1 line-clamp-2 text-xs text-gray-600">{item.description}</p>
+interface ItemListCardProps {
+    item: Item;
+    isSelected: boolean;
+    onToggle: (item: Item) => void;
+}
 
-                {/* Render the indicators if metrics are provided */}
-                {item.metrics && <Indicators metrics={item.metrics} className="absolute left-2 top-2" content={item} />}
-
-                {item.metric && <p className="mt-1 text-xs text-blue-600">{item.metric}</p>}
-                {item.goal && <p className="mt-1 text-xs text-green-600">{item.goal}</p>}
-
-                {item.story && (
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className="absolute right-2 top-2 flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-blue-500">
-                                    <span className="text-xs font-bold text-white">i</span>
-                                </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p className="max-w-xs">{item.story}</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
+export const ItemListCard = ({ item, isSelected, onToggle }: ItemListCardProps) => {
+    return (
+        <Card
+            onClick={() => onToggle(item)}
+            className={cn(
+                "relative mb-4 cursor-pointer transition-all duration-200 hover:shadow-lg",
+                isSelected ? "border-2 border-blue-500 shadow-lg" : "border",
+            )}
+        >
+            <CardContent className="flex items-center p-4">
+                <div className="relative mr-4 h-[60px] w-[60px] flex-shrink-0">
+                    <Image
+                        src={item.picture?.url ?? "/images/default-picture.png"}
+                        alt={item.name}
+                        layout="fill"
+                        className="rounded-full object-cover"
+                    />
+                </div>
+                <div className="flex-grow">
+                    <h3 className="text-lg font-semibold">{item.name}</h3>
+                    <p className="text-sm text-gray-600">{item.description}</p>
+                </div>
+                {isSelected && (
+                    <div className="ml-4 rounded-full bg-white">
+                        <CheckCircle className="h-8 w-8 text-blue-500" />
+                    </div>
                 )}
             </CardContent>
         </Card>
     );
 };
 
-type ItemListCardProps = {
-    item: any;
-    isSelected: boolean;
-    onToggle: (item: any) => void;
-};
+interface ItemSelectionProps {
+    items: Item[];
+    selectedItems: Item[];
+    onToggle: (item: Item) => void;
+    isCause?: boolean;
+}
 
-export const ItemListCard = ({ item, isSelected, onToggle }: ItemListCardProps) => {
+export const ItemGrid = ({ items, selectedItems, onToggle, isCause }: ItemSelectionProps) => {
     return (
-        <Card
-            className={`flex cursor-pointer items-center border-0 p-2 shadow-lg transition-all ${isSelected ? "ring ring-[#66a5ff]" : ""}`}
-            onClick={() => onToggle(item)}
-        >
-            {item.picture && (
-                <div className="relative h-[50px] w-[50px] shrink-0 overflow-hidden rounded-full">
-                    <Image src={item.picture.url} alt={item.name} width={50} height={50} />
-                </div>
-            )}
-
-            <div className="ml-3 flex flex-col">
-                <h3 className="m-0 p-0 text-sm font-semibold">{item.name}</h3>
-                <p className="line-clamp-2 text-xs text-gray-600">{item.description}</p>
-            </div>
-        </Card>
-    );
-};
-
-type ItemGridProps = {
-    items: any[];
-    selectedItems: any[];
-    onToggle: (item: any) => void;
-    isCause: boolean;
-};
-
-export const ItemGrid = ({ items, selectedItems, onToggle, isCause }: ItemGridProps) => {
-    return (
-        <div className="grid grid-cols-3 gap-4 p-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {items.map((item) => (
                 <ItemGridCard
                     key={item.handle}
                     item={item}
-                    isSelected={selectedItems.some((c) => c.handle === item.handle)}
+                    isSelected={selectedItems.some((i) => i.handle === item.handle)}
                     onToggle={onToggle}
                     isCause={isCause}
                 />
@@ -112,20 +114,14 @@ export const ItemGrid = ({ items, selectedItems, onToggle, isCause }: ItemGridPr
     );
 };
 
-type ItemListProps = {
-    items: any[];
-    selectedItems: any[];
-    onToggle: (item: any) => void;
-};
-
-export const ItemList = ({ items, selectedItems, onToggle }: ItemListProps) => {
+export const ItemList = ({ items, selectedItems, onToggle }: ItemSelectionProps) => {
     return (
-        <div className="space-y-2 p-1">
+        <div>
             {items.map((item) => (
                 <ItemListCard
                     key={item.handle}
                     item={item}
-                    isSelected={selectedItems.some((c) => c.handle === item.handle)}
+                    isSelected={selectedItems.some((i) => i.handle === item.handle)}
                     onToggle={onToggle}
                 />
             ))}
