@@ -113,16 +113,15 @@ export default function AboutPage({ circle }: AboutPageProps) {
                             {circle.causes && circle.causes.length > 0 && (
                                 <div className="mb-6 w-full">
                                     <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">SDGs</div>
-                                    <SdgList sdgHandles={circle.causes} />
+                                    <SdgList sdgHandles={circle.causes} className="grid-cols-4" />
                                 </div>
                             )}
 
                             {/* Skills/Needs */}
-                            {circle.skills && circle.skills.length > 0 && (
+                            {/* {circle.skills && circle.skills.length > 0 && (
                                 <div className="w-full">
                                     <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
                                         {" "}
-                                        {/* Increased mb */}
                                         {circle.circleType === "user" ? "Skills" : "Needs"}
                                     </div>
                                     <div className="flex flex-wrap items-center gap-2">
@@ -142,14 +141,13 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                                         height={20} // Increased size
                                                         className="h-5 w-5 rounded-full object-cover" // Increased size
                                                     />
-                                                    <span className="text-sm font-medium">{skill.name}</span>{" "}
-                                                    {/* Increased text size */}
+                                                    <span className="text-sm font-medium">{skill.name}</span>{" "}                                                    
                                                 </Badge>
                                             );
                                         })}
                                     </div>
                                 </div>
-                            )}
+                            )} */}
                         </div>
                     </div>
                 )}{" "}

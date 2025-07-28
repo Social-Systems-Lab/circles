@@ -101,7 +101,7 @@ export default function CircleWizard({ onComplete, initialParentCircleId }: Circ
             ProfileStep,
             LocationStep,
             SdgsStep,
-            SkillsStep,
+            // SkillsStep,
             FinalStep,
         ];
 

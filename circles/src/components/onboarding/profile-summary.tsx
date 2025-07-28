@@ -2,6 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { OnboardingUserData } from "./onboarding";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import SdgList from "../modules/sdgs/SdgList";
 
 interface ProfileSummaryProps {
     userData: OnboardingUserData;
@@ -18,26 +19,33 @@ export default function ProfileSummary({ userData }: ProfileSummaryProps) {
                 <h2 className="mt-4 text-xl font-semibold">{userData.name}</h2>
                 <p className="mt-2 text-center text-sm text-gray-600">{userData.mission}</p>
             </div>
-            <hr className="my-4" />
-            <div>
-                <h3 className="text-md font-semibold">SDGs</h3>
-                <div className="mt-2 grid grid-cols-3 gap-2">
-                    {userData.selectedSdgs.map((sdg) => (
-                        <Popover key={sdg.handle}>
-                            <PopoverTrigger>
-                                <div className="aspect-square overflow-hidden rounded-lg">
-                                    <img src={sdg.picture?.url} alt={sdg.name} className="h-full w-full object-cover" />
-                                </div>
-                            </PopoverTrigger>
-                            <PopoverContent>
-                                <h3 className="font-bold">{sdg.name}</h3>
-                                <p>{sdg.description}</p>
-                            </PopoverContent>
-                        </Popover>
-                    ))}
+            <div className="my-4" />
+            {userData.selectedSdgs.length > 0 && (
+                <div>
+                    <h3 className="text-md font-semibold">SDGs</h3>
+
+                    <div className="mt-2 grid grid-cols-3 gap-2">
+                        {userData.selectedSdgs.map((sdg) => (
+                            <Popover key={sdg.handle}>
+                                <PopoverTrigger>
+                                    <div className="aspect-square overflow-hidden rounded-lg">
+                                        <img
+                                            src={sdg.picture?.url}
+                                            alt={sdg.name}
+                                            className="h-full w-full object-cover"
+                                        />
+                                    </div>
+                                </PopoverTrigger>
+                                <PopoverContent>
+                                    <h3 className="font-bold">{sdg.name}</h3>
+                                    <p>{sdg.description}</p>
+                                </PopoverContent>
+                            </Popover>
+                        ))}
+                    </div>
                 </div>
-            </div>
-            <div className="mt-4">
+            )}
+            {/* <div className="mt-4">
                 <h3 className="text-md font-semibold">Skills</h3>
                 <div className="mt-2 flex flex-wrap gap-2">
                     {userData.selectedSkills.map((skill) => (
@@ -46,7 +54,7 @@ export default function ProfileSummary({ userData }: ProfileSummaryProps) {
                         </Badge>
                     ))}
                 </div>
-            </div>
+            </div> */}
         </div>
     );
 }

@@ -171,12 +171,12 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                         {circle.causes && circle.causes.length > 0 && (
                             <div className="mt-4">
                                 <h3 className="mb-1.5 text-xs font-medium uppercase text-gray-500">SDGs</h3>
-                                <SdgList sdgHandles={circle.causes.slice(0, 8)} />
+                                <SdgList sdgHandles={circle.causes.slice(0, 8)} className="grid-cols-4" />
                             </div>
                         )}
 
                         {/* Skills/Needs Pills */}
-                        {circle.skills && circle.skills.length > 0 && (
+                        {/* {circle.skills && circle.skills.length > 0 && (
                             <div className="mt-4">
                                 <h3 className="mb-1.5 text-xs font-medium uppercase text-gray-500">
                                     {circle.circleType === "user" ? "Skills" : "Needs"}
@@ -204,7 +204,7 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                                     })}
                                 </div>
                             </div>
-                        )}
+                        )} */}
 
                         {/* Location (moved down, inline icon, no heading) */}
                         {circle.location &&

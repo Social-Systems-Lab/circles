@@ -47,7 +47,7 @@ export default function CircleSummary({ circleData }: CircleSummaryProps) {
                     )}
                 </div>
             </div>
-            <div className="mt-4">
+            {/* <div className="mt-4">
                 <h3 className="text-md font-semibold">Needs</h3>
                 <div className="mt-2 flex flex-wrap gap-2">
                     {selectedSkills.length > 0 ? (
@@ -60,7 +60,7 @@ export default function CircleSummary({ circleData }: CircleSummaryProps) {
                         <p className="text-sm text-gray-500">No needs selected</p>
                     )}
                 </div>
-            </div>
+            </div> */}
         </div>
     );
 }

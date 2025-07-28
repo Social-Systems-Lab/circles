@@ -70,7 +70,7 @@ export default function Onboarding() {
             profile: ProfileStep,
             location: ProfileLocationStep,
             sdgs: SdgsStep,
-            skills: SkillsStep,
+            // skills: SkillsStep,
             final: FinalStep,
         };
 
