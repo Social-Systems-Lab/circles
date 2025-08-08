@@ -2,21 +2,22 @@
 
 import React, { useState, useMemo } from "react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { sdgs } from "@/lib/data/sdgs";
 import { Cause as SDG } from "@/models/models";
-import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { ItemGrid } from "@/components/circle-wizard/item-card";
+import { SdgPanel } from "./SdgPanel";
 import Image from "next/image";
 
 interface SdgFilterProps {
     selectedSdgs: SDG[];
     onSelectionChange: (sdgs: SDG[]) => void;
+    displayAs?: "inline" | "popover";
+    trigger?: React.ReactNode;
 }
 
-const SdgFilter: React.FC<SdgFilterProps> = ({ selectedSdgs, onSelectionChange }) => {
+const SdgFilter: React.FC<SdgFilterProps> = ({ selectedSdgs, onSelectionChange, displayAs = "inline", trigger }) => {
     const [search, setSearch] = useState("");
+    const [isOpen, setIsOpen] = useState(false);
 
     const visibleSdgs = useMemo(() => {
         if (search) {
@@ -63,32 +64,38 @@ const SdgFilter: React.FC<SdgFilterProps> = ({ selectedSdgs, onSelectionChange }
         }
     };
 
+    const panel = (
+        <SdgPanel
+            visibleSdgs={visibleSdgs}
+            selectedSdgs={selectedSdgs}
+            onToggle={handleSdgToggle}
+            search={search}
+            setSearch={setSearch}
+        />
+    );
+
+    if (displayAs === "popover") {
+        return (
+            <Popover open={isOpen} onOpenChange={setIsOpen}>
+                <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+                <PopoverContent className="w-80">{panel}</PopoverContent>
+            </Popover>
+        );
+    }
+
     return (
-        <Accordion type="single" collapsible className="w-full">
-            <AccordionItem value="sdgs">
-                <AccordionTrigger className="text-sm font-medium">{renderHeader()}</AccordionTrigger>
-                <AccordionContent>
-                    <div className="p-1">
-                        <div className="relative mb-2">
-                            <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
-                            <Input
-                                type="text"
-                                placeholder="Search SDGs..."
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                className="pl-8 text-xs"
-                            />
-                        </div>
-                        <ScrollArea className="h-60">
-                            <ItemGrid
-                                items={visibleSdgs}
-                                selectedItems={selectedSdgs}
-                                onToggle={handleSdgToggle}
-                                isCause={true}
-                            />
-                        </ScrollArea>
-                    </div>
-                </AccordionContent>
+        <Accordion
+            type="single"
+            collapsible
+            className="w-full"
+            value={isOpen ? "sdgs" : ""}
+            onValueChange={(value) => setIsOpen(value === "sdgs")}
+        >
+            <AccordionItem value="sdgs" className="border-none">
+                <AccordionTrigger onClick={() => setIsOpen(!isOpen)} className="text-sm font-medium">
+                    {trigger || renderHeader()}
+                </AccordionTrigger>
+                <AccordionContent>{panel}</AccordionContent>
             </AccordionItem>
         </Accordion>
     );

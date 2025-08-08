@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Circle, ContentPreviewData, WithMetric, Cause as SDG } from "@/models/models"; // Removed Page import
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, ChevronDown, Globe } from "lucide-react";
 import Image from "next/image";
 import { useAtom } from "jotai";
 import { contentPreviewAtom, sidePanelContentVisibleAtom, userAtom } from "@/lib/data/atoms";
@@ -19,7 +19,8 @@ import { useIsMobile } from "@/components/utils/use-is-mobile";
 import CircleTags from "./circle-tags";
 import Indicators from "@/components/utils/indicators";
 import { ListFilter } from "@/components/utils/list-filter";
-import SdgFilter from "../search/sdg-filter";
+import { SdgPanel } from "../search/SdgPanel";
+import { sdgs } from "@/lib/data/sdgs";
 import emptyFeed from "@images/empty-feed.png";
 import { updateQueryParam } from "@/lib/utils/helpers-client";
 import Link from "next/link";
@@ -52,7 +53,30 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>([]);
+    const [sdgFilterOpen, setSdgFilterOpen] = useState(false);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+    const [sdgSearch, setSdgSearch] = useState("");
+
+    const visibleSdgs = useMemo(() => {
+        if (sdgSearch) {
+            return sdgs.filter(
+                (sdg) =>
+                    sdg.name.toLowerCase().includes(sdgSearch.toLowerCase()) ||
+                    sdg.description.toLowerCase().includes(sdgSearch.toLowerCase()),
+            );
+        }
+        return sdgs;
+    }, [sdgSearch]);
+
+    const handleSdgToggle = (sdg: SDG) => {
+        const isSelected = selectedSdgs.some((s) => s.handle === sdg.handle);
+        if (isSelected) {
+            setSelectedSdgs(selectedSdgs.filter((s) => s.handle !== sdg.handle));
+        } else {
+            setSelectedSdgs([...selectedSdgs, sdg]);
+        }
+    };
+
     const filteredCircles = useMemo(() => {
         let results = circles;
         if (searchQuery) {
@@ -137,9 +161,46 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
                     )}
                 </div>
 
-                <div className="flex items-center gap-4">
-                    <ListFilter onFilterChange={handleFilterChange} />
-                    <SdgFilter selectedSdgs={selectedSdgs} onSelectionChange={setSelectedSdgs} />
+                <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                        <ListFilter onFilterChange={handleFilterChange} />
+                        <Button
+                            variant="ghost"
+                            onClick={() => setSdgFilterOpen(!sdgFilterOpen)}
+                            className="flex items-center gap-2"
+                        >
+                            {selectedSdgs.length === 0 ? (
+                                <Image src="/images/sdgs/SDG_Wheel_WEB.png" alt="SDG Wheel" width={24} height={24} />
+                            ) : (
+                                <div className="flex -space-x-2">
+                                    {selectedSdgs.slice(0, 3).map((sdg) => (
+                                        <Image
+                                            key={sdg.handle}
+                                            src={sdg.picture?.url ?? "/images/default-picture.png"}
+                                            alt={sdg.name}
+                                            width={24}
+                                            height={24}
+                                            className="h-6 w-6 rounded-full border-2 border-white object-cover"
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                            <span>SDGs {selectedSdgs.length > 0 && `(${selectedSdgs.length})`}</span>
+                            <ChevronDown
+                                className={`h-4 w-4 transform transition-transform ${sdgFilterOpen ? "rotate-180" : ""}`}
+                            />
+                        </Button>
+                    </div>
+                    {sdgFilterOpen && (
+                        <SdgPanel
+                            selectedSdgs={selectedSdgs}
+                            onToggle={handleSdgToggle}
+                            visibleSdgs={visibleSdgs}
+                            search={sdgSearch}
+                            setSearch={setSdgSearch}
+                            className="rounded-lg border p-4"
+                        />
+                    )}
                 </div>
 
                 {filteredCircles.length === 0 && activeTab === "following" && (

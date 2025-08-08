@@ -9,7 +9,7 @@ import { motion } from "framer-motion";
 import CircleSwipeCard from "./circle-swipe-card";
 import { MapDisplay } from "@/components/map/map";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Hand, Home, Search, X, ArrowLeft, ChevronRight } from "lucide-react"; // Added ArrowLeft
+import { RefreshCw, Hand, Home, Search, X, ArrowLeft, ChevronRight, Globe } from "lucide-react"; // Added ArrowLeft
 import { MdOutlineTravelExplore } from "react-icons/md";
 import { HiChevronRight, HiMiniSquare2Stack } from "react-icons/hi2";
 import { useAtom } from "jotai";
@@ -453,7 +453,39 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                     hasSearched={hasSearched}
                                 />
                             )}
-                            {!isMobile && <SdgFilter selectedSdgs={selectedSdgs} onSelectionChange={setSelectedSdgs} />}
+                            {!isMobile && (
+                                <SdgFilter
+                                    selectedSdgs={selectedSdgs}
+                                    onSelectionChange={setSelectedSdgs}
+                                    displayAs="popover"
+                                    trigger={
+                                        <Button variant="ghost" className="flex items-center gap-2">
+                                            {selectedSdgs.length === 0 ? (
+                                                <Image
+                                                    src="/images/sdgs/SDG_Wheel_WEB.png"
+                                                    alt="SDG Wheel"
+                                                    width={24}
+                                                    height={24}
+                                                />
+                                            ) : (
+                                                <div className="flex -space-x-2">
+                                                    {selectedSdgs.slice(0, 3).map((sdg) => (
+                                                        <Image
+                                                            key={sdg.handle}
+                                                            src={sdg.picture?.url ?? "/images/default-picture.png"}
+                                                            alt={sdg.name}
+                                                            width={24}
+                                                            height={24}
+                                                            className="h-6 w-6 rounded-full border-2 border-white object-cover"
+                                                        />
+                                                    ))}
+                                                </div>
+                                            )}
+                                            <span>SDGs {selectedSdgs.length > 0 && `(${selectedSdgs.length})`}</span>
+                                        </Button>
+                                    }
+                                />
+                            )}
                         </div>
                     </div>
                 )}
