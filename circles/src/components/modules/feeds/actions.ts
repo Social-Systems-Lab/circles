@@ -69,6 +69,7 @@ export async function getGlobalPostsAction(
     limit: number,
     skip: number,
     sortingOptions?: SortingOptions,
+    sdgHandles?: string[],
 ): Promise<PostDisplay[]> {
     // Get all public feeds
     const publicFeeds = await getPublicFeeds();
@@ -79,9 +80,9 @@ export async function getGlobalPostsAction(
 
     // Use your existing function to get posts across multiple feeds with metrics
     if (userDid) {
-        return getPostsFromMultipleFeedsWithMetrics(publicFeedIds, userDid, limit, skip, sortingOptions);
+        return getPostsFromMultipleFeedsWithMetrics(publicFeedIds, userDid, limit, skip, sortingOptions, sdgHandles);
     }
-    return getPostsFromMultipleFeeds(publicFeedIds, undefined, limit, skip, sortingOptions);
+    return getPostsFromMultipleFeeds(publicFeedIds, undefined, limit, skip, sortingOptions, sdgHandles);
 }
 
 export async function getAggregatePostsAction(
@@ -89,9 +90,10 @@ export async function getAggregatePostsAction(
     limit: number,
     skip: number,
     sortingOptions?: SortingOptions,
+    sdgHandles?: string[],
 ): Promise<PostDisplay[]> {
     if (!userDid) {
-        return getGlobalPostsAction(userDid, limit, skip, sortingOptions);
+        return getGlobalPostsAction(userDid, limit, skip, sortingOptions, sdgHandles);
     }
     // Get all circles the user is a member of
     const user = await getUserPrivate(userDid);
@@ -122,7 +124,14 @@ export async function getAggregatePostsAction(
     }
 
     // Get posts from all accessible feeds
-    const posts = await getPostsFromMultipleFeedsWithMetrics(accessibleFeeds, userDid, limit, skip, sortingOptions);
+    const posts = await getPostsFromMultipleFeedsWithMetrics(
+        accessibleFeeds,
+        userDid,
+        limit,
+        skip,
+        sortingOptions,
+        sdgHandles,
+    );
     return posts;
 }
 

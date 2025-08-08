@@ -54,9 +54,10 @@ function SdgsStep({ userData, setUserData, nextStep, prevStep }: OnboardingStepP
     const handleSdgToggle = (sdg: SDG) => {
         setUserData((prev) => {
             if (!prev) return prev;
-            const newSelectedSdgs = prev.selectedSdgs.some((s) => s.handle === sdg.handle)
-                ? prev.selectedSdgs.filter((s) => s.handle !== sdg.handle)
-                : [...prev.selectedSdgs, sdg];
+            const currentSdgs = prev.selectedSdgs || [];
+            const newSelectedSdgs = currentSdgs.some((s) => s.handle === sdg.handle)
+                ? currentSdgs.filter((s) => s.handle !== sdg.handle)
+                : [...currentSdgs, sdg];
 
             return {
                 ...prev,
@@ -67,7 +68,7 @@ function SdgsStep({ userData, setUserData, nextStep, prevStep }: OnboardingStepP
 
     const handleNext = async () => {
         startTransition(async () => {
-            let selectedSdgs = userData.selectedSdgs.map((x) => x.handle);
+            let selectedSdgs = (userData.selectedSdgs || []).map((x) => x.handle);
             const response = await saveSdgsAction(selectedSdgs, user?._id);
             if (!response.success) {
                 // Handle error
@@ -119,7 +120,7 @@ function SdgsStep({ userData, setUserData, nextStep, prevStep }: OnboardingStepP
                 )}
             </ScrollArea>
             <div className="flex flex-wrap">
-                {userData.selectedSdgs.map((sdg) => (
+                {(userData.selectedSdgs || []).map((sdg) => (
                     <SelectedItemBadge key={sdg.handle} item={sdg} onRemove={handleSdgToggle} />
                 ))}
             </div>
@@ -129,7 +130,7 @@ function SdgsStep({ userData, setUserData, nextStep, prevStep }: OnboardingStepP
                 </Button>
                 <Button
                     onClick={handleNext}
-                    disabled={userData.selectedSdgs.length < 2 || isPending}
+                    disabled={(userData.selectedSdgs || []).length < 2 || isPending}
                     className="min-w-[100px] rounded-full"
                 >
                     {isPending ? (
@@ -138,7 +139,7 @@ function SdgsStep({ userData, setUserData, nextStep, prevStep }: OnboardingStepP
                             Saving...
                         </>
                     ) : (
-                        <>{userData.selectedSdgs.length < 2 ? "Select at least 2 SDGs" : "Next"}</>
+                        <>{(userData.selectedSdgs || []).length < 2 ? "Select at least 2 SDGs" : "Next"}</>
                     )}
                 </Button>
             </div>

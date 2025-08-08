@@ -15,6 +15,7 @@ import { revalidatePath } from "next/cache";
 export async function searchContentAction(
     query: string,
     selectedCategories: string[], // Keep param for compatibility, but ignore it
+    sdgHandles?: string[],
 ): Promise<WithMetric<Circle>[]> {
     // Always search the 'circles' VDB collection which contains circles, projects, and users
     const vdbSearchCategories: VbdCategories[] = ["circles"];
@@ -23,14 +24,18 @@ export async function searchContentAction(
         `Executing searchContentAction with query: "${query}", searching VDB categories: [${vdbSearchCategories.join(", ")}]`,
     );
 
-    if (!query) {
-        console.log("Search query empty, returning empty results.");
+    if (!query && (!sdgHandles || sdgHandles.length === 0)) {
+        console.log("Search query and SDGs empty, returning empty results.");
         return [];
     }
 
     try {
         // 1. Perform Semantic Search using VDB 'circles' category
-        const semanticResults = await semanticSearchContent({ query, categories: vdbSearchCategories });
+        const semanticResults = await semanticSearchContent({
+            query,
+            categories: vdbSearchCategories,
+            sdgHandles,
+        });
         console.log(`Semantic search returned ${semanticResults.length} raw results.`);
 
         // Client-side filtering is now done in MapSwipeContainer

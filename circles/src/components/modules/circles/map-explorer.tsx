@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState, useMemo } from "react";
-import { Circle, WithMetric, Content, ContentPreviewData, MemberDisplay } from "@/models/models";
+import { Circle, WithMetric, Content, ContentPreviewData, MemberDisplay, Cause as SDG } from "@/models/models";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import useWindowDimensions from "@/components/utils/use-window-dimensions";
 import { motion } from "framer-motion";
@@ -28,6 +28,7 @@ import { completeSwipeOnboardingAction } from "./swipe-actions";
 import { useRouter } from "next/navigation";
 import { searchContentAction } from "../search/actions";
 import CategoryFilter from "../search/category-filter";
+import SdgFilter from "../search/sdg-filter";
 import Indicators from "@/components/utils/indicators";
 import ResizingDrawer from "@/components/ui/resizing-drawer"; // Correct import name
 import ContentPreview from "@/components/layout/content-preview";
@@ -80,6 +81,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const [viewMode, setViewMode] = useState<ViewMode>("explore");
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>([]);
     const [allSearchResults, setAllSearchResults] = useState<WithMetric<Circle>[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
@@ -114,12 +116,16 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     }, [allDiscoverableCircles, user]);
 
     const filteredSearchResults = useMemo(() => {
-        // ... (no changes) ...
-        if (!selectedCategory) return allSearchResults;
-        const typeToFilter =
-            selectedCategory === "circles" ? "circle" : selectedCategory === "projects" ? "project" : "user";
-        return allSearchResults.filter((result) => result.circleType === typeToFilter);
-    }, [allSearchResults, selectedCategory]);
+        let results = allSearchResults;
+
+        if (selectedCategory) {
+            const typeToFilter =
+                selectedCategory === "circles" ? "circle" : selectedCategory === "projects" ? "project" : "user";
+            results = results.filter((result) => result.circleType === typeToFilter);
+        }
+
+        return results;
+    }, [allSearchResults, selectedCategory, selectedSdgs]);
 
     const categoryCounts = useMemo(() => {
         // ... (no changes) ...
@@ -172,7 +178,8 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
 
     const handleSearchTrigger = useCallback(async () => {
         const searchCategoriesForBackend = ["circles", "projects", "users"];
-        if (!searchQuery.trim()) {
+        const sdgHandles = selectedSdgs.map((sdg) => sdg.handle);
+        if (!searchQuery.trim() && sdgHandles.length === 0) {
             // If clearing search via empty query, reset state
             setAllSearchResults([]);
             setDisplayedContent(
@@ -192,7 +199,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         setContentPreview(undefined); // Clear preview on new search
 
         try {
-            const results = await searchContentAction(searchQuery, searchCategoriesForBackend);
+            const results = await searchContentAction(searchQuery, searchCategoriesForBackend, sdgHandles);
             setAllSearchResults(results);
             // Requirement 1: Jump to half-open state after search
             setTriggerSnapIndex(SNAP_INDEX_HALF);
@@ -205,11 +212,12 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         }
     }, [
         searchQuery,
+        selectedSdgs,
         setDisplayedContent,
         allDiscoverableCircles,
         selectedCategory,
         filterCirclesByCategory,
-        setContentPreview, // Add dependency
+        setContentPreview,
     ]);
 
     const handleClearSearch = useCallback(() => {
@@ -217,6 +225,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         setAllSearchResults([]);
         setHasSearched(false);
         setSelectedCategory(null);
+        setSelectedSdgs([]);
         const resetMapData = filterCirclesByCategory(allDiscoverableCircles, null)
             .map((circle) => mapItemToContent(circle))
             .filter((c): c is Content => c !== null);
@@ -444,6 +453,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                     hasSearched={hasSearched}
                                 />
                             )}
+                            {!isMobile && <SdgFilter selectedSdgs={selectedSdgs} onSelectionChange={setSelectedSdgs} />}
                         </div>
                     </div>
                 )}

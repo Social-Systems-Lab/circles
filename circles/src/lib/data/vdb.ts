@@ -425,10 +425,11 @@ export const semanticSearchContent = async (options: {
     query: string;
     categories: string[]; // e.g., ['circles', 'posts']
     limit?: number;
+    sdgHandles?: string[];
 }): Promise<SearchResultItem[]> => {
-    const { query, categories, limit = 20 } = options;
+    const { query, categories, limit = 20, sdgHandles } = options;
 
-    if (!query || categories.length === 0) {
+    if ((!query || query.trim() === "") && (!sdgHandles || sdgHandles.length === 0)) {
         return [];
     }
 
@@ -437,15 +438,18 @@ export const semanticSearchContent = async (options: {
 
     try {
         // 1. Get embedding for the search query
-        const queryEmbeddingResponse = await openai.embeddings.create({
-            input: [query],
-            model: "text-embedding-3-small",
-        });
-        const queryVector = queryEmbeddingResponse.data[0]?.embedding;
+        let queryVector: number[] | undefined;
+        if (query && query.trim() !== "") {
+            const queryEmbeddingResponse = await openai.embeddings.create({
+                input: [query],
+                model: "text-embedding-3-small",
+            });
+            queryVector = queryEmbeddingResponse.data[0]?.embedding;
 
-        if (!queryVector) {
-            console.error("Failed to generate embedding for the query.");
-            return [];
+            if (!queryVector) {
+                console.error("Failed to generate embedding for the query.");
+                return [];
+            }
         }
 
         // 2. Prepare search requests for each category (collection)
@@ -456,12 +460,35 @@ export const semanticSearchContent = async (options: {
                 return Promise.resolve([]); // Return empty results for invalid collections
             }
 
-            return client.search(collectionName, {
-                vector: queryVector,
-                limit: limit,
-                with_payload: true, // We need the payload data
-                // Add filters here if needed in the future (e.g., based on location bounds)
-            });
+            const filter: any = {};
+            if (sdgHandles && sdgHandles.length > 0) {
+                filter.must = [
+                    {
+                        key: "causes",
+                        match: {
+                            any: sdgHandles,
+                        },
+                    },
+                ];
+            }
+
+            if (queryVector) {
+                return client.search(collectionName, {
+                    vector: queryVector,
+                    limit: limit,
+                    with_payload: true, // We need the payload data
+                    filter: filter,
+                });
+            } else {
+                // When no query vector, use scroll with filtering
+                return client
+                    .scroll(collectionName, {
+                        limit: limit,
+                        with_payload: true,
+                        filter: filter,
+                    })
+                    .then((response) => response.points);
+            }
         });
 
         // 3. Execute searches in parallel

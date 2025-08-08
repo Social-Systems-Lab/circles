@@ -20,7 +20,7 @@ export default function ProfileSummary({ userData }: ProfileSummaryProps) {
                 <p className="mt-2 text-center text-sm text-gray-600">{userData.mission}</p>
             </div>
             <div className="my-4" />
-            {userData.selectedSdgs.length > 0 && (
+            {userData.selectedSdgs && userData.selectedSdgs.length > 0 && (
                 <div>
                     <h3 className="text-md font-semibold">SDGs</h3>
 

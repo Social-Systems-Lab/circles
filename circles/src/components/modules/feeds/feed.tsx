@@ -2,7 +2,7 @@
 "use client";
 
 import { useIsCompact } from "@/components/utils/use-is-compact";
-import { Circle, Feed, PostDisplay } from "@/models/models"; // Removed DynamicForm and Page imports
+import { Circle, Feed, PostDisplay, Cause as SDG } from "@/models/models"; // Removed DynamicForm and Page imports
 import { CreateNewPost } from "./create-new-post";
 import PostList from "./post-list";
 import { features, LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
@@ -16,7 +16,8 @@ import emptyFeed from "@images/empty-feed.png";
 import Image from "next/image";
 import { updateQueryParam } from "@/lib/utils/helpers-client";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import SdgFilter from "../search/sdg-filter";
 
 export type FeedComponentProps = {
     circle: Circle;
@@ -76,6 +77,7 @@ export const AggregateFeedComponent = ({ posts, userFeed, activeTab }: Aggregate
     const isCompact = useIsCompact();
     const [user] = useAtom(userAtom);
     const isMobile = useIsMobile();
+    const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>([]);
 
     // check if authorized to post
     const canPost = !!user && !!userFeed;
@@ -84,6 +86,12 @@ export const AggregateFeedComponent = ({ posts, userFeed, activeTab }: Aggregate
 
     const handleFilterChange = (filter: string) => {
         updateQueryParam(router, "sort", filter);
+    };
+
+    const handleSdgSelectionChange = (sdgs: SDG[]) => {
+        setSelectedSdgs(sdgs);
+        const sdgHandles = sdgs.map((s) => s.handle);
+        updateQueryParam(router, "sdgs", sdgHandles.join(","));
     };
 
     // If no posts in the "Following" feed, show a placeholder
@@ -126,7 +134,10 @@ export const AggregateFeedComponent = ({ posts, userFeed, activeTab }: Aggregate
                         <CreateNewPost circle={user as Circle} feed={userFeed} />
                     </div>
                 )}
-                <ListFilter onFilterChange={handleFilterChange} />
+                <div className="flex items-center gap-4">
+                    <ListFilter onFilterChange={handleFilterChange} />
+                    <SdgFilter selectedSdgs={selectedSdgs} onSelectionChange={handleSdgSelectionChange} />
+                </div>
 
                 <PostList posts={posts} isAggregateFeed={true} />
             </div>

@@ -246,15 +246,25 @@ export async function getPostsFromMultipleFeeds(
     limit: number,
     skip: number,
     sort?: SortingOptions,
+    sdgHandles?: string[],
 ): Promise<PostDisplay[]> {
+    const matchStage: any = {
+        feedId: { $in: feedIds },
+        $or: [{ postType: { $eq: "post" } }, { postType: { $exists: false } }],
+    };
+
+    if (sdgHandles && sdgHandles.length > 0) {
+        const circlesWithSdgs = await Circles.find({ causes: { $in: sdgHandles } })
+            .project({ did: 1 })
+            .toArray();
+        const userDidsWithSdgs = circlesWithSdgs.map((c) => c.did);
+        matchStage.createdBy = { $in: userDidsWithSdgs };
+    }
+
     // Get all posts from the specified feeds without user group filtering
     const posts = (await Posts.aggregate([
         {
-            $match: {
-                feedId: { $in: feedIds },
-                // Filter out project shadow posts from regular feeds
-                $or: [{ postType: { $eq: "post" } }, { postType: { $exists: false } }],
-            },
+            $match: matchStage,
         },
 
         // Convert `feedId` to ObjectId for lookup
@@ -641,8 +651,9 @@ export async function getPostsFromMultipleFeedsWithMetrics(
     limit: number,
     skip: number,
     sort?: SortingOptions,
+    sdgHandles?: string[],
 ): Promise<PostDisplay[]> {
-    let posts = await getPostsFromMultipleFeeds(feedIds, userDid, limit, skip, sort);
+    let posts = await getPostsFromMultipleFeeds(feedIds, userDid, limit, skip, sort, sdgHandles);
 
     let user: Circle | undefined = undefined;
     if (userDid) {

@@ -11,12 +11,19 @@ type PageProps = { circle: Circle; searchParams?: Promise<{ [key: string]: strin
 export default async function CirclesModule(props: PageProps) {
     const circle = props.circle;
     const searchParams = await props.searchParams;
+    const sdgHandles = (searchParams?.sdgs as string)?.split(",") || [];
 
     // get user handle
     let userDid = await getAuthenticatedUserDid();
 
     // get all circles or projects based on the page
-    let circles = await getCirclesWithMetrics(userDid, circle?._id, searchParams?.sort as SortingOptions, "circle");
+    let circles = await getCirclesWithMetrics(
+        userDid,
+        circle?._id,
+        searchParams?.sort as SortingOptions,
+        "circle",
+        sdgHandles,
+    );
 
     return (
         <ContentDisplayWrapper content={circles}>

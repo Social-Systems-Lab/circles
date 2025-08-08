@@ -15,6 +15,7 @@ type ForYouProps = {
 export default async function ForYou(props: ForYouProps) {
     const searchParams = await props.searchParams;
     const userDid = await getAuthenticatedUserDid();
+    const sdgHandles = (searchParams?.sdgs as string)?.split(",") || [];
 
     let activeTab = searchParams?.tab as string;
     if (!userDid && !activeTab) {
@@ -32,18 +33,16 @@ export default async function ForYou(props: ForYouProps) {
 
     if (activeTab === "following" || !activeTab) {
         console.log("Getting aggregate posts for user", userDid);
-        posts = await getAggregatePostsAction(userDid, 20, 0, searchParams?.sort as SortingOptions);
+        posts = await getAggregatePostsAction(userDid, 20, 0, searchParams?.sort as SortingOptions, sdgHandles);
     } else {
         // For the "For You" tab, use a new function that fetches global posts
-        posts = await getGlobalPostsAction(userDid, 20, 0, searchParams?.sort as SortingOptions);
+        posts = await getGlobalPostsAction(userDid, 20, 0, searchParams?.sort as SortingOptions, sdgHandles);
     }
 
     return (
         <div className="flex flex-1 justify-center overflow-hidden">
             <div className="mb-4 mt-14 flex w-full max-w-[1100px] flex-col items-center md:ml-4 md:mr-4">
-                {userDid && (
-                    <FeedTabs currentTab={activeTab} />
-                )}
+                {userDid && <FeedTabs currentTab={activeTab} />}
                 <AggregateFeedComponent posts={posts} userFeed={userFeed} activeTab={activeTab} />
             </div>
         </div>

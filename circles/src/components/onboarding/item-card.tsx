@@ -130,7 +130,7 @@ export const ItemGrid = ({ items, selectedItems, onToggle, isCause }: ItemSelect
                 <ItemGridCard
                     key={item.handle}
                     item={item}
-                    isSelected={selectedItems.some((i) => i.handle === item.handle)}
+                    isSelected={(selectedItems || []).some((i) => i.handle === item.handle)}
                     onToggle={onToggle}
                     isCause={isCause}
                 />
@@ -146,7 +146,7 @@ export const ItemList = ({ items, selectedItems, onToggle }: ItemSelectionProps)
                 <ItemListCard
                     key={item.handle}
                     item={item}
-                    isSelected={selectedItems.some((i) => i.handle === item.handle)}
+                    isSelected={(selectedItems || []).some((i) => i.handle === item.handle)}
                     onToggle={onToggle}
                 />
             ))}

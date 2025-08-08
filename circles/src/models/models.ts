@@ -1077,7 +1077,7 @@ export const ONBOARDING_STEPS = [
     "profile",
     "location",
     "sdgs",
-    "skills",
+    // "skills",
     "final",
 ] as const;
 

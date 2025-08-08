@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Input } from "@/components/ui/input";
-import { Circle, ContentPreviewData, WithMetric } from "@/models/models"; // Removed Page import
+import { Circle, ContentPreviewData, WithMetric, Cause as SDG } from "@/models/models"; // Removed Page import
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import Image from "next/image";
@@ -19,6 +19,7 @@ import { useIsMobile } from "@/components/utils/use-is-mobile";
 import CircleTags from "./circle-tags";
 import Indicators from "@/components/utils/indicators";
 import { ListFilter } from "@/components/utils/list-filter";
+import SdgFilter from "../search/sdg-filter";
 import emptyFeed from "@images/empty-feed.png";
 import { updateQueryParam } from "@/lib/utils/helpers-client";
 import Link from "next/link";
@@ -50,14 +51,19 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
     const router = useRouter();
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [searchQuery, setSearchQuery] = useState("");
+    const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>([]);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const filteredCircles = useMemo(() => {
+        let results = circles;
         if (searchQuery) {
-            return circles.filter((circle) => circle?.name?.toLowerCase().includes(searchQuery.toLowerCase()));
-        } else {
-            return circles;
+            results = results.filter((circle) => circle?.name?.toLowerCase().includes(searchQuery.toLowerCase()));
         }
-    }, [circles, searchQuery]);
+        if (selectedSdgs.length > 0) {
+            const sdgHandles = selectedSdgs.map((s) => s.handle);
+            results = results.filter((c) => c.causes?.some((cause) => sdgHandles.includes(cause)));
+        }
+        return results;
+    }, [circles, searchQuery, selectedSdgs]);
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -131,7 +137,10 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
                     )}
                 </div>
 
-                <ListFilter onFilterChange={handleFilterChange} />
+                <div className="flex items-center gap-4">
+                    <ListFilter onFilterChange={handleFilterChange} />
+                    <SdgFilter selectedSdgs={selectedSdgs} onSelectionChange={setSelectedSdgs} />
+                </div>
 
                 {filteredCircles.length === 0 && activeTab === "following" && (
                     <div className="flex h-full flex-col items-center justify-center">

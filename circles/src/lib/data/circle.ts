@@ -111,19 +111,20 @@ export const getSwipeCircles = async (): Promise<Circle[]> => {
     return circles;
 };
 
-export const getCircles = async (parentCircleId?: string, circleType?: CircleType): Promise<Circle[]> => {
-    let circles: Circle[] = [];
-    if (!parentCircleId) {
-        circles = await Circles.find(
-            { circleType: circleType ?? "circle" },
-            { projection: SAFE_CIRCLE_PROJECTION },
-        ).toArray();
-    } else {
-        circles = await Circles.find(
-            { parentCircleId: parentCircleId, circleType: circleType ?? "circle" },
-            { projection: SAFE_CIRCLE_PROJECTION },
-        ).toArray();
+export const getCircles = async (
+    parentCircleId?: string,
+    circleType?: CircleType,
+    sdgHandles?: string[],
+): Promise<Circle[]> => {
+    let query: any = { circleType: circleType ?? "circle" };
+    if (parentCircleId) {
+        query.parentCircleId = parentCircleId;
     }
+    if (sdgHandles && sdgHandles.length > 0) {
+        query.causes = { $in: sdgHandles };
+    }
+
+    let circles = await Circles.find(query, { projection: SAFE_CIRCLE_PROJECTION }).toArray();
     circles.forEach((circle: Circle) => {
         if (circle._id) {
             circle._id = circle._id.toString();
@@ -145,8 +146,9 @@ export const getCirclesWithMetrics = async (
     parentCircleId?: string,
     sort?: SortingOptions,
     circleType?: CircleType,
+    sdgHandles?: string[],
 ): Promise<WithMetric<Circle>[]> => {
-    let circles = (await getCircles(parentCircleId, circleType)) as WithMetric<Circle>[];
+    let circles = (await getCircles(parentCircleId, circleType, sdgHandles)) as WithMetric<Circle>[];
 
     console.log("🔍 [DB] getCirclesWithMetrics query:", { userDid, parentCircleId, sort, circleType });
     const currentDate = new Date();
