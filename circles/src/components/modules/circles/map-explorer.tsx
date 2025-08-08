@@ -29,6 +29,7 @@ import { useRouter } from "next/navigation";
 import { searchContentAction } from "../search/actions";
 import CategoryFilter from "../search/category-filter";
 import SdgFilter from "../search/sdg-filter";
+import { SdgPanel } from "../search/SdgPanel";
 import Indicators from "@/components/utils/indicators";
 import ResizingDrawer from "@/components/ui/resizing-drawer"; // Correct import name
 import ContentPreview from "@/components/layout/content-preview";
@@ -458,8 +459,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                     selectedSdgs={selectedSdgs}
                                     onSelectionChange={setSelectedSdgs}
                                     displayAs="popover"
+                                    gridCols="grid-cols-3"
                                     trigger={
-                                        <Button variant="ghost" className="flex items-center gap-2">
+                                        <Button variant="ghost" className="flex flex-shrink-0 items-center gap-2">
                                             {selectedSdgs.length === 0 ? (
                                                 <Image
                                                     src="/images/sdgs/SDG_Wheel_WEB.png"
@@ -481,7 +483,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                                     ))}
                                                 </div>
                                             )}
-                                            <span>SDGs {selectedSdgs.length > 0 && `(${selectedSdgs.length})`}</span>
+                                            <span className="flex-shrink-0">
+                                                SDGs {selectedSdgs.length > 0 && `(${selectedSdgs.length})`}
+                                            </span>
                                         </Button>
                                     }
                                 />

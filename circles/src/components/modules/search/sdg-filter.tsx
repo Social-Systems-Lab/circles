@@ -13,9 +13,16 @@ interface SdgFilterProps {
     onSelectionChange: (sdgs: SDG[]) => void;
     displayAs?: "inline" | "popover";
     trigger?: React.ReactNode;
+    gridCols?: string;
 }
 
-const SdgFilter: React.FC<SdgFilterProps> = ({ selectedSdgs, onSelectionChange, displayAs = "inline", trigger }) => {
+const SdgFilter: React.FC<SdgFilterProps> = ({
+    selectedSdgs,
+    onSelectionChange,
+    displayAs = "inline",
+    trigger,
+    gridCols,
+}) => {
     const [search, setSearch] = useState("");
     const [isOpen, setIsOpen] = useState(false);
 
@@ -71,6 +78,7 @@ const SdgFilter: React.FC<SdgFilterProps> = ({ selectedSdgs, onSelectionChange, 
             onToggle={handleSdgToggle}
             search={search}
             setSearch={setSearch}
+            gridCols={gridCols}
         />
     );
 

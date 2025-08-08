@@ -16,6 +16,7 @@ interface SdgPanelProps {
     search: string;
     setSearch: (value: string) => void;
     className?: string;
+    gridCols?: string;
 }
 
 export const SdgPanel: React.FC<SdgPanelProps> = ({
@@ -25,6 +26,7 @@ export const SdgPanel: React.FC<SdgPanelProps> = ({
     search,
     setSearch,
     className,
+    gridCols,
 }) => {
     return (
         <div className={cn("p-1", className)}>
@@ -39,7 +41,13 @@ export const SdgPanel: React.FC<SdgPanelProps> = ({
                 />
             </div>
             <ScrollArea className="h-60">
-                <ItemGrid items={visibleSdgs} selectedItems={selectedSdgs} onToggle={onToggle} isCause={true} />
+                <ItemGrid
+                    items={visibleSdgs}
+                    selectedItems={selectedSdgs}
+                    onToggle={onToggle}
+                    isCause={true}
+                    gridCols={gridCols}
+                />
             </ScrollArea>
         </div>
     );
