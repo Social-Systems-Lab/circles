@@ -125,6 +125,11 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             results = results.filter((result) => result.circleType === typeToFilter);
         }
 
+        if (selectedSdgs.length > 0) {
+            const sdgHandles = selectedSdgs.map((s) => s.handle);
+            results = results.filter((c) => c.causes?.some((cause) => sdgHandles.includes(cause)));
+        }
+
         return results;
     }, [allSearchResults, selectedCategory, selectedSdgs]);
 
