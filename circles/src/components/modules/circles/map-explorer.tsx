@@ -98,7 +98,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const filterCirclesByCategory = useCallback((circles: WithMetric<Circle>[], category: string | null) => {
         // ... (no changes) ...
         if (!category) return circles;
-        const typeToFilter = category === "circles" ? "circle" : "user";
+        const typeToFilter = category === "communities" ? "circle" : "user";
         return circles.filter((c) => c.circleType === typeToFilter);
     }, []);
 
@@ -121,7 +121,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
 
         if (selectedCategory) {
             const typeToFilter =
-                selectedCategory === "circles" ? "circle" : selectedCategory === "projects" ? "project" : "user";
+                selectedCategory === "communities" ? "circle" : selectedCategory === "projects" ? "project" : "user";
             results = results.filter((result) => result.circleType === typeToFilter);
         }
 
@@ -131,12 +131,11 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const categoryCounts = useMemo(() => {
         // ... (no changes) ...
         const counts: { [key: string]: number } = {
-            circles: 0,
-            projects: 0,
+            communities: 0,
             users: 0,
         };
         allSearchResults?.forEach((result) => {
-            if (result.circleType === "circle") counts.circles++;
+            if (result.circleType === "circle") counts.communities++;
             else if (result.circleType === "user") counts.users++;
         });
         return counts;
@@ -178,7 +177,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     );
 
     const handleSearchTrigger = useCallback(async () => {
-        const searchCategoriesForBackend = ["circles", "projects", "users"];
+        const searchCategoriesForBackend = ["circles", "users"];
         const sdgHandles = selectedSdgs.map((sdg) => sdg.handle);
         if (!searchQuery.trim() && sdgHandles.length === 0) {
             // If clearing search via empty query, reset state
@@ -289,7 +288,14 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                     .map((circle) => mapItemToContent(circle))
                     .filter((c): c is Content => c !== null);
             } else {
-                mapData = filterCirclesByCategory(allDiscoverableCircles, selectedCategory)
+                let circlesToDisplay = allDiscoverableCircles;
+                if (selectedSdgs.length > 0) {
+                    const sdgHandles = selectedSdgs.map((s) => s.handle);
+                    circlesToDisplay = circlesToDisplay.filter((c) =>
+                        c.causes?.some((cause) => sdgHandles.includes(cause)),
+                    );
+                }
+                mapData = filterCirclesByCategory(circlesToDisplay, selectedCategory)
                     .map((circle) => mapItemToContent(circle))
                     .filter((c): c is Content => c !== null);
             }
@@ -301,6 +307,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         filteredSearchResults,
         allDiscoverableCircles,
         selectedCategory,
+        selectedSdgs,
         filterCirclesByCategory,
         setDisplayedContent,
     ]);

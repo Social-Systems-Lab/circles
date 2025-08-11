@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import { Cause as SDG } from "@/models/models";
 import { SdgList } from "../sdgs/sdg-list";
+import { Button } from "@/components/ui/button";
 
 import { cn } from "@/lib/utils";
 
@@ -16,6 +17,7 @@ interface SdgPanelProps {
     setSearch: (value: string) => void;
     className?: string;
     gridCols?: string;
+    onClear?: () => void;
 }
 
 export const SdgPanel: React.FC<SdgPanelProps> = ({
@@ -26,6 +28,7 @@ export const SdgPanel: React.FC<SdgPanelProps> = ({
     setSearch,
     className,
     gridCols,
+    onClear,
 }) => {
     return (
         <div className={cn("p-1", className)}>
@@ -40,6 +43,13 @@ export const SdgPanel: React.FC<SdgPanelProps> = ({
                 />
             </div>
             <SdgList sdgs={visibleSdgs} selectedSdgs={selectedSdgs} onToggle={onToggle} gridCols={gridCols} />
+            {selectedSdgs.length > 0 && (
+                <div className="mt-2">
+                    <Button variant="outline" size="sm" onClick={onClear} className="w-full">
+                        Clear Selection
+                    </Button>
+                </div>
+            )}
         </div>
     );
 };

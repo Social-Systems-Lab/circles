@@ -46,6 +46,10 @@ const SdgFilter: React.FC<SdgFilterProps> = ({
         }
     };
 
+    const handleClear = () => {
+        onSelectionChange([]);
+    };
+
     const renderHeader = () => {
         if (selectedSdgs.length === 0) {
             return "All SDG's";
@@ -79,6 +83,7 @@ const SdgFilter: React.FC<SdgFilterProps> = ({
             search={search}
             setSearch={setSearch}
             gridCols={gridCols}
+            onClear={handleClear}
         />
     );
 
