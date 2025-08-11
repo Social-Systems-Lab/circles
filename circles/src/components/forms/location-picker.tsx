@@ -296,6 +296,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
                 emptyMessage="No results found"
                 onSearch={fetchSuggestions}
                 isLocationConfirmed={isLocationConfirmed}
+                onClear={handleClearLocation}
             />
             <Button type="button" onClick={handleUseCurrentLocation}>
                 <MapPin className="mr-2 h-4 w-4" />

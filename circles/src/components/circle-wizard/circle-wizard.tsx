@@ -41,12 +41,12 @@ export type CircleWizardStepProps = {
     setCircleData: React.Dispatch<React.SetStateAction<CircleData>>;
     nextStep: () => void;
     prevStep: () => void;
-    onComplete?: () => void;
+    onComplete?: (createdCircleId?: string, handle?: string) => void;
     initialParentCircleId?: string;
 };
 
 interface CircleWizardProps {
-    onComplete?: (createdCircleId?: string) => void; // Modified to pass createdCircleId
+    onComplete?: (createdCircleId?: string, handle?: string) => void; // Modified to pass createdCircleId
     initialParentCircleId?: string;
 }
 
@@ -72,25 +72,27 @@ export default function CircleWizard({ onComplete, initialParentCircleId }: Circ
 
     // Effect to reset state if key props change (indicating a new wizard session)
     useEffect(() => {
-        console.log("Wizard props changed, resetting state (isOpen).");
-        setCircleData({
-            name: "",
-            handle: "",
-            isPublic: true,
-            mission: "",
-            description: "",
-            content: "",
-            selectedSdgs: [],
-            selectedSkills: [],
-            picture: "/images/default-picture.png", // Reset picture
-            images: [], // Reset images
-            parentCircleId: undefined, // Reset parentCircleId
-            circleType: "circle", // Always "circle"
-            _id: undefined, // Clear any existing ID
-            pictureFile: undefined, // Clear any lingering file object
-        });
-        setCurrentStepIndex(0); // Reset to the first step
-    }, [isOpen]);
+        if (isOpen) {
+            console.log("Wizard is opening, resetting state.");
+            setCircleData({
+                name: "",
+                handle: "",
+                isPublic: true,
+                mission: "",
+                description: "",
+                content: "",
+                selectedSdgs: [],
+                selectedSkills: [],
+                picture: "/images/default-picture.png",
+                images: [],
+                parentCircleId: initialParentCircleId, // Set initial parentCircleId
+                circleType: "circle",
+                _id: undefined,
+                pictureFile: undefined,
+            });
+            setCurrentStepIndex(0);
+        }
+    }, [isOpen, initialParentCircleId]);
 
     // Define the steps for the wizard
     const steps = useMemo(() => {
@@ -147,7 +149,7 @@ export default function CircleWizard({ onComplete, initialParentCircleId }: Circ
             // This is the final step completion
             setIsOpen(false);
             if (onComplete) {
-                onComplete(circleData._id); // Pass the created circle's ID
+                onComplete(circleData._id, circleData.handle); // Pass the created circle's ID
             } else {
                 // Default navigation if onComplete is not provided
                 if (circleData._id) {

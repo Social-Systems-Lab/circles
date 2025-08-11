@@ -7,11 +7,13 @@ import { useState } from "react";
 import CircleWizard from "./circle-wizard";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { DialogTitle, DialogHeader } from "@/components/ui/dialog";
+import { useRouter } from "next/navigation";
 
 export function CreateCircleDialog({ parentCircleId }: { parentCircleId?: string }) {
     // parentCircleId removed from props
     const [isOpen, setIsOpen] = useState(false);
     const isCompact = useIsCompact();
+    const router = useRouter();
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -35,7 +37,14 @@ export function CreateCircleDialog({ parentCircleId }: { parentCircleId?: string
                 </div>
                 <CircleWizard
                     initialParentCircleId={parentCircleId}
-                    onComplete={() => setIsOpen(false)} // This is compatible, createdCircleId will be ignored
+                    onComplete={(createdCircleId, handle) => {
+                        setIsOpen(false);
+                        if (handle) {
+                            router.push(`/circles/${handle}`);
+                        } else if (createdCircleId) {
+                            router.push(`/circles/${createdCircleId}`);
+                        }
+                    }}
                 />
             </DialogContent>
         </Dialog>

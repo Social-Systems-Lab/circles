@@ -60,7 +60,13 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
         const allUserMemberships = currentUserCircle.memberships || [];
         const potentialCircles: Circle[] = allUserMemberships
             .map((mem) => mem.circle)
-            .filter((circle): circle is Circle => circle !== null && circle !== undefined);
+            .filter((circle): circle is Circle => {
+                if (!circle) return false;
+                // Keep the user's own circle regardless of its type
+                if (circle._id === currentUserCircle._id) return true;
+                // For other circles, only include those of type 'circle'
+                return circle.circleType === "circle";
+            });
 
         const featureToAuth = (features[itemType.moduleHandle as keyof typeof features] as any)?.[
             itemType.createFeatureHandle

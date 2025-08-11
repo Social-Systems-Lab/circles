@@ -13,31 +13,10 @@ export default function FinalStep({ circleData, setCircleData, prevStep, onCompl
     const [user] = useAtom(userAtom);
     const router = useRouter();
 
-    const handleCreateCircle = async () => {
-        setIsPending(true);
-        setError("");
-
-        if (!user) {
-            setError("You must be logged in to create a circle.");
-            setIsPending(false);
-            return;
+    const handleCreateCircle = () => {
+        if (onComplete) {
+            onComplete(circleData._id, circleData.handle);
         }
-
-        const result = await createCircleAction(circleData, user.did);
-
-        if (result.success) {
-            // If an onComplete callback is provided, call it with the new circle's ID
-            if (onComplete) {
-                onComplete(result.data?.circleId);
-            } else {
-                // Otherwise, redirect to the new circle's page
-                router.push(`/circles/${result.data?.handle}`);
-            }
-        } else {
-            setError(result.message || "Failed to create circle. Please try again.");
-        }
-
-        setIsPending(false);
     };
 
     return (

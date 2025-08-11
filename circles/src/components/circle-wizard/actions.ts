@@ -1,6 +1,12 @@
 "use server";
 
-import { createCircle, updateCircle, getCircleById, ensureModuleIsEnabledOnCircle } from "@/lib/data/circle";
+import {
+    createCircle,
+    updateCircle,
+    getCircleById,
+    ensureModuleIsEnabledOnCircle,
+    getCircleByHandle,
+} from "@/lib/data/circle";
 import { Circle, CircleType, Media, FileInfo } from "@/models/models";
 import { ImageItem } from "@/components/forms/controls/multi-image-uploader";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -22,6 +28,7 @@ export async function saveBasicInfoAction(
     circleType?: CircleType,
 ) {
     try {
+        console.log("saveBasicInfoAction called with parentCircleId:", parentCircleId);
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) {
             return { success: false, message: "You need to be logged in" };
@@ -42,6 +49,12 @@ export async function saveBasicInfoAction(
             const authorized = await isAuthorized(userDid, parentCircleId ?? "", features.communities.create);
             if (!authorized) {
                 return { success: false, message: "You are not authorized to create new circles" };
+            }
+
+            // Check if handle is already in use
+            const existingCircle = await getCircleByHandle(handle);
+            if (existingCircle) {
+                return { success: false, message: "handle" };
             }
 
             // 1. Create initial circle record

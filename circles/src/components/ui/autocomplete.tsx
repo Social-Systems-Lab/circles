@@ -12,10 +12,12 @@ import { RiMapPinFill } from "react-icons/ri";
 
 interface LocationInputProps extends React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input> {
     isConfirmed: boolean;
+    onClear?: () => void;
+    showClearButton?: boolean;
 }
 
 export const LocationInput = React.forwardRef<React.ElementRef<typeof CommandPrimitive.Input>, LocationInputProps>(
-    ({ className, isConfirmed, ...props }, ref) => {
+    ({ className, isConfirmed, onClear, showClearButton, ...props }, ref) => {
         // workaround for chrome autofilling the input box with wrong values
         useEffect(() => {
             if (ref && (ref as any).current) {
@@ -39,6 +41,24 @@ export const LocationInput = React.forwardRef<React.ElementRef<typeof CommandPri
                     {...props}
                     autoComplete="one-time-code"
                 />
+                {showClearButton && (
+                    <button type="button" onClick={onClear} className="ml-2 text-gray-500 hover:text-gray-700">
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                )}
             </div>
         );
     },
@@ -58,6 +78,7 @@ type AutoCompleteProps = {
     placeholder?: string;
     onSearch: (query: string) => void;
     isLocationConfirmed: boolean;
+    onClear?: () => void;
 };
 
 export const AutoComplete = ({
@@ -69,6 +90,7 @@ export const AutoComplete = ({
     disabled,
     onSearch,
     isLocationConfirmed,
+    onClear,
     isLoading = false,
 }: AutoCompleteProps) => {
     const inputRef = useRef<HTMLInputElement>(null);
@@ -149,6 +171,8 @@ export const AutoComplete = ({
                     placeholder={placeholder}
                     disabled={disabled}
                     isConfirmed={isLocationConfirmed}
+                    onClear={onClear}
+                    showClearButton={isLocationConfirmed}
                     className="text-base"
                 />
             </div>

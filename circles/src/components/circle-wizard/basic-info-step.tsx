@@ -29,7 +29,7 @@ export default function BasicInfoStep({
     const [isPending, startTransition] = useTransition();
     const [nameError, setNameError] = useState("");
     const [handleError, setHandleError] = useState("");
-    const [parentCircleId, setParentCircleId] = useState<string | undefined>(undefined);
+    const [parentCircleId, setParentCircleId] = useState<string | undefined>(initialParentCircleId);
     // selectedParentCircle state is managed by CircleSelector's onCircleSelected callback
     // const [selectedParentCircle, setSelectedParentCircle] = useState<Circle | null>(null);
     const [user] = useAtom(userAtom);
@@ -53,6 +53,7 @@ export default function BasicInfoStep({
     // }, [selectedParentCircle, setCircleData, user]);
 
     const handleParentCircleSelected = useCallback((circle: Circle | null) => {
+        console.log("Setting parent circle id:", circle ? circle._id : undefined);
         setParentCircleId(circle ? circle._id : undefined);
     }, []); // Wrapped with useCallback
 
@@ -101,6 +102,7 @@ export default function BasicInfoStep({
         if (!validateForm()) return;
 
         startTransition(async () => {
+            console.log("Saving basic info with parentCircleId:", parentCircleId);
             // Save the basic info and create the circle
             const result = await saveBasicInfoAction(
                 circleData.name,
@@ -120,10 +122,12 @@ export default function BasicInfoStep({
                 nextStep();
             } else {
                 // Handle error
-                if (result.message.includes("handle")) {
+                if (result.message === "handle") {
+                    setHandleError("This handle is already in use. Please choose another one.");
+                } else if (result.message) {
                     setHandleError(result.message);
                 } else {
-                    console.error(result.message);
+                    console.error("An unknown error occurred.");
                 }
             }
         });
