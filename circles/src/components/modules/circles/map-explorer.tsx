@@ -447,7 +447,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                             {/* Category Filter */}
                             {!isMobile && (
                                 <CategoryFilter
-                                    categories={["circles", "projects", "users"]}
+                                    categories={["communities", "users"]}
                                     categoryCounts={categoryCounts}
                                     selectedCategory={selectedCategory}
                                     onSelectionChange={setSelectedCategory}
@@ -470,7 +470,12 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                                     height={24}
                                                 />
                                             ) : (
-                                                <div className="flex -space-x-2">
+                                                <div
+                                                    className="flex w-2 -space-x-2"
+                                                    style={{
+                                                        width: 24 + 16 * Math.min(selectedSdgs.length - 1, 2), // Adjust width based on number of selected SDGs
+                                                    }}
+                                                >
                                                     {selectedSdgs.slice(0, 3).map((sdg) => (
                                                         <Image
                                                             key={sdg.handle}
@@ -483,9 +488,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                                     ))}
                                                 </div>
                                             )}
-                                            <span className="flex-shrink-0">
+                                            <div className="hidden flex-shrink-0 md:block">
                                                 SDGs {selectedSdgs.length > 0 && `(${selectedSdgs.length})`}
-                                            </span>
+                                            </div>
                                         </Button>
                                     }
                                 />

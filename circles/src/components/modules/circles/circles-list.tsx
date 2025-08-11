@@ -185,7 +185,9 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
                                     ))}
                                 </div>
                             )}
-                            <span>SDGs {selectedSdgs.length > 0 && `(${selectedSdgs.length})`}</span>
+                            <span className="hidden md:block">
+                                SDGs {selectedSdgs.length > 0 && `(${selectedSdgs.length})`}
+                            </span>
                             <ChevronDown
                                 className={`h-4 w-4 transform transition-transform ${sdgFilterOpen ? "rotate-180" : ""}`}
                             />

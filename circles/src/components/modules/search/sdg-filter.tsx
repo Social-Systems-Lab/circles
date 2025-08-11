@@ -62,7 +62,7 @@ const SdgFilter: React.FC<SdgFilterProps> = ({
                                 alt={sdg.name}
                                 width={24}
                                 height={24}
-                                className="h-6 w-6 rounded-full border-2 border-white object-cover"
+                                className="h-6 w-6 shrink-0 rounded-full border-2 border-white object-cover"
                             />
                         ))}
                     </div>

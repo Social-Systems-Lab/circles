@@ -33,23 +33,15 @@ export default function SdgList({ sdgHandles, className }: SdgListProps) {
     return (
         <div className={`grid grid-cols-3 gap-2 ${className}`}>
             {selectedSdgs.map((sdg) => (
-                <HoverCard key={sdg.handle}>
-                    <HoverCardTrigger>
-                        <div className="aspect-square overflow-hidden rounded-lg">
-                            <Image
-                                src={sdg.picture?.url ?? "/images/default-picture.png"}
-                                alt={sdg.name}
-                                width={100}
-                                height={100}
-                                className="h-full w-full object-cover"
-                            />
-                        </div>
-                    </HoverCardTrigger>
-                    <HoverCardContent className="formatted">
-                        <h3 className="font-bold">{sdg.name}</h3>
-                        <p>{sdg.description}</p>
-                    </HoverCardContent>
-                </HoverCard>
+                <div key={sdg.handle} className="aspect-square overflow-hidden rounded-lg">
+                    <Image
+                        src={sdg.picture?.url ?? "/images/default-picture.png"}
+                        alt={sdg.name}
+                        width={100}
+                        height={100}
+                        className="h-full w-full object-cover"
+                    />
+                </div>
             ))}
         </div>
     );

@@ -56,24 +56,6 @@ export const ItemGridCard = ({ item, isSelected, onToggle, isCause }: ItemGridCa
                     </div>
                 )}
             </CardHeader>
-            <CardContent className="p-0">
-                {isCause ? (
-                    <Popover>
-                        <PopoverTrigger className="absolute inset-0">
-                            <span className="sr-only">View details for {item.name}</span>
-                        </PopoverTrigger>
-                        <PopoverContent>
-                            <h3 className="font-bold">{item.name}</h3>
-                            <p>{item.description}</p>
-                        </PopoverContent>
-                    </Popover>
-                ) : (
-                    <div className="p-4">
-                        <CardTitle className="mb-2 text-base font-semibold">{item.name}</CardTitle>
-                        <p className="text-xs text-gray-600">{item.description}</p>
-                    </div>
-                )}
-            </CardContent>
         </Card>
     );
 };
@@ -126,7 +108,7 @@ interface ItemSelectionProps {
 
 export const ItemGrid = ({ items, selectedItems, onToggle, isCause, gridCols }: ItemSelectionProps) => {
     return (
-        <div className={cn("grid gap-4", gridCols || "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6")}>
+        <div className={cn("grid gap-4", gridCols || "grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6")}>
             {items.map((item) => (
                 <ItemGridCard
                     key={item.handle}
