@@ -923,41 +923,36 @@ export const PostItem = ({
 
             {/* Actions (like and comment) */}
             <div className="flex items-center justify-between pl-4 pr-4 text-gray-500">
-                <div className="flex items-center gap-4">
-                    {/* Comments Section */}
-                    <div className="flex cursor-pointer items-center gap-1.5" onClick={fetchComments}>
-                        <MessageCircle className="h-5 w-5" />
-                        {post.comments > 0 && <div>{post.comments}</div>}
+                <div className="flex flex-1 items-center gap-1.5">
+                    {/* Likes Section */}
+                    <div className="flex h-[24px] cursor-pointer items-center gap-1.5 text-gray-500">
+                        <LikeButton isLiked={isLiked} onClick={handleLikePost} />
+                        {likes > 0 && (
+                            <HoverCard openDelay={200} onOpenChange={(open) => handleLikesPopoverHover(open)}>
+                                <HoverCardTrigger>
+                                    <div>{likes}</div>
+                                </HoverCardTrigger>
+                                <HoverCardContent className="w-auto border-0 bg-[#333333] p-2 pt-[6px]">
+                                    <HoverCardArrow className="text-[#333333]" fill="#333333" color="#333333" />
+                                    <div className="text-[14px] text-white">
+                                        <div className="font-bold">Likes</div>
+                                        {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                        {likedByUsers?.map((user) => (
+                                            <div key={user.did} className="flex items-center gap-2 text-[12px]">
+                                                <div>{user.name}</div>
+                                            </div>
+                                        ))}
+                                        {likes > 20 && (
+                                            <div className="text-sm text-gray-500">...and {likes - 20} more</div>
+                                        )}
+                                    </div>
+                                </HoverCardContent>
+                            </HoverCard>
+                        )}
                     </div>
-
-                    {/* Metrics */}
-                    {post.metrics && (
-                        <div className="flex items-center gap-4">
-                            {post.metrics.similarity !== undefined && (
-                                <div className="text-[16px]">
-                                    <SimilarityScore
-                                        score={post.metrics.similarity}
-                                        color={"#6b7280"}
-                                        size={"1.25rem"}
-                                    />
-                                </div>
-                            )}
-                            {post.metrics.distance !== undefined && (
-                                <div className="text-[16px]">
-                                    <ProximityIndicator
-                                        distance={post.metrics.distance}
-                                        color={"#6b7280"}
-                                        content={post}
-                                        size={"1.25rem"}
-                                    />
-                                </div>
-                            )}
-                        </div>
-                    )}
-
                     {/* SDGs */}
                     {populatedSdgs.length > 0 && (
-                        <div className="flex -space-x-2">
+                        <div className="flex -space-x-2 pl-2">
                             {populatedSdgs.slice(0, 3).map((sdg) => (
                                 <Image
                                     key={sdg.handle}
@@ -972,35 +967,31 @@ export const PostItem = ({
                     )}
                 </div>
 
-                {/* Likes Section */}
-                <div className="flex h-[24px] cursor-pointer items-center gap-1.5 text-gray-500">
-                    <LikeButton isLiked={isLiked} onClick={handleLikePost} />
-                    {likes > 0 && (
-                        <HoverCard openDelay={200} onOpenChange={(open) => handleLikesPopoverHover(open)}>
-                            <HoverCardTrigger>
-                                <div>{likes}</div>
-                            </HoverCardTrigger>
-                            <HoverCardContent className="w-auto border-0 bg-[#333333] p-2 pt-[6px]">
-                                <HoverCardArrow className="text-[#333333]" fill="#333333" color="#333333" />
-                                <div className="text-[14px] text-white">
-                                    <div className="font-bold">Likes</div>
-                                    {isPending && (
-                                        <>
-                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        </>
-                                    )}
-                                    {likedByUsers?.map((user) => (
-                                        <div key={user.did} className="flex items-center gap-2 text-[12px]">
-                                            <div>{user.name}</div>
-                                        </div>
-                                    ))}
-                                    {likes > 20 && (
-                                        <div className="text-sm text-gray-500">...and {likes - 20} more</div>
-                                    )}
-                                </div>
-                            </HoverCardContent>
-                        </HoverCard>
-                    )}
+                {/* Metrics */}
+                {post.metrics && (
+                    <div className="flex flex-1 items-center justify-center gap-1.5">
+                        {post.metrics.similarity !== undefined && (
+                            <div className="text-[16px]">
+                                <SimilarityScore score={post.metrics.similarity} color={"#6b7280"} size={"1.25rem"} />
+                            </div>
+                        )}
+                        {post.metrics.distance !== undefined && (
+                            <div className="text-[16px]">
+                                <ProximityIndicator
+                                    distance={post.metrics.distance}
+                                    color={"#6b7280"}
+                                    content={post}
+                                    size={"1.25rem"}
+                                />
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Comments Section */}
+                <div className="flex flex-1 cursor-pointer items-center justify-end gap-1.5" onClick={fetchComments}>
+                    <MessageCircle className="h-5 w-5" />
+                    {post.comments > 0 && <div>{post.comments}</div>}
                 </div>
             </div>
 
