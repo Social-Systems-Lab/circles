@@ -78,7 +78,7 @@ export const ListFilter = ({ onFilterChange, onSdgChange, selectedSdgs = [] }: L
                         </Label>
                     </div>
                 </RadioGroup>
-                <div className="flex-shrink-0">
+                <div className="flex-shrink-0 self-end">
                     <SdgFilter
                         selectedSdgs={selectedSdgs}
                         onSelectionChange={onSdgChange ? onSdgChange : () => {}}
@@ -87,10 +87,30 @@ export const ListFilter = ({ onFilterChange, onSdgChange, selectedSdgs = [] }: L
                         trigger={
                             <Button
                                 variant="ghost"
-                                className="flex h-8 items-center gap-2 px-2 data-[selected=true]:bg-accent"
+                                className="relative top-[-1px] flex h-8 items-center gap-2 px-2 data-[selected=true]:bg-accent"
                                 data-selected={selectedSdgs.length > 0}
                             >
-                                <Image src="/images/sdgs/SDG_Wheel_WEB.png" alt="SDG Wheel" width={20} height={20} />
+                                {selectedSdgs.length === 0 ? (
+                                    <Image
+                                        src="/images/sdgs/SDG_Wheel_WEB.png"
+                                        alt="SDG Wheel"
+                                        width={20}
+                                        height={20}
+                                    />
+                                ) : (
+                                    <div className="flex -space-x-2">
+                                        {selectedSdgs.slice(0, 3).map((sdg) => (
+                                            <Image
+                                                key={sdg.handle}
+                                                src={sdg.picture?.url ?? "/images/default-picture.png"}
+                                                alt={sdg.name}
+                                                width={20}
+                                                height={20}
+                                                className="h-5 w-5 rounded-full border-2 border-white object-cover"
+                                            />
+                                        ))}
+                                    </div>
+                                )}
                             </Button>
                         }
                     />
