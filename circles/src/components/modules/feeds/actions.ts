@@ -31,6 +31,7 @@ import {
 import { saveFile, isFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
+import { sdgs } from "@/lib/data/sdgs";
 import { getProposalById } from "@/lib/data/proposal";
 import { getIssueById } from "@/lib/data/issue";
 import {
@@ -267,12 +268,16 @@ export async function getInternalLinkPreviewData(url: string): Promise<InternalL
             // For now, assuming getPost is sufficient and we manually add author etc. if needed
             const author = await getUserByDid(post.createdBy);
             const feed = await getFeed(post.feedId);
+            const { sdgs: sdgIds, ...restOfPost } = post;
+            const populatedSdgs = sdgIds ? sdgs.filter((sdg) => sdgIds.includes(sdg._id)) : [];
+
             const postDisplay: PostDisplay = {
-                ...post,
+                ...restOfPost,
                 author: author!, // Assuming author is found
                 circleType: "post",
                 circle: circle,
                 feed: feed!, // Assuming feed is found
+                sdgs: populatedSdgs,
             };
             return { type: "post", data: postDisplay };
         } else if (proposalMatch) {
@@ -334,6 +339,7 @@ export async function getPostsAction(
     limit: number,
     skip: number,
     sortingOptions?: SortingOptions,
+    sdgHandles?: string[],
 ): Promise<PostDisplay[]> {
     let userDid = await getAuthenticatedUserDid();
     const feed = await getFeed(feedId);
@@ -347,7 +353,7 @@ export async function getPostsAction(
     }
 
     // get posts for feed
-    const posts = await getPostsWithMetrics(feedId, userDid, limit, skip, sortingOptions);
+    const posts = await getPostsWithMetrics(feedId, userDid, limit, skip, sortingOptions, sdgHandles);
     return posts;
 }
 
@@ -385,6 +391,8 @@ export async function createPostAction(
         const internalPreviewId = formData.get("internalPreviewId") as string | undefined;
         const internalPreviewUrl = formData.get("internalPreviewUrl") as string | undefined;
         // +++ End Internal Link Preview Data Extraction +++
+        const sdgsStr = formData.get("sdgs") as string;
+        const sdgs = sdgsStr ? JSON.parse(sdgsStr) : undefined;
 
         // Get the default feed for this circle
         let feed = await getFeedByHandle(circleId, "default"); // Changed to let
@@ -426,6 +434,7 @@ export async function createPostAction(
             internalPreviewId: internalPreviewId || undefined,
             internalPreviewUrl: internalPreviewUrl || undefined,
             // +++ End Internal Link Preview Fields +++
+            sdgs: sdgs || undefined,
         };
 
         // console.log("creating post", JSON.stringify(post.location)); // Reduced logging
@@ -536,6 +545,8 @@ export async function updatePostAction(
         const internalPreviewId = formData.get("internalPreviewId") as string | undefined;
         const internalPreviewUrl = formData.get("internalPreviewUrl") as string | undefined;
         // +++ End Internal Link Preview Data Extraction +++
+        const sdgsStr = formData.get("sdgs") as string;
+        const sdgs = sdgsStr ? JSON.parse(sdgsStr) : undefined;
 
         const post = await getPost(postId);
         if (!post) {
@@ -562,6 +573,7 @@ export async function updatePostAction(
             internalPreviewId: internalPreviewId || undefined,
             internalPreviewUrl: internalPreviewUrl || undefined,
             // +++ End Internal Link Preview Fields +++
+            sdgs: sdgs || undefined,
         };
 
         // console.log("Updating post", JSON.stringify(updatedPost.location)); // Reduced logging

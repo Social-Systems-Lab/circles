@@ -21,6 +21,7 @@ import { deleteVbdPost, upsertVbdPosts } from "./vdb";
 import { getProposalById } from "./proposal";
 import { getIssueById } from "./issue";
 import { getTaskById } from "./task"; // Added getTaskById
+import { sdgs } from "./sdgs";
 
 export const getFeedsByCircleId = async (circleId: string): Promise<Feed[]> => {
     const feeds = await Feeds.find({
@@ -138,7 +139,15 @@ export const createPost = async (post: Post): Promise<Post> => {
     // get post with author details
     let author = await getUserByDid(post.createdBy);
     try {
-        await upsertVbdPosts([{ ...newPost, author, circleType: "post" }]);
+        const { sdgs: sdgIds, ...restOfNewPost } = newPost;
+        const populatedSdgs = sdgIds ? sdgs.filter((s) => sdgIds.includes(s._id)) : [];
+        const postForVdb = {
+            ...restOfNewPost,
+            sdgs: populatedSdgs,
+            author: author!,
+            circleType: "post" as const,
+        };
+        await upsertVbdPosts([postForVdb as PostDisplay]);
     } catch (e) {
         console.error("Failed to upsert post embedding", e);
     }
@@ -254,11 +263,10 @@ export async function getPostsFromMultipleFeeds(
     };
 
     if (sdgHandles && sdgHandles.length > 0) {
-        const circlesWithSdgs = await Circles.find({ causes: { $in: sdgHandles } })
-            .project({ did: 1 })
-            .toArray();
-        const userDidsWithSdgs = circlesWithSdgs.map((c) => c.did);
-        matchStage.createdBy = { $in: userDidsWithSdgs };
+        const sdgIds = sdgs.filter((s) => sdgHandles.includes(s.handle)).map((s) => s._id);
+        if (sdgIds.length > 0) {
+            matchStage.sdgs = { $in: sdgIds };
+        }
     }
 
     // Get all posts from the specified feeds without user group filtering
@@ -472,6 +480,7 @@ export async function getPostsFromMultipleFeeds(
                 internalPreviewUrl: 1,
                 internalPreviewType: 1,
                 internalPreviewId: 1,
+                sdgs: 1,
                 circleType: { $literal: "post" },
 
                 highlightedCommentId: { $toString: "$highlightedCommentId" },
@@ -677,8 +686,9 @@ export const getPostsWithMetrics = async (
     limit: number = 10,
     offset: number = 0,
     sort?: SortingOptions,
+    sdgHandles?: string[],
 ): Promise<PostDisplay[]> => {
-    let posts = await getPosts(feedId, userDid, limit, offset);
+    let posts = await getPosts(feedId, userDid, limit, offset, sdgHandles);
     let user: Circle | undefined = undefined;
     if (userDid) {
         user = await getUserByDid(userDid!);
@@ -700,18 +710,27 @@ export const getPosts = async (
     userDid?: string,
     limit: number = 10,
     offset: number = 0,
+    sdgHandles?: string[],
 ): Promise<PostDisplay[]> => {
     const safeLimit = Math.max(1, limit);
     const safeOffset = Math.max(0, offset);
 
+    const matchStage: any = {
+        feedId: feedId,
+        $or: [{ postType: { $eq: "post" } }, { postType: { $exists: false } }],
+    };
+
+    if (sdgHandles && sdgHandles.length > 0) {
+        const sdgIds = sdgs.filter((s) => sdgHandles.includes(s.handle)).map((s) => s._id);
+        if (sdgIds.length > 0) {
+            matchStage.sdgs = { $in: sdgIds };
+        }
+    }
+
     // Get posts without user group filtering initially
     const posts = (await Posts.aggregate([
         {
-            $match: {
-                feedId: feedId,
-                // Filter out project shadow posts from regular feeds
-                $or: [{ postType: { $eq: "post" } }, { postType: { $exists: false } }],
-            },
+            $match: matchStage,
         },
         // Lookup for author details
         {
@@ -878,6 +897,7 @@ export const getPosts = async (
                 internalPreviewUrl: 1,
                 internalPreviewType: 1,
                 internalPreviewId: 1,
+                sdgs: 1,
                 circleType: { $literal: "post" },
                 highlightedCommentId: { $toString: "$highlightedCommentId" },
                 mentions: 1,
@@ -1098,11 +1118,14 @@ async function fetchAndAttachInternalPreviewData(posts: PostDisplay[]): Promise<
 
                     postPreviewsData.forEach((p) => {
                         const author = authorMap.get(p.createdBy);
+                        const { sdgs: sdgIds, ...restOfP } = p as Post;
+                        const populatedSdgs = sdgIds ? sdgs.filter((s) => sdgIds.includes(s._id)) : [];
                         const postDisplay: Partial<PostDisplay> = {
-                            ...p,
-                            _id: p._id.toString(), // ID is already string here
-                            author: author ? { ...author, _id: author._id.toString() } : undefined, // Convert author _id
+                            ...(restOfP as Omit<Post, "sdgs">),
+                            _id: p._id.toString(),
+                            author: author ? { ...author, _id: author._id.toString() } : undefined,
                             circleType: "post",
+                            sdgs: populatedSdgs,
                         };
                         previewDataMap.set(`post-${p._id.toString()}`, postDisplay as PostDisplay);
                     });
@@ -1172,7 +1195,10 @@ export const updatePost = async (post: Partial<Post>): Promise<void> => {
     if (p) {
         let author = await getUserByDid(p.createdBy);
         try {
-            await upsertVbdPosts([{ ...p, author, circleType: "post" }]);
+            const { sdgs: sdgIds, ...restOfP } = p;
+            const populatedSdgs = sdgIds ? sdgs.filter((s) => sdgIds.includes(s._id)) : [];
+            const postForVdb = { ...restOfP, sdgs: populatedSdgs, author: author!, circleType: "post" as const };
+            await upsertVbdPosts([postForVdb as PostDisplay]);
         } catch (e) {
             console.error("Failed to upsert post embedding", e);
         }

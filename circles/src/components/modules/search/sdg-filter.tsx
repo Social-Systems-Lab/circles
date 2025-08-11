@@ -14,6 +14,7 @@ interface SdgFilterProps {
     displayAs?: "inline" | "popover";
     trigger?: React.ReactNode;
     gridCols?: string;
+    popoverContentClassName?: string;
 }
 
 const SdgFilter: React.FC<SdgFilterProps> = ({
@@ -22,6 +23,7 @@ const SdgFilter: React.FC<SdgFilterProps> = ({
     displayAs = "inline",
     trigger,
     gridCols,
+    popoverContentClassName,
 }) => {
     const [search, setSearch] = useState("");
     const [isOpen, setIsOpen] = useState(false);
@@ -91,7 +93,7 @@ const SdgFilter: React.FC<SdgFilterProps> = ({
         return (
             <Popover open={isOpen} onOpenChange={setIsOpen}>
                 <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-                <PopoverContent className="w-80">{panel}</PopoverContent>
+                <PopoverContent className={`w-80 ${popoverContentClassName}`}>{panel}</PopoverContent>
             </Popover>
         );
     }

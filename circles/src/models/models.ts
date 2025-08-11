@@ -229,11 +229,12 @@ export const postSchema = z.object({
     internalPreviewType: z.enum(["circle", "post", "proposal", "issue", "task", "goal"]).optional(),
     internalPreviewId: z.string().optional(), // Handle for circle, ID for others
     internalPreviewUrl: z.string().url().optional(),
+    sdgs: z.array(z.string()).optional(),
 });
 
 export type Post = z.infer<typeof postSchema>;
 
-export interface PostDisplay extends WithMetric<Post> {
+export interface PostDisplay extends WithMetric<Omit<Post, "sdgs">> {
     author: Circle;
     highlightedComment?: CommentDisplay;
     circleType: "post";
@@ -244,6 +245,7 @@ export interface PostDisplay extends WithMetric<Post> {
     feed?: Feed;
     // Populated internal preview data
     internalPreviewData?: Circle | PostDisplay | TaskDisplay | ProposalDisplay | IssueDisplay | null;
+    sdgs?: Cause[];
 }
 
 export const commentSchema = z.object({
