@@ -176,45 +176,7 @@ export const AggregateFeedComponent = ({ posts, userFeed, activeTab }: Aggregate
                             onSdgChange={handleSdgSelectionChange}
                             selectedSdgs={selectedSdgs}
                         />
-                        <Button
-                            variant="ghost"
-                            onClick={() => setSdgFilterOpen(!sdgFilterOpen)}
-                            className="flex items-center gap-2"
-                        >
-                            {selectedSdgs.length === 0 ? (
-                                <Image src="/images/sdgs/SDG_Wheel_WEB.png" alt="SDG Wheel" width={24} height={24} />
-                            ) : (
-                                <div className="flex -space-x-2">
-                                    {selectedSdgs.slice(0, 3).map((sdg) => (
-                                        <Image
-                                            key={sdg.handle}
-                                            src={sdg.picture?.url ?? "/images/default-picture.png"}
-                                            alt={sdg.name}
-                                            width={24}
-                                            height={24}
-                                            className="h-6 w-6 rounded-full border-2 border-white object-cover"
-                                        />
-                                    ))}
-                                </div>
-                            )}
-                            <span className="hidden md:inline">
-                                SDGs {selectedSdgs.length > 0 && `(${selectedSdgs.length})`}
-                            </span>
-                            <ChevronDown
-                                className={`h-4 w-4 transform transition-transform ${sdgFilterOpen ? "rotate-180" : ""}`}
-                            />
-                        </Button>
                     </div>
-                    {sdgFilterOpen && (
-                        <SdgPanel
-                            selectedSdgs={selectedSdgs}
-                            onToggle={handleSdgToggle}
-                            visibleSdgs={visibleSdgs}
-                            search={sdgSearch}
-                            setSearch={setSdgSearch}
-                            className="rounded-lg border p-4"
-                        />
-                    )}
                 </div>
 
                 <PostList posts={posts} isAggregateFeed={true} />

@@ -139,12 +139,12 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             communities: 0,
             users: 0,
         };
-        allSearchResults?.forEach((result) => {
+        filteredSearchResults?.forEach((result) => {
             if (result.circleType === "circle") counts.communities++;
             else if (result.circleType === "user") counts.users++;
         });
         return counts;
-    }, [allSearchResults]);
+    }, [filteredSearchResults]);
 
     // Determine data source for the drawer list
     const drawerListData = useMemo(() => {
