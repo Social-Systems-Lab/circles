@@ -3,9 +3,8 @@
 import React from "react";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { ItemGrid } from "@/components/circle-wizard/item-card";
 import { Cause as SDG } from "@/models/models";
+import { SdgList } from "../sdgs/sdg-list";
 
 import { cn } from "@/lib/utils";
 
@@ -40,15 +39,7 @@ export const SdgPanel: React.FC<SdgPanelProps> = ({
                     className="pl-8 text-xs"
                 />
             </div>
-            <ScrollArea className="h-60">
-                <ItemGrid
-                    items={visibleSdgs}
-                    selectedItems={selectedSdgs}
-                    onToggle={onToggle}
-                    isCause={true}
-                    gridCols={gridCols}
-                />
-            </ScrollArea>
+            <SdgList sdgs={visibleSdgs} selectedSdgs={selectedSdgs} onToggle={onToggle} gridCols={gridCols} />
         </div>
     );
 };

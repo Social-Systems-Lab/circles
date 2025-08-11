@@ -444,24 +444,28 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                     {isSearching ? "..." : <Search className="h-4 w-4" />}
                                 </Button>
                             </div>
-                            {/* Category Filter */}
-                            {!isMobile && (
-                                <CategoryFilter
-                                    categories={["communities", "users"]}
-                                    categoryCounts={categoryCounts}
-                                    selectedCategory={selectedCategory}
-                                    onSelectionChange={setSelectedCategory}
-                                    hasSearched={hasSearched}
-                                />
-                            )}
-                            {!isMobile && (
+                            {/* Filters */}
+                            <div className="flex items-center">
+                                {!isMobile && (
+                                    <CategoryFilter
+                                        categories={["communities", "users"]}
+                                        categoryCounts={categoryCounts}
+                                        selectedCategory={selectedCategory}
+                                        onSelectionChange={setSelectedCategory}
+                                        hasSearched={hasSearched}
+                                    />
+                                )}
                                 <SdgFilter
                                     selectedSdgs={selectedSdgs}
                                     onSelectionChange={setSelectedSdgs}
                                     displayAs="popover"
                                     gridCols="grid-cols-3"
                                     trigger={
-                                        <Button variant="ghost" className="flex flex-shrink-0 items-center gap-2">
+                                        <Button
+                                            variant="ghost"
+                                            className="flex min-w-[56px] flex-shrink-0 items-center gap-2 data-[selected=true]:bg-accent md:min-w-[100px]"
+                                            data-selected={selectedSdgs.length > 0}
+                                        >
                                             {selectedSdgs.length === 0 ? (
                                                 <Image
                                                     src="/images/sdgs/SDG_Wheel_WEB.png"
@@ -471,9 +475,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                                 />
                                             ) : (
                                                 <div
-                                                    className="flex w-2 -space-x-2"
+                                                    className="flex flex-row -space-x-2"
                                                     style={{
-                                                        width: 24 + 16 * Math.min(selectedSdgs.length - 1, 2), // Adjust width based on number of selected SDGs
+                                                        width: `calc(24px + ${16 * Math.min(selectedSdgs.length - 1, 2)}px)`,
                                                     }}
                                                 >
                                                     {selectedSdgs.slice(0, 3).map((sdg) => (
@@ -488,13 +492,13 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                                     ))}
                                                 </div>
                                             )}
-                                            <div className="hidden flex-shrink-0 md:block">
+                                            <div className="hidden md:block">
                                                 SDGs {selectedSdgs.length > 0 && `(${selectedSdgs.length})`}
                                             </div>
                                         </Button>
                                     }
                                 />
-                            )}
+                            </div>
                         </div>
                     </div>
                 )}
@@ -828,6 +832,31 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                 transition={{ repeat: Infinity, duration: 4, times: [0, 0.25, 0.5, 0.75, 1] }}
                             >
                                 <Hand className="h-16 w-16 text-gray-600" />
+                                {isMobile && (
+                                    <div className="mt-4">
+                                        <SdgFilter
+                                            selectedSdgs={selectedSdgs}
+                                            onSelectionChange={setSelectedSdgs}
+                                            displayAs="popover"
+                                            gridCols="grid-cols-2"
+                                            trigger={
+                                                <Button
+                                                    variant="outline"
+                                                    className="flex w-full items-center justify-center gap-2"
+                                                >
+                                                    <Image
+                                                        src="/images/sdgs/SDG_Wheel_WEB.png"
+                                                        alt="SDG Wheel"
+                                                        width={20}
+                                                        height={20}
+                                                    />
+                                                    <span>Filter by SDGs</span>
+                                                    {selectedSdgs.length > 0 && `(${selectedSdgs.length})`}
+                                                </Button>
+                                            }
+                                        />
+                                    </div>
+                                )}
                             </motion.div>
                             <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-red-500">
                                 Ignore
