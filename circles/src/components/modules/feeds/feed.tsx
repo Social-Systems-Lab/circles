@@ -30,6 +30,13 @@ export type FeedComponentProps = {
 export const FeedComponent = ({ circle, posts, feed }: FeedComponentProps) => {
     const isCompact = useIsCompact();
     const [user] = useAtom(userAtom);
+    const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>([]);
+
+    const handleSdgSelectionChange = (sdgs: SDG[]) => {
+        setSelectedSdgs(sdgs);
+        const sdgHandles = sdgs.map((s) => s.handle);
+        updateQueryParam(router, "sdgs", sdgHandles.join(","));
+    };
 
     // check if authorized to post
     const canPost = isAuthorized(user, circle, features.feed.post);
@@ -61,7 +68,11 @@ export const FeedComponent = ({ circle, posts, feed }: FeedComponentProps) => {
                         <CreateNewPost circle={circle} feed={feed} />
                     </div>
                 )}
-                <ListFilter onFilterChange={handleFilterChange} />
+                <ListFilter
+                    onFilterChange={handleFilterChange}
+                    onSdgChange={handleSdgSelectionChange}
+                    selectedSdgs={selectedSdgs}
+                />
 
                 <PostList posts={posts} feed={feed} circle={circle} />
             </div>
@@ -160,7 +171,11 @@ export const AggregateFeedComponent = ({ posts, userFeed, activeTab }: Aggregate
                 )}
                 <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                        <ListFilter onFilterChange={handleFilterChange} />
+                        <ListFilter
+                            onFilterChange={handleFilterChange}
+                            onSdgChange={handleSdgSelectionChange}
+                            selectedSdgs={selectedSdgs}
+                        />
                         <Button
                             variant="ghost"
                             onClick={() => setSdgFilterOpen(!sdgFilterOpen)}

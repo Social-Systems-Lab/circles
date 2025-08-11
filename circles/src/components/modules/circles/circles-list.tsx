@@ -68,12 +68,18 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
         return sdgs;
     }, [sdgSearch]);
 
+    const handleSdgSelectionChange = (sdgs: SDG[]) => {
+        setSelectedSdgs(sdgs);
+        const sdgHandles = sdgs.map((s) => s.handle);
+        updateQueryParam(router, "sdgs", sdgHandles.join(","));
+    };
+
     const handleSdgToggle = (sdg: SDG) => {
         const isSelected = selectedSdgs.some((s) => s.handle === sdg.handle);
         if (isSelected) {
-            setSelectedSdgs(selectedSdgs.filter((s) => s.handle !== sdg.handle));
+            handleSdgSelectionChange(selectedSdgs.filter((s) => s.handle !== sdg.handle));
         } else {
-            setSelectedSdgs([...selectedSdgs, sdg]);
+            handleSdgSelectionChange([...selectedSdgs, sdg]);
         }
     };
 
@@ -163,7 +169,11 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
 
                 <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                        <ListFilter onFilterChange={handleFilterChange} />
+                        <ListFilter
+                            onFilterChange={handleFilterChange}
+                            onSdgChange={handleSdgSelectionChange}
+                            selectedSdgs={selectedSdgs}
+                        />
                         <Button
                             variant="ghost"
                             onClick={() => setSdgFilterOpen(!sdgFilterOpen)}
