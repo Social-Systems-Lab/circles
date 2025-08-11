@@ -9,7 +9,9 @@ import {
     PostItemProps,
     ContentPreviewData,
     MentionDisplay,
+    Cause as SDG,
 } from "@/models/models";
+import { sdgs } from "@/lib/data/sdgs";
 import { UserPicture } from "../members/user-picture";
 import { CirclePicture } from "../circles/circle-picture";
 import { Button } from "@/components/ui/button";
@@ -316,6 +318,15 @@ export const PostItem = ({
         }
         return undefined;
     }, [post.userGroups, circle?.userGroups]);
+
+    const populatedSdgs = useMemo(() => {
+        if (!post.sdgs || post.sdgs.length === 0) return [];
+        if (typeof post.sdgs[0] === "object" && post.sdgs[0] !== null && "handle" in post.sdgs[0]) {
+            return post.sdgs as SDG[];
+        }
+        const sdgIds = post.sdgs as string[];
+        return sdgs.filter((sdg) => sdgIds.includes(sdg._id!));
+    }, [post.sdgs]);
 
     // State for likes
     const initialLikes = post.reactions.like || 0;
@@ -912,24 +923,58 @@ export const PostItem = ({
 
             {/* Actions (like and comment) */}
             <div className="flex items-center justify-between pl-4 pr-4 text-gray-500">
-                {post.sdgs && post.sdgs.length > 0 && (
-                    <div className="flex -space-x-2">
-                        {post.sdgs.slice(0, 3).map((sdg) => (
-                            <Image
-                                key={sdg.handle}
-                                src={sdg.picture?.url ?? "/images/default-picture.png"}
-                                alt={sdg.name}
-                                width={20}
-                                height={20}
-                                className="h-5 w-5 rounded-full border-2 border-white object-cover"
-                            />
-                        ))}
+                <div className="flex items-center gap-4">
+                    {/* Comments Section */}
+                    <div className="flex cursor-pointer items-center gap-1.5" onClick={fetchComments}>
+                        <MessageCircle className="h-5 w-5" />
+                        {post.comments > 0 && <div>{post.comments}</div>}
                     </div>
-                )}
+
+                    {/* Metrics */}
+                    {post.metrics && (
+                        <div className="flex items-center gap-4">
+                            {post.metrics.similarity !== undefined && (
+                                <div className="text-[16px]">
+                                    <SimilarityScore
+                                        score={post.metrics.similarity}
+                                        color={"#6b7280"}
+                                        size={"1.25rem"}
+                                    />
+                                </div>
+                            )}
+                            {post.metrics.distance !== undefined && (
+                                <div className="text-[16px]">
+                                    <ProximityIndicator
+                                        distance={post.metrics.distance}
+                                        color={"#6b7280"}
+                                        content={post}
+                                        size={"1.25rem"}
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* SDGs */}
+                    {populatedSdgs.length > 0 && (
+                        <div className="flex -space-x-2">
+                            {populatedSdgs.slice(0, 3).map((sdg) => (
+                                <Image
+                                    key={sdg.handle}
+                                    src={sdg.picture?.url ?? "/images/default-picture.png"}
+                                    alt={sdg.name}
+                                    width={20}
+                                    height={20}
+                                    className="h-5 w-5 rounded-full border-2 border-white object-cover"
+                                />
+                            ))}
+                        </div>
+                    )}
+                </div>
+
                 {/* Likes Section */}
                 <div className="flex h-[24px] cursor-pointer items-center gap-1.5 text-gray-500">
                     <LikeButton isLiked={isLiked} onClick={handleLikePost} />
-
                     {likes > 0 && (
                         <HoverCard openDelay={200} onOpenChange={(open) => handleLikesPopoverHover(open)}>
                             <HoverCardTrigger>
@@ -944,10 +989,8 @@ export const PostItem = ({
                                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                         </>
                                     )}
-
                                     {likedByUsers?.map((user) => (
                                         <div key={user.did} className="flex items-center gap-2 text-[12px]">
-                                            {/* <UserPicture name={user.name} picture={user.picture?.url} size="small" /> */}
                                             <div>{user.name}</div>
                                         </div>
                                     ))}
@@ -958,34 +1001,6 @@ export const PostItem = ({
                             </HoverCardContent>
                         </HoverCard>
                     )}
-                </div>
-
-                {post.metrics && (
-                    <>
-                        {post.metrics.similarity !== undefined && (
-                            <div className="text-[16px]">
-                                <SimilarityScore score={post.metrics.similarity} color={"#6b7280"} size={"1.25rem"} />
-                            </div>
-                        )}
-                        {post.metrics.distance !== undefined && (
-                            <div className="text-[16px]">
-                                <ProximityIndicator
-                                    distance={post.metrics.distance}
-                                    color={"#6b7280"}
-                                    content={post}
-                                    size={"1.25rem"}
-                                />
-                            </div>
-                        )}
-                    </>
-                )}
-
-                {/* Comments Section */}
-                <div className="flex items-center gap-2 pl-4 pr-4">
-                    <div className="flex cursor-pointer items-center gap-1.5 text-gray-500" onClick={fetchComments}>
-                        <MessageCircle className="h-5 w-5" />
-                        {post.comments > 0 && <div>{post.comments}</div>}
-                    </div>
                 </div>
             </div>
 
