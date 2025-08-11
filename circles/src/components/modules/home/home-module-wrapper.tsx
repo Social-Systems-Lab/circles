@@ -2,7 +2,7 @@
 
 import React, { ReactNode, useEffect } from "react";
 import { Circle } from "@/models/models";
-import CircleSidePanel from "./circle-side-panel";
+import { CircleSidePanel } from "./circle-side-panel";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 

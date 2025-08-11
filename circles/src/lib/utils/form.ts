@@ -30,8 +30,7 @@ export const getFormValues = (formData: FormData, formSchema: FormSchema): Recor
             fieldInfo?.type === "table" ||
             fieldInfo?.type === "access-rules" ||
             fieldInfo?.type === "location" ||
-            fieldInfo?.type === "skills" ||
-            fieldInfo?.type === "causes"
+            fieldInfo?.type === "skills"
         ) {
             if (value !== undefined && value !== "undefined") {
                 values[key] = JSON.parse(value);
@@ -152,10 +151,6 @@ export const generateZodSchema = (fields: FormField[]): ZodSchema<any> => {
                     break;
 
                 case "skills":
-                    schema = z.array(z.string());
-                    break;
-
-                case "causes":
                     schema = z.array(z.string());
                     break;
 

@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { Circles } from "@/lib/data/db";
-import { getServerSettings, updateServerSettings, upsertCausesAndSkills } from "@/lib/data/server-settings";
+import { getServerSettings, updateServerSettings } from "@/lib/data/server-settings";
 import { upsertVdbCollections } from "@/lib/data/vdb";
 
 export async function saveServerSettings(values: {
@@ -54,8 +54,8 @@ export async function saveServerSettings(values: {
             serverSettings.serverVersion = appVersion;
 
             // upsert causes and skills
-            console.log("Upserting causes and skills");
-            await upsertCausesAndSkills();
+            //console.log("Upserting causes and skills");
+            //await upsertCausesAndSkills();
 
             try {
                 console.log("Upserting embeddings");

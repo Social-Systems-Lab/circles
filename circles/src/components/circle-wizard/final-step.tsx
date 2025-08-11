@@ -23,7 +23,8 @@ export default function FinalStep({ circleData, setCircleData, prevStep, onCompl
         <div className="space-y-6">
             <h2 className="text-center text-3xl font-bold">Ready to Launch?</h2>
             <p className="text-center text-gray-600">
-                You've done a great job setting up your community. Here's a final look at what you've created.
+                You&apos;ve done a great job setting up your community. Here&apos;s a final look at what you&apos;ve
+                created.
             </p>
 
             <div className="rounded-lg border bg-white p-6 shadow-sm">

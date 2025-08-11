@@ -2,9 +2,8 @@
 
 "use client"; // This component now uses client-side state for filters
 
-import { getFeedByHandle } from "@/lib/data/feed";
 import { FeedComponent } from "./feed";
-import { getPostsAction, getAggregatePostsAction } from "./actions";
+import { getPostsAction, getAggregatePostsAction, getFeedByHandleAction } from "./actions";
 import { Circle, SortingOptions, Cause as SDG, PostDisplay } from "@/models/models";
 import { ListFilter } from "@/components/utils/list-filter";
 import { useState, useEffect, useTransition, useCallback } from "react";
@@ -37,7 +36,7 @@ export default function FeedsModule(props: PageProps) {
 
     useEffect(() => {
         async function fetchInitialData() {
-            const defaultFeed = await getFeedByHandle(circle?._id, "default");
+            const defaultFeed = await getFeedByHandleAction(circle?._id, "default");
             if (defaultFeed) {
                 setFeed(defaultFeed);
                 const searchParams = await searchParamsProp;

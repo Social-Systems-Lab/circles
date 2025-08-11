@@ -324,7 +324,7 @@ export const PostItem = ({
         if (typeof post.sdgs[0] === "object" && post.sdgs[0] !== null && "handle" in post.sdgs[0]) {
             return post.sdgs as SDG[];
         }
-        const sdgIds = post.sdgs as string[];
+        const sdgIds = post.sdgs;
         return sdgs.filter((sdg) => sdgIds.includes(sdg._id!));
     }, [post.sdgs]);
 

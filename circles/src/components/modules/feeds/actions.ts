@@ -1099,7 +1099,7 @@ export async function getFeedByHandleAction(circleId: string, feedHandle: string
     if (!userDid) return null;
 
     try {
-        const feed = await getFeed(feedHandle);
+        const feed = await getFeedByHandle(circleId, feedHandle);
         if (!feed) return null;
 
         // Check if user has permission to view the feed

@@ -3,11 +3,13 @@ import { MatchmakingSettingsForm } from "@/components/forms/circle-settings/matc
 import { Separator } from "@/components/ui/separator";
 
 type MatchmakingSettingsProps = {
-    params: { handle: string };
+    params: Promise<{ handle: string }>;
 };
 
 export default async function MatchmakingSettings(props: MatchmakingSettingsProps) {
-    const circle = await getCircleByHandle(props.params.handle);
+    const params = await props.params;
+
+    const circle = await getCircleByHandle(params.handle);
 
     if (!circle) {
         return <div>Circle not found</div>;

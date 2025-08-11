@@ -11,8 +11,6 @@ import TermsStep from "./terms-step";
 import MemberStep from "./member-step";
 import MissionStep from "./mission-step";
 import SdgsStep from "./sdgs-step";
-import SkillsStep from "./skills-step";
-import QuestsStep from "./quests-step";
 import ProfileStep from "./profile-step";
 import ProfileLocationStep from "./profile-location-step";
 import FinalStep from "./final-step";
