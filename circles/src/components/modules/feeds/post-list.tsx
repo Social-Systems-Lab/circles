@@ -912,6 +912,20 @@ export const PostItem = ({
 
             {/* Actions (like and comment) */}
             <div className="flex items-center justify-between pl-4 pr-4 text-gray-500">
+                {post.sdgs && post.sdgs.length > 0 && (
+                    <div className="flex -space-x-2">
+                        {post.sdgs.slice(0, 3).map((sdg) => (
+                            <Image
+                                key={sdg.handle}
+                                src={sdg.picture?.url ?? "/images/default-picture.png"}
+                                alt={sdg.name}
+                                width={20}
+                                height={20}
+                                className="h-5 w-5 rounded-full border-2 border-white object-cover"
+                            />
+                        ))}
+                    </div>
+                )}
                 {/* Likes Section */}
                 <div className="flex h-[24px] cursor-pointer items-center gap-1.5 text-gray-500">
                     <LikeButton isLiked={isLiked} onClick={handleLikePost} />

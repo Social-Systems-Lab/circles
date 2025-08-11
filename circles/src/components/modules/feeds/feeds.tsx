@@ -4,10 +4,12 @@
 
 import { getFeedByHandle } from "@/lib/data/feed";
 import { FeedComponent } from "./feed";
-import { getPostsAction } from "./actions";
+import { getPostsAction, getAggregatePostsAction } from "./actions";
 import { Circle, SortingOptions, Cause as SDG, PostDisplay } from "@/models/models";
 import { ListFilter } from "@/components/utils/list-filter";
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useCallback } from "react";
+import { useAtom } from "jotai";
+import { userAtom } from "@/lib/data/atoms";
 
 type PageProps = {
     circle: Circle;
@@ -21,6 +23,17 @@ export default function FeedsModule(props: PageProps) {
     const [sorting, setSorting] = useState<SortingOptions>("top");
     const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>([]);
     const [isPending, startTransition] = useTransition();
+    const [user] = useAtom(userAtom);
+
+    const fetchPosts = useCallback(async () => {
+        if (!feed) return;
+
+        startTransition(async () => {
+            const sdgHandles = selectedSdgs.map((s) => s.handle);
+            const newPosts = await getAggregatePostsAction(user?.did, 20, 0, sorting, sdgHandles);
+            setPosts(newPosts);
+        });
+    }, [feed, sorting, selectedSdgs, user]);
 
     useEffect(() => {
         async function fetchInitialData() {
@@ -30,46 +43,21 @@ export default function FeedsModule(props: PageProps) {
                 const searchParams = await searchParamsProp;
                 const initialSort = (searchParams?.sort as SortingOptions) || "top";
                 setSorting(initialSort);
-                const initialPosts = await getPostsAction(defaultFeed._id, circle._id, 20, 0, initialSort, []);
-                setPosts(initialPosts);
             }
         }
         fetchInitialData();
     }, [circle, searchParamsProp]);
 
+    useEffect(() => {
+        fetchPosts();
+    }, [fetchPosts]);
+
     const handleFilterChange = (filter: string) => {
-        const newSorting = filter as SortingOptions;
-        setSorting(newSorting);
-        if (feed) {
-            startTransition(async () => {
-                const newPosts = await getPostsAction(
-                    feed._id,
-                    circle._id,
-                    20,
-                    0,
-                    newSorting,
-                    selectedSdgs.map((s) => s.handle),
-                );
-                setPosts(newPosts);
-            });
-        }
+        setSorting(filter as SortingOptions);
     };
 
     const handleSdgChange = (sdgs: SDG[]) => {
         setSelectedSdgs(sdgs);
-        if (feed) {
-            startTransition(async () => {
-                const newPosts = await getPostsAction(
-                    feed._id,
-                    circle._id,
-                    20,
-                    0,
-                    sorting,
-                    sdgs.map((s) => s.handle),
-                );
-                setPosts(newPosts);
-            });
-        }
     };
 
     if (!feed) {

@@ -542,7 +542,7 @@ export type PostItemProps = {
 };
 
 export type ContentPreviewData =
-    | { type: "post"; content: Post; props: PostItemProps }
+    | { type: "post"; content: PostDisplay; props: PostItemProps }
     | { type: "member"; content: MemberDisplay; props?: never }
     | { type: "user"; content: Circle; props?: never }
     | { type: "circle"; content: Circle; props?: never }
