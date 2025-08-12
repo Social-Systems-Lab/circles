@@ -47,6 +47,7 @@ export const SAFE_CIRCLE_PROJECTION = {
     needs: 1,
     completedOnboardingSteps: 1,
     metadata: 1, // Include metadata for shadow post IDs
+    socialLinks: 1,
 } as const;
 
 export const getCirclesByIds = async (ids: string[]): Promise<Circle[]> => {

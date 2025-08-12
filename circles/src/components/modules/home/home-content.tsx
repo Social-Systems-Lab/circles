@@ -131,16 +131,17 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle }: 
                             isCompact ? "items-center text-center" : "items-start"
                         }`}
                     >
-                        <h4 className="m-0 p-0 pb-1 text-4xl font-bold text-gray-800">
-                            {authorizedToEdit ? (
-                                <EditableField id="name" value={circle.name ?? ""} circleId={circle._id!} />
-                            ) : (
-                                circle.name
-                            )}
-                        </h4>
-                        <div className={`pt-2 ${isCompact ? "order-last" : ""}`}>
-                            <SocialLinks circle={circle} />
+                        <div className="flex flex-row items-center gap-4">
+                            <h4 className="m-0 p-0 text-4xl font-bold text-gray-800">
+                                {authorizedToEdit ? (
+                                    <EditableField id="name" value={circle.name ?? ""} circleId={circle._id!} />
+                                ) : (
+                                    circle.name
+                                )}
+                            </h4>
+                            {/* {!isCompact && <SocialLinks circle={circle} />} */}
                         </div>
+
                         {parentCircle && parentCircle?.circleType === "circle" && (
                             <div className="mt-2 text-sm text-gray-500">
                                 Subcommunity of{" "}
@@ -190,11 +191,19 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle }: 
                                 </p>
                             </div>
                         )}
+                        {isCompact && (
+                            <div className="pb-2 pt-2">
+                                <SocialLinks circle={circle} />
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex-1"></div>
                     {!isCompact && (
                         <div className={`flex flex-row gap-1 pt-2`}>
+                            <div className="pr-4 pt-2">
+                                <SocialLinks circle={circle} />
+                            </div>
                             {user && isUser && circle._id !== user?._id && (
                                 <MessageButton circle={circle} renderCompact={false} />
                             )}
