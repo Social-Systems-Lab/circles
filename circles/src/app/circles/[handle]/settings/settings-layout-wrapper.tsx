@@ -18,6 +18,10 @@ const settingsForms: SettingsForm[] = [
         handle: "about",
     },
     {
+        name: "Presence",
+        handle: "presence",
+    },
+    {
         name: "Pages",
         handle: "pages",
     },

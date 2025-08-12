@@ -206,6 +206,50 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                             </div>
                         )} */}
 
+                        {/* Offers & Skills */}
+                        {circle.offers && (
+                            <div className="mt-4">
+                                <h3 className="mb-1.5 text-xs font-medium uppercase text-gray-500">Offers & Skills</h3>
+                                {circle.offers.text && <p className="text-sm text-gray-700">{circle.offers.text}</p>}
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                    {circle.offers.skills?.map((skill) => (
+                                        <Badge key={skill} variant="outline">
+                                            {skill}
+                                        </Badge>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Engagement */}
+                        {circle.engagements && (
+                            <div className="mt-4">
+                                <h3 className="mb-1.5 text-xs font-medium uppercase text-gray-500">
+                                    What I want to engage in
+                                </h3>
+                                {circle.engagements.text && (
+                                    <p className="text-sm text-gray-700">{circle.engagements.text}</p>
+                                )}
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                    {circle.engagements.interests?.map((interest) => (
+                                        <Badge key={interest} variant="outline">
+                                            {interest}
+                                        </Badge>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Needs */}
+                        {circle.needs && (
+                            <div className="mt-4">
+                                <h3 className="mb-1.5 text-xs font-medium uppercase text-gray-500">
+                                    What I need help with
+                                </h3>
+                                {circle.needs.text && <p className="text-sm text-gray-700">{circle.needs.text}</p>}
+                            </div>
+                        )}
+
                         {/* Location (moved down, inline icon, no heading) */}
                         {circle.location &&
                             (circle.location.city || circle.location.region || circle.location.country) && (

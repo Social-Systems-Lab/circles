@@ -1,19 +1,18 @@
-// actions.ts
-
 "use server";
 
 import { verifyUserToken } from "@/lib/auth/jwt";
-import { addMember, countAdmins, getMember, getMembers, removeMember } from "@/lib/data/member";
-import { Circle, UserPrivate } from "@/models/models";
+import { addMember, countAdmins, getMember, removeMember } from "@/lib/data/member";
+import { ChatRoom, Circle, UserPrivate } from "@/models/models";
 import { cookies } from "next/headers";
 import { createPendingMembershipRequest, deletePendingMembershipRequest } from "@/lib/data/membership-requests";
-import { getCircleById, getCirclePath, getCirclesByDids, updateCircle } from "@/lib/data/circle";
+import { getCircleById, getCirclePath, updateCircle, getCircleByDid } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, getAuthorizedMembers, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { saveFile } from "@/lib/data/storage";
 import { revalidatePath } from "next/cache";
-import { getUser, getUserById, getUserPrivate, getPrivateUserByDid } from "@/lib/data/user";
+import { getUser, getUserById, getUserPrivate } from "@/lib/data/user";
 import { notifyNewMember, sendNotifications } from "@/lib/data/matrix";
+import { findOrCreateDMRoom as findOrCreateDMRoomData } from "@/lib/data/chat";
 
 type CircleActionResponse = {
     success: boolean;
@@ -46,21 +45,14 @@ export const followCircle = async (circle: Circle, answers?: Record<string, stri
             return { success: false, message: "Authentication failed" };
         }
 
-        console.log(circle._id);
-
-        // Fetch the latest circle data
-        let updatedCircle = null;
-        updatedCircle = await getCircleById(circle._id ?? "");
+        let updatedCircle = await getCircleById(circle._id ?? "");
 
         if (!updatedCircle) {
             return { success: false, message: isUser ? "User not found" : "Circle not found" };
         }
 
         if (updatedCircle.isPublic) {
-            // For public circles, add member directly
             await addMember(userDid, updatedCircle._id ?? "", ["members"], answers);
-
-            // Notify members that user has followed
             await notifyNewMember(userDid, updatedCircle, true);
 
             return {
@@ -69,19 +61,13 @@ export const followCircle = async (circle: Circle, answers?: Record<string, stri
                 pending: false,
             };
         } else {
-            // For private circles, create a membership request
             await createPendingMembershipRequest(userDid, updatedCircle._id ?? "", answers);
-
-            // get access rules for circle feature
             let members = await getAuthorizedMembers(updatedCircle, features.general.manage_membership_requests);
-
-            // send a notification to all users that have permission to accept requests
             let user = await getUser(userDid);
-            // Convert Circle[] to UserPrivate[]
             const recipientUsers: UserPrivate[] = [];
             for (const memberCircle of members) {
                 if (memberCircle.did) {
-                    const userPrivate = await getUserPrivate(memberCircle.did); // Changed to getUserPrivate
+                    const userPrivate = await getUserPrivate(memberCircle.did);
                     if (userPrivate) {
                         recipientUsers.push(userPrivate);
                     }
@@ -119,7 +105,6 @@ export const leaveCircle = async (circle: Circle): Promise<CircleActionResponse>
             return { success: false, message: "Authentication failed" };
         }
 
-        // make sure last admin doesn't leave
         let member = await getMember(userDid, circle._id ?? "");
         if (!member) {
             throw new Error("Member not found");
@@ -169,10 +154,8 @@ export const updateUser = async (userId: string, formData: FormData): Promise<Us
     }
 
     try {
-        // Get current user
         const currentUser = await getUserById(userId);
         if (!currentUser || currentUser.did !== userDid) {
-            // Only allow users to update their own profile
             return undefined;
         }
 
@@ -184,7 +167,6 @@ export const updateUser = async (userId: string, formData: FormData): Promise<Us
                 updateData[key as keyof Circle] = fileInfo;
                 revalidatePath(fileInfo.url);
             } else if (key === "location") {
-                // Parse location JSON
                 try {
                     updateData[key as keyof Circle] = JSON.parse(value as string);
                 } catch (e) {
@@ -196,11 +178,7 @@ export const updateUser = async (userId: string, formData: FormData): Promise<Us
         }
 
         await updateCircle(updateData, userDid);
-
-        // Revalidate the profile path
         revalidatePath(`/circles/${currentUser.handle}`);
-
-        // Get updated user data
         const updatedUser = await getUserPrivate(userDid);
         return updatedUser;
     } catch (error) {
@@ -229,7 +207,6 @@ export const updateCircleField = async (circleId: string, formData: FormData): P
                 updateData[key as keyof Circle] = fileInfo;
                 revalidatePath(fileInfo.url);
             } else if (key === "location") {
-                // Parse location JSON
                 try {
                     updateData[key as keyof Circle] = JSON.parse(value as string);
                 } catch (e) {
@@ -241,11 +218,8 @@ export const updateCircleField = async (circleId: string, formData: FormData): P
         }
 
         await updateCircle(updateData, userDid);
-
         let circlePath = await getCirclePath({ _id: circleId } as Circle);
         revalidatePath(circlePath);
-
-        // get circle
         let circle = await getCircleById(circleId);
 
         return { success: true, message: `Circle updated successfully`, circle };
@@ -253,3 +227,23 @@ export const updateCircleField = async (circleId: string, formData: FormData): P
         return { success: false, message: `Failed to update circle. ${error}` };
     }
 };
+
+export async function findOrCreateDMRoom(recipient: Circle): Promise<ChatRoom | null> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            throw new Error("User not authenticated");
+        }
+
+        const user = await getCircleByDid(userDid);
+        if (!user) {
+            throw new Error("User not found");
+        }
+
+        const room = await findOrCreateDMRoomData(user, recipient);
+        return room;
+    } catch (error) {
+        console.error("Error finding or creating DM room:", error);
+        return null;
+    }
+}

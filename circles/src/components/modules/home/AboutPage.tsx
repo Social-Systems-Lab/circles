@@ -14,6 +14,11 @@ import { skills } from "@/lib/data/skills";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import RichText from "../feeds/RichText";
 import SdgList from "../sdgs/SdgList";
+import { useAtom } from "jotai";
+import { userAtom } from "@/lib/data/atoms";
+import OffersCard from "./offers-card";
+import EngagementCard from "./engagement-card";
+import NeedsCard from "./needs-card";
 
 // Helper mappings for quick lookup
 const sdgMap = new Map(sdgs.map((s) => [s.handle, s]));
@@ -25,6 +30,8 @@ interface AboutPageProps {
 
 export default function AboutPage({ circle }: AboutPageProps) {
     const isCompact = useIsCompact();
+    const [user] = useAtom(userAtom);
+    const isOwner = user?.did === circle.did;
 
     // Check if sidebar has any content
     const hasSidebarContent =
@@ -41,26 +48,33 @@ export default function AboutPage({ circle }: AboutPageProps) {
                 {/* --- Main Content Column --- */}
                 {/* Adjust column span based on sidebar visibility */}
                 <div className={hasSidebarContent ? "md:col-span-2" : "md:col-span-3"}>
-                    <div className={`bg-white p-6 ${isCompact ? "rounded-none" : "rounded-[15px] border-0 shadow-lg"}`}>
-                        {/* Main Content */}
-                        {hasMainContent ? (
-                            <>
-                                <h1 className="my-4">About</h1>
-                                {circle.content ? (
-                                    <RichText content={circle.content} />
-                                ) : (
-                                    <p className="mb-6 text-base">{circle.description}</p>
-                                )}
-                            </>
-                        ) : (
-                            // Default text if no content or description
-                            <>
-                                <h1 className="my-4">About</h1>
-                                <p className="mb-6 text-base text-muted-foreground">
-                                    This circle hasn&apos;t added a description yet.
-                                </p>
-                            </>
-                        )}
+                    <div className="space-y-6">
+                        <div
+                            className={`bg-white p-6 ${isCompact ? "rounded-none" : "rounded-[15px] border-0 shadow-lg"}`}
+                        >
+                            {/* Main Content */}
+                            {hasMainContent ? (
+                                <>
+                                    <h1 className="my-4">About</h1>
+                                    {circle.content ? (
+                                        <RichText content={circle.content} />
+                                    ) : (
+                                        <p className="mb-6 text-base">{circle.description}</p>
+                                    )}
+                                </>
+                            ) : (
+                                // Default text if no content or description
+                                <>
+                                    <h1 className="my-4">About</h1>
+                                    <p className="mb-6 text-base text-muted-foreground">
+                                        This circle hasn't added a description yet.
+                                    </p>
+                                </>
+                            )}
+                        </div>
+                        <OffersCard circle={circle} isOwner={isOwner} />
+                        <EngagementCard circle={circle} isOwner={isOwner} />
+                        <NeedsCard circle={circle} isOwner={isOwner} />
                     </div>
                 </div>
                 {/* --- Sidebar Column (Conditionally Rendered) --- */}
@@ -141,7 +155,7 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                                         height={20} // Increased size
                                                         className="h-5 w-5 rounded-full object-cover" // Increased size
                                                     />
-                                                    <span className="text-sm font-medium">{skill.name}</span>{" "}                                                    
+                                                    <span className="text-sm font-medium">{skill.name}</span>{" "}
                                                 </Badge>
                                             );
                                         })}

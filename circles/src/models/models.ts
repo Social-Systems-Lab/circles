@@ -398,6 +398,27 @@ export const questionSchema = z.object({
 
 export type Question = z.infer<typeof questionSchema>;
 
+export const visibilitySchema = z.enum(["public", "private", "members"]);
+
+export const offersSchema = z.object({
+    text: z.string().max(600).optional(),
+    skills: z.array(z.string()).optional(),
+    visibility: visibilitySchema.default("public"),
+});
+
+export const engagementSchema = z.object({
+    text: z.string().max(600).optional(),
+    interests: z.array(z.string()).optional(),
+    visibility: visibilitySchema.default("public"),
+    inviteEnabled: z.boolean().default(true),
+});
+
+export const needsSchema = z.object({
+    text: z.string().max(600).optional(),
+    visibility: visibilitySchema.default("public"),
+    offerHelpEnabled: z.boolean().default(true),
+});
+
 export const circleSchema = z.object({
     _id: z.any().optional(),
     did: didSchema.optional(),
@@ -426,6 +447,9 @@ export const circleSchema = z.object({
     location: locationSchema.optional(),
     causes: z.array(z.string()).optional(),
     skills: z.array(z.string()).optional(),
+    offers: offersSchema.optional(),
+    engagements: engagementSchema.optional(),
+    needs: needsSchema.optional(),
     completedOnboardingSteps: z.array(z.string()).optional(),
     matrixAccessToken: z.string().optional(),
     matrixUsername: z.string().optional(),

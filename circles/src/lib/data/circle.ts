@@ -42,6 +42,9 @@ export const SAFE_CIRCLE_PROJECTION = {
     location: 1,
     causes: 1,
     skills: 1,
+    offers: 1,
+    engagements: 1,
+    needs: 1,
     completedOnboardingSteps: 1,
     metadata: 1, // Include metadata for shadow post IDs
 } as const;

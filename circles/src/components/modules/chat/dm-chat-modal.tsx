@@ -16,11 +16,12 @@ import { sendRoomMessage } from "@/lib/data/client-matrix";
 interface DMModalProps {
     recipient: Circle;
     onClose: () => void;
+    initialMessage?: string;
 }
 
-export const DmChatModal: React.FC<DMModalProps> = ({ recipient, onClose }) => {
+export const DmChatModal: React.FC<DMModalProps> = ({ recipient, onClose, initialMessage }) => {
     const [user, setUser] = useAtom(userAtom);
-    const [message, setMessage] = useState("");
+    const [message, setMessage] = useState(initialMessage || "");
     const [loading, setLoading] = useState(false);
     const router = useRouter();
     const { toast } = useToast();
