@@ -419,6 +419,11 @@ export const needsSchema = z.object({
     offerHelpEnabled: z.boolean().default(true),
 });
 
+export const socialLinkSchema = z.object({
+    platform: z.string(),
+    url: z.string().url(),
+});
+
 export const circleSchema = z.object({
     _id: z.any().optional(),
     did: didSchema.optional(),
@@ -450,6 +455,7 @@ export const circleSchema = z.object({
     offers: offersSchema.optional(),
     engagements: engagementSchema.optional(),
     needs: needsSchema.optional(),
+    socialLinks: z.array(socialLinkSchema).optional(),
     completedOnboardingSteps: z.array(z.string()).optional(),
     matrixAccessToken: z.string().optional(),
     matrixUsername: z.string().optional(),

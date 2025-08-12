@@ -18,11 +18,13 @@ import {
     DynamicImageField,
     DynamicSwitchField,
     DynamicLocationField,
+    DynamicArrayField,
 } from "@/components/forms/dynamic-field";
 import { getUserPrivateAction } from "@/components/modules/home/actions";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader"; // Import the new component
+import { socialPlatforms } from "@/lib/data/social";
 
 interface AboutSettingsFormProps {
     circle: Circle;
@@ -54,6 +56,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                 ) || [], // Initialize images state
             isPublic: circle.isPublic !== false, // Default to true if not set
             location: circle.location || {},
+            socialLinks: circle.socialLinks || [],
         },
     });
 
@@ -69,6 +72,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
         images?: ImageItem[]; // Add images
         isPublic?: boolean;
         location?: any;
+        socialLinks?: any;
     }) => {
         setIsSubmitting(true);
         try {
@@ -303,6 +307,48 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         description: {
                                             circle: "Specify the location of the circle.",
                                             user: "Specify your location. Your location will be shared with other users.",
+                                        },
+                                    }}
+                                    formField={field}
+                                    control={form.control as unknown as Control}
+                                />
+                            )}
+                        />
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Social Links</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <Controller
+                            name="socialLinks"
+                            control={form.control as unknown as Control}
+                            render={({ field }) => (
+                                <DynamicArrayField
+                                    field={{
+                                        name: "socialLinks",
+                                        type: "array",
+                                        label: "Social Links",
+                                        itemSchema: {
+                                            id: "socialLink",
+                                            title: "Social Link",
+                                            description: "Add a new social media link.",
+                                            button: { text: "Add" },
+                                            fields: [
+                                                {
+                                                    name: "platform",
+                                                    label: "Platform",
+                                                    type: "select",
+                                                    options: socialPlatforms.map((p) => ({
+                                                        value: p.handle,
+                                                        label: p.name,
+                                                    })),
+                                                    required: true,
+                                                },
+                                                { name: "url", label: "URL", type: "text", required: true },
+                                            ],
                                         },
                                     }}
                                     formField={field}

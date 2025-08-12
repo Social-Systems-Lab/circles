@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import { VerifyAccountButton } from "../auth/verify-account-button";
+import SocialLinks from "./social-links";
 
 type HomeContentProps = { circle: Circle; authorizedToEdit: boolean; parentCircle?: Circle };
 
@@ -137,6 +138,9 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle }: 
                                 circle.name
                             )}
                         </h4>
+                        <div className={`pt-2 ${isCompact ? "order-last" : ""}`}>
+                            <SocialLinks circle={circle} />
+                        </div>
                         {parentCircle && parentCircle?.circleType === "circle" && (
                             <div className="mt-2 text-sm text-gray-500">
                                 Subcommunity of{" "}

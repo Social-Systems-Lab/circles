@@ -38,6 +38,7 @@ import { CirclePicture } from "../modules/circles/circle-picture";
 import { sdgs } from "@/lib/data/sdgs";
 import { skills } from "@/lib/data/skills";
 import SdgList from "../modules/sdgs/SdgList";
+import SocialLinks from "../modules/home/social-links";
 
 const sdgMap = new Map(sdgs.map((s) => [s.handle, s]));
 const skillMap = new Map(skills.map((s) => [s.handle, s]));
@@ -152,6 +153,9 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                             </p>
                         </div>
                     )}
+                    <div className="pt-2">
+                        <SocialLinks circle={circle} />
+                    </div>
                 </div>
                 {/* Content below image - now inside the scrollable container */}
                 <div className="relative flex flex-1 flex-col p-4 pt-2">

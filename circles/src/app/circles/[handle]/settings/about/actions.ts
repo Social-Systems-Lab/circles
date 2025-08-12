@@ -20,6 +20,7 @@ export async function saveAbout(values: {
     images?: ImageItem[]; // Added images
     isPublic?: boolean;
     location?: any;
+    socialLinks?: any;
 }): Promise<FormSubmitResponse> {
     console.log("Saving circle about with values (images length):", values.images?.length);
 
@@ -32,6 +33,7 @@ export async function saveAbout(values: {
         mission: values.mission,
         isPublic: values.isPublic,
         location: values.location,
+        socialLinks: values.socialLinks,
     };
 
     // check if user is authorized to edit circle settings
