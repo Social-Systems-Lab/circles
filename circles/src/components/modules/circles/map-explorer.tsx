@@ -10,7 +10,11 @@ import CircleSwipeCard from "./circle-swipe-card";
 import { MapDisplay } from "@/components/map/map";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { RefreshCw, Hand, Home, Search, X, ArrowLeft, ChevronRight, Globe } from "lucide-react"; // Added ArrowLeft
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { RefreshCw, Hand, Home, Search, X, ArrowLeft, ChevronRight, Globe, CalendarIcon } from "lucide-react"; // Added ArrowLeft
+import { format } from "date-fns";
+import type { DateRange } from "react-day-picker";
 import { MdOutlineTravelExplore } from "react-icons/md";
 import { HiChevronRight, HiMiniSquare2Stack } from "react-icons/hi2";
 import { useAtom } from "jotai";
@@ -90,6 +94,31 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     // Resonance filter state (min similarity threshold) and current dataset range
     const [minSimFilter, setMinSimFilter] = useState<number | undefined>(undefined);
     const [simRange, setSimRange] = useState<{ min: number; max: number }>({ min: 0, max: 1 });
+
+    // Date range filter
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+    const dateLabel = useMemo(() => {
+        if (dateRange?.from) {
+            const from = format(dateRange.from, "MMM d, yyyy");
+            const to = dateRange.to ? format(dateRange.to, "MMM d, yyyy") : "Now";
+            return `${from} – ${to}`;
+        }
+        return format(new Date(), "MMM d, yyyy");
+    }, [dateRange]);
+
+    const withinDateRange = useCallback(
+        (d?: Date | string) => {
+            if (!dateRange?.from && !dateRange?.to) return true;
+            if (!d) return false;
+            const dt = typeof d === "string" ? new Date(d) : d;
+            const fromT = dateRange.from ? new Date(dateRange.from).setHours(0, 0, 0, 0) : undefined;
+            const toT = dateRange.to ? new Date(dateRange.to).setHours(23, 59, 59, 999) : Date.now();
+            const t = dt.getTime();
+            return (fromT ? t >= fromT : true) && t <= (toT as number);
+        },
+        [dateRange],
+    );
+
     // State to control the drawer's active snap index
     const [isMounted, setIsMounted] = useState(false);
     const [showSwipeInstructions, setShowSwipeInstructions] = useState(false);
@@ -195,8 +224,11 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         if (minSimFilter !== undefined) {
             list = list.filter((c) => c.metrics?.similarity === undefined || c.metrics!.similarity >= minSimFilter);
         }
+        if (dateRange?.from || dateRange?.to) {
+            list = list.filter((c) => withinDateRange((c as any).createdAt));
+        }
         return list;
-    }, [baseCircles, minSimFilter]);
+    }, [baseCircles, minSimFilter, dateRange, withinDateRange]);
 
     // --- Callbacks ---
     const handleSwiped = useCallback((circle: Circle, direction: "left" | "right") => {
@@ -332,12 +364,15 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                     (c) => c.metrics?.similarity === undefined || c.metrics!.similarity >= minSimFilter,
                 );
             }
+            if (dateRange?.from || dateRange?.to) {
+                circles = circles.filter((c) => withinDateRange((c as any).createdAt));
+            }
             const mapData: Content[] = circles
                 .map((circle) => mapItemToContent(circle))
                 .filter((c): c is Content => c !== null);
             setDisplayedContent(mapData);
         }
-    }, [viewMode, baseCircles, minSimFilter, setDisplayedContent]);
+    }, [viewMode, baseCircles, minSimFilter, dateRange, withinDateRange, setDisplayedContent]);
 
     // Control drawer snap based on contentPreview state
     useEffect(() => {
@@ -498,8 +533,8 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                             </div>
                         </div>
 
-                        {/* Resonance slider */}
-                        <div className="absolute left-0 top-[56px] z-40 flex items-center gap-2 rounded-full bg-white/95 px-3 py-2 shadow-md backdrop-blur-sm">
+                        {/* Resonance slider + Date filter */}
+                        <div className="absolute left-0 top-[56px] z-40 flex items-center gap-3 rounded-full bg-white/95 px-3 py-2 shadow-md backdrop-blur-sm">
                             <span className="text-xs text-gray-600">Resonance</span>
                             <div className="w-[160px]">
                                 <Slider
@@ -513,6 +548,29 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                             <span className="text-xs text-gray-600">
                                 ≥ {Math.round((minSimFilter ?? simRange.min) * 100)}%
                             </span>
+                            <div className="mx-2 h-4 w-px bg-gray-200" />
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <button className="flex items-center gap-1 rounded-full border px-2 py-1 text-xs hover:bg-gray-50">
+                                        <CalendarIcon className="h-3.5 w-3.5" />
+                                        <span>{dateLabel}</span>
+                                    </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-2" align="start">
+                                    <Calendar
+                                        mode="range"
+                                        selected={dateRange}
+                                        onSelect={setDateRange as any}
+                                        numberOfMonths={2}
+                                        defaultMonth={dateRange?.from}
+                                    />
+                                    <div className="mt-2 flex justify-end">
+                                        <Button variant="ghost" size="sm" onClick={() => setDateRange(undefined)}>
+                                            Clear
+                                        </Button>
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
                         </div>
                     </div>
                 )}
