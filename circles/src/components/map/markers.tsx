@@ -1,15 +1,16 @@
 "use client";
 
 import { contentPreviewAtom, zoomContentAtom } from "@/lib/data/atoms";
-import { Content, ContentPreviewData, WithMetric } from "@/models/models";
-import { useAtom, useSetAtom } from "jotai";
+import { Content, WithMetric } from "@/models/models";
+import { useAtom } from "jotai";
 import React, { useEffect } from "react";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "../ui/hover-card";
 import { HoverCardArrow } from "@radix-ui/react-hover-card";
 import Indicators from "../utils/indicators";
 import Image from "next/image";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
-import { Footprints, Bike, Car } from "lucide-react";
+import ImageCarousel from "../ui/image-carousel";
+import { Media } from "@/models/models";
 
 interface MapMarkerProps {
     content?: Content;
@@ -19,7 +20,7 @@ interface MapMarkerProps {
 
 const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }) => {
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
-    const [zoomContent, setZoomContent] = useAtom(zoomContentAtom);
+    const [, setZoomContent] = useAtom(zoomContentAtom);
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -35,23 +36,30 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
         }
     };
 
-    const handleMapPinClick = () => {
-        if (onMapPinClick && content) {
-            onMapPinClick(content);
-            return;
-        }
-
-        // If no explicit handler provided, set zoomContent to zoom in on map
-        if (content) {
-            setZoomContent(content);
-        }
-    };
-
     // Compute popover helpers
     const metrics = (content as WithMetric<Content>)?.metrics;
-    const distance = metrics?.distance;
-    const travelMode = distance === undefined ? null : distance < 1.5 ? "walk" : distance < 7 ? "bike" : "car";
+    const title = content?.circleType === "post" ? (content as any)?.content : (content as any)?.name;
     const description = (content as any)?.mission || (content as any)?.description;
+    const images: Media[] = (() => {
+        const anyContent: any = content;
+        let imgs: Media[] = [];
+        if (anyContent?.images?.length) {
+            imgs = anyContent.images as Media[];
+        } else if (anyContent?.media?.length) {
+            imgs = anyContent.media as Media[];
+        } else if (anyContent?.cover?.url) {
+            imgs = [{ name: "cover", type: "image", fileInfo: anyContent.cover } as Media];
+        } else if (anyContent?.picture?.url) {
+            imgs = [{ name: "picture", type: "image", fileInfo: anyContent.picture } as Media];
+        }
+        const fallbackUrl =
+            (content as any)?.circleType === "post"
+                ? "/images/default-post-picture.png"
+                : "/images/default-user-cover.png";
+        return imgs.length
+            ? imgs
+            : [{ name: "default", type: "image", fileInfo: { url: fallbackUrl } as any } as Media];
+    })();
 
     return (
         <HoverCard openDelay={200}>
@@ -107,65 +115,33 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
                 </div>
             </HoverCardTrigger>
             <HoverCardContent
-                className="w-auto cursor-pointer rounded-[15px] border-0 bg-[#333333] p-2 pr-4 pt-[6px]"
+                className="w-auto cursor-pointer rounded-[15px] border-0 bg-transparent p-0"
                 onClick={handleClick}
             >
-                <HoverCardArrow className="text-[#333333]" fill="#333333" color="#333333" />
-                <div className="flex items-center space-x-2">
-                    {content?.circleType === "post" ? (
-                        <Image
-                            className={`h-9 w-9 rounded-full border-2 bg-white ${contentPreview && contentPreview.content?._id === content?._id ? "border-[#f8dd53]" : "border-white"} bg-cover bg-center shadow-md transition-transform duration-300 group-hover:scale-110`}
-                            src="/images/default-post-picture.png"
-                            alt="Post"
-                            width={36}
-                            height={36}
-                        />
-                    ) : (
-                        <div
-                            className={`h-9 w-9 rounded-full bg-white bg-cover bg-center shadow-md`}
-                            style={{
-                                backgroundImage: content?.picture?.url ? `url(${content?.picture?.url})` : "none",
-                            }}
-                        />
-                    )}
-                    <div className="max-w-[300px]">
-                        {content?.circleType === "post" ? (
-                            <p className="line-clamp-2 text-[14px] text-white">{content?.content}</p>
-                        ) : (
-                            <>
-                                <div className="flex items-center gap-2">
-                                    <p className="text-[14px] font-semibold text-white">{content?.name}</p>
-                                    {travelMode && (
-                                        <span className="ml-auto flex items-center text-white/80">
-                                            {travelMode === "walk" && (
-                                                <Footprints className="h-4 w-4" aria-label="Walking distance" />
-                                            )}
-                                            {travelMode === "bike" && (
-                                                <Bike className="h-4 w-4" aria-label="Biking distance" />
-                                            )}
-                                            {travelMode === "car" && (
-                                                <Car className="h-4 w-4" aria-label="Driving distance" />
-                                            )}
-                                        </span>
-                                    )}
-                                </div>
-                                {description && (
-                                    <p className="mt-0.5 line-clamp-2 text-[12px] text-white/80">{description}</p>
-                                )}
-                            </>
-                        )}
-                        <div className="flex flex-row">
-                            {(content as WithMetric<Content>)?.metrics && (
-                                <Indicators
-                                    metrics={(content as WithMetric<Content>).metrics!}
-                                    className="mr-auto bg-transparent pl-0 shadow-none"
-                                    color="#ffffff"
-                                    content={content}
-                                    onMapPinClick={handleMapPinClick}
-                                    disableProximity
-                                />
-                            )}
+                <HoverCardArrow className="opacity-0" fill="transparent" color="transparent" />
+                <div className="relative h-[200px] w-[320px] overflow-hidden rounded-[15px]">
+                    <ImageCarousel
+                        images={images}
+                        containerClassName="h-[200px] w-[320px]"
+                        imageClassName="h-full w-full object-cover"
+                        showArrows={true}
+                        showDots={true}
+                    />
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
+                    {(content as WithMetric<Content>)?.metrics && (
+                        <div className="absolute left-2 top-2 z-10">
+                            <Indicators
+                                metrics={(content as WithMetric<Content>).metrics!}
+                                className="bg-transparent pl-0 shadow-none"
+                                color="#ffffff"
+                                content={content}
+                                disableProximity
+                            />
                         </div>
+                    )}
+                    <div className="absolute bottom-0 left-0 right-0 z-10 p-3">
+                        <p className="mb-1 line-clamp-1 text-[14px] font-semibold text-white">{title}</p>
+                        {description && <p className="line-clamp-2 text-[12px] text-white/90">{description}</p>}
                     </div>
                 </div>
             </HoverCardContent>
