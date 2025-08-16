@@ -11,6 +11,8 @@ import Image from "next/image";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import ImageCarousel from "../ui/image-carousel";
 import { Media } from "@/models/models";
+import { Button } from "../ui/button";
+import { ArrowUpRight } from "lucide-react";
 
 interface MapMarkerProps {
     content?: Content;
@@ -60,6 +62,16 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
             ? imgs
             : [{ name: "default", type: "image", fileInfo: { url: fallbackUrl } as any } as Media];
     })();
+    const openHref =
+        (content as any)?.handle && (content as any)?.circleType !== "post"
+            ? `/circles/${(content as any).handle}`
+            : undefined;
+    const handleOpen = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (openHref && typeof window !== "undefined") {
+            window.open(openHref, "_self");
+        }
+    };
 
     return (
         <HoverCard openDelay={200}>
@@ -145,6 +157,17 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
                                 disableProximity
                             />
                         </div>
+                    )}
+                    {openHref && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-2 top-2 z-10 h-7 w-7 rounded-full bg-black/40 hover:bg-black/60"
+                            onClick={handleOpen}
+                            title="Open"
+                        >
+                            <ArrowUpRight className="h-4 w-4 text-white" />
+                        </Button>
                     )}
                     <div className="absolute bottom-0 left-0 right-0 z-10 p-3">
                         <p className="mb-1 line-clamp-1 text-[16px] font-semibold text-white">{title}</p>
