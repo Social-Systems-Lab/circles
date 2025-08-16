@@ -175,6 +175,7 @@ interface IndicatorsProps {
     onMapPinClick?: () => void;
     tooltipAlign?: "center" | "start" | "end";
     tooltipSideOffset?: number;
+    disableProximity?: boolean;
 }
 
 export function Indicators({
@@ -186,6 +187,7 @@ export function Indicators({
     onMapPinClick,
     tooltipAlign,
     tooltipSideOffset,
+    disableProximity,
 }: IndicatorsProps) {
     return (
         <div
@@ -206,7 +208,7 @@ export function Indicators({
             )}
 
             {/* Render ProximityIndicator if 'proximity' is defined */}
-            {metrics.distance !== undefined && (
+            {metrics.distance !== undefined && !disableProximity && (
                 <ProximityIndicator
                     distance={metrics.distance}
                     color={color}
