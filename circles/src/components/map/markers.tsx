@@ -115,19 +115,26 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
                 </div>
             </HoverCardTrigger>
             <HoverCardContent
-                className="w-auto cursor-pointer rounded-[15px] border-0 bg-transparent p-0"
+                className="z-[9999] w-auto cursor-pointer rounded-[15px] border-0 bg-transparent p-0"
                 onClick={handleClick}
+                style={{ zIndex: 99999 }}
             >
                 <HoverCardArrow className="opacity-0" fill="transparent" color="transparent" />
                 <div className="relative h-[200px] w-[320px] overflow-hidden rounded-[15px]">
-                    <ImageCarousel
-                        images={images}
-                        containerClassName="h-[200px] w-[320px]"
-                        imageClassName="h-full w-full object-cover"
-                        showArrows={true}
-                        showDots={true}
-                    />
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
+                    <div
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <ImageCarousel
+                            images={images}
+                            containerClassName="h-[200px] w-[320px]"
+                            imageClassName="h-full w-full object-cover"
+                            showArrows={true}
+                            showDots={true}
+                        />
+                    </div>
+                    <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-[60%] bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
                     {(content as WithMetric<Content>)?.metrics && (
                         <div className="absolute left-2 top-2 z-10">
                             <Indicators
@@ -140,8 +147,8 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
                         </div>
                     )}
                     <div className="absolute bottom-0 left-0 right-0 z-10 p-3">
-                        <p className="mb-1 line-clamp-1 text-[14px] font-semibold text-white">{title}</p>
-                        {description && <p className="line-clamp-2 text-[12px] text-white/90">{description}</p>}
+                        <p className="mb-1 line-clamp-1 text-[16px] font-semibold text-white">{title}</p>
+                        {description && <p className="line-clamp-2 text-[13px] text-white/90">{description}</p>}
                     </div>
                 </div>
             </HoverCardContent>

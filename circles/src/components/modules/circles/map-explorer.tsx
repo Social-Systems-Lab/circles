@@ -382,44 +382,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             <div
                 className={`absolute ${isMobile ? "flex-col" : "flex-row"} left-4 top-4 z-[60] flex gap-2`} // Increased z-index
             >
-                {/* View Mode Toggle */}
-                {!(sidePanelContentVisible === "toolbox" && isMobile) && (
-                    <div className={`flex flex-row gap-1 rounded-full bg-white p-[4px] shadow-md`}>
-                        <TooltipProvider delayDuration={100}>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className={`relative h-9 w-9 rounded-full ${viewMode === "cards" ? "bg-[#f1f1f1]" : "bg-white"} hover:bg-[#cecece]`}
-                                        onClick={() => setViewMode("cards")}
-                                    >
-                                        <HiMiniSquare2Stack className="h-5 w-5" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    <p>Cards View</p>
-                                </TooltipContent>
-                            </Tooltip>
-
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className={`relative h-9 w-9 rounded-full  ${viewMode === "explore" ? "bg-[#f1f1f1]" : "bg-white"} hover:bg-[#cecece]`}
-                                        onClick={() => setViewMode("explore")}
-                                    >
-                                        <MdOutlineTravelExplore className="h-5 w-5" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    <p>Explore View</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                    </div>
-                )}
+                {/* View Mode Toggle removed: Explore mode only */}
 
                 {/* Search Bar & Filters (Only in Explore Mode) */}
                 {viewMode === "explore" && !(sidePanelContentVisible === "toolbox" && isMobile) && (
