@@ -78,18 +78,7 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
             <HoverCardTrigger>
                 <div className="group relative cursor-pointer" onClick={handleClick}>
                     <div className="absolute bottom-[4px] left-1/2 -translate-x-1/2 transform">
-                        <div
-                            className="relative h-10 w-10 rounded-full transition-transform duration-300 group-hover:scale-110"
-                            style={
-                                metrics?.similarity !== undefined
-                                    ? {
-                                          background: `conic-gradient(#ac22c3 ${Math.round(
-                                              (metrics?.similarity ?? 0) * 360,
-                                          )}deg, rgba(172, 34, 195, 0.15) 0deg)`,
-                                      }
-                                    : undefined
-                            }
-                        >
+                        <div className="relative h-10 w-10 rounded-full transition-transform duration-300 group-hover:scale-110">
                             <div className="absolute inset-[2px] rounded-full bg-white shadow-md" />
                             {content?.circleType === "post" ? (
                                 <div className="absolute inset-[2px] flex items-center justify-center rounded-full">

@@ -9,6 +9,7 @@ import { motion } from "framer-motion";
 import CircleSwipeCard from "./circle-swipe-card";
 import { MapDisplay } from "@/components/map/map";
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import { RefreshCw, Hand, Home, Search, X, ArrowLeft, ChevronRight, Globe } from "lucide-react"; // Added ArrowLeft
 import { MdOutlineTravelExplore } from "react-icons/md";
 import { HiChevronRight, HiMiniSquare2Stack } from "react-icons/hi2";
@@ -86,6 +87,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const [allSearchResults, setAllSearchResults] = useState<WithMetric<Circle>[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
+    // Resonance filter state (min similarity threshold) and current dataset range
+    const [minSimFilter, setMinSimFilter] = useState<number | undefined>(undefined);
+    const [simRange, setSimRange] = useState<{ min: number; max: number }>({ min: 0, max: 1 });
     // State to control the drawer's active snap index
     const [isMounted, setIsMounted] = useState(false);
     const [showSwipeInstructions, setShowSwipeInstructions] = useState(false);
@@ -147,16 +151,52 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     }, [filteredSearchResults]);
 
     // Determine data source for the drawer list
-    const drawerListData = useMemo(() => {
+    // Base circles used for map/list before mapping to Content
+    const baseCircles = useMemo(() => {
         if (hasSearched) {
             return filteredSearchResults;
         } else {
-            // When no search, show the same discoverable circles as the map
-            // Need to map them to ensure consistent type if needed by list item component
-            return filterCirclesByCategory(allDiscoverableCircles, selectedCategory);
-            // .map(item => mapItemToContent(item)).filter(Boolean) as Content[]; // Optional mapping
+            let circlesToDisplay = allDiscoverableCircles;
+            if (selectedSdgs.length > 0) {
+                const sdgHandles = selectedSdgs.map((s) => s.handle);
+                circlesToDisplay = circlesToDisplay.filter((c) =>
+                    c.causes?.some((cause) => sdgHandles.includes(cause)),
+                );
+            }
+            return filterCirclesByCategory(circlesToDisplay, selectedCategory);
         }
-    }, [hasSearched, filteredSearchResults, allDiscoverableCircles, selectedCategory, filterCirclesByCategory]);
+    }, [
+        hasSearched,
+        filteredSearchResults,
+        allDiscoverableCircles,
+        selectedSdgs,
+        selectedCategory,
+        filterCirclesByCategory,
+    ]);
+
+    // Compute current similarity range from dataset
+    const simStats = useMemo(() => {
+        const sims = baseCircles.map((c) => c.metrics?.similarity).filter((s): s is number => s !== undefined);
+        if (sims.length === 0) return { min: 0, max: 1 };
+        return { min: Math.min(...sims), max: Math.max(...sims) };
+    }, [baseCircles]);
+
+    // Keep state in sync with dataset range
+    useEffect(() => {
+        setSimRange(simStats);
+        setMinSimFilter((prev) => {
+            if (prev === undefined) return simStats.min;
+            return Math.min(Math.max(prev, simStats.min), simStats.max);
+        });
+    }, [simStats]);
+
+    const drawerListData = useMemo(() => {
+        let list = baseCircles;
+        if (minSimFilter !== undefined) {
+            list = list.filter((c) => c.metrics?.similarity === undefined || c.metrics!.similarity >= minSimFilter);
+        }
+        return list;
+    }, [baseCircles, minSimFilter]);
 
     // --- Callbacks ---
     const handleSwiped = useCallback((circle: Circle, direction: "left" | "right") => {
@@ -285,37 +325,19 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
 
     // Update map markers when in Explore mode
     useEffect(() => {
-        // ... (no changes, logic seems correct) ...
         if (viewMode === "explore") {
-            let mapData: Content[] = [];
-            if (hasSearched) {
-                mapData = filteredSearchResults
-                    .map((circle) => mapItemToContent(circle))
-                    .filter((c): c is Content => c !== null);
-            } else {
-                let circlesToDisplay = allDiscoverableCircles;
-                if (selectedSdgs.length > 0) {
-                    const sdgHandles = selectedSdgs.map((s) => s.handle);
-                    circlesToDisplay = circlesToDisplay.filter((c) =>
-                        c.causes?.some((cause) => sdgHandles.includes(cause)),
-                    );
-                }
-                mapData = filterCirclesByCategory(circlesToDisplay, selectedCategory)
-                    .map((circle) => mapItemToContent(circle))
-                    .filter((c): c is Content => c !== null);
+            let circles = baseCircles;
+            if (minSimFilter !== undefined) {
+                circles = circles.filter(
+                    (c) => c.metrics?.similarity === undefined || c.metrics!.similarity >= minSimFilter,
+                );
             }
+            const mapData: Content[] = circles
+                .map((circle) => mapItemToContent(circle))
+                .filter((c): c is Content => c !== null);
             setDisplayedContent(mapData);
         }
-    }, [
-        viewMode,
-        hasSearched,
-        filteredSearchResults,
-        allDiscoverableCircles,
-        selectedCategory,
-        selectedSdgs,
-        filterCirclesByCategory,
-        setDisplayedContent,
-    ]);
+    }, [viewMode, baseCircles, minSimFilter, setDisplayedContent]);
 
     // Control drawer snap based on contentPreview state
     useEffect(() => {
@@ -474,6 +496,23 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                     }
                                 />
                             </div>
+                        </div>
+
+                        {/* Resonance slider */}
+                        <div className="absolute left-0 top-[56px] z-40 flex items-center gap-2 rounded-full bg-white/95 px-3 py-2 shadow-md backdrop-blur-sm">
+                            <span className="text-xs text-gray-600">Resonance</span>
+                            <div className="w-[160px]">
+                                <Slider
+                                    min={simRange.min}
+                                    max={simRange.max}
+                                    step={0.01}
+                                    value={[minSimFilter ?? simRange.min]}
+                                    onValueChange={(v) => setMinSimFilter(v[0])}
+                                />
+                            </div>
+                            <span className="text-xs text-gray-600">
+                                ≥ {Math.round((minSimFilter ?? simRange.min) * 100)}%
+                            </span>
                         </div>
                     </div>
                 )}
