@@ -758,7 +758,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
 
             {/* Desktop Search Results Panel */}
             {viewMode === "explore" && hasSearched && !isMobile && (
-                <div className="formatted absolute left-4 top-20 z-40 max-h-[calc(100vh-120px)] w-[300px] overflow-y-auto rounded-lg bg-white shadow-lg">
+                <div className="formatted absolute left-4 top-[120px] z-40 max-h-[calc(100vh-130px)] w-[300px] overflow-y-auto rounded-lg bg-white shadow-lg">
                     <div className="p-4">
                         <h3 className="mb-2 font-semibold">Search Results</h3>
                         {isSearching && <p>Loading...</p>}

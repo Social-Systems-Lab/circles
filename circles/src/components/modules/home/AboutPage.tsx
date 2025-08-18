@@ -67,7 +67,7 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                 <>
                                     <h1 className="my-4">About</h1>
                                     <p className="mb-6 text-base text-muted-foreground">
-                                        This circle hasn't added a description yet.
+                                        This circle hasn&apos;t added a description yet.
                                     </p>
                                 </>
                             )}
