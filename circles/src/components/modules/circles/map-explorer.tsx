@@ -12,7 +12,19 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { RefreshCw, Hand, Home, Search, X, ArrowLeft, ChevronRight, Globe, CalendarIcon } from "lucide-react"; // Added ArrowLeft
+import {
+    RefreshCw,
+    Hand,
+    Home,
+    Search,
+    X,
+    ArrowLeft,
+    ChevronRight,
+    Globe,
+    CalendarIcon,
+    AudioLines,
+    ChevronDown,
+} from "lucide-react"; // Added ArrowLeft
 import { format } from "date-fns";
 import type { DateRange } from "react-day-picker";
 import { MdOutlineTravelExplore } from "react-icons/md";
@@ -322,6 +334,29 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         setTriggerSnapIndex(-1);
     }, []);
 
+    // Quick date range presets for the date filter
+    const setQuickDateRange = useCallback(
+        (preset: "today" | "7d" | "30d" | "all") => {
+            const now = new Date();
+            const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+            if (preset === "all") {
+                setDateRange(undefined);
+                return;
+            }
+            if (preset === "today") {
+                setDateRange({ from: startOfDay(now), to: undefined });
+                return;
+            }
+
+            const days = preset === "7d" ? 7 : 30;
+            const from = new Date(now);
+            from.setDate(now.getDate() - (days - 1));
+            setDateRange({ from: startOfDay(from), to: undefined });
+        },
+        [setDateRange],
+    );
+
     const handleExplore = () => {
         setViewMode("explore");
     };
@@ -535,8 +570,20 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
 
                         {/* Resonance slider + Date filter */}
                         <div className="absolute left-0 top-[56px] z-40 flex items-center gap-3 rounded-full bg-white/95 px-3 py-2 shadow-md backdrop-blur-sm">
-                            <span className="text-xs text-gray-600">Resonance</span>
-                            <div className="w-[160px]">
+                            <TooltipProvider delayDuration={200}>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span className="flex items-center gap-1 text-xs font-medium text-gray-700">
+                                            <AudioLines className="h-4 w-4 text-indigo-500" />
+                                        </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="right">
+                                        <p>Minimum similarity threshold. Higher = closer match.</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+
+                            <div className="w-[180px] sm:w-[200px]">
                                 <Slider
                                     min={simRange.min}
                                     max={simRange.max}
@@ -545,18 +592,51 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                     onValueChange={(v) => setMinSimFilter(v[0])}
                                 />
                             </div>
-                            <span className="text-xs text-gray-600">
-                                ≥ {Math.round((minSimFilter ?? simRange.min) * 100)}%
+
+                            <span className="rounded-full bg-gray-100/80 px-2 py-0.5 text-[10px] font-medium text-gray-700 ring-1 ring-black/5">
+                                {Math.round((minSimFilter ?? simRange.min) * 100)}%
                             </span>
-                            <div className="mx-2 h-4 w-px bg-gray-200" />
+
+                            <div className="mx-2 h-4 w-px bg-gray-200/80" />
+
                             <Popover>
                                 <PopoverTrigger asChild>
-                                    <button className="flex items-center gap-1 rounded-full border px-2 py-1 text-xs hover:bg-gray-50">
-                                        <CalendarIcon className="h-3.5 w-3.5" />
-                                        <span>{dateLabel}</span>
+                                    <button className="flex items-center gap-1 rounded-full border border-gray-200/70 bg-white/70 px-2.5 py-1 text-xs text-gray-700 shadow-sm hover:bg-white">
+                                        <CalendarIcon className="h-3.5 w-3.5 text-gray-600" />
+                                        <span className="max-w-[160px] truncate">{dateLabel}</span>
+                                        <ChevronDown className="h-3 w-3 text-gray-500" />
                                     </button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-auto p-2" align="start">
+                                <PopoverContent
+                                    className="w-auto rounded-xl border border-gray-100 p-3 shadow-xl"
+                                    align="start"
+                                >
+                                    <div className="mb-2 flex gap-1">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 px-2 text-xs"
+                                            onClick={() => setQuickDateRange("today")}
+                                        >
+                                            Today
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 px-2 text-xs"
+                                            onClick={() => setQuickDateRange("7d")}
+                                        >
+                                            7d
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 px-2 text-xs"
+                                            onClick={() => setQuickDateRange("30d")}
+                                        >
+                                            30d
+                                        </Button>
+                                    </div>
                                     <Calendar
                                         mode="range"
                                         selected={dateRange}
@@ -564,7 +644,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                         numberOfMonths={2}
                                         defaultMonth={dateRange?.from}
                                     />
-                                    <div className="mt-2 flex justify-end">
+                                    <div className="mt-3 flex justify-end">
                                         <Button variant="ghost" size="sm" onClick={() => setDateRange(undefined)}>
                                             Clear
                                         </Button>

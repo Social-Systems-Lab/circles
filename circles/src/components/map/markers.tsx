@@ -116,7 +116,7 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
                 </div>
             </HoverCardTrigger>
             <HoverCardContent
-                className="z-[9999] w-auto cursor-pointer rounded-[15px] border-0 bg-transparent p-0"
+                className="z-[9999] w-auto cursor-pointer rounded-[15px] border-0 bg-white p-0"
                 onClick={handleClick}
                 style={{ zIndex: 99999 }}
             >
