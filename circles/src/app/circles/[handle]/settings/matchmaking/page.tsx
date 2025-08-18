@@ -20,8 +20,7 @@ export default async function MatchmakingSettings(props: MatchmakingSettingsProp
             <div>
                 <h3 className="text-lg font-medium">Matchmaking</h3>
                 <p className="text-sm text-muted-foreground">
-                    Configure your circle&apos;s SDGs and skills to improve matchmaking with potential members and other
-                    circles.
+                    Configure your circle&apos;s SDGs to improve matchmaking with potential members and other circles.
                 </p>
             </div>
             <Separator />

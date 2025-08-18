@@ -6,19 +6,12 @@ import { revalidatePath } from "next/cache";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 
-export async function saveMatchmaking(values: {
-    _id: any;
-    causes?: string[];
-    skills?: string[];
-    location?: any;
-}): Promise<FormSubmitResponse> {
+export async function saveMatchmaking(values: { _id: any; causes?: string[] }): Promise<FormSubmitResponse> {
     console.log("Saving circle matchmaking with values", values);
 
     let circle: Partial<Circle> = {
         _id: values._id,
         causes: values.causes,
-        skills: values.skills,
-        location: values.location,
     };
 
     // check if user is authorized to edit circle settings

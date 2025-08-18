@@ -25,12 +25,10 @@ export function MatchmakingSettingsForm({ circle }: MatchmakingSettingsFormProps
         defaultValues: {
             _id: circle._id,
             causes: circle.causes || [],
-            skills: circle.skills || [],
-            location: circle.location || {},
         },
     });
 
-    const onSubmit = async (data: { _id: any; causes?: string[]; skills?: string[]; location?: any }) => {
+    const onSubmit = async (data: { _id: any; causes?: string[] }) => {
         setIsSubmitting(true);
         try {
             const result = await saveMatchmaking(data);
@@ -81,35 +79,6 @@ export function MatchmakingSettingsForm({ circle }: MatchmakingSettingsFormProps
                                         label: "SDGs",
                                         placeholder: "Search SDGs...",
                                         description: "Select the SDGs that your circle is focused on.",
-                                    }}
-                                    formField={field}
-                                    control={form.control as unknown as Control}
-                                />
-                            )}
-                        />
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Skills</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="mb-4 text-sm text-muted-foreground">
-                            Select the skills that are relevant to your circle. This helps match your circle with
-                            members who have the skills you need.
-                        </p>
-                        <Controller
-                            name="skills"
-                            control={form.control}
-                            render={({ field }) => (
-                                <DynamicField
-                                    field={{
-                                        name: "skills",
-                                        type: "skills",
-                                        label: "Skills",
-                                        placeholder: "Search skills...",
-                                        description: "Select the skills that are relevant to your circle.",
                                     }}
                                     formField={field}
                                     control={form.control as unknown as Control}

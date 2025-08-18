@@ -42,7 +42,7 @@ const settingsForms: SettingsForm[] = [
         handle: "questionnaire",
     },
     {
-        name: { user: "Causes and Skills", circle: "Causes and Skills Needed" },
+        name: "SDGs",
         handle: "matchmaking",
     },
     {
