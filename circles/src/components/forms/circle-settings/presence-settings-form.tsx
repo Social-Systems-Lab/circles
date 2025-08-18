@@ -10,12 +10,7 @@ import { useState } from "react";
 import { useForm, Controller, Control } from "react-hook-form";
 import { savePresence } from "@/app/circles/[handle]/settings/presence/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-    DynamicTextareaField,
-    DynamicSwitchField,
-    DynamicTagsField,
-    DynamicSelectField,
-} from "@/components/forms/dynamic-field";
+import { DynamicTextareaField, DynamicTagsField } from "@/components/forms/dynamic-field";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 
@@ -68,7 +63,7 @@ export function PresenceSettingsForm({ circle }: PresenceSettingsFormProps): Rea
 
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="formatted space-y-6">
                 <Card>
                     <CardHeader>
                         <CardTitle>My offers & skills</CardTitle>
@@ -99,26 +94,6 @@ export function PresenceSettingsForm({ circle }: PresenceSettingsFormProps): Rea
                                         name: "offers.skills",
                                         type: "tags",
                                         label: "Skills",
-                                    }}
-                                    formField={field}
-                                    control={form.control as unknown as Control}
-                                />
-                            )}
-                        />
-                        <Controller
-                            name="offers.visibility"
-                            control={form.control as unknown as Control}
-                            render={({ field }) => (
-                                <DynamicSelectField
-                                    field={{
-                                        name: "offers.visibility",
-                                        type: "select",
-                                        label: "Visibility",
-                                        options: [
-                                            { value: "public", label: "Public" },
-                                            { value: "members", label: "Members" },
-                                            { value: "private", label: "Private" },
-                                        ],
                                     }}
                                     formField={field}
                                     control={form.control as unknown as Control}
@@ -164,41 +139,6 @@ export function PresenceSettingsForm({ circle }: PresenceSettingsFormProps): Rea
                                 />
                             )}
                         />
-                        <Controller
-                            name="engagements.visibility"
-                            control={form.control as unknown as Control}
-                            render={({ field }) => (
-                                <DynamicSelectField
-                                    field={{
-                                        name: "engagements.visibility",
-                                        type: "select",
-                                        label: "Visibility",
-                                        options: [
-                                            { value: "public", label: "Public" },
-                                            { value: "members", label: "Members" },
-                                            { value: "private", label: "Private" },
-                                        ],
-                                    }}
-                                    formField={field}
-                                    control={form.control as unknown as Control}
-                                />
-                            )}
-                        />
-                        <Controller
-                            name="engagements.inviteEnabled"
-                            control={form.control as unknown as Control}
-                            render={({ field }) => (
-                                <DynamicSwitchField
-                                    field={{
-                                        name: "engagements.inviteEnabled",
-                                        type: "switch",
-                                        label: "Enable 'Invite to project' button on my profile",
-                                    }}
-                                    formField={field}
-                                    control={form.control as unknown as Control}
-                                />
-                            )}
-                        />
                     </CardContent>
                 </Card>
 
@@ -217,41 +157,6 @@ export function PresenceSettingsForm({ circle }: PresenceSettingsFormProps): Rea
                                         type: "textarea",
                                         label: "Current needs",
                                         maxLength: 600,
-                                    }}
-                                    formField={field}
-                                    control={form.control as unknown as Control}
-                                />
-                            )}
-                        />
-                        <Controller
-                            name="needs.visibility"
-                            control={form.control as unknown as Control}
-                            render={({ field }) => (
-                                <DynamicSelectField
-                                    field={{
-                                        name: "needs.visibility",
-                                        type: "select",
-                                        label: "Visibility",
-                                        options: [
-                                            { value: "public", label: "Public" },
-                                            { value: "members", label: "Members" },
-                                            { value: "private", label: "Private" },
-                                        ],
-                                    }}
-                                    formField={field}
-                                    control={form.control as unknown as Control}
-                                />
-                            )}
-                        />
-                        <Controller
-                            name="needs.offerHelpEnabled"
-                            control={form.control as unknown as Control}
-                            render={({ field }) => (
-                                <DynamicSwitchField
-                                    field={{
-                                        name: "needs.offerHelpEnabled",
-                                        type: "switch",
-                                        label: "Enable 'Offer to help' button on my profile",
                                     }}
                                     formField={field}
                                     control={form.control as unknown as Control}
