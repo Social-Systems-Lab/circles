@@ -302,6 +302,32 @@ export default function KamooniLandingPage() {
                 </div>
             </section>
 
+            {/* Video Section */}
+            <section className="bg-white py-12 sm:py-20">
+                <div className="container mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+                    <h2 className="mb-6 text-center text-3xl font-bold text-kam-gray-dark sm:text-4xl">
+                        Watch Kamooni in Action
+                    </h2>
+                    <p className="mx-auto mb-8 max-w-2xl text-center text-lg leading-relaxed text-kam-gray-dark/80">
+                        A quick overview of what we’re building and how you can take part.
+                    </p>
+                    <div className="relative mx-auto w-full max-w-3xl overflow-hidden rounded-xl shadow-lg ring-1 ring-black/5">
+                        {/* 16:9 responsive iframe */}
+                        <div className="relative h-0 w-full" style={{ paddingBottom: "56.25%" }}>
+                            <iframe
+                                className="absolute left-0 top-0 h-full w-full"
+                                src="https://www.youtube.com/embed/DBlJYdMKsTU"
+                                title="Kamooni video"
+                                frameBorder="0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                referrerPolicy="strict-origin-when-cross-origin"
+                                allowFullScreen
+                            />
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             {/* Who Dis? */}
             <section className="bg-white py-12 sm:py-20">
                 <div className="container mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
