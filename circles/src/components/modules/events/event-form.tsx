@@ -269,7 +269,7 @@ export default function EventForm({ circleHandle, event }: Props) {
 
             <div className="flex gap-3">
                 <Button type="submit" disabled={isPending}>
-                    {isPending ? "Saving..." : event ? "Update Event" : "Create Event"}
+                    {isPending ? "Saving..." : event ? "Update Event" : "Create Draft"}
                 </Button>
                 <Button type="button" variant="outline" onClick={() => router.back()}>
                     Cancel

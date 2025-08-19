@@ -172,7 +172,6 @@ export async function createEventAction(
 
         const canCreate = await isAuthorized(userDid, circle._id as string, features.events.create);
         if (!canCreate) return { success: false, message: "Not authorized to create events" };
-        const creatorCanReview = await isAuthorized(userDid, circle._id as string, features.events.review);
 
         const validated = createEventSchema.safeParse({
             title: formData.get("title"),
@@ -245,7 +244,7 @@ export async function createEventAction(
             description: data.description,
             images: uploadedImages,
             location: locationData,
-            stage: creatorCanReview ? "open" : "draft",
+            stage: "draft",
             userGroups: data.userGroups || [],
             isVirtual,
             virtualUrl,

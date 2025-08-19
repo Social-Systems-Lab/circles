@@ -51,7 +51,7 @@ export default async function CreateEventPage(props: PageProps) {
                         Back to Events
                     </Link>
                 </Button>
-                <h1 className="text-2xl font-bold">Create New Event</h1>
+                <h1 className="text-2xl font-bold">Create Draft</h1>
             </div>
 
             <div className="p-4">
