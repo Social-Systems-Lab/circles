@@ -4,9 +4,7 @@
 import { getEventsAction } from "@/app/circles/[handle]/events/actions";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
-import { getCircleByHandle } from "@/lib/data/circle";
-import CalendarView from "./calendar";
-import Link from "next/link";
+import EventsTabs from "./events-tabs";
 import { Circle } from "@/models/models";
 
 type Props = {
@@ -41,19 +39,7 @@ export default async function EventsModule({ circle }: Props) {
 
     return (
         <div className="space-y-4 p-2 md:p-4">
-            <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-semibold">Events</h1>
-                {canCreateEvents && (
-                    <Link
-                        href={`/circles/${circle.handle}/events/create`}
-                        className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                    >
-                        Create Event
-                    </Link>
-                )}
-            </div>
-
-            <CalendarView circleHandle={circle.handle!} events={events} />
+            <EventsTabs circleHandle={circle.handle!} events={events} canCreate={canCreateEvents} />
         </div>
     );
 }
