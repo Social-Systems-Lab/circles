@@ -193,8 +193,8 @@ export default function EventTimeline({ circleHandle, events }: Props) {
                                         <div className="header mb-3 text-lg font-semibold text-foreground">
                                             {format(monthDate, "MMMM yyyy")}
                                         </div>
-                                        {/* Grid */}
-                                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                        {/* List (single column) */}
+                                        <div className="flex flex-col gap-4">
                                             {monthEvents.map((e) => (
                                                 <EventCard key={(e as any)._id} e={e} circleHandle={circleHandle} />
                                             ))}
