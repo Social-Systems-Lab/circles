@@ -57,6 +57,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
             isPublic: circle.isPublic !== false, // Default to true if not set
             location: circle.location || {},
             socialLinks: circle.socialLinks || [],
+            websiteUrl: circle.websiteUrl || "",
         },
     });
 
@@ -73,6 +74,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
         isPublic?: boolean;
         location?: any;
         socialLinks?: any;
+        websiteUrl?: string;
     }) => {
         setIsSubmitting(true);
         try {
@@ -149,6 +151,27 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                             user: "Choose a unique handle that will identify you on the platform.",
                                         },
                                         required: true,
+                                    }}
+                                    formField={field}
+                                    control={form.control as unknown as Control}
+                                />
+                            )}
+                        />
+
+                        <Controller
+                            name="websiteUrl"
+                            control={form.control as unknown as Control}
+                            render={({ field }) => (
+                                <DynamicTextField
+                                    field={{
+                                        name: "websiteUrl",
+                                        type: "text",
+                                        label: "Website",
+                                        placeholder: "https://your-website.org",
+                                        description: {
+                                            circle: "Your community or organization website.",
+                                            user: "Your personal website.",
+                                        },
                                     }}
                                     formField={field}
                                     control={form.control as unknown as Control}

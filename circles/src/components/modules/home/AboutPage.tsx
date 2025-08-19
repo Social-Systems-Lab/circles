@@ -6,7 +6,7 @@ import { Circle } from "@/models/models";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { MapPin, Quote } from "lucide-react";
+import { MapPin, Quote, ExternalLink } from "lucide-react";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import CircleTags from "@/components/modules/circles/circle-tags";
 import { sdgs } from "@/lib/data/sdgs";
@@ -38,6 +38,7 @@ export default function AboutPage({ circle }: AboutPageProps) {
         !!circle.mission ||
         !!(circle.location && (circle.location.city || circle.location.region || circle.location.country)) ||
         !!(circle.causes && circle.causes.length > 0) ||
+        !!circle.websiteUrl ||
         !!(circle.skills && circle.skills.length > 0);
 
     const hasMainContent = !!circle.content || !!circle.description;
@@ -128,6 +129,24 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                 <div className="mb-6 w-full">
                                     <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">SDGs</div>
                                     <SdgList sdgHandles={circle.causes} className="grid-cols-4" />
+                                </div>
+                            )}
+
+                            {/* Website */}
+                            {circle.websiteUrl && (
+                                <div className="mb-6 w-full">
+                                    <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                                        Website
+                                    </div>
+                                    <a
+                                        href={circle.websiteUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-2 break-all text-[15px] text-foreground underline"
+                                    >
+                                        <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                                        <span>{circle.websiteUrl}</span>
+                                    </a>
                                 </div>
                             )}
 

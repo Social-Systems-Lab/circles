@@ -21,8 +21,17 @@ export async function saveAbout(values: {
     isPublic?: boolean;
     location?: any;
     socialLinks?: any;
+    websiteUrl?: string;
 }): Promise<FormSubmitResponse> {
     console.log("Saving circle about with values (images length):", values.images?.length);
+
+    const ensureProtocol = (url?: string) => {
+        if (!url) return undefined;
+        const trimmed = url.trim();
+        if (!trimmed) return undefined;
+        if (/^https?:\/\//i.test(trimmed)) return trimmed;
+        return `https://${trimmed}`;
+    };
 
     let circleUpdateData: Partial<Circle> = {
         _id: values._id,
@@ -35,6 +44,12 @@ export async function saveAbout(values: {
         location: values.location,
         socialLinks: values.socialLinks,
     };
+
+    // Normalize website URL and include if present
+    const normalizedWebsite = ensureProtocol(values.websiteUrl);
+    if (normalizedWebsite) {
+        circleUpdateData.websiteUrl = normalizedWebsite;
+    }
 
     // check if user is authorized to edit circle settings
     const userDid = await getAuthenticatedUserDid();

@@ -456,6 +456,7 @@ export const circleSchema = z.object({
     engagements: engagementSchema.optional(),
     needs: needsSchema.optional(),
     socialLinks: z.array(socialLinkSchema).optional(),
+    websiteUrl: z.string().url().optional(),
     completedOnboardingSteps: z.array(z.string()).optional(),
     matrixAccessToken: z.string().optional(),
     matrixUsername: z.string().optional(),
