@@ -36,9 +36,20 @@ export default async function EventDetailPage(props: PageProps) {
         notFound();
     }
 
-    // Basic edit permission (author or moderators)
+    // Permissions
     const canModerate = userDid ? await isAuthorized(userDid, circle._id as string, features.events.moderate) : false;
-    const canEdit = canModerate || (userDid && userDid === event.createdBy);
+    const canReview = userDid ? await isAuthorized(userDid, circle._id as string, features.events.review) : false;
+    const isAuthor = !!userDid && userDid === event.createdBy;
+    const canEdit = canModerate || isAuthor;
 
-    return <EventDetail circleHandle={circle.handle!} event={event} canEdit={!!canEdit} />;
+    return (
+        <EventDetail
+            circleHandle={circle.handle!}
+            event={event}
+            canEdit={!!canEdit}
+            canReview={!!canReview}
+            canModerate={!!canModerate}
+            isAuthor={isAuthor}
+        />
+    );
 }

@@ -31,6 +31,11 @@ import {
     changeEventStage as changeEventStageDb,
 } from "@/lib/data/event";
 import { upsertRsvp, cancelRsvp } from "@/lib/data/eventRsvp";
+import {
+    notifyEventSubmittedForReview,
+    notifyEventApproved,
+    notifyEventStatusChanged,
+} from "@/lib/data/eventNotifications";
 
 // ----- Types -----
 
@@ -167,6 +172,7 @@ export async function createEventAction(
 
         const canCreate = await isAuthorized(userDid, circle._id as string, features.events.create);
         if (!canCreate) return { success: false, message: "Not authorized to create events" };
+        const creatorCanReview = await isAuthorized(userDid, circle._id as string, features.events.review);
 
         const validated = createEventSchema.safeParse({
             title: formData.get("title"),
@@ -239,7 +245,7 @@ export async function createEventAction(
             description: data.description,
             images: uploadedImages,
             location: locationData,
-            stage: "review",
+            stage: creatorCanReview ? "open" : "draft",
             userGroups: data.userGroups || [],
             isVirtual,
             virtualUrl,
@@ -470,10 +476,14 @@ export async function changeEventStageAction(
 
         if (canModerate) {
             allowed = true;
-        } else if (currentStage === "review" && newStage === "published") {
+        } else if (currentStage === "draft" && newStage === "review") {
+            // Author can submit for review; reviewers can also move directly to review if needed
+            allowed = userDid === event.createdBy || canReview;
+        } else if ((currentStage === "draft" || currentStage === "review") && newStage === "open") {
+            // Reviewers can open directly from draft, or after review
             allowed = canReview;
-        } else if (currentStage === "published" && newStage === "cancelled") {
-            // allow review or moderate
+        } else if (currentStage === "open" && newStage === "cancelled") {
+            // allow review or moderate to cancel
             allowed = canReview;
         }
 
@@ -483,6 +493,38 @@ export async function changeEventStageAction(
 
         const success = await changeEventStageDb(eventId, newStage);
         if (!success) return { success: false, message: "Failed to change event stage" };
+
+        // Send notifications based on transition
+        try {
+            const actor = await getUserByDid(userDid);
+            if (actor) {
+                if (currentStage === "draft" && newStage === "review") {
+                    await notifyEventSubmittedForReview(
+                        { _id: event._id!, title: event.title, circleId: event.circleId },
+                        actor,
+                    );
+                } else if ((currentStage === "draft" || currentStage === "review") && newStage === "open") {
+                    await notifyEventApproved(
+                        { _id: event._id!, title: event.title, circleId: event.circleId, createdBy: event.createdBy },
+                        actor,
+                    );
+                } else {
+                    await notifyEventStatusChanged(
+                        {
+                            _id: event._id!,
+                            title: event.title,
+                            circleId: event.circleId,
+                            createdBy: event.createdBy,
+                            stage: newStage,
+                        },
+                        actor,
+                        currentStage,
+                    );
+                }
+            }
+        } catch (notifyErr) {
+            console.error("Error sending event stage change notifications:", notifyErr);
+        }
 
         revalidatePath(`/circles/${circleHandle}/events`);
         revalidatePath(`/circles/${circleHandle}/events/${eventId}`);

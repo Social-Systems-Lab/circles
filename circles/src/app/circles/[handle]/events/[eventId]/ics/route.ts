@@ -93,8 +93,8 @@ export async function GET(req: Request, ctx: { params: { handle: string; eventId
             return new Response("Event not found", { status: 404 });
         }
 
-        // Ensure event belongs to the circle and is published
-        if (event.circleId !== String(circle._id) || event.stage !== "published") {
+        // Ensure event belongs to the circle and is open
+        if (event.circleId !== String(circle._id) || event.stage !== "open") {
             return new Response("Event not accessible", { status: 404 });
         }
 

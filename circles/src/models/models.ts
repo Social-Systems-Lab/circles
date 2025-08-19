@@ -928,6 +928,10 @@ export type NotificationType =
     | "goal_status_changed"
     | "goal_completed" // A goal has been marked as completed
     | "proposal_to_goal" // A proposal has been converted to a goal
+    // Event Notifications
+    | "event_submitted_for_review"
+    | "event_approved"
+    | "event_status_changed"
     // Ranking Notifications
     | "ranking_stale_reminder" // User's ranking list is stale, reminder sent
     | "ranking_grace_period_ended" // User's ranking list is past grace period
@@ -981,6 +985,10 @@ export const notificationTypeValues = [
     "goal_status_changed",
     "goal_completed",
     "proposal_to_goal",
+    // Event Notifications
+    "event_submitted_for_review",
+    "event_approved",
+    "event_status_changed",
     "ranking_stale_reminder",
     "ranking_grace_period_ended",
     "user_verified",
@@ -1267,7 +1275,7 @@ export interface TaskDisplay extends Task {
 /**
  * Event stages
  */
-export const eventStageSchema = z.enum(["review", "published", "cancelled"]);
+export const eventStageSchema = z.enum(["draft", "review", "open", "cancelled"]);
 export type EventStage = z.infer<typeof eventStageSchema>;
 
 /**
@@ -1281,7 +1289,7 @@ export const eventSchema = z.object({
     updatedAt: z.date().optional(), // Track updates
     title: z.string(),
     description: z.string(),
-    stage: eventStageSchema.default("review"),
+    stage: eventStageSchema.default("draft"),
     userGroups: z.array(z.string()).default([]), // User groups that can see this event
     location: locationSchema.optional(),
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments

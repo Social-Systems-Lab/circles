@@ -4,7 +4,7 @@ import React, { useTransition } from "react";
 import { EventDisplay } from "@/models/models";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { rsvpEventAction, cancelRsvpAction } from "@/app/circles/[handle]/events/actions";
+import { rsvpEventAction, cancelRsvpAction, changeEventStageAction } from "@/app/circles/[handle]/events/actions";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 
@@ -12,6 +12,9 @@ type Props = {
     circleHandle: string;
     event: EventDisplay;
     canEdit?: boolean;
+    canReview?: boolean;
+    canModerate?: boolean;
+    isAuthor?: boolean;
 };
 
 function googleCalendarUrl(e: EventDisplay) {
@@ -31,7 +34,7 @@ function googleCalendarUrl(e: EventDisplay) {
     return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
-export default function EventDetail({ circleHandle, event, canEdit }: Props) {
+export default function EventDetail({ circleHandle, event, canEdit, canReview, canModerate, isAuthor }: Props) {
     const { toast } = useToast();
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
@@ -63,6 +66,43 @@ export default function EventDetail({ circleHandle, event, canEdit }: Props) {
     const startFmt = event.startAt ? format(new Date(event.startAt), "PPpp") : "";
     const endFmt = event.endAt ? format(new Date(event.endAt), "PPpp") : "";
 
+    // Stage control handlers
+    const onSubmitForReview = () => {
+        startTransition(async () => {
+            const res = await changeEventStageAction(circleHandle, (event as any)._id?.toString?.() || "", "review");
+            if (res.success) {
+                toast({ title: "Event submitted for review" });
+                router.refresh();
+            } else {
+                toast({ title: "Error", description: res.message || "Failed to submit", variant: "destructive" });
+            }
+        });
+    };
+
+    const onOpenNow = () => {
+        startTransition(async () => {
+            const res = await changeEventStageAction(circleHandle, (event as any)._id?.toString?.() || "", "open");
+            if (res.success) {
+                toast({ title: "Event opened" });
+                router.refresh();
+            } else {
+                toast({ title: "Error", description: res.message || "Failed to open", variant: "destructive" });
+            }
+        });
+    };
+
+    const onCancelEvent = () => {
+        startTransition(async () => {
+            const res = await changeEventStageAction(circleHandle, (event as any)._id?.toString?.() || "", "cancelled");
+            if (res.success) {
+                toast({ title: "Event cancelled" });
+                router.refresh();
+            } else {
+                toast({ title: "Error", description: res.message || "Failed to cancel", variant: "destructive" });
+            }
+        });
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -83,6 +123,30 @@ export default function EventDetail({ circleHandle, event, canEdit }: Props) {
                             Edit
                         </Button>
                     )}
+                </div>
+
+                {/* Stage controls */}
+                <div className="flex flex-wrap items-center gap-3 rounded-md border bg-white/50 p-3">
+                    <div className="text-sm text-muted-foreground">
+                        Status: <span className="font-medium capitalize">{event.stage}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        {event.stage === "draft" && (isAuthor || canReview) && (
+                            <Button disabled={isPending} variant="secondary" onClick={onSubmitForReview}>
+                                Submit for review
+                            </Button>
+                        )}
+                        {(event.stage === "draft" || event.stage === "review") && canReview && (
+                            <Button disabled={isPending} onClick={onOpenNow}>
+                                Open
+                            </Button>
+                        )}
+                        {event.stage === "open" && (canReview || canModerate) && (
+                            <Button disabled={isPending} variant="destructive" onClick={onCancelEvent}>
+                                Cancel
+                            </Button>
+                        )}
+                    </div>
                 </div>
             </div>
 

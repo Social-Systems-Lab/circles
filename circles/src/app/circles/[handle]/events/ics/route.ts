@@ -82,7 +82,7 @@ export async function GET(req: Request, ctx: { params: { handle: string } }): Pr
         const circleIdStr = String(circle._id);
         const events = await Events.find({
             circleId: circleIdStr,
-            stage: "published",
+            stage: "open",
             endAt: { $gte: now },
         })
             .sort({ startAt: 1 })
