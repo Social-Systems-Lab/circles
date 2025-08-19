@@ -216,17 +216,17 @@ export const postSchema = z.object({
     highlightedCommentId: z.string().optional(),
     comments: z.number().default(0),
     mentions: z.array(mentionSchema).optional(),
-    postType: z.enum(["post", "goal", "task", "issue", "proposal"]).optional(), // To identify shadow posts for projects
+    postType: z.enum(["post", "goal", "task", "issue", "proposal", "event"]).optional(), // To identify shadow posts for projects
     userGroups: z.array(z.string()).default([]), // User groups that can see this post
     parentItemId: z.string().optional(), // ID of the parent Goal, Task, Issue, or Proposal for shadow posts
-    parentItemType: z.enum(["goal", "task", "issue", "proposal"]).optional(), // Type of the parent item
+    parentItemType: z.enum(["goal", "task", "issue", "proposal", "event"]).optional(), // Type of the parent item
     // Link Preview Fields
     linkPreviewUrl: z.string().url().optional(),
     linkPreviewTitle: z.string().optional(),
     linkPreviewDescription: z.string().optional(),
     linkPreviewImage: fileInfoSchema.optional(),
     // Internal Link Preview Fields
-    internalPreviewType: z.enum(["circle", "post", "proposal", "issue", "task", "goal"]).optional(),
+    internalPreviewType: z.enum(["circle", "post", "proposal", "issue", "task", "goal", "event"]).optional(),
     internalPreviewId: z.string().optional(), // Handle for circle, ID for others
     internalPreviewUrl: z.string().url().optional(),
     sdgs: z.array(z.string()).optional(),
@@ -545,6 +545,17 @@ export type TaskPermissions = {
     canAssign: boolean;
     canResolve: boolean;
     canComment: boolean;
+};
+
+/**
+ * Define Permissions type for Events (mirroring IssuePermissions, without assign/resolve)
+ */
+export type EventPermissions = {
+    canModerate: boolean;
+    canReview: boolean;
+    canComment: boolean;
+    canCreate: boolean;
+    canRSVP: boolean;
 };
 
 // Define Permissions type for Goals (mirroring IssuePermissions)
@@ -1252,6 +1263,70 @@ export interface TaskDisplay extends Task {
     rank?: number; // Aggregated task rank
     goal?: GoalDisplay; // Associated goal details
 }
+
+/**
+ * Event stages
+ */
+export const eventStageSchema = z.enum(["review", "published", "cancelled"]);
+export type EventStage = z.infer<typeof eventStageSchema>;
+
+/**
+ * Event model
+ */
+export const eventSchema = z.object({
+    _id: z.any().optional(),
+    circleId: z.string(),
+    createdBy: didSchema,
+    createdAt: z.date(),
+    updatedAt: z.date().optional(), // Track updates
+    title: z.string(),
+    description: z.string(),
+    stage: eventStageSchema.default("review"),
+    userGroups: z.array(z.string()).default([]), // User groups that can see this event
+    location: locationSchema.optional(),
+    commentPostId: z.string().optional(), // Optional link to a shadow post for comments
+    images: z.array(mediaSchema).optional(), // Optional images/media attached to the event
+    // Format
+    isVirtual: z.boolean().optional(),
+    virtualUrl: z.string().url().optional(),
+    isHybrid: z.boolean().optional(),
+    // Schedule
+    startAt: z.date(),
+    endAt: z.date(),
+    allDay: z.boolean().optional(),
+    // Classification
+    categories: z.array(z.string()).optional(),
+    causes: z.array(z.string()).optional(),
+    // Capacity
+    capacity: z.number().optional(),
+});
+
+export type Event = z.infer<typeof eventSchema>;
+
+/**
+ * Display type for Events
+ */
+export interface EventDisplay extends Event {
+    author: Circle; // Creator's details
+    circle?: Circle; // Circle details
+    attendees?: number; // Aggregated RSVP count (e.g., 'going')
+    userRsvpStatus?: "going" | "interested" | "none"; // Current user RSVP status
+}
+
+/**
+ * Event RSVP model
+ */
+export const eventRsvpSchema = z.object({
+    _id: z.any().optional(),
+    eventId: z.string(),
+    circleId: z.string(),
+    userDid: didSchema,
+    status: z.enum(["going", "interested", "cancelled", "waitlist"]),
+    selectedRoles: z.array(z.string()).optional(), // Optional roles/chores
+    createdAt: z.date(),
+    updatedAt: z.date(),
+});
+export type EventRsvp = z.infer<typeof eventRsvpSchema>;
 
 // Goal stages
 export const goalStageSchema = z.enum(["review", "open", "completed"]); // Replaced "resolved" with "completed"

@@ -1,0 +1,166 @@
+"use client";
+
+import React, { useTransition } from "react";
+import { EventDisplay } from "@/models/models";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/use-toast";
+import { rsvpEventAction, cancelRsvpAction } from "@/app/circles/[handle]/events/actions";
+import { useRouter } from "next/navigation";
+import { format } from "date-fns";
+
+type Props = {
+    circleHandle: string;
+    event: EventDisplay;
+    canEdit?: boolean;
+};
+
+function googleCalendarUrl(e: EventDisplay) {
+    const formatGoogle = (d?: Date) => (d ? format(new Date(d), "yyyyMMdd'T'HHmmss'Z'") : "");
+    const dates = `${formatGoogle(e.startAt as any)}/${formatGoogle(e.endAt as any)}`;
+    const params = new URLSearchParams({
+        action: "TEMPLATE",
+        text: e.title || "Event",
+        details: e.description || "",
+        dates,
+    });
+    if (e.isVirtual && e.virtualUrl) {
+        params.set("location", e.virtualUrl);
+    } else if (e.location?.city) {
+        params.set("location", e.location.city);
+    }
+    return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+export default function EventDetail({ circleHandle, event, canEdit }: Props) {
+    const { toast } = useToast();
+    const router = useRouter();
+    const [isPending, startTransition] = useTransition();
+
+    const onRsvp = (status: "going" | "interested" | "waitlist") => {
+        startTransition(async () => {
+            const res = await rsvpEventAction(circleHandle, (event as any)._id?.toString?.() || "", status);
+            if (res.success) {
+                toast({ title: "RSVP updated" });
+                router.refresh();
+            } else {
+                toast({ title: "Error", description: res.message || "Failed to RSVP", variant: "destructive" });
+            }
+        });
+    };
+
+    const onCancelRsvp = () => {
+        startTransition(async () => {
+            const res = await cancelRsvpAction(circleHandle, (event as any)._id?.toString?.() || "");
+            if (res.success) {
+                toast({ title: "RSVP cancelled" });
+                router.refresh();
+            } else {
+                toast({ title: "Error", description: res.message || "Failed to cancel RSVP", variant: "destructive" });
+            }
+        });
+    };
+
+    const startFmt = event.startAt ? format(new Date(event.startAt), "PPpp") : "";
+    const endFmt = event.endAt ? format(new Date(event.endAt), "PPpp") : "";
+
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <h1 className="text-2xl font-semibold">{event.title}</h1>
+                <div className="flex gap-2">
+                    <a href={googleCalendarUrl(event)} target="_blank" rel="noreferrer">
+                        <Button variant="outline">Add to Google Calendar</Button>
+                    </a>
+                    {canEdit && (
+                        <Button
+                            variant="outline"
+                            onClick={() =>
+                                router.push(
+                                    `/circles/${circleHandle}/events/${(event as any)._id?.toString?.() || ""}/edit`,
+                                )
+                            }
+                        >
+                            Edit
+                        </Button>
+                    )}
+                </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-4 md:col-span-2">
+                    <div className="rounded-md border p-4">
+                        <div className="text-sm text-muted-foreground">When</div>
+                        <div className="font-medium">
+                            {startFmt}
+                            {endFmt ? ` — ${endFmt}` : ""}
+                            {event.allDay ? " (All day)" : ""}
+                        </div>
+                    </div>
+
+                    <div className="rounded-md border p-4">
+                        <div className="text-sm text-muted-foreground">Where</div>
+                        <div className="font-medium">
+                            {event.isVirtual && event.virtualUrl ? (
+                                <a className="text-blue-600 underline" href={event.virtualUrl} target="_blank">
+                                    Join virtual event
+                                </a>
+                            ) : event.location ? (
+                                <>
+                                    {event.location.city || event.location.region || event.location.country
+                                        ? [event.location.city, event.location.region, event.location.country]
+                                              .filter(Boolean)
+                                              .join(", ")
+                                        : "Location provided"}
+                                </>
+                            ) : (
+                                "Not specified"
+                            )}
+                            {event.isHybrid ? <div className="text-xs text-muted-foreground">Hybrid</div> : null}
+                        </div>
+                    </div>
+
+                    <div className="rounded-md border p-4">
+                        <div className="prose max-w-none whitespace-pre-wrap">{event.description}</div>
+                    </div>
+
+                    {event.images && event.images.length > 0 && (
+                        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                            {event.images.map((img, i) => (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                    key={img.fileInfo.url + i}
+                                    src={img.fileInfo.url}
+                                    alt={event.title || "Event image"}
+                                    className="h-40 w-full rounded-md object-cover"
+                                />
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="space-y-3">
+                    <div className="rounded-md border p-4">
+                        <div className="mb-2 text-sm text-muted-foreground">RSVP</div>
+                        <div className="flex flex-wrap gap-2">
+                            <Button disabled={isPending} onClick={() => onRsvp("going")}>
+                                I'm going
+                            </Button>
+                            <Button variant="outline" disabled={isPending} onClick={() => onRsvp("interested")}>
+                                Interested
+                            </Button>
+                            <Button variant="ghost" disabled={isPending} onClick={onCancelRsvp}>
+                                Cancel RSVP
+                            </Button>
+                        </div>
+                        <div className="mt-3 text-sm text-muted-foreground">
+                            Attendees (going): {event.attendees ?? 0}
+                        </div>
+                        {event.userRsvpStatus && event.userRsvpStatus !== "none" && (
+                            <div className="mt-1 text-sm">Your status: {event.userRsvpStatus}</div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}

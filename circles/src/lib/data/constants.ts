@@ -278,6 +278,62 @@ export const features = {
             needsToBeVerified: true,
         } as Feature,
     },
+    events: {
+        view: {
+            name: "View Events",
+            handle: "view",
+            description: "View the events list and details",
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+            module: "events",
+        } as Feature,
+        update: {
+            name: "Update Events",
+            handle: "update",
+            description: "Edit existing events",
+            defaultUserGroups: ["admins", "moderators"],
+            module: "events",
+            needsToBeVerified: true,
+        } as Feature,
+        create: {
+            name: "Create Events",
+            handle: "create",
+            description: "Create a new event",
+            defaultUserGroups: ["admins", "moderators"],
+            module: "events",
+            needsToBeVerified: true,
+        } as Feature,
+        review: {
+            name: "Review Events",
+            handle: "review",
+            description: "Review submitted events and publish them",
+            defaultUserGroups: ["admins", "moderators"],
+            module: "events",
+            needsToBeVerified: true,
+        } as Feature,
+        moderate: {
+            name: "Moderate Events",
+            handle: "moderate",
+            description: "Edit or delete any event",
+            defaultUserGroups: ["admins"],
+            module: "events",
+            needsToBeVerified: true,
+        } as Feature,
+        comment: {
+            name: "Comment on Events",
+            handle: "comment",
+            description: "Add comments to events",
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+            module: "events",
+            needsToBeVerified: true,
+        } as Feature,
+        rsvp: {
+            name: "RSVP to Events",
+            handle: "rsvp",
+            description: "RSVP or mark interest for events",
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+            module: "events",
+        } as Feature,
+    },
     proposals: {
         view: {
             name: "View Proposals",
@@ -521,6 +577,12 @@ export const modules: ModuleInfo[] = [
         handle: "tasks",
         description:
             "Manage and track tasks within the circle. Users can create tasks, assign them, and monitor progress through various stages.",
+    },
+    {
+        name: "Events",
+        handle: "events",
+        description:
+            "Create and discover upcoming meetups, cleanups and gatherings. Publish event details, locations or virtual links, and manage RSVPs with calendar integration.",
     },
     {
         name: "Proposals",

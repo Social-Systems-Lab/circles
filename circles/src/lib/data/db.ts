@@ -22,6 +22,8 @@ import {
     GoalMember, // Added GoalMember model
     UserNotificationSetting, // Added UserNotificationSetting model
     DefaultNotificationSetting, // Added DefaultNotificationSetting model
+    Event,
+    EventRsvp,
 } from "@/models/models";
 import { AggregateRank } from "./ranking";
 
@@ -54,6 +56,8 @@ let Proposals: Collection<Proposal>;
 let Issues: Collection<Issue>;
 let Tasks: Collection<Task>;
 let Goals: Collection<Goal>;
+let Events: Collection<Event>;
+let EventRsvps: Collection<EventRsvp>;
 let GoalMembers: Collection<GoalMember>; // Added GoalMembers collection
 let RankedLists: Collection<RankedList>;
 let AggregateRanks: Collection<AggregateRank>;
@@ -89,6 +93,8 @@ if (process.env.IS_BUILD !== "true") {
     Issues = db.collection<Issue>("issues");
     Tasks = db.collection<Task>("tasks");
     Goals = db.collection<Goal>("goals");
+    Events = db.collection<Event>("events");
+    EventRsvps = db.collection<EventRsvp>("eventRsvps");
     GoalMembers = db.collection<GoalMember>("goalMembers"); // Initialize GoalMembers
     RankedLists = db.collection<RankedList>("rankedLists");
     AggregateRanks = db.collection<AggregateRank>("aggregateRanks");
@@ -117,6 +123,8 @@ export {
     Issues,
     Tasks,
     Goals,
+    Events,
+    EventRsvps,
     GoalMembers, // Export GoalMembers
     RankedLists,
     AggregateRanks,
