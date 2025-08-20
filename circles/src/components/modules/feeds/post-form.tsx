@@ -600,16 +600,22 @@ export function PostForm({
                                     </div>
                                 </div>
                             )}
-                            <Input
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                placeholder="Title"
-                                className="mb-3 text-2xl font-semibold placeholder:text-gray-400"
-                            />
+                            <div className="mb-3">
+                                <Label className="mb-1 block text-sm font-medium text-gray-600">Title</Label>
+                                <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
+                                    <Input
+                                        value={title}
+                                        onChange={(e) => setTitle(e.target.value)}
+                                        placeholder="Enter a clear announcement title..."
+                                        className="border-0 p-0 text-2xl font-semibold shadow-none placeholder:text-gray-400 focus-visible:ring-0"
+                                    />
+                                </div>
+                            </div>
+                            <Label className="mb-1 block text-sm font-medium text-gray-600">Content</Label>
                             <MentionsInput
                                 value={postContent}
                                 onChange={(e) => setPostContent(e.target.value)}
-                                placeholder="Create announcement..."
+                                placeholder="Write your announcement..."
                                 className="flex-grow"
                                 autoFocus
                                 style={postMentionsInputStyle}

@@ -760,7 +760,7 @@ export const PostItem = ({
             {/* Title */}
             {!hideContent && (
                 <div className="pl-4 pr-4 pt-4">
-                    {post.title && <h3 className="text-xl font-semibold">{post.title}</h3>}
+                    {post.title && <div className="text-xl font-semibold">{post.title}</div>}
                     <div className="text-sm text-gray-500">{formattedDate}</div>
                 </div>
             )}
