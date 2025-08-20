@@ -5,7 +5,6 @@
 import { FeedComponent } from "./feed";
 import { getPostsAction, getAggregatePostsAction, getFeedByHandleAction } from "./actions";
 import { Circle, SortingOptions, Cause as SDG, PostDisplay } from "@/models/models";
-import { ListFilter } from "@/components/utils/list-filter";
 import { useState, useEffect, useTransition, useCallback } from "react";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";

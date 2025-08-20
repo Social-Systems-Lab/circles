@@ -465,6 +465,7 @@ export async function getPostsFromMultipleFeeds(
             $project: {
                 _id: { $toString: "$_id" },
                 feedId: 1,
+                title: 1,
                 content: 1,
                 createdAt: 1,
                 reactions: 1,
@@ -882,6 +883,7 @@ export const getPosts = async (
             $project: {
                 _id: { $toString: "$_id" },
                 feedId: 1,
+                title: 1,
                 content: 1,
                 createdAt: 1,
                 reactions: 1,

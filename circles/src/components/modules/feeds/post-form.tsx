@@ -1,6 +1,7 @@
 // post-form.tsx
 import React, { useState, useCallback, useEffect, useTransition, useRef, useMemo } from "react";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import {
     ImageIcon,
     MapPinIcon,
@@ -117,21 +118,24 @@ type InternalPreviewDisplayData = {
 const postMentionsInputStyle = {
     control: {
         backgroundColor: "rgb(255 255 255)",
+        border: "1px solid #e5e7eb",
+        borderRadius: "12px",
+        minHeight: "200px",
     },
     input: {
         padding: "0 0",
         outline: "none",
-        fontSize: "1.125rem",
-        lineHeight: "1.75rem",
-        paddingTop: "1.5rem",
+        fontSize: "1.25rem",
+        lineHeight: "1.875rem",
+        paddingTop: "0.75rem",
         overflowWrap: "break-word" as const,
         wordBreak: "break-word" as const,
     },
     highlighter: {
         padding: "0 0",
-        paddingTop: "1.5rem",
-        fontSize: "1.125rem",
-        lineHeight: "1.75rem",
+        paddingTop: "0.75rem",
+        fontSize: "1.25rem",
+        lineHeight: "1.875rem",
         overflowWrap: "break-word" as const,
         wordBreak: "break-word" as const,
     },
@@ -186,6 +190,7 @@ export function PostForm({
     initialSelectedCircleId,
 }: PostFormProps) {
     const [postContent, setPostContent] = useState(initialPost?.content || "");
+    const [title, setTitle] = useState(initialPost?.title || "");
     const [showPollCreator, setShowPollCreator] = useState(false);
     const [selectedCircleId, setSelectedCircleId] = useState<string | null>(initialSelectedCircleId || null);
     const [selectedCircle, setSelectedCircle] = useState<Circle | null>(null);
@@ -482,6 +487,14 @@ export function PostForm({
     const handleSubmit = async () => {
         startTransition(async () => {
             const formData = new FormData();
+            if (!title.trim()) {
+                toast({
+                    title: "Error",
+                    description: "Please enter a title for your announcement.",
+                    variant: "destructive",
+                });
+                return;
+            }
             if (!selectedCircleId) {
                 toast({
                     title: "Error",
@@ -490,6 +503,7 @@ export function PostForm({
                 });
                 return;
             }
+            formData.append("title", title.trim());
             formData.append("content", postContent);
             userGroups.forEach((group) => {
                 formData.append("userGroups", group);
@@ -586,6 +600,12 @@ export function PostForm({
                                     </div>
                                 </div>
                             )}
+                            <Input
+                                value={title}
+                                onChange={(e) => setTitle(e.target.value)}
+                                placeholder="Title"
+                                className="mb-3 text-2xl font-semibold placeholder:text-gray-400"
+                            />
                             <MentionsInput
                                 value={postContent}
                                 onChange={(e) => setPostContent(e.target.value)}

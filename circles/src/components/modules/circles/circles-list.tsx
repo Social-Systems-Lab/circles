@@ -179,7 +179,11 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
 
                 {filteredCircles.length === 0 && activeTab === "following" && (
                     <div className="flex h-full flex-col items-center justify-center">
-                        <Image src={emptyFeed} alt="No posts yet" width={isMobile ? 230 : 300} />
+                        <Image
+                            src={emptyFeed}
+                            alt={`No ${isProjectsList ? "projects" : inUser ? "users" : "circles"} yet`}
+                            width={isMobile ? 230 : 300}
+                        />
                         <h4>No {isProjectsList ? "projects" : inUser ? "users" : "circles"}</h4>
                         <div className="max-w-[700px] pl-4 pr-4">
                             {isProjectsList

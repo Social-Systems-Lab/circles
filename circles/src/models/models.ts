@@ -210,6 +210,7 @@ export const postSchema = z.object({
     createdAt: z.date(),
     editedAt: z.date().optional(),
     content: z.string(),
+    title: z.string().optional(),
     reactions: z.record(z.string(), z.number()).default({}),
     location: locationSchema.optional(),
     media: z.array(mediaSchema).optional(),

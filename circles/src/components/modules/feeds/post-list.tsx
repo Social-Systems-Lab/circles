@@ -657,12 +657,116 @@ export const PostItem = ({
     return (
         // Added min-w-0 and overflow-hidden to allow shrinking and clip content
         <div
-            className={`flex min-w-0 flex-col gap-4 overflow-hidden ${
+            className={`formatted relative flex min-w-0 flex-col gap-4 overflow-hidden ${
                 isCompact || inPreview || embedded ? "" : "rounded-[15px] border-0 shadow-lg"
             } ${embedded ? "" : "bg-white"}`}
         >
-            {/* Header with user information */}
+            {(isAuthor || canModerate) && (
+                <div className="absolute right-2 top-2 z-10">
+                    <DropdownMenu modal={false} open={openDropdown} onOpenChange={setOpenDropdown}>
+                        <DropdownMenuTrigger asChild onClick={(event) => event.stopPropagation()}>
+                            <Button variant="ghost" size="icon" className="rounded-full">
+                                <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            {isAuthor && (
+                                <Dialog onOpenChange={(open) => setOpenDropdown(open)}>
+                                    <DialogTrigger asChild>
+                                        <DropdownMenuItem
+                                            onSelect={(e) => {
+                                                e.stopPropagation();
+                                                e.preventDefault();
+                                            }}
+                                        >
+                                            <Edit className="mr-2 h-4 w-4" />
+                                            <div>Edit</div>
+                                        </DropdownMenuItem>
+                                    </DialogTrigger>
+                                    <DialogContent
+                                        className="h-[90vh] w-[95vw] max-w-3xl overflow-hidden rounded-[15px] p-0"
+                                        onInteractOutside={(e) => {
+                                            e.preventDefault();
+                                        }}
+                                    >
+                                        <div className="hidden">
+                                            <DialogTitle>Edit announcement</DialogTitle>
+                                        </div>
+                                        <PostForm
+                                            user={user!}
+                                            initialPost={post}
+                                            onSubmit={async (formData, targetCircleId) => {
+                                                await handleEditSubmit(formData);
+                                            }}
+                                            onCancel={() => setOpenDropdown(false)}
+                                            moduleHandle="feed"
+                                            createFeatureHandle="post"
+                                            itemKey="post"
+                                        />
+                                    </DialogContent>
+                                </Dialog>
+                            )}
+                            <Dialog onOpenChange={(open) => setOpenDropdown(open)}>
+                                <DialogTrigger asChild>
+                                    <DropdownMenuItem
+                                        onSelect={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                        }}
+                                    >
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        <div>Delete</div>
+                                    </DropdownMenuItem>
+                                </DialogTrigger>
+                                <DialogContent
+                                    onInteractOutside={(e) => {
+                                        e.preventDefault();
+                                    }}
+                                >
+                                    <DialogHeader>
+                                        <DialogTitle>Delete Announcement</DialogTitle>
+                                        <DialogDescription>
+                                            Are you sure you want to delete this announcement? This action cannot be
+                                            undone.
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <DialogFooter>
+                                        <DialogClose asChild>
+                                            <Button variant="outline">Cancel</Button>
+                                        </DialogClose>
+                                        <Button
+                                            variant="destructive"
+                                            onClick={handleDeleteConfirm}
+                                            disabled={isPending}
+                                        >
+                                            {isPending ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    Deleting...
+                                                </>
+                                            ) : (
+                                                <>Delete</>
+                                            )}
+                                        </Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
+            )}
+            {/* Title */}
             {!hideContent && (
+                <div className="pl-4 pr-4 pt-4">
+                    {post.title && <h3 className="text-xl font-semibold">{post.title}</h3>}
+                    <div className="text-sm text-gray-500">{formattedDate}</div>
+                </div>
+            )}
+
+            {/* Header with user information */}
+            {false && (
                 <div
                     className="flex cursor-pointer items-center justify-between pl-4 pr-4 pt-4"
                     onClick={(e) => {
@@ -670,11 +774,11 @@ export const PostItem = ({
                         handlePostClick();
                     }}
                 >
-                    {isAggregateFeed && post.circle && post.circle._id !== post.author._id ? (
+                    {isAggregateFeed && post.circle && post.circle?._id !== post.author._id ? (
                         // New layout for aggregate feed posts in a different circle
                         <div className="flex items-center gap-4">
                             <div className="relative h-10 w-10">
-                                <CirclePicture circle={post.circle} size="40px" openPreview={true} />
+                                <CirclePicture circle={post.circle!} size="40px" openPreview={true} />
                                 <div
                                     className="absolute bottom-[-4px] right-[-4px] cursor-pointer rounded-full border-2 border-white"
                                     onClick={(e) => {
@@ -697,7 +801,7 @@ export const PostItem = ({
                                         handleCircleClick(post.circle!); // post.circle is checked in condition
                                     }}
                                 >
-                                    {post.circle.name}
+                                    {post.circle!.name}
                                     {userGroupName && (
                                         <Badge variant="secondary" className="ml-2">
                                             {userGroupName}
@@ -915,6 +1019,94 @@ export const PostItem = ({
                                         }`}
                                     />
                                 ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Author (moved below content) */}
+            {!hideContent && (
+                <div
+                    className="flex items-center justify-end pl-4 pr-4"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        handlePostClick();
+                    }}
+                >
+                    {isAggregateFeed && post.circle && post.circle?._id !== post.author._id ? (
+                        <div className="flex items-center gap-4">
+                            <div className="relative h-10 w-10">
+                                <CirclePicture circle={post.circle!} size="40px" openPreview={true} />
+                                <div
+                                    className="absolute bottom-[-4px] right-[-4px] cursor-pointer rounded-full border-2 border-white"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAuthorClick(post.author);
+                                    }}
+                                >
+                                    <UserPicture
+                                        name={post.author.name}
+                                        picture={post.author.picture?.url}
+                                        size="24px"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex flex-col">
+                                <div
+                                    className="flex cursor-pointer flex-row items-center font-semibold"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleCircleClick(post.circle!);
+                                    }}
+                                >
+                                    {post.circle!.name}
+                                    {userGroupName && (
+                                        <Badge variant="secondary" className="ml-2">
+                                            {userGroupName}
+                                        </Badge>
+                                    )}
+                                </div>
+                                <div
+                                    className="cursor-pointer text-sm text-gray-500"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAuthorClick(post.author);
+                                    }}
+                                >
+                                    {post.author.name} • {formattedDate}
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-4">
+                            <UserPicture
+                                name={post.author?.name}
+                                picture={post.author?.picture?.url}
+                                circleType={post.author?.circleType}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAuthorClick(post.author);
+                                }}
+                            />
+                            <div className="flex flex-col">
+                                <div
+                                    className="flex cursor-pointer flex-row items-center font-semibold"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAuthorClick(post.author);
+                                    }}
+                                >
+                                    <UserBadge user={post.author} />
+                                    {userGroupName && (
+                                        <Badge variant="secondary" className="ml-2">
+                                            {userGroupName}
+                                        </Badge>
+                                    )}
+                                </div>
+                                <div className="flex cursor-pointer items-center text-sm text-gray-500">
+                                    {formattedDate}
+                                </div>
                             </div>
                         </div>
                     )}

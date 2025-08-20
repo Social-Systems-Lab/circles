@@ -57,7 +57,7 @@ export function FeedPostDialog() {
     return (
         <Dialog open={dialogState.isOpen} onOpenChange={handleClose}>
             <DialogContent
-                className="z-[110] flex h-full flex-col rounded-[15px] bg-white p-0 sm:h-auto sm:max-w-[425px] sm:rounded-[15px]"
+                className="z-[110] flex h-[90vh] w-[95vw] max-w-3xl flex-col rounded-[15px] bg-white p-0"
                 onInteractOutside={(e) => {
                     e.preventDefault();
                 }}
