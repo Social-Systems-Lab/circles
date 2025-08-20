@@ -580,8 +580,8 @@ export function PostForm({
                                     <div className="flex items-center">
                                         <Info className="mr-2 h-5 w-5 flex-shrink-0" />
                                         <p className="mt-0 pt-0" style={{ paddingTop: 0, marginTop: 0 }}>
-                                            Your account is not verified. Posts from unverified accounts are not shown
-                                            to other users until the account is verified.
+                                            Your account is not verified. Announcements from unverified accounts are not
+                                            shown to other users until the account is verified.
                                         </p>
                                     </div>
                                 </div>
@@ -589,7 +589,7 @@ export function PostForm({
                             <MentionsInput
                                 value={postContent}
                                 onChange={(e) => setPostContent(e.target.value)}
-                                placeholder="Share your story..."
+                                placeholder="Create announcement..."
                                 className="flex-grow"
                                 autoFocus
                                 style={postMentionsInputStyle}
@@ -873,10 +873,10 @@ export function PostForm({
                                     {isActuallySubmitting ? (
                                         <>
                                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                            {initialPost ? "Updating..." : "Posting..."}
+                                            {initialPost ? "Updating..." : "Announcing..."}
                                         </>
                                     ) : (
-                                        <>{initialPost ? "Update" : "Post"}</>
+                                        <>{initialPost ? "Update" : "Announce"}</>
                                     )}
                                 </Button>
                             </div>
@@ -934,7 +934,7 @@ export function PostForm({
                         </div>
                         <div className="text-sm text-gray-600">
                             Your default audience is <span className="font-semibold">Everyone</span> but you can change
-                            the audience for this post.
+                            the audience for this announcement.
                         </div>
                         <div className="max-h-[300px] space-y-3 overflow-y-auto py-2">
                             <div className="flex items-center rounded-lg p-2 hover:bg-gray-100">

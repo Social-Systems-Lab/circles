@@ -405,16 +405,16 @@ export const ContentPreview: React.FC = () => {
             case "post": {
                 const props = contentPreview.props as PostItemProps | undefined;
                 if (!props) {
-                    console.error("Post preview missing props data:", contentPreview.content, props);
-                    return <div className="p-4 text-red-500">Error: Missing props data for post preview.</div>;
+                    console.error("Announcement preview missing props data:", contentPreview.content, props);
+                    return <div className="p-4 text-red-500">Error: Missing props data for announcement preview.</div>;
                 }
                 if (!props.post || !props.circle) {
                     console.error(
-                        "Post preview missing essential post or circle data in props:",
+                        "Announcement preview missing essential announcement or circle data in props:",
                         contentPreview.content,
                         props,
                     );
-                    return <div className="p-4 text-red-500">Error: Missing data for post preview.</div>;
+                    return <div className="p-4 text-red-500">Error: Missing data for announcement preview.</div>;
                 }
                 return (
                     <PostPreview

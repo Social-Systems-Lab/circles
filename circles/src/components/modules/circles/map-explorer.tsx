@@ -776,7 +776,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                                 <MdOutlineTravelExplore className="h-4 w-4" /> Explore
                                             </Button>
                                             <Button onClick={goToFeed} className="mt-4 gap-2">
-                                                <Home className="h-4 w-4" /> Go to feed
+                                                <Home className="h-4 w-4" /> Go to Announcements
                                             </Button>
                                         </div>
                                     </motion.div>
@@ -797,7 +797,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                         <MdOutlineTravelExplore className="h-4 w-4" /> Explore
                                     </Button>
                                     <Button onClick={goToFeed} className="mt-4 gap-2">
-                                        <Home className="h-4 w-4" /> Go to feed
+                                        <Home className="h-4 w-4" /> Go to Announcements
                                     </Button>
                                 </div>
                             </motion.div>
@@ -874,7 +874,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                         <div className="relative flex-1 overflow-hidden pl-2">
                                             <div className="truncate p-0 text-sm font-medium">
                                                 {/* Handle name based on type */}
-                                                {"name" in item && item.name ? item.name : "Post"}
+                                                {"name" in item && item.name ? item.name : "Announcement"}
                                             </div>
                                             <div className="mt-1 line-clamp-2 p-0 text-xs text-gray-500">
                                                 {/* Handle description/content/mission based on type */}
