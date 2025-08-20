@@ -528,7 +528,7 @@ export const serverSettingsSchema = z.object({
 
 export type ServerSettings = z.infer<typeof serverSettingsSchema>;
 
-export type Content = Circle | MemberDisplay | PostDisplay;
+export type Content = Circle | MemberDisplay | PostDisplay | EventDisplay;
 
 // Define Permissions type based on what IssuesModule passes
 export type IssuePermissions = {

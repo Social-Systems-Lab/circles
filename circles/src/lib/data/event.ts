@@ -505,3 +505,171 @@ export const changeEventStage = async (eventId: string, newStage: EventStage): P
         return false;
     }
 };
+
+/**
+ * Get open events across all circles for map display.
+ * Filters by optional date range overlap or, if no range provided, to upcoming (endAt >= now).
+ * Ensures events have a location with lngLat.
+ */
+export const getOpenEventsForMap = async (userDid: string, range?: Range): Promise<EventDisplay[]> => {
+    try {
+        const dateMatch = buildRangeMatch(range);
+        const now = new Date();
+
+        // Base match: must be open and have a geocoded point
+        const baseMatch: any = {
+            stage: "open",
+            "location.lngLat": { $exists: true },
+        };
+
+        // Apply date overlap if provided, otherwise only upcoming
+        if (range?.from || range?.to) {
+            Object.assign(baseMatch, dateMatch);
+        } else {
+            baseMatch.endAt = { $gte: now };
+        }
+
+        const events = (await Events.aggregate([
+            { $match: baseMatch },
+
+            // Author
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { authorDid: "$createdBy" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$did", "$$authorDid"] },
+                                        { $eq: ["$circleType", "user"] },
+                                        { $ne: ["$$authorDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" },
+                            },
+                        },
+                    ],
+                    as: "authorDetails",
+                },
+            },
+            { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: false } },
+
+            // Circle
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { cId: { $toObjectId: "$circleId" } },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ["$_id", "$$cId"] } } },
+                        {
+                            $project: {
+                                _id: { $toString: "$_id" },
+                                name: 1,
+                                handle: 1,
+                                picture: 1,
+                                enabledModules: 1,
+                            },
+                        },
+                    ],
+                    as: "circleDetails",
+                },
+            },
+            { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
+
+            // RSVP counts
+            {
+                $lookup: {
+                    from: "eventRsvps",
+                    let: { eId: { $toString: "$_id" } },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: { $eq: ["$eventId", "$$eId"] },
+                            },
+                        },
+                        {
+                            $group: {
+                                _id: "$status",
+                                count: { $sum: 1 },
+                            },
+                        },
+                    ],
+                    as: "rsvpCounts",
+                },
+            },
+
+            // user RSVP
+            {
+                $lookup: {
+                    from: "eventRsvps",
+                    let: { eId: { $toString: "$_id" } },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [{ $eq: ["$eventId", "$$eId"] }, { $eq: ["$userDid", userDid] }],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                _id: 0,
+                                status: 1,
+                            },
+                        },
+                    ],
+                    as: "userRsvpDocs",
+                },
+            },
+
+            // Final projection
+            {
+                $project: {
+                    ...SAFE_EVENT_PROJECTION,
+                    _id: { $toString: "$_id" },
+                    author: "$authorDetails",
+                    circle: "$circleDetails",
+                    attendees: {
+                        $let: {
+                            vars: {
+                                goingObj: {
+                                    $first: {
+                                        $filter: {
+                                            input: "$rsvpCounts",
+                                            as: "rc",
+                                            cond: { $eq: ["$$rc._id", "going"] },
+                                        },
+                                    },
+                                },
+                            },
+                            in: { $ifNull: ["$$goingObj.count", 0] },
+                        },
+                    },
+                    userRsvpStatus: {
+                        $let: {
+                            vars: { firstRsvp: { $first: "$userRsvpDocs" } },
+                            in: {
+                                $ifNull: ["$$firstRsvp.status", "none"],
+                            },
+                        },
+                    },
+                },
+            },
+
+            // Sort soonest first
+            { $sort: { startAt: 1 } },
+        ]).toArray()) as EventDisplay[];
+
+        return events;
+    } catch (error) {
+        console.error("Error getting open events for map:", error);
+        throw error;
+    }
+};

@@ -50,6 +50,8 @@ import { SdgPanel } from "../search/SdgPanel";
 import Indicators from "@/components/utils/indicators";
 import ResizingDrawer from "@/components/ui/resizing-drawer"; // Correct import name
 import ContentPreview from "@/components/layout/content-preview";
+import { getOpenEventsForMapAction } from "./map-explorer-actions";
+import { EventDisplay } from "@/models/models";
 
 // mapItemToContent helper remains the same
 const mapItemToContent = (item: WithMetric<Content> | Circle | undefined): Content | null => {
@@ -103,6 +105,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const [allSearchResults, setAllSearchResults] = useState<WithMetric<Circle>[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
+    // Events dataset for map
+    const [eventsForMap, setEventsForMap] = useState<EventDisplay[]>([]);
+    const [isEventsLoading, setIsEventsLoading] = useState(false);
     // Resonance filter state (min similarity threshold) and current dataset range
     const [minSimFilter, setMinSimFilter] = useState<number | undefined>(undefined);
     const [simRange, setSimRange] = useState<{ min: number; max: number }>({ min: 0, max: 1 });
@@ -179,17 +184,18 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     }, [allSearchResults, selectedCategory, selectedSdgs]);
 
     const categoryCounts = useMemo(() => {
-        // ... (no changes) ...
+        // Include events count from eventsForMap
         const counts: { [key: string]: number } = {
             communities: 0,
             users: 0,
+            events: eventsForMap.length,
         };
         filteredSearchResults?.forEach((result) => {
             if (result.circleType === "circle") counts.communities++;
             else if (result.circleType === "user") counts.users++;
         });
         return counts;
-    }, [filteredSearchResults]);
+    }, [filteredSearchResults, eventsForMap.length]);
 
     // Determine data source for the drawer list
     // Base circles used for map/list before mapping to Content
@@ -376,6 +382,36 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     // --- Effects ---
     useEffect(() => setIsMounted(true), []);
 
+    // Fetch events for map when date range changes
+    useEffect(() => {
+        let canceled = false;
+        const load = async () => {
+            setIsEventsLoading(true);
+            try {
+                const range =
+                    dateRange && (dateRange.from || dateRange.to)
+                        ? {
+                              from: dateRange.from ? dateRange.from.toISOString() : undefined,
+                              to: dateRange.to ? dateRange.to.toISOString() : undefined,
+                          }
+                        : undefined;
+                const data = await getOpenEventsForMapAction(range as any);
+                if (!canceled) {
+                    setEventsForMap((data || []).filter((e: any) => e?.location?.lngLat));
+                }
+            } catch (e) {
+                console.error("Failed to load events for map:", e);
+                if (!canceled) setEventsForMap([]);
+            } finally {
+                if (!canceled) setIsEventsLoading(false);
+            }
+        };
+        load();
+        return () => {
+            canceled = true;
+        };
+    }, [dateRange?.from, dateRange?.to]);
+
     // Reset index when swipe circles change
     useEffect(() => setCurrentIndex(0), [displayedSwipeCircles]);
 
@@ -393,6 +429,11 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     // Update map markers when in Explore mode
     useEffect(() => {
         if (viewMode === "explore") {
+            // When "events" category is selected, show event markers
+            if (selectedCategory === "events") {
+                setDisplayedContent(eventsForMap as unknown as Content[]);
+                return;
+            }
             let circles = baseCircles;
             if (minSimFilter !== undefined) {
                 circles = circles.filter(
@@ -407,7 +448,16 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 .filter((c): c is Content => c !== null);
             setDisplayedContent(mapData);
         }
-    }, [viewMode, baseCircles, minSimFilter, dateRange, withinDateRange, setDisplayedContent]);
+    }, [
+        viewMode,
+        baseCircles,
+        minSimFilter,
+        dateRange,
+        withinDateRange,
+        setDisplayedContent,
+        selectedCategory,
+        eventsForMap,
+    ]);
 
     // Control drawer snap based on contentPreview state
     useEffect(() => {
@@ -515,7 +565,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                             <div className="flex items-center">
                                 {!isMobile && (
                                     <CategoryFilter
-                                        categories={["communities", "users"]}
+                                        categories={["communities", "users", "events"]}
                                         categoryCounts={categoryCounts}
                                         selectedCategory={selectedCategory}
                                         onSelectionChange={setSelectedCategory}
@@ -779,13 +829,11 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                             {/* Filter displayedContent to only include CircleLike items before mapping */}
                             {displayedContent
                                 .filter(
-                                    (
-                                        item,
-                                    ): item is Circle | MemberDisplay => // Type guard to filter out PostDisplay
-                                        item.circleType === "user" ||
-                                        item.circleType === "circle" ||
-                                        item.circleType === "project" ||
-                                        !item.circleType, // Handle cases where circleType might be undefined but it's still CircleLike
+                                    (item): item is Circle | MemberDisplay =>
+                                        "circleType" in (item as any) &&
+                                        ((item as any).circleType === "user" ||
+                                            (item as any).circleType === "circle" ||
+                                            (item as any).circleType === "project"),
                                 )
                                 .map((item) => (
                                     <li

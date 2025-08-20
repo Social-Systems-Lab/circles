@@ -13,6 +13,7 @@ import ImageCarousel from "../ui/image-carousel";
 import { Media } from "@/models/models";
 import { Button } from "../ui/button";
 import { ArrowUpRight } from "lucide-react";
+import { format } from "date-fns";
 
 interface MapMarkerProps {
     content?: Content;
@@ -40,8 +41,15 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
 
     // Compute popover helpers
     const metrics = (content as WithMetric<Content>)?.metrics;
-    const title = content?.circleType === "post" ? (content as any)?.content : (content as any)?.name;
-    const description = (content as any)?.mission || (content as any)?.description;
+    const isEvent = !!(content as any)?.title && !!(content as any)?.startAt;
+    const title = isEvent
+        ? (content as any)?.title
+        : (content as any)?.circleType === "post"
+          ? (content as any)?.content
+          : (content as any)?.name;
+    const description = isEvent
+        ? (content as any)?.description
+        : (content as any)?.mission || (content as any)?.description;
     const images: Media[] = (() => {
         const anyContent: any = content;
         let imgs: Media[] = [];
@@ -62,10 +70,20 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
             ? imgs
             : [{ name: "default", type: "image", fileInfo: { url: fallbackUrl } as any } as Media];
     })();
-    const openHref =
-        (content as any)?.handle && (content as any)?.circleType !== "post"
-            ? `/circles/${(content as any).handle}`
-            : undefined;
+    const isPost = (content as any)?.circleType === "post";
+    const markerImgUrl = isEvent
+        ? images?.[0]?.fileInfo?.url
+        : ((content as any)?.picture?.url ?? images?.[0]?.fileInfo?.url);
+    let openHref: string | undefined = undefined;
+    if (isEvent) {
+        const e: any = content as any;
+        const circleHandle = e?.circle?.handle;
+        if (circleHandle && e?._id) {
+            openHref = `/circles/${circleHandle}/events/${e._id}`;
+        }
+    } else if ((content as any)?.handle && (content as any)?.circleType !== "post") {
+        openHref = `/circles/${(content as any).handle}`;
+    }
     const handleOpen = (e: React.MouseEvent) => {
         e.stopPropagation();
         if (openHref && typeof window !== "undefined") {
@@ -80,7 +98,7 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
                     <div className="absolute bottom-[4px] left-1/2 -translate-x-1/2 transform">
                         <div className="relative h-10 w-10 rounded-full transition-transform duration-300 group-hover:scale-110">
                             <div className="absolute inset-[2px] rounded-full bg-white shadow-md" />
-                            {content?.circleType === "post" ? (
+                            {isPost ? (
                                 <div className="absolute inset-[2px] flex items-center justify-center rounded-full">
                                     <Image
                                         className="h-9 w-9 rounded-full border bg-cover bg-center"
@@ -100,9 +118,7 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
                                 <div
                                     className="absolute inset-[2px] rounded-full border bg-white bg-cover bg-center"
                                     style={{
-                                        backgroundImage: content?.picture?.url
-                                            ? `url(${content?.picture?.url})`
-                                            : "none",
+                                        backgroundImage: markerImgUrl ? `url(${markerImgUrl})` : "none",
                                         borderColor:
                                             contentPreview && contentPreview.content?._id === content?._id
                                                 ? "#f8dd53"
