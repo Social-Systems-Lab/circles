@@ -59,7 +59,7 @@ export const features = {
             name: "Create Announcement",
             handle: "post",
             description: "Create an announcement",
-            defaultUserGroups: ["admins", "moderators", "members"],
+            defaultUserGroups: ["admins", "moderators"],
             module: "feed",
             needsToBeVerified: true,
         } as Feature,

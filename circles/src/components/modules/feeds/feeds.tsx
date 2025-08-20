@@ -66,12 +66,14 @@ export default function FeedsModule(props: PageProps) {
     return (
         <div className="flex flex-1 justify-center overflow-hidden">
             <div className="mb-4 mt-2 flex w-full max-w-[1100px] flex-col items-center md:ml-4 md:mr-4">
-                <ListFilter
+                <FeedComponent
+                    posts={posts}
+                    feed={feed}
+                    circle={circle}
                     onFilterChange={handleFilterChange}
                     onSdgChange={handleSdgChange}
-                    selectedSdgs={selectedSdgs}
+                    selectedSdgsExternal={selectedSdgs}
                 />
-                <FeedComponent posts={posts} feed={feed} circle={circle} />
             </div>
         </div>
     );

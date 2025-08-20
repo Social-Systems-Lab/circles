@@ -25,9 +25,19 @@ export type FeedComponentProps = {
     circle: Circle;
     posts: PostDisplay[];
     feed: Feed;
+    onFilterChange?: (filter: string) => void;
+    onSdgChange?: (sdgs: SDG[]) => void;
+    selectedSdgsExternal?: SDG[];
 };
 
-export const FeedComponent = ({ circle, posts, feed }: FeedComponentProps) => {
+export const FeedComponent = ({
+    circle,
+    posts,
+    feed,
+    onFilterChange,
+    onSdgChange,
+    selectedSdgsExternal,
+}: FeedComponentProps) => {
     const isCompact = useIsCompact();
     const [user] = useAtom(userAtom);
     const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>([]);
@@ -69,9 +79,9 @@ export const FeedComponent = ({ circle, posts, feed }: FeedComponentProps) => {
                     </div>
                 )}
                 <ListFilter
-                    onFilterChange={handleFilterChange}
-                    onSdgChange={handleSdgSelectionChange}
-                    selectedSdgs={selectedSdgs}
+                    onFilterChange={onFilterChange ?? handleFilterChange}
+                    onSdgChange={onSdgChange ?? handleSdgSelectionChange}
+                    selectedSdgs={selectedSdgsExternal ?? selectedSdgs}
                 />
 
                 <PostList posts={posts} feed={feed} circle={circle} />
