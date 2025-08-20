@@ -68,7 +68,7 @@ const EventCard: React.FC<{ e: EventDisplay; circleHandle: string }> = ({ e, cir
         <Link href={`/circles/${circleHandle}/events/${(e as any)._id}`} className="group relative block">
             <Card
                 className={cn(
-                    "h-full transition-shadow duration-200 ease-in-out group-hover:shadow-lg",
+                    "h-full max-w-2xl transition-shadow duration-200 ease-in-out group-hover:shadow-lg",
                     isDraft && "border-dashed border-yellow-400 bg-yellow-50/30 opacity-90",
                     isCancelled && "border-dashed border-red-400 bg-red-50/40 opacity-75",
                 )}

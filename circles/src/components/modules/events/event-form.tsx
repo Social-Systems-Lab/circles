@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
+import LocationPicker from "@/components/forms/location-picker";
 
 type Props = {
     circleHandle: string;
@@ -245,23 +246,10 @@ export default function EventForm({ circleHandle, event }: Props) {
                     </div>
 
                     <div>
-                        <Label htmlFor="location">Location JSON (temporary)</Label>
-                        <Textarea
-                            id="location"
-                            className="min-h-[120px]"
-                            placeholder='{"precision": 1, "city":"Stockholm"}'
-                            defaultValue={location ? JSON.stringify(location, null, 2) : ""}
-                            onChange={(e) => {
-                                try {
-                                    const val = e.target.value.trim();
-                                    setLocation(val ? (JSON.parse(val) as Location) : undefined);
-                                } catch {
-                                    // ignore until submit
-                                }
-                            }}
-                        />
+                        <Label htmlFor="location">Location</Label>
+                        <LocationPicker value={location} onChange={(val) => setLocation(val)} compact />
                         <p className="mt-1 text-xs text-muted-foreground">
-                            Temporary field for MVP. Will be replaced by a proper location picker.
+                            Set the event location. For online events, toggle "Virtual" above.
                         </p>
                     </div>
                 </div>

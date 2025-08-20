@@ -37,6 +37,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events }) => 
                     isHybrid: e.isHybrid,
                     attendees: e.attendees ?? 0,
                     userRsvpStatus: e.userRsvpStatus ?? "none",
+                    stage: e.stage,
                 },
             })),
         [events],
@@ -60,6 +61,17 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events }) => 
         }
     };
 
+    const renderEventContent = (arg: any) => {
+        const stage = (arg.event.extendedProps as any)?.stage as string | undefined;
+        const isDraft = stage === "draft";
+        const isCancelled = stage === "cancelled";
+        const title = arg.event.title + (isDraft ? " (draft)" : "");
+        const style: React.CSSProperties = {};
+        if (isCancelled) style.textDecoration = "line-through";
+        if (isDraft) style.color = "#6c757d"; // grey text similar to Bootstrap secondary
+        return <div style={style}>{title}</div>;
+    };
+
     return (
         <div className="rounded-md border bg-white p-2">
             <FullCalendar
@@ -72,6 +84,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events }) => 
                 }}
                 height="auto"
                 events={fcEvents}
+                eventContent={renderEventContent}
                 dateClick={handleDateClick}
                 eventClick={handleEventClick}
                 selectable={true}
