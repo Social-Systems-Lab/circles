@@ -431,7 +431,7 @@ export const Notifications = () => {
                         groupedNotification[`${itemType}Title` as keyof typeof groupedNotification] || `a ${itemType}`;
                     return `${userList} liked the ${itemType}: "${itemTitle}"`; // Message doesn't imply ownership
                 }
-                return `${userList} liked your post`; // Fallback
+                return `${userList} liked your announcement`; // Fallback
 
             case "comment_like":
                 // Check if it's a like on a parent item's comment
@@ -458,7 +458,7 @@ export const Notifications = () => {
                     // TODO: Differentiate message if recipient is assignee vs author?
                     return `${userList} commented on the ${itemType}: "${itemTitle}"`;
                 }
-                return `${userList} commented on your post`; // Fallback
+                return `${userList} commented on your announcement`; // Fallback
 
             case "comment_reply":
                 // Check if it's a reply on a parent item's comment thread
@@ -478,7 +478,7 @@ export const Notifications = () => {
                         groupedNotification[`${itemType}Title` as keyof typeof groupedNotification] || `a ${itemType}`;
                     return `${userList} mentioned you in the ${itemType}: "${itemTitle}"`;
                 }
-                return `${userList} mentioned you in a post`; // Fallback
+                return `${userList} mentioned you in an announcement`; // Fallback
 
             case "comment_mention":
                 // Check if it's a mention in a parent item's comment

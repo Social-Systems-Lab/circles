@@ -49,8 +49,8 @@ export const creatableItemsList: CreatableItemDetail[] = [
     // },
     {
         key: "post",
-        title: "Post",
-        description: "Share an update, idea, or story.",
+        title: "Announcement",
+        description: "Share an announcement, update, or story.",
         icon: MessageSquare,
         moduleHandle: "feed",
         createFeatureHandle: "post",

@@ -483,7 +483,11 @@ export function PostForm({
         startTransition(async () => {
             const formData = new FormData();
             if (!selectedCircleId) {
-                toast({ title: "Error", description: "Please select a circle to post in.", variant: "destructive" });
+                toast({
+                    title: "Error",
+                    description: "Please select a circle to create an announcement in.",
+                    variant: "destructive",
+                });
                 return;
             }
             formData.append("content", postContent);
@@ -695,7 +699,8 @@ export function PostForm({
                                                 </Avatar>
                                                 <div>
                                                     <div className="text-xs text-gray-500">
-                                                        Post by {(internalPreview.data as PostDisplay).author?.name}
+                                                        Announcement by{" "}
+                                                        {(internalPreview.data as PostDisplay).author?.name}
                                                     </div>
                                                     <p className="text-sm text-gray-800">
                                                         {truncateText(
@@ -919,11 +924,13 @@ export function PostForm({
                     }}
                 >
                     <DialogHeader>
-                        <DialogTitle className="text-center text-xl font-bold">Who can see your post?</DialogTitle>
+                        <DialogTitle className="text-center text-xl font-bold">
+                            Who can see your announcement?
+                        </DialogTitle>
                     </DialogHeader>
                     <div className="mt-2 space-y-4">
                         <div className="text-sm text-gray-600">
-                            Your post will be visible in feeds, on your profile, and in search results.
+                            Your announcement will be visible in feeds, on your profile, and in search results.
                         </div>
                         <div className="text-sm text-gray-600">
                             Your default audience is <span className="font-semibold">Everyone</span> but you can change

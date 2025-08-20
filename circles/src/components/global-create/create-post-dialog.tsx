@@ -71,7 +71,7 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({ isOpen, onOp
 
         if (!response.success) {
             toast({
-                title: response.message || "Failed to create post.",
+                title: response.message || "Failed to create announcement.",
                 variant: "destructive",
             });
             setIsSubmittingForm(false);
@@ -95,7 +95,7 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({ isOpen, onOp
                     {/* Description can be simplified or removed as CircleSelector is inside PostForm */}
                 </DialogHeader>
 
-                {!user && <p className="p-4 text-red-500">Please log in to create a post.</p>}
+                {!user && <p className="p-4 text-red-500">Please log in to create an announcement.</p>}
 
                 {user && (
                     <PostForm

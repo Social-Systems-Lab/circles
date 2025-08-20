@@ -119,7 +119,7 @@ export const createDefaultFeed = async (circleId: string): Promise<Feed | null> 
     let defaultFeed = await getFeedByHandle(circleId, "default");
     if (!defaultFeed) {
         defaultFeed = {
-            name: "Circle Feed",
+            name: "Circle Announcements",
             handle: "default",
             circleId,
             userGroups: ["admins", "moderators", "members", "everyone"],

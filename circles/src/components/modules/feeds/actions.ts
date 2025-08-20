@@ -362,7 +362,7 @@ export async function createPostAction(
 ): Promise<{ success: boolean; message?: string; post?: Post }> {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
-        return { success: false, message: "You need to be logged in to create a post" };
+        return { success: false, message: "You need to be logged in to create an announcement" };
     }
 
     try {
@@ -506,9 +506,9 @@ export async function createPostAction(
             // Non-critical, so don't fail the post creation
         }
 
-        return { success: true, message: "Post created successfully", post: newPost };
+        return { success: true, message: "Announcement created successfully", post: newPost };
     } catch (error) {
-        return { success: false, message: error instanceof Error ? error.message : "Failed to create post." };
+        return { success: false, message: error instanceof Error ? error.message : "Failed to create announcement." };
     }
 }
 
@@ -518,7 +518,7 @@ export async function updatePostAction(
     const userDid = await getAuthenticatedUserDid();
 
     if (!userDid) {
-        return { success: false, message: "You need to be logged in to edit a post" };
+        return { success: false, message: "You need to be logged in to edit an announcement" };
     }
 
     try {
@@ -639,16 +639,16 @@ export async function updatePostAction(
         let circlePath = await getCirclePath({ _id: circleId } as Circle);
         revalidatePath(`${circlePath}feed`);
 
-        return { success: true, message: "Post updated successfully" };
+        return { success: true, message: "Announcement updated successfully" };
     } catch (error) {
-        return { success: false, message: error instanceof Error ? error.message : "Failed to update post." };
+        return { success: false, message: error instanceof Error ? error.message : "Failed to update announcement." };
     }
 }
 
 export async function deletePostAction(postId: string): Promise<{ success: boolean; message?: string }> {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
-        return { success: false, message: "You need to be logged in to delete a post" };
+        return { success: false, message: "You need to be logged in to delete an announcement" };
     }
 
     try {
@@ -671,10 +671,10 @@ export async function deletePostAction(postId: string): Promise<{ success: boole
         // delete post
         await deletePost(postId);
 
-        return { success: true, message: "Post deleted successfully" };
+        return { success: true, message: "Announcement deleted successfully" };
     } catch (error) {
         console.error("Error deleting post:", error);
-        return { success: false, message: "An error occurred while deleting the post" };
+        return { success: false, message: "An error occurred while deleting the announcement" };
     }
 }
 

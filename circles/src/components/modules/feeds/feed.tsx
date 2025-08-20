@@ -139,11 +139,11 @@ export const AggregateFeedComponent = ({ posts, userFeed, activeTab }: Aggregate
                         <CreateNewPost circle={user as Circle} feed={userFeed} />
                     </div>
                 )}
-                <Image src={emptyFeed} alt="No posts yet" width={isMobile ? 230 : 300} />
-                <h4>No posts</h4>
+                <Image src={emptyFeed} alt="No announcements yet" width={isMobile ? 230 : 300} />
+                <h4>No announcements</h4>
                 <div className="max-w-[700px] pl-4 pr-4">
-                    We couldn&apos;t find any posts. Try the discover tab to find new content and start following users
-                    and circles.
+                    We couldn't find any announcements. Try the discover tab to find new content and start following
+                    users and circles.
                 </div>
                 <div className="mt-4 flex flex-row gap-2">
                     <Button variant={"outline"} onClick={() => updateQueryParam(router, "tab", "discover")}>

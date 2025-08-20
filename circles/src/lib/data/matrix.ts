@@ -553,7 +553,7 @@ function deriveBody(notificationType: NotificationType, payload: { [key: string]
                     `a ${itemType}`;
                 return `${userName} commented on the ${itemType}: "${itemTitle}"`;
             }
-            return `${userName} commented on your post`;
+            return `${userName} commented on your announcement`;
         case "comment_reply":
             if (payload.post?.parentItemType) {
                 const itemType = payload.post.parentItemType;
@@ -577,7 +577,7 @@ function deriveBody(notificationType: NotificationType, payload: { [key: string]
                     `a ${itemType}`;
                 return `${userName} liked the ${itemType}: "${itemTitle}"`;
             }
-            return `${userName} liked your post`;
+            return `${userName} liked your announcement`;
         case "comment_like":
             if (payload.post?.parentItemType) {
                 const itemType = payload.post.parentItemType;
@@ -601,7 +601,7 @@ function deriveBody(notificationType: NotificationType, payload: { [key: string]
                     `a ${itemType}`;
                 return `${userName} mentioned you in the ${itemType}: "${itemTitle}"`;
             }
-            return `${userName} mentioned you in a post`;
+            return `${userName} mentioned you in an announcement`;
         case "comment_mention":
             if (payload.post?.parentItemType) {
                 const itemType = payload.post.parentItemType;

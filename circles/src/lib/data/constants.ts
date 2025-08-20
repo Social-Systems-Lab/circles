@@ -49,16 +49,16 @@ export const features = {
     },
     feed: {
         view: {
-            name: "View Feed",
+            name: "View Announcements",
             handle: "view",
-            description: "View the feed",
+            description: "View announcements",
             defaultUserGroups: ["admins", "moderators", "members", "everyone"],
             module: "feed",
         } as Feature,
         post: {
-            name: "Create Post",
+            name: "Create Announcement",
             handle: "post",
-            description: "Create a post in the feed",
+            description: "Create an announcement",
             defaultUserGroups: ["admins", "moderators", "members"],
             module: "feed",
             needsToBeVerified: true,
@@ -66,15 +66,15 @@ export const features = {
         comment: {
             name: "Comment",
             handle: "comment",
-            description: "Comment on posts in the feed",
+            description: "Comment on announcements",
             defaultUserGroups: ["admins", "moderators", "members", "everyone"],
             module: "feed",
             needsToBeVerified: true,
         } as Feature,
         moderate: {
-            name: "Moderate Feed",
+            name: "Moderate Announcements",
             handle: "moderate",
-            description: "Moderate posts in the feed",
+            description: "Moderate announcements",
             defaultUserGroups: ["admins", "moderators"],
             module: "feed",
             needsToBeVerified: true,
@@ -549,10 +549,10 @@ export const modules: ModuleInfo[] = [
         readOnly: true, // Admins cannot disable this module
     },
     {
-        name: "Feed",
+        name: "Announcements",
         handle: "feed",
         description:
-            "A shared space for circle members to post updates, share ideas, and engage in discussions. Serves as the central communication hub to foster transparent collaboration and community engagement.",
+            "A shared space for circle members to publish announcements, updates, and discussions. Serves as the central communication hub to foster transparent collaboration and community engagement.",
     },
     {
         name: "Followers",

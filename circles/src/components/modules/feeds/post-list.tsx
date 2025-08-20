@@ -425,7 +425,7 @@ export const PostItem = ({
                 return;
             } else {
                 toast({
-                    title: "Post updated successfully",
+                    title: "Announcement updated successfully",
                     variant: "success",
                 });
             }
@@ -445,7 +445,7 @@ export const PostItem = ({
                 return;
             } else {
                 toast({
-                    title: "Post deleted successfully",
+                    title: "Announcement deleted successfully",
                     variant: "success",
                 });
             }
@@ -788,7 +788,7 @@ export const PostItem = ({
                                                 }}
                                             >
                                                 <div className="hidden">
-                                                    <DialogTitle>Edit post</DialogTitle>
+                                                    <DialogTitle>Edit announcement</DialogTitle>
                                                 </div>
                                                 <PostForm
                                                     user={user!}
@@ -829,10 +829,10 @@ export const PostItem = ({
                                             }}
                                         >
                                             <DialogHeader>
-                                                <DialogTitle>Delete Post</DialogTitle>
+                                                <DialogTitle>Delete Announcement</DialogTitle>
                                                 <DialogDescription>
-                                                    Are you sure you want to delete this post? This action cannot be
-                                                    undone.
+                                                    Are you sure you want to delete this announcement? This action
+                                                    cannot be undone.
                                                 </DialogDescription>
                                             </DialogHeader>
                                             <DialogFooter>

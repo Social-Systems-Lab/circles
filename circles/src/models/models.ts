@@ -1029,7 +1029,7 @@ export const summaryNotificationTypeDetails: Record<
     COMMUNITY_FOLLOW_REQUEST: { label: "Follow Request", moduleHandle: "members", mapsTo: ["follow_request"] }, // Technically 'members' or 'general'
     COMMUNITY_NEW_FOLLOWER: { label: "New Follower", moduleHandle: "members", mapsTo: ["new_follower"] }, // Technically 'members' or 'general'
     POSTS_ALL: {
-        label: "Posts",
+        label: "Announcements",
         moduleHandle: "feed",
         mapsTo: ["post_comment", "comment_reply", "post_like", "comment_like", "post_mention", "comment_mention"],
     },

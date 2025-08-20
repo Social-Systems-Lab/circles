@@ -38,7 +38,7 @@ export function CreateNewPost({ circle, feed }: CreateNewPostProps) {
                 <input
                     disabled={!user}
                     type="text"
-                    placeholder={user ? "Share your story" : "Log in to post"}
+                    placeholder={user ? "Share your story" : "Log in to create an announcement"}
                     className="pointer-events-none w-full rounded-full bg-gray-100 p-2 pl-4 focus:outline-none focus:ring-2 focus:ring-blue-500" // Added pointer-events-none as click is on parent
                     readOnly
                 />
