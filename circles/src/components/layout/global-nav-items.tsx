@@ -7,13 +7,12 @@ import PageIcon from "../modules/page-icon";
 import { motion } from "framer-motion";
 import { userSettingsAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
-import { IoChatbubbleOutline } from "react-icons/io5";
+import { IoChatbubbleOutline, IoPulseOutline } from "react-icons/io5";
 import { LiaGlobeAfricaSolid } from "react-icons/lia";
 import { FaRegCircle } from "react-icons/fa6";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { CgFeed } from "react-icons/cg";
 import { MdRssFeed } from "react-icons/md";
-import { AiOutlineHome } from "react-icons/ai";
 import GlobalCreateButton from "./global-create-button";
 
 export default function GlobalNavItems() {
@@ -68,14 +67,14 @@ export default function GlobalNavItems() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5, delay: 0 * 0.1 }}
                     >
-                        <AiOutlineHome size={"24px"} />
+                        <IoPulseOutline size={"24px"} />
                         <motion.span
                             className="mt-[4px] text-[11px]"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.3, delay: 0.2 + 0 * 0.1 }}
                         >
-                            For You
+                            Activities
                         </motion.span>
                     </motion.div>
                 </Link>
@@ -98,7 +97,7 @@ export default function GlobalNavItems() {
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.3, delay: 0.2 + 2 * 0.1 }}
                         >
-                            Communities
+                            Engagements
                         </motion.span>
                     </motion.div>
                 </Link>
