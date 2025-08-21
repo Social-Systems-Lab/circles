@@ -570,6 +570,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                         selectedCategory={selectedCategory}
                                         onSelectionChange={setSelectedCategory}
                                         hasSearched={hasSearched}
+                                        displayLabelMap={{ users: "people" }}
                                     />
                                 )}
                                 <SdgFilter

@@ -11,6 +11,7 @@ interface CategoryFilterProps {
     selectedCategory: string | null; // Single selected category or null
     onSelectionChange: (selected: string | null) => void; // Callback for single selection
     hasSearched: boolean;
+    displayLabelMap?: { [key: string]: string }; // Optional mapping for presentation labels
 }
 
 const CategoryFilter: React.FC<CategoryFilterProps> = ({
@@ -19,6 +20,7 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
     selectedCategory,
     onSelectionChange,
     hasSearched,
+    displayLabelMap,
 }) => {
     // Handle ToggleGroup value change
     const handleValueChange = (value: string) => {
@@ -44,9 +46,9 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
                         "data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground", // Styling when selected
                         "hover:bg-accent hover:text-accent-foreground", // Hover styling
                     )}
-                    aria-label={`Filter by ${category}`}
+                    aria-label={`Filter by ${displayLabelMap?.[category] ?? category}`}
                 >
-                    {category}
+                    {displayLabelMap?.[category] ?? category}
                     {hasSearched && (
                         <Badge variant="secondary" className="ml-1.5 rounded-full px-1.5 py-0 text-xs">
                             {categoryCounts[category] ?? 0}
