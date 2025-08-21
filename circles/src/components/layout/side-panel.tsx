@@ -118,19 +118,6 @@ export const SidePanel: React.FC = () => {
                 )}
             </AnimatePresence>
 
-            {/* Reserve right-side space when overlays are open (to avoid covering content) */}
-            <AnimatePresence>
-                {(contentPreview || userToolbox) && !mapOpen && (
-                    <motion.div
-                        className="relative flex-shrink-0 bg-[#fbfbfb]"
-                        initial={{ width: 0 }}
-                        animate={{ width: 420 }}
-                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                        exit={{ width: 0 }}
-                    ></motion.div>
-                )}
-            </AnimatePresence>
-
             {/* Existing right-floating overlays remain unchanged */}
             <AnimatePresence>
                 {contentPreview && (
