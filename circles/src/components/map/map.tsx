@@ -38,7 +38,17 @@ const isPostDisplay = (c: any): c is PostDisplay => {
     return c && (c as any).circleType === "post";
 };
 
-const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
+const MapBox = ({
+    mapboxKey,
+    panelMode,
+    windowWidth,
+    windowHeight,
+}: {
+    mapboxKey: string;
+    panelMode?: string;
+    windowWidth: number;
+    windowHeight: number;
+}) => {
     const mapContainer = useRef(null);
     const map = useRef<mapboxgl.Map | null>(null);
     const [displayedContent] = useAtom(displayedContentAtom);
@@ -100,6 +110,17 @@ const MapBox = ({ mapboxKey }: { mapboxKey: string }) => {
             //maxZoom: 12, // Limit maximum zoom to city level
         });
     }, [mapContainer, lat, lng, zoom, mapboxKey, displayedContent]);
+
+    // Ensure Mapbox resizes when panel animates or window size changes
+    useEffect(() => {
+        if (!map.current) return;
+        const id = setTimeout(() => {
+            try {
+                map.current?.resize();
+            } catch {}
+        }, 350); // align roughly with panel animation
+        return () => clearTimeout(id);
+    }, [panelMode, windowWidth, windowHeight]);
 
     useEffect(() => {
         if (!map.current || !displayedContent) return;
@@ -238,7 +259,12 @@ export function MapDisplay({ mapboxKey }: { mapboxKey: string }) {
                         className={"fixed right-0 z-30"}
                         style={{ width: mapWidth, height: windowHeight - (isMobile ? 72 : 0) + "px" }}
                     >
-                        <MapBox mapboxKey={mapboxKey} />
+                        <MapBox
+                            mapboxKey={mapboxKey}
+                            panelMode={panelMode}
+                            windowWidth={windowWidth}
+                            windowHeight={windowHeight}
+                        />
                     </div>
                 </>
             )}

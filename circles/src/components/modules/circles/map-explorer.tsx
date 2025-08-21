@@ -143,7 +143,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const [showSwipeInstructions, setShowSwipeInstructions] = useState(false);
     const [triggerSnapIndex, setTriggerSnapIndex] = useState<number>(-1);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
-    const [, setSidePanelMode] = useAtom(sidePanelModeAtom);
+    const [panelMode, setSidePanelMode] = useAtom(sidePanelModeAtom);
     const [, setSearchPanelState] = useAtom(sidePanelSearchStateAtom);
 
     // --- Memos ---
@@ -599,7 +599,8 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
 
             {/* Top Bar Controls */}
             <div
-                className={`absolute ${isMobile ? "flex-col" : "flex-row"} left-4 top-4 z-[60] flex gap-2`} // Increased z-index
+                className={`absolute ${isMobile ? "flex-col" : "flex-row"} z-[60] flex gap-2`} // Increased z-index
+                style={{ left: !isMobile && panelMode !== "none" ? 440 : 16, top: 16 }}
             >
                 {/* View Mode Toggle removed: Explore mode only */}
 
