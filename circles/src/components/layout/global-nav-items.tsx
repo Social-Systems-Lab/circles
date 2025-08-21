@@ -5,11 +5,10 @@ import React, { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import PageIcon from "../modules/page-icon";
 import { motion } from "framer-motion";
-import { userSettingsAtom, userAtom } from "@/lib/data/atoms";
+import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { IoChatbubbleOutline, IoPulseOutline } from "react-icons/io5";
 import { LiaGlobeAfricaSolid } from "react-icons/lia";
-import { FaHandshake } from "react-icons/fa6";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { CgFeed } from "react-icons/cg";
 import { MdRssFeed } from "react-icons/md";
@@ -17,7 +16,6 @@ import GlobalCreateButton from "./global-create-button";
 
 export default function GlobalNavItems() {
     const pathname = usePathname();
-    const [settings] = useAtom(userSettingsAtom);
     const [user] = useAtom(userAtom);
 
     useEffect(() => {
@@ -74,37 +72,14 @@ export default function GlobalNavItems() {
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.3, delay: 0.2 + 0 * 0.1 }}
                         >
-                            Activities
-                        </motion.span>
-                    </motion.div>
-                </Link>
-
-                <Link href={`/circles?tab=${settings?.circlesTab ?? "following"}`}>
-                    <motion.div
-                        className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
-                            pathname === "/circles" ? "text-[#495cff]" : "text-[#696969]"
-                        }`}
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.95 }}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5, delay: 2 * 0.1 }}
-                    >
-                        <FaHandshake size={"24px"} />
-                        <motion.span
-                            className="mt-[4px] text-[10px]"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ duration: 0.3, delay: 0.2 + 2 * 0.1 }}
-                        >
-                            Engagements
+                            Activity
                         </motion.span>
                     </motion.div>
                 </Link>
 
                 {user && (
                     <>
-                        <Link href={"/chat"}>
+                        {/* <Link href={"/chat"}>
                             <motion.div
                                 className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
                                     pathname === "/chat" ? "text-[#495cff]" : "text-[#696969]"
@@ -125,7 +100,7 @@ export default function GlobalNavItems() {
                                     Chat
                                 </motion.span>
                             </motion.div>
-                        </Link>
+                        </Link> */}
                         <GlobalCreateButton />
                     </>
                 )}
