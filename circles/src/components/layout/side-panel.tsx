@@ -6,10 +6,20 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
-import { contentPreviewAtom, mapOpenAtom, userToolboxDataAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
+import {
+    contentPreviewAtom,
+    mapOpenAtom,
+    userToolboxDataAtom,
+    sidePanelContentVisibleAtom,
+    sidePanelModeAtom,
+    sidePanelSearchStateAtom,
+} from "@/lib/data/atoms";
 import ContentPreview from "./content-preview";
 import { UserToolbox } from "./user-toolbox";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import ActivityPanel from "./activity-panel";
+import SearchResultsPanel from "./search-results-panel";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
 
 export const SidePanel: React.FC = () => {
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
@@ -17,12 +27,30 @@ export const SidePanel: React.FC = () => {
     const [mapOpen] = useAtom(mapOpenAtom);
     const isMobile = useIsMobile();
     const [sidePanelContentVisible, setSidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+    const [sidePanelMode, setSidePanelMode] = useAtom(sidePanelModeAtom);
+    const [searchPanelState] = useAtom(sidePanelSearchStateAtom);
+    const searchParams = useSearchParams();
+    const pathname = usePathname();
+    const router = useRouter();
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
             console.log("useEffect.SidePanel.1");
         }
     }, []);
+
+    // Sync panel open state with URL on desktop for /explore
+    useEffect(() => {
+        if (isMobile) return;
+        if (pathname !== "/explore") return;
+        const panel = searchParams.get("panel");
+        if (panel === "activity" || panel === "search") {
+            setSidePanelMode(panel as any);
+        }
+        // If panel param is absent, don't force-close — allow programmatic open (e.g., search) to persist.
+        // Navigation to Explore button will explicitly setSidePanelMode("none").
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isMobile, pathname, searchParams]);
 
     const closeContentPreview = () => {
         setContentPreview(undefined);
@@ -54,6 +82,44 @@ export const SidePanel: React.FC = () => {
 
     return (
         <>
+            {/* Left side panel (desktop only) */}
+            <AnimatePresence>
+                {!isMobile && sidePanelMode !== "none" && (
+                    <motion.div
+                        className="fixed left-[72px] top-0 z-[200] h-[100vh] flex-shrink-0 bg-white md:border-r md:shadow-sm"
+                        initial={{ width: 0 }}
+                        animate={{ width: 420 }}
+                        exit={{ width: 0 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                    >
+                        <div className="flex h-full w-full flex-col">
+                            <div className="flex items-center justify-between border-b px-3 py-2">
+                                <div className="text-sm font-semibold">
+                                    {sidePanelMode === "activity" ? "Activity" : "Search Results"}
+                                </div>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="rounded-full bg-gray-100"
+                                    onClick={() => {
+                                        setSidePanelMode("none");
+                                        if (pathname === "/explore") {
+                                            router.push("/explore");
+                                        }
+                                    }}
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto">
+                                {sidePanelMode === "activity" ? <ActivityPanel /> : <SearchResultsPanel />}
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Reserve right-side space when overlays are open (to avoid covering content) */}
             <AnimatePresence>
                 {(contentPreview || userToolbox) && !mapOpen && (
                     <motion.div
@@ -65,6 +131,8 @@ export const SidePanel: React.FC = () => {
                     ></motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Existing right-floating overlays remain unchanged */}
             <AnimatePresence>
                 {contentPreview && (
                     <motion.div

@@ -28,6 +28,29 @@ export const zoomContentAtom = atom<Content | undefined>(undefined);
 export const contentPreviewAtom = atom<ContentPreviewData | undefined>(undefined);
 export const userToolboxDataAtom = atom<UserToolboxData | undefined>(undefined);
 export const sidePanelContentVisibleAtom = atom<"content" | "toolbox" | undefined>(undefined);
+
+// Left side panel (global) state
+export type SidePanelMode = "none" | "activity" | "search";
+
+export type SidePanelSearchState = {
+    query: string;
+    isSearching: boolean;
+    hasSearched: boolean;
+    selectedCategory?: string | null;
+    selectedSdgHandles?: string[];
+    items: (Circle | MemberDisplay)[];
+    counts?: { communities: number; users: number; events: number };
+};
+
+export const sidePanelModeAtom = atom<SidePanelMode>("none");
+export const sidePanelSearchStateAtom = atom<SidePanelSearchState>({
+    query: "",
+    isSearching: false,
+    hasSearched: false,
+    selectedCategory: null,
+    selectedSdgHandles: [],
+    items: [],
+});
 export const focusPostAtom = atom<PostDisplay | undefined>(undefined);
 export const imageGalleryAtom = atom<{ images: Media[]; initialIndex: number } | null>(null);
 export const matrixUserCacheAtom = atom<MatrixUserCache>({});

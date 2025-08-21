@@ -36,6 +36,8 @@ import {
     displayedContentAtom,
     contentPreviewAtom,
     sidePanelContentVisibleAtom, // Import contentPreviewAtom
+    sidePanelModeAtom,
+    sidePanelSearchStateAtom,
 } from "@/lib/data/atoms";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
@@ -141,6 +143,8 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const [showSwipeInstructions, setShowSwipeInstructions] = useState(false);
     const [triggerSnapIndex, setTriggerSnapIndex] = useState<number>(-1);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+    const [, setSidePanelMode] = useAtom(sidePanelModeAtom);
+    const [, setSearchPanelState] = useAtom(sidePanelSearchStateAtom);
 
     // --- Memos ---
     const snapPoints = useMemo(() => [100, windowHeight * 0.4, windowHeight * 0.8, windowHeight], [windowHeight]);
@@ -285,8 +289,36 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             setHasSearched(false);
             setTriggerSnapIndex(SNAP_INDEX_PEEK); // Reset drawer to peek
             setContentPreview(undefined); // Clear preview
+
+            // Close global left search panel
+            setSidePanelMode("none");
+            setSearchPanelState({
+                query: "",
+                isSearching: false,
+                hasSearched: false,
+                selectedCategory: null,
+                selectedSdgHandles: [],
+                items: [],
+                counts: { communities: 0, users: 0, events: eventsForMap.length },
+            });
             return;
         }
+
+        // Open global left search panel in searching state (desktop UX)
+        setSidePanelMode("search");
+        setSearchPanelState({
+            query: searchQuery,
+            isSearching: true,
+            hasSearched: false,
+            selectedCategory: selectedCategory ?? null,
+            selectedSdgHandles: sdgHandles,
+            items: [],
+            counts: { communities: 0, users: 0, events: eventsForMap.length },
+        });
+        if (!isMobile) {
+            router.push("/explore?panel=search");
+        }
+
         setIsSearching(true);
         setHasSearched(true);
         setAllSearchResults([]);
@@ -296,11 +328,56 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         try {
             const results = await searchContentAction(searchQuery, searchCategoriesForBackend, sdgHandles);
             setAllSearchResults(results);
+
+            // Compute filtered list and counts for left panel now
+            let filtered = results;
+            if (selectedCategory) {
+                const typeToFilter =
+                    selectedCategory === "communities"
+                        ? "circle"
+                        : selectedCategory === "projects"
+                          ? "project"
+                          : "user";
+                filtered = filtered.filter((r) => r.circleType === typeToFilter);
+            }
+            if (selectedSdgs.length > 0) {
+                const sdgHandlesLocal = selectedSdgs.map((s) => s.handle);
+                filtered = filtered.filter((c) => c.causes?.some((cause) => sdgHandlesLocal.includes(cause)));
+            }
+            const counts = { communities: 0, users: 0, events: eventsForMap.length };
+            filtered.forEach((r: any) => {
+                if (r.circleType === "circle") counts.communities++;
+                else if (r.circleType === "user") counts.users++;
+            });
+
+            setSearchPanelState({
+                query: searchQuery,
+                isSearching: false,
+                hasSearched: true,
+                selectedCategory: selectedCategory ?? null,
+                selectedSdgHandles: sdgHandles,
+                items: filtered as any,
+                counts,
+            });
+            setSidePanelMode("search");
+
             // Requirement 1: Jump to half-open state after search
             setTriggerSnapIndex(SNAP_INDEX_HALF);
         } catch (error) {
             console.error("Search action failed:", error);
             setAllSearchResults([]);
+
+            // Reflect error state in left panel
+            setSearchPanelState({
+                query: searchQuery,
+                isSearching: false,
+                hasSearched: true,
+                selectedCategory: selectedCategory ?? null,
+                selectedSdgHandles: sdgHandles,
+                items: [],
+                counts: { communities: 0, users: 0, events: eventsForMap.length },
+            });
+
             setTriggerSnapIndex(SNAP_INDEX_PEEK); // Reset drawer on error
         } finally {
             setIsSearching(false);
@@ -807,8 +884,8 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 </div>
             )}
 
-            {/* Desktop Search Results Panel */}
-            {viewMode === "explore" && hasSearched && !isMobile && (
+            {/* Desktop Search Results Panel moved to global left panel */}
+            {false && viewMode === "explore" && hasSearched && !isMobile && (
                 <div className="formatted absolute left-4 top-[120px] z-40 max-h-[calc(100vh-130px)] w-[300px] overflow-y-auto rounded-lg bg-white shadow-lg">
                     <div className="p-4">
                         <h3 className="mb-2 font-semibold">Search Results</h3>

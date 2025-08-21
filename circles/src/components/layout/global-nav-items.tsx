@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import React, { useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import PageIcon from "../modules/page-icon";
 import { motion } from "framer-motion";
-import { userAtom } from "@/lib/data/atoms";
+import { userAtom, sidePanelModeAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { IoChatbubbleOutline, IoPulseOutline } from "react-icons/io5";
 import { LiaGlobeAfricaSolid } from "react-icons/lia";
@@ -16,7 +16,9 @@ import GlobalCreateButton from "./global-create-button";
 
 export default function GlobalNavItems() {
     const pathname = usePathname();
+    const router = useRouter();
     const [user] = useAtom(userAtom);
+    const [panelMode, setSidePanelMode] = useAtom(sidePanelModeAtom);
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -34,8 +36,9 @@ export default function GlobalNavItems() {
             >
                 <Link href={"/explore"}>
                     <motion.div
+                        onClick={() => setSidePanelMode("none")}
                         className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
-                            pathname === "/explore" ? "text-[#495cff]" : "text-[#696969]"
+                            pathname === "/explore" && panelMode !== "activity" ? "text-[#495cff]" : "text-[#696969]"
                         }`}
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.95 }}
@@ -54,10 +57,15 @@ export default function GlobalNavItems() {
                         </motion.span>
                     </motion.div>
                 </Link>
-                <Link href={"/foryou"}>
+                <div
+                    onClick={() => {
+                        setSidePanelMode("activity");
+                        router.push("/explore?panel=activity");
+                    }}
+                >
                     <motion.div
                         className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
-                            pathname === "/foryou" ? "text-[#495cff]" : "text-[#696969]"
+                            pathname === "/explore" && panelMode === "activity" ? "text-[#495cff]" : "text-[#696969]"
                         }`}
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.95 }}
@@ -75,7 +83,7 @@ export default function GlobalNavItems() {
                             Activity
                         </motion.span>
                     </motion.div>
-                </Link>
+                </div>
 
                 {user && (
                     <>
