@@ -9,7 +9,7 @@ import { userSettingsAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { IoChatbubbleOutline, IoPulseOutline } from "react-icons/io5";
 import { LiaGlobeAfricaSolid } from "react-icons/lia";
-import { FaRegCircle } from "react-icons/fa6";
+import { FaHandshake } from "react-icons/fa6";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { CgFeed } from "react-icons/cg";
 import { MdRssFeed } from "react-icons/md";
@@ -90,7 +90,7 @@ export default function GlobalNavItems() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5, delay: 2 * 0.1 }}
                     >
-                        <FaRegCircle size={"24px"} />
+                        <FaHandshake size={"24px"} />
                         <motion.span
                             className="mt-[4px] text-[10px]"
                             initial={{ opacity: 0 }}
