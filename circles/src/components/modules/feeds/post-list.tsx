@@ -1731,9 +1731,10 @@ type PostListProps = {
     circle?: Circle;
     posts: PostDisplay[];
     isAggregateFeed?: boolean;
+    compact?: boolean; // render in compact/mobile style (e.g., side panel)
 };
 
-const PostList = ({ feed, circle, posts, isAggregateFeed }: PostListProps) => {
+const PostList = ({ feed, circle, posts, isAggregateFeed, compact = false }: PostListProps) => {
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
             console.log("useEffect.PostList.1");
@@ -1749,6 +1750,7 @@ const PostList = ({ feed, circle, posts, isAggregateFeed }: PostListProps) => {
                     circle={isAggregateFeed ? post.circle! : circle!}
                     feed={isAggregateFeed ? post.feed! : feed!}
                     isAggregateFeed={isAggregateFeed}
+                    embedded={compact}
                 />
             ))}
         </div>

@@ -26,7 +26,7 @@ export default function GlobalNav() {
     return (
         <>
             <div className={`order-last h-[72px] w-full flex-shrink-0 md:order-first md:h-full md:w-[72px]`}></div>
-            <div className={`fixed bottom-0 z-[100] h-[72px] w-full bg-white shadow-lg md:top-0 md:h-full md:w-[72px]`}>
+            <div className={`fixed bottom-0 z-[300] h-[72px] w-full bg-white shadow-md md:top-0 md:h-full md:w-[72px]`}>
                 <div className={`flex h-[72px] flex-row items-center justify-center md:h-auto md:w-[72px] md:flex-col`}>
                     <Link href="/circles/kamooni">
                         <div className="group relative ml-4 mr-4 hidden flex-shrink-0 flex-col items-center justify-center md:mb-4 md:ml-0 md:mr-0 md:mt-4 md:flex">

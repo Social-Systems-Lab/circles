@@ -86,31 +86,30 @@ export const SidePanel: React.FC = () => {
             <AnimatePresence>
                 {!isMobile && sidePanelMode !== "none" && (
                     <motion.div
-                        className="fixed left-[72px] top-0 z-[200] h-[100vh] flex-shrink-0 bg-white md:border-r md:shadow-sm"
+                        className="fixed left-[72px] top-0 z-[200] h-[100vh] flex-shrink-0 bg-[#fbfbfb] md:border-r md:shadow-sm"
                         initial={{ width: 0 }}
                         animate={{ width: 420 }}
                         exit={{ width: 0 }}
                         transition={{ type: "spring", stiffness: 300, damping: 30 }}
                     >
-                        <div className="flex h-full w-full flex-col">
-                            <div className="flex items-center justify-between border-b px-3 py-2">
-                                <div className="text-sm font-semibold">
-                                    {sidePanelMode === "activity" ? "Activity" : "Search Results"}
-                                </div>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="rounded-full bg-gray-100"
-                                    onClick={() => {
-                                        setSidePanelMode("none");
-                                        if (pathname === "/explore") {
-                                            router.push("/explore");
-                                        }
-                                    }}
-                                >
-                                    <X className="h-4 w-4" />
-                                </Button>
-                            </div>
+                        {/* Close (top-right, smaller) */}
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-2 top-2 z-[210] rounded-full bg-gray-100"
+                            onClick={() => {
+                                setSidePanelMode("none");
+                                if (pathname === "/explore") {
+                                    router.push("/explore");
+                                }
+                            }}
+                            aria-label="Close panel"
+                        >
+                            <X className="h-3.5 w-3.5" />
+                        </Button>
+
+                        {/* Panel content (no header, content starts at top) */}
+                        <div className="flex h-full w-full flex-col overflow-hidden">
                             <div className="flex-1 overflow-y-auto">
                                 {sidePanelMode === "activity" ? <ActivityPanel /> : <SearchResultsPanel />}
                             </div>

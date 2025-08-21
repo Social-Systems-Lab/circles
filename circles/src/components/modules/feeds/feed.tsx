@@ -94,9 +94,17 @@ export type AggregateFeedComponentProps = {
     posts: PostDisplay[];
     userFeed: Feed | null;
     activeTab: string;
+    showCreateNew?: boolean; // when false, hide "create post" in aggregate view (e.g., side panel)
+    compact?: boolean; // when true, render list in compact/mobile style (e.g., side panel)
 };
 
-export const AggregateFeedComponent = ({ posts, userFeed, activeTab }: AggregateFeedComponentProps) => {
+export const AggregateFeedComponent = ({
+    posts,
+    userFeed,
+    activeTab,
+    showCreateNew = true,
+    compact = false,
+}: AggregateFeedComponentProps) => {
     const isCompact = useIsCompact();
     const [user] = useAtom(userAtom);
     const isMobile = useIsMobile();
@@ -115,8 +123,8 @@ export const AggregateFeedComponent = ({ posts, userFeed, activeTab }: Aggregate
         return sdgs;
     }, [sdgSearch]);
 
-    // check if authorized to post
-    const canPost = !!user && !!userFeed;
+    // check if authorized to post (optionally disabled)
+    const canPost = !!user && !!userFeed && showCreateNew;
 
     const router = useRouter();
 
@@ -152,7 +160,7 @@ export const AggregateFeedComponent = ({ posts, userFeed, activeTab }: Aggregate
                 <Image src={emptyFeed} alt="No announcements yet" width={isMobile ? 230 : 300} />
                 <h4>No announcements</h4>
                 <div className="max-w-[700px] pl-4 pr-4">
-                    We couldn't find any announcements. Try the discover tab to find new content and start following
+                    We couldn’t find any announcements. Try the discover tab to find new content and start following
                     users and circles.
                 </div>
                 <div className="mt-4 flex flex-row gap-2">
@@ -189,7 +197,7 @@ export const AggregateFeedComponent = ({ posts, userFeed, activeTab }: Aggregate
                     </div>
                 </div>
 
-                <PostList posts={posts} isAggregateFeed={true} />
+                <PostList posts={posts} isAggregateFeed={true} compact={compact} />
             </div>
         </div>
     );

@@ -17,12 +17,7 @@ export default function SearchResultsPanel() {
 
     const items = searchState.items || [];
 
-    const header = useMemo(() => {
-        if (searchState.isSearching) return `Searching…`;
-        if (searchState.query) return `Results for "${searchState.query}"`;
-        if (searchState.hasSearched) return `No results`;
-        return `Search`;
-    }, [searchState.isSearching, searchState.query, searchState.hasSearched]);
+    // No header in side panel per design; keep internal state if needed later
 
     const handleItemClick = (item: any) => {
         // Zoom map if possible
@@ -40,12 +35,7 @@ export default function SearchResultsPanel() {
 
     return (
         <div className="flex h-full w-full flex-col">
-            <div className="flex items-center justify-between border-b px-3 py-2">
-                <div className="text-sm font-semibold">{header}</div>
-                <Button variant="ghost" size="sm" className="text-xs" onClick={() => setSidePanelMode("none")}>
-                    Close
-                </Button>
-            </div>
+            {/* Content starts at top; close handled by global SidePanel button */}
             <div className="flex-1 overflow-y-auto">
                 {searchState.isSearching && <div className="p-4 text-sm text-gray-600">Loading…</div>}
                 {!searchState.isSearching && items.length === 0 && searchState.hasSearched && (
