@@ -659,7 +659,7 @@ export const PostItem = ({
         <div
             className={`formatted relative flex min-w-0 flex-col gap-4 overflow-hidden ${
                 isCompact || inPreview || embedded ? "" : "rounded-[15px] border-0 shadow-lg"
-            } ${embedded ? "" : "bg-white"}`}
+            } bg-white`}
         >
             {(isAuthor || canModerate) && (
                 <div className="absolute right-2 top-2 z-10">
