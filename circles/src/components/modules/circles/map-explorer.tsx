@@ -695,21 +695,22 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                     trigger={
                                         <Button
                                             variant="ghost"
-                                            className="flex min-w-[56px] flex-shrink-0 items-center gap-2 data-[selected=true]:bg-accent md:min-w-[100px]"
+                                            className="ml-2 flex h-6 items-center gap-2 rounded-full border bg-white px-3 text-xs leading-none shadow-sm data-[selected=true]:border-primary"
                                             data-selected={selectedSdgs.length > 0}
                                         >
                                             {selectedSdgs.length === 0 ? (
                                                 <Image
                                                     src="/images/sdgs/SDG_Wheel_WEB.png"
                                                     alt="SDG Wheel"
-                                                    width={24}
-                                                    height={24}
+                                                    width={16}
+                                                    height={16}
+                                                    className="h-4 w-4"
                                                 />
                                             ) : (
                                                 <div
                                                     className="flex flex-row -space-x-2"
                                                     style={{
-                                                        width: `calc(24px + ${16 * Math.min(selectedSdgs.length - 1, 2)}px)`,
+                                                        width: `calc(16px + ${12 * Math.min(selectedSdgs.length - 1, 2)}px)`,
                                                     }}
                                                 >
                                                     {selectedSdgs.slice(0, 3).map((sdg) => (
@@ -717,9 +718,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                                             key={sdg.handle}
                                                             src={sdg.picture?.url ?? "/images/default-picture.png"}
                                                             alt={sdg.name}
-                                                            width={24}
-                                                            height={24}
-                                                            className="h-6 w-6 rounded-full border-2 border-white object-cover"
+                                                            width={16}
+                                                            height={16}
+                                                            className="h-4 w-4 rounded-full border-2 border-white object-cover"
                                                         />
                                                     ))}
                                                 </div>

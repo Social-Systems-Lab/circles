@@ -42,9 +42,9 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
                     variant="outline"
                     size="sm"
                     className={cn(
-                        "h-auto rounded-full border px-3 py-1 text-xs capitalize", // Chip-like styling, allow height adjust
-                        "data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground", // Styling when selected
-                        "hover:bg-accent hover:text-accent-foreground", // Hover styling
+                        "h-auto rounded-full border bg-white px-3 py-1 text-xs capitalize shadow-sm",
+                        "data-[state=on]:border-primary data-[state=on]:bg-white data-[state=on]:text-primary",
+                        "hover:bg-white"
                     )}
                     aria-label={`Filter by ${displayLabelMap?.[category] ?? category}`}
                 >
