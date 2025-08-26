@@ -695,7 +695,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                     trigger={
                                         <Button
                                             variant="ghost"
-                                            className="ml-2 flex h-6 items-center gap-2 rounded-full border bg-white px-3 text-xs leading-none shadow-sm data-[selected=true]:border-primary"
+                                            className="ml-2 flex h-6 items-center gap-2 rounded-full border bg-white px-4 text-xs leading-none shadow-sm data-[selected=true]:border-primary"
                                             data-selected={selectedSdgs.length > 0}
                                         >
                                             {selectedSdgs.length === 0 ? (
