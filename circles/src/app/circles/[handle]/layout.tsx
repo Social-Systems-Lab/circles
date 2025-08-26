@@ -54,7 +54,8 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 
     let title = circle.name;
     let description = circle.description ?? circle.mission;
-    let icon = circle.picture?.url ?? "/images/default-picture.png";
+    let icon = "/images/default-picture.png";
+    //let icon = circle.picture?.url ?? "/images/default-picture.png"; // Use a default icon if none is set
 
     return { title: title, description: description, icons: [icon] };
 }
