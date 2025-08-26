@@ -41,9 +41,9 @@ export default function SearchResultsPanel() {
     };
 
     return (
-        <div className="flex h-full w-full flex-col">
+        <div className="flex h-full w-full flex-col bg-white">
             {/* Header with search input moved into panel */}
-            <div className="sticky top-0 z-10 border-b bg-[#fbfbfb] px-3 py-2">
+            <div className="sticky top-0 z-10 border-b bg-white px-3 py-2">
                 <div className="mb-2 text-sm font-semibold">Search results</div>
                 <div className="flex items-center gap-2">
                     <input

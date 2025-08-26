@@ -641,10 +641,10 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 {/* Search Bar & Filters (Only in Explore Mode) */}
                 {viewMode === "explore" && !(sidePanelContentVisible === "toolbox" && isMobile) && (
                     <div className="relative">
-                        <div className="absolute flex items-center gap-2 rounded-full bg-white p-1 px-3 shadow-md">
+                        <div className="absolute flex items-center gap-2">
                             {/* Search Input (hidden on desktop when panel is open) */}
                             {showTopSearchInput && (
-                                <div className="flex items-center">
+                                <div className="flex items-center rounded-full bg-white p-1 px-3 shadow-md">
                                 <input
                                     type="text"
                                     placeholder="Search..."
