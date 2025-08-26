@@ -4,6 +4,7 @@ import React from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"; // Use ToggleGroup
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge"; // Import Badge for count display
+import { Users, User, Calendar } from "lucide-react";
 
 interface CategoryFilterProps {
     categories: string[]; // All available categories (e.g., ['circles', 'projects', 'users'])
@@ -22,6 +23,12 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
     hasSearched,
     displayLabelMap,
 }) => {
+    const iconMap: Record<string, React.ReactNode> = {
+        communities: <Users className="h-4 w-4" />,
+        users: <User className="h-4 w-4" />,
+        events: <Calendar className="h-4 w-4" />,
+    };
+
     // Handle ToggleGroup value change
     const handleValueChange = (value: string) => {
         // ToggleGroup returns the value of the selected item, or "" if deselected
@@ -42,15 +49,16 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
                     variant="outline"
                     size="sm"
                     className={cn(
-                        "h-auto rounded-full border bg-white px-3 py-1 text-xs capitalize shadow-sm",
+                        "flex h-auto items-center gap-2 rounded-full border bg-white px-5 py-1.5 text-sm capitalize shadow-sm",
                         "data-[state=on]:border-primary data-[state=on]:bg-white data-[state=on]:text-primary",
                         "hover:bg-white"
                     )}
                     aria-label={`Filter by ${displayLabelMap?.[category] ?? category}`}
                 >
-                    {displayLabelMap?.[category] ?? category}
+                    <span className="text-gray-600">{iconMap[category]}</span>
+                    <span>{displayLabelMap?.[category] ?? category}</span>
                     {hasSearched && (
-                        <Badge variant="secondary" className="ml-1.5 rounded-full px-1.5 py-0 text-xs">
+                        <Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0 text-[10px]">
                             {categoryCounts[category] ?? 0}
                         </Badge>
                     )}
