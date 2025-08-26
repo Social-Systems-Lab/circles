@@ -23,6 +23,7 @@ import {
     IssuePermissions,
     TaskDisplay, // Added TaskDisplay
     TaskPermissions, // Added TaskPermissions
+    EventDisplay, // Added EventDisplay
 } from "@/models/models";
 import { PostItem } from "../modules/feeds/post-list";
 import Indicators from "../utils/indicators";
@@ -33,6 +34,7 @@ import ImageCarousel from "@/components/ui/image-carousel";
 import { ProposalItem } from "../modules/proposals/proposal-item";
 import IssueDetail from "../modules/issues/issue-detail";
 import TaskDetail from "../modules/tasks/task-detail"; // Added TaskDetail import
+import EventDetail from "../modules/events/event-detail"; // Added EventDetail import
 import { MapPin, Quote } from "lucide-react";
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { sdgs } from "@/lib/data/sdgs";
@@ -398,6 +400,45 @@ export const ContentPreview: React.FC = () => {
                             permissions={props.permissions} // Safe
                             currentUserDid={currentUserDid}
                             isPreview={true}
+                        />
+                    </div>
+                );
+            }
+            case "event": {
+                // Render EventDetail in preview mode
+                const evt = contentPreview!.content as EventDisplay;
+                const props = contentPreview!.props as
+                    | {
+                          circleHandle: string;
+                          canEdit?: boolean;
+                          canReview?: boolean;
+                          canModerate?: boolean;
+                          isAuthor?: boolean;
+                      }
+                    | undefined;
+
+                const circleHandle =
+                    props?.circleHandle ||
+                    (evt?.circle as any)?.handle ||
+                    ""; // Fallback to circle.handle if provided by data layer
+
+                if (!circleHandle) {
+                    console.error("Event preview missing circleHandle", { evt, props });
+                    return <div className="p-4 text-red-500">Error: Missing circleHandle for event preview.</div>;
+                }
+
+                // If not provided, infer author from current user
+                const inferredIsAuthor = user?.did ? user.did === (evt as any).createdBy : false;
+
+                return (
+                    <div className="custom-scrollbar h-full overflow-y-auto">
+                        <EventDetail
+                            circleHandle={circleHandle}
+                            event={evt}
+                            canEdit={props?.canEdit ?? false}
+                            canReview={props?.canReview ?? false}
+                            canModerate={props?.canModerate ?? false}
+                            isAuthor={props?.isAuthor ?? inferredIsAuthor}
                         />
                     </div>
                 );

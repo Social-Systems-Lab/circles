@@ -14,6 +14,7 @@ import {
 import { getCircleById, SAFE_CIRCLE_PROJECTION } from "./circle";
 import { getUserByDid } from "./user";
 import { createPost } from "./feed"; // Import createPost from feed.ts
+import { upsertVbdProposals } from "./vdb";
 // import { getStalenessInfo } from "./ranking"; // getStalenessInfo is not exported from ranking
 
 // Safe projection for proposal queries
@@ -711,6 +712,13 @@ export const createProposal = async (
             console.error(`Error creating/linking shadow post for proposal ${createdProposalId}:`, postError);
         }
         // --- End Shadow Post Creation ---
+
+        // Upsert into vector DB
+        try {
+            await upsertVbdProposals([createdProposal as Proposal]);
+        } catch (e) {
+            console.error("Error upserting proposal to VDB:", e);
+        }
 
         return createdProposal as Proposal;
     } catch (error) {

@@ -1,7 +1,18 @@
 import { QdrantClient } from "@qdrant/js-client-rest";
-import { Cause as SDG, Skill, Circle, Post, MemberDisplay, PostDisplay } from "../../models/models";
-import { ObjectId } from "mongodb";
-import { Circles, Posts, Skills } from "./db";
+import {
+  Cause as SDG,
+  Skill,
+  Circle,
+  Post,
+  MemberDisplay,
+  PostDisplay,
+  Event,
+  Proposal,
+  Task,
+  Issue,
+  Goal,
+} from "../../models/models";
+import { Circles, Posts, Skills, Events, Proposals, Tasks, Issues, Goals } from "./db";
 import { getFullLocationName } from "../utils";
 import OpenAI from "openai";
 import { sdgs } from "@/lib/data/sdgs";
@@ -13,93 +24,139 @@ let qdrantClient: QdrantClient | undefined = undefined;
 let openAiClient: OpenAI | undefined = undefined;
 
 export const getQdrantClient = async () => {
-    if (!qdrantClient) {
-        qdrantClient = new QdrantClient({
-            host: process.env.QDRANT_HOST ?? "qdrant",
-            port: 6333,
-            // url: `http://${process.env.QDRANT_HOST ?? "qdrant"}:6333`,
-            timeout: 30000,
-        });
-    }
-    return qdrantClient;
+  if (!qdrantClient) {
+    qdrantClient = new QdrantClient({
+      host: process.env.QDRANT_HOST ?? "qdrant",
+      port: 6333,
+      // url: `http://${process.env.QDRANT_HOST ?? "qdrant"}:6333`,
+      timeout: 30000,
+    });
+  }
+  return qdrantClient;
 };
 
 export const getOpenAiClient = () => {
-    if (!openAiClient) {
-        openAiClient = new OpenAI({
-            apiKey: process.env.OPENAI_API_KEY,
-        });
-    }
-    return openAiClient;
+  if (!openAiClient) {
+    openAiClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+  }
+  return openAiClient;
 };
 
-export type VbdCategories = "circles" | "sdgs" | "skills" | "posts";
-const vdbCollections = ["circles", "sdgs", "skills", "posts"];
+export type VbdCategories =
+  | "circles"
+  | "sdgs"
+  | "skills"
+  | "posts"
+  | "events"
+  | "proposals"
+  | "tasks"
+  | "issues"
+  | "goals";
+
+const vdbCollections: VbdCategories[] = [
+  "circles",
+  "sdgs",
+  "skills",
+  "posts",
+  "events",
+  "proposals",
+  "tasks",
+  "issues",
+  "goals",
+];
 
 const getEmbeddings = async (textArray: string[]) => {
-    try {
-        let openai = getOpenAiClient();
+  try {
+    let openai = getOpenAiClient();
 
-        // Create embeddings for the array of texts
-        const response = await openai.embeddings.create({
-            input: textArray,
-            model: "text-embedding-3-small",
-        });
+    // Create embeddings for the array of texts
+    const response = await openai.embeddings.create({
+      input: textArray,
+      model: "text-embedding-3-small",
+    });
 
-        return response.data.map((item: any) => item.embedding); // Extract embeddings from the response
-    } catch (error) {
-        console.error("Error generating embeddings:", error);
-        return [];
-    }
+    return response.data.map((item: any) => item.embedding); // Extract embeddings from the response
+  } catch (error) {
+    console.error("Error generating embeddings:", error);
+    return [];
+  }
 };
 
 export const upsertVdbCollections = async () => {
-    const client = await getQdrantClient();
+  const client = await getQdrantClient();
 
-    const response = await client.getCollections();
+  const response = await client.getCollections();
 
-    console.log("Existing collections in Qdrant:", response.collections);
-    const existingCollections = response.collections.map((collection: any) => collection.name);
-    const missingCollections = vdbCollections.filter((collection) => !existingCollections.includes(collection));
+  console.log("Existing collections in Qdrant:", response.collections);
+  const existingCollections = response.collections.map((collection: any) => collection.name);
+  const missingCollections = vdbCollections.filter((collection) => !existingCollections.includes(collection));
 
-    for (const collection of missingCollections) {
-        await client.createCollection(collection, {
-            vectors: {
-                size: 1536,
-                distance: "Cosine",
-            },
-        });
-        console.log(`Collection ${collection} created in Qdrant.`);
-    }
+  for (const collection of missingCollections) {
+    await client.createCollection(collection, {
+      vectors: {
+        size: 1536,
+        distance: "Cosine",
+      },
+    });
+    console.log(`Collection ${collection} created in Qdrant.`);
+  }
 
-    // upsert data for each collection
-    console.log("Upserting circles to Qdrant...");
-    const circles = await Circles.find().toArray();
-    await upsertVbdCircles(circles);
-    console.log(`${circles.length} circles upserted.`);
+  // upsert data for each collection
+  console.log("Upserting circles to Qdrant...");
+  const circles = await Circles.find().toArray();
+  await upsertVbdCircles(circles);
+  console.log(`${circles.length} circles upserted.`);
 
-    console.log("Upserting posts to Qdrant...");
-    const posts = await getPostsForEmbedding();
-    await upsertVbdPosts(posts);
-    console.log(`${posts.length} posts upserted.`);
+  console.log("Upserting posts to Qdrant...");
+  const posts = await getPostsForEmbedding();
+  await upsertVbdPosts(posts);
+  console.log(`${posts.length} posts upserted.`);
 
-    console.log("Upserting sdgs to Qdrant...");
-    await upsertVbdSdgs();
-    console.log(`${sdgs.length} sdgs upserted.`);
+  console.log("Upserting sdgs to Qdrant...");
+  await upsertVbdSdgs();
+  console.log(`${sdgs.length} sdgs upserted.`);
 
-    console.log("Upserting skills to Qdrant...");
-    await upsertVbdSkills();
-    console.log(`${skills.length} skills upserted.`);
+  console.log("Upserting skills to Qdrant...");
+  await upsertVbdSkills();
+  console.log(`${skills.length} skills upserted.`);
+
+  // New entity upserts
+  console.log("Upserting events to Qdrant...");
+  const events = await Events.find().toArray();
+  await upsertVbdEvents(events);
+  console.log(`${events.length} events upserted.`);
+
+  console.log("Upserting proposals to Qdrant...");
+  const proposals = await Proposals.find().toArray();
+  await upsertVbdProposals(proposals);
+  console.log(`${proposals.length} proposals upserted.`);
+
+  console.log("Upserting tasks to Qdrant...");
+  const tasks = await Tasks.find().toArray();
+  await upsertVbdTasks(tasks);
+  console.log(`${tasks.length} tasks upserted.`);
+
+  console.log("Upserting issues to Qdrant...");
+  const issues = await Issues.find().toArray();
+  await upsertVbdIssues(issues);
+  console.log(`${issues.length} issues upserted.`);
+
+  console.log("Upserting goals to Qdrant...");
+  const goals = await Goals.find().toArray();
+  await upsertVbdGoals(goals);
+  console.log(`${goals.length} goals upserted.`);
 };
 
 // Helper function to format a circle into readable text
 export const formatCircleForEmbedding = (circle: Circle) => {
-    const sdgNames = getNamesFromHandles(circle.causes || [], sdgs);
-    const skillNames = getNamesFromHandles(circle.skills || [], skills);
+  const sdgNames = getNamesFromHandles(circle.causes || [], sdgs);
+  const skillNames = getNamesFromHandles(circle.skills || [], skills);
 
-    const skillsLabel = circle.circleType === "user" ? "offers" : "needs";
+  const skillsLabel = circle.circleType === "user" ? "offers" : "needs";
 
-    return `
+  return `
       Name: ${circle.name}
       Type: ${circle.circleType}
       Description: ${circle.description ?? "N/A"}
@@ -113,7 +170,7 @@ export const formatCircleForEmbedding = (circle: Circle) => {
 
 // Helper function to format a post for embedding
 export const formatPostForEmbedding = (post: PostDisplay) => {
-    return `
+  return `
       Content: ${post.content}
       Author: ${post.author?.name ? post.author?.name : "N/A"}
       Created At: ${post.createdAt.toISOString()}
@@ -123,7 +180,7 @@ export const formatPostForEmbedding = (post: PostDisplay) => {
 
 // Helper function to format a skill for embedding
 export const formatSkillForEmbedding = (skill: Skill) => {
-    return `
+  return `
       Name: ${skill.name}
       Description: ${skill.description}
     `;
@@ -131,18 +188,77 @@ export const formatSkillForEmbedding = (skill: Skill) => {
 
 // Helper function to format a sdg for embedding
 export const formatSdgForEmbedding = (sdg: SDG) => {
-    return `
+  return `
       Name: ${sdg.name}
       Description: ${sdg.description ?? ""}
     `;
 };
 
+// New helper formatters
+export const formatEventForEmbedding = (e: Event) => {
+  return `
+      Title: ${e.title}
+      Description: ${e.description ?? ""}
+      Stage: ${e.stage}
+      When: ${e.allDay ? "All day" : ""} ${e.startAt?.toString?.() ?? ""} - ${e.endAt?.toString?.() ?? ""}
+      Format: ${e.isVirtual ? "Virtual" : e.isHybrid ? "Hybrid" : "In-person"}
+      Virtual URL: ${e.virtualUrl ?? ""}
+      Location: ${e.location ? getFullLocationName(e.location) : "N/A"}
+      Categories: ${e.categories?.join(", ") ?? ""}
+      SDGs: ${e.causes?.join(", ") ?? ""}
+    `;
+};
+
+export const formatProposalForEmbedding = (p: Proposal) => {
+  return `
+      Name: ${p.name}
+      Background: ${p.background}
+      Decision: ${p.decisionText}
+      Stage: ${p.stage}
+      Outcome: ${p.outcome ?? ""}
+      Voting Deadline: ${p.votingDeadline?.toString?.() ?? ""}
+      Location: ${p.location ? getFullLocationName(p.location) : "N/A"}
+    `;
+};
+
+export const formatTaskForEmbedding = (t: Task) => {
+  return `
+      Title: ${t.title}
+      Description: ${t.description}
+      Stage: ${t.stage}
+      Assigned To: ${t.assignedTo ?? "Unassigned"}
+      Goal Id: ${t.goalId ?? ""}
+      Location: ${t.location ? getFullLocationName(t.location) : "N/A"}
+    `;
+};
+
+export const formatIssueForEmbedding = (i: Issue) => {
+  return `
+      Title: ${i.title}
+      Description: ${i.description}
+      Stage: ${i.stage}
+      Assigned To: ${i.assignedTo ?? "Unassigned"}
+      Location: ${i.location ? getFullLocationName(i.location) : "N/A"}
+    `;
+};
+
+export const formatGoalForEmbedding = (g: Goal) => {
+  return `
+      Title: ${g.title}
+      Description: ${g.description}
+      Stage: ${g.stage}
+      Target Date: ${g.targetDate?.toString?.() ?? ""}
+      Result: ${g.resultSummary ?? ""}
+      Location: ${g.location ? getFullLocationName(g.location) : "N/A"}
+    `;
+};
+
 // Utility function to map handles to names for sdgs or skills
 const getNamesFromHandles = (handles: string[], data: any[]) => {
-    return handles.map((handle) => {
-        const item = data.find((d) => d.handle === handle);
-        return item ? item.name : handle; // Fallback to handle if name not found
-    });
+  return handles.map((handle) => {
+    const item = data.find((d) => d.handle === handle);
+    return item ? item.name : handle; // Fallback to handle if name not found
+  });
 };
 
 const circleNs = "374c3b2f-be54-5c82-b3a1-f16f7b205cdc";
@@ -150,379 +266,555 @@ const postNs = "425f7857-1b1b-5ddc-b797-bd12ff00023c";
 const sdgNs = "2fb0c076-39d6-5c9b-b98d-24409f4ebfbc";
 const skillNs = "e8b887ec-5e3d-5383-9565-7fc72bb0e251";
 
+// New namespaces for new entities
+const eventNs = "4f2a8b6b-8d93-5e8c-bc7e-6a0c2c87c1e0";
+const proposalNs = "8f991a54-2e03-5ffc-bf0f-5e7b2b92fcd1";
+const taskNs = "d3e15cc7-6df2-5102-9a3b-1b4b4b9af6e2";
+const issueNs = "b4b1f58e-9b0f-53b0-9f1a-928e4fc27d8e";
+const goalNs = "c6bfe6f5-6a6a-5ef6-95e9-7c8ba57a8e21";
+
 // Upsert function for circles
 export const upsertVbdCircles = async (circles: Circle[]) => {
-    if (circles.length <= 0) {
-        console.log("No circles to upsert.");
-        return;
-    }
+  if (circles.length <= 0) {
+    console.log("No circles to upsert.");
+    return;
+  }
 
-    const client = await getQdrantClient();
+  const client = await getQdrantClient();
 
-    console.log("Getting embeddings for circles. Count:", circles.length);
+  console.log("Getting embeddings for circles. Count:", circles.length);
 
-    const embeddings = await getEmbeddings(circles.map((circle) => formatCircleForEmbedding(circle)));
+  const embeddings = await getEmbeddings(circles.map((circle) => formatCircleForEmbedding(circle)));
 
-    console.log("Embeddings generated. Count:", embeddings.length);
+  console.log("Embeddings generated. Count:", embeddings.length);
 
-    const qdrantPoints = circles.map((circle, i) => {
-        console.log("Getting embeddings for circle", circle._id.toString());
-        console.log(`Embedding ${i}.length:`, embeddings[i]?.length);
-        console.log("Getting UUID");
-        console.log("UUID:", uuidv5(circle._id.toString()!, circleNs));
+  const qdrantPoints = circles.map((circle, i) => {
+    return {
+      id: uuidv5(circle._id!.toString(), circleNs),
+      vector: embeddings[i],
+      payload: {
+        mongoId: circle._id!.toString(), // Add MongoDB _id here
+        name: circle.name,
+        description: circle.description,
+        content: circle.content ?? "",
+        mission: circle.mission,
+        circleType: circle.circleType,
+        createdAt: circle.createdAt?.toISOString(),
+        isPublic: circle.isPublic,
+        locationName: circle.location ? getFullLocationName(circle.location) : null,
+        location: circle.location?.lngLat
+          ? {
+              latitude: circle.location.lngLat.lat,
+              longitude: circle.location.lngLat.lng,
+            }
+          : null,
+        causes: circle.causes,
+        skills: circle.skills,
+      },
+    };
+  });
 
-        return {
-            id: uuidv5(circle._id.toString(), circleNs),
-            vector: embeddings[i],
-            payload: {
-                mongoId: circle._id.toString(), // Add MongoDB _id here
-                name: circle.name,
-                description: circle.description,
-                content: circle.content ?? "",
-                mission: circle.mission,
-                circleType: circle.circleType,
-                createdAt: circle.createdAt?.toISOString(),
-                isPublic: circle.isPublic,
-                locationName: circle.location ? getFullLocationName(circle.location) : null,
-                location: circle.location?.lngLat
-                    ? {
-                          latitude: circle.location.lngLat.lat,
-                          longitude: circle.location.lngLat.lng,
-                      }
-                    : null,
-                causes: circle.causes,
-                skills: circle.skills,
-            },
-        };
-    });
-
-    console.log("Upserting embeddings...");
-    await client.upsert("circles", { points: qdrantPoints });
+  console.log("Upserting embeddings...");
+  await client.upsert("circles", { points: qdrantPoints });
 };
 
 // Repeat similar logic for posts, sdgs, and skills
 export const upsertVbdPosts = async (posts: PostDisplay[]) => {
-    const client = await getQdrantClient();
+  const client = await getQdrantClient();
 
-    // Ensure all posts have valid `_id` fields
-    const validPosts = posts.filter((post) => post._id);
-    if (validPosts.length <= 0) {
-        console.log("No valid posts to upsert.");
-        return;
-    }
+  // Ensure all posts have valid `_id` fields
+  const validPosts = posts.filter((post) => post._id);
+  if (validPosts.length <= 0) {
+    console.log("No valid posts to upsert.");
+    return;
+  }
 
-    console.log("Getting embeddings for posts...");
+  console.log("Getting embeddings for posts...");
 
-    const embeddings = await getEmbeddings(validPosts.map((post) => formatPostForEmbedding(post)));
+  const embeddings = await getEmbeddings(validPosts.map((post) => formatPostForEmbedding(post)));
 
-    const qdrantPoints = validPosts.map((post, i) => ({
-        id: uuidv5(post._id.toString(), postNs), // Ensure `_id` is stringified
-        vector: embeddings[i], // Ensure embedding is a valid number[]
-        payload: {
-            mongoId: post._id.toString(), // Add MongoDB _id here
-            content: post.content,
-            createdAt: post.createdAt.toISOString(),
-            createdBy: post.createdBy,
-            locationName: post.location ? getFullLocationName(post.location) : null,
-        },
-    }));
+  const qdrantPoints = validPosts.map((post, i) => ({
+    id: uuidv5(post._id!.toString(), postNs), // Ensure `_id` is stringified
+    vector: embeddings[i], // Ensure embedding is a valid number[]
+    payload: {
+      mongoId: post._id!.toString(), // Add MongoDB _id here
+      content: post.content,
+      createdAt: post.createdAt.toISOString(),
+      createdBy: post.createdBy,
+      locationName: post.location ? getFullLocationName(post.location) : null,
+    },
+  }));
 
-    console.log("Upserting embeddings...");
-    await client.upsert("posts", { points: qdrantPoints });
+  console.log("Upserting embeddings...");
+  await client.upsert("posts", { points: qdrantPoints });
 };
 
 // Upsert function for sdgs
 export const upsertVbdSdgs = async () => {
-    const client = await getQdrantClient();
+  const client = await getQdrantClient();
 
-    // Ensure all sdgs have valid `handle` fields
-    const validSdgs = sdgs.filter((sdg) => sdg.handle);
-    if (validSdgs.length <= 0) {
-        console.log("No valid sdgs to upsert.");
-        return;
-    }
+  // Ensure all sdgs have valid `handle` fields
+  const validSdgs = sdgs.filter((sdg) => sdg.handle);
+  if (validSdgs.length <= 0) {
+    console.log("No valid sdgs to upsert.");
+    return;
+  }
 
-    console.log("Getting embeddings for sdgs...");
+  console.log("Getting embeddings for sdgs...");
 
-    const embeddings = await getEmbeddings(validSdgs.map((sdg) => formatSdgForEmbedding(sdg)));
+  const embeddings = await getEmbeddings(validSdgs.map((sdg) => formatSdgForEmbedding(sdg)));
 
-    const qdrantPoints = validSdgs.map((sdg, i) => ({
-        id: uuidv5(sdg.handle as string, sdgNs), // Ensure handle is always a string
-        vector: embeddings[i], // Ensure embedding is a valid number[]
-        payload: {
-            name: sdg.name,
-            description: sdg.description,
-        },
-    }));
+  const qdrantPoints = validSdgs.map((sdg, i) => ({
+    id: uuidv5(sdg.handle as string, sdgNs), // Ensure handle is always a string
+    vector: embeddings[i], // Ensure embedding is a valid number[]
+    payload: {
+      name: sdg.name,
+      description: sdg.description,
+    },
+  }));
 
-    console.log("Upserting embeddings...");
+  console.log("Upserting embeddings...");
 
-    // Upsert into the 'sdgs' collection in Qdrant
-    await client.upsert("sdgs", { points: qdrantPoints });
+  // Upsert into the 'sdgs' collection in Qdrant
+  await client.upsert("sdgs", { points: qdrantPoints });
 };
 
 // Upsert function for skills
 export const upsertVbdSkills = async () => {
-    const client = await getQdrantClient();
+  const client = await getQdrantClient();
 
-    // Ensure all skills have valid `handle` fields
-    const validSkills = skills.filter((skill) => skill.handle);
-    if (validSkills.length <= 0) {
-        console.log("No valid skills to upsert.");
-        return;
-    }
+  // Ensure all skills have valid `handle` fields
+  const validSkills = skills.filter((skill) => skill.handle);
+  if (validSkills.length <= 0) {
+    console.log("No valid skills to upsert.");
+    return;
+  }
 
-    console.log("Getting embeddings for skills...");
+  console.log("Getting embeddings for skills...");
 
-    const embeddings = await getEmbeddings(validSkills.map((skill) => formatSkillForEmbedding(skill)));
+  const embeddings = await getEmbeddings(validSkills.map((skill) => formatSkillForEmbedding(skill)));
 
-    const qdrantPoints = validSkills.map((skill, i) => ({
-        id: uuidv5(skill.handle, skillNs), // Ensure handle is always a string
-        vector: embeddings[i], // Ensure embedding is a valid number[]
-        payload: {
-            name: skill.name,
-            description: skill.description,
-        },
-    }));
+  const qdrantPoints = validSkills.map((skill, i) => ({
+    id: uuidv5(skill.handle, skillNs), // Ensure handle is always a string
+    vector: embeddings[i], // Ensure embedding is a valid number[]
+    payload: {
+      name: skill.name,
+      description: skill.description,
+    },
+  }));
 
-    console.log("Upserting embeddings...");
+  console.log("Upserting embeddings...");
 
-    // Upsert into the 'skills' collection in Qdrant
-    await client.upsert("skills", { points: qdrantPoints });
+  // Upsert into the 'skills' collection in Qdrant
+  await client.upsert("skills", { points: qdrantPoints });
+};
+
+// New: Upsert function for events
+export const upsertVbdEvents = async (events: Event[]) => {
+  const client = await getQdrantClient();
+
+  const valid = (events || []).filter((e) => e && (e as any)._id);
+  if (valid.length <= 0) {
+    console.log("No valid events to upsert.");
+    return;
+  }
+
+  console.log("Getting embeddings for events...");
+
+  const embeddings = await getEmbeddings(valid.map((e) => formatEventForEmbedding(e)));
+
+  const points = valid.map((e, i) => ({
+    id: uuidv5((e as any)._id.toString(), eventNs),
+    vector: embeddings[i],
+    payload: {
+      mongoId: (e as any)._id.toString(),
+      title: e.title,
+      description: e.description,
+      stage: e.stage,
+      createdAt: (e as any).createdAt?.toString?.(),
+      circleId: e.circleId,
+      locationName: e.location ? getFullLocationName(e.location) : null,
+      isVirtual: !!e.isVirtual,
+      isHybrid: !!e.isHybrid,
+      virtualUrl: e.virtualUrl ?? null,
+      startAt: e.startAt?.toString?.(),
+      endAt: e.endAt?.toString?.(),
+      allDay: !!e.allDay,
+      categories: e.categories ?? [],
+      causes: e.causes ?? [],
+    },
+  }));
+
+  console.log("Upserting event embeddings...");
+  await client.upsert("events", { points });
+};
+
+// New: Upsert function for proposals
+export const upsertVbdProposals = async (proposals: Proposal[]) => {
+  const client = await getQdrantClient();
+
+  const valid = (proposals || []).filter((p) => p && (p as any)._id);
+  if (valid.length <= 0) {
+    console.log("No valid proposals to upsert.");
+    return;
+  }
+
+  console.log("Getting embeddings for proposals...");
+
+  const embeddings = await getEmbeddings(valid.map((p) => formatProposalForEmbedding(p)));
+
+  const points = valid.map((p, i) => ({
+    id: uuidv5((p as any)._id.toString(), proposalNs),
+    vector: embeddings[i],
+    payload: {
+      mongoId: (p as any)._id.toString(),
+      name: p.name,
+      background: p.background,
+      decisionText: p.decisionText,
+      stage: p.stage,
+      outcome: p.outcome ?? null,
+      createdAt: (p as any).createdAt?.toString?.(),
+      circleId: p.circleId,
+      locationName: p.location ? getFullLocationName(p.location) : null,
+    },
+  }));
+
+  console.log("Upserting proposal embeddings...");
+  await client.upsert("proposals", { points });
+};
+
+// New: Upsert function for tasks
+export const upsertVbdTasks = async (tasks: Task[]) => {
+  const client = await getQdrantClient();
+
+  const valid = (tasks || []).filter((t) => t && (t as any)._id);
+  if (valid.length <= 0) {
+    console.log("No valid tasks to upsert.");
+    return;
+  }
+
+  console.log("Getting embeddings for tasks...");
+
+  const embeddings = await getEmbeddings(valid.map((t) => formatTaskForEmbedding(t)));
+
+  const points = valid.map((t, i) => ({
+    id: uuidv5((t as any)._id.toString(), taskNs),
+    vector: embeddings[i],
+    payload: {
+      mongoId: (t as any)._id.toString(),
+      title: t.title,
+      description: t.description,
+      stage: t.stage,
+      assignedTo: t.assignedTo ?? null,
+      createdAt: (t as any).createdAt?.toString?.(),
+      circleId: t.circleId,
+      goalId: t.goalId ?? null,
+      locationName: t.location ? getFullLocationName(t.location) : null,
+    },
+  }));
+
+  console.log("Upserting task embeddings...");
+  await client.upsert("tasks", { points });
+};
+
+// New: Upsert function for issues
+export const upsertVbdIssues = async (issues: Issue[]) => {
+  const client = await getQdrantClient();
+
+  const valid = (issues || []).filter((x) => x && (x as any)._id);
+  if (valid.length <= 0) {
+    console.log("No valid issues to upsert.");
+    return;
+  }
+
+  console.log("Getting embeddings for issues...");
+
+  const embeddings = await getEmbeddings(valid.map((x) => formatIssueForEmbedding(x)));
+
+  const points = valid.map((x, i) => ({
+    id: uuidv5((x as any)._id.toString(), issueNs),
+    vector: embeddings[i],
+    payload: {
+      mongoId: (x as any)._id.toString(),
+      title: x.title,
+      description: x.description,
+      stage: x.stage,
+      assignedTo: x.assignedTo ?? null,
+      createdAt: (x as any).createdAt?.toString?.(),
+      circleId: x.circleId,
+      locationName: x.location ? getFullLocationName(x.location) : null,
+    },
+  }));
+
+  console.log("Upserting issue embeddings...");
+  await client.upsert("issues", { points });
+};
+
+// New: Upsert function for goals
+export const upsertVbdGoals = async (goals: Goal[]) => {
+  const client = await getQdrantClient();
+
+  const valid = (goals || []).filter((g) => g && (g as any)._id);
+  if (valid.length <= 0) {
+    console.log("No valid goals to upsert.");
+    return;
+  }
+
+  console.log("Getting embeddings for goals...");
+
+  const embeddings = await getEmbeddings(valid.map((g) => formatGoalForEmbedding(g)));
+
+  const points = valid.map((g, i) => ({
+    id: uuidv5((g as any)._id.toString(), goalNs),
+    vector: embeddings[i],
+    payload: {
+      mongoId: (g as any)._id.toString(),
+      title: g.title,
+      description: g.description,
+      stage: g.stage,
+      createdAt: (g as any).createdAt?.toString?.(),
+      circleId: g.circleId,
+      targetDate: g.targetDate?.toString?.() ?? null,
+      locationName: g.location ? getFullLocationName(g.location) : null,
+    },
+  }));
+
+  console.log("Upserting goal embeddings...");
+  await client.upsert("goals", { points });
 };
 
 // Method to delete circles from Qdrant by ID
 export const deleteVbdCircle = async (circleId: string) => {
-    const client = await getQdrantClient();
+  const client = await getQdrantClient();
 
-    let uuid = uuidv5(circleId, circleNs);
+  let uuid = uuidv5(circleId, circleNs);
 
-    // Delete the circle from the 'circles' collection in Qdrant
-    await client.delete("circles", {
-        points: [uuid],
-    });
+  // Delete the circle from the 'circles' collection in Qdrant
+  await client.delete("circles", {
+    points: [uuid],
+  });
 
-    console.log(`Circle with ID ${circleId} deleted from Qdrant.`);
+  console.log(`Circle with ID ${circleId} deleted from Qdrant.`);
 };
 
 // Method to delete posts from Qdrant by ID
 export const deleteVbdPost = async (postId: string) => {
-    const client = await getQdrantClient();
+  const client = await getQdrantClient();
 
-    let uuid = uuidv5(postId, postNs);
+  let uuid = uuidv5(postId, postNs);
 
-    // Delete the post from the 'posts' collection in Qdrant
-    await client.delete("posts", {
-        points: [uuid],
-    });
+  // Delete the post from the 'posts' collection in Qdrant
+  await client.delete("posts", {
+    points: [uuid],
+  });
 
-    console.log(`Post with ID ${postId} deleted from Qdrant.`);
+  console.log(`Post with ID ${postId} deleted from Qdrant.`);
 };
 
 export const getVbdCircleById = async (circleId: string) => {
-    const client = await getQdrantClient();
+  const client = await getQdrantClient();
 
-    let uuid = uuidv5(circleId, circleNs);
+  let uuid = uuidv5(circleId, circleNs);
 
-    // Retrieve the circle by ID
-    const response = await client.retrieve("circles", {
-        ids: [uuid],
-        with_vector: true, // If you need the vector as well
-        with_payload: false, // To get the payload (metadata) along with the vector
-    });
+  // Retrieve the circle by ID
+  const response = await client.retrieve("circles", {
+    ids: [uuid],
+    with_vector: true, // If you need the vector as well
+    with_payload: false, // To get the payload (metadata) along with the vector
+  });
 
-    if (response.length > 0) {
-        return response[0]; // Return the first match if available
-    } else {
-        console.error(`No circle found with ID: ${circleId}`);
-        return null;
-    }
+  if (response.length > 0) {
+    return response[0]; // Return the first match if available
+  } else {
+    console.error(`No circle found with ID: ${circleId}`);
+    return null;
+  }
 };
 
 export const getVbdPostById = async (postId: string) => {
-    const client = await getQdrantClient();
+  const client = await getQdrantClient();
 
-    let uuid = uuidv5(postId, postNs);
+  let uuid = uuidv5(postId, postNs);
 
-    // Retrieve the post by its ID
-    const response = await client.retrieve("posts", {
-        ids: [uuid],
-        with_vector: true, // Assuming you don't need the vector
-        with_payload: false, // Get the payload (metadata)
-    });
+  // Retrieve the post by its ID
+  const response = await client.retrieve("posts", {
+    ids: [uuid],
+    with_vector: true, // Assuming you don't need the vector
+    with_payload: false, // Get the payload (metadata)
+  });
 
-    if (response.length > 0) {
-        return response[0]; // Return the first match if available
-    } else {
-        console.error(`No post found with ID: ${postId}`);
-        return null;
-    }
+  if (response.length > 0) {
+    return response[0]; // Return the first match if available
+  } else {
+    console.error(`No post found with ID: ${postId}`);
+    return null;
+  }
 };
 
 export const getVbdSimilarity = async (
-    source: Circle,
-    item: PostDisplay | Circle | MemberDisplay,
+  source: Circle,
+  item: PostDisplay | Circle | MemberDisplay,
 ): Promise<number | undefined> => {
-    if (!source || !item) return undefined;
+  if (!source || !item) return undefined;
 
-    const client = await getQdrantClient();
+  const client = await getQdrantClient();
 
-    // Determine whether the item is a Circle or a Post, and select the appropriate collection
-    const isCircle = item?.circleType === "circle" || item?.circleType === "user" || item?.circleType === "project";
-    const collectionName = isCircle ? "circles" : "posts";
-    const idName = item._id?.toString();
-    const sourceIdName = source._id?.toString();
-    const targetNs = isCircle ? circleNs : postNs;
+  // Determine whether the item is a Circle or a Post, and select the appropriate collection
+  const isCircle = (item as any)?.circleType === "circle" || (item as any)?.circleType === "user" || (item as any)?.circleType === "project";
+  const collectionName = isCircle ? "circles" : "posts";
+  const idName = (item as any)._id?.toString();
+  const sourceIdName = (source as any)._id?.toString();
+  const targetNs = isCircle ? circleNs : postNs;
 
-    let sourceUuid = uuidv5(sourceIdName, circleNs);
-    let targetUuid = uuidv5(idName, targetNs);
+  let sourceUuid = uuidv5(sourceIdName, circleNs);
+  let targetUuid = uuidv5(idName, targetNs);
 
-    if (!idName) return undefined;
+  if (!idName) return undefined;
 
-    try {
-        // Fetch the vectors for both the source circle and the target item
-        const sourceResponse = await client.retrieve("circles", {
-            ids: [sourceUuid],
-            with_vector: true, // Fetch vector as well
-        });
+  try {
+    // Fetch the vectors for both the source circle and the target item
+    const sourceResponse = await client.retrieve("circles", {
+      ids: [sourceUuid],
+      with_vector: true, // Fetch vector as well
+    });
 
-        const targetResponse = await client.retrieve(collectionName, {
-            ids: [targetUuid],
-            with_vector: true, // Fetch vector as well
-        });
+    const targetResponse = await client.retrieve(collectionName, {
+      ids: [targetUuid],
+      with_vector: true, // Fetch vector as well
+    });
 
-        const sourceVector = sourceResponse[0]?.vector as number[];
-        const targetVector = targetResponse[0]?.vector as number[];
+    const sourceVector = sourceResponse[0]?.vector as number[];
+    const targetVector = targetResponse[0]?.vector as number[];
 
-        if (!sourceVector || !targetVector) return undefined;
+    if (!sourceVector || !targetVector) return undefined;
 
-        // Calculate cosine similarity between the two vectors
-        const similarity = calculateCosineSimilarity(sourceVector, targetVector);
-        return similarity;
-    } catch (error) {
-        console.error(`Error fetching similarity for ${collectionName} ${idName}:`, error);
-        return undefined;
-    }
+    // Calculate cosine similarity between the two vectors
+    const similarity = calculateCosineSimilarity(sourceVector, targetVector);
+    return similarity;
+  } catch (error) {
+    console.error(`Error fetching similarity for ${collectionName} ${idName}:`, error);
+    return undefined;
+  }
 };
 
 const calculateCosineSimilarity = (vecA: number[], vecB: number[]): number => {
-    const dotProduct = vecA.reduce((sum, val, i) => sum + val * vecB[i], 0);
-    const magnitudeA = Math.sqrt(vecA.reduce((sum, val) => sum + val * val, 0));
-    const magnitudeB = Math.sqrt(vecB.reduce((sum, val) => sum + val * val, 0));
-    return dotProduct / (magnitudeA * magnitudeB);
+  const dotProduct = vecA.reduce((sum, val, i) => sum + val * vecB[i], 0);
+  const magnitudeA = Math.sqrt(vecA.reduce((sum, val) => sum + val * val, 0));
+  const magnitudeB = Math.sqrt(vecB.reduce((sum, val) => sum + val * val, 0));
+  return dotProduct / (magnitudeA * magnitudeB);
 };
 
 // Define the structure for search results
 export interface SearchResultItem {
-    _id: string; // Original MongoDB ObjectId as string
-    qdrantId: string; // Qdrant UUID
-    type: "circle" | "project" | "user" | "post"; // Type of content
-    score: number; // Similarity score from Qdrant
+  _id: string; // Original MongoDB ObjectId as string
+  qdrantId: string; // Qdrant UUID
+  type: "circle" | "project" | "user" | "post"; // Type of content
+  score: number; // Similarity score from Qdrant
 }
 
 // Function for semantic search across specified collections
 export const semanticSearchContent = async (options: {
-    query: string;
-    categories: string[]; // e.g., ['circles', 'posts']
-    limit?: number;
-    sdgHandles?: string[];
+  query: string;
+  categories: string[]; // e.g., ['circles', 'posts']
+  limit?: number;
+  sdgHandles?: string[];
 }): Promise<SearchResultItem[]> => {
-    const { query, categories, limit = 20, sdgHandles } = options;
+  const { query, categories, limit = 20, sdgHandles } = options;
 
-    if ((!query || query.trim() === "") && (!sdgHandles || sdgHandles.length === 0)) {
+  if ((!query || query.trim() === "") && (!sdgHandles || sdgHandles.length === 0)) {
+    return [];
+  }
+
+  const client = await getQdrantClient();
+  const openai = getOpenAiClient();
+
+  try {
+    // 1. Get embedding for the search query
+    let queryVector: number[] | undefined;
+    if (query && query.trim() !== "") {
+      const queryEmbeddingResponse = await openai.embeddings.create({
+        input: [query],
+        model: "text-embedding-3-small",
+      });
+      queryVector = queryEmbeddingResponse.data[0]?.embedding;
+
+      if (!queryVector) {
+        console.error("Failed to generate embedding for the query.");
         return [];
+      }
     }
 
-    const client = await getQdrantClient();
-    const openai = getOpenAiClient();
+    // 2. Prepare search requests for each category (collection)
+    const searchPromises = categories.map((collectionName) => {
+      // Ensure collection name is valid
+      if (!vdbCollections.includes(collectionName as VbdCategories)) {
+        console.warn(`Invalid collection name provided: ${collectionName}`);
+        return Promise.resolve([] as any[]); // Return empty results for invalid collections
+      }
 
-    try {
-        // 1. Get embedding for the search query
-        let queryVector: number[] | undefined;
-        if (query && query.trim() !== "") {
-            const queryEmbeddingResponse = await openai.embeddings.create({
-                input: [query],
-                model: "text-embedding-3-small",
-            });
-            queryVector = queryEmbeddingResponse.data[0]?.embedding;
+      const filter: any = {};
+      if (sdgHandles && sdgHandles.length > 0) {
+        filter.must = [
+          {
+            key: "causes",
+            match: {
+              any: sdgHandles,
+            },
+          },
+        ];
+      }
 
-            if (!queryVector) {
-                console.error("Failed to generate embedding for the query.");
-                return [];
-            }
-        }
-
-        // 2. Prepare search requests for each category (collection)
-        const searchPromises = categories.map((collectionName) => {
-            // Ensure collection name is valid
-            if (!vdbCollections.includes(collectionName)) {
-                console.warn(`Invalid collection name provided: ${collectionName}`);
-                return Promise.resolve([]); // Return empty results for invalid collections
-            }
-
-            const filter: any = {};
-            if (sdgHandles && sdgHandles.length > 0) {
-                filter.must = [
-                    {
-                        key: "causes",
-                        match: {
-                            any: sdgHandles,
-                        },
-                    },
-                ];
-            }
-
-            if (queryVector) {
-                return client.search(collectionName, {
-                    vector: queryVector,
-                    limit: limit,
-                    with_payload: true, // We need the payload data
-                    filter: filter,
-                });
-            } else {
-                // When no query vector, use scroll with filtering
-                return client
-                    .scroll(collectionName, {
-                        limit: limit,
-                        with_payload: true,
-                        filter: filter,
-                    })
-                    .then((response) => response.points);
-            }
+      if (queryVector) {
+        return client.search(collectionName, {
+          vector: queryVector,
+          limit: limit,
+          with_payload: true, // We need the payload data
+          filter: filter,
         });
+      } else {
+        // When no query vector, use scroll with filtering
+        return client
+          .scroll(collectionName, {
+            limit: limit,
+            with_payload: true,
+            filter: filter,
+          })
+          .then((response) => response.points);
+      }
+    });
 
-        // 3. Execute searches in parallel
-        const searchResults = await Promise.all(searchPromises);
+    // 3. Execute searches in parallel
+    const searchResults = await Promise.all(searchPromises);
 
-        // 4. Combine and process results
-        let combinedResults: SearchResultItem[] = [];
-        searchResults.forEach((resultSet, index) => {
-            const collectionName = categories[index]; // Get the corresponding collection name
+    // 4. Combine and process results
+    let combinedResults: SearchResultItem[] = [];
+    searchResults.forEach((resultSet, index) => {
+      const collectionName = categories[index]; // Get the corresponding collection name
 
-            resultSet.forEach((hit: any) => {
-                const payload = hit.payload;
-                const type = collectionName === "posts" ? "post" : payload?.circleType || "circle"; // Determine type
+      resultSet.forEach((hit: any) => {
+        const payload = hit.payload;
+        const type = collectionName === "posts" ? "post" : (payload?.circleType || "circle"); // Determine type
 
-                console.log("Search hit:", hit);
+        console.log("Search hit:", hit);
 
-                // Map payload to SearchResultItem structure
-                const resultItem: SearchResultItem = {
-                    _id: payload?.mongoId, // Use the stored mongoId
-                    qdrantId: hit.id,
-                    type: type,
-                    score: hit.score,
-                };
-                combinedResults.push(resultItem);
-            });
-        });
+        // Map payload to SearchResultItem structure
+        const resultItem: SearchResultItem = {
+          _id: payload?.mongoId, // Use the stored mongoId
+          qdrantId: hit.id,
+          type: type,
+          score: hit.score,
+        };
+        combinedResults.push(resultItem);
+      });
+    });
 
-        // 5. Sort combined results by score (descending) and take top N
-        combinedResults.sort((a, b) => b.score - a.score);
-        combinedResults = combinedResults.slice(0, limit);
+    // 5. Sort combined results by score (descending) and take top N
+    combinedResults.sort((a, b) => b.score - a.score);
+    combinedResults = combinedResults.slice(0, limit);
 
-        return combinedResults;
-    } catch (error) {
-        console.error("Error during semantic search:", error);
-        return [];
-    }
+    return combinedResults;
+  } catch (error) {
+    console.error("Error during semantic search:", error);
+    return [];
+  }
 };

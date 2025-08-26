@@ -7,6 +7,7 @@ import { getMemberIdsByUserGroup } from "./member";
 import { isAuthorized } from "../auth/auth";
 import { features } from "./constants"; // RANKING_STALENESS_DAYS is now in ranking.ts
 import { createPost } from "./feed"; // Import createPost from feed.ts
+import { upsertVbdTasks } from "./vdb";
 import { getAggregateRanking, RankingContext } from "./ranking"; // Import the new generic function
 // No longer need getUserByDid if we use $lookup consistently
 
@@ -461,6 +462,13 @@ export const createTask = async (taskData: Omit<Task, "_id" | "commentPostId">):
             console.error(`Error creating/linking shadow post for task ${createdTaskId}:`, postError);
         }
         // --- End Shadow Post Creation ---
+
+        // Upsert into vector DB
+        try {
+            await upsertVbdTasks([createdTask as Task]);
+        } catch (e) {
+            console.error("Error upserting task to VDB:", e);
+        }
 
         return createdTask as Task;
     } catch (error) {

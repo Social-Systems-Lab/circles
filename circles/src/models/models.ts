@@ -592,6 +592,17 @@ export type ContentPreviewData =
     | { type: "proposal"; content: ProposalDisplay; props: { circle: Circle } }
     | { type: "issue"; content: IssueDisplay; props: { circle: Circle; permissions: IssuePermissions } }
     | { type: "task"; content: TaskDisplay; props: { circle: Circle; permissions: TaskPermissions } }
+    | {
+          type: "event";
+          content: EventDisplay;
+          props: {
+              circleHandle: string;
+              canEdit?: boolean;
+              canReview?: boolean;
+              canModerate?: boolean;
+              isAuthor?: boolean;
+          };
+      }
     | { type: "goal"; content: GoalDisplay; props: { circle: Circle; permissions: GoalPermissions } }
     | {
           type: "default";

@@ -3,6 +3,7 @@ import { ObjectId } from "mongodb";
 import { Event, EventDisplay, EventStage, EventRsvp, Circle, Post, Media } from "@/models/models";
 import { SAFE_CIRCLE_PROJECTION } from "./circle";
 import { createPost } from "./feed";
+import { upsertVbdEvents } from "./vdb";
 
 // Safe projection for event queries
 export const SAFE_EVENT_PROJECTION = {
@@ -427,6 +428,13 @@ export const createEvent = async (data: Omit<Event, "_id" | "commentPostId">): P
         }
     } catch (postError) {
         console.error(`Error creating/linking shadow post for event ${createdEventId}:`, postError);
+    }
+
+    // Upsert into vector DB
+    try {
+        await upsertVbdEvents([createdEvent as Event]);
+    } catch (e) {
+        console.error("Error upserting event to VDB:", e);
     }
 
     return createdEvent as Event;

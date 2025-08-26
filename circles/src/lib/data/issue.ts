@@ -4,6 +4,7 @@ import { ObjectId } from "mongodb";
 import { Issue, IssueDisplay, IssueStage, Circle, Member, Post } from "@/models/models"; // Added Post type
 import { getCircleById, SAFE_CIRCLE_PROJECTION } from "./circle";
 import { createPost } from "./feed"; // Import createPost from feed.ts
+import { upsertVbdIssues } from "./vdb";
 // No longer need getUserByDid if we use $lookup consistently
 
 // Safe projection for issue queries, similar to proposals
@@ -412,6 +413,13 @@ export const createIssue = async (issueData: Omit<Issue, "_id" | "commentPostId"
             console.error(`Error creating/linking shadow post for issue ${createdIssueId}:`, postError);
         }
         // --- End Shadow Post Creation ---
+
+        // Upsert into vector DB
+        try {
+            await upsertVbdIssues([createdIssue as Issue]);
+        } catch (e) {
+            console.error("Error upserting issue to VDB:", e);
+        }
 
         return createdIssue as Issue;
     } catch (error) {

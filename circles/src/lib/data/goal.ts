@@ -6,6 +6,7 @@ import { SAFE_CIRCLE_PROJECTION } from "./circle";
 import { getMemberIdsByUserGroup } from "./member";
 // RANKING_STALENESS_DAYS is now in ranking.ts
 import { createPost } from "./feed"; // Import createPost from feed.ts
+import { upsertVbdGoals } from "./vdb";
 import { getAggregateRanking, RankingContext } from "./ranking"; // Import the new generic function
 // No longer need getUserByDid if we use $lookup consistently
 
@@ -418,6 +419,13 @@ export const createGoal = async (
             // Goal creation succeeded, but shadow post failed. Log error but return the created goal.
         }
         // --- End Shadow Post Creation ---
+
+        // Upsert into vector DB
+        try {
+            await upsertVbdGoals([createdGoal as Goal]);
+        } catch (e) {
+            console.error("Error upserting goal to VDB:", e);
+        }
 
         // Return the goal object, potentially updated with commentPostId
         return createdGoal as Goal;
