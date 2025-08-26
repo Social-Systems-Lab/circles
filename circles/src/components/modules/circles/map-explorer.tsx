@@ -38,6 +38,7 @@ import {
     sidePanelContentVisibleAtom, // Import contentPreviewAtom
     sidePanelModeAtom,
     sidePanelSearchStateAtom,
+    mapSearchCommandAtom,
 } from "@/lib/data/atoms";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
@@ -145,6 +146,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [panelMode, setSidePanelMode] = useAtom(sidePanelModeAtom);
     const [, setSearchPanelState] = useAtom(sidePanelSearchStateAtom);
+    const [mapSearchCommand] = useAtom(mapSearchCommandAtom);
+    const [lastSearchCmdTs, setLastSearchCmdTs] = useState<number>(-1);
+    const showTopSearchInput = isMobile || panelMode !== "search";
 
     // --- Memos ---
     const snapPoints = useMemo(() => [100, windowHeight * 0.4, windowHeight * 0.8, windowHeight], [windowHeight]);
@@ -404,6 +408,19 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         setDisplayedContent(resetMapData);
         setTriggerSnapIndex(SNAP_INDEX_PEEK); // Reset drawer to peek
         setContentPreview(undefined); // Clear preview
+
+        // Also reset/close the desktop left search panel so the map search box reappears
+        setSidePanelMode("none");
+        setSearchPanelState({
+            query: "",
+            isSearching: false,
+            hasSearched: false,
+            selectedCategory: null,
+            selectedSdgHandles: [],
+            items: [],
+            counts: { communities: 0, users: 0, events: eventsForMap.length },
+        });
+
         console.log("Search cleared, resetting map to all discoverable circles:", resetMapData.length);
     }, [
         setDisplayedContent,
@@ -458,6 +475,23 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
 
     // --- Effects ---
     useEffect(() => setIsMounted(true), []);
+
+    // Listen for map search commands from the left search panel (desktop)
+    useEffect(() => {
+        if (!mapSearchCommand) return;
+        if (mapSearchCommand.timestamp === lastSearchCmdTs) return;
+        setLastSearchCmdTs(mapSearchCommand.timestamp);
+        const q = mapSearchCommand.query ?? "";
+        if (!q.trim()) {
+            handleClearSearch();
+        } else {
+            setSearchQuery(q);
+            // Defer to let state commit before triggering search
+            setTimeout(() => {
+                handleSearchTrigger();
+            }, 0);
+        }
+    }, [mapSearchCommand, lastSearchCmdTs, handleClearSearch, handleSearchTrigger]);
 
     // Fetch events for map when date range changes
     useEffect(() => {
@@ -608,8 +642,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 {viewMode === "explore" && !(sidePanelContentVisible === "toolbox" && isMobile) && (
                     <div className="relative">
                         <div className="absolute flex items-center gap-2 rounded-full bg-white p-1 px-3 shadow-md">
-                            {/* Search Input */}
-                            <div className="flex items-center">
+                            {/* Search Input (hidden on desktop when panel is open) */}
+                            {showTopSearchInput && (
+                                <div className="flex items-center">
                                 <input
                                     type="text"
                                     placeholder="Search..."
@@ -639,6 +674,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                     {isSearching ? "..." : <Search className="h-4 w-4" />}
                                 </Button>
                             </div>
+                            )}
                             {/* Filters */}
                             <div className="flex items-center">
                                 {!isMobile && (

@@ -74,3 +74,7 @@ export type CreatePostDialogAtomProps = {
 export const createPostDialogAtom = atom<CreatePostDialogAtomProps>({ isOpen: false });
 
 export const replyToMessageAtom = atom<ChatMessage | null>(null);
+
+// Command channel for map searches initiated from the left SearchResultsPanel.
+// MapExplorer listens to this and runs the existing search/clear logic.
+export const mapSearchCommandAtom = atom<{ query: string; timestamp: number } | null>(null);
