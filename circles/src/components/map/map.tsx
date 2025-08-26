@@ -25,7 +25,7 @@ import { isEqual } from "lodash"; // You might need to install lodash
 import { motion } from "framer-motion";
 import Image from "next/image";
 import ContentPreview from "../layout/content-preview";
-import { Content, ContentPreviewData, Location, PostDisplay } from "@/models/models";
+import { Content, ContentPreviewData, Location, PostDisplay, EventDisplay } from "@/models/models";
 import ImageGallery from "../layout/image-gallery";
 import { TbFocus2 } from "react-icons/tb";
 import Onboarding from "../onboarding/onboarding";
@@ -74,16 +74,30 @@ const MapBox = ({
         (content: Content) => {
             if (isPostDisplay(content)) {
                 setFocusPost(content as PostDisplay);
+                return;
+            }
+
+            const isEvent = (c: any): c is EventDisplay => !!(c && (c as any).startAt && (c as any).title);
+
+            let nextPreview: ContentPreviewData;
+            if (isEvent(content)) {
+                const circleHandle = (content as any)?.circle?.handle ?? "";
+                nextPreview = {
+                    type: "event",
+                    content: content as EventDisplay,
+                    props: { circleHandle },
+                };
             } else {
                 const previewType = (content as any).circleType || "circle";
-                const contentPreviewData: any = {
-                    type: previewType,
+                nextPreview = {
+                    type: previewType as any,
                     content: content,
-                };
-                setContentPreview((x) =>
-                    content === x?.content && sidePanelContentVisible === "content" ? undefined : contentPreviewData,
-                );
+                } as any;
             }
+
+            setContentPreview((x) =>
+                content === x?.content && sidePanelContentVisible === "content" ? undefined : nextPreview,
+            );
         },
         [setContentPreview],
     );

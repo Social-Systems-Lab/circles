@@ -111,6 +111,22 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     // Events dataset for map
     const [eventsForMap, setEventsForMap] = useState<EventDisplay[]>([]);
     const [isEventsLoading, setIsEventsLoading] = useState(false);
+    const filteredEventsForMap = useMemo(() => {
+        let list = eventsForMap;
+        if (selectedSdgs.length > 0) {
+            const sdgHandles = selectedSdgs.map((s) => s.handle);
+            list = list.filter((e) => e.causes?.some((cause) => sdgHandles.includes(cause)));
+        }
+        if (hasSearched && searchQuery.trim()) {
+            const q = searchQuery.trim().toLowerCase();
+            list = list.filter(
+                (e) =>
+                    (e.title && e.title.toLowerCase().includes(q)) ||
+                    (e.description && e.description.toLowerCase().includes(q)),
+            );
+        }
+        return list;
+    }, [eventsForMap, selectedSdgs, hasSearched, searchQuery]);
     // Resonance filter state (min similarity threshold) and current dataset range
     const [minSimFilter, setMinSimFilter] = useState<number | undefined>(undefined);
     const [simRange, setSimRange] = useState<{ min: number; max: number }>({ min: 0, max: 1 });
@@ -192,18 +208,18 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     }, [allSearchResults, selectedCategory, selectedSdgs]);
 
     const categoryCounts = useMemo(() => {
-        // Include events count from eventsForMap
+        // Include events count from filteredEventsForMap
         const counts: { [key: string]: number } = {
             communities: 0,
             users: 0,
-            events: eventsForMap.length,
+            events: filteredEventsForMap.length,
         };
         filteredSearchResults?.forEach((result) => {
             if (result.circleType === "circle") counts.communities++;
             else if (result.circleType === "user") counts.users++;
         });
         return counts;
-    }, [filteredSearchResults, eventsForMap.length]);
+    }, [filteredSearchResults, filteredEventsForMap.length]);
 
     // Determine data source for the drawer list
     // Base circles used for map/list before mapping to Content
@@ -303,7 +319,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 selectedCategory: null,
                 selectedSdgHandles: [],
                 items: [],
-                counts: { communities: 0, users: 0, events: eventsForMap.length },
+                counts: { communities: 0, users: 0, events: filteredEventsForMap.length },
             });
             return;
         }
@@ -317,7 +333,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             selectedCategory: selectedCategory ?? null,
             selectedSdgHandles: sdgHandles,
             items: [],
-            counts: { communities: 0, users: 0, events: eventsForMap.length },
+            counts: { communities: 0, users: 0, events: filteredEventsForMap.length },
         });
         if (!isMobile) {
             router.push("/explore?panel=search");
@@ -348,7 +364,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 const sdgHandlesLocal = selectedSdgs.map((s) => s.handle);
                 filtered = filtered.filter((c) => c.causes?.some((cause) => sdgHandlesLocal.includes(cause)));
             }
-            const counts = { communities: 0, users: 0, events: eventsForMap.length };
+            const counts = { communities: 0, users: 0, events: filteredEventsForMap.length };
             filtered.forEach((r: any) => {
                 if (r.circleType === "circle") counts.communities++;
                 else if (r.circleType === "user") counts.users++;
@@ -360,7 +376,8 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 hasSearched: true,
                 selectedCategory: selectedCategory ?? null,
                 selectedSdgHandles: sdgHandles,
-                items: filtered as any,
+                // Include events in search results panel (events first for clarity)
+                items: ([...filteredEventsForMap, ...filtered] as any),
                 counts,
             });
             setSidePanelMode("search");
@@ -379,7 +396,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 selectedCategory: selectedCategory ?? null,
                 selectedSdgHandles: sdgHandles,
                 items: [],
-                counts: { communities: 0, users: 0, events: eventsForMap.length },
+                counts: { communities: 0, users: 0, events: filteredEventsForMap.length },
             });
 
             setTriggerSnapIndex(SNAP_INDEX_PEEK); // Reset drawer on error
@@ -418,7 +435,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             selectedCategory: null,
             selectedSdgHandles: [],
             items: [],
-            counts: { communities: 0, users: 0, events: eventsForMap.length },
+            counts: { communities: 0, users: 0, events: filteredEventsForMap.length },
         });
 
         console.log("Search cleared, resetting map to all discoverable circles:", resetMapData.length);
@@ -540,9 +557,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     // Update map markers when in Explore mode
     useEffect(() => {
         if (viewMode === "explore") {
-            // When "events" category is selected, show event markers
+            // When "events" category is selected, show only event markers
             if (selectedCategory === "events") {
-                setDisplayedContent(eventsForMap as unknown as Content[]);
+                setDisplayedContent(filteredEventsForMap as unknown as Content[]);
                 return;
             }
             let circles = baseCircles;
@@ -557,7 +574,10 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             const mapData: Content[] = circles
                 .map((circle) => mapItemToContent(circle))
                 .filter((c): c is Content => c !== null);
-            setDisplayedContent(mapData);
+
+            // Default: combine circles with filtered events
+            const combined: Content[] = [...mapData, ...(filteredEventsForMap as unknown as Content[])];
+            setDisplayedContent(combined);
         }
     }, [
         viewMode,
@@ -567,7 +587,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         withinDateRange,
         setDisplayedContent,
         selectedCategory,
-        eventsForMap,
+        filteredEventsForMap,
     ]);
 
     // Control drawer snap based on contentPreview state

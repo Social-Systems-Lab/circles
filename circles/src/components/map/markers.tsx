@@ -12,7 +12,7 @@ import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import ImageCarousel from "../ui/image-carousel";
 import { Media } from "@/models/models";
 import { Button } from "../ui/button";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Calendar as CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 
 interface MapMarkerProps {
@@ -74,6 +74,12 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
     const markerImgUrl = isEvent
         ? images?.[0]?.fileInfo?.url
         : ((content as any)?.picture?.url ?? images?.[0]?.fileInfo?.url);
+    const dateStr =
+        isEvent && (content as any)?.startAt
+            ? `${format(new Date((content as any).startAt), "PPpp")}${
+                  (content as any)?.endAt ? " — " + format(new Date((content as any).endAt), "PPpp") : ""
+              }`
+            : "";
     let openHref: string | undefined = undefined;
     if (isEvent) {
         const e: any = content as any;
@@ -175,6 +181,12 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
                         </Button>
                     )}
                     <div className="absolute bottom-0 left-0 right-0 z-10 p-3">
+                        {isEvent && dateStr && (
+                            <div className="mb-1 inline-flex items-center gap-1 text-[12px] font-medium text-white/90">
+                                <CalendarIcon className="h-3.5 w-3.5" />
+                                <span className="truncate">{dateStr}</span>
+                            </div>
+                        )}
                         <p className="mb-1 line-clamp-1 text-[16px] font-semibold text-white">{title}</p>
                         {description && <p className="line-clamp-2 text-[13px] text-white/90">{description}</p>}
                     </div>

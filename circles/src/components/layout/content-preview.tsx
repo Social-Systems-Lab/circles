@@ -290,6 +290,18 @@ export const ContentPreview: React.FC = () => {
     const getPreviewContent = () => {
         if (!contentPreview) return null;
 
+        // Defensive: if the content looks like an event, render EventDetail even if the type was misclassified
+        const possibleEvent: any = contentPreview.content as any;
+        if (possibleEvent && possibleEvent.startAt && possibleEvent.title) {
+            const evt = possibleEvent as EventDisplay;
+            const circleHandle = (evt as any)?.circle?.handle || "";
+            return (
+                <div className="custom-scrollbar h-full overflow-y-auto">
+                    <EventDetail circleHandle={circleHandle} event={evt} isPreview={true} />
+                </div>
+            );
+        }
+
         switch (contentPreview.type) {
             default:
             case "member":
@@ -439,6 +451,7 @@ export const ContentPreview: React.FC = () => {
                             canReview={props?.canReview ?? false}
                             canModerate={props?.canModerate ?? false}
                             isAuthor={props?.isAuthor ?? inferredIsAuthor}
+                            isPreview={true}
                         />
                     </div>
                 );

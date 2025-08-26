@@ -15,6 +15,7 @@ type Props = {
     canReview?: boolean;
     canModerate?: boolean;
     isAuthor?: boolean;
+    isPreview?: boolean;
 };
 
 function googleCalendarUrl(e: EventDisplay) {
@@ -34,10 +35,19 @@ function googleCalendarUrl(e: EventDisplay) {
     return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
-export default function EventDetail({ circleHandle, event, canEdit, canReview, canModerate, isAuthor }: Props) {
+export default function EventDetail({
+    circleHandle,
+    event,
+    canEdit,
+    canReview,
+    canModerate,
+    isAuthor,
+    isPreview,
+}: Props) {
     const { toast } = useToast();
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
+    const compact = !!isPreview;
 
     const onRsvp = (status: "going" | "interested" | "waitlist") => {
         startTransition(async () => {
@@ -106,27 +116,33 @@ export default function EventDetail({ circleHandle, event, canEdit, canReview, c
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-semibold">{event.title}</h1>
-                <div className="flex gap-2">
-                    <a href={googleCalendarUrl(event)} target="_blank" rel="noreferrer">
-                        <Button variant="outline">Add to Google Calendar</Button>
-                    </a>
-                    {canEdit && (
-                        <Button
-                            variant="outline"
-                            onClick={() =>
-                                router.push(
-                                    `/circles/${circleHandle}/events/${(event as any)._id?.toString?.() || ""}/edit`,
-                                )
-                            }
-                        >
-                            Edit
-                        </Button>
-                    )}
-                </div>
+                <h1 className={`font-semibold ${compact ? "text-xl" : "text-2xl"}`}>{event.title}</h1>
+                {!compact && (
+                    <div className="flex gap-2">
+                        <a href={googleCalendarUrl(event)} target="_blank" rel="noreferrer">
+                            <Button variant="outline">Add to Google Calendar</Button>
+                        </a>
+                        {canEdit && (
+                            <Button
+                                variant="outline"
+                                onClick={() =>
+                                    router.push(
+                                        `/circles/${circleHandle}/events/${(event as any)._id?.toString?.() || ""}/edit`,
+                                    )
+                                }
+                            >
+                                Edit
+                            </Button>
+                        )}
+                    </div>
+                )}
 
                 {/* Stage controls */}
-                <div className="flex flex-wrap items-center gap-3 rounded-md border bg-white/50 p-3">
+                <div
+                    className={`flex flex-wrap items-center gap-3 rounded-md border bg-white/50 p-3 ${
+                        compact ? "hidden" : ""
+                    }`}
+                >
                     <div className="text-sm text-muted-foreground">
                         Status: <span className="font-medium capitalize">{event.stage}</span>
                     </div>
@@ -150,7 +166,7 @@ export default function EventDetail({ circleHandle, event, canEdit, canReview, c
                 </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className={`grid gap-4 ${compact ? "grid-cols-1" : "md:grid-cols-3"}`}>
                 <div className="space-y-4 md:col-span-2">
                     <div className="rounded-md border p-4">
                         <div className="text-sm text-muted-foreground">When</div>
@@ -188,17 +204,29 @@ export default function EventDetail({ circleHandle, event, canEdit, canReview, c
                     </div>
 
                     {event.images && event.images.length > 0 && (
-                        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                            {event.images.map((img, i) => (
-                                // eslint-disable-next-line @next/next/no-img-element
+                        compact ? (
+                            <div className="grid grid-cols-1 gap-3">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
-                                    key={img.fileInfo.url + i}
-                                    src={img.fileInfo.url}
+                                    key={event.images[0].fileInfo.url}
+                                    src={event.images[0].fileInfo.url}
                                     alt={event.title || "Event image"}
                                     className="h-40 w-full rounded-md object-cover"
                                 />
-                            ))}
-                        </div>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                                {event.images.map((img, i) => (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                        key={img.fileInfo.url + i}
+                                        src={img.fileInfo.url}
+                                        alt={event.title || "Event image"}
+                                        className="h-40 w-full rounded-md object-cover"
+                                    />
+                                ))}
+                            </div>
+                        )
                     )}
                 </div>
 
@@ -206,13 +234,13 @@ export default function EventDetail({ circleHandle, event, canEdit, canReview, c
                     <div className="rounded-md border p-4">
                         <div className="mb-2 text-sm text-muted-foreground">RSVP</div>
                         <div className="flex flex-wrap gap-2">
-                            <Button disabled={isPending} onClick={() => onRsvp("going")}>
+                            <Button size="sm" disabled={isPending} onClick={() => onRsvp("going")}>
                                 I'm going
                             </Button>
-                            <Button variant="outline" disabled={isPending} onClick={() => onRsvp("interested")}>
+                            <Button size="sm" variant="outline" disabled={isPending} onClick={() => onRsvp("interested")}>
                                 Interested
                             </Button>
-                            <Button variant="ghost" disabled={isPending} onClick={onCancelRsvp}>
+                            <Button size="sm" variant="ghost" disabled={isPending} onClick={onCancelRsvp}>
                                 Cancel RSVP
                             </Button>
                         </div>

@@ -5,10 +5,11 @@ import { useAtom } from "jotai";
 import { sidePanelSearchStateAtom, contentPreviewAtom, zoomContentAtom, sidePanelModeAtom, mapSearchCommandAtom } from "@/lib/data/atoms";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { X, Search } from "lucide-react";
+import { X, Search, Calendar as CalendarIcon } from "lucide-react";
 import Indicators from "@/components/utils/indicators";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
-import { Content, ContentPreviewData } from "@/models/models";
+import { Content, ContentPreviewData, EventDisplay } from "@/models/models";
+import { format } from "date-fns";
 
 export default function SearchResultsPanel() {
     const [searchState] = useAtom(sidePanelSearchStateAtom);
@@ -32,12 +33,21 @@ export default function SearchResultsPanel() {
             setZoomContent(item as unknown as Content);
         }
         // Open right-side content preview
-        const preview: ContentPreviewData = {
-            // circleType can be "user" | "circle" | "project". Default to "circle".
-            type: (item.circleType || "circle") as any,
-            content: item as any,
-        };
-        setContentPreview(preview);
+        if (item && item.startAt && item.title) {
+            const preview: ContentPreviewData = {
+                type: "event",
+                content: item as EventDisplay,
+                props: { circleHandle: item?.circle?.handle || "" },
+            };
+            setContentPreview(preview);
+        } else {
+            const preview: ContentPreviewData = {
+                // circleType can be "user" | "circle" | "project". Default to "circle".
+                type: (item.circleType || "circle") as any,
+                content: item as any,
+            };
+            setContentPreview(preview);
+        }
     };
 
     return (
@@ -106,14 +116,30 @@ export default function SearchResultsPanel() {
                                 </div>
                                 <div className="relative flex-1 overflow-hidden pl-2">
                                     <div className="truncate p-0 text-sm font-medium">
-                                        {"name" in item && item.name ? item.name : "Announcement"}
+                                        {"startAt" in item && (item as any).title ? (
+                                            <span className="inline-flex items-center gap-1">
+                                                <CalendarIcon className="h-3.5 w-3.5 text-gray-600" />
+                                                {(item as any).title}
+                                            </span>
+                                        ) : (
+                                            ("name" in item && item.name ? item.name : "Announcement")
+                                        )}
                                     </div>
                                     <div className="mt-1 line-clamp-2 p-0 text-xs text-gray-500">
-                                        {"description" in item
-                                            ? (item.description ?? ("mission" in item ? item.mission : "") ?? "")
-                                            : "content" in item && typeof item.content === "string"
-                                              ? item.content.substring(0, 70) + (item.content.length > 70 ? "..." : "")
-                                              : ""}
+                                        {"startAt" in item && (item as any).startAt
+                                            ? `${format(new Date((item as any).startAt), "PPpp")}${
+                                                  "endAt" in item && (item as any).endAt
+                                                      ? " — " + format(new Date((item as any).endAt), "PPpp")
+                                                      : ""
+                                              }`
+                                            : ("description" in item
+                                                  ? (item.description ??
+                                                        ("mission" in item ? (item as any).mission : "") ??
+                                                        "")
+                                                  : ("content" in item && typeof (item as any).content === "string"
+                                                        ? (item as any).content.substring(0, 70) +
+                                                          ((item as any).content.length > 70 ? "..." : "")
+                                                        : ""))}
                                     </div>
                                     {"metrics" in item && item.metrics && (
                                         <div className="flex flex-row pt-1">
