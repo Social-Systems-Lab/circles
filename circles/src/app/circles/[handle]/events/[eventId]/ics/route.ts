@@ -76,9 +76,9 @@ function slugifyForFilename(s: string): string {
     return base || "event";
 }
 
-export async function GET(req: Request, ctx: { params: { handle: string; eventId: string } }): Promise<Response> {
+export async function GET(req: Request, ctx: { params: Promise<{ handle: string; eventId: string }> }): Promise<Response> {
     try {
-        const { handle, eventId } = ctx.params;
+        const { handle, eventId } = await ctx.params;
         if (!handle || !eventId || !ObjectId.isValid(eventId)) {
             return new Response("Invalid parameters", { status: 400 });
         }
