@@ -9,6 +9,7 @@ import EditableField from "./editable-field";
 import InviteButton from "./invite-button";
 import ChatButton from "./chat-button";
 import FollowButton from "./follow-button";
+import BookmarkButton from "./bookmark-button";
 import GalleryTrigger from "./gallery-trigger";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
@@ -113,6 +114,7 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle }: 
                                 {user && circle.circleType === "circle" && isMember && <ChatButton circle={circle} />}
                                 <InviteButton circle={circle} />
                                 {user && <FollowButton circle={circle} />}
+                                {user && <BookmarkButton circle={circle} iconOnly />}
                                 {/* Consistent Bell Icon for Mobile View */}
                                 {circle._id && user && (
                                     <NotificationSettingsDialog // Changed Popover to Dialog
@@ -210,6 +212,7 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle }: 
                             {user && circle.circleType === "circle" && isMember && <ChatButton circle={circle} />}
                             <InviteButton circle={circle} />
                             {user && <FollowButton circle={circle} />}
+                            {user && <BookmarkButton circle={circle} iconOnly />}
                             {/* Add NotificationSettingsDialog for the current circle */}
                             {circle._id &&
                                 user && ( // Ensure circle ID and user are available

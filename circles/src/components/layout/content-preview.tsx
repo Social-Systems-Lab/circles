@@ -9,6 +9,7 @@ import { FaUsers } from "react-icons/fa6";
 import { useRouter } from "next/navigation";
 import InviteButton from "../modules/home/invite-button";
 import FollowButton from "../modules/home/follow-button";
+import BookmarkButton from "../modules/home/bookmark-button";
 import {
     Circle,
     FileInfo,
@@ -131,6 +132,7 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                     <div className="absolute bottom-[-45px] right-2 flex flex-row gap-1">
                         <InviteButton circle={circle as Circle} renderCompact={true} />
                         {user && <FollowButton circle={circle as Circle} renderCompact={true} />}
+                        {user && <BookmarkButton circle={circle as Circle} renderCompact={true} iconOnly={true} />}
                     </div>
 
                     <div className="absolute top-[-60px]">

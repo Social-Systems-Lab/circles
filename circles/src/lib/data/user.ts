@@ -496,3 +496,62 @@ export const getUsersByMatrixUsernames = async (usernames: string[]): Promise<Ci
         _id: user._id?.toString(),
     })) as Circle[];
 };
+
+/**
+ * Add a circle to the user's bookmarks.
+ */
+export const addBookmark = async (userDid: string, circleId: string): Promise<void> => {
+    await Circles.updateOne(
+        { did: userDid },
+        {
+            $addToSet: { bookmarkedCircles: circleId },
+        },
+    );
+};
+
+/**
+ * Remove a circle from the user's bookmarks.
+ */
+export const removeBookmark = async (userDid: string, circleId: string): Promise<void> => {
+    await Circles.updateOne(
+        { did: userDid },
+        {
+            $pull: { bookmarkedCircles: circleId },
+        },
+    );
+};
+
+/**
+ * Pin a circle for the user. Also ensures it's bookmarked. New pins are added to the front.
+ * Caps total pins at 5.
+ */
+export const pinCircle = async (userDid: string, circleId: string): Promise<void> => {
+    // Fetch current pinned list
+    const user = await Circles.findOne(
+        { did: userDid },
+        { projection: { pinnedCircles: 1 } as any },
+    );
+
+    const current = Array.isArray((user as any)?.pinnedCircles) ? ((user as any).pinnedCircles as string[]) : [];
+    const next = [circleId, ...current.filter((id) => id !== circleId)].slice(0, 5);
+
+    await Circles.updateOne(
+        { did: userDid },
+        {
+            $set: { pinnedCircles: next },
+            $addToSet: { bookmarkedCircles: circleId },
+        },
+    );
+};
+
+/**
+ * Unpin a circle for the user.
+ */
+export const unpinCircle = async (userDid: string, circleId: string): Promise<void> => {
+    await Circles.updateOne(
+        { did: userDid },
+        {
+            $pull: { pinnedCircles: circleId },
+        },
+    );
+};

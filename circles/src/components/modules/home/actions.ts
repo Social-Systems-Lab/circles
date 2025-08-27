@@ -5,12 +5,12 @@ import { addMember, countAdmins, getMember, removeMember } from "@/lib/data/memb
 import { ChatRoom, Circle, UserPrivate } from "@/models/models";
 import { cookies } from "next/headers";
 import { createPendingMembershipRequest, deletePendingMembershipRequest } from "@/lib/data/membership-requests";
-import { getCircleById, getCirclePath, updateCircle, getCircleByDid } from "@/lib/data/circle";
+import { getCircleById, getCirclePath, updateCircle, getCircleByDid, getCirclesByIds } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, getAuthorizedMembers, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { saveFile } from "@/lib/data/storage";
 import { revalidatePath } from "next/cache";
-import { getUser, getUserById, getUserPrivate } from "@/lib/data/user";
+import { getUser, getUserById, getUserPrivate, addBookmark, removeBookmark, pinCircle, unpinCircle } from "@/lib/data/user";
 import { notifyNewMember, sendNotifications } from "@/lib/data/matrix";
 import { findOrCreateDMRoom as findOrCreateDMRoomData } from "@/lib/data/chat";
 
@@ -144,6 +144,112 @@ export const cancelFollowRequest = async (circle: Circle): Promise<CircleActionR
         return { success: true, message: "Your follow request has been canceled" };
     } catch (error) {
         return { success: false, message: "Failed to cancel follow request. " + error?.toString() };
+    }
+};
+
+/**
+ * Toggle bookmark for a circle. Returns the updated UserPrivate on success.
+ */
+export const toggleBookmarkAction = async (circleId: string): Promise<UserPrivate | undefined> => {
+    const token = (await cookies()).get("token")?.value;
+
+    try {
+        if (!token) {
+            return undefined;
+        }
+
+        const payload = await verifyUserToken(token);
+        const userDid = payload.userDid as string;
+        if (!userDid) {
+            return undefined;
+        }
+
+        // Get current user and toggle bookmark based on current state
+        const current = (await getUserPrivate(userDid)) as UserPrivate;
+        const currentList = current.bookmarkedCircles ?? [];
+        const isBookmarked = currentList.includes(circleId);
+
+        if (isBookmarked) {
+            await removeBookmark(userDid, circleId);
+        } else {
+            await addBookmark(userDid, circleId);
+        }
+
+        // Return updated user
+        const updated = (await getUserPrivate(userDid)) as UserPrivate;
+        return updated;
+    } catch (error) {
+        console.error("Failed to toggle bookmark", error);
+        return undefined;
+    }
+};
+
+/**
+ * Fetch bookmarked circles for the authenticated user.
+ */
+export const getBookmarkedCirclesAction = async (): Promise<Circle[]> => {
+    try {
+        // Prefer server-side auth util if available
+        const token = (await cookies()).get("token")?.value;
+        if (!token) {
+            return [];
+        }
+        const payload = await verifyUserToken(token);
+        const userDid = payload.userDid as string;
+        if (!userDid) {
+            return [];
+        }
+
+        const user = (await getUserPrivate(userDid)) as UserPrivate;
+        const ids = user.bookmarkedCircles ?? [];
+        if (!ids || ids.length === 0) {
+            return [];
+        }
+        const circles = await getCirclesByIds(ids);
+        return circles;
+    } catch (error) {
+        console.error("Failed to load bookmarked circles", error);
+        return [];
+    }
+};
+
+/**
+ * Pin a circle for the current user. Returns updated UserPrivate.
+ */
+export const pinCircleAction = async (circleId: string): Promise<UserPrivate | undefined> => {
+    const token = (await cookies()).get("token")?.value;
+    try {
+        if (!token) return undefined;
+        const payload = await verifyUserToken(token);
+        const userDid = payload.userDid as string;
+        if (!userDid) return undefined;
+
+        await pinCircle(userDid, circleId);
+        const updated = (await getUserPrivate(userDid)) as UserPrivate;
+        return updated;
+    } catch (e) {
+        console.error("Failed to pin circle", e);
+        return undefined;
+    }
+};
+
+/**
+ * Unpin a circle for the current user. Returns updated UserPrivate.
+ */
+export const unpinCircleAction = async (circleId: string): Promise<UserPrivate | undefined> => {
+    const token = (await cookies()).get("token")?.value;
+    try {
+        if (!token) return undefined;
+        const payload = await verifyUserToken(token);
+        const userDid = payload.userDid as string;
+        if (!userDid) return undefined;
+
+        await unpinCircle(userDid, circleId);
+        const updated = (await getUserPrivate(userDid)) as UserPrivate;
+        return updated;
+    } catch (e) {
+        console.error("Failed to unpin circle", e);
+        return undefined;
     }
 };
 

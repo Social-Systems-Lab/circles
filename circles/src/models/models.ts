@@ -465,6 +465,8 @@ export const circleSchema = z.object({
     matrixNotificationsRoomId: z.string().optional(),
     isAdmin: z.boolean().optional(),
     ignoredCircles: z.array(z.string()).optional(),
+    bookmarkedCircles: z.array(z.string()).optional(),
+    pinnedCircles: z.array(z.string()).optional(),
     agreedToTos: z.boolean().optional(),
     agreedToEmailUpdates: z.boolean().optional(),
     metadata: z.record(z.string(), z.any()).optional(), // For storing additional data like commentPostId
