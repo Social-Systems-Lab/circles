@@ -179,7 +179,7 @@ export default function EventDetail({
                         </div>
                     )}
                     <a
-                        className="absolute right-2 top-2 z-10"
+                        className="absolute right-2 bottom-2 z-10"
                         href={googleCalendarUrl(event)}
                         target="_blank"
                         rel="noreferrer"
@@ -194,7 +194,7 @@ export default function EventDetail({
                     </a>
                 </div>
 
-                <div className="px-2 md:px-0">
+                <div className="px-4">
                     <h1 className="text-xl font-semibold">{event.title}</h1>
                     <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                         {shortDateTimeRange && (
@@ -213,7 +213,7 @@ export default function EventDetail({
                     </div>
                 </div>
 
-                <div className="px-2 md:px-0">
+                <div className="px-4">
                     <div className="rounded-md border bg-white/60 p-3">
                         <div className="mb-2 text-xs text-muted-foreground">RSVP</div>
                         <div className="flex flex-wrap gap-2">
@@ -237,7 +237,7 @@ export default function EventDetail({
                 </div>
 
                 {event.description && (
-                    <div className="px-2 md:px-0">
+                    <div className="px-4">
                         <div className="rounded-md border bg-white/50 p-3">
                             <div className="prose max-w-none max-h-40 overflow-hidden whitespace-pre-wrap">
                                 {event.description}
