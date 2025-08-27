@@ -435,3 +435,29 @@ div.ReactTags__suggestions ul li.ReactTags__activeSuggestion {
     overflow: hidden;
     border-radius: 50%;
 }
+
+/* Scrollbar hidden by default; shown on hover. Cross-browser. */
+.scrollbar-hover {
+    scrollbar-gutter: stable;
+    /* Firefox */
+    scrollbar-width: none;
+}
+.scrollbar-hover:hover {
+    scrollbar-width: auto;
+}
+/* WebKit */
+.scrollbar-hover::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+}
+.scrollbar-hover:hover::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+.scrollbar-hover::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.25);
+    border-radius: 8px;
+}
+.scrollbar-hover::-webkit-scrollbar-track {
+    background: transparent;
+}

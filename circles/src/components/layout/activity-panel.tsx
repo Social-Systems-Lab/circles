@@ -64,7 +64,7 @@ export default function ActivityPanel() {
             {/* Tabs should be visible for authenticated users to switch between Following/Discover */}
             {userDid && <FeedTabs currentTab={activeTab} />}
             {/* Reuse aggregate feed renderer - compact + no create-post in panel */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto scrollbar-hover">
                 <AggregateFeedComponent
                     posts={posts}
                     userFeed={userFeed}

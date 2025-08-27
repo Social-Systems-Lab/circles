@@ -93,7 +93,7 @@ export default function SearchResultsPanel() {
                     {searchState.isSearching ? "Searching…" : `${items.length} result${items.length === 1 ? "" : "s"}`}
                 </div>
             </div>
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto scrollbar-hover">
                 {searchState.isSearching && <div className="p-4 text-sm text-gray-600">Loading…</div>}
                 {!searchState.isSearching && items.length === 0 && searchState.hasSearched && (
                     <div className="p-4 text-sm text-gray-500">No results found.</div>

@@ -52,6 +52,13 @@ export const SidePanel: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isMobile, pathname, searchParams]);
 
+    // Auto-close left side panel when navigating away from /explore to avoid overlapping content
+    useEffect(() => {
+        if (!isMobile && pathname !== "/explore" && sidePanelMode !== "none") {
+            setSidePanelMode("none");
+        }
+    }, [isMobile, pathname, sidePanelMode, setSidePanelMode]);
+
     const closeContentPreview = () => {
         setContentPreview(undefined);
     };
@@ -84,7 +91,7 @@ export const SidePanel: React.FC = () => {
         <>
             {/* Left side panel (desktop only) */}
             <AnimatePresence>
-                {!isMobile && sidePanelMode !== "none" && (
+                {!isMobile && pathname === "/explore" && sidePanelMode !== "none" && (
                     <motion.div
                         className="fixed left-[72px] top-0 z-[200] h-[100vh] flex-shrink-0 bg-[#fbfbfb] md:border-r md:shadow-sm"
                         initial={{ width: 0 }}
@@ -110,7 +117,7 @@ export const SidePanel: React.FC = () => {
 
                         {/* Panel content (no header, content starts at top) */}
                         <div className="flex h-full w-full flex-col overflow-hidden">
-                            <div className="flex-1 overflow-y-auto">
+                            <div className="flex-1 min-h-0">
                                 {sidePanelMode === "activity" ? <ActivityPanel /> : <SearchResultsPanel />}
                             </div>
                         </div>
