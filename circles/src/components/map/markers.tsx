@@ -3,7 +3,7 @@
 import { contentPreviewAtom, zoomContentAtom } from "@/lib/data/atoms";
 import { Content, WithMetric } from "@/models/models";
 import { useAtom } from "jotai";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "../ui/hover-card";
 import { HoverCardArrow } from "@radix-ui/react-hover-card";
 import Indicators from "../utils/indicators";
@@ -80,6 +80,19 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
                   (content as any)?.endAt ? " — " + format(new Date((content as any).endAt), "PPpp") : ""
               }`
             : "";
+
+    // Calendar image for events (e.g., /images/cal/c10_1.png for Oct 1)
+    const startDate = isEvent && (content as any)?.startAt ? new Date((content as any).startAt) : undefined;
+    const month = startDate ? startDate.getMonth() + 1 : undefined;
+    const dayOfMonth = startDate ? startDate.getDate() : undefined;
+    const calImgSrc =
+        startDate && month && dayOfMonth ? `/images/cal/c${month}_${dayOfMonth}.png` : undefined;
+
+    // Fallback to icon+number if calendar image is missing
+    const [calImgError, setCalImgError] = useState(false);
+    useEffect(() => {
+        setCalImgError(false);
+    }, [content?._id]);
     let openHref: string | undefined = undefined;
     if (isEvent) {
         const e: any = content as any;
@@ -102,9 +115,37 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
             <HoverCardTrigger>
                 <div className="group relative cursor-pointer" onClick={handleClick}>
                     <div className="absolute bottom-[4px] left-1/2 -translate-x-1/2 transform">
-                        <div className="relative h-10 w-10 rounded-full transition-transform duration-300 group-hover:scale-110">
+                        <div className={`relative ${isEvent ? "h-8 w-8" : "h-10 w-10"} rounded-full transition-transform duration-300 group-hover:scale-110`}>
                             <div className="absolute inset-[2px] rounded-full bg-white shadow-md" />
-                            {isPost ? (
+                            {isEvent ? (
+                                <div
+                                    className="absolute inset-[2px] flex items-center justify-center rounded-full border bg-white"
+                                    style={{
+                                        borderColor:
+                                            contentPreview && contentPreview.content?._id === content?._id
+                                                ? "#f8dd53"
+                                                : "#ffffff",
+                                    }}
+                                >
+                                    {!calImgError && calImgSrc ? (
+                                        <img
+                                            src={calImgSrc}
+                                            alt="Event date"
+                                            className="h-6 w-6 object-contain"
+                                            onError={() => setCalImgError(true)}
+                                        />
+                                    ) : (
+                                        <div className="relative flex h-full w-full items-center justify-center">
+                                            <CalendarIcon className="h-4 w-4 text-gray-700" />
+                                            {dayOfMonth !== undefined && (
+                                                <span className="absolute bottom-1 right-1 text-[10px] font-bold text-gray-800">
+                                                    {dayOfMonth}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : isPost ? (
                                 <div className="absolute inset-[2px] flex items-center justify-center rounded-full">
                                     <Image
                                         className="h-9 w-9 rounded-full border bg-cover bg-center"
@@ -134,7 +175,7 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
                             )}
                         </div>
                     </div>
-                    <div className="absolute bottom-0 left-1/2 h-2 w-2 -translate-x-1/2 transform rounded-full bg-white shadow-md" />
+                    <div className={`absolute bottom-0 left-1/2 ${isEvent ? "h-[6px] w-[6px]" : "h-2 w-2"} -translate-x-1/2 transform rounded-full bg-white shadow-md`} />
                 </div>
             </HoverCardTrigger>
             <HoverCardContent
