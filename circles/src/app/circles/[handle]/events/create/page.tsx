@@ -31,7 +31,7 @@ export default async function CreateEventPage(props: PageProps) {
         return (
             <div className="flex h-full w-full flex-col items-center justify-center p-4 text-center">
                 <h2 className="mb-2 text-xl font-semibold">Access Denied</h2>
-                <p className="text-gray-600">You don't have permission to create events in this circle.</p>
+                <p className="text-gray-600">You don&apos;t have permission to create events in this circle.</p>
                 <Button asChild className="mt-4">
                     <Link href={`/circles/${circleHandle}/events`}>
                         <ArrowLeft className="mr-2 h-4 w-4" />

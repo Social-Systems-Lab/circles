@@ -28,7 +28,7 @@ export default async function EventsModule({ circle }: Props) {
         return (
             <div className="p-6 text-center">
                 <h2 className="mb-2 text-xl font-semibold">Access Denied</h2>
-                <p className="text-gray-600">You don't have permission to view events in this circle.</p>
+                <p className="text-gray-600">You don&apos;t have permission to view events in this circle.</p>
             </div>
         );
     }

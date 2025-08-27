@@ -218,7 +218,7 @@ export default function EventDetail({
                         <div className="mb-2 text-xs text-muted-foreground">RSVP</div>
                         <div className="flex flex-wrap gap-2">
                             <Button size="sm" disabled={isPending} onClick={() => onRsvp("going")}>
-                                I'm going
+                                I&apos;m going
                             </Button>
                             <Button size="sm" variant="outline" disabled={isPending} onClick={() => onRsvp("interested")}>
                                 Interested
@@ -371,7 +371,7 @@ export default function EventDetail({
                         <div className="mb-2 text-sm text-muted-foreground">RSVP</div>
                         <div className="flex flex-wrap gap-2">
                             <Button size="sm" disabled={isPending} onClick={() => onRsvp("going")}>
-                                I'm going
+                                I&apos;m going
                             </Button>
                             <Button size="sm" variant="outline" disabled={isPending} onClick={() => onRsvp("interested")}>
                                 Interested
