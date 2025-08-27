@@ -121,7 +121,7 @@ export const ImageGallery: React.FC = () => {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className={`fixed inset-0 z-[200] flex items-center justify-start bg-black`}
+                className={`fixed inset-0 z-[400] flex items-center justify-start bg-black`}
             >
                 <div className="embla h-full w-full" ref={emblaRef}>
                     <div className="embla__container h-full">

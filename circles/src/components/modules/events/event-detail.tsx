@@ -7,6 +7,9 @@ import { useToast } from "@/components/ui/use-toast";
 import { rsvpEventAction, cancelRsvpAction, changeEventStageAction } from "@/app/circles/[handle]/events/actions";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
+import ImageCarousel from "@/components/ui/image-carousel";
+import { Calendar, MapPin, Clock } from "lucide-react";
+import type { Media } from "@/models/models";
 
 type Props = {
     circleHandle: string;
@@ -48,6 +51,40 @@ export default function EventDetail({
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const compact = !!isPreview;
+
+    const start = event.startAt ? new Date(event.startAt as any) : null;
+    const end = event.endAt ? new Date(event.endAt as any) : null;
+
+    const locationText =
+        event.isVirtual && event.virtualUrl
+            ? ""
+            : event.location
+            ? [event.location.city, event.location.region, event.location.country].filter(Boolean).join(", ")
+            : "";
+
+    let shortDateTimeRange = "";
+    if (start) {
+        if (event.allDay) {
+            shortDateTimeRange = `${format(start, "EEE, MMM d")} (All day)`;
+        } else if (end && format(start, "yyyy-MM-dd") === format(end, "yyyy-MM-dd")) {
+            shortDateTimeRange = `${format(start, "EEE, MMM d")} • ${format(start, "p")} — ${format(end, "p")}`;
+        } else if (end) {
+            shortDateTimeRange = `${format(start, "EEE, MMM d p")} — ${format(end, "EEE, MMM d p")}`;
+        } else {
+            shortDateTimeRange = `${format(start, "EEE, MMM d p")}`;
+        }
+    }
+
+    const images: Media[] =
+        event.images && event.images.length > 0
+            ? event.images
+            : [
+                  {
+                      name: "Default Cover",
+                      type: "image/png",
+                      fileInfo: { url: "/images/default-cover.png" },
+                  } as Media,
+              ];
 
     const onRsvp = (status: "going" | "interested" | "waitlist") => {
         startTransition(async () => {
@@ -112,6 +149,105 @@ export default function EventDetail({
             }
         });
     };
+
+    if (compact) {
+        // Compact preview layout specialized for events
+        return (
+            <div className="space-y-3">
+                <div className="relative h-[270px] w-full">
+                    <ImageCarousel
+                        images={images}
+                        options={{ loop: images.length > 1 }}
+                        containerClassName="h-full"
+                        imageClassName="object-cover"
+                        showArrows={false}
+                        showDots={images.length > 1}
+                        dotsPosition="bottom-right"
+                    />
+                    {start && (
+                        <div className="absolute left-2 top-2 z-10 rounded-md bg-black/45 px-2 py-1 text-white text-xs md:text-sm">
+                            {format(start, "MMM d")}
+                        </div>
+                    )}
+                    {(locationText || event.isVirtual || event.isHybrid) && (
+                        <div className="absolute bottom-2 left-2 z-10 flex items-center gap-1 rounded-md bg-black/40 px-2 py-1 text-xs text-white">
+                            <MapPin className="h-3 w-3" />
+                            <span>
+                                {event.isVirtual && !locationText ? "Virtual" : locationText}
+                                {event.isHybrid ? " · Hybrid" : ""}
+                            </span>
+                        </div>
+                    )}
+                    <a
+                        className="absolute right-2 top-2 z-10"
+                        href={googleCalendarUrl(event)}
+                        target="_blank"
+                        rel="noreferrer"
+                    >
+                        <Button
+                            size="icon"
+                            variant="ghost"
+                            className="rounded-full bg-black/30 text-white hover:bg-black/50"
+                        >
+                            <Calendar className="h-4 w-4" />
+                        </Button>
+                    </a>
+                </div>
+
+                <div className="px-2 md:px-0">
+                    <h1 className="text-xl font-semibold">{event.title}</h1>
+                    <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                        {shortDateTimeRange && (
+                            <span className="inline-flex items-center gap-1">
+                                <Clock className="h-4 w-4" />
+                                {shortDateTimeRange}
+                            </span>
+                        )}
+                        {(locationText || event.isVirtual || event.isHybrid) && (
+                            <span className="inline-flex items-center gap-1">
+                                <MapPin className="h-4 w-4" />
+                                {event.isVirtual && !locationText ? "Virtual" : locationText}
+                                {event.isHybrid ? " · Hybrid" : ""}
+                            </span>
+                        )}
+                    </div>
+                </div>
+
+                <div className="px-2 md:px-0">
+                    <div className="rounded-md border bg-white/60 p-3">
+                        <div className="mb-2 text-xs text-muted-foreground">RSVP</div>
+                        <div className="flex flex-wrap gap-2">
+                            <Button size="sm" disabled={isPending} onClick={() => onRsvp("going")}>
+                                I'm going
+                            </Button>
+                            <Button size="sm" variant="outline" disabled={isPending} onClick={() => onRsvp("interested")}>
+                                Interested
+                            </Button>
+                            <Button size="sm" variant="ghost" disabled={isPending} onClick={onCancelRsvp}>
+                                Cancel RSVP
+                            </Button>
+                        </div>
+                        <div className="mt-2 text-xs text-muted-foreground">
+                            Attendees (going): {event.attendees ?? 0}
+                        </div>
+                        {event.userRsvpStatus && event.userRsvpStatus !== "none" && (
+                            <div className="mt-1 text-xs">Your status: {event.userRsvpStatus}</div>
+                        )}
+                    </div>
+                </div>
+
+                {event.description && (
+                    <div className="px-2 md:px-0">
+                        <div className="rounded-md border bg-white/50 p-3">
+                            <div className="prose max-w-none max-h-40 overflow-hidden whitespace-pre-wrap">
+                                {event.description}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
