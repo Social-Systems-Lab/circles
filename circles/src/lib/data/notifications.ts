@@ -46,6 +46,7 @@ export async function sendVerificationRequestNotification(user: Circle, admins: 
     }
 }
 
+// fix
 export async function sendUserVerifiedNotification(user: UserPrivate): Promise<void> {
     try {
         console.log(`🔔 [NOTIFY] Sending user_verified notification to ${user.name}`);
