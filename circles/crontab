@@ -4,6 +4,10 @@
 
 # Add future cron jobs here, each on a new line
 
+# Run the email reminder job every hour at minute 0
+
+0 \* \* \* \* curl -f -H "Authorization: Bearer $CRON_SECRET" http://circles:3000/api/cron/email-reminders || echo "Cron job failed: email-reminders at $(date)" >> /var/log/cron.log
+
 # Example: 15 \* \* \* \* curl ...
 
 # End of file needs a newline

@@ -1393,3 +1393,15 @@ export interface GoalDisplay extends Goal {
     // resultImages?: Media[];
     // resultPostId?: string;
 }
+
+export const notificationSchema = z.object({
+    _id: z.any().optional(),
+    userId: didSchema,
+    type: notificationTypeSchema,
+    content: z.any(),
+    isRead: z.boolean().default(false),
+    createdAt: z.date(),
+    lastEmailedAt: z.date().optional(),
+});
+
+export type Notification = z.infer<typeof notificationSchema>;

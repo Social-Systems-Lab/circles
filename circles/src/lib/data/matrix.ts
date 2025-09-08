@@ -17,13 +17,14 @@ import {
     EntityType,
     DefaultNotificationSetting,
     UserNotificationSetting,
+    Notification,
 } from "@/models/models";
 import crypto from "crypto";
 import { getCirclesByDids, updateCircle } from "./circle";
 import { getServerSettings, updateServerSettings } from "./server-settings";
 import { getPrivateUserByDid, getUser } from "./user";
 import { getMembers } from "./member";
-import { UserNotificationSettings, DefaultNotificationSettings } from "./db";
+import { UserNotificationSettings, DefaultNotificationSettings, Notifications } from "./db";
 import { checkUserPermissionForNotification } from "@/lib/actions/notificationSettings";
 
 const MATRIX_HOST = process.env.MATRIX_HOST || "127.0.0.1";
@@ -441,6 +442,16 @@ export async function sendNotifications(
         const content = { msgtype: "m.text", body, notificationType, ...sanitizeObject(payload) };
 
         await sendMessage(recipientDoc.matrixAccessToken, recipientDoc.matrixNotificationsRoomId, content);
+
+        // Persist the notification to the database
+        const notification: Notification = {
+            userId: recipientDoc.did,
+            type: notificationType,
+            content: content,
+            isRead: false,
+            createdAt: new Date(),
+        };
+        await Notifications.insertOne(notification);
     }
 }
 

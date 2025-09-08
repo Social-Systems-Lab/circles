@@ -271,6 +271,16 @@ export const Notifications = () => {
                 latestNotification.id,
             );
 
+            try {
+                await fetch("/api/notifications/mark-as-read", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ notificationId: latestNotification.id }),
+                });
+            } catch (error) {
+                console.error("Error marking notification as read in DB:", error);
+            }
+
             console.log(`📩 [Notifications] Read receipt sent successfully`);
 
             // Reset unread count for notifications

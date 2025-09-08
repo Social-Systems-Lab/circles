@@ -24,6 +24,7 @@ import {
     DefaultNotificationSetting, // Added DefaultNotificationSetting model
     Event,
     EventRsvp,
+    Notification,
 } from "@/models/models";
 import { AggregateRank } from "./ranking";
 
@@ -63,6 +64,7 @@ let RankedLists: Collection<RankedList>;
 let AggregateRanks: Collection<AggregateRank>;
 let UserNotificationSettings: Collection<UserNotificationSetting>; // Added UserNotificationSettings collection
 let DefaultNotificationSettings: Collection<DefaultNotificationSetting>; // Added DefaultNotificationSettings collection
+let Notifications: Collection<Notification>;
 
 // Only initialize the database connection if not in build mode
 if (process.env.IS_BUILD !== "true") {
@@ -100,6 +102,7 @@ if (process.env.IS_BUILD !== "true") {
     AggregateRanks = db.collection<AggregateRank>("aggregateRanks");
     UserNotificationSettings = db.collection<UserNotificationSetting>("userNotificationSettings");
     DefaultNotificationSettings = db.collection<DefaultNotificationSetting>("defaultNotificationSettings");
+    Notifications = db.collection<Notification>("notifications");
 }
 
 export {
@@ -130,4 +133,5 @@ export {
     AggregateRanks,
     UserNotificationSettings,
     DefaultNotificationSettings,
+    Notifications,
 };
