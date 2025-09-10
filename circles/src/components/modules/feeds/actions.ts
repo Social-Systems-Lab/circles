@@ -92,30 +92,40 @@ export async function getAggregatePostsAction(
     skip: number,
     sortingOptions?: SortingOptions,
     sdgHandles?: string[],
+    circleHandle?: string,
 ): Promise<PostDisplay[]> {
     if (!userDid) {
         return getGlobalPostsAction(userDid, limit, skip, sortingOptions, sdgHandles);
     }
-    // Get all circles the user is a member of
-    const user = await getUserPrivate(userDid);
 
-    // Collect all feeds the user has access to
+    const user = await getUserPrivate(userDid);
     const accessibleFeeds: string[] = [];
 
-    for (const membership of user.memberships) {
-        // ignore the default circle
-        if (membership.circle.handle === "default") {
-            continue;
+    if (circleHandle) {
+        const circle = await getCircleByHandle(circleHandle);
+        if (circle) {
+            const feeds = await getFeedsByCircleId(circle._id.toString());
+            const membership = user.memberships.find((m) => m.circleId === circle._id.toString());
+            if (membership) {
+                for (const feed of feeds) {
+                    if (feed.userGroups.some((group) => membership.userGroups.includes(group))) {
+                        accessibleFeeds.push(feed._id?.toString());
+                    }
+                }
+            }
         }
+    } else {
+        for (const membership of user.memberships) {
+            if (membership.circle.handle === "default") {
+                continue;
+            }
 
-        const { circleId, userGroups } = membership;
-
-        // Get all feeds in the circle
-        const feeds = await getFeedsByCircleId(circleId);
-        for (const feed of feeds) {
-            // Check if user has read access to the feed
-            if (feed.userGroups.some((group) => userGroups.includes(group))) {
-                accessibleFeeds.push(feed._id?.toString());
+            const { circleId, userGroups } = membership;
+            const feeds = await getFeedsByCircleId(circleId);
+            for (const feed of feeds) {
+                if (feed.userGroups.some((group) => userGroups.includes(group))) {
+                    accessibleFeeds.push(feed._id?.toString());
+                }
             }
         }
     }

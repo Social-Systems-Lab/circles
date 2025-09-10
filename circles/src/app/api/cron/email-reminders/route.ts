@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
                     templateModel: {
                         name: user.name,
                         notifications: unreadNotifications.map((n) => n.content),
+                        actionUrl: process.env.CIRCLES_URL || "http://localhost:3000",
                     },
                 });
 

@@ -28,10 +28,10 @@ export default function FeedsModule(props: PageProps) {
 
         startTransition(async () => {
             const sdgHandles = selectedSdgs.map((s) => s.handle);
-            const newPosts = await getAggregatePostsAction(user?.did, 20, 0, sorting, sdgHandles);
+            const newPosts = await getAggregatePostsAction(user?.did, 20, 0, sorting, sdgHandles, circle.handle);
             setPosts(newPosts);
         });
-    }, [feed, sorting, selectedSdgs, user]);
+    }, [feed, sorting, selectedSdgs, user, circle.handle]);
 
     useEffect(() => {
         async function fetchInitialData() {

@@ -17,6 +17,7 @@ import { Bookmark, Plus } from "lucide-react";
 import { Circle } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
 import PinPicker from "../modules/home/pin-picker";
+import { RiMegaphoneLine } from "react-icons/ri";
 
 export default function GlobalNavItems() {
     const pathname = usePathname();
@@ -102,14 +103,15 @@ export default function GlobalNavItems() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5, delay: 0 * 0.1 }}
                     >
-                        <IoPulseOutline size={"24px"} />
+                        <RiMegaphoneLine size={"24px"} />
+                        {/* <IoPulseOutline size={"24px"} /> */}
                         <motion.span
-                            className="mt-[4px] text-[11px]"
+                            className="mt-[4px] text-[8px]"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.3, delay: 0.2 + 0 * 0.1 }}
                         >
-                            Activity
+                            Announcements
                         </motion.span>
                     </motion.div>
                 </div>
