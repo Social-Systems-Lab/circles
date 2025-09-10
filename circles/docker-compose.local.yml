@@ -101,6 +101,19 @@ services:
         depends_on:
             - minio
 
+    cron:
+        build:
+            context: .
+            dockerfile: Dockerfile.cron
+        restart: always
+        env_file:
+            - .env
+            - .env.local
+        depends_on:
+            - nginx # Wait for nginx to be available
+        networks:
+            - webnet
+
 volumes:
     db:
     storage:

@@ -142,13 +142,12 @@ services:
             - minio
 
     cron:
-        image: alpine # Using lightweight alpine image
+        build:
+            context: .
+            dockerfile: Dockerfile.cron
         restart: always
         env_file:
             - .env # To get CRON_SECRET
-        volumes:
-            - ./crontab:/etc/crontabs/root # Mount the crontab file
-        command: sh -c "apk add --no-cache curl && crond -f -l 8" # Install curl and start crond
         depends_on:
             - circles # Wait for the app service to be available (basic check)
         networks:
