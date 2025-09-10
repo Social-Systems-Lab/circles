@@ -955,6 +955,7 @@ export type NotificationType =
     | "user_verification_request" // User has requested verification
     | "user_verification_rejected" // User has requested verification - REJECTED
     | "user_becomes_member" // User becomes a platform member
+    | "pm_received" // A private message has been received
     // Consolidated Summary Notification Types
     | "COMMUNITY_FOLLOW_REQUEST" // Replaces follow_request
     | "COMMUNITY_NEW_FOLLOWER" // Replaces new_follower
@@ -1010,6 +1011,7 @@ export const notificationTypeValues = [
     "user_verification_request",
     "user_verification_rejected",
     "user_becomes_member",
+    "pm_received",
     // Summary Types (for user configuration)
     "COMMUNITY_FOLLOW_REQUEST",
     "COMMUNITY_NEW_FOLLOWER",

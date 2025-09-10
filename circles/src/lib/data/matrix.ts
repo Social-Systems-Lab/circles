@@ -676,6 +676,8 @@ export async function sendMessage(
     accessToken: string,
     roomId: string,
     content: { msgtype: string; body: string; [key: string]: any },
+    isPM: boolean = false,
+    recipientDid?: string,
 ): Promise<any> {
     const txnId = `${Date.now()}`;
     const url = `${MATRIX_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${txnId}`;
@@ -685,5 +687,17 @@ export async function sendMessage(
         body: JSON.stringify(content),
     });
     if (!response.ok) throw new Error(`Failed to send message: ${await response.text()}`);
+
+    if (isPM && recipientDid) {
+        const notification: Notification = {
+            userId: recipientDid,
+            type: "pm_received",
+            content: content,
+            isRead: false,
+            createdAt: new Date(),
+        };
+        await Notifications.insertOne(notification);
+    }
+
     return await response.json();
 }

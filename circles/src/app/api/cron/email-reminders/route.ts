@@ -19,7 +19,8 @@ export async function GET(req: NextRequest) {
                 userId: user.did,
                 isRead: false,
                 lastEmailedAt: { $exists: false },
-                createdAt: { $lt: new Date(Date.now() - 24 * 60 * 60 * 1000) }, // 24 hours ago
+                createdAt: { $lt: new Date(Date.now() - 60 * 60 * 1000) }, // 60 hours ago
+                $or: [{ type: { $ne: "pm_received" } }, { type: "pm_received" }],
             }).toArray();
 
             if (unreadNotifications.length > 0) {

@@ -616,7 +616,23 @@ export const ChatRoomComponent: React.FC<{
         if (logLevel >= LOG_LEVEL_TRACE) {
             console.log("useEffect.ChatRoomComponent.1");
         }
-    }, []);
+
+        const markPmsAsRead = async () => {
+            try {
+                await fetch("/api/notifications/mark-pms-as-read", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ roomId: chatRoom.matrixRoomId }),
+                });
+            } catch (error) {
+                console.error("Error marking PMs as read:", error);
+            }
+        };
+
+        if (chatRoom.matrixRoomId) {
+            markPmsAsRead();
+        }
+    }, [chatRoom.matrixRoomId]);
 
     const markLatestMessageAsRead = useCallback(async () => {
         if (messages.length > 0 && user?.matrixAccessToken) {
