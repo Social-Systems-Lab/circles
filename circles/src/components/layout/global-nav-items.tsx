@@ -98,6 +98,9 @@ export default function GlobalNavItems() {
                 <div
                     onClick={() => {
                         if (isMobile) {
+                            if (pathname !== "/explore") {
+                                router.push("/explore");
+                            }
                             setDrawerContent("announcements");
                         } else {
                             setSidePanelMode("activity");
@@ -108,7 +111,7 @@ export default function GlobalNavItems() {
                     <motion.div
                         className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
                             (pathname === "/explore" && panelMode === "activity") ||
-                            (isMobile && drawerContent === "announcements")
+                            (isMobile && drawerContent === "announcements" && pathname === "/explore")
                                 ? "text-[#495cff]"
                                 : "text-[#696969]"
                         }`}
