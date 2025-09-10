@@ -39,6 +39,7 @@ import {
     sidePanelModeAtom,
     sidePanelSearchStateAtom,
     mapSearchCommandAtom,
+    drawerContentAtom,
 } from "@/lib/data/atoms";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
@@ -55,6 +56,7 @@ import ResizingDrawer from "@/components/ui/resizing-drawer"; // Correct import 
 import ContentPreview from "@/components/layout/content-preview";
 import { getOpenEventsForMapAction } from "./map-explorer-actions";
 import { EventDisplay } from "@/models/models";
+import ActivityPanel from "@/components/layout/activity-panel";
 
 // mapItemToContent helper remains the same
 const mapItemToContent = (item: WithMetric<Content> | Circle | undefined): Content | null => {
@@ -83,6 +85,7 @@ interface MapExplorerProps {
 }
 
 type ViewMode = "cards" | "explore";
+type DrawerContent = "explore" | "announcements" | "preview";
 
 // Define snap point indices for clarity
 const SNAP_INDEX_CLOSED = -1; // Not used by resizing drawer, but conceptually useful
@@ -108,6 +111,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const [allSearchResults, setAllSearchResults] = useState<WithMetric<Circle>[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
+    const [drawerContent, setDrawerContent] = useAtom(drawerContentAtom);
     // Events dataset for map
     const [eventsForMap, setEventsForMap] = useState<EventDisplay[]>([]);
     const [isEventsLoading, setIsEventsLoading] = useState(false);
@@ -377,7 +381,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 selectedCategory: selectedCategory ?? null,
                 selectedSdgHandles: sdgHandles,
                 // Include events in search results panel (events first for clarity)
-                items: ([...filteredEventsForMap, ...filtered] as any),
+                items: [...filteredEventsForMap, ...filtered] as any,
                 counts,
             });
             setSidePanelMode("search");
@@ -593,7 +597,10 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     // Control drawer snap based on contentPreview state
     useEffect(() => {
         if (isMobile && viewMode === "explore") {
-            if (contentPreview) {
+            if (drawerContent === "announcements") {
+                setTriggerSnapIndex(SNAP_INDEX_HALF);
+            } else if (contentPreview) {
+                setDrawerContent("preview");
                 // Requirement 4: Expand drawer when preview is shown
                 setTriggerSnapIndex(SNAP_INDEX_OPEN);
             } else {
@@ -602,7 +609,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             }
         }
         // Add dependencies that should trigger this logic
-    }, [contentPreview, isMobile, viewMode, hasSearched]);
+    }, [contentPreview, isMobile, viewMode, hasSearched, drawerContent]);
 
     // Reset drawer and preview when switching view modes or leaving mobile explore
     useEffect(() => {
@@ -665,35 +672,35 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                             {/* Search Input (hidden on desktop when panel is open) */}
                             {showTopSearchInput && (
                                 <div className="flex items-center rounded-full bg-white p-1 px-3 shadow-md">
-                                <input
-                                    type="text"
-                                    placeholder="Search..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    onKeyDown={(e) => e.key === "Enter" && handleSearchTrigger()}
-                                    className="w-32 border-none bg-transparent pl-1 outline-none focus:ring-0 sm:w-48"
-                                />
-                                {searchQuery && (
+                                    <input
+                                        type="text"
+                                        placeholder="Search..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        onKeyDown={(e) => e.key === "Enter" && handleSearchTrigger()}
+                                        className="w-32 border-none bg-transparent pl-1 outline-none focus:ring-0 sm:w-48"
+                                    />
+                                    {searchQuery && (
+                                        <Button
+                                            onClick={handleClearSearch}
+                                            size="sm"
+                                            variant="ghost"
+                                            className="ml-1 p-1"
+                                            aria-label="Clear search"
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    )}
                                     <Button
-                                        onClick={handleClearSearch}
+                                        onClick={handleSearchTrigger}
                                         size="sm"
                                         variant="ghost"
-                                        className="ml-1 p-1"
-                                        aria-label="Clear search"
+                                        disabled={isSearching || !searchQuery.trim()}
+                                        aria-label="Search"
                                     >
-                                        <X className="h-4 w-4" />
+                                        {isSearching ? "..." : <Search className="h-4 w-4" />}
                                     </Button>
-                                )}
-                                <Button
-                                    onClick={handleSearchTrigger}
-                                    size="sm"
-                                    variant="ghost"
-                                    disabled={isSearching || !searchQuery.trim()}
-                                    aria-label="Search"
-                                >
-                                    {isSearching ? "..." : <Search className="h-4 w-4" />}
-                                </Button>
-                            </div>
+                                </div>
                             )}
                             {/* Filters */}
                             <div className="flex items-center">
@@ -1052,32 +1059,34 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                     // Optional: Get notified when drawer snaps internally
                     // onSnapChange={(index) => setDrawerSnapIndex(index)}
                 >
-                    {/* Requirement 4: Conditional Rendering inside Drawer */}
-                    {contentPreview ? (
+                    {drawerContent === "preview" ? (
                         // --- Content Preview View ---
                         <div className="flex h-full flex-col">
                             <div className="flex items-center border-b px-0 py-2">
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => setContentPreview(undefined)} // Back button clears preview
+                                    onClick={() => setDrawerContent("explore")}
                                     className="mr-2"
                                 >
                                     <ArrowLeft className="mr-1 h-4 w-4" /> Back to List
                                 </Button>
                             </div>
                             <div className="flex-1 overflow-y-auto">
-                                {/* Render the actual preview component */}
                                 <ContentPreview />
+                            </div>
+                        </div>
+                    ) : drawerContent === "announcements" ? (
+                        // --- Announcements View ---
+                        <div className="flex h-full flex-col">
+                            <div className="flex-1 overflow-y-auto">
+                                <ActivityPanel />
                             </div>
                         </div>
                     ) : (
                         // --- List View (Default / Search Results) ---
                         <div className="flex-1 rounded-t-[10px] bg-white pt-0">
-                            {" "}
-                            {/* Ensure flex-1 is here if needed */}
                             <div className="mx-0 px-4 pb-4">
-                                {/* Loading and No Results Messages */}
                                 {isSearching && <p className="py-4 text-center">Loading...</p>}
                                 {!isSearching && drawerListData.length === 0 && (
                                     <p className="py-4 text-center text-sm text-gray-500">
@@ -1086,24 +1095,18 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                             : "No communities found."}
                                     </p>
                                 )}
-
-                                {/* Results List */}
                                 {!isSearching && drawerListData.length > 0 && (
                                     <ul className="space-y-2">
-                                        {/* Requirement 2: Use drawerListData */}
                                         {drawerListData.map((item) => (
                                             <li
                                                 key={item._id}
                                                 className="flex cursor-pointer items-center gap-2 rounded pb-2 pt-1 hover:bg-gray-100"
                                                 onClick={() => {
-                                                    // Requirement 3: Set contentPreview on click
                                                     const previewData: ContentPreviewData = {
                                                         type: (item.circleType || "circle") as any,
                                                         content: item as any,
                                                     };
                                                     setContentPreview(previewData);
-
-                                                    // Also zoom map if location exists
                                                     if (item.location?.lngLat) {
                                                         handleSetZoomContent(item);
                                                     }
@@ -1114,7 +1117,6 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                                         : "Click to view details"
                                                 }
                                             >
-                                                {/* List Item Content (remains the same) */}
                                                 <div className="relative">
                                                     <CirclePicture circle={item} size="60px" showTypeIndicator={true} />
                                                 </div>
@@ -1136,7 +1138,6 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                                     )}
                                                 </div>
                                                 <div className="relative">
-                                                    {/* <ChevronRight className="h-4 w-4" /> */}
                                                     <HiChevronRight className="h-4 w-4" />
                                                 </div>
                                             </li>

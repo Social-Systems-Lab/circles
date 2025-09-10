@@ -5,8 +5,9 @@ import React, { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import PageIcon from "../modules/page-icon";
 import { motion } from "framer-motion";
-import { userAtom, sidePanelModeAtom } from "@/lib/data/atoms";
+import { userAtom, sidePanelModeAtom, drawerContentAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
+import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { IoChatbubbleOutline, IoPulseOutline } from "react-icons/io5";
 import { LiaGlobeAfricaSolid } from "react-icons/lia";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
@@ -24,6 +25,8 @@ export default function GlobalNavItems() {
     const router = useRouter();
     const [user, setUser] = useAtom(userAtom);
     const [panelMode, setSidePanelMode] = useAtom(sidePanelModeAtom);
+    const [drawerContent, setDrawerContent] = useAtom(drawerContentAtom);
+    const isMobile = useIsMobile();
     const [pinned, setPinned] = useState<Circle[]>([]);
     const [pinPickerOpen, setPinPickerOpen] = useState(false);
 
@@ -66,9 +69,14 @@ export default function GlobalNavItems() {
             >
                 <Link href={"/explore"}>
                     <motion.div
-                        onClick={() => setSidePanelMode("none")}
+                        onClick={() => {
+                            setSidePanelMode("none");
+                            setDrawerContent("explore");
+                        }}
                         className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
-                            pathname === "/explore" && panelMode !== "activity" ? "text-[#495cff]" : "text-[#696969]"
+                            pathname === "/explore" && panelMode !== "activity" && drawerContent !== "announcements"
+                                ? "text-[#495cff]"
+                                : "text-[#696969]"
                         }`}
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.95 }}
@@ -89,13 +97,20 @@ export default function GlobalNavItems() {
                 </Link>
                 <div
                     onClick={() => {
-                        setSidePanelMode("activity");
-                        router.push("/explore?panel=activity");
+                        if (isMobile) {
+                            setDrawerContent("announcements");
+                        } else {
+                            setSidePanelMode("activity");
+                            router.push("/explore?panel=activity");
+                        }
                     }}
                 >
                     <motion.div
                         className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
-                            pathname === "/explore" && panelMode === "activity" ? "text-[#495cff]" : "text-[#696969]"
+                            (pathname === "/explore" && panelMode === "activity") ||
+                            (isMobile && drawerContent === "announcements")
+                                ? "text-[#495cff]"
+                                : "text-[#696969]"
                         }`}
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.95 }}
