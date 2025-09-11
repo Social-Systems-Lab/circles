@@ -22,6 +22,8 @@ curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/dev/circles
 curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/dev/circles/.env
 curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/dev/circles/nginx.conf.template
 curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/dev/circles/docker-entrypoint.sh
+curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/dev/circles/Dockerfile.cron
+curl -O https://raw.githubusercontent.com/Social-Systems-Lab/circles/dev/circles/crontab
 
 # Check if files were downloaded successfully
 if [ ! -f docker-compose.yml ] || [ ! -f .env ] || [ ! -f nginx.conf.template ]  || [ ! -f docker-entrypoint.sh ]; then

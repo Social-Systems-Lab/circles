@@ -15,6 +15,7 @@ import {
     TaskStage,
     GoalDisplay,
     GoalStage,
+    Event,
 } from "@/models/models";
 import { sendNotifications } from "./matrix";
 import { getUser, getUserPrivate } from "./user";
@@ -25,6 +26,7 @@ import { getProposalById, getProposalReactions } from "./proposal"; // Use getPr
 import { getIssueById } from "./issue"; // Import getIssueById
 import { getTaskById } from "./task"; // Import getTaskById
 import { getGoalById } from "./goal"; // Import getGoalById
+import { getEventById } from "./event";
 import { features } from "./constants";
 import { getAuthorizedMembers } from "../auth/auth"; // Import the function to get authorized members
 import { sanitizeObjectForJSON } from "../utils/sanitize";
@@ -1742,5 +1744,32 @@ export async function notifyProposalToGoal(
         );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyProposalToGoal:", error);
+    }
+}
+
+/**
+ * Send notification when a user is invited to an event.
+ */
+export async function notifyEventInvitation(event: Event, inviter: Circle, invitedUser: UserPrivate): Promise<void> {
+    try {
+        console.log(`🔔 [NOTIFY] notifyEventInvitation called for event ${event._id} to user ${invitedUser.did}`);
+        const circle = await getCircleById(event.circleId);
+        if (!circle) {
+            console.error(`🔔 [NOTIFY] Circle not found for event invitation: ${event.circleId}`);
+            return;
+        }
+
+        await sendNotifications(
+            "event_invitation",
+            [invitedUser],
+            sanitizeObjectForJSON({
+                circle,
+                user: inviter, // The user who invited
+                eventId: event._id?.toString(),
+                eventName: event.title,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyEventInvitation:", error);
     }
 }

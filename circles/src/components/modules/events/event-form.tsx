@@ -249,7 +249,7 @@ export default function EventForm({ circleHandle, event }: Props) {
                         <Label htmlFor="location">Location</Label>
                         <LocationPicker value={location} onChange={(val) => setLocation(val)} compact />
                         <p className="mt-1 text-xs text-muted-foreground">
-                            Set the event location. For online events, toggle &quot;Virtual&quot; above.
+                            Set the event location. For online events, toggle "Virtual" above.
                         </p>
                     </div>
                 </div>

@@ -1,9 +1,11 @@
-import { Events, EventRsvps, Feeds, Posts } from "./db";
+import { Events, EventRsvps, Feeds, Posts, EventInvitations } from "./db";
 import { ObjectId } from "mongodb";
-import { Event, EventDisplay, EventStage, EventRsvp, Circle, Post, Media } from "@/models/models";
+import { Event, EventDisplay, EventStage, EventRsvp, Circle, Post, Media, EventInvitation } from "@/models/models";
 import { SAFE_CIRCLE_PROJECTION } from "./circle";
 import { createPost } from "./feed";
 import { upsertVbdEvents } from "./vdb";
+import { notifyEventInvitation } from "./notifications";
+import { getUserPrivate } from "./user";
 
 // Safe projection for event queries
 export const SAFE_EVENT_PROJECTION = {
@@ -28,6 +30,7 @@ export const SAFE_EVENT_PROJECTION = {
     categories: 1,
     causes: 1,
     capacity: 1,
+    invitations: 1,
 } as const;
 
 type Range = { from?: Date; to?: Date };
@@ -367,7 +370,47 @@ export const getEventById = async (eventId: string, userDid: string): Promise<Ev
  * Create a new event and shadow post for comments (if a feed exists).
  * Returns the created event (with commentPostId if created).
  */
-export const createEvent = async (data: Omit<Event, "_id" | "commentPostId">): Promise<Event> => {
+/**
+ * Invite users to an event, create invitation records, and send notifications.
+ */
+export const inviteUsersToEvent = async (
+    eventId: string,
+    circleId: string,
+    userDids: string[],
+    inviter: Circle,
+): Promise<void> => {
+    if (!userDids || userDids.length === 0) {
+        return;
+    }
+
+    const now = new Date();
+    const invitations: Omit<EventInvitation, "_id">[] = userDids.map((userDid) => ({
+        eventId,
+        circleId,
+        userDid,
+        status: "pending",
+        createdAt: now,
+        updatedAt: now,
+    }));
+
+    await EventInvitations.insertMany(invitations);
+
+    const event = await getEventById(eventId, inviter.did!);
+    if (!event) {
+        console.error(`Event not found for invitation: ${eventId}`);
+        return;
+    }
+
+    // Send notifications
+    for (const userDid of userDids) {
+        const user = await getUserPrivate(userDid);
+        if (user) {
+            await notifyEventInvitation(event, inviter, user);
+        }
+    }
+};
+
+export const createEvent = async (data: Omit<Event, "_id" | "commentPostId">, inviter: Circle): Promise<Event> => {
     const eventToInsert = {
         ...data,
         createdAt: data.createdAt || new Date(),
@@ -437,16 +480,26 @@ export const createEvent = async (data: Omit<Event, "_id" | "commentPostId">): P
         console.error("Error upserting event to VDB:", e);
     }
 
+    // Handle invitations
+    if (createdEvent.invitations && createdEvent.invitations.length > 0) {
+        await inviteUsersToEvent(createdEvent._id.toString(), createdEvent.circleId, createdEvent.invitations, inviter);
+    }
+
     return createdEvent as Event;
 };
 
 /**
  * Update an event
  */
-export const updateEvent = async (eventId: string, updates: Partial<Event>): Promise<boolean> => {
+export const updateEvent = async (eventId: string, updates: Partial<Event>, inviter: Circle): Promise<boolean> => {
     try {
         if (!ObjectId.isValid(eventId)) {
             console.error("Invalid eventId provided for update:", eventId);
+            return false;
+        }
+
+        const existingEvent = await Events.findOne({ _id: new ObjectId(eventId) });
+        if (!existingEvent) {
             return false;
         }
 
@@ -463,6 +516,16 @@ export const updateEvent = async (eventId: string, updates: Partial<Event>): Pro
         }
 
         const result = await Events.updateOne({ _id: new ObjectId(eventId) }, updateOp);
+
+        // Handle new invitations
+        if (updates.invitations) {
+            const existingInvitations = existingEvent.invitations || [];
+            const newInvitations = updates.invitations.filter((did) => !existingInvitations.includes(did));
+            if (newInvitations.length > 0) {
+                await inviteUsersToEvent(eventId, existingEvent.circleId, newInvitations, inviter);
+            }
+        }
+
         return result.matchedCount > 0 || result.modifiedCount > 0;
     } catch (error) {
         console.error(`Error updating event (${eventId}):`, error);

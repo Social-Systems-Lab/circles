@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useTransition } from "react";
+import React, { useState, useTransition } from "react";
 import { EventDisplay } from "@/models/models";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
@@ -10,6 +10,8 @@ import { format } from "date-fns";
 import ImageCarousel from "@/components/ui/image-carousel";
 import { Calendar, MapPin, Clock } from "lucide-react";
 import type { Media } from "@/models/models";
+import InvitedUserList from "./invited-user-list";
+import InviteModal from "./invite-modal";
 
 type Props = {
     circleHandle: string;
@@ -50,6 +52,7 @@ export default function EventDetail({
     const { toast } = useToast();
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
+    const [isInviteModalOpen, setInviteModalOpen] = useState(false);
     const compact = !!isPreview;
 
     const start = event.startAt ? new Date(event.startAt as any) : null;
@@ -59,8 +62,8 @@ export default function EventDetail({
         event.isVirtual && event.virtualUrl
             ? ""
             : event.location
-            ? [event.location.city, event.location.region, event.location.country].filter(Boolean).join(", ")
-            : "";
+              ? [event.location.city, event.location.region, event.location.country].filter(Boolean).join(", ")
+              : "";
 
     let shortDateTimeRange = "";
     if (start) {
@@ -165,7 +168,7 @@ export default function EventDetail({
                         dotsPosition="bottom-right"
                     />
                     {start && (
-                        <div className="absolute left-2 top-2 z-10 rounded-md bg-black/45 px-2 py-1 text-white text-xs md:text-sm">
+                        <div className="absolute left-2 top-2 z-10 rounded-md bg-black/45 px-2 py-1 text-xs text-white md:text-sm">
                             {format(start, "MMM d")}
                         </div>
                     )}
@@ -179,7 +182,7 @@ export default function EventDetail({
                         </div>
                     )}
                     <a
-                        className="absolute right-2 bottom-2 z-10"
+                        className="absolute bottom-2 right-2 z-10"
                         href={googleCalendarUrl(event)}
                         target="_blank"
                         rel="noreferrer"
@@ -220,7 +223,12 @@ export default function EventDetail({
                             <Button size="sm" disabled={isPending} onClick={() => onRsvp("going")}>
                                 I&apos;m going
                             </Button>
-                            <Button size="sm" variant="outline" disabled={isPending} onClick={() => onRsvp("interested")}>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={isPending}
+                                onClick={() => onRsvp("interested")}
+                            >
                                 Interested
                             </Button>
                             <Button size="sm" variant="ghost" disabled={isPending} onClick={onCancelRsvp}>
@@ -239,7 +247,7 @@ export default function EventDetail({
                 {event.description && (
                     <div className="px-4">
                         <div className="rounded-md border bg-white/50 p-3">
-                            <div className="prose max-w-none max-h-40 overflow-hidden whitespace-pre-wrap">
+                            <div className="prose max-h-40 max-w-none overflow-hidden whitespace-pre-wrap">
                                 {event.description}
                             </div>
                         </div>
@@ -270,6 +278,7 @@ export default function EventDetail({
                                 Edit
                             </Button>
                         )}
+                        {event.stage === "open" && <Button onClick={() => setInviteModalOpen(true)}>Invite</Button>}
                     </div>
                 )}
 
@@ -339,8 +348,9 @@ export default function EventDetail({
                         <div className="prose max-w-none whitespace-pre-wrap">{event.description}</div>
                     </div>
 
-                    {event.images && event.images.length > 0 && (
-                        compact ? (
+                    {event.images &&
+                        event.images.length > 0 &&
+                        (compact ? (
                             <div className="grid grid-cols-1 gap-3">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
@@ -362,8 +372,7 @@ export default function EventDetail({
                                     />
                                 ))}
                             </div>
-                        )
-                    )}
+                        ))}
                 </div>
 
                 <div className="space-y-3">
@@ -373,7 +382,12 @@ export default function EventDetail({
                             <Button size="sm" disabled={isPending} onClick={() => onRsvp("going")}>
                                 I&apos;m going
                             </Button>
-                            <Button size="sm" variant="outline" disabled={isPending} onClick={() => onRsvp("interested")}>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={isPending}
+                                onClick={() => onRsvp("interested")}
+                            >
                                 Interested
                             </Button>
                             <Button size="sm" variant="ghost" disabled={isPending} onClick={onCancelRsvp}>
@@ -387,8 +401,21 @@ export default function EventDetail({
                             <div className="mt-1 text-sm">Your status: {event.userRsvpStatus}</div>
                         )}
                     </div>
+                    {event.invitations && event.invitations.length > 0 && (
+                        <InvitedUserList
+                            userDids={event.invitations}
+                            circleHandle={circleHandle}
+                            eventId={event._id!.toString()}
+                        />
+                    )}
                 </div>
             </div>
+            <InviteModal
+                circleHandle={circleHandle}
+                eventId={event._id!.toString()}
+                open={isInviteModalOpen}
+                onOpenChange={setInviteModalOpen}
+            />
         </div>
     );
 }

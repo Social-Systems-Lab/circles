@@ -947,6 +947,7 @@ export type NotificationType =
     | "event_submitted_for_review"
     | "event_approved"
     | "event_status_changed"
+    | "event_invitation"
     // Ranking Notifications
     | "ranking_stale_reminder" // User's ranking list is stale, reminder sent
     | "ranking_grace_period_ended" // User's ranking list is past grace period
@@ -1005,6 +1006,7 @@ export const notificationTypeValues = [
     "event_submitted_for_review",
     "event_approved",
     "event_status_changed",
+    "event_invitation",
     "ranking_stale_reminder",
     "ranking_grace_period_ended",
     "user_verified",
@@ -1324,6 +1326,8 @@ export const eventSchema = z.object({
     causes: z.array(z.string()).optional(),
     // Capacity
     capacity: z.number().optional(),
+    // Invitations
+    invitations: z.array(didSchema).optional(),
 });
 
 export type Event = z.infer<typeof eventSchema>;
@@ -1352,6 +1356,20 @@ export const eventRsvpSchema = z.object({
     updatedAt: z.date(),
 });
 export type EventRsvp = z.infer<typeof eventRsvpSchema>;
+
+/**
+ * Event Invitation model
+ */
+export const eventInvitationSchema = z.object({
+    _id: z.any().optional(),
+    eventId: z.string(),
+    circleId: z.string(),
+    userDid: didSchema,
+    status: z.enum(["pending", "accepted", "declined"]),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+});
+export type EventInvitation = z.infer<typeof eventInvitationSchema>;
 
 // Goal stages
 export const goalStageSchema = z.enum(["review", "open", "completed"]); // Replaced "resolved" with "completed"

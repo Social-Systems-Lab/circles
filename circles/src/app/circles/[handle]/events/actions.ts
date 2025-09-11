@@ -30,17 +30,23 @@ import {
     deleteEvent as deleteEventDb,
     changeEventStage as changeEventStageDb,
 } from "@/lib/data/event";
+import { getCirclesByDids } from "@/lib/data/circle";
 import { upsertRsvp, cancelRsvp } from "@/lib/data/eventRsvp";
 import {
     notifyEventSubmittedForReview,
     notifyEventApproved,
     notifyEventStatusChanged,
 } from "@/lib/data/eventNotifications";
+import { inviteUsersToEvent } from "@/lib/data/event";
 
 // ----- Types -----
 
 type GetEventsActionResult = {
     events: EventDisplay[];
+};
+
+type GetInvitedUsersActionResult = {
+    users: Circle[];
 };
 
 // ----- Zod Schemas -----
@@ -258,7 +264,7 @@ export async function createEventAction(
         };
 
         // Create in DB (will also create shadow post if feed exists)
-        const created = await createEventDb(newEvent);
+        const created = await createEventDb(newEvent, user);
 
         // Revalidate list
         revalidatePath(`/circles/${circleHandle}/events`);
@@ -400,7 +406,10 @@ export async function updateEventAction(
             updatedAt: new Date(),
         };
 
-        const success = await updateEventDb(eventId, updateData);
+        const user = await getUserByDid(userDid);
+        if (!user) return { success: false, message: "User not found" };
+
+        const success = await updateEventDb(eventId, updateData, user);
         if (!success) return { success: false, message: "Failed to update event" };
 
         revalidatePath(`/circles/${circleHandle}/events`);
@@ -650,5 +659,66 @@ export async function ensureShadowPostForEventAction(eventId: string, circleId: 
     } catch (error) {
         console.error(`Error in ensureShadowPostForEventAction for event ${eventId}:`, error);
         return null;
+    }
+}
+
+/**
+ * Invite users to an event
+ */
+export async function inviteUsersToEventAction(
+    circleHandle: string,
+    eventId: string,
+    userDids: string[],
+): Promise<{ success: boolean; message?: string }> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) return { success: false, message: "User not authenticated" };
+
+        const user = await getUserByDid(userDid);
+        if (!user) return { success: false, message: "User not found" };
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) return { success: false, message: "Circle not found" };
+
+        const event = await getEventById(eventId, userDid);
+        if (!event) return { success: false, message: "Event not found" };
+
+        await inviteUsersToEvent(eventId, circle._id!.toString(), userDids, user);
+
+        revalidatePath(`/circles/${circleHandle}/events/${eventId}`);
+        return { success: true, message: "Invitations sent" };
+    } catch (error) {
+        console.error("Error inviting users to event:", error);
+        return { success: false, message: "Failed to send invitations" };
+    }
+}
+
+/**
+ * Get invited users for an event
+ */
+export async function getInvitedUsersAction(
+    circleHandle: string,
+    eventId: string,
+): Promise<GetInvitedUsersActionResult> {
+    const defaultResult: GetInvitedUsersActionResult = { users: [] };
+
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) return defaultResult;
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) return defaultResult;
+
+        const canView = await isAuthorized(userDid, circle._id as string, features.events.view);
+        if (!canView) return defaultResult;
+
+        const event = await getEventById(eventId, userDid);
+        if (!event || !event.invitations) return defaultResult;
+
+        const users = await getCirclesByDids(event.invitations);
+        return { users };
+    } catch (error) {
+        console.error("Error in getInvitedUsersAction:", error);
+        return defaultResult;
     }
 }
