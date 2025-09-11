@@ -374,9 +374,13 @@ export const getCirclePath = async (circle: Partial<Circle>): Promise<string> =>
     return `/circles/${circle.handle}/`;
 };
 
-export const getCirclesBySearchQuery = async (query: string, limit: number = 10) => {
+export const getCirclesBySearchQuery = async (query: string, limit: number = 10, circleType?: CircleType) => {
     const regex = new RegExp(query, "i"); // case-insensitive search
-    const circles = await Circles.find({ name: regex }, { projection: SAFE_CIRCLE_PROJECTION }).limit(limit).toArray();
+    const filter: any = { name: regex };
+    if (circleType) {
+        filter.circleType = circleType;
+    }
+    const circles = await Circles.find(filter, { projection: SAFE_CIRCLE_PROJECTION }).limit(limit).toArray();
     circles.forEach((circle: Circle) => {
         if (circle._id) {
             circle._id = circle._id.toString();

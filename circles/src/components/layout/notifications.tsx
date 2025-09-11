@@ -20,6 +20,7 @@ import {
     TaskStage,
     GoalDisplay,
     GoalStage, // Added TaskStage
+    Event,
 } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { sendReadReceipt } from "@/lib/data/client-matrix";
@@ -64,6 +65,9 @@ type Notification = {
     goalTitle?: string;
     previousGoalStage?: GoalStage;
     newGoalStage?: GoalStage;
+    // Event fields
+    eventId?: string;
+    eventName?: string;
     // For grouping purposes
     key?: string;
 };
@@ -95,6 +99,9 @@ type GroupedNotification = {
     goal?: GoalDisplay;
     goalId?: string;
     goalTitle?: string;
+    // Event fields
+    eventId?: string;
+    eventName?: string;
 };
 
 export const Notifications = () => {
@@ -155,6 +162,9 @@ export const Notifications = () => {
                     case "proposal_vote":
                         groupKey = `proposal_vote_${content.proposalId}`;
                         break;
+                    case "event_invitation":
+                        groupKey = `event_invitation_${content.eventId}`;
+                        break;
                     default:
                         groupKey = msg.id;
                 }
@@ -182,6 +192,8 @@ export const Notifications = () => {
                     issueTitle: content.issueTitle,
                     previousStage: content.previousStage,
                     newStage: content.newStage,
+                    eventId: content.eventId,
+                    eventName: content.eventName,
                     key: groupKey,
                 };
 
@@ -243,6 +255,9 @@ export const Notifications = () => {
                     goal: notification.goal,
                     goalId: notification.goalId,
                     goalTitle: notification.goalTitle,
+                    // Add event fields
+                    eventId: notification.eventId,
+                    eventName: notification.eventName,
                 });
             }
         }
@@ -398,6 +413,12 @@ export const Notifications = () => {
                 }
                 break;
 
+            case "event_invitation":
+                if (notification.eventId) {
+                    router.push(`/circles/${circleHandle}/events/${notification.eventId}`);
+                }
+                break;
+
             default:
                 // Ensure exhaustive check or provide a default behavior
                 const exhaustiveCheck = notification.notificationType;
@@ -520,6 +541,8 @@ export const Notifications = () => {
                 return groupedNotification.latestNotification.message;
 
             // For non-grouped or single proposal/issue notifications, use the original message
+            case "event_invitation":
+                return `${userList} invited you to the event "${groupedNotification.latestNotification.eventName || "an event"}"`;
             default:
                 return groupedNotification.latestNotification.message;
         }

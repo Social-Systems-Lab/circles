@@ -44,7 +44,7 @@ export default function InviteModal({ circleHandle, eventId, open, onOpenChange 
                 <DialogHeader>
                     <DialogTitle>Invite Users</DialogTitle>
                 </DialogHeader>
-                <UserPicker onSelectionChange={setSelectedUsers} />
+                <UserPicker onSelectionChange={setSelectedUsers} circleHandle={circleHandle} />
                 <DialogFooter>
                     <DialogClose asChild>
                         <Button variant="outline">Cancel</Button>

@@ -7,31 +7,43 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { X } from "lucide-react";
+import { getCircleMembersAction } from "@/app/circles/[handle]/events/actions";
 
 type Props = {
     onSelectionChange: (selected: Circle[]) => void;
     initialSelection?: Circle[];
+    circleHandle: string;
 };
 
-export default function UserPicker({ onSelectionChange, initialSelection = [] }: Props) {
+export default function UserPicker({ onSelectionChange, initialSelection = [], circleHandle }: Props) {
     const [search, setSearch] = useState("");
     const [results, setResults] = useState<Circle[]>([]);
     const [selected, setSelected] = useState<Circle[]>(initialSelection);
+    const [defaultUsers, setDefaultUsers] = useState<Circle[]>([]);
+
+    useEffect(() => {
+        const fetchInitialUsers = async () => {
+            const { members } = await getCircleMembersAction(circleHandle);
+            setDefaultUsers(members);
+            setResults(members);
+        };
+        fetchInitialUsers();
+    }, [circleHandle]);
 
     useEffect(() => {
         const fetchUsers = async () => {
             if (search.length < 2) {
-                setResults([]);
+                setResults(defaultUsers);
                 return;
             }
             const response = await fetch(`/api/circles/search?q=${search}&type=user`);
             const data = await response.json();
-            setResults(data.circles);
+            setResults(data.circles || []);
         };
 
         const debounce = setTimeout(fetchUsers, 300);
         return () => clearTimeout(debounce);
-    }, [search]);
+    }, [search, defaultUsers]);
 
     const handleSelect = (user: Circle) => {
         if (!selected.find((s) => s.did === user.did)) {

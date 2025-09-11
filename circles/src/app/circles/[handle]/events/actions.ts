@@ -38,6 +38,7 @@ import {
     notifyEventStatusChanged,
 } from "@/lib/data/eventNotifications";
 import { inviteUsersToEvent } from "@/lib/data/event";
+import { getMembers } from "@/lib/data/member";
 
 // ----- Types -----
 
@@ -47,6 +48,10 @@ type GetEventsActionResult = {
 
 type GetInvitedUsersActionResult = {
     users: Circle[];
+};
+
+type GetCircleMembersActionResult = {
+    members: Circle[];
 };
 
 // ----- Zod Schemas -----
@@ -719,6 +724,33 @@ export async function getInvitedUsersAction(
         return { users };
     } catch (error) {
         console.error("Error in getInvitedUsersAction:", error);
+        return defaultResult;
+    }
+}
+
+/**
+ * Get circle members
+ */
+export async function getCircleMembersAction(circleHandle: string): Promise<GetCircleMembersActionResult> {
+    const defaultResult: GetCircleMembersActionResult = { members: [] };
+
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) return defaultResult;
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) return defaultResult;
+
+        const canView = await isAuthorized(userDid, circle._id as string, features.events.view);
+        if (!canView) return defaultResult;
+
+        const members = await getMembers(circle._id!.toString());
+        const memberDids = members.map((m) => m.userDid);
+        const users = await getCirclesByDids(memberDids);
+
+        return { members: users };
+    } catch (error) {
+        console.error("Error in getCircleMembersAction:", error);
         return defaultResult;
     }
 }
