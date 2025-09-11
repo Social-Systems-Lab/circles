@@ -57,7 +57,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent
-                className="max-h-[90vh] overflow-y-auto sm:max-w-[600px] md:max-w-[750px] lg:max-w-[900px]"
+                className="z-[201] max-h-[90vh] overflow-y-auto sm:max-w-[600px] md:max-w-[750px] lg:max-w-[900px]"
                 onInteractOutside={(e) => {
                     // Allow closing by clicking outside if needed, or keep preventDefault
                     // e.preventDefault();

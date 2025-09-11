@@ -18,7 +18,7 @@ export function CreateEventDialog({ isOpen, onOpenChange, onSuccess }: Props) {
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent>
+            <DialogContent className="z-[201]">
                 <DialogHeader>
                     <DialogTitle>Create Event</DialogTitle>
                 </DialogHeader>
