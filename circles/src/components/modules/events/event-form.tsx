@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
 import LocationPicker from "@/components/forms/location-picker";
+import TimePicker from "@/components/forms/time-picker";
+import { format, addHours, setHours, setMinutes } from "date-fns";
 
 type Props = {
     circleHandle: string;
@@ -27,6 +29,14 @@ function toISOStringLocal(date: Date) {
     const h = pad(date.getHours());
     const min = pad(date.getMinutes());
     return `${y}-${m}-${d}T${h}:${min}`;
+}
+
+function formatDate(date: Date) {
+    return format(date, "yyyy-MM-dd");
+}
+
+function formatTime(date: Date) {
+    return format(date, "HH:mm");
 }
 
 export default function EventForm({ circleHandle, event }: Props) {
@@ -60,6 +70,24 @@ export default function EventForm({ circleHandle, event }: Props) {
 
     const [startAt, setStartAt] = useState<string>(initialStart);
     const [endAt, setEndAt] = useState<string>(initialEnd);
+
+    const [startDate, setStartDate] = useState(() =>
+        event?.startAt ? formatDate(new Date(event.startAt)) : format(new Date(), "yyyy-MM-dd"),
+    );
+    const [endDate, setEndDate] = useState(() =>
+        event?.endAt ? formatDate(new Date(event.endAt)) : formatDate(new Date()),
+    );
+    const [startTime, setStartTime] = useState(() => (event?.startAt ? formatTime(new Date(event.startAt)) : "12:00"));
+    const [endTime, setEndTime] = useState(() => (event?.endAt ? formatTime(new Date(event.endAt)) : "13:00"));
+
+    useEffect(() => {
+        if (allDay) return;
+        const [h, m] = startTime.split(":").map(Number);
+        const newStart = setMinutes(setHours(new Date(startDate), h), m);
+        const newEnd = addHours(newStart, 1);
+        setEndDate(formatDate(newEnd));
+        setEndTime(formatTime(newEnd));
+    }, [startTime, startDate, allDay]);
 
     // Seed images for edit
     useEffect(() => {
@@ -117,8 +145,11 @@ export default function EventForm({ circleHandle, event }: Props) {
                 fd.set("isHybrid", isHybrid ? "on" : "");
                 if (virtualUrl) fd.set("virtualUrl", virtualUrl);
 
-                fd.set("startAt", new Date(startAt).toISOString());
-                fd.set("endAt", new Date(endAt).toISOString());
+                const finalStart = allDay ? new Date(startDate) : new Date(`${startDate}T${startTime}`);
+                const finalEnd = allDay ? new Date(endDate) : new Date(`${endDate}T${endTime}`);
+
+                fd.set("startAt", finalStart.toISOString());
+                fd.set("endAt", finalEnd.toISOString());
                 fd.set("allDay", allDay ? "on" : "");
                 if (capacity) fd.set("capacity", capacity);
 
@@ -174,27 +205,30 @@ export default function EventForm({ circleHandle, event }: Props) {
                         />
                     </div>
 
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <Label htmlFor="startAt">Start</Label>
-                            <Input
-                                id="startAt"
-                                type="datetime-local"
-                                value={startAt}
-                                onChange={(e) => setStartAt(e.target.value)}
-                                required
-                            />
+                            <Label>Start Date</Label>
+                            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                         </div>
+                        {!allDay && (
+                            <div>
+                                <Label>Start Time</Label>
+                                <TimePicker value={startTime} onChange={setStartTime} />
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <Label htmlFor="endAt">End</Label>
-                            <Input
-                                id="endAt"
-                                type="datetime-local"
-                                value={endAt}
-                                onChange={(e) => setEndAt(e.target.value)}
-                                required
-                            />
+                            <Label>End Date</Label>
+                            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
                         </div>
+                        {!allDay && (
+                            <div>
+                                <Label>End Time</Label>
+                                <TimePicker value={endTime} onChange={setEndTime} />
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex items-center gap-2">
