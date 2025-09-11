@@ -16,8 +16,9 @@ import TimePicker from "@/components/forms/time-picker";
 import { format, addHours, setHours, setMinutes } from "date-fns";
 
 type Props = {
-    circleHandle: string;
+    circleHandle?: string; // optional, can come from context or picker
     event?: EventDisplay | null;
+    showCirclePicker?: boolean;
 };
 
 function toISOStringLocal(date: Date) {
@@ -39,7 +40,11 @@ function formatTime(date: Date) {
     return format(date, "HH:mm");
 }
 
-export default function EventForm({ circleHandle, event }: Props) {
+import CircleSelector from "@/components/global-create/circle-selector";
+import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content";
+
+export default function EventForm({ circleHandle, event, showCirclePicker }: Props) {
+    const [selectedCircle, setSelectedCircle] = useState<string | undefined>(circleHandle);
     const router = useRouter();
     const searchParams = useSearchParams();
     const { toast } = useToast();
@@ -104,6 +109,11 @@ export default function EventForm({ circleHandle, event }: Props) {
             return;
         }
 
+        if (!selectedCircle) {
+            toast({ title: "Validation", description: "Please select a circle.", variant: "destructive" });
+            return;
+        }
+
         startTransition(async () => {
             try {
                 const fd = new FormData();
@@ -143,9 +153,9 @@ export default function EventForm({ circleHandle, event }: Props) {
 
                 let result: { success: boolean; message?: string; eventId?: string };
                 if (event?._id) {
-                    result = await updateEventAction(circleHandle, event._id as string, fd);
+                    result = await updateEventAction(selectedCircle, event._id as string, fd);
                 } else {
-                    result = await createEventAction(circleHandle, fd);
+                    result = await createEventAction(selectedCircle, fd);
                 }
 
                 if (result.success) {
@@ -154,9 +164,9 @@ export default function EventForm({ circleHandle, event }: Props) {
                         description: result.message || (event ? "Event updated." : "Event created."),
                     });
                     if (!event && result.eventId) {
-                        router.push(`/circles/${circleHandle}/events/${result.eventId}`);
+                        router.push(`/circles/${selectedCircle}/events/${result.eventId}`);
                     } else {
-                        router.push(`/circles/${circleHandle}/events`);
+                        router.push(`/circles/${selectedCircle}/events`);
                     }
                     router.refresh();
                 } else {
@@ -175,6 +185,21 @@ export default function EventForm({ circleHandle, event }: Props) {
 
     return (
         <form className="space-y-6" onSubmit={onSubmit}>
+            {showCirclePicker && (
+                <div>
+                    <Label>Select Circle</Label>
+                    <CircleSelector
+                        itemType={
+                            {
+                                key: "event",
+                                moduleHandle: "events",
+                                createFeatureHandle: "createEvent",
+                            } as CreatableItemDetail
+                        }
+                        onCircleSelected={(circle) => setSelectedCircle(circle?.handle)}
+                    />
+                </div>
+            )}
             <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-4">
                     <div>
