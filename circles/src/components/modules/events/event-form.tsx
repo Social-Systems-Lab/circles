@@ -55,22 +55,6 @@ export default function EventForm({ circleHandle, event }: Props) {
     const [location, setLocation] = useState<Location | undefined>(event?.location);
     const [images, setImages] = useState<ImageItem[]>([]);
 
-    // Prefill from URL if creating
-    const initialStart = useMemo(() => {
-        if (event?.startAt) return toISOStringLocal(new Date(event.startAt));
-        const qs = searchParams?.get("startAt");
-        return qs ? toISOStringLocal(new Date(qs)) : "";
-    }, [event?.startAt, searchParams]);
-
-    const initialEnd = useMemo(() => {
-        if (event?.endAt) return toISOStringLocal(new Date(event.endAt));
-        const qs = searchParams?.get("endAt");
-        return qs ? toISOStringLocal(new Date(qs)) : "";
-    }, [event?.endAt, searchParams]);
-
-    const [startAt, setStartAt] = useState<string>(initialStart);
-    const [endAt, setEndAt] = useState<string>(initialEnd);
-
     const [startDate, setStartDate] = useState(() =>
         event?.startAt ? formatDate(new Date(event.startAt)) : format(new Date(), "yyyy-MM-dd"),
     );
@@ -111,8 +95,12 @@ export default function EventForm({ circleHandle, event }: Props) {
             toast({ title: "Validation", description: "Title and description are required.", variant: "destructive" });
             return;
         }
-        if (!startAt || !endAt) {
-            toast({ title: "Validation", description: "Start and end time are required.", variant: "destructive" });
+        if (!startDate || !endDate || (!allDay && (!startTime || !endTime))) {
+            toast({
+                title: "Validation",
+                description: "Start and end date and time are required.",
+                variant: "destructive",
+            });
             return;
         }
 
