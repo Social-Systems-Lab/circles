@@ -5,6 +5,9 @@ import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { getEventAction } from "@/app/circles/[handle]/events/actions";
 import EventDetail from "@/components/modules/events/event-detail";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 
 type PageProps = {
     params: Promise<{ handle: string; eventId: string }>;
@@ -43,13 +46,28 @@ export default async function EventDetailPage(props: PageProps) {
     const canEdit = canModerate || isAuthor;
 
     return (
-        <EventDetail
-            circleHandle={circle.handle!}
-            event={event}
-            canEdit={!!canEdit}
-            canReview={!!canReview}
-            canModerate={!!canModerate}
-            isAuthor={isAuthor}
-        />
+        <div className="formatted flex w-full flex-col">
+            <div className="mb-4 flex items-center p-4">
+                <Button asChild variant="ghost" className="mr-2">
+                    <Link href={`/circles/${circle.handle}/events`}>
+                        <ArrowLeft className="mr-2 h-4 w-4" />
+                        Back to Events
+                    </Link>
+                </Button>
+            </div>
+
+            <div className="mx-auto w-full max-w-4xl px-4">
+                <div className="rounded-lg bg-white p-6">
+                    <EventDetail
+                        circleHandle={circle.handle!}
+                        event={event}
+                        canEdit={!!canEdit}
+                        canReview={!!canReview}
+                        canModerate={!!canModerate}
+                        isAuthor={isAuthor}
+                    />
+                </div>
+            </div>
+        </div>
     );
 }
