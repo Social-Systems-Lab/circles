@@ -24,7 +24,7 @@ type Props = {
 };
 
 function googleCalendarUrl(e: EventDisplay) {
-    const formatGoogle = (d?: Date) => (d ? format(new Date(d), "yyyyMMdd'T'HHmmss'Z'") : "");
+    const formatGoogle = (d?: Date) => (d ? format(new Date(d), "yyyyMMdd'T'HHmmss") : "");
     const dates = `${formatGoogle(e.startAt as any)}/${formatGoogle(e.endAt as any)}`;
     const params = new URLSearchParams({
         action: "TEMPLATE",

@@ -383,8 +383,16 @@ export const inviteUsersToEvent = async (
         return;
     }
 
+    const existingInvitations = await EventInvitations.find({ eventId, userDid: { $in: userDids } }).toArray();
+    const existingUserDids = new Set(existingInvitations.map((inv) => inv.userDid));
+    const newUserDids = userDids.filter((did) => !existingUserDids.has(did));
+
+    if (newUserDids.length === 0) {
+        return;
+    }
+
     const now = new Date();
-    const invitations: Omit<EventInvitation, "_id">[] = userDids.map((userDid) => ({
+    const invitations: Omit<EventInvitation, "_id">[] = newUserDids.map((userDid) => ({
         eventId,
         circleId,
         userDid,
@@ -402,7 +410,7 @@ export const inviteUsersToEvent = async (
     }
 
     // Send notifications
-    for (const userDid of userDids) {
+    for (const userDid of newUserDids) {
         const user = await getUserPrivate(userDid);
         if (user) {
             await notifyEventInvitation(event, inviter, user);
