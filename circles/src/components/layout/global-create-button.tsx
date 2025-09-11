@@ -19,6 +19,7 @@ import { CreateTaskDialog } from "@/components/global-create/create-task-dialog"
 import { CreateGoalDialog } from "@/components/global-create/create-goal-dialog";
 import { CreateIssueDialog } from "@/components/global-create/create-issue-dialog";
 import { CreateProposalDialog } from "@/components/global-create/create-proposal-dialog";
+import { CreateEventDialog } from "@/components/global-create/create-event-dialog";
 // CreatePostDialog import will be removed as FeedPostDialog handles this globally
 // import { CreatePostDialog } from "@/components/global-create/create-post-dialog";
 import { CreateCommunityDialog } from "@/components/global-create/create-community-dialog"; // Updated Import
@@ -71,6 +72,7 @@ export function GlobalCreateButton() {
                 goal: "goals",
                 issue: "issues",
                 proposal: "proposals",
+                event: "events",
                 community: "circles", // Or specific community view if exists
             };
             const pathSegment = pathSegmentMap[itemKey];
@@ -162,7 +164,7 @@ export function GlobalCreateButton() {
                     </motion.div>
                 </DialogTrigger>
                 <DialogContent
-                    className="z-[100] max-h-[90vh] overflow-y-auto rounded-[15px] bg-white p-0 sm:max-w-[600px] md:max-w-[750px] lg:max-w-[900px]"
+                    className="z-[1000] max-h-[90vh] overflow-y-auto rounded-[15px] bg-white p-0 sm:max-w-[600px] md:max-w-[750px] lg:max-w-[900px]"
                     onInteractOutside={(e) => e.preventDefault()}
                 >
                     <GlobalCreateDialogContent
@@ -198,6 +200,12 @@ export function GlobalCreateButton() {
                 onOpenChange={createDialogOnOpenChange}
                 onSuccess={(data) => handleItemCreatedSuccess("proposal", data)}
                 itemKey="proposal"
+            />
+            <CreateEventDialog
+                isOpen={isSpecificDialogOpen("event")}
+                onOpenChange={createDialogOnOpenChange}
+                onSuccess={(data) => handleItemCreatedSuccess("event", data)}
+                itemKey="event"
             />
             {/* CreatePostDialog instance removed, FeedPostDialog will be used via atom */}
 

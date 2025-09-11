@@ -14,8 +14,9 @@ import {
     Event as EventModel,
     EventDisplay,
     EventStage,
+    CircleType,
 } from "@/models/models";
-import { getCircleByHandle, ensureModuleIsEnabledOnCircle } from "@/lib/data/circle";
+import { getCircleByHandle, ensureModuleIsEnabledOnCircle, getCirclesBySearchQuery } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getUserByDid, getUserPrivate } from "@/lib/data/user";
 import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage";
@@ -52,6 +53,10 @@ type GetInvitedUsersActionResult = {
 
 type GetCircleMembersActionResult = {
     members: Circle[];
+};
+
+type GetCirclesBySearchQueryActionResult = {
+    circles: Circle[];
 };
 
 // ----- Zod Schemas -----
@@ -751,6 +756,25 @@ export async function getCircleMembersAction(circleHandle: string): Promise<GetC
         return { members: users };
     } catch (error) {
         console.error("Error in getCircleMembersAction:", error);
+        return defaultResult;
+    }
+}
+
+/**
+ * Get circles by search query
+ */
+export async function getCirclesBySearchQueryAction(
+    query: string,
+    limit: number = 10,
+    circleType?: CircleType,
+): Promise<GetCirclesBySearchQueryActionResult> {
+    const defaultResult: GetCirclesBySearchQueryActionResult = { circles: [] };
+
+    try {
+        const circles = await getCirclesBySearchQuery(query, limit, circleType);
+        return { circles };
+    } catch (error) {
+        console.error("Error in getCirclesBySearchQueryAction:", error);
         return defaultResult;
     }
 }

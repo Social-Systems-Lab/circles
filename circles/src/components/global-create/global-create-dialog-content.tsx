@@ -3,17 +3,27 @@
 import React, { useState } from "react"; // Keep useState for potential future use if needed locally
 import { DialogTitle, DialogDescription, DialogHeader } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, ListChecks, Target, MessageSquare, AlertTriangle, FileText, ChevronRight } from "lucide-react";
+import {
+    Users,
+    ListChecks,
+    Target,
+    MessageSquare,
+    AlertTriangle,
+    FileText,
+    ChevronRight,
+    Calendar,
+} from "lucide-react";
 import { features } from "@/lib/data/constants"; // modules as moduleInfos removed as descriptions are simplified
 
 // Define types for creatable items
-export type CreatableItemKey = "community" | "task" | "goal" | "post" | "issue" | "proposal";
+export type CreatableItemKey = "community" | "task" | "goal" | "post" | "issue" | "proposal" | "event";
 
 const iconColors: Record<CreatableItemKey, string> = {
     community: "bg-purple-100 text-purple-600",
     // project: "bg-blue-100 text-blue-600", // Removed project
     post: "bg-orange-100 text-orange-600",
     task: "bg-teal-100 text-teal-600",
+    event: "bg-pink-100 text-pink-600",
     issue: "bg-red-100 text-red-600",
     goal: "bg-cyan-100 text-cyan-600",
     proposal: "bg-yellow-100 text-yellow-600",
@@ -85,6 +95,14 @@ export const creatableItemsList: CreatableItemDetail[] = [
         description: "Make a new proposal for decision.",
         icon: FileText,
         moduleHandle: "proposals",
+        createFeatureHandle: "create",
+    },
+    {
+        key: "event",
+        title: "Event",
+        description: "Schedule a new event.",
+        icon: Calendar,
+        moduleHandle: "events",
         createFeatureHandle: "create",
     },
 ];
