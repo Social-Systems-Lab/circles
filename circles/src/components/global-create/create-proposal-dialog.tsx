@@ -52,7 +52,7 @@ export const CreateProposalDialog: React.FC<CreateProposalDialogProps> = ({
             <DialogContent
                 className="z-[201] max-h-[90vh] overflow-y-auto sm:max-w-[600px] md:max-w-[750px] lg:max-w-[900px]"
                 onInteractOutside={(e) => {
-                    // e.preventDefault();
+                    e.preventDefault();
                 }}
             >
                 {/* DialogHeader removed as ProposalForm now provides its own card-based header */}

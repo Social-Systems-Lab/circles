@@ -60,7 +60,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                 className="z-[201] max-h-[90vh] overflow-y-auto sm:max-w-[600px] md:max-w-[750px] lg:max-w-[900px]"
                 onInteractOutside={(e) => {
                     // Allow closing by clicking outside if needed, or keep preventDefault
-                    // e.preventDefault();
+                    e.preventDefault();
                 }}
             >
                 {/* DialogHeader removed as TaskForm now provides its own card-based header */}

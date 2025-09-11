@@ -4,6 +4,9 @@ import React, { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import EventForm from "@/components/modules/events/event-form";
 import { Circle } from "@/models/models";
+import { useAtom } from "jotai";
+import { userAtom } from "@/lib/data/atoms";
+import { creatableItemsList, CreatableItemDetail } from "./global-create-dialog-content";
 
 type Props = {
     isOpen: boolean;
@@ -13,6 +16,9 @@ type Props = {
 };
 
 export function CreateEventDialog({ isOpen, onOpenChange, onSuccess }: Props) {
+    const [user] = useAtom(userAtom);
+    const itemDetail = creatableItemsList.find((item: CreatableItemDetail) => item.key === "event");
+
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent
@@ -23,7 +29,8 @@ export function CreateEventDialog({ isOpen, onOpenChange, onSuccess }: Props) {
                 }}
             >
                 <DialogTitle className="hidden">Create New Event</DialogTitle>
-                <EventForm showCirclePicker />
+                {!user && <p className="p-4 text-red-500">Please log in to create an event.</p>}
+                {user && itemDetail && <EventForm showCirclePicker />}
             </DialogContent>
         </Dialog>
     );
