@@ -12,7 +12,6 @@ import { Calendar, MapPin, Clock } from "lucide-react";
 import type { Circle, Media } from "@/models/models";
 import InvitedUserList from "./invited-user-list";
 import InviteModal from "./invite-modal";
-import CommentThread from "@/components/modules/discussions/comment-thread";
 import { CommentSection } from "../feeds/CommentSection";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
@@ -228,7 +227,7 @@ export default function EventDetail({
                         <div className="mb-2 text-xs text-muted-foreground">RSVP</div>
                         <div className="flex flex-wrap gap-2">
                             <Button size="sm" disabled={isPending} onClick={() => onRsvp("going")}>
-                                I&apos;m going
+                                I'm going
                             </Button>
                             <Button
                                 size="sm"
@@ -271,73 +270,68 @@ export default function EventDetail({
     }
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h1 className={`font-semibold ${compact ? "text-xl" : "text-2xl"}`}>{event.title}</h1>
-                {!compact && (
-                    <div className="flex gap-2">
-                        <a href={googleCalendarUrl(event)} target="_blank" rel="noreferrer">
-                            <Button variant="outline">Add to Google Calendar</Button>
-                        </a>
-                        {canEdit && (
-                            <Button
-                                variant="outline"
-                                onClick={() =>
-                                    router.push(
-                                        `/circles/${circleHandle}/events/${(event as any)._id?.toString?.() || ""}/edit`,
-                                    )
-                                }
-                            >
-                                Edit
-                            </Button>
-                        )}
-                        {event.stage === "open" && <Button onClick={() => setInviteModalOpen(true)}>Invite</Button>}
-                    </div>
-                )}
-
-                {/* Stage controls */}
-                <div
-                    className={`flex flex-wrap items-center gap-3 rounded-md border bg-white/50 p-3 ${
-                        compact ? "hidden" : ""
-                    }`}
-                >
-                    <div className="text-sm text-muted-foreground">
-                        Status: <span className="font-medium capitalize">{event.stage}</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                        {event.stage === "draft" && (isAuthor || canReview) && (
-                            <Button disabled={isPending} variant="secondary" onClick={onSubmitForReview}>
-                                Submit for review
-                            </Button>
-                        )}
-                        {(event.stage === "draft" || event.stage === "review") && canReview && (
-                            <Button disabled={isPending} onClick={onOpenNow}>
-                                Open
-                            </Button>
-                        )}
-                        {event.stage === "open" && (canReview || canModerate) && (
-                            <Button disabled={isPending} variant="destructive" onClick={onCancelEvent}>
-                                Cancel
-                            </Button>
-                        )}
-                    </div>
+        <div className="space-y-8">
+            {/* Header */}
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <h1 className="text-3xl font-bold tracking-tight">{event.title}</h1>
+                <div className="flex flex-wrap gap-2">
+                    <a href={googleCalendarUrl(event)} target="_blank" rel="noreferrer">
+                        <Button variant="outline">Add to Google Calendar</Button>
+                    </a>
+                    {canEdit && (
+                        <Button
+                            variant="outline"
+                            onClick={() =>
+                                router.push(
+                                    `/circles/${circleHandle}/events/${(event as any)._id?.toString?.() || ""}/edit`,
+                                )
+                            }
+                        >
+                            Edit
+                        </Button>
+                    )}
+                    {event.stage === "open" && <Button onClick={() => setInviteModalOpen(true)}>Invite</Button>}
                 </div>
             </div>
 
-            <div className={`grid gap-4 ${compact ? "grid-cols-1" : "md:grid-cols-3"}`}>
-                <div className="space-y-4 md:col-span-2">
-                    <div className="rounded-md border p-4">
-                        <div className="text-sm text-muted-foreground">When</div>
-                        <div className="font-medium">
+            {/* Stage controls */}
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-white/70 p-4 shadow-sm">
+                <div className="text-sm text-muted-foreground">
+                    Status: <span className="font-medium capitalize">{event.stage}</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    {event.stage === "draft" && (isAuthor || canReview) && (
+                        <Button disabled={isPending} variant="secondary" onClick={onSubmitForReview}>
+                            Submit for review
+                        </Button>
+                    )}
+                    {(event.stage === "draft" || event.stage === "review") && canReview && (
+                        <Button disabled={isPending} onClick={onOpenNow}>
+                            Open
+                        </Button>
+                    )}
+                    {event.stage === "open" && (canReview || canModerate) && (
+                        <Button disabled={isPending} variant="destructive" onClick={onCancelEvent}>
+                            Cancel
+                        </Button>
+                    )}
+                </div>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-3">
+                <div className="space-y-6 md:col-span-2">
+                    <div className="rounded-lg border bg-white/70 p-5 shadow-sm">
+                        <div className="mb-1 text-sm font-medium text-muted-foreground">When</div>
+                        <div className="text-base font-semibold">
                             {startFmt}
                             {endFmt ? ` — ${endFmt}` : ""}
                             {event.allDay ? " (All day)" : ""}
                         </div>
                     </div>
 
-                    <div className="rounded-md border p-4">
-                        <div className="text-sm text-muted-foreground">Where</div>
-                        <div className="font-medium">
+                    <div className="rounded-lg border bg-white/70 p-5 shadow-sm">
+                        <div className="mb-1 text-sm font-medium text-muted-foreground">Where</div>
+                        <div className="text-base font-semibold">
                             {event.isVirtual && event.virtualUrl ? (
                                 <a className="text-blue-600 underline" href={event.virtualUrl} target="_blank">
                                     Join virtual event
@@ -357,43 +351,33 @@ export default function EventDetail({
                         </div>
                     </div>
 
-                    <div className="rounded-md border p-4">
-                        <div className="prose max-w-none whitespace-pre-wrap">{event.description}</div>
-                    </div>
+                    {event.description && (
+                        <div className="rounded-lg border bg-white/70 p-5 shadow-sm">
+                            <div className="prose max-w-none whitespace-pre-wrap">{event.description}</div>
+                        </div>
+                    )}
 
-                    {event.images &&
-                        event.images.length > 0 &&
-                        (compact ? (
-                            <div className="grid grid-cols-1 gap-3">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                    {event.images && event.images.length > 0 && (
+                        <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+                            {event.images.map((img, i) => (
+                                // eslint-disable-next-line @next/next/no-img-element
                                 <img
-                                    key={event.images[0].fileInfo.url}
-                                    src={event.images[0].fileInfo.url}
+                                    key={img.fileInfo.url + i}
+                                    src={img.fileInfo.url}
                                     alt={event.title || "Event image"}
-                                    className="h-40 w-full rounded-md object-cover"
+                                    className="h-48 w-full rounded-lg object-cover shadow-sm"
                                 />
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                                {event.images.map((img, i) => (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                        key={img.fileInfo.url + i}
-                                        src={img.fileInfo.url}
-                                        alt={event.title || "Event image"}
-                                        className="h-40 w-full rounded-md object-cover"
-                                    />
-                                ))}
-                            </div>
-                        ))}
+                            ))}
+                        </div>
+                    )}
                 </div>
 
-                <div className="space-y-3">
-                    <div className="rounded-md border p-4">
-                        <div className="mb-2 text-sm text-muted-foreground">RSVP</div>
+                <div className="space-y-4">
+                    <div className="rounded-lg border bg-white/70 p-5 shadow-sm">
+                        <div className="mb-2 text-sm font-medium text-muted-foreground">RSVP</div>
                         <div className="flex flex-wrap gap-2">
                             <Button size="sm" disabled={isPending} onClick={() => onRsvp("going")}>
-                                I&apos;m going
+                                I'm going
                             </Button>
                             <Button
                                 size="sm"
@@ -423,6 +407,7 @@ export default function EventDetail({
                     )}
                 </div>
             </div>
+
             <InviteModal
                 circleHandle={circleHandle}
                 eventId={event._id!.toString()}
@@ -430,7 +415,6 @@ export default function EventDetail({
                 onOpenChange={setInviteModalOpen}
             />
 
-            {/* <hr className="my-6" /> */}
             {event.commentPostId ? (
                 <CommentSection postId={event.commentPostId} circle={circle!} user={user ?? null} />
             ) : (
