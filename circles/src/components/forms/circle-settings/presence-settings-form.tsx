@@ -66,7 +66,9 @@ export function PresenceSettingsForm({ circle }: PresenceSettingsFormProps): Rea
             <form onSubmit={form.handleSubmit(onSubmit)} className="formatted space-y-6">
                 <Card>
                     <CardHeader>
-                        <CardTitle>My offers & skills</CardTitle>
+                        <CardTitle>
+                            {circle.circleType === "user" ? "My offers & skills" : "Our offers & skills"}
+                        </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <Controller
@@ -105,7 +107,9 @@ export function PresenceSettingsForm({ circle }: PresenceSettingsFormProps): Rea
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>What I want to engage in</CardTitle>
+                        <CardTitle>
+                            {circle.circleType === "user" ? "What I want to engage in" : "What we want to engage in"}
+                        </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <Controller
@@ -144,7 +148,9 @@ export function PresenceSettingsForm({ circle }: PresenceSettingsFormProps): Rea
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>What I need help with</CardTitle>
+                        <CardTitle>
+                            {circle.circleType === "user" ? "What I need help with" : "What we need help with"}
+                        </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <Controller
@@ -157,6 +163,21 @@ export function PresenceSettingsForm({ circle }: PresenceSettingsFormProps): Rea
                                         type: "textarea",
                                         label: "Current needs",
                                         maxLength: 600,
+                                    }}
+                                    formField={field}
+                                    control={form.control as unknown as Control}
+                                />
+                            )}
+                        />
+                        <Controller
+                            name="needs.tags"
+                            control={form.control as unknown as Control}
+                            render={({ field }) => (
+                                <DynamicTagsField
+                                    field={{
+                                        name: "needs.tags",
+                                        type: "tags",
+                                        label: "Needs",
                                     }}
                                     formField={field}
                                     control={form.control as unknown as Control}

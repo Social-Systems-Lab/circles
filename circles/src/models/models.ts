@@ -419,6 +419,7 @@ export const engagementSchema = z.object({
 
 export const needsSchema = z.object({
     text: z.string().max(600).optional(),
+    tags: z.array(z.string()).optional(),
     visibility: visibilitySchema.default("public"),
     offerHelpEnabled: z.boolean().default(true),
 });

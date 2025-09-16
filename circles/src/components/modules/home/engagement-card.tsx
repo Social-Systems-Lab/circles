@@ -43,7 +43,11 @@ export default function EngagementCard({ circle, isOwner }: EngagementCardProps)
     }
 
     return (
-        <PresenceCard title="What I want to engage in" isOwner={isOwner} onEdit={onEdit}>
+        <PresenceCard
+            title={circle.circleType === "user" ? "What I want to engage in" : "What we want to engage in"}
+            isOwner={isOwner}
+            onEdit={onEdit}
+        >
             {circle.engagements?.text ? (
                 <div>
                     <RichText content={circle.engagements.text} />

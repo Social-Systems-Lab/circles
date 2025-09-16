@@ -28,7 +28,11 @@ export default function OffersCard({ circle, isOwner }: OffersCardProps) {
     }
 
     return (
-        <PresenceCard title="My offers & skills" isOwner={isOwner} onEdit={onEdit}>
+        <PresenceCard
+            title={circle.circleType === "user" ? "My offers & skills" : "Our offers & skills"}
+            isOwner={isOwner}
+            onEdit={onEdit}
+        >
             {circle.offers?.text ? (
                 <div>
                     <RichText content={circle.offers.text} />

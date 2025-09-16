@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { findOrCreateDMRoom } from "./actions";
 import { DmChatModal } from "../chat/dm-chat-modal";
 import { trackEvent } from "@/app/api/analytics/actions";
+import { Badge } from "@/components/ui/badge";
 
 interface NeedsCardProps {
     circle: Circle;
@@ -24,6 +25,10 @@ export default function NeedsCard({ circle, isOwner }: NeedsCardProps) {
         router.push(`/circles/${circle.handle}/settings/presence`);
     };
 
+    const handleNeedsClick = (skill: string) => {
+        router.push(`/explore?needs=${skill}`);
+    };
+
     const onOfferHelp = async () => {
         trackEvent("offer_to_help_click", { circleId: circle._id });
         const room = await findOrCreateDMRoom(circle);
@@ -37,12 +42,23 @@ export default function NeedsCard({ circle, isOwner }: NeedsCardProps) {
         return null;
     }
 
+    const title = circle.circleType === "user" ? "What I need help with" : "What we need help with";
+
     return (
-        <PresenceCard title="What I need help with" isOwner={isOwner} onEdit={onEdit}>
-            {circle.needs?.text ? (
+        <PresenceCard title={title} isOwner={isOwner} onEdit={onEdit}>
+            {circle.needs?.text || (circle.needs?.tags && circle.needs.tags.length > 0) ? (
                 <div>
-                    <RichText content={circle.needs.text} />
-                    {!isOwner && circle.needs.offerHelpEnabled && (
+                    {circle.needs?.text && <RichText content={circle.needs.text} />}
+                    {circle.needs?.tags && circle.needs.tags.length > 0 && (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                            {circle.needs.tags.map((tag, idx) => (
+                                <Badge key={idx} onClick={() => handleNeedsClick(tag)} className="cursor-pointer">
+                                    {tag}
+                                </Badge>
+                            ))}
+                        </div>
+                    )}
+                    {!isOwner && circle.needs?.offerHelpEnabled && (
                         <div className="mt-4">
                             <Button onClick={onOfferHelp}>Offer to help</Button>
                         </div>
