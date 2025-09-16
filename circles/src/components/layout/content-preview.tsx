@@ -431,10 +431,7 @@ export const ContentPreview: React.FC = () => {
                       }
                     | undefined;
 
-                const circleHandle =
-                    props?.circleHandle ||
-                    (evt?.circle as any)?.handle ||
-                    ""; // Fallback to circle.handle if provided by data layer
+                const circleHandle = props?.circleHandle || (evt?.circle as any)?.handle || ""; // Fallback to circle.handle if provided by data layer
 
                 if (!circleHandle) {
                     console.error("Event preview missing circleHandle", { evt, props });
@@ -447,6 +444,7 @@ export const ContentPreview: React.FC = () => {
                 return (
                     <div className="custom-scrollbar h-full overflow-y-auto">
                         <EventDetail
+                            circle={evt?.circle as Circle} // May be undefined in some cases
                             circleHandle={circleHandle}
                             event={evt}
                             canEdit={props?.canEdit ?? false}

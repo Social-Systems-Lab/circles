@@ -9,13 +9,16 @@ import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import ImageCarousel from "@/components/ui/image-carousel";
 import { Calendar, MapPin, Clock } from "lucide-react";
-import type { Media } from "@/models/models";
+import type { Circle, Media } from "@/models/models";
 import InvitedUserList from "./invited-user-list";
 import InviteModal from "./invite-modal";
 import CommentThread from "@/components/modules/discussions/comment-thread";
 import { CommentSection } from "../feeds/CommentSection";
+import { userAtom } from "@/lib/data/atoms";
+import { useAtom } from "jotai";
 
 type Props = {
+    circle?: Circle;
     circleHandle: string;
     event: EventDisplay;
     canEdit?: boolean;
@@ -43,6 +46,7 @@ function googleCalendarUrl(e: EventDisplay) {
 }
 
 export default function EventDetail({
+    circle,
     circleHandle,
     event,
     canEdit,
@@ -52,6 +56,7 @@ export default function EventDetail({
     isPreview,
 }: Props) {
     const { toast } = useToast();
+    const [user] = useAtom(userAtom);
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [isInviteModalOpen, setInviteModalOpen] = useState(false);
@@ -425,9 +430,9 @@ export default function EventDetail({
                 onOpenChange={setInviteModalOpen}
             />
 
-            <hr className="my-6" />
+            {/* <hr className="my-6" /> */}
             {event.commentPostId ? (
-                <CommentSection postId={event.commentPostId} circle={event.circle!} user={null} />
+                <CommentSection postId={event.commentPostId} circle={circle!} user={user ?? null} />
             ) : (
                 <div className="text-sm text-gray-500">Comments are not available for this event.</div>
             )}

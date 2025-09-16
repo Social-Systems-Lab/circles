@@ -59,6 +59,7 @@ export default async function EventDetailPage(props: PageProps) {
             <div className="mx-auto w-full max-w-4xl px-4">
                 <div className="rounded-lg bg-white p-6">
                     <EventDetail
+                        circle={circle}
                         circleHandle={circle.handle!}
                         event={event}
                         canEdit={!!canEdit}
