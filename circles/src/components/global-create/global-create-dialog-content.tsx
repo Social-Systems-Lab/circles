@@ -16,7 +16,7 @@ import {
 import { features } from "@/lib/data/constants"; // modules as moduleInfos removed as descriptions are simplified
 
 // Define types for creatable items
-export type CreatableItemKey = "community" | "task" | "goal" | "post" | "issue" | "proposal" | "event";
+export type CreatableItemKey = "community" | "task" | "goal" | "post" | "issue" | "proposal" | "event" | "discussion";
 
 const iconColors: Record<CreatableItemKey, string> = {
     community: "bg-purple-100 text-purple-600",
@@ -27,6 +27,7 @@ const iconColors: Record<CreatableItemKey, string> = {
     issue: "bg-red-100 text-red-600",
     goal: "bg-cyan-100 text-cyan-600",
     proposal: "bg-yellow-100 text-yellow-600",
+    discussion: "bg-indigo-100 text-indigo-600",
 };
 
 export interface CreatableItemDetail {
@@ -104,6 +105,14 @@ export const creatableItemsList: CreatableItemDetail[] = [
         icon: Calendar,
         moduleHandle: "events",
         createFeatureHandle: "create",
+    },
+    {
+        key: "discussion",
+        title: "Discussion",
+        description: "Start a new discussion thread.",
+        icon: MessageSquare,
+        moduleHandle: "feed",
+        createFeatureHandle: "post",
     },
 ];
 

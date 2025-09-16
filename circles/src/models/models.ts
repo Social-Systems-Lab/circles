@@ -217,7 +217,7 @@ export const postSchema = z.object({
     highlightedCommentId: z.string().optional(),
     comments: z.number().default(0),
     mentions: z.array(mentionSchema).optional(),
-    postType: z.enum(["post", "goal", "task", "issue", "proposal", "event"]).optional(), // To identify shadow posts for projects
+    postType: z.enum(["post", "goal", "task", "issue", "proposal", "event", "discussion"]).optional(), // Added discussion
     userGroups: z.array(z.string()).default([]), // User groups that can see this post
     parentItemId: z.string().optional(), // ID of the parent Goal, Task, Issue, or Proposal for shadow posts
     parentItemType: z.enum(["goal", "task", "issue", "proposal", "event"]).optional(), // Type of the parent item
@@ -231,6 +231,9 @@ export const postSchema = z.object({
     internalPreviewId: z.string().optional(), // Handle for circle, ID for others
     internalPreviewUrl: z.string().url().optional(),
     sdgs: z.array(z.string()).optional(),
+    // Discussion-specific fields
+    pinned: z.boolean().default(false).optional(),
+    closed: z.boolean().default(false).optional(),
 });
 
 export type Post = z.infer<typeof postSchema>;
