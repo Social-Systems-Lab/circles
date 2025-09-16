@@ -40,6 +40,8 @@ import {
 } from "@/lib/data/eventNotifications";
 import { inviteUsersToEvent } from "@/lib/data/event";
 import { getMembers } from "@/lib/data/member";
+import { addCommentToDiscussion, getDiscussionWithComments } from "@/lib/data/discussion";
+import { Comment } from "@/models/models";
 
 // ----- Types -----
 
@@ -758,6 +760,45 @@ export async function getCircleMembersAction(circleHandle: string): Promise<GetC
         console.error("Error in getCircleMembersAction:", error);
         return defaultResult;
     }
+}
+
+/**
+/**
+ * Add a comment to an event (via its shadow post)
+ */
+export async function addEventCommentAction(eventId: string, data: Partial<Comment>) {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) throw new Error("Unauthorized");
+
+    const user = await getUserByDid(userDid);
+    if (!user) throw new Error("User not found");
+
+    const event = await getEventById(eventId, userDid);
+    if (!event) throw new Error("Event not found");
+
+    if (!event.commentPostId) {
+        throw new Error("Event has no comment post");
+    }
+
+    const canComment = await isAuthorized(userDid, event.circleId, features.feed.comment);
+    if (!canComment) throw new Error("Not authorized to comment");
+
+    return addCommentToDiscussion(event.commentPostId, {
+        ...data,
+        createdBy: userDid,
+    });
+}
+
+/**
+ * Get event with comments (via its shadow post)
+ */
+export async function getEventWithCommentsAction(eventId: string) {
+    const event = await getEventById(eventId, (await getAuthenticatedUserDid()) || "");
+    if (!event) throw new Error("Event not found");
+    if (!event.commentPostId) return { ...event, comments: [] };
+
+    const discussion = await getDiscussionWithComments(event.commentPostId);
+    return { ...event, comments: discussion?.comments || [] };
 }
 
 /**

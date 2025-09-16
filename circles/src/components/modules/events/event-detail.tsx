@@ -12,6 +12,8 @@ import { Calendar, MapPin, Clock } from "lucide-react";
 import type { Media } from "@/models/models";
 import InvitedUserList from "./invited-user-list";
 import InviteModal from "./invite-modal";
+import CommentThread from "@/components/modules/discussions/comment-thread";
+import { CommentSection } from "../feeds/CommentSection";
 
 type Props = {
     circleHandle: string;
@@ -253,6 +255,12 @@ export default function EventDetail({
                         </div>
                     </div>
                 )}
+                <InviteModal
+                    circleHandle={circleHandle}
+                    eventId={event._id!.toString()}
+                    open={isInviteModalOpen}
+                    onOpenChange={setInviteModalOpen}
+                />
             </div>
         );
     }
@@ -416,6 +424,13 @@ export default function EventDetail({
                 open={isInviteModalOpen}
                 onOpenChange={setInviteModalOpen}
             />
+
+            <hr className="my-6" />
+            {event.commentPostId ? (
+                <CommentSection postId={event.commentPostId} circle={event.circle!} user={null} />
+            ) : (
+                <div className="text-sm text-gray-500">Comments are not available for this event.</div>
+            )}
         </div>
     );
 }
