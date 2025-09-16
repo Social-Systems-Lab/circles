@@ -259,6 +259,19 @@ export default function EventDetail({
                         </div>
                     </div>
                 )}
+
+                <div className="px-4">
+                    <Button
+                        className="w-full"
+                        variant="secondary"
+                        onClick={() =>
+                            router.push(`/circles/${circleHandle}/events/${(event as any)._id?.toString?.() || ""}`)
+                        }
+                    >
+                        Open Event
+                    </Button>
+                </div>
+
                 <InviteModal
                     circleHandle={circleHandle}
                     eventId={event._id!.toString()}
