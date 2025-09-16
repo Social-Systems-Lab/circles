@@ -71,18 +71,12 @@ export default function EventDetail({
               ? [event.location.city, event.location.region, event.location.country].filter(Boolean).join(", ")
               : "";
 
-    let shortDateTimeRange = "";
-    if (start) {
-        if (event.allDay) {
-            shortDateTimeRange = `${format(start, "EEE, MMM d")} (All day)`;
-        } else if (end && format(start, "yyyy-MM-dd") === format(end, "yyyy-MM-dd")) {
-            shortDateTimeRange = `${format(start, "EEE, MMM d")} • ${format(start, "p")} — ${format(end, "p")}`;
-        } else if (end) {
-            shortDateTimeRange = `${format(start, "EEE, MMM d p")} — ${format(end, "EEE, MMM d p")}`;
-        } else {
-            shortDateTimeRange = `${format(start, "EEE, MMM d p")}`;
-        }
-    }
+    // Improved date formatting
+    const now = new Date();
+    const sameYear = start && start.getFullYear() === now.getFullYear();
+    const fmt = sameYear ? "EEE, MMM d p" : "EEE, MMM d, yyyy p";
+    const startFmt = start ? format(start, fmt) : "";
+    const endFmt = end ? format(end, fmt) : "";
 
     const images: Media[] =
         event.images && event.images.length > 0
@@ -118,9 +112,6 @@ export default function EventDetail({
             }
         });
     };
-
-    const startFmt = event.startAt ? format(new Date(event.startAt), "PPpp") : "";
-    const endFmt = event.endAt ? format(new Date(event.endAt), "PPpp") : "";
 
     // Stage control handlers
     const onSubmitForReview = () => {
@@ -284,9 +275,46 @@ export default function EventDetail({
 
     return (
         <div className="space-y-8">
+            {/* Cover image */}
+            {event.images && event.images.length > 0 && (
+                <div className="relative h-64 w-full md:h-80">
+                    <ImageCarousel
+                        images={images}
+                        options={{ loop: images.length > 1 }}
+                        containerClassName="h-full"
+                        imageClassName="object-cover rounded-md"
+                        showArrows={images.length > 1}
+                        showDots={images.length > 1}
+                        dotsPosition="bottom-right"
+                    />
+                </div>
+            )}
+
             {/* Header */}
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <h1 className="text-3xl font-bold tracking-tight">{event.title}</h1>
+                <div>
+                    {/* Happening now / upcoming label */}
+                    {start && end && now >= start && now <= end && (
+                        <div className="mb-1 text-sm font-medium text-green-600">Happening now</div>
+                    )}
+                    {start && now < start && <div className="mb-1 text-sm font-medium text-blue-600">Upcoming</div>}
+                    <h1 className="text-3xl font-bold tracking-tight">{event.title}</h1>
+                    <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                        {startFmt && (
+                            <span className="inline-flex items-center gap-1">
+                                <Clock className="h-4 w-4" />
+                                {endFmt ? `${startFmt} — ${endFmt}` : startFmt}
+                            </span>
+                        )}
+                        {(locationText || event.isVirtual || event.isHybrid) && (
+                            <span className="inline-flex items-center gap-1">
+                                <MapPin className="h-4 w-4" />
+                                {event.isVirtual && !locationText ? "Virtual" : locationText}
+                                {event.isHybrid ? " · Hybrid" : ""}
+                            </span>
+                        )}
+                    </div>
+                </div>
                 <div className="flex flex-wrap gap-2">
                     <a href={googleCalendarUrl(event)} target="_blank" rel="noreferrer">
                         <Button variant="outline">Add to Google Calendar</Button>
@@ -367,20 +395,6 @@ export default function EventDetail({
                     {event.description && (
                         <div className="rounded-lg border bg-white/70 p-5 shadow-sm">
                             <div className="prose max-w-none whitespace-pre-wrap">{event.description}</div>
-                        </div>
-                    )}
-
-                    {event.images && event.images.length > 0 && (
-                        <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                            {event.images.map((img, i) => (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                    key={img.fileInfo.url + i}
-                                    src={img.fileInfo.url}
-                                    alt={event.title || "Event image"}
-                                    className="h-48 w-full rounded-lg object-cover shadow-sm"
-                                />
-                            ))}
                         </div>
                     )}
                 </div>
