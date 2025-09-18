@@ -538,6 +538,39 @@ export const features = {
             module: "home",
         } as Feature,
     },
+    discussions: {
+        view: {
+            name: "View Discussions",
+            handle: "view",
+            description: "View discussions",
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+            module: "discussions",
+        } as Feature,
+        create: {
+            name: "Create Discussions",
+            handle: "create",
+            description: "Start a new discussion",
+            defaultUserGroups: ["admins", "moderators", "members"],
+            module: "discussions",
+            needsToBeVerified: true,
+        } as Feature,
+        comment: {
+            name: "Comment on Discussions",
+            handle: "comment",
+            description: "Add comments to discussions",
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+            module: "discussions",
+            needsToBeVerified: true,
+        } as Feature,
+        moderate: {
+            name: "Moderate Discussions",
+            handle: "moderate",
+            description: "Edit or delete any discussion",
+            defaultUserGroups: ["admins", "moderators"],
+            module: "discussions",
+            needsToBeVerified: true,
+        } as Feature,
+    },
 };
 
 export const modules: ModuleInfo[] = [
@@ -565,6 +598,11 @@ export const modules: ModuleInfo[] = [
         handle: "communities",
         description:
             "Displays all communities connected to this community. Helps members navigate related communities, deepen partnerships, and organize nested initiatives.",
+    },
+    {
+        name: "Discussions",
+        handle: "discussions",
+        description: "Start and participate in discussions within your circle.",
     },
     {
         name: "Goals",
@@ -605,8 +643,8 @@ export const modules: ModuleInfo[] = [
     },
 ];
 
-export const defaultUserModules = ["home", "feed", "followers", "communities", "goals", "settings"];
-export const defaultCircleModules = ["home", "feed", "followers", "goals", "settings"];
+export const defaultUserModules = ["home", "feed", "followers", "communities", "settings"];
+export const defaultCircleModules = ["home", "feed", "followers", "discussions", "settings"];
 
 export const getDefaultModules = (circleType: CircleType): string[] => {
     switch (circleType) {
