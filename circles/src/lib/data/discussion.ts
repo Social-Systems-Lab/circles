@@ -22,13 +22,13 @@ export async function createDiscussion(data: Partial<Post>) {
     if (data.feedId) {
         doc.feedId = data.feedId;
     }
-    if (data.circleId) {
-        doc.circleId = data.circleId;
+    if ((data as any).circleId) {
+        doc.circleId = (data as any).circleId;
     }
 
     const result = await Posts.insertOne(doc);
 
-    const newDiscussion: Post = {
+    const newDiscussion: any = {
         ...(data as Post),
         _id: result.insertedId.toString(),
         postType: "discussion",

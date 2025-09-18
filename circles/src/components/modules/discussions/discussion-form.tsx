@@ -6,8 +6,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
 import LocationPicker from "@/components/forms/location-picker";
 import { Button } from "@/components/ui/button";
-import { MapPin } from "lucide-react";
+import { Image as ImageIcon, MapPin } from "lucide-react";
 import { getFullLocationName } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface DiscussionFormProps {
     circleHandle: string;
@@ -66,32 +67,46 @@ export default function DiscussionForm({ circleHandle, onCreated }: DiscussionFo
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="What's on your mind?"
-                className="w-full rounded border p-2"
+                className="min-h-[400px] w-full rounded border p-3 text-base"
                 required
             />
-            <div>
-                <label className="block text-sm font-medium">Attach Images</label>
-                <MultiImageUploader
-                    initialImages={[]}
-                    onChange={handleImageChange}
-                    maxImages={5}
-                    previewMode="compact"
-                />
-            </div>
-            <div>
-                <label className="block text-sm font-medium">Location</label>
-                <LocationPicker value={location} onChange={(loc) => setLocation(loc)} />
-                {location && (
-                    <div className="mt-2 flex items-center text-sm text-gray-600">
-                        <MapPin className="mr-1 h-4 w-4 text-primary" />
-                        {getFullLocationName(location)}
-                    </div>
-                )}
+            <div className="flex items-center gap-2">
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <Button type="button" variant="ghost" size="sm">
+                            <ImageIcon className="mr-1 h-4 w-4" /> Add Images
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80">
+                        <MultiImageUploader
+                            initialImages={[]}
+                            onChange={handleImageChange}
+                            maxImages={5}
+                            previewMode="compact"
+                        />
+                    </PopoverContent>
+                </Popover>
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <Button type="button" variant="ghost" size="sm">
+                            <MapPin className="mr-1 h-4 w-4" /> Add Location
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80">
+                        <LocationPicker value={location} onChange={(loc) => setLocation(loc)} />
+                        {location && (
+                            <div className="mt-2 flex items-center text-sm text-gray-600">
+                                <MapPin className="mr-1 h-4 w-4 text-primary" />
+                                {getFullLocationName(location)}
+                            </div>
+                        )}
+                    </PopoverContent>
+                </Popover>
             </div>
             <Button
                 type="submit"
                 disabled={loading}
-                className="rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 disabled:opacity-50"
+                className="mt-4 rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 disabled:opacity-50"
             >
                 {loading ? "Posting..." : "Post Discussion"}
             </Button>
