@@ -5,13 +5,21 @@ import { Post, Comment } from "@/models/models";
  * Create a new discussion (a Post of type 'discussion')
  */
 export async function createDiscussion(data: Partial<Post>) {
-    return Posts.insertOne({
+    const result = await Posts.insertOne({
         ...data,
         postType: "discussion",
         pinned: false,
         closed: false,
         createdAt: new Date(),
     } as Post);
+    return {
+        _id: result.insertedId.toString(),
+        ...data,
+        postType: "discussion",
+        pinned: false,
+        closed: false,
+        createdAt: new Date(),
+    };
 }
 
 /**
@@ -36,7 +44,7 @@ export async function addCommentToDiscussion(discussionId: string, data: Partial
     if (!discussion || discussion.closed) {
         throw new Error("Discussion is closed or not found");
     }
-    return Comments.insertOne({
+    const result = await Comments.insertOne({
         ...data,
         postId: discussionId,
         createdAt: new Date(),
@@ -46,6 +54,7 @@ export async function addCommentToDiscussion(discussionId: string, data: Partial
         reactions: data.reactions ?? {},
         replies: 0,
     } as Comment);
+    return { _id: result.insertedId.toString(), ...data, postId: discussionId, createdAt: new Date(), replies: 0 };
 }
 
 /**

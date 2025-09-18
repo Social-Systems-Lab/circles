@@ -15,7 +15,7 @@ export default function CreateDiscussionDialog({ open, onOpenChange, circleHandl
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent>
+            <DialogContent className="formatted">
                 <DialogHeader>
                     <DialogTitle>Start a Discussion</DialogTitle>
                 </DialogHeader>
