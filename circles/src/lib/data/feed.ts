@@ -487,7 +487,10 @@ export const createComment = async (comment: Comment): Promise<Comment> => {
         const result = await Comments.insertOne(comment);
         const insertedComment = { ...comment, _id: result.insertedId.toString() };
 
-        await Posts.updateOne({ _id: new ObjectId(comment.postId) }, { $inc: { comments: 1 } });
+        await Posts.updateOne(
+            { _id: new ObjectId(comment.postId) },
+            { $inc: { comments: 1 }, $set: { lastActivityAt: new Date() } },
+        );
 
         if (!comment.parentCommentId) {
             await updateHighlightedComment(comment.postId);
@@ -757,7 +760,7 @@ export async function getPostsFromMultipleFeeds(
         //**********************************************************
 
         // Sorting and pagination
-        { $sort: { createdAt: -1 } },
+        { $sort: sort === "activity" ? { lastActivityAt: -1 } : { createdAt: -1 } },
         { $skip: skip },
         { $limit: limit },
 

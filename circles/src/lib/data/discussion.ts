@@ -163,6 +163,10 @@ export async function addCommentToDiscussion(discussionId: string, data: Partial
         reactions: data.reactions ?? {},
         replies: 0,
     } as Comment);
+
+    // Update the lastActivityAt field on the parent discussion post
+    await Posts.updateOne({ _id: new ObjectId(discussionId) }, { $set: { lastActivityAt: new Date() } });
+
     return { _id: result.insertedId.toString(), ...data, postId: discussionId, createdAt: new Date(), replies: 0 };
 }
 

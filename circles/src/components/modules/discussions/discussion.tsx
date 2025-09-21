@@ -12,6 +12,8 @@ import { isAuthorized } from "@/lib/auth/client-auth";
 import { useRouter } from "next/navigation";
 import { ListFilter } from "@/components/utils/list-filter";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Plus } from "lucide-react";
 import emptyFeed from "@images/empty-feed.png";
 import Image from "next/image";
 import { updateQueryParam } from "@/lib/utils/helpers-client";
@@ -72,12 +74,20 @@ export const DiscussionComponent = ({
             }}
         >
             <div className="flex w-full flex-col">
-                {canPost && (
-                    <div>
-                        {/* TODO insert create discussion button here */}
-                        {/* <CreateNewPost circle={circle} feed={feed} /> */}
+                <div className="flex w-full flex-row items-center gap-2">
+                    <div className="flex flex-1 flex-col">
+                        <Input
+                            placeholder="Search discussions by title..."
+                            // value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
+                            // onChange={(event) => table.getColumn("title")?.setFilterValue(event.target.value)}
+                        />
                     </div>
-                )}
+                    {canPost && (
+                        <Button onClick={() => router.push(`/circles/${circle.handle}/discussions/new`)}>
+                            <Plus className="mr-2 h-4 w-4" /> Create Discussion
+                        </Button>
+                    )}
+                </div>
                 <ListFilter
                     onFilterChange={onFilterChange ?? handleFilterChange}
                     onSdgChange={onSdgChange ?? handleSdgSelectionChange}

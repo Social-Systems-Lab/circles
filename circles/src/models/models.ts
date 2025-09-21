@@ -234,6 +234,7 @@ export const postSchema = z.object({
     // Discussion-specific fields
     pinned: z.boolean().default(false).optional(),
     closed: z.boolean().default(false).optional(),
+    lastActivityAt: z.date().optional(),
 });
 
 export type Post = z.infer<typeof postSchema>;
@@ -575,7 +576,7 @@ export type GoalPermissions = {
     canCreateTask: boolean;
 };
 
-export type SortingOptions = "similarity" | "near" | "pop" | "new" | "top" | "custom";
+export type SortingOptions = "similarity" | "near" | "pop" | "new" | "top" | "custom" | "activity";
 
 export type PostItemProps = {
     post: PostDisplay;

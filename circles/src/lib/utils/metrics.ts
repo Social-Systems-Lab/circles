@@ -16,6 +16,8 @@ const getWeightsBySortingOptions = (sortingOptions?: SortingOptions, customWeigh
             return { similarity: 0, proximity: 1, recentness: 0, popularity: 0 };
         case "new":
             return { similarity: 0, proximity: 0, recentness: 1, popularity: 0 };
+        case "activity":
+            return { similarity: 0, proximity: 0, recentness: 1, popularity: 0 };
         case "pop":
             return { similarity: 0, proximity: 0, recentness: 0, popularity: 1 };
         case "custom":
@@ -59,7 +61,9 @@ export const getMetrics = async (
 };
 
 export const getCreatedAt = (item: PostDisplay | Circle | MemberDisplay): Date | undefined => {
-    if ("joinedAt" in item) {
+    if ("lastActivityAt" in item && item.lastActivityAt) {
+        return item.lastActivityAt;
+    } else if ("joinedAt" in item) {
         return item.joinedAt;
     } else if ("createdAt" in item) {
         return item.createdAt;
