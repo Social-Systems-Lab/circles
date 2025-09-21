@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getDiscussionAction, addCommentAction } from "@/app/circles/[handle]/discussions/actions";
 import { Post, Comment } from "@/models/models";
+import DiscussionCommentItem from "./discussion-comment-item";
 
 interface DiscussionDetailProps {
     discussionId: string;
@@ -52,20 +53,31 @@ export default function DiscussionDetail({ discussionId }: DiscussionDetailProps
 
     return (
         <div className="space-y-4">
-            <div className="rounded border bg-white p-4 shadow">
+            <div className="space-y-2 rounded border bg-white p-4 shadow">
                 <h2 className="text-lg font-semibold">{discussion.title || "Untitled Discussion"}</h2>
                 <p className="text-sm text-gray-600">{discussion.content}</p>
-                {discussion.pinned && <span className="text-xs text-blue-500">📌 Pinned</span>}
-                {discussion.closed && <span className="ml-2 text-xs text-red-500">Closed</span>}
+                <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>{discussion.createdBy || "Unknown"}</span>
+                    <div className="flex space-x-3">
+                        <button className="hover:underline">Like</button>
+                        <button className="hover:underline">Reply</button>
+                    </div>
+                </div>
+                <div>
+                    {discussion.pinned && <span className="text-xs text-blue-500">📌 Pinned</span>}
+                    {discussion.closed && <span className="ml-2 text-xs text-red-500">Closed</span>}
+                </div>
             </div>
 
             <div className="space-y-2">
-                <h3 className="font-semibold">Comments</h3>
-                {comments.length === 0 && <p className="text-sm text-gray-500">No comments yet.</p>}
+                <h3 className="font-semibold">Replies</h3>
+                {comments.length === 0 && <p className="text-sm text-gray-500">No replies yet.</p>}
                 {comments.map((c) => (
-                    <div key={c._id?.toString()} className="rounded border bg-gray-50 p-2">
-                        <p className="text-sm">{c.content}</p>
-                    </div>
+                    <DiscussionCommentItem
+                        key={c._id?.toString()}
+                        comment={c}
+                        replies={Array.isArray(c.replies) ? c.replies : []}
+                    />
                 ))}
             </div>
 
