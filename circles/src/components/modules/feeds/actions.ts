@@ -93,6 +93,7 @@ export async function getAggregatePostsAction(
     sortingOptions?: SortingOptions,
     sdgHandles?: string[],
     circleHandle?: string,
+    postType?: string,
 ): Promise<PostDisplay[]> {
     if (!userDid) {
         return getGlobalPostsAction(userDid, limit, skip, sortingOptions, sdgHandles);
@@ -142,6 +143,7 @@ export async function getAggregatePostsAction(
         skip,
         sortingOptions,
         sdgHandles,
+        postType,
     );
     return posts;
 }

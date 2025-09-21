@@ -1,4 +1,4 @@
-// feed.tsx - component for displaying feeds
+// discussion.tsx - component for displaying feeds
 "use client";
 
 import { useIsCompact } from "@/components/utils/use-is-compact";

@@ -256,11 +256,17 @@ export async function getPostsFromMultipleFeeds(
     skip: number,
     sort?: SortingOptions,
     sdgHandles?: string[],
+    postType?: string,
 ): Promise<PostDisplay[]> {
     const matchStage: any = {
         feedId: { $in: feedIds },
-        $or: [{ postType: { $eq: "post" } }, { postType: { $exists: false } }],
     };
+
+    if (postType) {
+        matchStage.postType = postType;
+    } else {
+        matchStage.$or = [{ postType: { $eq: "post" } }, { postType: { $exists: false } }];
+    }
 
     if (sdgHandles && sdgHandles.length > 0) {
         const sdgIds = sdgs.filter((s) => sdgHandles.includes(s.handle)).map((s) => s._id);
@@ -662,8 +668,9 @@ export async function getPostsFromMultipleFeedsWithMetrics(
     skip: number,
     sort?: SortingOptions,
     sdgHandles?: string[],
+    postType?: string,
 ): Promise<PostDisplay[]> {
-    let posts = await getPostsFromMultipleFeeds(feedIds, userDid, limit, skip, sort, sdgHandles);
+    let posts = await getPostsFromMultipleFeeds(feedIds, userDid, limit, skip, sort, sdgHandles, postType);
 
     let user: Circle | undefined = undefined;
     if (userDid) {
@@ -688,8 +695,9 @@ export const getPostsWithMetrics = async (
     offset: number = 0,
     sort?: SortingOptions,
     sdgHandles?: string[],
+    postType?: string,
 ): Promise<PostDisplay[]> => {
-    let posts = await getPosts(feedId, userDid, limit, offset, sdgHandles);
+    let posts = await getPosts(feedId, userDid, limit, offset, sdgHandles, postType);
     let user: Circle | undefined = undefined;
     if (userDid) {
         user = await getUserByDid(userDid!);
@@ -712,14 +720,20 @@ export const getPosts = async (
     limit: number = 10,
     offset: number = 0,
     sdgHandles?: string[],
+    postType?: string,
 ): Promise<PostDisplay[]> => {
     const safeLimit = Math.max(1, limit);
     const safeOffset = Math.max(0, offset);
 
     const matchStage: any = {
         feedId: feedId,
-        $or: [{ postType: { $eq: "post" } }, { postType: { $exists: false } }],
     };
+
+    if (postType) {
+        matchStage.postType = postType;
+    } else {
+        matchStage.$or = [{ postType: { $eq: "post" } }, { postType: { $exists: false } }];
+    }
 
     if (sdgHandles && sdgHandles.length > 0) {
         const sdgIds = sdgs.filter((s) => sdgHandles.includes(s.handle)).map((s) => s._id);

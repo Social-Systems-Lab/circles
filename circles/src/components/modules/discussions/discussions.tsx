@@ -1,4 +1,4 @@
-// feeds.tsx
+// discussions.tsx
 
 "use client"; // This component now uses client-side state for filters
 
@@ -28,7 +28,15 @@ export default function DiscussionsModule(props: PageProps) {
 
         startTransition(async () => {
             const sdgHandles = selectedSdgs.map((s) => s.handle);
-            const newPosts = await getAggregatePostsAction(user?.did, 20, 0, sorting, sdgHandles, circle.handle);
+            const newPosts = await getAggregatePostsAction(
+                user?.did,
+                20,
+                0,
+                sorting,
+                sdgHandles,
+                circle.handle,
+                "discussion",
+            );
             setPosts(newPosts);
         });
     }, [feed, sorting, selectedSdgs, user, circle.handle]);

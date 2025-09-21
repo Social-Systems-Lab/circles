@@ -95,7 +95,7 @@ import { Card, CardContent } from "@/components/ui/card"; // Import Card compone
 import Link from "next/link"; // Import Next Link
 // Import InternalLinkPreview
 import InternalLinkPreview from "../feeds/InternalLinkPreview";
-import DiscussionPreviewItem from "./discussion-preview-item";
+import { DiscussionPreviewItem } from "./discussion-preview-item";
 
 export const defaultMentionsInputStyle = {
     control: {
@@ -1730,14 +1730,9 @@ const DiscussionList = ({ feed, circle, posts, isAggregateFeed, compact = false 
     return (
         <div className={"flex flex-col gap-6 rounded-lg"}>
             {posts.map((post) => (
-                <DiscussionItem
-                    key={post._id}
-                    post={post}
-                    circle={isAggregateFeed ? post.circle! : circle!}
-                    feed={isAggregateFeed ? post.feed! : feed!}
-                    isAggregateFeed={isAggregateFeed}
-                    embedded={compact}
-                />
+                <Link href={`/circles/${circle?.handle}/discussions/${post._id}`} key={post._id}>
+                    <DiscussionPreviewItem discussion={post} />
+                </Link>
             ))}
         </div>
     );
