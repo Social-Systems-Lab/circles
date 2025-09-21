@@ -1,24 +1,29 @@
-import DiscussionList from "@/components/modules/discussions/discussion-list";
-import { listDiscussionsAction } from "./actions";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus } from "lucide-react";
-import Link from "next/link";
+import { getCircleByHandle } from "@/lib/data/circle";
+import DiscussionsModule from "@/components/modules/discussions/discussions";
+import { notFound } from "next/navigation";
+import { createDefaultFeed } from "@/lib/data/feed";
+import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 
-interface DiscussionsPageProps {
+type PageProps = {
     params: Promise<{ handle: string }>;
-}
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+};
 
-export default async function DiscussionsPage(props: DiscussionsPageProps) {
-    const { handle } = await props.params;
-    const discussions = await listDiscussionsAction(handle);
+export default async function DiscussionsPage(props: PageProps) {
+    const params = await props.params;
+    const circle = await getCircleByHandle(params.handle);
 
-    return (
-        <div className="flex flex-1 flex-row justify-center">
-            <div className="mb-4 ml-2 mr-2 mt-4 flex max-w-[1100px] flex-1 flex-col space-y-6">
-                <DiscussionList discussions={discussions || []} circleHandle={handle} />
-            </div>
-        </div>
-    );
+    if (!circle) {
+        notFound();
+    }
+
+    // ensure it has a default feed
+    let userDid = await getAuthenticatedUserDid();
+    if (userDid) {
+        await createDefaultFeed(circle._id);
+    }
+
+    // Pass circle and original props down to FeedsModule
+    // FeedsModule likely fetches its own feed/posts using these props
+    return <DiscussionsModule {...props} circle={circle} />;
 }
