@@ -16,6 +16,7 @@ export async function createDiscussion(data: Partial<Post>) {
         pinned: false,
         closed: false,
         createdAt: now,
+        lastActivityAt: now,
     };
 
     // Ensure both circleId and feedId are stored
@@ -35,6 +36,7 @@ export async function createDiscussion(data: Partial<Post>) {
         pinned: false,
         closed: false,
         createdAt: now,
+        lastActivityAt: now,
         feedId: doc.feedId,
         circleId: doc.circleId,
         media: doc.media || [],

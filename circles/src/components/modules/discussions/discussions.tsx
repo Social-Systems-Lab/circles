@@ -18,7 +18,8 @@ export default function DiscussionsModule(props: PageProps) {
     const { circle, searchParams: searchParamsProp } = props;
     const [feed, setFeed] = useState<any>(null);
     const [posts, setPosts] = useState<PostDisplay[]>([]);
-    const [sorting, setSorting] = useState<SortingOptions>("top");
+    const [sorting, setSorting] = useState<SortingOptions>("activity");
+    const [searchQuery, setSearchQuery] = useState("");
     const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>([]);
     const [isPending, startTransition] = useTransition();
     const [user] = useAtom(userAtom);
@@ -47,7 +48,7 @@ export default function DiscussionsModule(props: PageProps) {
             if (defaultFeed) {
                 setFeed(defaultFeed);
                 const searchParams = await searchParamsProp;
-                const initialSort = (searchParams?.sort as SortingOptions) || "top";
+                const initialSort = (searchParams?.sort as SortingOptions) || "activity";
                 setSorting(initialSort);
             }
         }
@@ -74,12 +75,14 @@ export default function DiscussionsModule(props: PageProps) {
         <div className="flex flex-1 justify-center overflow-hidden">
             <div className="mb-4 mt-2 flex w-full max-w-[1100px] flex-col items-center md:ml-4 md:mr-4">
                 <DiscussionComponent
-                    posts={posts}
+                    posts={posts.filter((post) => post.title?.toLowerCase().includes(searchQuery.toLowerCase()))}
                     feed={feed}
                     circle={circle}
                     onFilterChange={handleFilterChange}
                     onSdgChange={handleSdgChange}
                     selectedSdgsExternal={selectedSdgs}
+                    searchQuery={searchQuery}
+                    setSearchQuery={setSearchQuery}
                 />
             </div>
         </div>

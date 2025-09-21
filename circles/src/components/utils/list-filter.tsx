@@ -3,6 +3,7 @@ import { useIsCompact } from "./use-is-compact";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { Label } from "../ui/label";
 import { AudioLines, Clock, MapPin, Star } from "lucide-react";
+import { BiRefresh } from "react-icons/bi";
 import SdgFilter from "../modules/search/sdg-filter";
 import { Cause as SDG } from "@/models/models";
 import { Button } from "../ui/button";
@@ -12,10 +13,16 @@ type ListFilterProps = {
     onFilterChange?: (filter: string) => void;
     onSdgChange?: (sdgs: SDG[]) => void;
     selectedSdgs?: SDG[];
+    defaultValue?: string;
 };
 
-export const ListFilter = ({ onFilterChange, onSdgChange, selectedSdgs = [] }: ListFilterProps) => {
-    const [filter, setFilter] = useState("top");
+export const ListFilter = ({
+    onFilterChange,
+    onSdgChange,
+    selectedSdgs = [],
+    defaultValue = "top",
+}: ListFilterProps) => {
+    const [filter, setFilter] = useState(defaultValue);
     const isCompact = useIsCompact();
 
     const onValueChange = (value: string) => {
@@ -26,9 +33,9 @@ export const ListFilter = ({ onFilterChange, onSdgChange, selectedSdgs = [] }: L
     };
 
     return (
-        <div className={`${isCompact ? "w-full" : "w-[300px]"} py-1 pb-2`}>
+        <div className={`${isCompact ? "w-full" : "w-auto"} py-1 pb-2`}>
             <div className="flex items-center space-x-1">
-                <RadioGroup defaultValue="top" onValueChange={onValueChange} className="flex flex-1 space-x-1">
+                <RadioGroup defaultValue={defaultValue} onValueChange={onValueChange} className="flex flex-1 space-x-1">
                     <div className="flex-1">
                         <RadioGroupItem value="top" id="top" className="peer sr-only" />
                         <Label
@@ -71,7 +78,7 @@ export const ListFilter = ({ onFilterChange, onSdgChange, selectedSdgs = [] }: L
                             htmlFor="activity"
                             className="flex h-8 cursor-pointer items-center justify-center border-b-2 border-transparent px-2 peer-data-[state=checked]:border-blue-500 dark:hover:bg-gray-800 dark:peer-data-[state=checked]:border-blue-400 dark:peer-data-[state=checked]:bg-blue-900"
                         >
-                            <AudioLines className="mr-1 h-[18px] w-[18px] text-gray-500 peer-data-[state=checked]:text-blue-500 dark:text-gray-400 dark:peer-data-[state=checked]:text-blue-400" />
+                            <BiRefresh className="mr-1 h-[18px] w-[18px] text-gray-500 peer-data-[state=checked]:text-blue-500 dark:text-gray-400 dark:peer-data-[state=checked]:text-blue-400" />
                             <span className="text-[13px] font-medium text-gray-700 peer-data-[state=checked]:text-blue-500 dark:text-gray-300 dark:peer-data-[state=checked]:text-blue-400">
                                 Activity
                             </span>

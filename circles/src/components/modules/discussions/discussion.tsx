@@ -30,6 +30,8 @@ export type FeedComponentProps = {
     onFilterChange?: (filter: string) => void;
     onSdgChange?: (sdgs: SDG[]) => void;
     selectedSdgsExternal?: SDG[];
+    searchQuery: string;
+    setSearchQuery: (query: string) => void;
 };
 
 export const DiscussionComponent = ({
@@ -39,6 +41,8 @@ export const DiscussionComponent = ({
     onFilterChange,
     onSdgChange,
     selectedSdgsExternal,
+    searchQuery,
+    setSearchQuery,
 }: FeedComponentProps) => {
     const isCompact = useIsCompact();
     const [user] = useAtom(userAtom);
@@ -78,8 +82,8 @@ export const DiscussionComponent = ({
                     <div className="flex flex-1 flex-col">
                         <Input
                             placeholder="Search discussions by title..."
-                            // value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
-                            // onChange={(event) => table.getColumn("title")?.setFilterValue(event.target.value)}
+                            value={searchQuery}
+                            onChange={(event) => setSearchQuery(event.target.value)}
                         />
                     </div>
                     {canPost && (
@@ -92,6 +96,7 @@ export const DiscussionComponent = ({
                     onFilterChange={onFilterChange ?? handleFilterChange}
                     onSdgChange={onSdgChange ?? handleSdgSelectionChange}
                     selectedSdgs={selectedSdgsExternal ?? selectedSdgs}
+                    defaultValue="activity"
                 />
 
                 <DiscussionList posts={posts} feed={feed} circle={circle} />
