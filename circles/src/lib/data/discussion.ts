@@ -37,6 +37,17 @@ export async function createDiscussion(data: Partial<Post>) {
         createdAt: now,
         feedId: doc.feedId,
         circleId: doc.circleId,
+        media: doc.media || [],
+        userGroups: doc.userGroups || ["everyone"],
+        mentions: doc.mentions || [],
+        linkPreviewUrl: doc.linkPreviewUrl,
+        linkPreviewTitle: doc.linkPreviewTitle,
+        linkPreviewDescription: doc.linkPreviewDescription,
+        linkPreviewImage: doc.linkPreviewImage,
+        internalPreviewType: doc.internalPreviewType,
+        internalPreviewId: doc.internalPreviewId,
+        internalPreviewUrl: doc.internalPreviewUrl,
+        sdgs: doc.sdgs || [],
     };
 
     // attach author
@@ -89,20 +100,41 @@ export async function listDiscussionsByCircle(circleId: string) {
  * Get a discussion with comments
  */
 export async function getDiscussionWithComments(id: string) {
-    const discussion: any = await Posts.findOne({ _id: new ObjectId(id), postType: "discussion" });
-    if (!discussion) return null;
-    discussion._id = discussion._id.toString();
+    const pipeline = [
+        { $match: { _id: new ObjectId(id), postType: "discussion" } },
+        {
+            $lookup: {
+                from: "circles",
+                localField: "createdBy",
+                foreignField: "did",
+                as: "authorDetails",
+            },
+        },
+        { $unwind: "$authorDetails" },
+        {
+            $lookup: {
+                from: "feeds",
+                localField: "feedId",
+                foreignField: "_id",
+                as: "feed",
+            },
+        },
+        { $unwind: { path: "$feed", preserveNullAndEmptyArrays: true } },
+        {
+            $lookup: {
+                from: "circles",
+                localField: "circleId",
+                foreignField: "_id",
+                as: "circle",
+            },
+        },
+        { $unwind: { path: "$circle", preserveNullAndEmptyArrays: true } },
+    ];
 
-    if (discussion.createdBy) {
-        try {
-            const author = await getUserByDid(discussion.createdBy);
-            if (author) {
-                (discussion as any).author = author;
-            }
-        } catch (e) {
-            console.error("Failed to fetch author for discussion", e);
-        }
-    }
+    const results = await Posts.aggregate(pipeline).toArray();
+    if (!results || results.length === 0) return null;
+    const discussion: any = results[0];
+    discussion._id = discussion._id.toString();
 
     const comments = await Comments.find({ postId: id }).toArray();
     discussion.comments = comments.map((c: any) => ({

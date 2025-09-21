@@ -70,7 +70,7 @@ export default function DiscussionList({ discussions, circleHandle }: Discussion
                     </div>
 
                     <Button asChild>
-                        <Link href={`/circles/${(discussions[0] as any)?.circle}/discussions/new`}>
+                        <Link href={`/circles/${circleHandle}/discussions/new`}>
                             <Plus className="mr-2 h-4 w-4" /> Create Discussion
                         </Link>
                     </Button>

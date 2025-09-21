@@ -45,14 +45,35 @@ export async function createDiscussionAction(handle: string, data: Partial<Post>
         }
         const mediaFiles = data.getAll("media") as File[];
         if (mediaFiles && mediaFiles.length > 0) {
-            payload.media = mediaFiles;
+            payload.media = [];
+            for (const file of mediaFiles) {
+                if (file instanceof File) {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const buffer = Buffer.from(arrayBuffer);
+                    // Save file to storage (local/public/uploads or S3 depending on setup)
+                    const filename = `${Date.now()}-${file.name}`;
+                    const fs = await import("fs");
+                    const path = await import("path");
+                    const uploadDir = path.join(process.cwd(), "public", "uploads");
+                    if (!fs.existsSync(uploadDir)) {
+                        fs.mkdirSync(uploadDir, { recursive: true });
+                    }
+                    const filePath = path.join(uploadDir, filename);
+                    fs.writeFileSync(filePath, buffer);
+                    payload.media.push(`/uploads/${filename}`);
+                }
+            }
         }
     } else {
         payload = data;
     }
 
+    // Extract mentions from content
+    const mentions = payload.content ? (await import("@/lib/data/feed")).extractMentions(payload.content) : [];
+
     return createDiscussion({
         ...payload,
+        mentions,
         feedId: circle._id.toString(), // reuse circleId as feedId for now
         createdBy: userDid,
         circleId: circle._id.toString(),

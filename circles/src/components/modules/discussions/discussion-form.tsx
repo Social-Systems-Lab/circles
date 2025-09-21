@@ -1,10 +1,16 @@
 "use client";
 
-import { useState, useCallback, useTransition } from "react";
+import { useState, useCallback, useTransition, useRef, useMemo, useEffect } from "react";
 import { createDiscussionAction } from "@/app/circles/[handle]/discussions/actions";
-import { Textarea } from "@/components/ui/textarea";
+import { MentionsInput, Mention } from "react-mentions";
+import {
+    defaultMentionsInputStyle,
+    defaultMentionStyle,
+    handleMentionQuery,
+    renderCircleSuggestion,
+} from "../feeds/post-list";
 import { Button } from "@/components/ui/button";
-import { Image as ImageIcon, MapPin, Trash2, Loader2 } from "lucide-react";
+import { Image as ImageIcon, MapPin, Trash2, Loader2, Globe, Lock } from "lucide-react";
 import { getFullLocationName } from "@/lib/utils";
 import { useDropzone } from "react-dropzone";
 import {
@@ -17,6 +23,11 @@ import {
 } from "@/components/ui/carousel";
 import LocationPicker from "@/components/forms/location-picker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import SdgFilter from "@/components/modules/search/sdg-filter";
+import { Button as UIButton } from "@/components/ui/button";
+import { useToast } from "@/components/ui/use-toast";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 interface DiscussionFormProps {
     circleHandle: string;
@@ -33,6 +44,11 @@ export default function DiscussionForm({ circleHandle, onCreated }: DiscussionFo
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
     const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
     const [isPending, startTransition] = useTransition();
+    const [userGroups, setUserGroups] = useState<string[]>(["everyone"]);
+    const [selectedSdgs, setSelectedSdgs] = useState<any[]>([]);
+    const [linkPreview, setLinkPreview] = useState<any>(null);
+    const [internalPreview, setInternalPreview] = useState<any>(null);
+    const { toast } = useToast();
 
     const onDrop = useCallback((acceptedFiles: File[]) => {
         const newImages = acceptedFiles.map((file) => ({
@@ -71,11 +87,29 @@ export default function DiscussionForm({ circleHandle, onCreated }: DiscussionFo
                 images.forEach((img) => {
                     formData.append("media", img.file);
                 });
+                formData.append("userGroups", JSON.stringify(userGroups));
+                formData.append("sdgs", JSON.stringify(selectedSdgs));
+                if (linkPreview) {
+                    formData.append("linkPreviewUrl", linkPreview.url);
+                    formData.append("linkPreviewTitle", linkPreview.title || "");
+                    formData.append("linkPreviewDescription", linkPreview.description || "");
+                    formData.append("linkPreviewImage", linkPreview.image || "");
+                }
+                if (internalPreview) {
+                    formData.append("internalPreviewType", internalPreview.type);
+                    formData.append("internalPreviewId", internalPreview.id);
+                    formData.append("internalPreviewUrl", internalPreview.url);
+                }
+
                 const discussion = await createDiscussionAction(circleHandle, formData as any);
                 setTitle("");
                 setContent("");
                 setImages([]);
                 setLocation(null);
+                setUserGroups(["everyone"]);
+                setSelectedSdgs([]);
+                setLinkPreview(null);
+                setInternalPreview(null);
                 if (onCreated) {
                     onCreated();
                 } else if (discussion?._id) {
@@ -102,13 +136,23 @@ export default function DiscussionForm({ circleHandle, onCreated }: DiscussionFo
                 className="w-full rounded border p-2"
                 required
             />
-            <Textarea
+            <MentionsInput
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="What's on your mind?"
                 className="min-h-[200px] w-full rounded border p-3 text-base"
+                style={defaultMentionsInputStyle}
                 required
-            />
+            >
+                <Mention
+                    trigger="@"
+                    data={handleMentionQuery}
+                    style={defaultMentionStyle}
+                    displayTransform={(id, display) => `${display}`}
+                    renderSuggestion={renderCircleSuggestion}
+                    markup="[__display__](/circles/__id__)"
+                />
+            </MentionsInput>
             {images.length > 0 && (
                 <div className="relative mt-4">
                     <Carousel setApi={setCarouselApi}>
@@ -159,19 +203,31 @@ export default function DiscussionForm({ circleHandle, onCreated }: DiscussionFo
                     <MapPin className="mr-1 h-4 w-4" /> Add Location
                 </Button>
             </div>
-            <Button
-                type="submit"
-                disabled={loading || isPending}
-                className="mt-4 rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 disabled:opacity-50"
-            >
-                {loading || isPending ? (
-                    <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Posting...
-                    </>
-                ) : (
-                    "Post Discussion"
-                )}
-            </Button>
+            <div className="flex items-center justify-between">
+                <SdgFilter
+                    displayAs="popover"
+                    selectedSdgs={selectedSdgs}
+                    onSelectionChange={setSelectedSdgs}
+                    trigger={
+                        <UIButton variant="ghost" size="sm">
+                            Add SDGs
+                        </UIButton>
+                    }
+                />
+                <Button
+                    type="submit"
+                    disabled={loading || isPending}
+                    className="mt-4 rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 disabled:opacity-50"
+                >
+                    {loading || isPending ? (
+                        <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Posting...
+                        </>
+                    ) : (
+                        "Post Discussion"
+                    )}
+                </Button>
+            </div>
             <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
