@@ -55,15 +55,18 @@ export default function DiscussionDetail({ discussionId }: DiscussionDetailProps
         <div className="space-y-4">
             <div className="space-y-2 rounded border bg-white p-4 shadow">
                 <h2 className="text-lg font-semibold">{discussion.title || "Untitled Discussion"}</h2>
-                <p className="text-sm text-gray-600">{discussion.content}</p>
+                <p className="whitespace-pre-line text-sm text-gray-600">{discussion.content}</p>
                 <div className="flex items-center justify-between text-xs text-gray-500">
-                    <span>{discussion.createdBy || "Unknown"}</span>
+                    <span>
+                        {(discussion as any).author?.name || discussion.createdBy || "Unknown"} ·{" "}
+                        {new Date(discussion.createdAt).toLocaleString()}
+                    </span>
                     <div className="flex space-x-3">
                         <button className="hover:underline">Like</button>
                         <button className="hover:underline">Reply</button>
                     </div>
                 </div>
-                <div>
+                <div className="mt-1">
                     {discussion.pinned && <span className="text-xs text-blue-500">📌 Pinned</span>}
                     {discussion.closed && <span className="ml-2 text-xs text-red-500">Closed</span>}
                 </div>

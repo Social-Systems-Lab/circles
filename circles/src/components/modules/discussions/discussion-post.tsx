@@ -46,10 +46,10 @@ export default function DiscussionPost({ discussion }: DiscussionPostProps) {
                     </p>
                 </div>
             </div>
-            <div className="prose mt-4 max-w-none">
+            <div className="mt-2 line-clamp-1 text-sm text-gray-700">
                 <RichText content={discussion.content} mentions={discussion.mentionsDisplay} />
             </div>
-            <div className="mt-4 flex items-center gap-2">
+            <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
                 <Button
                     type="button"
                     variant="ghost"
@@ -60,6 +60,9 @@ export default function DiscussionPost({ discussion }: DiscussionPostProps) {
                     <ThumbsUp className="mr-1 h-4 w-4" />
                     {likes}
                 </Button>
+            </div>
+            <div>
+                <pre>{JSON.stringify(discussion, null, 2)}</pre>
             </div>
         </div>
     );
