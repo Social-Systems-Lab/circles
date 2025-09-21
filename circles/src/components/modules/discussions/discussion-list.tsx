@@ -216,7 +216,7 @@ MemoizedPostContent.displayName = "MemoizedPostContent";
 // In post-list.tsx, add this near the other memoized components at the top
 
 const MemoizedCommentContent = memo(({ content, mentions }: { content: string; mentions?: MentionDisplay[] }) => (
-    <div className="text-sm">
+    <div className="formatted min-w-0 break-words text-lg">
         <RichText content={content} mentions={mentions} />
     </div>
 ));
@@ -338,7 +338,7 @@ export const DiscussionItem = ({
     const [likedByUsers, setLikedByUsers] = useState<Circle[] | undefined>(undefined);
 
     const [comments, setComments] = useState<CommentDisplay[]>(initialComments ?? []);
-    const [showAllComments, setShowAllComments] = useState(initialShowAllComments ?? false);
+    const [showAllComments, setShowAllComments] = useState(true);
     const [newCommentContent, setNewCommentContent] = useState("");
 
     const topLevelComments = useMemo(() => {
@@ -638,10 +638,11 @@ export const DiscussionItem = ({
     }, [comments.length, post._id, post.comments, startCommentsTransition]); // Added startCommentsTransition
 
     useEffect(() => {
-        if (initialShowAllComments && (initialComments === undefined || initialComments.length < post.comments)) {
+        // Eagerly fetch all comments if there are any and none are loaded yet
+        if (post.comments > 0 && comments.length === 0) {
             fetchComments();
         }
-    }, [post.comments, initialComments, initialShowAllComments, fetchComments]);
+    }, [post.comments, comments.length, fetchComments]);
 
     // useEffect(() => {
     //     console.log("re-rendering post-list");
@@ -1181,52 +1182,25 @@ export const DiscussionItem = ({
                         Loading comments...
                     </div>
                 ) : (
-                    <>
-                        {/* Show "Show more comments" if more than one comment and not showing all */}
-                        {!showAllComments && post.comments > 1 && (
-                            <div
-                                className="cursor-pointer text-[15px] font-bold text-gray-500 hover:underline"
-                                onClick={fetchComments}
-                            >
-                                Show more comments
-                            </div>
-                        )}
-                    </>
+                    <></>
                 )}
 
                 {/* Display comments */}
-                {showAllComments
-                    ? topLevelComments.map((comment) => (
-                          <CommentItem
-                              key={comment._id}
-                              comment={comment}
-                              comments={comments}
-                              setComments={setComments}
-                              setShowAllComments={setShowAllComments}
-                              user={user}
-                              postId={post._id}
-                              feed={feed}
-                              circle={circle}
-                              onDeleteComment={onDeleteComment}
-                              onShowAllComments={fetchComments}
-                          />
-                      ))
-                    : post.highlightedComment && (
-                          <CommentItem
-                              key={post.highlightedComment._id}
-                              comment={post.highlightedComment}
-                              comments={comments}
-                              setComments={setComments}
-                              setShowAllComments={setShowAllComments}
-                              user={user}
-                              postId={post._id}
-                              feed={feed}
-                              circle={circle}
-                              onDeleteComment={onDeleteComment}
-                              isHighlighted={true}
-                              onShowAllComments={fetchComments}
-                          />
-                      )}
+                {topLevelComments.map((comment) => (
+                    <CommentItem
+                        key={comment._id}
+                        comment={comment}
+                        comments={comments}
+                        setComments={setComments}
+                        setShowAllComments={setShowAllComments}
+                        user={user}
+                        postId={post._id}
+                        feed={feed}
+                        circle={circle}
+                        onDeleteComment={onDeleteComment}
+                        onShowAllComments={fetchComments}
+                    />
+                ))}
 
                 {/* Comment input box */}
                 {user && canComment && !disableComments && (
@@ -1292,7 +1266,7 @@ const CommentItem = ({
     isHighlighted,
     depth = 0,
 }: CommentItemProps) => {
-    const [showReplies, setShowReplies] = useState(false);
+    const [showReplies, setShowReplies] = useState(true);
     const [likes, setLikes] = useState<number>(comment.reactions.like || 0);
     const [isLiked, setIsLiked] = useState<boolean>(comment.userReaction !== undefined);
     const [showReplyInput, setShowReplyInput] = useState(false);
@@ -1505,7 +1479,7 @@ const CommentItem = ({
     };
 
     return (
-        <div className={`flex flex-col ${depth > 0 ? "ml-5" : ""} mt-2`}>
+        <div className={`flex flex-col ${depth > 0 ? "ml-5" : "border-t border-gray-200 pt-4"} mt-2`}>
             {/* Comment Content */}
             <div className="group flex items-start gap-2">
                 <div className="pt-1">
@@ -1522,7 +1496,7 @@ const CommentItem = ({
                     )}
                 </div>
                 <div className="flex w-auto max-w-[80%] flex-col">
-                    <div className="inline-block rounded-[15px] bg-gray-100 p-2">
+                    <div className="">
                         {comment.isDeleted ? (
                             <div className="text-sm text-gray-400">Comment removed</div>
                         ) : (
@@ -1681,31 +1655,22 @@ const CommentItem = ({
             {/* Only show for top level comments since we flattened the hierarchy beyond */}
             {!comment.parentCommentId && (comment.replies > 0 || replies?.length > 0) && (
                 <div className={`ml-8 mt-2`}>
-                    {showReplies &&
-                        replies?.map((reply) => (
-                            <CommentItem
-                                key={reply._id}
-                                comment={reply}
-                                user={user}
-                                postId={postId}
-                                comments={comments}
-                                setComments={setComments}
-                                setShowAllComments={setShowAllComments}
-                                depth={depth + 1}
-                                feed={feed}
-                                circle={circle}
-                                onDeleteComment={onDeleteComment}
-                                onShowAllComments={onShowAllComments}
-                            />
-                        ))}
-                    {(!showReplies || isHighlighted) && (
-                        <div
-                            className="cursor-pointer pl-2 text-xs font-bold text-gray-500 hover:underline"
-                            onClick={fetchReplies}
-                        >
-                            Show {comment.replies} {comment.replies > 1 ? "replies" : "reply"}
-                        </div>
-                    )}
+                    {replies?.map((reply) => (
+                        <CommentItem
+                            key={reply._id}
+                            comment={reply}
+                            user={user}
+                            postId={postId}
+                            comments={comments}
+                            setComments={setComments}
+                            setShowAllComments={setShowAllComments}
+                            depth={depth + 1}
+                            feed={feed}
+                            circle={circle}
+                            onDeleteComment={onDeleteComment}
+                            onShowAllComments={onShowAllComments}
+                        />
+                    ))}
                 </div>
             )}
         </div>
