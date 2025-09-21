@@ -76,6 +76,7 @@ import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/h
 import { HoverCardArrow } from "@radix-ui/react-hover-card";
 import { AiOutlineHeart, AiFillHeart } from "react-icons/ai";
 import { useToast } from "@/components/ui/use-toast";
+// Remove unused PostForm reference and keep only DiscussionForm
 import { DiscussionForm } from "./discussion-form";
 import { isAuthorized } from "@/lib/auth/client-auth";
 import { features, LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
@@ -92,7 +93,9 @@ import Indicators, { ProximityIndicator, SimilarityScore } from "@/components/ut
 import Image from "next/image"; // Import Next Image
 import { Card, CardContent } from "@/components/ui/card"; // Import Card components
 import Link from "next/link"; // Import Next Link
-import InternalLinkPreview from "../feeds/InternalLinkPreview"; // Import InternalLinkPreview
+// Import InternalLinkPreview
+import InternalLinkPreview from "../feeds/InternalLinkPreview";
+import DiscussionPreviewItem from "./discussion-preview-item";
 
 export const defaultMentionsInputStyle = {
     control: {
@@ -425,7 +428,7 @@ export const DiscussionItem = ({
                 return;
             } else {
                 toast({
-                    title: "Announcement updated successfully",
+                    title: "Discussion updated successfully",
                     variant: "success",
                 });
             }
@@ -445,7 +448,7 @@ export const DiscussionItem = ({
                 return;
             } else {
                 toast({
-                    title: "Announcement deleted successfully",
+                    title: "Discussion deleted successfully",
                     variant: "success",
                 });
             }
@@ -692,7 +695,7 @@ export const DiscussionItem = ({
                                         }}
                                     >
                                         <div className="hidden">
-                                            <DialogTitle>Edit announcement</DialogTitle>
+                                            <DialogTitle>Edit discussion</DialogTitle>
                                         </div>
                                         <DiscussionForm
                                             initialPost={post}
@@ -721,9 +724,9 @@ export const DiscussionItem = ({
                                     }}
                                 >
                                     <DialogHeader>
-                                        <DialogTitle>Delete Announcement</DialogTitle>
+                                        <DialogTitle>Delete Discussion</DialogTitle>
                                         <DialogDescription>
-                                            Are you sure you want to delete this announcement? This action cannot be
+                                            Are you sure you want to delete this discussion? This action cannot be
                                             undone.
                                         </DialogDescription>
                                     </DialogHeader>
@@ -887,22 +890,10 @@ export const DiscussionItem = ({
                                                 }}
                                             >
                                                 <div className="hidden">
-                                                    <DialogTitle>Edit announcement</DialogTitle>
+                                                    <DialogTitle>Edit discussion</DialogTitle>
                                                 </div>
-                                                <PostForm
-                                                    user={user!}
+                                                <DiscussionForm
                                                     initialPost={post}
-                                                    onSubmit={async (formData, targetCircleId) => {
-                                                        // When editing, targetCircleId is the post's original circle.
-                                                        // updatePostAction uses postId from formData.
-                                                        // The circleId for updatePostAction is derived from the post object
-                                                        // or not strictly needed if only postId is used.
-                                                        // We ensure handleEditSubmit is called correctly.
-                                                        // If handleEditSubmit needs targetCircleId, pass post.circle._id!
-                                                        // For now, assuming handleEditSubmit only needs formData.
-                                                        await handleEditSubmit(formData);
-                                                    }}
-                                                    onCancel={() => setOpenDropdown(false)}
                                                     moduleHandle="feed"
                                                     createFeatureHandle="post" // Or "edit" if a specific edit feature exists
                                                     itemKey="post"
@@ -928,10 +919,10 @@ export const DiscussionItem = ({
                                             }}
                                         >
                                             <DialogHeader>
-                                                <DialogTitle>Delete Announcement</DialogTitle>
+                                                <DialogTitle>Delete Discussion</DialogTitle>
                                                 <DialogDescription>
-                                                    Are you sure you want to delete this announcement? This action
-                                                    cannot be undone.
+                                                    Are you sure you want to delete this discussion? This action cannot
+                                                    be undone.
                                                 </DialogDescription>
                                             </DialogHeader>
                                             <DialogFooter>
