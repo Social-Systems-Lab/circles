@@ -1728,7 +1728,7 @@ const DiscussionList = ({ feed, circle, posts, isAggregateFeed, compact = false 
     }, []);
 
     return (
-        <div className={"flex flex-col gap-6"}>
+        <div className={"flex flex-col gap-6 rounded-lg"}>
             {posts.map((post) => (
                 <DiscussionItem
                     key={post._id}
