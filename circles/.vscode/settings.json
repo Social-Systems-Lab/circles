@@ -11,8 +11,8 @@
     "editor.gotoLocation.multipleDefinitions": "goto",
     "editor.defaultFormatter": "esbenp.prettier-vscode",
     "[javascript]": {
-      "editor.defaultFormatter": "esbenp.prettier-vscode"
-    }
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
     "vscode_custom_css.imports": ["file:///D:/pretty-ts-errors.css"],
     "hide-files.files": []
 }

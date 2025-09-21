@@ -17,7 +17,7 @@ import { getUserByDid } from "@/lib/data/user";
 /**
  * Create a new discussion in a circle
  */
-export async function createDiscussionAction(handle: string, data: Partial<Post>) {
+export async function createDiscussionAction(handle: string, data: Partial<Post> | FormData) {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) throw new Error("Unauthorized");
 
@@ -31,10 +31,31 @@ export async function createDiscussionAction(handle: string, data: Partial<Post>
     const canCreate = await isAuthorized(userDid, circle._id as string, features.feed.post);
     if (!canCreate) throw new Error("Not authorized to create discussions");
 
+    let payload: any = {};
+    if (data instanceof FormData) {
+        payload.title = data.get("title") as string;
+        payload.content = data.get("content") as string;
+        const loc = data.get("location") as string | null;
+        if (loc) {
+            try {
+                payload.location = JSON.parse(loc);
+            } catch {
+                payload.location = null;
+            }
+        }
+        const mediaFiles = data.getAll("media") as File[];
+        if (mediaFiles && mediaFiles.length > 0) {
+            payload.media = mediaFiles;
+        }
+    } else {
+        payload = data;
+    }
+
     return createDiscussion({
-        ...data,
+        ...payload,
         feedId: circle._id.toString(), // reuse circleId as feedId for now
         createdBy: userDid,
+        circleId: circle._id.toString(),
     });
 }
 

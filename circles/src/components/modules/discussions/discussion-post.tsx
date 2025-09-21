@@ -3,7 +3,7 @@
 import { Post } from "@/models/models";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
-import { likeContent, unlikeContent, checkIfLiked } from "@/lib/data/feed"; // reuse feed reactions
+import { likeContentAction, unlikeContentAction } from "@/components/modules/feeds/actions";
 import { Button } from "@/components/ui/button";
 import { ThumbsUp } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -21,13 +21,17 @@ export default function DiscussionPost({ discussion }: DiscussionPostProps) {
 
     async function toggleLike() {
         if (liked) {
-            await unlikeContent(discussion._id as string, "post", discussion.createdBy);
-            setLiked(false);
-            setLikes((l) => l - 1);
+            const result = await unlikeContentAction(discussion._id as string, "post");
+            if (result.success) {
+                setLiked(false);
+                setLikes((l) => l - 1);
+            }
         } else {
-            await likeContent(discussion._id as string, "post", discussion.createdBy);
-            setLiked(true);
-            setLikes((l) => l + 1);
+            const result = await likeContentAction(discussion._id as string, "post");
+            if (result.success) {
+                setLiked(true);
+                setLikes((l) => l + 1);
+            }
         }
     }
 
