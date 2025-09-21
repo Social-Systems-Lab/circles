@@ -6,20 +6,21 @@ const defaultWeights: Weights = {
     proximity: 0.25,
     recentness: 0.25,
     popularity: 0.25,
+    activity: 0,
 };
 
 const getWeightsBySortingOptions = (sortingOptions?: SortingOptions, customWeights?: Weights): Weights => {
     switch (sortingOptions) {
         case "similarity":
-            return { similarity: 1, proximity: 0, recentness: 0, popularity: 0 };
+            return { similarity: 1, proximity: 0, recentness: 0, popularity: 0, activity: 0 };
         case "near":
-            return { similarity: 0, proximity: 1, recentness: 0, popularity: 0 };
+            return { similarity: 0, proximity: 1, recentness: 0, popularity: 0, activity: 0 };
         case "new":
-            return { similarity: 0, proximity: 0, recentness: 1, popularity: 0 };
+            return { similarity: 0, proximity: 0, recentness: 1, popularity: 0, activity: 0 };
         case "activity":
-            return { similarity: 0, proximity: 0, recentness: 1, popularity: 0 };
+            return { similarity: 0, proximity: 0, recentness: 0, popularity: 0, activity: 1 };
         case "pop":
-            return { similarity: 0, proximity: 0, recentness: 0, popularity: 1 };
+            return { similarity: 0, proximity: 0, recentness: 0, popularity: 1, activity: 0 };
         case "custom":
             return customWeights ?? defaultWeights;
         default:
@@ -55,6 +56,7 @@ export const getMetrics = async (
     }
     metrics.recentness = getRecentness(getCreatedAt(item), currentDate);
     metrics.popularity = getPopularity(item);
+    metrics.activity = getActivity(item as PostDisplay, currentDate);
     metrics.rank = getRank(metrics, weights);
 
     return metrics;
@@ -81,7 +83,8 @@ export const getRank = (metrics: Metrics, customWeights?: Weights): number => {
         ((metrics.similarity !== undefined ? metrics.similarity : 0.5) * weights.similarity +
             (metrics.proximity !== undefined ? metrics.proximity : 0.5) * weights.proximity +
             (metrics.recentness !== undefined ? metrics.recentness : 0) * weights.recentness +
-            (metrics.popularity !== undefined ? metrics.popularity : 0) * weights.popularity)
+            (metrics.popularity !== undefined ? metrics.popularity : 0) * weights.popularity +
+            (metrics.activity !== undefined ? metrics.activity : 0) * weights.activity)
     );
 };
 
@@ -101,6 +104,15 @@ export const getRecentness = (createdAt: Date | undefined, currentDate: Date): n
 
     const daysSinceCreation = (currentDate.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
     return 1 / (1 + daysSinceCreation);
+};
+
+export const getActivity = (post: PostDisplay, currentDate: Date): number | undefined => {
+    if (!post.lastActivityAt) {
+        return undefined;
+    }
+
+    const daysSinceActivity = (currentDate.getTime() - post.lastActivityAt.getTime()) / (1000 * 60 * 60 * 24);
+    return 1 / (1 + daysSinceActivity);
 };
 
 export const getProximity = (lngLat1?: LngLat, lngLat2?: LngLat): number | undefined => {

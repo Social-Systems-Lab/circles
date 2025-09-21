@@ -378,6 +378,7 @@ export type Metrics = {
     proximity?: number;
     popularity?: number;
     recentness?: number;
+    activity?: number;
     searchRank?: number; // Added for search results
 };
 
@@ -386,6 +387,7 @@ export type Weights = {
     proximity: number;
     popularity: number;
     recentness: number;
+    activity: number;
 };
 
 // Define the schema for module-specific access rules (feature -> user groups)
