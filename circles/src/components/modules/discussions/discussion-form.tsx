@@ -68,6 +68,7 @@ import {
     getInternalLinkPreviewData,
     InternalLinkPreviewResult,
     getVerificationStatusAction,
+    createPostAction,
 } from "../feeds/actions";
 import { useToast } from "@/components/ui/use-toast";
 import Image from "next/image";
@@ -122,7 +123,7 @@ const postMentionsInputStyle = {
         backgroundColor: "rgb(255 255 255)",
         border: "1px solid #e5e7eb",
         borderRadius: "12px",
-        minHeight: "200px",
+        minHeight: "400px",
     },
     input: {
         padding: "0 0",
@@ -169,11 +170,7 @@ type ImageItem = {
 };
 
 type PostFormProps = {
-    user: UserPrivate;
     initialPost?: PostDisplay;
-    onSubmit: (formData: FormData, targetCircleId: string) => Promise<void>;
-    onCancel: () => void;
-    isSubmitting?: boolean;
     moduleHandle: string;
     createFeatureHandle: string;
     itemKey: CreatableItemKey;
@@ -181,16 +178,13 @@ type PostFormProps = {
 };
 
 export function DiscussionForm({
-    user,
     initialPost,
-    onSubmit,
-    onCancel,
-    isSubmitting: externalIsSubmitting,
     moduleHandle,
     createFeatureHandle,
     itemKey,
     initialSelectedCircleId,
 }: PostFormProps) {
+    const [user] = useAtom(userAtom);
     const [postContent, setPostContent] = useState(initialPost?.content || "");
     const [title, setTitle] = useState(initialPost?.title || "");
     const [showPollCreator, setShowPollCreator] = useState(false);
@@ -201,13 +195,14 @@ export function DiscussionForm({
     const [dragging, setDragging] = useState(false);
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
     const [isPending, startTransition] = useTransition();
-    const isActuallySubmitting = externalIsSubmitting ?? isPending;
     const [location, setLocation] = useState<Location | undefined>(initialPost?.location);
     const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
     const [userGroups, setUserGroups] = useState<string[]>(initialPost?.userGroups || ["everyone"]);
     const [isUserGroupsDialogOpen, setIsUserGroupsDialogOpen] = useState(false);
     const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>(initialPost?.sdgs || []);
     const { toast } = useToast();
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const isActuallySubmitting = isSubmitting || isPending;
 
     const itemDetail: CreatableItemDetail | undefined = useMemo(
         () => creatableItemsList.find((item) => item.key === itemKey),
@@ -224,6 +219,8 @@ export function DiscussionForm({
     );
 
     useEffect(() => {
+        if (!user) return;
+
         if (selectedCircleId) {
             if (user.did && user._id === selectedCircleId) {
                 setSelectedCircle(user as Circle);
@@ -492,7 +489,7 @@ export function DiscussionForm({
             if (!title.trim()) {
                 toast({
                     title: "Error",
-                    description: "Please enter a title for your announcement.",
+                    description: "Please enter a title for your discussion.",
                     variant: "destructive",
                 });
                 return;
@@ -500,7 +497,7 @@ export function DiscussionForm({
             if (!selectedCircleId) {
                 toast({
                     title: "Error",
-                    description: "Please select a circle to create an announcement in.",
+                    description: "Please select a circle to create an discussion in.",
                     variant: "destructive",
                 });
                 return;
@@ -539,9 +536,46 @@ export function DiscussionForm({
                     formData.append("sdgs", JSON.stringify(validSdgs));
                 }
             }
+
             await onSubmit(formData, selectedCircleId);
         });
     };
+
+    const onSubmit = async (formData: FormData, targetCircleId: string) => {
+        setIsSubmitting(true);
+
+        // The createPostAction expects circleId on formData to determine the feed.
+        // PostForm now provides targetCircleId separately.
+        // We need to ensure createPostAction can derive the feed from targetCircleId.
+        // For now, let's add circleId to formData as createPostAction expects.
+        // This might need adjustment in createPostAction later if it's to use targetCircleId directly.
+        formData.append("circleId", targetCircleId);
+
+        // feedId is derived by createPostAction from circleId (default feed)
+        // So, no need to explicitly add feedId here if createPostAction handles it.
+
+        const response = await createPostAction(formData);
+
+        if (!response.success) {
+            toast({
+                title: response.message || "Failed to create discussion.",
+                variant: "destructive",
+            });
+            setIsSubmitting(false);
+            return;
+        } else {
+            // TODO navigate to the newly created discussion
+        }
+        setIsSubmitting(false);
+    };
+
+    const onCancel = () => {
+        // TODO navigate to the discussions list
+    };
+
+    if (!user) {
+        return null;
+    }
 
     return (
         <div {...getRootProps()} className="flex h-full flex-col">
@@ -596,7 +630,7 @@ export function DiscussionForm({
                                     <div className="flex items-center">
                                         <Info className="mr-2 h-5 w-5 flex-shrink-0" />
                                         <p className="mt-0 pt-0" style={{ paddingTop: 0, marginTop: 0 }}>
-                                            Your account is not verified. Announcements from unverified accounts are not
+                                            Your account is not verified. Discussions from unverified accounts are not
                                             shown to other users until the account is verified.
                                         </p>
                                     </div>
@@ -608,7 +642,7 @@ export function DiscussionForm({
                                     <Input
                                         value={title}
                                         onChange={(e) => setTitle(e.target.value)}
-                                        placeholder="Enter a clear announcement title..."
+                                        placeholder="Enter a clear discussion title..."
                                         className="border-0 p-0 text-2xl font-semibold shadow-none placeholder:text-gray-400 focus-visible:ring-0"
                                     />
                                 </div>
@@ -617,7 +651,7 @@ export function DiscussionForm({
                             <MentionsInput
                                 value={postContent}
                                 onChange={(e) => setPostContent(e.target.value)}
-                                placeholder="Write your announcement..."
+                                placeholder="Write your discussion..."
                                 className="flex-grow"
                                 autoFocus
                                 style={postMentionsInputStyle}
@@ -727,7 +761,7 @@ export function DiscussionForm({
                                                 </Avatar>
                                                 <div>
                                                     <div className="text-xs text-gray-500">
-                                                        Announcement by{" "}
+                                                        Discussion by{" "}
                                                         {(internalPreview.data as PostDisplay).author?.name}
                                                     </div>
                                                     <p className="text-sm text-gray-800">
@@ -901,10 +935,10 @@ export function DiscussionForm({
                                     {isActuallySubmitting ? (
                                         <>
                                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                            {initialPost ? "Updating..." : "Announcing..."}
+                                            {initialPost ? "Updating..." : "Creating discussion..."}
                                         </>
                                     ) : (
-                                        <>{initialPost ? "Update" : "Announce"}</>
+                                        <>{initialPost ? "Update" : "Create Discussion"}</>
                                     )}
                                 </Button>
                             </div>
@@ -953,16 +987,13 @@ export function DiscussionForm({
                 >
                     <DialogHeader>
                         <DialogTitle className="text-center text-xl font-bold">
-                            Who can see your announcement?
+                            Who can see your discussion?
                         </DialogTitle>
                     </DialogHeader>
                     <div className="mt-2 space-y-4">
                         <div className="text-sm text-gray-600">
-                            Your announcement will be visible in feeds, on your profile, and in search results.
-                        </div>
-                        <div className="text-sm text-gray-600">
                             Your default audience is <span className="font-semibold">Everyone</span> but you can change
-                            the audience for this announcement.
+                            the audience for this discussion.
                         </div>
                         <div className="max-h-[300px] space-y-3 overflow-y-auto py-2">
                             <div className="flex items-center rounded-lg p-2 hover:bg-gray-100">
