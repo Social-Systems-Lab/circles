@@ -556,6 +556,9 @@ export function DiscussionForm({
         // feedId is derived by createPostAction from circleId (default feed)
         // So, no need to explicitly add feedId here if createPostAction handles it.
 
+        // Ensure this is marked as a discussion
+        formData.append("postType", "discussion");
+
         const response = await createPostAction(formData);
 
         if (!response.success) {
@@ -566,13 +569,22 @@ export function DiscussionForm({
             setIsSubmitting(false);
             return;
         } else {
-            // TODO navigate to the newly created discussion
+            // navigate to the newly created discussion
+            if (response.post?._id) {
+                window.location.href = `/circles/${selectedCircle?.handle || targetCircleId}/discussions/${response.post._id}`;
+            } else {
+                window.location.href = `/circles/${selectedCircle?.handle || targetCircleId}/discussions`;
+            }
         }
         setIsSubmitting(false);
     };
 
     const onCancel = () => {
-        // TODO navigate to the discussions list
+        if (selectedCircle) {
+            window.location.href = `/circles/${selectedCircle.handle}/discussions`;
+        } else {
+            window.location.href = `/circles/${moduleHandle}/discussions`;
+        }
     };
 
     if (!user) {

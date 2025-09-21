@@ -380,6 +380,7 @@ export async function createPostAction(
         const title = (formData.get("title") as string) || "";
         const circleId = formData.get("circleId") as string;
         const locationStr = formData.get("location") as string;
+        const postType = (formData.get("postType") as string) || undefined;
         const location = locationStr ? JSON.parse(locationStr) : undefined;
 
         // Get user groups from form data
@@ -453,6 +454,10 @@ export async function createPostAction(
             // +++ End Internal Link Preview Fields +++
             sdgs: sdgs || undefined,
         };
+
+        if (postType) {
+            post.postType = postType as any;
+        }
 
         // console.log("creating post", JSON.stringify(post.location)); // Reduced logging
         await postSchema.parseAsync(post);
