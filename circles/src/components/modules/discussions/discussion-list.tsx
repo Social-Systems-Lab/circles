@@ -10,11 +10,12 @@ import { Plus } from "lucide-react";
 
 interface DiscussionListProps {
     discussions: Post[];
+    circleHandle: string;
 }
 
 type SortOption = "activity" | "newest" | "oldest";
 
-export default function DiscussionList({ discussions }: DiscussionListProps) {
+export default function DiscussionList({ discussions, circleHandle }: DiscussionListProps) {
     const [search, setSearch] = useState("");
     const [sort, setSort] = useState<SortOption>("activity");
 
@@ -90,11 +91,7 @@ export default function DiscussionList({ discussions }: DiscussionListProps) {
                 </button>
             </div>
             {sorted.map((d) => (
-                <Link
-                    key={d._id?.toString()}
-                    href={`/circles/${(d as any).circle}/discussions/${d._id}`}
-                    className="block"
-                >
+                <Link key={d._id?.toString()} href={`/circles/${circleHandle}/discussions/${d._id}`} className="block">
                     <DiscussionPost discussion={d as any} />
                 </Link>
             ))}

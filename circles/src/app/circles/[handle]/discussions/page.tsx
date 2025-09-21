@@ -17,7 +17,7 @@ export default async function DiscussionsPage(props: DiscussionsPageProps) {
     return (
         <div className="flex flex-1 flex-row justify-center">
             <div className="mb-4 ml-2 mr-2 mt-4 flex max-w-[1100px] flex-1 flex-col space-y-6">
-                <DiscussionList discussions={discussions || []} />
+                <DiscussionList discussions={discussions || []} circleHandle={handle} />
             </div>
         </div>
     );
