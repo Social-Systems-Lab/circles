@@ -17,30 +17,6 @@ export default async function DiscussionsPage(props: DiscussionsPageProps) {
     return (
         <div className="flex flex-1 flex-row justify-center">
             <div className="mb-4 ml-2 mr-2 mt-4 flex max-w-[1100px] flex-1 flex-col space-y-6">
-                <div className="flex w-full flex-row items-center gap-2">
-                    <div className="flex flex-1 flex-col">
-                        <Input placeholder="Search discussions..." />
-                    </div>
-
-                    <Select defaultValue="all">
-                        <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="All Categories" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Categories</SelectItem>
-                            <SelectItem value="general">General</SelectItem>
-                            <SelectItem value="announcements">Announcements</SelectItem>
-                            <SelectItem value="questions">Questions</SelectItem>
-                        </SelectContent>
-                    </Select>
-
-                    <Button asChild>
-                        <Link href={`/circles/${handle}/discussions/new`}>
-                            <Plus className="mr-2 h-4 w-4" /> Create Discussion
-                        </Link>
-                    </Button>
-                </div>
-
                 <DiscussionList discussions={discussions || []} />
             </div>
         </div>

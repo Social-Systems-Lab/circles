@@ -36,13 +36,22 @@ export default function DiscussionPost({ discussion }: DiscussionPostProps) {
     }
 
     return (
-        <div className="rounded border bg-white p-4 shadow">
+        <div className="formatted rounded border bg-white p-4 shadow">
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-lg font-semibold">{discussion.title}</h2>
                     <p className="text-sm text-gray-500">
-                        {discussion.author?.name} ·{" "}
-                        {formatDistanceToNow(new Date(discussion.createdAt), { addSuffix: true })}
+                        <span className="flex items-center gap-2">
+                            {discussion.author?.picture?.url && (
+                                <img
+                                    src={discussion.author.picture.url}
+                                    alt={discussion.author?.name}
+                                    className="h-5 w-5 rounded-full object-cover"
+                                />
+                            )}
+                            {discussion.author?.name || discussion.createdBy} ·{" "}
+                            {formatDistanceToNow(new Date(discussion.createdAt), { addSuffix: true })}
+                        </span>
                     </p>
                 </div>
             </div>
@@ -60,9 +69,6 @@ export default function DiscussionPost({ discussion }: DiscussionPostProps) {
                     <ThumbsUp className="mr-1 h-4 w-4" />
                     {likes}
                 </Button>
-            </div>
-            <div>
-                <pre>{JSON.stringify(discussion, null, 2)}</pre>
             </div>
         </div>
     );

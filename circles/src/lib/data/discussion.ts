@@ -65,10 +65,24 @@ export async function listDiscussionsByCircle(circleId: string) {
         .sort({ pinned: -1, createdAt: -1 })
         .toArray();
 
-    return discussions.map((d: any) => ({
-        ...d,
-        _id: d._id.toString(),
-    }));
+    const withAuthors = await Promise.all(
+        discussions.map(async (d: any) => {
+            const doc = { ...d, _id: d._id.toString() };
+            if (d.createdBy) {
+                try {
+                    const author = await getUserByDid(d.createdBy);
+                    if (author) {
+                        (doc as any).author = author;
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch author for discussion", e);
+                }
+            }
+            return doc;
+        }),
+    );
+
+    return withAuthors;
 }
 
 /**
@@ -78,6 +92,17 @@ export async function getDiscussionWithComments(id: string) {
     const discussion: any = await Posts.findOne({ _id: new ObjectId(id), postType: "discussion" });
     if (!discussion) return null;
     discussion._id = discussion._id.toString();
+
+    if (discussion.createdBy) {
+        try {
+            const author = await getUserByDid(discussion.createdBy);
+            if (author) {
+                (discussion as any).author = author;
+            }
+        } catch (e) {
+            console.error("Failed to fetch author for discussion", e);
+        }
+    }
 
     const comments = await Comments.find({ postId: id }).toArray();
     discussion.comments = comments.map((c: any) => ({

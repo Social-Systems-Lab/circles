@@ -57,7 +57,14 @@ export default function DiscussionDetail({ discussionId }: DiscussionDetailProps
                 <h2 className="text-lg font-semibold">{discussion.title || "Untitled Discussion"}</h2>
                 <p className="whitespace-pre-line text-sm text-gray-600">{discussion.content}</p>
                 <div className="flex items-center justify-between text-xs text-gray-500">
-                    <span>
+                    <span className="flex items-center gap-2">
+                        {(discussion as any).author?.picture?.url && (
+                            <img
+                                src={(discussion as any).author.picture.url}
+                                alt={(discussion as any).author?.name}
+                                className="h-5 w-5 rounded-full object-cover"
+                            />
+                        )}
                         {(discussion as any).author?.name || discussion.createdBy || "Unknown"} ·{" "}
                         {new Date(discussion.createdAt).toLocaleString()}
                     </span>
