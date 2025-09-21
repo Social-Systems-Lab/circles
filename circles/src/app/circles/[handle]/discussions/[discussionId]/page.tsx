@@ -1,17 +1,30 @@
-import DiscussionDetail from "@/components/modules/discussions/discussion-detail";
 import { DiscussionItem } from "@/components/modules/discussions/discussion-list";
+import { notFound } from "next/navigation";
+import { getCircleByHandle } from "@/lib/data/circle";
+import { getFeed, getFullPost } from "@/lib/data/feed";
 
 interface DiscussionDetailPageProps {
-    params: Promise<{ handle: string; discussionId: string }>;
+    params: { handle: string; discussionId: string };
 }
 
-export default async function DiscussionDetailPage(props: DiscussionDetailPageProps) {
-    const { handle, discussionId } = await props.params;
+export default async function DiscussionDetailPage({ params }: DiscussionDetailPageProps) {
+    const { handle, discussionId } = params;
+    const post = await getFullPost(discussionId);
+    const circle = await getCircleByHandle(handle);
+
+    if (!post || !circle) {
+        notFound();
+    }
+
+    const feed = await getFeed(post.feedId);
+
+    if (!feed) {
+        notFound();
+    }
 
     return (
         <div className="mx-auto max-w-3xl p-6">
-            <DiscussionItem />
-            // <DiscussionDetail discussionId={discussionId} />
+            <DiscussionItem post={post} circle={circle} feed={feed} />
         </div>
     );
 }
