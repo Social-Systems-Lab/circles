@@ -106,14 +106,14 @@ export const creatableItemsList: CreatableItemDetail[] = [
         moduleHandle: "events",
         createFeatureHandle: "create",
     },
-    {
-        key: "discussion",
-        title: "Discussion",
-        description: "Start a new discussion thread.",
-        icon: MessageSquare,
-        moduleHandle: "feed",
-        createFeatureHandle: "post",
-    },
+    // {
+    //     key: "discussion",
+    //     title: "Discussion",
+    //     description: "Start a new discussion thread.",
+    //     icon: MessageSquare,
+    //     moduleHandle: "discussions",
+    //     createFeatureHandle: "create",
+    // },
 ];
 
 interface GlobalCreateDialogContentProps {
