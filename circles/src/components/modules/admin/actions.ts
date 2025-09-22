@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { Circles } from "@/lib/data/db";
+import { Circles, Notifications } from "@/lib/data/db";
 import { deleteCircle } from "@/lib/data/circle";
 import { Circle, UserPrivate } from "@/models/models";
 import { ObjectId } from "mongodb";
@@ -544,6 +544,136 @@ export async function syncAllDonorboxSubscriptions() {
         console.error("Error during Donorbox sync:", error);
         const message = error instanceof Error ? error.message : "Failed to complete Donorbox sync.";
         return { success: false, message };
+    }
+}
+
+export async function triggerCronEmailReminder() {
+    // Check if user is admin
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "Unauthorized: You must be logged in." };
+    }
+    const adminUser = await getUserPrivate(userDid);
+    if (!adminUser.isAdmin) {
+        return { success: false, message: "Unauthorized: You do not have permission." };
+    }
+
+    const cronSecret = process.env.CRON_SECRET;
+    if (!cronSecret) {
+        return { success: false, message: "CRON_SECRET is not configured on the server." };
+    }
+
+    const baseUrl = (process.env.CIRCLES_URL || "http://localhost:3000").replace(/\/+$/, "");
+    const url = `${baseUrl}/api/cron/email-reminders`;
+
+    try {
+        const resp = await fetch(url, {
+            method: "GET",
+            headers: {
+                Authorization: `Bearer ${cronSecret}`,
+            },
+        });
+
+        if (!resp.ok) {
+            let body = "";
+            try {
+                body = await resp.text();
+            } catch {}
+            return {
+                success: false,
+                message: `Cron endpoint returned ${resp.status} ${resp.statusText}${body ? `: ${body}` : ""}`,
+            };
+        }
+
+        const data = await resp.json().catch(() => ({}));
+        return {
+            success: true,
+            message: "Cron email reminders triggered successfully.",
+            data,
+        };
+    } catch (error) {
+        console.error("Error triggering cron email reminders:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to call cron endpoint.",
+        };
+    }
+}
+
+export async function sendReminderEmailForHandle(handle: string) {
+    // Check if user is admin
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "Unauthorized: You must be logged in." };
+    }
+    const adminUser = await getUserPrivate(userDid);
+    if (!adminUser.isAdmin) {
+        return { success: false, message: "Unauthorized: You do not have permission." };
+    }
+
+    try {
+        const normalized = handle.trim().toLowerCase().replace(/^@/, "");
+        if (!normalized) {
+            return { success: false, message: "Please provide a valid handle." };
+        }
+
+        const user = await Circles.findOne({
+            handle: normalized,
+            circleType: "user",
+            agreedToEmailUpdates: true,
+        });
+
+        if (!user) {
+            return {
+                success: false,
+                message: "User not found or user has not agreed to email updates.",
+            };
+        }
+
+        if (!user.email) {
+            return { success: false, message: "User does not have an email address." };
+        }
+
+        const unreadNotifications = await Notifications.find({
+            userId: user.did,
+            isRead: false,
+            lastEmailedAt: { $exists: false },
+            createdAt: { $lt: new Date(Date.now() - 60 * 60 * 1000) }, // same threshold as cron
+            $or: [{ type: { $ne: "pm_received" } }, { type: "pm_received" }],
+        }).toArray();
+
+        if (unreadNotifications.length === 0) {
+            return {
+                success: true,
+                message: "No pending notifications to email for this user.",
+                count: 0,
+            };
+        }
+
+        await sendEmail({
+            to: user.email,
+            templateAlias: "notification-reminder",
+            templateModel: {
+                name: user.name,
+                notifications: unreadNotifications.map((n: any) => n.content),
+                actionUrl: process.env.CIRCLES_URL || "http://localhost:3000",
+            },
+        });
+
+        const notificationIds = unreadNotifications.map((n: any) => n._id);
+        await Notifications.updateMany({ _id: { $in: notificationIds } }, { $set: { lastEmailedAt: new Date() } });
+
+        return {
+            success: true,
+            message: `Sent reminder email with ${unreadNotifications.length} notifications.`,
+            count: unreadNotifications.length,
+        };
+    } catch (error) {
+        console.error("Error sending reminder email for handle:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to send reminder email.",
+        };
     }
 }
 

@@ -5,7 +5,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GlobalServerSettingsForm } from "./global-server-settings-form"; // Import the new form
 import { Circle, ServerSettings } from "@/models/models";
 import { Button } from "@/components/ui/button"; // Import Button
-import { triggerReindexAction, syncAllDonorboxSubscriptions } from "./actions"; // Import the new action
+import { Input } from "@/components/ui/input";
+import {
+    triggerReindexAction,
+    syncAllDonorboxSubscriptions,
+    sendReminderEmailForHandle,
+    triggerCronEmailReminder,
+} from "./actions"; // Import the new action
 import CirclesTab from "./tabs/circles-tab";
 import UsersTab from "./tabs/users-tab";
 import SuperAdminsTab from "./tabs/super-admins-tab";
@@ -23,6 +29,11 @@ export default function AdminDashboard({ serverSettings, circles }: AdminDashboa
     const [reindexStatusMessage, setReindexStatusMessage] = useState<string | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
     const [syncStatusMessage, setSyncStatusMessage] = useState<string | null>(null);
+    const [handleToEmail, setHandleToEmail] = useState("");
+    const [isSendingReminder, setIsSendingReminder] = useState(false);
+    const [sendReminderStatusMessage, setSendReminderStatusMessage] = useState<string | null>(null);
+    const [isTriggeringCron, setIsTriggeringCron] = useState(false);
+    const [cronStatusMessage, setCronStatusMessage] = useState<string | null>(null);
 
     const handleSyncClick = async () => {
         setIsSyncing(true);
@@ -65,6 +76,54 @@ export default function AdminDashboard({ serverSettings, circles }: AdminDashboa
             toast.error(`Error: ${message}`);
         } finally {
             setIsReindexing(false);
+        }
+    };
+
+    const handleSendReminderClick = async () => {
+        const input = handleToEmail.trim();
+        if (!input) {
+            setSendReminderStatusMessage("Please enter a handle.");
+            toast.error("Please enter a handle.");
+            return;
+        }
+        setIsSendingReminder(true);
+        setSendReminderStatusMessage("Sending reminder...");
+        toast.info("Sending reminder...");
+        try {
+            const result = await sendReminderEmailForHandle(input);
+            setSendReminderStatusMessage(result.message);
+            if (result.success) {
+                toast.success(result.message);
+            } else {
+                toast.error(result.message);
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "An unexpected error occurred.";
+            setSendReminderStatusMessage(`Error: ${message}`);
+            toast.error(`Error: ${message}`);
+        } finally {
+            setIsSendingReminder(false);
+        }
+    };
+
+    const handleTriggerCronClick = async () => {
+        setIsTriggeringCron(true);
+        setCronStatusMessage("Triggering cron email reminders...");
+        toast.info("Triggering cron email reminders...");
+        try {
+            const result = await triggerCronEmailReminder();
+            setCronStatusMessage(result.message);
+            if (result.success) {
+                toast.success(result.message);
+            } else {
+                toast.error(result.message);
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "An unexpected error occurred.";
+            setCronStatusMessage(`Error: ${message}`);
+            toast.error(`Error: ${message}`);
+        } finally {
+            setIsTriggeringCron(false);
         }
     };
 
@@ -159,7 +218,58 @@ export default function AdminDashboard({ serverSettings, circles }: AdminDashboa
                                 </p>
                             )}
                         </div>
-                        {/* Add other server operations here in the future */}
+                        <div className="border-t pt-4">
+                            <h3 className="mb-2 text-lg font-medium">Trigger Email Reminder Cron</h3>
+                            <p className="mb-3 text-sm text-muted-foreground">
+                                Calls the cron endpoint to process reminder emails for all eligible users. Uses your
+                                server&#39;s CRON_SECRET.
+                            </p>
+                            <Button onClick={handleTriggerCronClick} disabled={isTriggeringCron}>
+                                {isTriggeringCron ? "Triggering..." : "Trigger Email Reminder Cron"}
+                            </Button>
+                            {cronStatusMessage && (
+                                <p
+                                    className={`mt-2 text-sm ${
+                                        cronStatusMessage.startsWith("Error:") ? "text-red-600" : "text-green-600"
+                                    }`}
+                                >
+                                    {cronStatusMessage}
+                                </p>
+                            )}
+                        </div>
+                        <div className="border-t pt-4">
+                            <h3 className="mb-2 text-lg font-medium">Send Notification Reminder Email</h3>
+                            <p className="mb-3 text-sm text-muted-foreground">
+                                Manually send the notification reminder email to a specific user by handle.
+                            </p>
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                <Input
+                                    placeholder="@handle or handle"
+                                    value={handleToEmail}
+                                    onChange={(e) => setHandleToEmail(e.target.value)}
+                                    className="max-w-xs"
+                                />
+                                <Button
+                                    onClick={handleSendReminderClick}
+                                    disabled={isSendingReminder || handleToEmail.trim().length === 0}
+                                >
+                                    {isSendingReminder ? "Sending..." : "Send Reminder to Handle"}
+                                </Button>
+                            </div>
+                            {sendReminderStatusMessage && (
+                                <p
+                                    className={`mt-2 text-sm ${
+                                        sendReminderStatusMessage.startsWith("Error:")
+                                            ? "text-red-600"
+                                            : sendReminderStatusMessage.startsWith("No pending")
+                                              ? "text-amber-600"
+                                              : "text-green-600"
+                                    }`}
+                                >
+                                    {sendReminderStatusMessage}
+                                </p>
+                            )}
+                        </div>
                     </div>
                 </div>
             </TabsContent>
