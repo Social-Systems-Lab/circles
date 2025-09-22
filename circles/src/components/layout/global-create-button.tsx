@@ -74,6 +74,7 @@ export function GlobalCreateButton() {
                 proposal: "proposals",
                 event: "events",
                 community: "circles", // Or specific community view if exists
+                discussion: "discussions",
             };
             const pathSegment = pathSegmentMap[itemKey];
             if (pathSegment) {

@@ -197,12 +197,12 @@ export default function EventDetail({
                 <div className="px-4">
                     <h1 className="text-xl font-semibold">{event.title}</h1>
                     <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                        {shortDateTimeRange && (
+                        {/* {shortDateTimeRange && (
                             <span className="inline-flex items-center gap-1">
                                 <Clock className="h-4 w-4" />
                                 {shortDateTimeRange}
                             </span>
-                        )}
+                        )} */}
                         {(locationText || event.isVirtual || event.isHybrid) && (
                             <span className="inline-flex items-center gap-1">
                                 <MapPin className="h-4 w-4" />
@@ -218,7 +218,7 @@ export default function EventDetail({
                         <div className="mb-2 text-xs text-muted-foreground">RSVP</div>
                         <div className="flex flex-wrap gap-2">
                             <Button size="sm" disabled={isPending} onClick={() => onRsvp("going")}>
-                                I'm going
+                                I&apos;m going
                             </Button>
                             <Button
                                 size="sm"
@@ -404,7 +404,7 @@ export default function EventDetail({
                         <div className="mb-2 text-sm font-medium text-muted-foreground">RSVP</div>
                         <div className="flex flex-wrap gap-2">
                             <Button size="sm" disabled={isPending} onClick={() => onRsvp("going")}>
-                                I'm going
+                                I&apos;m going
                             </Button>
                             <Button
                                 size="sm"

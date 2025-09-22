@@ -4,11 +4,11 @@ import { getCircleByHandle } from "@/lib/data/circle";
 import { getFeed, getFullPost } from "@/lib/data/feed";
 
 interface DiscussionDetailPageProps {
-    params: { handle: string; discussionId: string };
+    params: Promise<{ handle: string; discussionId: string }>;
 }
 
-export default async function DiscussionDetailPage({ params }: DiscussionDetailPageProps) {
-    const { handle, discussionId } = params;
+export default async function DiscussionDetailPage(props: DiscussionDetailPageProps) {
+    const { handle, discussionId } = await props.params;
     const post = await getFullPost(discussionId);
     const circle = await getCircleByHandle(handle);
 
