@@ -69,6 +69,7 @@ import {
     InternalLinkPreviewResult,
     getVerificationStatusAction,
     createPostAction,
+    updatePostAction,
 } from "../feeds/actions";
 import { useToast } from "@/components/ui/use-toast";
 import Image from "next/image";
@@ -496,10 +497,12 @@ export function DiscussionForm({
                 });
                 return;
             }
-            if (!selectedCircleId) {
+            const isEditing = Boolean(initialPost);
+            const targetCircleId = selectedCircleId || initialPost?.circle?._id || initialSelectedCircleId || null;
+            if (!isEditing && !targetCircleId) {
                 toast({
                     title: "Error",
-                    description: "Please select a circle to create an discussion in.",
+                    description: "Please select a circle to create a discussion in.",
                     variant: "destructive",
                 });
                 return;
@@ -539,44 +542,68 @@ export function DiscussionForm({
                 }
             }
 
-            await onSubmit(formData, selectedCircleId);
+            await onSubmit(formData, targetCircleId as string);
         });
     };
 
     const onSubmit = async (formData: FormData, targetCircleId: string) => {
         setIsSubmitting(true);
 
-        // The createPostAction expects circleId on formData to determine the feed.
-        // PostForm now provides targetCircleId separately.
-        // We need to ensure createPostAction can derive the feed from targetCircleId.
-        // For now, let's add circleId to formData as createPostAction expects.
-        // This might need adjustment in createPostAction later if it's to use targetCircleId directly.
-        formData.append("circleId", targetCircleId);
+        const isEditing = Boolean(initialPost);
 
-        // feedId is derived by createPostAction from circleId (default feed)
-        // So, no need to explicitly add feedId here if createPostAction handles it.
-
-        // Ensure this is marked as a discussion
-        formData.append("postType", "discussion");
-
-        const response = await createPostAction(formData);
-
-        if (!response.success) {
-            toast({
-                title: response.message || "Failed to create discussion.",
-                variant: "destructive",
-            });
-            setIsSubmitting(false);
-            return;
-        } else {
-            // navigate to the newly created discussion
-            if (response.post?._id) {
-                window.location.href = `/circles/${selectedCircle?.handle || targetCircleId}/discussions/${response.post._id}`;
-            } else {
-                window.location.href = `/circles/${selectedCircle?.handle || targetCircleId}/discussions`;
-            }
+        // Always include circleId for media handling when available
+        if (targetCircleId) {
+            formData.append("circleId", targetCircleId);
         }
-        setIsSubmitting(false);
+
+        try {
+            if (isEditing) {
+                // Ensure postId was appended earlier in handleSubmit when initialPost exists
+                const response = await updatePostAction(formData);
+                if (!response.success) {
+                    toast({
+                        title: response.message || "Failed to update discussion.",
+                        variant: "destructive",
+                    });
+                    return;
+                }
+                const circleHandle = selectedCircle?.handle || initialPost?.circle?.handle;
+                if (circleHandle) {
+                    window.location.href = `/circles/${circleHandle}/discussions/${initialPost!._id}`;
+                } else {
+                    window.location.reload();
+                }
+            } else {
+                // Creating new discussion
+                formData.append("postType", "discussion");
+                const response = await createPostAction(formData);
+
+                if (!response.success) {
+                    toast({
+                        title: response.message || "Failed to create discussion.",
+                        variant: "destructive",
+                    });
+                    return;
+                } else {
+                    // navigate to the newly created discussion
+                    if (response.post?._id) {
+                        if (selectedCircle?.handle) {
+                            window.location.href = `/circles/${selectedCircle.handle}/discussions/${response.post._id}`;
+                        } else {
+                            window.location.reload();
+                        }
+                    } else {
+                        if (selectedCircle?.handle) {
+                            window.location.href = `/circles/${selectedCircle.handle}/discussions`;
+                        } else {
+                            window.location.reload();
+                        }
+                    }
+                }
+            }
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const onCancel = () => {

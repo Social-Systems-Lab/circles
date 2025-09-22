@@ -451,6 +451,13 @@ export const DiscussionItem = ({
                     title: "Discussion deleted successfully",
                     variant: "success",
                 });
+                setOpenDropdown(false);
+                const circleHandle = circle?.handle || post.circle?.handle || post.author?.handle;
+                if (circleHandle) {
+                    router.push(`/circles/${circleHandle}/discussions`);
+                } else {
+                    router.push(`/circles`);
+                }
             }
         });
     };
