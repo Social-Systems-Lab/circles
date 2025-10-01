@@ -9,6 +9,8 @@ interface CircleSummaryProps {
 
 export default function CircleSummary({ circleData }: CircleSummaryProps) {
     const { name, mission, selectedSdgs, selectedSkills, picture } = circleData;
+    const entityLabel = circleData.circleType === "project" ? "Project" : "Community";
+    const entityLabelLower = entityLabel.toLowerCase();
 
     return (
         <div className="formatted w-64 rounded-lg bg-white p-4 shadow-md">
@@ -17,8 +19,8 @@ export default function CircleSummary({ circleData }: CircleSummaryProps) {
                     <AvatarImage src={picture} alt={name} />
                     <AvatarFallback>{name ? name.charAt(0) : "C"}</AvatarFallback>
                 </Avatar>
-                <h2 className="mt-4 text-xl font-semibold">{name || "Community Name"}</h2>
-                <p className="mt-2 text-center text-sm text-gray-600">{mission || "Community mission..."}</p>
+                <h2 className="mt-4 text-xl font-semibold">{name || `${entityLabel} Name`}</h2>
+                <p className="mt-2 text-center text-sm text-gray-600">{mission || `${entityLabel} mission...`}</p>
             </div>
             <hr className="my-4" />
             <div>

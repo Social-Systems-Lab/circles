@@ -13,6 +13,8 @@ import { saveLocationAction } from "./actions";
 export default function LocationStep({ circleData, setCircleData, nextStep, prevStep }: CircleWizardStepProps) {
     const [isPending, startTransition] = useTransition();
     const [locationError, setLocationError] = useState("");
+    const entityLabel = circleData.circleType === "project" ? "Project" : "Community";
+    const entityLabelLower = entityLabel.toLowerCase();
 
     const handleLocationChange = (location: Location | undefined) => {
         // Clear any previous errors
@@ -57,15 +59,15 @@ export default function LocationStep({ circleData, setCircleData, nextStep, prev
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-2xl font-bold">Community Location</h2>
+                <h2 className="text-2xl font-bold">{`${entityLabel} Location`}</h2>
                 <p className="text-gray-500">
-                    Add a location to help people find your community and connect with nearby members.
+                    {`Add a location to help people find your ${entityLabelLower} and connect with nearby members.`}
                 </p>
             </div>
 
             <Card>
                 <CardContent className="pt-6">
-                    <Label>Community Location</Label>
+                    <Label>{`${entityLabel} Location`}</Label>
                     <LocationPicker value={circleData.location} onChange={handleLocationChange} compact={true} />
                 </CardContent>
             </Card>

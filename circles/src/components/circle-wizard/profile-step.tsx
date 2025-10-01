@@ -129,6 +129,8 @@ function CircleImageUpload({
 export default function ProfileStep({ circleData, setCircleData, nextStep, prevStep }: CircleWizardStepProps) {
     const [isPending, startTransition] = useTransition();
     const [profileError, setProfileError] = useState("");
+    const entityLabel = circleData.circleType === "project" ? "Project" : "Community";
+    const entityLabelLower = entityLabel.toLowerCase();
     const profilePictureRef = useRef<HTMLInputElement>(null);
     // const coverImageRef = useRef<HTMLInputElement>(null); // Remove cover ref
 
@@ -170,7 +172,7 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
             try {
                 // Validate the description
                 if (!circleData.description.trim()) {
-                    setProfileError("Please provide a short description for your circle");
+                    setProfileError(`Please provide a short description for your ${entityLabelLower}`);
                     return;
                 }
 
@@ -214,9 +216,9 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-2xl font-bold">Community Profile</h2>
+                <h2 className="text-2xl font-bold">{`${entityLabel} Profile`}</h2>
                 <p className="text-gray-500">
-                    Add details about your community to help others understand what it&apos;s about.
+                    {`Add details about your ${entityLabelLower} to help others understand what it's about.`}
                 </p>
             </div>
 
@@ -225,7 +227,7 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                 <div className="space-y-4">
                     <div className="space-y-2">
                         <Label className="flex items-center gap-2">
-                            <Camera className="h-4 w-4" /> Community Picture
+                            <Camera className="h-4 w-4" /> {`${entityLabel} Picture`}
                         </Label>
                         <div className="relative mx-auto h-24 w-24 overflow-hidden rounded-full">
                             <CircleImageUpload
@@ -243,13 +245,13 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                             />
                         </div>
                         <p className="text-center text-xs text-gray-500">
-                            This appears on all of your community&apos;s posts and comments
+                            {`This appears on all of your ${entityLabelLower}'s posts and comments`}
                         </p>
                     </div>
 
                     <div className="space-y-2">
                         <Label className="flex items-center gap-2">
-                            <ImageIcon className="h-4 w-4" /> Community Cover Pictures
+                            <ImageIcon className="h-4 w-4" /> {`${entityLabel} Cover Pictures`}
                         </Label>
                         {/* Replace CircleImageUpload for cover with MultiImageUploader */}
                         <MultiImageUploader
@@ -278,7 +280,7 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                             dropzoneClassName="h-32" // Adjust dropzone height
                         />
                         <p className="text-center text-xs text-gray-500">
-                            Add images to showcase and represent your community. Drag to reorder.
+                            {`Add images to showcase and represent your ${entityLabelLower}. Drag to reorder.`}
                         </p>
                     </div>
                 </div>
@@ -292,7 +294,7 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                             name="description"
                             value={circleData.description}
                             onChange={handleTextChange}
-                            placeholder={`A brief description about this community`}
+                            placeholder={`A brief description about this ${entityLabelLower}`}
                         />
                         <p className="text-xs text-gray-500">This short description appears in cards and previews</p>
                     </div>
@@ -304,11 +306,11 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                             name="content"
                             value={circleData.content}
                             onChange={handleTextChange}
-                            placeholder={`Tell more about this community, its goals, and what members can expect`}
+                            placeholder={`Tell more about this ${entityLabelLower}, its goals, and what members can expect`}
                             className="h-36"
                         />
                         <p className="text-xs text-gray-500">
-                            This detailed description appears on your community &apos;s page
+                            {`This detailed description appears on your ${entityLabelLower}'s page`}
                         </p>
                     </div>
                 </div>

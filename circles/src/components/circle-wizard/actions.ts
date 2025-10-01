@@ -78,13 +78,10 @@ export async function saveBasicInfoAction(
             // 2. Add user as admin member
             await addMember(userDid, newCircle._id!, ["admins", "moderators", "members"]);
 
-            // 3. If the parent is the user's own circle, ensure the relevant module is enabled
+            // 3. Ensure the relevant module is enabled on the parent circle (so the tab appears)
             if (parentCircleId) {
-                const userCircle = await getUser(userDid);
-                if (userCircle && userCircle._id === parentCircleId) {
-                    const moduleToEnable = circleType === "project" ? "projects" : "communities";
-                    await ensureModuleIsEnabledOnCircle(parentCircleId, moduleToEnable, userDid);
-                }
+                const moduleToEnable = circleType === "project" ? "projects" : "communities";
+                await ensureModuleIsEnabledOnCircle(parentCircleId, moduleToEnable, userDid);
             }
 
             return { success: true, message: "Circle created successfully", data: { circle: newCircle } };
@@ -100,7 +97,9 @@ export async function saveBasicInfoAction(
 
 export async function createCircleAction(circleData: CircleData, userDid: string) {
     try {
-        const authorized = await isAuthorized(userDid, circleData.parentCircleId ?? "", features.communities.create);
+        const createFeature =
+            circleData.circleType === "project" ? features.projects.create : features.communities.create;
+        const authorized = await isAuthorized(userDid, circleData.parentCircleId ?? "", createFeature);
         if (!authorized) {
             return { success: false, message: "You are not authorized to create new circles" };
         }
@@ -109,11 +108,8 @@ export async function createCircleAction(circleData: CircleData, userDid: string
         await addMember(userDid, newCircle._id!, ["admins", "moderators", "members"]);
 
         if (circleData.parentCircleId) {
-            const userCircle = await getUser(userDid);
-            if (userCircle && userCircle._id === circleData.parentCircleId) {
-                const moduleToEnable = circleData.circleType === "project" ? "projects" : "communities";
-                await ensureModuleIsEnabledOnCircle(circleData.parentCircleId, moduleToEnable, userDid);
-            }
+            const moduleToEnable = circleData.circleType === "project" ? "projects" : "communities";
+            await ensureModuleIsEnabledOnCircle(circleData.parentCircleId, moduleToEnable, userDid);
         }
 
         return {

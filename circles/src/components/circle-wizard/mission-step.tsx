@@ -11,6 +11,8 @@ import { saveMissionAction } from "./actions";
 export default function MissionStep({ circleData, setCircleData, nextStep, prevStep }: CircleWizardStepProps) {
     const [isPending, startTransition] = useTransition();
     const [missionError, setMissionError] = useState("");
+    const entityLabel = circleData.circleType === "project" ? "Project" : "Community";
+    const entityLabelLower = entityLabel.toLowerCase();
 
     const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -29,7 +31,7 @@ export default function MissionStep({ circleData, setCircleData, nextStep, prevS
         startTransition(async () => {
             // Validate mission
             if (!circleData.mission.trim()) {
-                setMissionError(`Please provide a mission for your community`);
+                setMissionError(`Please provide a mission for your ${entityLabelLower}`);
                 return;
             }
 
@@ -63,15 +65,15 @@ export default function MissionStep({ circleData, setCircleData, nextStep, prevS
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-2xl font-bold">Community Mission</h2>
+                <h2 className="text-2xl font-bold">{`${entityLabel} Mission`}</h2>
                 <p className="text-gray-500">
-                    Define the purpose and goals of your community. What change do you want to see in the world?
+                    {`Define the purpose and goals of your ${entityLabelLower}. What change do you want to see in the world?`}
                 </p>
             </div>
 
             <div className="space-y-4">
                 <div className="space-y-2">
-                    <Label htmlFor="mission">What is the mission of this community?</Label>
+                    <Label htmlFor="mission">{`What is the mission of this ${entityLabelLower}?`}</Label>
                     <Textarea
                         id="mission"
                         name="mission"
@@ -84,8 +86,7 @@ export default function MissionStep({ circleData, setCircleData, nextStep, prevS
                 </div>
 
                 <p className="text-sm text-gray-500">
-                    A clear mission helps potential members understand what your community stands for and attracts
-                    like-minded individuals.
+                    {`A clear mission helps potential members understand what your ${entityLabelLower} stands for and attracts like-minded individuals.`}
                 </p>
             </div>
 

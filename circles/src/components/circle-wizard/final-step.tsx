@@ -12,6 +12,8 @@ export default function FinalStep({ circleData, setCircleData, prevStep, onCompl
     const [error, setError] = useState("");
     const [user] = useAtom(userAtom);
     const router = useRouter();
+    const entityLabel = circleData.circleType === "project" ? "Project" : "Community";
+    const entityLabelLower = entityLabel.toLowerCase();
 
     const handleCreateCircle = () => {
         if (onComplete) {
@@ -23,12 +25,11 @@ export default function FinalStep({ circleData, setCircleData, prevStep, onCompl
         <div className="space-y-6">
             <h2 className="text-center text-3xl font-bold">Ready to Launch?</h2>
             <p className="text-center text-gray-600">
-                You&apos;ve done a great job setting up your community. Here&apos;s a final look at what you&apos;ve
-                created.
+                {`You've done a great job setting up your ${entityLabelLower}. Here's a final look at what you've created.`}
             </p>
 
             <div className="rounded-lg border bg-white p-6 shadow-sm">
-                <h3 className="mb-4 text-xl font-semibold">Community Summary</h3>
+                <h3 className="mb-4 text-xl font-semibold">{`${entityLabel} Summary`}</h3>
                 <div className="space-y-4">
                     <div>
                         <p className="font-medium">Name</p>
@@ -82,7 +83,7 @@ export default function FinalStep({ circleData, setCircleData, prevStep, onCompl
                             Creating...
                         </>
                     ) : (
-                        "Create Community"
+                        <>Create {entityLabel}</>
                     )}
                 </Button>
             </div>

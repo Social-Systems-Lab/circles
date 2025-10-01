@@ -18,6 +18,8 @@ export default function SdgsStep({ circleData, setCircleData, nextStep, prevStep
     const [isPending, startTransition] = useTransition();
     const [sdgsError, setSdgsError] = useState("");
     const isMobile = useIsMobile();
+    const entityLabel = circleData.circleType === "project" ? "Project" : "Community";
+    const entityLabelLower = entityLabel.toLowerCase();
 
     const visibleSdgs = useMemo(() => {
         if (sdgSearch) {
@@ -104,7 +106,7 @@ export default function SdgsStep({ circleData, setCircleData, nextStep, prevStep
         <div className="space-y-4">
             <h2 className="text-2xl font-bold">Choose SDGs</h2>
             <p className="text-gray-500">
-                Select Sustainable Development Goals (SDGs) that align with your community&apos;s mission:
+                {`Select Sustainable Development Goals (SDGs) that align with your ${entityLabelLower}'s mission:`}
             </p>
 
             <div className="relative">

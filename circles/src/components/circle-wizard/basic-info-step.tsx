@@ -140,7 +140,7 @@ export default function BasicInfoStep({
         <div className="space-y-6">
             <div>
                 <h2 className="text-2xl font-bold">{`Create a New ${entityLabel}`}</h2>
-                <p className="text-gray-500">Let&apos;s start with the basic information for your community.</p>
+                <p className="text-gray-500">{`Let's start with the basic information for your ${entityLabelLower}.`}</p>
             </div>
 
             <div className="space-y-4">
@@ -158,7 +158,7 @@ export default function BasicInfoStep({
                         // selectedCircle and setSelectedCircle are not direct props of CircleSelector
                     />
                     <p className="text-xs text-gray-500">
-                        Select where this community will be created. Defaults to your profile.
+                        {`Select where this ${entityLabelLower} will be created. Defaults to your profile.`}
                     </p>
                 </div>
 
@@ -187,7 +187,7 @@ export default function BasicInfoStep({
                         />
                     </div>
                     <p className="text-xs text-gray-500">
-                        This will be used in the URL for your community: circles/community-handle
+                        {`This will be used in the URL for your ${entityLabelLower}: circles/${handlePlaceholder}`}
                     </p>
                     {handleError && <p className="text-sm text-red-500">{handleError}</p>}
                 </div>
@@ -197,7 +197,7 @@ export default function BasicInfoStep({
                     <Label htmlFor="isPublic">{`Public ${entityLabel}`}</Label>
                     <p className="text-xs text-gray-500">
                         {circleData.isPublic
-                            ? `Anyone can follow this community without approval`
+                            ? `Anyone can follow this ${entityLabelLower} without approval`
                             : `New followers will need approval`}
                     </p>
                 </div>
