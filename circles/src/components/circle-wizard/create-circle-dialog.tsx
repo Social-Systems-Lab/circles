@@ -7,13 +7,16 @@ import { useState } from "react";
 import CircleWizard from "./circle-wizard";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { DialogTitle, DialogHeader } from "@/components/ui/dialog";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 export function CreateCircleDialog({ parentCircleId }: { parentCircleId?: string }) {
     // parentCircleId removed from props
     const [isOpen, setIsOpen] = useState(false);
     const isCompact = useIsCompact();
     const router = useRouter();
+    const pathname = usePathname();
+    const isProjectsPage = pathname?.includes("/projects");
+    const entityLabel = isProjectsPage ? "Project" : "Community";
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -23,7 +26,7 @@ export function CreateCircleDialog({ parentCircleId }: { parentCircleId?: string
                     className={isCompact ? "h-[32px] w-[32px] p-0" : "gap-2"}
                 >
                     <Plus className="h-4 w-4" />
-                    {isCompact ? "" : `Create Community`}
+                    {isCompact ? "" : `Create ${entityLabel}`}
                 </Button>
             </DialogTrigger>
             <DialogContent
@@ -33,9 +36,10 @@ export function CreateCircleDialog({ parentCircleId }: { parentCircleId?: string
                 }}
             >
                 <div className="hidden">
-                    <DialogTitle>{`Create Community`}</DialogTitle>
+                    <DialogTitle>{`Create ${entityLabel}`}</DialogTitle>
                 </div>
                 <CircleWizard
+                    initialCircleType={isProjectsPage ? "project" : "circle"}
                     initialParentCircleId={parentCircleId}
                     onComplete={(createdCircleId, handle) => {
                         setIsOpen(false);

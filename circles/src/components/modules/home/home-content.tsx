@@ -144,9 +144,9 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle }: 
                             {/* {!isCompact && <SocialLinks circle={circle} />} */}
                         </div>
 
-                        {parentCircle && parentCircle?.circleType === "circle" && (
+                        {parentCircle && (
                             <div className="mt-2 text-sm text-gray-500">
-                                Subcommunity of{" "}
+                                {circle.circleType === "project" ? "Project by " : "Subcommunity of "}
                                 <Link
                                     href={`/circles/${parentCircle.handle}`}
                                     className="text-blue-500 hover:underline"
