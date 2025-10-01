@@ -12,15 +12,25 @@ import {
     FileText,
     ChevronRight,
     Calendar,
+    Hammer,
 } from "lucide-react";
 import { features } from "@/lib/data/constants"; // modules as moduleInfos removed as descriptions are simplified
 
 // Define types for creatable items
-export type CreatableItemKey = "community" | "task" | "goal" | "post" | "issue" | "proposal" | "event" | "discussion";
+export type CreatableItemKey =
+    | "community"
+    | "project"
+    | "task"
+    | "goal"
+    | "post"
+    | "issue"
+    | "proposal"
+    | "event"
+    | "discussion";
 
 const iconColors: Record<CreatableItemKey, string> = {
     community: "bg-purple-100 text-purple-600",
-    // project: "bg-blue-100 text-blue-600", // Removed project
+    project: "bg-blue-100 text-blue-600",
     post: "bg-orange-100 text-orange-600",
     task: "bg-teal-100 text-teal-600",
     event: "bg-pink-100 text-pink-600",
@@ -50,14 +60,14 @@ export const creatableItemsList: CreatableItemDetail[] = [
         moduleHandle: "communities",
         createFeatureHandle: "create",
     },
-    // { // Removed Project from creatable items
-    //     key: "project",
-    //     title: "Project",
-    //     description: "Launch a new project.",
-    //     icon: Hammer,
-    //     moduleHandle: "projects",
-    //     createFeatureHandle: "create",
-    // },
+    {
+        key: "project",
+        title: "Project",
+        description: "Launch a new project.",
+        icon: Hammer,
+        moduleHandle: "projects",
+        createFeatureHandle: "create",
+    },
     {
         key: "post",
         title: "Announcement",
@@ -120,20 +130,22 @@ interface GlobalCreateDialogContentProps {
     onCloseMainDialog: () => void; // To close this selection dialog
     onSelectItemType: (itemKey: CreatableItemKey) => void; // New prop to inform parent of selection
     setCreateCommunityOpen: (open: boolean) => void;
-    // setCreateProjectOpen: (open: boolean) => void; // Removed
+    setCreateProjectOpen: (open: boolean) => void;
 }
 
 export const GlobalCreateDialogContent: React.FC<GlobalCreateDialogContentProps> = ({
     onCloseMainDialog,
     onSelectItemType,
     setCreateCommunityOpen,
-    // setCreateProjectOpen, // Removed
+    setCreateProjectOpen,
 }) => {
     const handleItemClick = (itemKey: CreatableItemKey) => {
         onCloseMainDialog(); // Close this selection dialog
 
         if (itemKey === "community") {
             setCreateCommunityOpen(true);
+        } else if (itemKey === "project") {
+            setCreateProjectOpen(true);
         } else {
             // For other items, notify the parent to open the specific dialog
             onSelectItemType(itemKey);

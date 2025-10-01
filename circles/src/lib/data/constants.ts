@@ -131,6 +131,31 @@ export const features = {
             needsToBeVerified: true,
         } as Feature,
     },
+    projects: {
+        view: {
+            name: "View Projects",
+            handle: "view",
+            description: "View the projects list",
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+            module: "projects",
+        } as Feature,
+        create: {
+            name: "Create Project",
+            handle: "create",
+            description: "Create a new project",
+            defaultUserGroups: ["admins", "moderators"],
+            module: "projects",
+            needsToBeVerified: true,
+        } as Feature,
+        delete: {
+            name: "Delete Project",
+            handle: "delete",
+            description: "Delete a project",
+            defaultUserGroups: ["admins"],
+            module: "projects",
+            needsToBeVerified: true,
+        } as Feature,
+    },
     goals: {
         // Added goals module features, mirroring issues
         view: {
@@ -600,6 +625,12 @@ export const modules: ModuleInfo[] = [
             "Displays all communities connected to this community. Helps members navigate related communities, deepen partnerships, and organize nested initiatives.",
     },
     {
+        name: "Projects",
+        handle: "projects",
+        description:
+            "Displays all projects under this circle. Helps organize initiatives into concrete, trackable project spaces.",
+    },
+    {
         name: "Discussions",
         handle: "discussions",
         description: "Start and participate in discussions within your circle.",
@@ -651,6 +682,8 @@ export const getDefaultModules = (circleType: CircleType): string[] => {
         case "user":
             return defaultUserModules;
         case "circle":
+            return defaultCircleModules;
+        case "project":
             return defaultCircleModules;
         default:
             // Default to user modules if type is unknown or not specified

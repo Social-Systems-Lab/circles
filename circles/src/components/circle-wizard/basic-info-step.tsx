@@ -33,6 +33,9 @@ export default function BasicInfoStep({
     // selectedParentCircle state is managed by CircleSelector's onCircleSelected callback
     // const [selectedParentCircle, setSelectedParentCircle] = useState<Circle | null>(null);
     const [user] = useAtom(userAtom);
+    const entityLabel = circleData.circleType === "project" ? "Project" : "Community";
+    const entityLabelLower = entityLabel.toLowerCase();
+    const handlePlaceholder = circleData.circleType === "project" ? "project-handle" : "community-handle";
 
     // This effect is now handled by onCircleSelected callback
     // useEffect(() => {
@@ -82,13 +85,13 @@ export default function BasicInfoStep({
 
         // Validate name
         if (!circleData.name.trim()) {
-            setNameError(`Community name is required`);
+            setNameError(`${entityLabel} name is required`);
             isValid = false;
         }
 
         // Validate handle
         if (!circleData.handle.trim()) {
-            setHandleError(`Community handle is required`);
+            setHandleError(`${entityLabel} handle is required`);
             isValid = false;
         } else if (!/^[a-zA-Z0-9\-]*$/.test(circleData.handle)) {
             setHandleError("Handle can only contain letters, numbers and hyphens (-)");
@@ -136,7 +139,7 @@ export default function BasicInfoStep({
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-2xl font-bold">Create a New Community</h2>
+                <h2 className="text-2xl font-bold">{`Create a New ${entityLabel}`}</h2>
                 <p className="text-gray-500">Let&apos;s start with the basic information for your community.</p>
             </div>
 
@@ -160,19 +163,19 @@ export default function BasicInfoStep({
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="name">Community Name</Label>
+                    <Label htmlFor="name">{entityLabel} Name</Label>
                     <Input
                         id="name"
                         name="name"
                         value={circleData.name}
                         onChange={handleInputChange}
-                        placeholder={`Enter community name`}
+                        placeholder={`Enter ${entityLabelLower} name`}
                     />
                     {nameError && <p className="text-sm text-red-500">{nameError}</p>}
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="handle">Community Handle</Label>
+                    <Label htmlFor="handle">{entityLabel} Handle</Label>
                     <div className="flex items-center">
                         <span className="mr-1 text-gray-500">@</span>
                         <Input
@@ -180,7 +183,7 @@ export default function BasicInfoStep({
                             name="handle"
                             value={circleData.handle}
                             onChange={handleInputChange}
-                            placeholder={`community-handle`}
+                            placeholder={handlePlaceholder}
                         />
                     </div>
                     <p className="text-xs text-gray-500">
@@ -191,7 +194,7 @@ export default function BasicInfoStep({
 
                 <div className="flex items-center space-x-2">
                     <Switch id="isPublic" checked={circleData.isPublic} onCheckedChange={handleSwitchChange} />
-                    <Label htmlFor="isPublic">Public Community</Label>
+                    <Label htmlFor="isPublic">{`Public ${entityLabel}`}</Label>
                     <p className="text-xs text-gray-500">
                         {circleData.isPublic
                             ? `Anyone can follow this community without approval`
@@ -231,7 +234,7 @@ export default function BasicInfoStep({
                             Saving...
                         </>
                     ) : (
-                        `Create Community`
+                        <>Create {entityLabel}</>
                     )}
                 </Button>
             </div>

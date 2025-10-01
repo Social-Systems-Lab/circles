@@ -48,9 +48,10 @@ export type CircleWizardStepProps = {
 interface CircleWizardProps {
     onComplete?: (createdCircleId?: string, handle?: string) => void; // Modified to pass createdCircleId
     initialParentCircleId?: string;
+    initialCircleType?: CircleType;
 }
 
-export default function CircleWizard({ onComplete, initialParentCircleId }: CircleWizardProps) {
+export default function CircleWizard({ onComplete, initialParentCircleId, initialCircleType }: CircleWizardProps) {
     const [isOpen, setIsOpen] = useState(true);
     const [currentStepIndex, setCurrentStepIndex] = useState(0);
     const router = useRouter();
@@ -67,7 +68,7 @@ export default function CircleWizard({ onComplete, initialParentCircleId }: Circ
         picture: "/images/default-picture.png",
         images: [], // Initialize images as empty array
         parentCircleId: undefined, // Initialized as undefined, BasicInfoStep will set it
-        circleType: "circle", // Always "circle" now
+        circleType: initialCircleType || "circle", // Default based on prop
     });
 
     // Effect to reset state if key props change (indicating a new wizard session)
@@ -86,13 +87,13 @@ export default function CircleWizard({ onComplete, initialParentCircleId }: Circ
                 picture: "/images/default-picture.png",
                 images: [],
                 parentCircleId: initialParentCircleId, // Set initial parentCircleId
-                circleType: "circle",
+                circleType: initialCircleType || "circle",
                 _id: undefined,
                 pictureFile: undefined,
             });
             setCurrentStepIndex(0);
         }
-    }, [isOpen, initialParentCircleId]);
+    }, [isOpen, initialParentCircleId, initialCircleType]);
 
     // Define the steps for the wizard
     const steps = useMemo(() => {
@@ -117,7 +118,7 @@ export default function CircleWizard({ onComplete, initialParentCircleId }: Circ
 
     // Helper function to get step titles
     function getStepTitle(stepIndex: number) {
-        const entityType = "Community"; // Always "Community" now
+        const entityType = circleData.circleType === "project" ? "Project" : "Community";
         switch (stepIndex) {
             case 0:
                 return "Basic Information";
