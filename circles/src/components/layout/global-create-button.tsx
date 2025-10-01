@@ -58,14 +58,20 @@ export function GlobalCreateButton() {
     const [isCreateCommunityOpen, setCreateCommunityOpen] = useState(false);
     const [isCreateProjectOpen, setCreateProjectOpen] = useState(false);
 
-    const handleItemCreatedSuccess = (itemKey: CreatableItemKey, data?: { id?: string; circleHandle?: string }) => {
+    const handleItemCreatedSuccess = (
+        itemKey: CreatableItemKey,
+        payload?: string | { id?: string; circleHandle?: string },
+    ) => {
         toast({
             title: `${itemKey.charAt(0).toUpperCase() + itemKey.slice(1)} created successfully!`,
         });
         setSelectedItemTypeForCreation(null);
         setCreateCommunityOpen(false);
 
-        if (data?.id) {
+        const id = typeof payload === "string" ? payload : payload?.id;
+        const circleHandle = typeof payload === "string" ? payload : payload?.circleHandle;
+
+        if (id) {
             // Map itemKey to path segment
             const pathSegmentMap: Record<CreatableItemKey, string | null> = {
                 post: "post", // Or the correct path for posts if different
@@ -81,9 +87,9 @@ export function GlobalCreateButton() {
             const pathSegment = pathSegmentMap[itemKey];
             // For community and project, the ID is the handle itself; navigate directly to the circle
             if (itemKey === "community" || itemKey === "project") {
-                router.push(`/circles/${data?.circleHandle ?? data?.id}`);
-            } else if (pathSegment && data?.circleHandle) {
-                router.push(`/circles/${data.circleHandle}/${pathSegment}/${data.id}`);
+                router.push(`/circles/${circleHandle ?? id}`);
+            } else if (pathSegment && circleHandle) {
+                router.push(`/circles/${circleHandle}/${pathSegment}/${id}`);
             }
         }
     };

@@ -10,7 +10,7 @@ import { getUserPrivateAction } from "@/components/modules/home/actions";
 interface CreateProjectDialogProps {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
-    onSuccess: (circleId?: string) => void;
+    onSuccess: (data?: { id?: string; circleHandle?: string }) => void;
 }
 
 export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({ isOpen, onOpenChange, onSuccess }) => {
@@ -23,8 +23,8 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({ isOpen
     }, [isOpen]);
 
     const handleWizardComplete = async (createdCircleId?: string, handle?: string) => {
-        // Prefer handle for navigation; fallback to id if handle unavailable
-        onSuccess(handle || createdCircleId);
+        // Prefer handle for navigation; include id as well
+        onSuccess({ id: createdCircleId, circleHandle: handle || createdCircleId });
         onOpenChange(false);
         const userData = await getUserPrivateAction();
         setUser(userData);

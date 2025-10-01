@@ -13,7 +13,7 @@ import { getUserPrivateAction } from "@/components/modules/home/actions";
 interface CreateCommunityDialogProps {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
-    onSuccess: (data?: { id?: string; circleHandle?: string }) => void;
+    onSuccess: (circleId?: string) => void;
     // itemKey is no longer needed as this dialog is now specific to communities
 }
 
@@ -38,8 +38,7 @@ export const CreateCommunityDialog: React.FC<CreateCommunityDialogProps> = ({
     }, [isOpen]);
 
     const handleWizardComplete = async (createdCircleId?: string, handle?: string) => {
-        // Prefer handle for navigation; include id as well
-        onSuccess({ id: createdCircleId, circleHandle: handle || createdCircleId });
+        onSuccess(handle || createdCircleId);
         onOpenChange(false);
         let userData = await getUserPrivateAction();
         setUser(userData);
