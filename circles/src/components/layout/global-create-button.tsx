@@ -81,7 +81,7 @@ export function GlobalCreateButton() {
             const pathSegment = pathSegmentMap[itemKey];
             // For community and project, the ID is the handle itself; navigate directly to the circle
             if (itemKey === "community" || itemKey === "project") {
-                router.push(`/circles/${data.id}`);
+                router.push(`/circles/${data?.circleHandle ?? data?.id}`);
             } else if (pathSegment && data?.circleHandle) {
                 router.push(`/circles/${data.circleHandle}/${pathSegment}/${data.id}`);
             }
@@ -214,13 +214,13 @@ export function GlobalCreateButton() {
             <CreateCommunityDialog
                 isOpen={isCreateCommunityOpen}
                 onOpenChange={communityDialogOnOpenChange}
-                onSuccess={(id) => handleItemCreatedSuccess("community", { id })} // Pass id as an object
+                onSuccess={(data) => handleItemCreatedSuccess("community", data)}
                 // itemKey="community" // No longer needed by CreateCommunityDialog
             />
             <CreateProjectDialog
                 isOpen={isCreateProjectOpen}
                 onOpenChange={setCreateProjectOpen}
-                onSuccess={(id) => handleItemCreatedSuccess("project", { id })}
+                onSuccess={(data) => handleItemCreatedSuccess("project", data)}
             />
         </>
     );

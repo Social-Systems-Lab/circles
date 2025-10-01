@@ -22,8 +22,9 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({ isOpen
         }
     }, [isOpen]);
 
-    const handleWizardComplete = async (createdCircleId?: string) => {
-        onSuccess(createdCircleId);
+    const handleWizardComplete = async (createdCircleId?: string, handle?: string) => {
+        // Prefer handle for navigation; fallback to id if handle unavailable
+        onSuccess(handle || createdCircleId);
         onOpenChange(false);
         const userData = await getUserPrivateAction();
         setUser(userData);
