@@ -11,9 +11,10 @@ interface SdgListProps {
     onToggle: (sdg: SDG) => void;
     gridCols?: string;
     className?: string;
+    causeCounts?: Record<string, number>;
 }
 
-export const SdgList: React.FC<SdgListProps> = ({ sdgs, selectedSdgs, onToggle, gridCols, className }) => {
+export const SdgList: React.FC<SdgListProps> = ({ sdgs, selectedSdgs, onToggle, gridCols, className, causeCounts }) => {
     return (
         <ScrollArea className={cn("h-60", className)}>
             <ItemGrid
@@ -22,6 +23,7 @@ export const SdgList: React.FC<SdgListProps> = ({ sdgs, selectedSdgs, onToggle, 
                 onToggle={onToggle}
                 isCause={true}
                 gridCols={gridCols}
+                causeCounts={causeCounts}
             />
         </ScrollArea>
     );

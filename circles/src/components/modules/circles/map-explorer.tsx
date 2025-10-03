@@ -211,6 +211,16 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         return results;
     }, [allSearchResults, selectedCategory, selectedSdgs]);
 
+    const countsDatasetCircles = useMemo(() => {
+        // Use all results (no category filter); apply SDG filter to reflect current SDG context
+        let list: WithMetric<Circle>[] = hasSearched ? allSearchResults : allDiscoverableCircles;
+        if (selectedSdgs.length > 0) {
+            const sdgHandles = selectedSdgs.map((s) => s.handle);
+            list = list.filter((c) => c.causes?.some((cause) => sdgHandles.includes(cause)));
+        }
+        return list;
+    }, [hasSearched, allSearchResults, allDiscoverableCircles, selectedSdgs]);
+
     const categoryCounts = useMemo(() => {
         // Include events count from filteredEventsForMap
         const counts: { [key: string]: number } = {
@@ -219,13 +229,25 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             users: 0,
             events: filteredEventsForMap.length,
         };
-        filteredSearchResults?.forEach((result) => {
+        countsDatasetCircles?.forEach((result) => {
             if (result.circleType === "circle") counts.communities++;
             else if (result.circleType === "project") counts.projects++;
             else if (result.circleType === "user") counts.users++;
         });
         return counts;
-    }, [filteredSearchResults, filteredEventsForMap.length]);
+    }, [countsDatasetCircles, filteredEventsForMap.length]);
+
+    const sdgCounts = useMemo(() => {
+        // Compute per-SDG counts ignoring current SDG selections (default proposal)
+        const dataset: WithMetric<Circle>[] = hasSearched ? allSearchResults : allDiscoverableCircles;
+        const map: Record<string, number> = {};
+        dataset.forEach((c) => {
+            (c.causes || []).forEach((h) => {
+                map[h] = (map[h] || 0) + 1;
+            });
+        });
+        return map;
+    }, [hasSearched, allSearchResults, allDiscoverableCircles]);
 
     // Determine data source for the drawer list
     // Base circles used for map/list before mapping to Content
@@ -712,7 +734,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                         categoryCounts={categoryCounts}
                                         selectedCategory={selectedCategory}
                                         onSelectionChange={setSelectedCategory}
-                                        hasSearched={hasSearched}
+                                        hasSearched={true}
                                         displayLabelMap={{ users: "people" }}
                                     />
                                 )}
@@ -721,6 +743,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                     onSelectionChange={setSelectedSdgs}
                                     displayAs="popover"
                                     gridCols="grid-cols-3"
+                                    sdgCounts={sdgCounts}
                                     trigger={
                                         <Button
                                             variant="ghost"
@@ -1178,6 +1201,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                             onSelectionChange={setSelectedSdgs}
                                             displayAs="popover"
                                             gridCols="grid-cols-2"
+                                            sdgCounts={sdgCounts}
                                             trigger={
                                                 <Button
                                                     variant="outline"

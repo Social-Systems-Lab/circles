@@ -18,6 +18,7 @@ interface SdgPanelProps {
     className?: string;
     gridCols?: string;
     onClear?: () => void;
+    causeCounts?: Record<string, number>;
 }
 
 export const SdgPanel: React.FC<SdgPanelProps> = ({
@@ -29,6 +30,7 @@ export const SdgPanel: React.FC<SdgPanelProps> = ({
     className,
     gridCols,
     onClear,
+    causeCounts,
 }) => {
     return (
         <div className={cn("p-1", className)}>
@@ -42,7 +44,13 @@ export const SdgPanel: React.FC<SdgPanelProps> = ({
                     className="pl-8 text-xs"
                 />
             </div>
-            <SdgList sdgs={visibleSdgs} selectedSdgs={selectedSdgs} onToggle={onToggle} gridCols={gridCols} />
+            <SdgList
+                sdgs={visibleSdgs}
+                selectedSdgs={selectedSdgs}
+                onToggle={onToggle}
+                gridCols={gridCols}
+                causeCounts={causeCounts}
+            />
             {selectedSdgs.length > 0 && (
                 <div className="mt-2">
                     <Button variant="outline" size="sm" onClick={onClear} className="w-full">

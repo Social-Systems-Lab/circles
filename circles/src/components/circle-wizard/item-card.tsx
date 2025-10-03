@@ -15,9 +15,10 @@ interface ItemGridCardProps {
     isSelected: boolean;
     onToggle: (item: Item) => void;
     isCause?: boolean;
+    count?: number;
 }
 
-export const ItemGridCard = ({ item, isSelected, onToggle, isCause }: ItemGridCardProps) => {
+export const ItemGridCard = ({ item, isSelected, onToggle, isCause, count }: ItemGridCardProps) => {
     let itemc = isCause ? sdgs.find((x) => x.name === item.name) : skills.find((x) => x.name === item.name);
 
     return (
@@ -29,7 +30,12 @@ export const ItemGridCard = ({ item, isSelected, onToggle, isCause }: ItemGridCa
                 isCause ? "overflow-hidden" : "",
             )}
         >
-            <CardHeader className="relative flex items-center justify-center p-0">
+            <CardHeader className="relative flex items-center justify-center space-y-0 p-0">
+                {typeof count === "number" && count > 0 && (
+                    <div className="absolute left-2 top-2 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold shadow">
+                        {count}
+                    </div>
+                )}
                 {isCause ? (
                     <Image
                         src={itemc?.picture?.url ?? "/images/default-picture.png"}
@@ -104,9 +110,10 @@ interface ItemSelectionProps {
     onToggle: (item: Item) => void;
     isCause?: boolean;
     gridCols?: string;
+    causeCounts?: Record<string, number>;
 }
 
-export const ItemGrid = ({ items, selectedItems, onToggle, isCause, gridCols }: ItemSelectionProps) => {
+export const ItemGrid = ({ items, selectedItems, onToggle, isCause, gridCols, causeCounts }: ItemSelectionProps) => {
     return (
         <div className={cn("grid gap-4", gridCols || "grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6")}>
             {items.map((item) => (
@@ -116,6 +123,7 @@ export const ItemGrid = ({ items, selectedItems, onToggle, isCause, gridCols }: 
                     isSelected={selectedItems.some((i) => i.handle === item.handle)}
                     onToggle={onToggle}
                     isCause={isCause}
+                    count={causeCounts ? (causeCounts[item.handle] ?? 0) : undefined}
                 />
             ))}
         </div>

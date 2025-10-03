@@ -15,6 +15,7 @@ interface SdgFilterProps {
     trigger?: React.ReactNode;
     gridCols?: string;
     popoverContentClassName?: string;
+    sdgCounts?: Record<string, number>;
 }
 
 const SdgFilter: React.FC<SdgFilterProps> = ({
@@ -24,6 +25,7 @@ const SdgFilter: React.FC<SdgFilterProps> = ({
     trigger,
     gridCols,
     popoverContentClassName,
+    sdgCounts,
 }) => {
     const [search, setSearch] = useState("");
     const [isOpen, setIsOpen] = useState(false);
@@ -86,6 +88,7 @@ const SdgFilter: React.FC<SdgFilterProps> = ({
             setSearch={setSearch}
             gridCols={gridCols}
             onClear={handleClear}
+            causeCounts={sdgCounts}
         />
     );
 
