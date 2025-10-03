@@ -132,7 +132,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         return list;
     }, [eventsForMap, selectedSdgs, hasSearched, searchQuery]);
     // Resonance filter state (min similarity threshold) and current dataset range
-    const [minSimFilter, setMinSimFilter] = useState<number | undefined>(undefined);
+    const [simPercent, setSimPercent] = useState<number>(0);
     const [simRange, setSimRange] = useState<{ min: number; max: number }>({ min: 0, max: 1 });
 
     // Date range filter
@@ -261,22 +261,23 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     // Keep state in sync with dataset range
     useEffect(() => {
         setSimRange(simStats);
-        setMinSimFilter((prev) => {
-            if (prev === undefined) return simStats.min;
-            return Math.min(Math.max(prev, simStats.min), simStats.max);
-        });
     }, [simStats]);
+
+    const simThreshold = useMemo(() => {
+        const min = simRange.min ?? 0;
+        const max = simRange.max ?? 1;
+        const span = Math.max(0, max - min);
+        return span === 0 ? min : min + (simPercent / 100) * span;
+    }, [simRange.min, simRange.max, simPercent]);
 
     const drawerListData = useMemo(() => {
         let list = baseCircles;
-        if (minSimFilter !== undefined) {
-            list = list.filter((c) => c.metrics?.similarity === undefined || c.metrics!.similarity >= minSimFilter);
-        }
+        list = list.filter((c) => c.metrics?.similarity === undefined || c.metrics!.similarity >= simThreshold);
         if (dateRange?.from || dateRange?.to) {
             list = list.filter((c) => withinDateRange((c as any).createdAt));
         }
         return list;
-    }, [baseCircles, minSimFilter, dateRange, withinDateRange]);
+    }, [baseCircles, simThreshold, dateRange, withinDateRange]);
 
     // --- Callbacks ---
     const handleSwiped = useCallback((circle: Circle, direction: "left" | "right") => {
@@ -570,11 +571,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 return;
             }
             let circles = baseCircles;
-            if (minSimFilter !== undefined) {
-                circles = circles.filter(
-                    (c) => c.metrics?.similarity === undefined || c.metrics!.similarity >= minSimFilter,
-                );
-            }
+            circles = circles.filter(
+                (c) => c.metrics?.similarity === undefined || c.metrics!.similarity >= simThreshold,
+            );
             if (dateRange?.from || dateRange?.to) {
                 circles = circles.filter((c) => withinDateRange((c as any).createdAt));
             }
@@ -589,7 +588,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     }, [
         viewMode,
         baseCircles,
-        minSimFilter,
+        simThreshold,
         dateRange,
         withinDateRange,
         setDisplayedContent,
@@ -781,16 +780,16 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
 
                             <div className="w-[180px] sm:w-[200px]">
                                 <Slider
-                                    min={simRange.min}
-                                    max={simRange.max}
-                                    step={0.01}
-                                    value={[minSimFilter ?? simRange.min]}
-                                    onValueChange={(v) => setMinSimFilter(v[0])}
+                                    min={0}
+                                    max={100}
+                                    step={1}
+                                    value={[simPercent]}
+                                    onValueChange={(v) => setSimPercent(v[0])}
                                 />
                             </div>
 
                             <span className="rounded-full bg-gray-100/80 px-2 py-0.5 text-[10px] font-medium text-gray-700 ring-1 ring-black/5">
-                                {Math.round((minSimFilter ?? simRange.min) * 100)}%
+                                {Math.round(simPercent)}%
                             </span>
 
                             <div className="mx-2 h-4 w-px bg-gray-200/80" />
