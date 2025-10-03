@@ -607,6 +607,12 @@ export const modules: ModuleInfo[] = [
         readOnly: true, // Admins cannot disable this module
     },
     {
+        name: "Goals",
+        handle: "goals",
+        description:
+            "Create, track, and celebrate the specific, measurable achievements your circle or project is working towards. Goals provide clear targets with defined victory conditions, helping to focus effort and measure progress. Link tasks directly to goals to see how day-to-day activities contribute to the bigger picture.",
+    },
+    {
         name: "Announcements",
         handle: "feed",
         description:
@@ -634,12 +640,6 @@ export const modules: ModuleInfo[] = [
         name: "Discussions",
         handle: "discussions",
         description: "Start and participate in discussions within your circle.",
-    },
-    {
-        name: "Goals",
-        handle: "goals",
-        description:
-            "Create, track, and celebrate the specific, measurable achievements your circle or project is working towards. Goals provide clear targets with defined victory conditions, helping to focus effort and measure progress. Link tasks directly to goals to see how day-to-day activities contribute to the bigger picture.",
     },
     {
         name: "Tasks",
@@ -676,6 +676,7 @@ export const modules: ModuleInfo[] = [
 
 export const defaultUserModules = ["home", "feed", "followers", "communities", "settings"];
 export const defaultCircleModules = ["home", "feed", "followers", "discussions", "settings"];
+export const defaultProjectModules = ["home", "feed", "goals", "tasks", "followers", "discussions", "settings"];
 
 export const getDefaultModules = (circleType: CircleType): string[] => {
     switch (circleType) {
@@ -684,7 +685,7 @@ export const getDefaultModules = (circleType: CircleType): string[] => {
         case "circle":
             return defaultCircleModules;
         case "project":
-            return defaultCircleModules;
+            return defaultProjectModules;
         default:
             // Default to user modules if type is unknown or not specified
             return defaultUserModules;

@@ -65,7 +65,7 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
                 // Keep the user's own circle regardless of its type
                 if (circle._id === currentUserCircle._id) return true;
                 // For other circles, only include those of type 'circle'
-                return circle.circleType === "circle";
+                return circle.circleType === "circle" || circle.circleType === "project";
             });
 
         const featureToAuth = (features[itemType.moduleHandle as keyof typeof features] as any)?.[

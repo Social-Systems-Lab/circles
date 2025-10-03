@@ -176,7 +176,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const filterCirclesByCategory = useCallback((circles: WithMetric<Circle>[], category: string | null) => {
         // ... (no changes) ...
         if (!category) return circles;
-        const typeToFilter = category === "communities" ? "circle" : "user";
+        const typeToFilter = category === "communities" ? "circle" : category === "projects" ? "project" : "user";
         return circles.filter((c) => c.circleType === typeToFilter);
     }, []);
 
@@ -215,11 +215,13 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         // Include events count from filteredEventsForMap
         const counts: { [key: string]: number } = {
             communities: 0,
+            projects: 0,
             users: 0,
             events: filteredEventsForMap.length,
         };
         filteredSearchResults?.forEach((result) => {
             if (result.circleType === "circle") counts.communities++;
+            else if (result.circleType === "project") counts.projects++;
             else if (result.circleType === "user") counts.users++;
         });
         return counts;
@@ -323,7 +325,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 selectedCategory: null,
                 selectedSdgHandles: [],
                 items: [],
-                counts: { communities: 0, users: 0, events: filteredEventsForMap.length },
+                counts: { communities: 0, projects: 0, users: 0, events: filteredEventsForMap.length },
             });
             return;
         }
@@ -337,7 +339,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             selectedCategory: selectedCategory ?? null,
             selectedSdgHandles: sdgHandles,
             items: [],
-            counts: { communities: 0, users: 0, events: filteredEventsForMap.length },
+            counts: { communities: 0, projects: 0, users: 0, events: filteredEventsForMap.length },
         });
         if (!isMobile) {
             router.push("/explore?panel=search");
@@ -368,9 +370,10 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 const sdgHandlesLocal = selectedSdgs.map((s) => s.handle);
                 filtered = filtered.filter((c) => c.causes?.some((cause) => sdgHandlesLocal.includes(cause)));
             }
-            const counts = { communities: 0, users: 0, events: filteredEventsForMap.length };
+            const counts = { communities: 0, projects: 0, users: 0, events: filteredEventsForMap.length };
             filtered.forEach((r: any) => {
                 if (r.circleType === "circle") counts.communities++;
+                else if (r.circleType === "project") counts.projects++;
                 else if (r.circleType === "user") counts.users++;
             });
 
@@ -400,7 +403,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 selectedCategory: selectedCategory ?? null,
                 selectedSdgHandles: sdgHandles,
                 items: [],
-                counts: { communities: 0, users: 0, events: filteredEventsForMap.length },
+                counts: { communities: 0, projects: 0, users: 0, events: filteredEventsForMap.length },
             });
 
             setTriggerSnapIndex(SNAP_INDEX_PEEK); // Reset drawer on error
@@ -439,7 +442,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             selectedCategory: null,
             selectedSdgHandles: [],
             items: [],
-            counts: { communities: 0, users: 0, events: filteredEventsForMap.length },
+            counts: { communities: 0, projects: 0, users: 0, events: filteredEventsForMap.length },
         });
 
         console.log("Search cleared, resetting map to all discoverable circles:", resetMapData.length);
@@ -706,7 +709,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                             <div className="flex items-center">
                                 {!isMobile && (
                                     <CategoryFilter
-                                        categories={["communities", "users", "events"]}
+                                        categories={["communities", "projects", "users", "events"]}
                                         categoryCounts={categoryCounts}
                                         selectedCategory={selectedCategory}
                                         onSelectionChange={setSelectedCategory}

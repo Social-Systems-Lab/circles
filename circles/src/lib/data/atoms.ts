@@ -39,7 +39,7 @@ export type SidePanelSearchState = {
     selectedCategory?: string | null;
     selectedSdgHandles?: string[];
     items: (Circle | MemberDisplay)[];
-    counts?: { communities: number; users: number; events: number };
+    counts?: { communities: number; projects: number; users: number; events: number };
 };
 
 export const sidePanelModeAtom = atom<SidePanelMode>("none");
