@@ -4,7 +4,7 @@ import React from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"; // Use ToggleGroup
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge"; // Import Badge for count display
-import { Users, User, Calendar } from "lucide-react";
+import { Users, User, Calendar, Hammer } from "lucide-react";
 
 interface CategoryFilterProps {
     categories: string[]; // All available categories (e.g., ['circles', 'projects', 'users'])
@@ -27,6 +27,7 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
         communities: <Users className="h-4 w-4" />,
         users: <User className="h-4 w-4" />,
         events: <Calendar className="h-4 w-4" />,
+        projects: <Hammer className="h-4 w-4" />,
     };
 
     // Handle ToggleGroup value change
