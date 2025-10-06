@@ -42,7 +42,11 @@ type GetGoalsActionResult = {
  * @param circleHandle The handle of the circle
  * @returns Array of goals
  */
-export async function getGoalsAction(circleHandle: string): Promise<GetGoalsActionResult> {
+export async function getGoalsAction(
+    circleHandle: string,
+    includeCreated?: boolean,
+    includeAssigned?: boolean,
+): Promise<GetGoalsActionResult> {
     const defaultResult: GetGoalsActionResult = {
         goals: [],
     };
@@ -69,7 +73,7 @@ export async function getGoalsAction(circleHandle: string): Promise<GetGoalsActi
         }
 
         // Get all displayable goals
-        const allGoals = await getGoalsByCircleId(circle._id as string, userDid);
+        const allGoals = await getGoalsByCircleId(circle._id as string, userDid, includeCreated, includeAssigned);
 
         // Removed ranking logic
 

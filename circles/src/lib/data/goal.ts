@@ -42,13 +42,36 @@ export const SAFE_TASK_PROJECTION = {
  * @param userDid The DID of the user requesting the goals (for visibility checks)
  * @returns Array of goals the user is allowed to see
  */
-export const getGoalsByCircleId = async (circleId: string, userDid: string): Promise<GoalDisplay[]> => {
+export const getGoalsByCircleId = async (
+    circleId: string,
+    userDid: string,
+    includeCreated?: boolean,
+    includeAssigned?: boolean,
+): Promise<GoalDisplay[]> => {
     // Renamed function, updated return type
     try {
+        const circle = await Circles.findOne({ _id: new ObjectId(circleId) });
+        const matchQuery: any = { circleId };
+
+        if (circle && circle.circleType === "user" && circle.did === userDid) {
+            const userQueries = [];
+            if (includeCreated) {
+                userQueries.push({ createdBy: userDid });
+            }
+            if (includeAssigned) {
+                userQueries.push({ followers: userDid });
+            }
+
+            if (userQueries.length > 0) {
+                matchQuery.$or = [{ circleId }, ...userQueries];
+                delete matchQuery.circleId;
+            }
+        }
+
         const goals = (await Goals.aggregate([
             // Changed Issues to Goals, variable issues to goals
             // 1) Match on circleId first
-            { $match: { circleId } },
+            { $match: matchQuery },
 
             // 2) Lookup author details
             {
@@ -83,6 +106,27 @@ export const getGoalsByCircleId = async (circleId: string, userDid: string): Pro
             // We expect exactly one author, but if no match was found, it just won't unwind
             { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: true } },
 
+            // 3) Lookup circle details
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { cId: { $toObjectId: "$circleId" } },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ["$_id", "$$cId"] } } },
+                        {
+                            $project: {
+                                _id: { $toString: "$_id" },
+                                name: 1,
+                                handle: 1,
+                                picture: 1,
+                            },
+                        },
+                    ],
+                    as: "circleDetails",
+                },
+            },
+            { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
+
             // 4) Final projection
             {
                 $project: {
@@ -91,6 +135,7 @@ export const getGoalsByCircleId = async (circleId: string, userDid: string): Pro
                     // Convert the Goal _id to string
                     _id: { $toString: "$_id" },
                     author: "$authorDetails",
+                    circle: "$circleDetails",
                 },
             },
 

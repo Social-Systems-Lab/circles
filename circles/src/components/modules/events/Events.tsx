@@ -35,11 +35,11 @@ export default async function EventsModule({ circle }: Props) {
 
     const canCreateEvents = await isAuthorized(userDid, circle._id!.toString(), features.events.create);
 
-    const { events } = await getEventsAction(circle.handle!, undefined);
+    const { events } = await getEventsAction(circle.handle!, undefined, true, true);
 
     return (
         <div className="space-y-4 p-2 md:p-4">
-            <EventsTabs circleHandle={circle.handle!} events={events} canCreate={canCreateEvents} />
+            <EventsTabs circle={circle} events={events} canCreate={canCreateEvents} />
         </div>
     );
 }

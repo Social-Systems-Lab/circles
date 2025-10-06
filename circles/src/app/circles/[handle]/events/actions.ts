@@ -120,6 +120,8 @@ function parseDate(val: string): Date {
 export async function getEventsAction(
     circleHandle: string,
     params?: { from?: string; to?: string },
+    includeCreated?: boolean,
+    includeParticipating?: boolean,
 ): Promise<GetEventsActionResult> {
     const defaultResult: GetEventsActionResult = { events: [] };
 
@@ -141,7 +143,13 @@ export async function getEventsAction(
                   }
                 : undefined;
 
-        const events = await getEventsByCircleId(circle._id!.toString(), userDid, range);
+        const events = await getEventsByCircleId(
+            circle._id!.toString(),
+            userDid,
+            range,
+            includeCreated,
+            includeParticipating,
+        );
         return { events };
     } catch (error) {
         console.error("Error in getEventsAction:", error);

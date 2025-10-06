@@ -67,6 +67,10 @@ import { userAtom, contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib
 import Link from "next/link";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // For assignee tooltip
 import { CreateIssueDialog } from "@/components/global-create/create-issue-dialog"; // Import CreateIssueDialog
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { getIssuesAction } from "@/app/circles/[handle]/issues/actions";
+import { CirclePicture } from "@/components/modules/circles/circle-picture";
 
 // Define Permissions type based on what IssuesModule passes
 type IssuePermissions = {
@@ -126,8 +130,22 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [isCreateIssueDialogOpen, setIsCreateIssueDialogOpen] = useState(false); // State for Create Issue Dialog
+    const [includeCreated, setIncludeCreated] = useState(true);
+    const [includeAssigned, setIncludeAssigned] = useState(true);
+    const [filteredIssues, setFilteredIssues] = useState(issues);
     // Add assignee filter state if needed later
     // const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
+
+    useEffect(() => {
+        const fetchIssues = async () => {
+            if (circle.circleType === "user" && user?.did === circle.did) {
+                const data = await getIssuesAction(circle.handle!, includeCreated, includeAssigned);
+                setFilteredIssues(data);
+            }
+        };
+
+        fetchIssues();
+    }, [includeCreated, includeAssigned, circle, user]);
 
     const columns = React.useMemo<ColumnDef<IssueDisplay>[]>(
         () => [
@@ -148,6 +166,11 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
                             className="font-medium text-blue-600 hover:underline"
                         >
                             {info.getValue() as string}
+                            {issue.circle && issue.circle._id !== circle._id && (
+                                <div className="ml-2">
+                                    <CirclePicture circle={issue.circle} size="24px" />
+                                </div>
+                            )}
                         </Link>
                     );
                 },
@@ -380,6 +403,27 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
                         {/* Placeholder for Assignee Filter */}
                         {/* <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>...</Select> */}
                     </div>
+
+                    {circle.circleType === "user" && user?.did === circle.did && (
+                        <div className="flex items-center gap-4 py-2">
+                            <div className="flex items-center gap-2">
+                                <Checkbox
+                                    id="includeCreated"
+                                    checked={includeCreated}
+                                    onCheckedChange={(checked) => setIncludeCreated(Boolean(checked))}
+                                />
+                                <Label htmlFor="includeCreated">Show created</Label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Checkbox
+                                    id="includeAssigned"
+                                    checked={includeAssigned}
+                                    onCheckedChange={(checked) => setIncludeAssigned(Boolean(checked))}
+                                />
+                                <Label htmlFor="includeAssigned">Show assigned</Label>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="mt-3 overflow-hidden rounded-[15px] shadow-lg">
                         <Table className="overflow-hidden">

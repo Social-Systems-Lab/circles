@@ -72,7 +72,10 @@ import TaskPrioritizationModal from "./task-prioritization-modal"; // Import the
 import { CreateTaskDialog } from "@/components/global-create/create-task-dialog"; // Import CreateTaskDialog
 import { PiRanking, PiRankingBold, PiUser, PiUsersThree } from "react-icons/pi";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
-
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { getTasksAction } from "@/app/circles/[handle]/tasks/actions";
+import { CirclePicture } from "@/components/modules/circles/circle-picture";
 interface TasksListProps {
     tasksData: {
         tasks: TaskDisplay[];
@@ -160,6 +163,20 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
     const [showRankModal, setShowRankModal] = useState(false); // State for modal
     const [isCreateTaskDialogOpen, setIsCreateTaskDialogOpen] = useState(false); // State for Create Task Dialog
     const isMobile = useIsMobile();
+    const [includeCreated, setIncludeCreated] = useState(true);
+    const [includeAssigned, setIncludeAssigned] = useState(true);
+    const [filteredTasks, setFilteredTasks] = useState(tasksData.tasks);
+
+    useEffect(() => {
+        const fetchTasks = async () => {
+            if (circle.circleType === "user" && user?.did === circle.did) {
+                const data = await getTasksAction(circle.handle!, includeCreated, includeAssigned);
+                setFilteredTasks(data.tasks);
+            }
+        };
+
+        fetchTasks();
+    }, [includeCreated, includeAssigned, circle, user]);
 
     const openAuthor = useCallback(
         (author: Circle) => {
@@ -301,6 +318,11 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
                             className="flex items-center font-medium text-blue-600 hover:underline" // Added flex
                         >
                             {info.getValue() as string}
+                            {task.circle && task.circle._id !== circle._id && (
+                                <div className="ml-2">
+                                    <CirclePicture circle={task.circle} size="24px" />
+                                </div>
+                            )}
                         </Link>
                     );
                 },
@@ -591,6 +613,27 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
                         {/* Placeholder for Assignee Filter */}
                         {/* <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>...</Select> */}
                     </div>
+
+                    {circle.circleType === "user" && user?.did === circle.did && (
+                        <div className="flex items-center gap-4 py-2">
+                            <div className="flex items-center gap-2">
+                                <Checkbox
+                                    id="includeCreated"
+                                    checked={includeCreated}
+                                    onCheckedChange={(checked) => setIncludeCreated(Boolean(checked))}
+                                />
+                                <Label htmlFor="includeCreated">Show created</Label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Checkbox
+                                    id="includeAssigned"
+                                    checked={includeAssigned}
+                                    onCheckedChange={(checked) => setIncludeAssigned(Boolean(checked))}
+                                />
+                                <Label htmlFor="includeAssigned">Show assigned</Label>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="mt-3 overflow-hidden rounded-[15px] shadow-lg">
                         <Table className="overflow-hidden">

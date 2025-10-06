@@ -46,7 +46,11 @@ import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
  * @param circleHandle The handle of the circle
  * @returns Array of issues
  */
-export async function getIssuesAction(circleHandle: string): Promise<IssueDisplay[]> {
+export async function getIssuesAction(
+    circleHandle: string,
+    includeCreated?: boolean,
+    includeAssigned?: boolean,
+): Promise<IssueDisplay[]> {
     try {
         // Get the current user
         const userDid = await getAuthenticatedUserDid();
@@ -69,7 +73,7 @@ export async function getIssuesAction(circleHandle: string): Promise<IssueDispla
         }
 
         // Get issues from the database (Placeholder data function)
-        const issues = await getIssuesByCircleId(circle._id as string, userDid);
+        const issues = await getIssuesByCircleId(circle._id as string, userDid, includeCreated, includeAssigned);
         return issues;
     } catch (error) {
         console.error("Error getting issues:", error);

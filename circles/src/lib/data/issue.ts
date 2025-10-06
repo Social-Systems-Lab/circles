@@ -32,11 +32,34 @@ export const SAFE_ISSUE_PROJECTION = {
  * @param userDid The DID of the user requesting the issues (for visibility checks)
  * @returns Array of issues the user is allowed to see
  */
-export const getIssuesByCircleId = async (circleId: string, userDid: string): Promise<IssueDisplay[]> => {
+export const getIssuesByCircleId = async (
+    circleId: string,
+    userDid: string,
+    includeCreated?: boolean,
+    includeAssigned?: boolean,
+): Promise<IssueDisplay[]> => {
     try {
+        const circle = await Circles.findOne({ _id: new ObjectId(circleId) });
+        const matchQuery: any = { circleId };
+
+        if (circle && circle.circleType === "user" && circle.did === userDid) {
+            const userQueries = [];
+            if (includeCreated) {
+                userQueries.push({ createdBy: userDid });
+            }
+            if (includeAssigned) {
+                userQueries.push({ assignedTo: userDid });
+            }
+
+            if (userQueries.length > 0) {
+                matchQuery.$or = [{ circleId }, ...userQueries];
+                delete matchQuery.circleId;
+            }
+        }
+
         const issues = (await Issues.aggregate([
             // 1) Match on circleId first
-            { $match: { circleId } },
+            { $match: matchQuery },
 
             // 2) Lookup author details
             {

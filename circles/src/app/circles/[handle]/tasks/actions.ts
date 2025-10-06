@@ -62,7 +62,11 @@ type GetTasksActionResult = {
  * @param circleHandle The handle of the circle
  * @returns Array of tasks
  */
-export async function getTasksAction(circleHandle: string): Promise<GetTasksActionResult> {
+export async function getTasksAction(
+    circleHandle: string,
+    includeCreated?: boolean,
+    includeAssigned?: boolean,
+): Promise<GetTasksActionResult> {
     // Updated return type
     const defaultResult: GetTasksActionResult = {
         tasks: [],
@@ -95,7 +99,7 @@ export async function getTasksAction(circleHandle: string): Promise<GetTasksActi
         }
 
         // 1. Get all displayable tasks (might include non-rankable ones initially)
-        const allTasks = await getTasksByCircleId(circle._id as string, userDid);
+        const allTasks = await getTasksByCircleId(circle._id as string, userDid, includeCreated, includeAssigned);
 
         // 2. Get aggregated ranking and the set of *rankable* task IDs
         const { rankMap: aggregatedRankMap, totalRankers, activeTaskIds } = await getTaskRanking(circleId);

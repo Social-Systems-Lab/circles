@@ -1,20 +1,25 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import CalendarView from "./calendar";
 import EventTimeline from "./event-timeline";
-import { EventDisplay } from "@/models/models";
+import { EventDisplay, Circle } from "@/models/models";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { getEventsAction } from "@/app/circles/[handle]/events/actions";
+import { useAtom } from "jotai";
+import { userAtom } from "@/lib/data/atoms";
 
 type Props = {
-    circleHandle: string;
+    circle: Circle;
     events: EventDisplay[];
     canCreate: boolean;
 };
 
-export default function EventsTabs({ circleHandle, events, canCreate }: Props) {
+export default function EventsTabs({ circle, events, canCreate }: Props) {
     const searchParams = useSearchParams();
     const router = useRouter();
     const pathname = usePathname();
@@ -25,6 +30,21 @@ export default function EventsTabs({ circleHandle, events, canCreate }: Props) {
     }, [searchParams]);
 
     const [tab, setTab] = useState<"calendar" | "timeline">(initialTab as "calendar" | "timeline");
+    const [user] = useAtom(userAtom);
+    const [includeCreated, setIncludeCreated] = useState(true);
+    const [includeParticipating, setIncludeParticipating] = useState(true);
+    const [filteredEvents, setFilteredEvents] = useState(events);
+
+    useEffect(() => {
+        const fetchEvents = async () => {
+            if (circle.circleType === "user" && user?.did === circle.did) {
+                const data = await getEventsAction(circle.handle!, undefined, includeCreated, includeParticipating);
+                setFilteredEvents(data.events);
+            }
+        };
+
+        fetchEvents();
+    }, [includeCreated, includeParticipating, circle, user]);
 
     const onTabChange = (value: string) => {
         const newTab = (value === "timeline" ? "timeline" : "calendar") as "calendar" | "timeline";
@@ -63,7 +83,7 @@ export default function EventsTabs({ circleHandle, events, canCreate }: Props) {
 
                             {canCreate && (
                                 <Link
-                                    href={`/circles/${circleHandle}/events/create`}
+                                    href={`/circles/${circle.handle}/events/create`}
                                     className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                                 >
                                     Create Event
@@ -71,15 +91,35 @@ export default function EventsTabs({ circleHandle, events, canCreate }: Props) {
                             )}
                         </div>
                     </div>
+                    {circle.circleType === "user" && user?.did === circle.did && (
+                        <div className="flex items-center gap-4 py-2">
+                            <div className="flex items-center gap-2">
+                                <Checkbox
+                                    id="includeCreated"
+                                    checked={includeCreated}
+                                    onCheckedChange={(checked) => setIncludeCreated(Boolean(checked))}
+                                />
+                                <Label htmlFor="includeCreated">Show created</Label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Checkbox
+                                    id="includeParticipating"
+                                    checked={includeParticipating}
+                                    onCheckedChange={(checked) => setIncludeParticipating(Boolean(checked))}
+                                />
+                                <Label htmlFor="includeParticipating">Show participating</Label>
+                            </div>
+                        </div>
+                    )}
 
                     <TabsContent value="timeline" className="mt-0">
-                        <EventTimeline circleHandle={circleHandle} events={events} />
+                        <EventTimeline circleHandle={circle.handle!} events={filteredEvents} />
                     </TabsContent>
                 </Tabs>
             </div>
             <Tabs value={tab} onValueChange={onTabChange} className="w-full">
                 <TabsContent value="calendar" className="mt-0">
-                    <CalendarView circleHandle={circleHandle} events={events} />
+                    <CalendarView circleHandle={circle.handle!} events={filteredEvents} />
                 </TabsContent>
             </Tabs>
         </div>

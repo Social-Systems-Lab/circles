@@ -19,7 +19,15 @@ export default async function ProjectsModule(props: PageProps) {
     let userDid = await getAuthenticatedUserDid();
 
     // Always get project type circles for this module
-    let projects = await getCirclesWithMetrics(userDid, circle?._id, searchParams?.sort as SortingOptions, "project");
+    let projects = await getCirclesWithMetrics(
+        userDid,
+        circle?._id,
+        searchParams?.sort as SortingOptions,
+        "project",
+        undefined,
+        true,
+        true,
+    );
 
     return (
         <ContentDisplayWrapper content={projects}>

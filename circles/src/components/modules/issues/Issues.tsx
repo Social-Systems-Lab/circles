@@ -31,7 +31,7 @@ export default async function IssuesModule({ circle }: PageProps) {
     }
 
     // Get issues for this circle
-    const issues: IssueDisplay[] = await getIssuesAction(circle.handle as string);
+    const issues: IssueDisplay[] = await getIssuesAction(circle.handle as string, true, true);
 
     // Perform permission checks for different actions within the issues module
     const canModerateIssue = await isAuthorized(userDid, circle._id as string, features.issues.moderate);

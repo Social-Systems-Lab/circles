@@ -122,6 +122,9 @@ export const getCircles = async (
     parentCircleId?: string,
     circleType?: CircleType,
     sdgHandles?: string[],
+    userDid?: string,
+    includeCreated?: boolean,
+    includeMember?: boolean,
 ): Promise<Circle[]> => {
     let query: any = { circleType: circleType ?? "circle" };
     if (parentCircleId) {
@@ -129,6 +132,28 @@ export const getCircles = async (
     }
     if (sdgHandles && sdgHandles.length > 0) {
         query.causes = { $in: sdgHandles };
+    }
+
+    if (userDid && circleType === "circle") {
+        const userCircle = await Circles.findOne({ did: userDid, circleType: "user" });
+        if (userCircle && userCircle._id.toString() === parentCircleId) {
+            const userQueries = [];
+            if (includeCreated) {
+                userQueries.push({ createdBy: userDid });
+            }
+            if (includeMember) {
+                const memberships = await Members.find({ userDid }).toArray();
+                const circleIds = memberships.map((m) => new ObjectId(m.circleId));
+                userQueries.push({ _id: { $in: circleIds } });
+            }
+
+            if (userQueries.length > 0) {
+                query = {
+                    $and: [{ circleType: "circle" }, { $or: [{ parentCircleId }, ...userQueries] }],
+                };
+                delete query.$and[0].parentCircleId;
+            }
+        }
     }
 
     let circles = await Circles.find(query, { projection: SAFE_CIRCLE_PROJECTION }).toArray();
@@ -154,8 +179,17 @@ export const getCirclesWithMetrics = async (
     sort?: SortingOptions,
     circleType?: CircleType,
     sdgHandles?: string[],
+    includeCreated?: boolean,
+    includeMember?: boolean,
 ): Promise<WithMetric<Circle>[]> => {
-    let circles = (await getCircles(parentCircleId, circleType, sdgHandles)) as WithMetric<Circle>[];
+    let circles = (await getCircles(
+        parentCircleId,
+        circleType,
+        sdgHandles,
+        userDid,
+        includeCreated,
+        includeMember,
+    )) as WithMetric<Circle>[];
 
     console.log("🔍 [DB] getCirclesWithMetrics query:", { userDid, parentCircleId, sort, circleType });
     const currentDate = new Date();

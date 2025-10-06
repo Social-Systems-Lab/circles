@@ -23,6 +23,8 @@ export default async function CirclesModule(props: PageProps) {
         searchParams?.sort as SortingOptions,
         "circle",
         sdgHandles,
+        true,
+        true,
     );
 
     return (

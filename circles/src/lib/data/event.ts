@@ -60,17 +60,38 @@ export const getEventsByCircleId = async (
     circleId: string,
     userDid: string,
     range?: Range,
+    includeCreated?: boolean,
+    includeParticipating?: boolean,
 ): Promise<EventDisplay[]> => {
     try {
         const dateMatch = buildRangeMatch(range);
+        const circle = await Circles.findOne({ _id: new ObjectId(circleId) });
+        const matchQuery: any = {
+            circleId,
+            ...(dateMatch as Record<string, unknown>),
+        };
+
+        if (circle && circle.circleType === "user" && circle.did === userDid) {
+            const userQueries = [];
+            if (includeCreated) {
+                userQueries.push({ createdBy: userDid });
+            }
+            if (includeParticipating) {
+                const rsvps = await EventRsvps.find({ userDid, status: "going" }).toArray();
+                const eventIds = rsvps.map((rsvp) => new ObjectId(rsvp.eventId));
+                userQueries.push({ _id: { $in: eventIds } });
+            }
+
+            if (userQueries.length > 0) {
+                matchQuery.$or = [{ circleId }, ...userQueries];
+                delete matchQuery.circleId;
+            }
+        }
 
         const events = (await Events.aggregate([
             // 1) Match circle and optional date overlap
             {
-                $match: {
-                    circleId,
-                    ...(dateMatch as Record<string, unknown>),
-                },
+                $match: matchQuery,
             },
 
             // 2) Lookup author details

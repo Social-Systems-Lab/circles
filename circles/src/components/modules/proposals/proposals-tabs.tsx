@@ -12,6 +12,8 @@ import { userAtom } from "@/lib/data/atoms";
 import { features } from "@/lib/data/constants";
 import { isAuthorized } from "@/lib/auth/client-auth";
 import ProposalsList from "./proposals-list"; // We'll integrate this properly later
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 interface ProposalsTabsProps {
     circle: Circle;
@@ -28,12 +30,27 @@ const ProposalsTabs: React.FC<ProposalsTabsProps> = ({ circle, initialProposals 
     // Initialize allProposals with initialProposals prop
     const [allProposals, setAllProposals] = useState<ProposalDisplay[]>(initialProposals || []);
     const [activeTab, setActiveTab] = useState<TabValue>("submitted");
+    const [includeCreated, setIncludeCreated] = useState(true);
+    const [includeVoted, setIncludeVoted] = useState(true);
 
     // useEffect to update proposals if initialProposals prop changes
     useEffect(() => {
-        setAllProposals(initialProposals || []);
-        setIsLoading(false); // Ensure loading is false when props are received/updated
-    }, [initialProposals]);
+        const fetchProposals = async () => {
+            if (circle.circleType === "user" && user?.did === circle.did) {
+                setIsLoading(true);
+                const result = await getProposalsByCircleIdAction(circle.handle!, includeCreated, includeVoted);
+                if (result.success && result.proposals) {
+                    setAllProposals(result.proposals);
+                }
+                setIsLoading(false);
+            } else {
+                setAllProposals(initialProposals || []);
+                setIsLoading(false); // Ensure loading is false when props are received/updated
+            }
+        };
+
+        fetchProposals();
+    }, [initialProposals, includeCreated, includeVoted, circle, user]);
 
     const filteredProposals = useMemo(() => {
         // No need to filter by activeTab here, as ProposalsList will receive the full list for that tab
@@ -67,6 +84,27 @@ const ProposalsTabs: React.FC<ProposalsTabsProps> = ({ circle, initialProposals 
                             </TabsTrigger>
                         </TabsList>
                     </div>
+
+                    {circle.circleType === "user" && user?.did === circle.did && (
+                        <div className="flex items-center gap-4 py-2">
+                            <div className="flex items-center gap-2">
+                                <Checkbox
+                                    id="includeCreated"
+                                    checked={includeCreated}
+                                    onCheckedChange={(checked) => setIncludeCreated(Boolean(checked))}
+                                />
+                                <Label htmlFor="includeCreated">Show created</Label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Checkbox
+                                    id="includeVoted"
+                                    checked={includeVoted}
+                                    onCheckedChange={(checked) => setIncludeVoted(Boolean(checked))}
+                                />
+                                <Label htmlFor="includeVoted">Show voted on</Label>
+                            </div>
+                        </div>
+                    )}
 
                     {isLoading ? (
                         <div className="flex h-64 items-center justify-center">

@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Circle, ContentPreviewData, WithMetric, Cause as SDG } from "@/models/models"; // Removed Page import
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { Plus, ChevronDown, Globe } from "lucide-react";
 import Image from "next/image";
 import { useAtom } from "jotai";
@@ -56,6 +58,13 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
     const [sdgFilterOpen, setSdgFilterOpen] = useState(false);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [sdgSearch, setSdgSearch] = useState("");
+    const [includeCreated, setIncludeCreated] = useState(true);
+    const [includeMember, setIncludeMember] = useState(true);
+
+    useEffect(() => {
+        updateQueryParam(router, "includeCreated", includeCreated.toString());
+        updateQueryParam(router, "includeMember", includeMember.toString());
+    }, [includeCreated, includeMember, router]);
 
     const visibleSdgs = useMemo(() => {
         if (sdgSearch) {
@@ -175,6 +184,26 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
                             selectedSdgs={selectedSdgs}
                         />
                     </div>
+                    {circle.circleType === "user" && user?.did === circle.did && (
+                        <div className="flex items-center gap-4 py-2">
+                            <div className="flex items-center gap-2">
+                                <Checkbox
+                                    id="includeCreated"
+                                    checked={includeCreated}
+                                    onCheckedChange={(checked) => setIncludeCreated(Boolean(checked))}
+                                />
+                                <Label htmlFor="includeCreated">Show created</Label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Checkbox
+                                    id="includeMember"
+                                    checked={includeMember}
+                                    onCheckedChange={(checked) => setIncludeMember(Boolean(checked))}
+                                />
+                                <Label htmlFor="includeMember">Show member</Label>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {filteredCircles.length === 0 && activeTab === "following" && (

@@ -38,13 +38,36 @@ export const SAFE_TASK_PROJECTION = {
  * @param userDid The DID of the user requesting the tasks (for visibility checks)
  * @returns Array of tasks the user is allowed to see
  */
-export const getTasksByCircleId = async (circleId: string, userDid: string): Promise<TaskDisplay[]> => {
+export const getTasksByCircleId = async (
+    circleId: string,
+    userDid: string,
+    includeCreated?: boolean,
+    includeAssigned?: boolean,
+): Promise<TaskDisplay[]> => {
     // Renamed function, updated return type
     try {
+        const circle = await Circles.findOne({ _id: new ObjectId(circleId) });
+        const matchQuery: any = { circleId };
+
+        if (circle && circle.circleType === "user" && circle.did === userDid) {
+            const userQueries = [];
+            if (includeCreated) {
+                userQueries.push({ createdBy: userDid });
+            }
+            if (includeAssigned) {
+                userQueries.push({ assignedTo: userDid });
+            }
+
+            if (userQueries.length > 0) {
+                matchQuery.$or = [{ circleId }, ...userQueries];
+                delete matchQuery.circleId;
+            }
+        }
+
         const tasks = (await Tasks.aggregate([
             // Changed Issues to Tasks, variable issues to tasks
             // 1) Match on circleId first
-            { $match: { circleId } },
+            { $match: matchQuery },
 
             // 2) Lookup author details
             {

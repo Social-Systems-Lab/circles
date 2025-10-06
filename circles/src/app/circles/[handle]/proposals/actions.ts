@@ -54,6 +54,8 @@ import { createGoal, getGoalById } from "@/lib/data/goal"; // Import createGoal 
  */
 export async function getProposalsByCircleIdAction(
     circleHandle: string,
+    includeCreated?: boolean,
+    includeVoted?: boolean,
 ): Promise<{ success: boolean; proposals?: ProposalDisplay[]; message?: string }> {
     try {
         const userDid = await getAuthenticatedUserDid();
@@ -72,7 +74,12 @@ export async function getProposalsByCircleIdAction(
         //     return { success: false, message: "Not authorized to view proposals for this circle." };
         // }
 
-        const proposals = await getProposalsByCircleId(circle._id.toString(), userDid || undefined);
+        const proposals = await getProposalsByCircleId(
+            circle._id.toString(),
+            userDid || undefined,
+            includeCreated,
+            includeVoted,
+        );
         return { success: true, proposals };
     } catch (error) {
         console.error("Error in getProposalsByCircleIdAction:", error);

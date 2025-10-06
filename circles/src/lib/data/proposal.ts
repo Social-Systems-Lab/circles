@@ -45,11 +45,35 @@ export const SAFE_PROPOSAL_PROJECTION = {
  * @param userDid Optional user DID for filtering by visibility
  * @returns Array of proposals
  */
-export const getProposalsByCircleId = async (circleId: string, userDid?: string): Promise<ProposalDisplay[]> => {
+export const getProposalsByCircleId = async (
+    circleId: string,
+    userDid?: string,
+    includeCreated?: boolean,
+    includeVoted?: boolean,
+): Promise<ProposalDisplay[]> => {
     try {
+        const circle = await Circles.findOne({ _id: new ObjectId(circleId) });
+        const matchQuery: any = { circleId };
+
+        if (circle && circle.circleType === "user" && userDid && circle.did === userDid) {
+            const userQueries = [];
+            if (includeCreated) {
+                userQueries.push({ createdBy: userDid });
+            }
+            if (includeVoted) {
+                const reactions = await Reactions.find({ userDid, contentType: "proposal" }).toArray();
+                const proposalIds = reactions.map((r) => new ObjectId(r.contentId));
+                userQueries.push({ _id: { $in: proposalIds } });
+            }
+
+            if (userQueries.length > 0) {
+                matchQuery.$or = [{ circleId }, ...userQueries];
+                delete matchQuery.circleId;
+            }
+        }
         // Get proposals without user group filtering initially
         const proposals = (await Proposals.aggregate([
-            { $match: { circleId } },
+            { $match: matchQuery },
 
             // Lookup for author details
             {

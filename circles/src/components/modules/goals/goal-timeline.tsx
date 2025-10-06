@@ -6,6 +6,9 @@ import { GoalDisplay, Circle, GoalPermissions, GoalStage } from "@/models/models
 import { getGoalsAction, getCompletedGoalsAction } from "@/app/circles/[handle]/goals/actions"; // Added getCompletedGoalsAction
 import { Loader2, CalendarIcon, Plus, Clock, Target } from "lucide-react"; // Added Target icon
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { getAuthenticatedUserDidAction } from "@/lib/actions/auth";
 import Image from "next/image";
 import Link from "next/link";
 import { format } from "date-fns";
@@ -13,6 +16,9 @@ import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime"; // Correct import path
 import { Badge } from "@/components/ui/badge";
+import { CirclePicture } from "@/components/modules/circles/circle-picture";
+import { useAtom } from "jotai";
+import { contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import CreateGoalDialog from "@/components/global-create/create-goal-dialog"; // Import CreateGoalDialog
@@ -35,6 +41,18 @@ interface GoalCardProps {
 
 const GoalCard: React.FC<GoalCardProps> = ({ goal, circleHandle, canCreateTask, tasksModuleEnabled, router }) => {
     const isReview = goal.stage === "review";
+    const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
+    const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+
+    const handleCircleClick = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setContentPreview((x) =>
+            x?.content === goal.circle && sidePanelContentVisible === "content"
+                ? undefined
+                : { type: "circle", content: goal.circle! },
+        );
+    };
 
     const handleCreateTaskClick = (e: React.MouseEvent) => {
         e.preventDefault(); // Prevent link navigation
@@ -87,6 +105,13 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, circleHandle, canCreateTask, 
                             </div>
                         )}
                     </div>
+                    {goal.circle && goal.circle._id !== circleHandle && (
+                        <div className="absolute bottom-2 right-2">
+                            <button onClick={handleCircleClick} className="z-10">
+                                <CirclePicture circle={goal.circle} size="32px" />
+                            </button>
+                        </div>
+                    )}
                 </CardContent>
                 {/* Create Task Button - Appears on Hover */}
                 {tasksModuleEnabled && canCreateTask && (
@@ -179,9 +204,36 @@ const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initia
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [isCreateGoalDialogOpen, setIsCreateGoalDialogOpen] = useState(false); // State for dialog
+    const [userDid, setUserDid] = useState<string | null>(null);
+    const [includeCreated, setIncludeCreated] = useState(true);
+    const [includeAssigned, setIncludeAssigned] = useState(true);
 
     // Check if tasks module is enabled
     const tasksModuleEnabled = useMemo(() => circle.enabledModules?.includes("tasks"), [circle.enabledModules]);
+
+    useEffect(() => {
+        getAuthenticatedUserDidAction().then((did) => setUserDid(did ?? null));
+    }, []);
+
+    // Effect to fetch data when tab changes or if initial data for that tab was missing/empty
+    useEffect(() => {
+        const fetchGoals = async () => {
+            if (circle.circleType === "user" && circle.did === userDid) {
+                setIsLoadingActive(true);
+                try {
+                    const data = await getGoalsAction(circle.handle!, includeCreated, includeAssigned);
+                    setActiveGoalsData(data.goals?.filter((g) => g.stage === "review" || g.stage === "open") || []);
+                    setCompletedGoalsData(data.goals?.filter((g) => g.stage === "completed") || []);
+                } catch (err) {
+                    setError("Failed to load goals.");
+                } finally {
+                    setIsLoadingActive(false);
+                }
+            }
+        };
+
+        fetchGoals();
+    }, [includeCreated, includeAssigned, userDid, circle.handle, circle.circleType, circle.did]);
 
     // Effect to fetch data when tab changes or if initial data for that tab was missing/empty
     useEffect(() => {
@@ -365,6 +417,26 @@ const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initia
                             </Button>
                         )}
                     </div>
+                    {circle.circleType === "user" && circle.did === userDid && (
+                        <div className="mb-4 flex items-center space-x-4 px-4">
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="includeCreated"
+                                    checked={includeCreated}
+                                    onCheckedChange={(checked) => setIncludeCreated(Boolean(checked))}
+                                />
+                                <Label htmlFor="includeCreated">Show created</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="includeAssigned"
+                                    checked={includeAssigned}
+                                    onCheckedChange={(checked) => setIncludeAssigned(Boolean(checked))}
+                                />
+                                <Label htmlFor="includeAssigned">Show assigned</Label>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Tab Content */}
                     <TabsContent value="active" className="mt-0">
