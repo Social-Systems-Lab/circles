@@ -118,7 +118,7 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, circleHandle, canCreateTask, 
                     <Button
                         variant="secondary"
                         size="sm"
-                        className="absolute bottom-3 right-3 z-10 scale-90 opacity-0 transition-all duration-200 ease-in-out group-hover:scale-100 group-hover:opacity-100"
+                        className="absolute bottom-3 right-12 z-10 scale-90 opacity-0 transition-all duration-200 ease-in-out group-hover:scale-100 group-hover:opacity-100"
                         onClick={handleCreateTaskClick}
                     >
                         <Plus className="mr-1.5 h-4 w-4" /> Create Task
@@ -235,16 +235,18 @@ const GoalTimeline: React.FC<GoalTimelineProps> = ({ circle, permissions, initia
         fetchGoals();
     }, [includeCreated, includeAssigned, userDid, circle.handle, circle.circleType, circle.did]);
 
-    // Effect to fetch data when tab changes or if initial data for that tab was missing/empty
+    // Apply server-provided initial goals only when NOT viewing own user circle
+    // to avoid overwriting aggregated fetch (created/assigned) for self user circles.
     useEffect(() => {
-        // When initialGoalsData is provided, update the state
-        if (initialGoalsData) {
-            setActiveGoalsData(initialGoalsData.goals?.filter((g) => g.stage === "review" || g.stage === "open") || []);
-            setCompletedGoalsData(initialGoalsData.goals?.filter((g) => g.stage === "completed") || []);
-            setIsLoadingActive(false);
-            setIsLoadingCompleted(false);
-        }
-    }, [initialGoalsData]);
+        if (!initialGoalsData) return;
+        const isSelfUserCircle = circle.circleType === "user" && circle.did === userDid;
+        if (isSelfUserCircle) return;
+
+        setActiveGoalsData(initialGoalsData.goals?.filter((g) => g.stage === "review" || g.stage === "open") || []);
+        setCompletedGoalsData(initialGoalsData.goals?.filter((g) => g.stage === "completed") || []);
+        setIsLoadingActive(false);
+        setIsLoadingCompleted(false);
+    }, [initialGoalsData, userDid, circle.circleType, circle.did]);
 
     const displayedGoals = useMemo(() => {
         if (activeTab === "active") {

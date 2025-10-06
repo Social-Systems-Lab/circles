@@ -135,6 +135,28 @@ export const getTasksByCircleId = async (
             // Optional assignee => preserveNullAndEmptyArrays = true
             { $unwind: { path: "$assigneeDetails", preserveNullAndEmptyArrays: true } },
 
+            // 3.5) Lookup circle details
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { cId: { $toObjectId: "$circleId" } },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ["$_id", "$$cId"] } } },
+                        {
+                            $project: {
+                                _id: { $toString: "$_id" },
+                                name: 1,
+                                handle: 1,
+                                picture: 1,
+                                enabledModules: 1,
+                            },
+                        },
+                    ],
+                    as: "circleDetails",
+                },
+            },
+            { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
+
             // 4) Final projection
             {
                 $project: {
@@ -144,6 +166,7 @@ export const getTasksByCircleId = async (
                     _id: { $toString: "$_id" },
                     author: "$authorDetails",
                     assignee: "$assigneeDetails", // null if no match
+                    circle: "$circleDetails",
                 },
             },
 

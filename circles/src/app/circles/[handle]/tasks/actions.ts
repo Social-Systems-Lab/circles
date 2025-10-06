@@ -99,7 +99,17 @@ export async function getTasksAction(
         }
 
         // 1. Get all displayable tasks (might include non-rankable ones initially)
-        const allTasks = await getTasksByCircleId(circle._id as string, userDid, includeCreated, includeAssigned);
+        // Default includeCreated/includeAssigned to true when viewing your own user circle
+        const isSelfUserCircle = circle.circleType === "user" && circle.did === userDid;
+        const includeCreatedFinal = includeCreated ?? isSelfUserCircle;
+        const includeAssignedFinal = includeAssigned ?? isSelfUserCircle;
+
+        const allTasks = await getTasksByCircleId(
+            circle._id as string,
+            userDid,
+            includeCreatedFinal,
+            includeAssignedFinal,
+        );
 
         // 2. Get aggregated ranking and the set of *rankable* task IDs
         const { rankMap: aggregatedRankMap, totalRankers, activeTaskIds } = await getTaskRanking(circleId);

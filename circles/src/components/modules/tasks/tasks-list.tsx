@@ -147,8 +147,16 @@ const getStageInfo = (stage: TaskStage) => {
 const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, hideRank }) => {
     // Renamed component, props
     const { tasks, hasUserRanked, totalRankers, unrankedCount, userRankBecameStaleAt } = tasksData;
-    const data = React.useMemo(() => tasks, [tasks]);
     const [user] = useAtom(userAtom);
+    const [includeCreated, setIncludeCreated] = useState(true);
+    const [includeAssigned, setIncludeAssigned] = useState(true);
+    const [filteredTasks, setFilteredTasks] = useState(tasksData.tasks);
+    const data = React.useMemo(() => {
+        if (circle.circleType === "user" && user?.did === circle.did) {
+            return filteredTasks;
+        }
+        return tasks;
+    }, [tasks, filteredTasks, circle, user]);
     const [sorting, setSorting] = React.useState<SortingState>([{ id: "rank", desc: false }]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
     const [deleteTaskDialogOpen, setDeleteTaskDialogOpen] = useState<boolean>(false); // Renamed state
@@ -163,9 +171,6 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
     const [showRankModal, setShowRankModal] = useState(false); // State for modal
     const [isCreateTaskDialogOpen, setIsCreateTaskDialogOpen] = useState(false); // State for Create Task Dialog
     const isMobile = useIsMobile();
-    const [includeCreated, setIncludeCreated] = useState(true);
-    const [includeAssigned, setIncludeAssigned] = useState(true);
-    const [filteredTasks, setFilteredTasks] = useState(tasksData.tasks);
 
     useEffect(() => {
         const fetchTasks = async () => {

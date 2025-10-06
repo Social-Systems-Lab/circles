@@ -54,6 +54,7 @@ import { CheckCircle, XCircle, ListOrdered, User as UserIcon } from "lucide-reac
 import { PiRankingBold, PiUsersThree } from "react-icons/pi"; // For aggregated rank icon, PiUsersThree
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // For tooltips
 import ProposalPrioritizationModal from "./proposal-prioritization-modal"; // Import the modal
+import { CirclePicture } from "@/components/modules/circles/circle-picture";
 
 interface ProposalsListProps {
     proposals: ProposalDisplay[];
@@ -239,9 +240,14 @@ const ProposalsList: React.FC<ProposalsListProps> = ({ proposals, circle, curren
                         <Link
                             href={`/circles/${circle.handle}/proposals/${proposal._id}`}
                             onClick={(e: React.MouseEvent) => e.stopPropagation()} // Added type for e
-                            className="font-medium text-blue-600 hover:underline"
+                            className="flex items-center font-medium text-blue-600 hover:underline"
                         >
                             {info.getValue() as string}
+                            {proposal.circle && proposal.circle._id !== circle._id && (
+                                <div className="ml-2">
+                                    <CirclePicture circle={proposal.circle} size="24px" />
+                                </div>
+                            )}
                         </Link>
                     );
                 },
