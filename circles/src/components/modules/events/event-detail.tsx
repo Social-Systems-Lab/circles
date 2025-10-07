@@ -65,6 +65,17 @@ export default function EventDetail({
     const start = event.startAt ? new Date(event.startAt as any) : null;
     const end = event.endAt ? new Date(event.endAt as any) : null;
 
+    // Virtual join window: show Join button from 5 minutes before start until end (or 2h after start if no end)
+    const isVirtual = !!(event.isVirtual && event.virtualUrl);
+    const isCancelled = event.stage === "cancelled";
+    const joinWindow = (() => {
+        if (!start) return false;
+        const now = new Date();
+        const startMinus5 = new Date(start.getTime() - 5 * 60 * 1000);
+        const endDt = end ?? new Date(start.getTime() + 2 * 60 * 60 * 1000);
+        return now >= startMinus5 && now <= endDt;
+    })();
+
     const locationText =
         event.isVirtual && event.virtualUrl
             ? ""
@@ -375,9 +386,47 @@ export default function EventDetail({
                         <div className="mb-1 text-sm font-medium text-muted-foreground">Where</div>
                         <div className="text-base font-semibold">
                             {event.isVirtual && event.virtualUrl ? (
-                                <a className="text-blue-600 underline" href={event.virtualUrl} target="_blank">
-                                    Join virtual event
-                                </a>
+                                <div className="flex flex-col gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            className={
+                                                joinWindow && !isCancelled
+                                                    ? "bg-green-600 text-white hover:bg-green-700"
+                                                    : "bg-gray-200 text-gray-700 hover:bg-gray-200"
+                                            }
+                                            onClick={() => {
+                                                if (joinWindow && !isCancelled) {
+                                                    window.open(event.virtualUrl!, "_blank", "noopener,noreferrer");
+                                                } else {
+                                                    const mins = start
+                                                        ? Math.max(
+                                                              0,
+                                                              Math.ceil(
+                                                                  (start.getTime() - new Date().getTime()) / 60000,
+                                                              ),
+                                                          )
+                                                        : 0;
+                                                    toast({
+                                                        title: "Join unavailable",
+                                                        description: `Event can be joined when it starts in ${mins} minute${
+                                                            mins === 1 ? "" : "s"
+                                                        }.`,
+                                                    });
+                                                }
+                                            }}
+                                        >
+                                            Join
+                                        </Button>
+                                    </div>
+                                    <a
+                                        className="break-all text-blue-600 underline"
+                                        href={event.virtualUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                    >
+                                        {event.virtualUrl}
+                                    </a>
+                                </div>
                             ) : event.location ? (
                                 <>
                                     {event.location.city || event.location.region || event.location.country
