@@ -13,6 +13,7 @@ import { CalendarIcon, Clock, MapPin, Users } from "lucide-react";
 type Props = {
     circleHandle: string;
     events: EventDisplay[];
+    condensed?: boolean;
 };
 
 const monthColorClasses = [
@@ -67,7 +68,11 @@ function isOngoing(evt: EventDisplay): boolean {
     return now >= start && now <= end;
 }
 
-const EventCard: React.FC<{ e: EventDisplay; circleHandle: string }> = ({ e, circleHandle }) => {
+const EventCard: React.FC<{ e: EventDisplay; circleHandle: string; condensed?: boolean }> = ({
+    e,
+    circleHandle,
+    condensed,
+}) => {
     const stage = e.stage;
     const isDraft = stage === "review";
     const isCancelled = stage === "cancelled";
@@ -84,9 +89,14 @@ const EventCard: React.FC<{ e: EventDisplay; circleHandle: string }> = ({ e, cir
                     ongoing && !isCancelled && "border-2 border-red-500",
                 )}
             >
-                <CardContent className="flex items-start space-x-4 p-4">
+                <CardContent className={cn("flex items-start", condensed ? "space-x-3 p-3" : "space-x-4 p-4")}>
                     {e.images && e.images.length > 0 && (
-                        <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded border">
+                        <div
+                            className={cn(
+                                "relative flex-shrink-0 overflow-hidden rounded border",
+                                condensed ? "h-16 w-16" : "h-24 w-24",
+                            )}
+                        >
                             <Image
                                 src={e.images[0].fileInfo.url}
                                 alt={e.title}
@@ -98,7 +108,12 @@ const EventCard: React.FC<{ e: EventDisplay; circleHandle: string }> = ({ e, cir
                     )}
                     <div className="min-w-0 flex-grow">
                         <div className="mb-1 flex items-center justify-between gap-2">
-                            <div className="header mb-1 truncate text-[20px] font-semibold group-hover:text-primary">
+                            <div
+                                className={cn(
+                                    "header mb-1 truncate font-semibold group-hover:text-primary",
+                                    condensed ? "text-[16px]" : "text-[20px]",
+                                )}
+                            >
                                 {e.title}
                             </div>
                             <div className="flex items-center gap-1">
@@ -120,7 +135,14 @@ const EventCard: React.FC<{ e: EventDisplay; circleHandle: string }> = ({ e, cir
                             </div>
                         </div>
                         {e.description && (
-                            <p className="mb-2 line-clamp-3 text-sm text-muted-foreground">{e.description}</p>
+                            <p
+                                className={cn(
+                                    "mb-2 text-muted-foreground",
+                                    condensed ? "line-clamp-2 text-xs" : "line-clamp-3 text-sm",
+                                )}
+                            >
+                                {e.description}
+                            </p>
                         )}
 
                         {/* Date/Time */}
@@ -165,7 +187,7 @@ const EventCard: React.FC<{ e: EventDisplay; circleHandle: string }> = ({ e, cir
     );
 };
 
-export default function EventTimeline({ circleHandle, events }: Props) {
+export default function EventTimeline({ circleHandle, events, condensed }: Props) {
     // Only show upcoming or ongoing events; filter out past events and sort by start date
     const sorted = useMemo(() => {
         const now = new Date();
@@ -227,9 +249,14 @@ export default function EventTimeline({ circleHandle, events }: Props) {
                                             {format(monthDate, "MMMM yyyy")}
                                         </div>
                                         {/* List (single column) */}
-                                        <div className="flex flex-col gap-4">
+                                        <div className={cn("flex flex-col", condensed ? "gap-2" : "gap-4")}>
                                             {monthEvents.map((e) => (
-                                                <EventCard key={(e as any)._id} e={e} circleHandle={circleHandle} />
+                                                <EventCard
+                                                    key={(e as any)._id}
+                                                    e={e}
+                                                    circleHandle={circleHandle}
+                                                    condensed={condensed}
+                                                />
                                             ))}
                                         </div>
                                     </div>

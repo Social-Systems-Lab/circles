@@ -854,7 +854,16 @@ export type MissionDisplay = {
     picture: string;
 };
 
-export type UserToolboxTab = "chat" | "notifications" | "profile" | "circles" | "contacts" | "account" | undefined;
+export type UserToolboxTab =
+    | "chat"
+    | "notifications"
+    | "profile"
+    | "circles"
+    | "projects"
+    | "tasks"
+    | "events"
+    | "account"
+    | undefined;
 export type UserToolboxData = {
     tab: UserToolboxTab;
 };

@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bell, MessageCircle, Users, Circle as CircleIcon } from "lucide-react";
+import { Bell, MessageCircle, Circle as CircleIcon, Calendar, CheckSquare } from "lucide-react";
 import { MdOutlineLogout } from "react-icons/md";
 import { RxDashboard } from "react-icons/rx";
 import {
@@ -18,7 +18,7 @@ import {
 } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { useRouter, usePathname } from "next/navigation";
-import { Circle, MemberDisplay, UserToolboxTab } from "@/models/models";
+import { Circle, MemberDisplay, UserToolboxTab, EventDisplay, TaskPermissions } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { logOut } from "../auth/actions";
 import { VerifyAccountButton } from "../modules/auth/verify-account-button";
@@ -27,6 +27,9 @@ import Link from "next/link";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { useIsMobile } from "../utils/use-is-mobile";
 import { ChatList } from "../modules/chat/chat-list";
+import TasksList from "../modules/tasks/tasks-list";
+import EventTimeline from "../modules/events/event-timeline";
+import { getEventsAction } from "@/app/circles/[handle]/events/actions";
 import { getCircleByIdAction } from "@/components/modules/circles/actions";
 
 export const UserToolbox = () => {
@@ -73,10 +76,42 @@ export const UserToolbox = () => {
             ?.filter((m) => m.circle.circleType === "circle" && m.circle.handle !== "default")
             ?.map((membership) => membership.circle) || [];
 
-    const contacts =
-        user?.memberships
-            ?.filter((m) => m.circle.circleType === "user" && m.circle._id !== user?._id)
-            ?.map((membership) => membership.circle) || [];
+    const projects =
+        user?.memberships?.filter((m) => m.circle.circleType === "project")?.map((membership) => membership.circle) ||
+        [];
+
+    const [events, setEvents] = useState<EventDisplay[]>([]);
+
+    const initialTasksData = {
+        tasks: [],
+        hasUserRanked: false,
+        totalRankers: 0,
+        unrankedCount: 0,
+        userRankUpdatedAt: null as Date | null,
+        userRankBecameStaleAt: null as Date | null,
+    };
+
+    const defaultTaskPermissions: TaskPermissions = {
+        canModerate: false,
+        canReview: false,
+        canAssign: false,
+        canResolve: false,
+        canComment: true,
+    };
+
+    useEffect(() => {
+        const fetchEvents = async () => {
+            try {
+                if (user?.handle) {
+                    const data = await getEventsAction(user.handle, undefined, true, true);
+                    setEvents(data.events || []);
+                }
+            } catch (e) {
+                console.error("Failed to load user events for toolbox", e);
+            }
+        };
+        fetchEvents();
+    }, [user?.handle]);
 
     const signOut = async () => {
         // clear the user data and redirect to the you've been signed out
@@ -156,10 +191,22 @@ export const UserToolbox = () => {
                             <CircleIcon className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger
-                            value="contacts"
+                            value="projects"
                             className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
                         >
-                            <Users className="h-5 w-5" />
+                            <RxDashboard className="h-5 w-5" />
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="tasks"
+                            className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
+                        >
+                            <CheckSquare className="h-5 w-5" />
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="events"
+                            className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
+                        >
+                            <Calendar className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger
                             value="account"
@@ -198,24 +245,51 @@ export const UserToolbox = () => {
                             </div>
                         )}
                     </TabsContent>
-                    <TabsContent value="contacts" className="m-0 flex-grow overflow-auto pt-1">
-                        {contacts.length > 0 ? (
-                            contacts.map((contact) => (
+                    <TabsContent value="projects" className="m-0 flex-grow overflow-auto pt-1">
+                        {projects.length > 0 ? (
+                            projects.map((project) => (
                                 <div
-                                    key={contact._id}
+                                    key={project._id}
                                     className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
-                                    onClick={() => openCircle(contact)}
+                                    onClick={() => openCircle(project)}
                                 >
-                                    <CirclePicture circle={contact} size="40px" />
+                                    <CirclePicture circle={project} size="40px" />
                                     <div className="flex-1">
-                                        <p className="text-sm font-medium">{contact.name}</p>
-                                        <p className="text-xs text-muted-foreground">{contact.description}</p>
+                                        <p className="text-sm font-medium">{project.name}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {project.description ?? project.mission}
+                                        </p>
                                     </div>
                                 </div>
                             ))
                         ) : (
                             <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
-                                No followers
+                                No projects yet
+                            </div>
+                        )}
+                    </TabsContent>
+
+                    <TabsContent value="tasks" className="m-0 flex-grow overflow-auto pt-1">
+                        {user ? (
+                            <TasksList
+                                tasksData={initialTasksData as any}
+                                circle={user as any}
+                                permissions={defaultTaskPermissions}
+                                hideRank={true}
+                            />
+                        ) : (
+                            <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
+                                Loading tasks...
+                            </div>
+                        )}
+                    </TabsContent>
+
+                    <TabsContent value="events" className="m-0 flex-grow overflow-auto pt-1">
+                        {user ? (
+                            <EventTimeline circleHandle={user.handle!} events={events} condensed />
+                        ) : (
+                            <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
+                                Loading events...
                             </div>
                         )}
                     </TabsContent>
