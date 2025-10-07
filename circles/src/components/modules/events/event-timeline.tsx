@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { EventDisplay } from "@/models/models";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -68,6 +69,21 @@ function isOngoing(evt: EventDisplay): boolean {
     return now >= start && now <= end;
 }
 
+// Show join button from 5 minutes before start until the event ends (or 2h after start if no end)
+function isWithinJoinWindow(evt: EventDisplay): boolean {
+    const start = evt.startAt ? new Date(evt.startAt as any) : undefined;
+    const end = evt.endAt ? new Date(evt.endAt as any) : undefined;
+    if (!start) return false;
+    const now = new Date();
+    const startMinus5 = new Date(start.getTime() - 5 * 60 * 1000);
+    if (end) {
+        return now >= startMinus5 && now <= end;
+    }
+    // Fallback if no end: allow for 2 hours after start
+    const fallbackEnd = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+    return now >= startMinus5 && now <= fallbackEnd;
+}
+
 const EventCard: React.FC<{ e: EventDisplay; circleHandle: string; condensed?: boolean }> = ({
     e,
     circleHandle,
@@ -80,15 +96,15 @@ const EventCard: React.FC<{ e: EventDisplay; circleHandle: string; condensed?: b
     const ongoing = isOngoing(e);
 
     return (
-        <Link href={`/circles/${circleHandle}/events/${(e as any)._id}`} className="group relative block">
-            <Card
-                className={cn(
-                    "h-full max-w-2xl transition-shadow duration-200 ease-in-out group-hover:shadow-lg",
-                    isDraft && "border-dashed border-yellow-400 bg-yellow-50/30 opacity-90",
-                    isCancelled && "border-dashed border-red-400 bg-red-50/40 opacity-75",
-                    ongoing && !isCancelled && "border-2 border-red-500",
-                )}
-            >
+        <Card
+            className={cn(
+                "relative h-full max-w-2xl transition-shadow duration-200 ease-in-out group-hover:shadow-lg",
+                isDraft && "border-dashed border-yellow-400 bg-yellow-50/30 opacity-90",
+                isCancelled && "border-dashed border-red-400 bg-red-50/40 opacity-75",
+                ongoing && !isCancelled && "border-2 border-red-500",
+            )}
+        >
+            <Link href={`/circles/${circleHandle}/events/${(e as any)._id}`} className="group block">
                 <CardContent className={cn("flex items-start", condensed ? "space-x-3 p-3" : "space-x-4 p-4")}>
                     {e.images && e.images.length > 0 && (
                         <div
@@ -151,23 +167,6 @@ const EventCard: React.FC<{ e: EventDisplay; circleHandle: string; condensed?: b
                             {fmtRange(e.startAt, e.endAt, e.allDay)}
                         </div>
 
-                        {/* Virtual join link */}
-                        {e.isVirtual && e.virtualUrl && (
-                            <div className="mb-1">
-                                <button
-                                    type="button"
-                                    onClick={(ev) => {
-                                        ev.preventDefault();
-                                        ev.stopPropagation();
-                                        window.open(e.virtualUrl!, "_blank", "noopener,noreferrer");
-                                    }}
-                                    className="text-xs font-medium text-blue-600 hover:underline"
-                                >
-                                    Join virtual event
-                                </button>
-                            </div>
-                        )}
-
                         {/* Location & attendees */}
                         <div className="flex items-center gap-3 text-xs text-muted-foreground">
                             {locationToString(e) && (
@@ -185,8 +184,21 @@ const EventCard: React.FC<{ e: EventDisplay; circleHandle: string; condensed?: b
                         </div>
                     </div>
                 </CardContent>
-            </Card>
-        </Link>
+            </Link>
+            {e.isVirtual && e.virtualUrl && isWithinJoinWindow(e) && !isCancelled && (
+                <Button
+                    size="sm"
+                    className="absolute right-2 top-2 z-10 bg-green-600 text-white hover:bg-green-700"
+                    onClick={(ev) => {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        window.open(e.virtualUrl!, "_blank", "noopener,noreferrer");
+                    }}
+                >
+                    Join
+                </Button>
+            )}
+        </Card>
     );
 };
 
