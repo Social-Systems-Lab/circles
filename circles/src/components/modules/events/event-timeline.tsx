@@ -166,9 +166,17 @@ const EventCard: React.FC<{ e: EventDisplay; circleHandle: string }> = ({ e, cir
 };
 
 export default function EventTimeline({ circleHandle, events }: Props) {
-    // Only show review/published upcoming-ish events; keep cancelled too for visibility but sorted
+    // Only show upcoming or ongoing events; filter out past events and sort by start date
     const sorted = useMemo(() => {
-        return [...(events || [])].sort((a, b) => {
+        const now = new Date();
+        const filtered = (events || []).filter((e) => {
+            const start = e.startAt ? new Date(e.startAt as any) : undefined;
+            const end = e.endAt ? new Date(e.endAt as any) : undefined;
+            if (end) return end >= now; // include ongoing or future (ends in future)
+            if (start) return start >= now; // include if start is in the future when no end
+            return false; // exclude undated events
+        });
+        return filtered.sort((a, b) => {
             const sa = new Date(a.startAt).getTime();
             const sb = new Date(b.startAt).getTime();
             return sa - sb;
