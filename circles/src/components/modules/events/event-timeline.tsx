@@ -58,11 +58,21 @@ function locationToString(evt: EventDisplay): string | undefined {
     return parts.length ? parts.join(", ") : undefined;
 }
 
+// Ongoing: now between start and end
+function isOngoing(evt: EventDisplay): boolean {
+    const start = evt.startAt ? new Date(evt.startAt as any) : undefined;
+    const end = evt.endAt ? new Date(evt.endAt as any) : undefined;
+    if (!start || !end) return false;
+    const now = new Date();
+    return now >= start && now <= end;
+}
+
 const EventCard: React.FC<{ e: EventDisplay; circleHandle: string }> = ({ e, circleHandle }) => {
     const stage = e.stage;
     const isDraft = stage === "review";
     const isCancelled = stage === "cancelled";
     const attendees = e.attendees ?? 0;
+    const ongoing = isOngoing(e);
 
     return (
         <Link href={`/circles/${circleHandle}/events/${(e as any)._id}`} className="group relative block">
@@ -71,6 +81,7 @@ const EventCard: React.FC<{ e: EventDisplay; circleHandle: string }> = ({ e, cir
                     "h-full max-w-2xl transition-shadow duration-200 ease-in-out group-hover:shadow-lg",
                     isDraft && "border-dashed border-yellow-400 bg-yellow-50/30 opacity-90",
                     isCancelled && "border-dashed border-red-400 bg-red-50/40 opacity-75",
+                    ongoing && !isCancelled && "border-2 border-red-500",
                 )}
             >
                 <CardContent className="flex items-start space-x-4 p-4">
@@ -117,6 +128,20 @@ const EventCard: React.FC<{ e: EventDisplay; circleHandle: string }> = ({ e, cir
                             <CalendarIcon className="mr-1 h-3 w-3" />
                             {fmtRange(e.startAt, e.endAt, e.allDay)}
                         </div>
+
+                        {/* Virtual join link */}
+                        {e.isVirtual && e.virtualUrl && (
+                            <div className="mb-1">
+                                <a
+                                    href={e.virtualUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-xs font-medium text-blue-600 hover:underline"
+                                >
+                                    Join virtual event
+                                </a>
+                            </div>
+                        )}
 
                         {/* Location & attendees */}
                         <div className="flex items-center gap-3 text-xs text-muted-foreground">

@@ -72,6 +72,24 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events }) => 
         return <div style={style}>{title}</div>;
     };
 
+    // Highlight ongoing events (now between start and end)
+    const isOngoing = (start?: Date | null, end?: Date | null): boolean => {
+        if (!start || !end) return false;
+        const now = new Date();
+        return now >= start && now <= end;
+    };
+
+    const eventClassNames = (arg: any): string[] => {
+        const stage = (arg.event.extendedProps as any)?.stage as string | undefined;
+        const isCancelled = stage === "cancelled";
+        const ongoing = isOngoing(arg.event.start, arg.event.end);
+        const classes: string[] = [];
+        if (ongoing && !isCancelled) {
+            classes.push("ongoing-event");
+        }
+        return classes;
+    };
+
     return (
         <div className="rounded-md border bg-white p-2">
             <FullCalendar
@@ -85,6 +103,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events }) => 
                 height="auto"
                 events={fcEvents}
                 eventContent={renderEventContent}
+                eventClassNames={eventClassNames}
                 dateClick={handleDateClick}
                 eventClick={handleEventClick}
                 selectable={true}

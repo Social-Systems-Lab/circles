@@ -488,3 +488,18 @@ div.ReactTags__suggestions ul li.ReactTags__activeSuggestion {
 .scrollbar-hover::-webkit-scrollbar-track {
     background: transparent;
 }
+
+/* FullCalendar: highlight ongoing events */
+.fc .ongoing-event {
+    border: 2px solid #ef4444 !important; /* red-500 border */
+    border-radius: 6px;
+    background-color: rgba(239, 68, 68, 0.08); /* red-500 @ ~8% */
+}
+.fc .ongoing-event .fc-event-main {
+    border-left: 4px solid #ef4444; /* accent on the left edge */
+    padding-left: 2px;
+}
+.fc .fc-list .ongoing-event .fc-list-event-title {
+    border-left: 4px solid #ef4444;
+    padding-left: 6px;
+}
