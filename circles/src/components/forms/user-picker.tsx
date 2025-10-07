@@ -13,9 +13,15 @@ type Props = {
     onSelectionChange: (selected: Circle[]) => void;
     initialSelection?: Circle[];
     circleHandle: string;
+    excludeDids?: string[];
 };
 
-export default function UserPicker({ onSelectionChange, initialSelection = [], circleHandle }: Props) {
+export default function UserPicker({
+    onSelectionChange,
+    initialSelection = [],
+    circleHandle,
+    excludeDids = [],
+}: Props) {
     const [search, setSearch] = useState("");
     const [results, setResults] = useState<Circle[]>([]);
     const [selected, setSelected] = useState<Circle[]>(initialSelection);
@@ -24,11 +30,12 @@ export default function UserPicker({ onSelectionChange, initialSelection = [], c
     useEffect(() => {
         const fetchInitialUsers = async () => {
             const { members } = await getCircleMembersAction(circleHandle);
-            setDefaultUsers(members);
-            setResults(members);
+            const filtered = (members || []).filter((u) => !excludeDids?.includes(u.did!));
+            setDefaultUsers(filtered);
+            setResults(filtered);
         };
         fetchInitialUsers();
-    }, [circleHandle]);
+    }, [circleHandle, excludeDids]);
 
     useEffect(() => {
         const fetchUsers = async () => {
@@ -38,7 +45,8 @@ export default function UserPicker({ onSelectionChange, initialSelection = [], c
             }
             try {
                 const { circles } = await searchEligibleUsersAction(circleHandle, search, 20);
-                setResults(circles || []);
+                const filtered = (circles || []).filter((u) => !excludeDids?.includes(u.did!));
+                setResults(filtered);
             } catch (e) {
                 console.error("Error searching eligible users:", e);
                 setResults([]);
@@ -47,7 +55,7 @@ export default function UserPicker({ onSelectionChange, initialSelection = [], c
 
         const debounce = setTimeout(fetchUsers, 300);
         return () => clearTimeout(debounce);
-    }, [search, defaultUsers]);
+    }, [search, defaultUsers, excludeDids]);
 
     const handleSelect = (user: Circle) => {
         if (!selected.find((s) => s.did === user.did)) {

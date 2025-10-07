@@ -4,7 +4,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ObjectId } from "mongodb";
-import { Feeds, Events } from "@/lib/data/db";
+import { Feeds, Events, EventInvitations } from "@/lib/data/db";
 import {
     Circle,
     Media,
@@ -732,10 +732,12 @@ export async function getInvitedUsersAction(
         const canView = await isAuthorized(userDid, circle._id as string, features.events.view);
         if (!canView) return defaultResult;
 
-        const event = await getEventById(eventId, userDid);
-        if (!event || !event.invitations) return defaultResult;
+        // Invitations are stored in EventInvitations collection (not on the event document)
+        const invitations = await EventInvitations.find({ eventId }).toArray();
+        const invitedDids = Array.from(new Set(invitations.map((inv: any) => inv.userDid).filter(Boolean)));
+        if (invitedDids.length === 0) return defaultResult;
 
-        const users = await getCirclesByDids(event.invitations);
+        const users = await getCirclesByDids(invitedDids);
         return { users };
     } catch (error) {
         console.error("Error in getInvitedUsersAction:", error);
