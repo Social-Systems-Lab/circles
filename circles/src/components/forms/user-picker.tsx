@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { X } from "lucide-react";
-import { getCircleMembersAction } from "@/app/circles/[handle]/events/actions";
+import { getCircleMembersAction, searchEligibleUsersAction } from "@/app/circles/[handle]/events/actions";
 
 type Props = {
     onSelectionChange: (selected: Circle[]) => void;
@@ -36,9 +36,13 @@ export default function UserPicker({ onSelectionChange, initialSelection = [], c
                 setResults(defaultUsers);
                 return;
             }
-            const response = await fetch(`/api/circles/search?q=${search}&type=user`);
-            const data = await response.json();
-            setResults(data.circles || []);
+            try {
+                const { circles } = await searchEligibleUsersAction(circleHandle, search, 20);
+                setResults(circles || []);
+            } catch (e) {
+                console.error("Error searching eligible users:", e);
+                setResults([]);
+            }
         };
 
         const debounce = setTimeout(fetchUsers, 300);

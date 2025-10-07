@@ -763,7 +763,15 @@ export async function getCircleMembersAction(circleHandle: string): Promise<GetC
         const memberDids = members.map((m) => m.userDid);
         const users = await getCirclesByDids(memberDids);
 
-        return { members: users };
+        // Filter to only users who themselves have permission to view events in this circle
+        const eligibilityChecks = await Promise.all(
+            users.map((u) =>
+                u.did ? isAuthorized(u.did, circle._id as string, features.events.view) : Promise.resolve(false),
+            ),
+        );
+        const eligibleUsers = users.filter((_, idx) => eligibilityChecks[idx]);
+
+        return { members: eligibleUsers };
     } catch (error) {
         console.error("Error in getCircleMembersAction:", error);
         return defaultResult;
@@ -824,6 +832,44 @@ export async function getCirclesBySearchQueryAction(
         return { circles };
     } catch (error) {
         console.error("Error in getCirclesBySearchQueryAction:", error);
+        return defaultResult;
+    }
+}
+
+/**
+ * Search users and return only those eligible to view events in the circle (for invites).
+ */
+export async function searchEligibleUsersAction(
+    circleHandle: string,
+    query: string,
+    limit: number = 10,
+): Promise<GetCirclesBySearchQueryActionResult> {
+    const defaultResult: GetCirclesBySearchQueryActionResult = { circles: [] };
+
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) return defaultResult;
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) return defaultResult;
+
+        // Ensure current user can view events in this circle
+        const canView = await isAuthorized(userDid, circle._id as string, features.events.view);
+        if (!canView) return defaultResult;
+
+        const { circles } = await getCirclesBySearchQueryAction(query, limit, "user");
+
+        // Filter search results to only users who themselves have permission to view events in this circle
+        const eligibilityChecks = await Promise.all(
+            circles.map((c) =>
+                c.did ? isAuthorized(c.did, circle._id as string, features.events.view) : Promise.resolve(false),
+            ),
+        );
+        const eligible = circles.filter((_, idx) => eligibilityChecks[idx]);
+
+        return { circles: eligible };
+    } catch (error) {
+        console.error("Error in searchEligibleUsersAction:", error);
         return defaultResult;
     }
 }

@@ -316,6 +316,33 @@ a.textLink:hover {
     color: #93949d;
 }
 
+/* Rich text list styles */
+.prose ul,
+.formatted ul {
+    list-style: disc;
+    padding-left: 1.25rem; /* indent bullets */
+    margin-left: 0;
+}
+.prose ol,
+.formatted ol {
+    list-style: decimal;
+    padding-left: 1.25rem; /* indent numbers */
+    margin-left: 0;
+}
+.prose li,
+.formatted li {
+    margin-top: 0.25rem;
+    margin-bottom: 0.25rem;
+}
+.prose ul ul,
+.formatted ul ul {
+    list-style-type: circle;
+}
+.prose ul ul ul,
+.formatted ul ul ul {
+    list-style-type: square;
+}
+
 /* React Input Tags */
 
 div.ReactTags__tags {
