@@ -154,14 +154,17 @@ const EventCard: React.FC<{ e: EventDisplay; circleHandle: string; condensed?: b
                         {/* Virtual join link */}
                         {e.isVirtual && e.virtualUrl && (
                             <div className="mb-1">
-                                <a
-                                    href={e.virtualUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
+                                <button
+                                    type="button"
+                                    onClick={(ev) => {
+                                        ev.preventDefault();
+                                        ev.stopPropagation();
+                                        window.open(e.virtualUrl!, "_blank", "noopener,noreferrer");
+                                    }}
                                     className="text-xs font-medium text-blue-600 hover:underline"
                                 >
                                     Join virtual event
-                                </a>
+                                </button>
                             </div>
                         )}
 

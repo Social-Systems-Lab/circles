@@ -87,6 +87,7 @@ interface TasksListProps {
     circle: Circle;
     permissions: TaskPermissions;
     hideRank?: boolean;
+    inToolbox?: boolean;
 }
 
 const SortIcon = ({ sortDir }: { sortDir: string | boolean }) => {
@@ -144,7 +145,7 @@ const getStageInfo = (stage: TaskStage) => {
     }
 };
 
-const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, hideRank }) => {
+const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, hideRank, inToolbox }) => {
     // Renamed component, props
     const { tasks, hasUserRanked, totalRankers, unrankedCount, userRankBecameStaleAt } = tasksData;
     const [user] = useAtom(userAtom);
@@ -439,13 +440,13 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
             sorting,
             columnFilters,
             columnVisibility: {
-                rank: !hideRank,
-                userRank: hasUserRanked && !hideRank,
+                rank: !hideRank && !inToolbox,
+                userRank: hasUserRanked && !hideRank && !inToolbox,
                 title: true,
                 stage: true,
-                assignee: !isCompact,
-                author: !isCompact,
-                createdAt: !isCompact,
+                assignee: !isCompact && !inToolbox,
+                author: !isCompact && !inToolbox,
+                createdAt: !isCompact && !inToolbox,
             },
         },
     });
@@ -529,7 +530,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
             <div className="flex flex-1 flex-row justify-center">
                 <div className="mb-4 ml-2 mr-2 mt-4 flex max-w-[1100px] flex-1 flex-col">
                     {/* --- START: Rank Stats and Nudge Boxes --- */}
-                    {hasUserRanked && !hideRank && (
+                    {!inToolbox && hasUserRanked && !hideRank && (
                         <div className="mb-3 rounded border bg-blue-50 p-3 text-sm text-blue-800 shadow-sm">
                             <p className="flex items-center">
                                 <PiUsersThree className="mr-2 h-5 w-5 flex-shrink-0" />
@@ -544,7 +545,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
                     )}
 
                     {/* Show nudge only if user has ranked */}
-                    {hasUserRanked && unrankedCount > 0 && !hideRank && (
+                    {!inToolbox && hasUserRanked && unrankedCount > 0 && !hideRank && (
                         <div
                             className="mb-4 cursor-pointer rounded border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800 shadow-sm transition-colors hover:bg-yellow-100"
                             onClick={() => setShowRankModal(true)} // Open rank modal on click
@@ -572,7 +573,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
                     )}
 
                     {/* Show success message only if user has ranked and count is 0 */}
-                    {hasUserRanked && unrankedCount === 0 && !hideRank && (
+                    {!inToolbox && hasUserRanked && unrankedCount === 0 && !hideRank && (
                         <div className="mb-4 rounded border border-green-400 bg-green-50 p-3 text-sm text-green-800 shadow-sm">
                             <p className="flex items-center">
                                 <CheckCircle2 className="mr-2 h-5 w-5 flex-shrink-0 text-green-600" />
@@ -581,45 +582,46 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
                         </div>
                     )}
 
-                    <div className="flex w-full flex-row items-center gap-2">
-                        <div className="flex flex-1 flex-col">
-                            <Input
-                                placeholder="Search tasks by title..." // Updated placeholder
-                                value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
-                                onChange={(event) => table.getColumn("title")?.setFilterValue(event.target.value)}
-                            />
+                    {!inToolbox && (
+                        <div className="flex w-full flex-row items-center gap-2">
+                            <div className="flex flex-1 flex-col">
+                                <Input
+                                    placeholder="Search tasks by title..." // Updated placeholder
+                                    value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
+                                    onChange={(event) => table.getColumn("title")?.setFilterValue(event.target.value)}
+                                />
+                            </div>
+                            {canCreateTask && (
+                                <Button onClick={() => setIsCreateTaskDialogOpen(true)}>
+                                    <Plus className="mr-2 h-4 w-4" /> Create Task
+                                </Button>
+                            )}
+                            {/* Add Rank Button */}
+                            {isAuthorized(user, circle, features.tasks.rank) && !hideRank && (
+                                <Button onClick={() => setShowRankModal(true)}>
+                                    <PiRanking className="mr-2 h-4 w-4" /> Rank
+                                </Button>
+                            )}
+                            <Select
+                                value={stageFilter}
+                                onValueChange={(value) => setStageFilter(value as TaskStage | "all")} // Updated type
+                            >
+                                <SelectTrigger className="w-[180px]">
+                                    <SelectValue placeholder="Filter by stage" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Stages</SelectItem>
+                                    <SelectItem value="review">Review</SelectItem>
+                                    <SelectItem value="open">Open</SelectItem>
+                                    <SelectItem value="inProgress">In Progress</SelectItem>
+                                    <SelectItem value="resolved">Resolved</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            {/* Placeholder for Assignee Filter */}
+                            {/* <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>...</Select> */}
                         </div>
-                        {canCreateTask && (
-                            <Button onClick={() => setIsCreateTaskDialogOpen(true)}>
-                                <Plus className="mr-2 h-4 w-4" /> Create Task
-                            </Button>
-                        )}
-                        {/* Add Rank Button */}
-                        {isAuthorized(user, circle, features.tasks.rank) && !hideRank && (
-                            <Button onClick={() => setShowRankModal(true)}>
-                                <PiRanking className="mr-2 h-4 w-4" /> Rank
-                            </Button>
-                        )}
-                        <Select
-                            value={stageFilter}
-                            onValueChange={(value) => setStageFilter(value as TaskStage | "all")} // Updated type
-                        >
-                            <SelectTrigger className="w-[180px]">
-                                <SelectValue placeholder="Filter by stage" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Stages</SelectItem>
-                                <SelectItem value="review">Review</SelectItem>
-                                <SelectItem value="open">Open</SelectItem>
-                                <SelectItem value="inProgress">In Progress</SelectItem>
-                                <SelectItem value="resolved">Resolved</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        {/* Placeholder for Assignee Filter */}
-                        {/* <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>...</Select> */}
-                    </div>
-
-                    {circle.circleType === "user" && user?.did === circle.did && (
+                    )}
+                    {!inToolbox && circle.circleType === "user" && user?.did === circle.did && (
                         <div className="flex items-center gap-4 py-2">
                             <div className="flex items-center gap-2">
                                 <Checkbox
@@ -653,7 +655,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
                                             </TableHead>
                                         ))}
                                         {/* Adjust colspan if rank header is added */}
-                                        <TableHead className="w-[40px]"></TableHead>
+                                        {!inToolbox && <TableHead className="w-[40px]"></TableHead>}
                                     </TableRow>
                                 ))}
                             </TableHeader>
@@ -687,51 +689,53 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
                                                     </TableCell>
                                                 ))}
                                                 {/* No space after map */}
-                                                <TableCell className="w-[40px]">
-                                                    {(canEdit || canDelete) && (
-                                                        <DropdownMenu>
-                                                            <DropdownMenuTrigger asChild>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    className="h-8 w-8 p-0"
-                                                                    onClick={(e) => e.stopPropagation()} // Prevent row click
-                                                                >
-                                                                    <span className="sr-only">Open menu</span>
-                                                                    <MoreHorizontal className="h-4 w-4" />
-                                                                </Button>
-                                                            </DropdownMenuTrigger>
-                                                            <DropdownMenuContent align="end">
-                                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                                <DropdownMenuSeparator />
-                                                                {canEdit && (
-                                                                    <DropdownMenuItem
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            router.push(
-                                                                                `/circles/${circle.handle}/tasks/${task._id}/edit`, // Updated path
-                                                                            );
-                                                                        }}
-                                                                        disabled={task.stage === "resolved"} // Can't edit resolved tasks, Renamed variable
+                                                {!inToolbox && (
+                                                    <TableCell className="w-[40px]">
+                                                        {(canEdit || canDelete) && (
+                                                            <DropdownMenu>
+                                                                <DropdownMenuTrigger asChild>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        className="h-8 w-8 p-0"
+                                                                        onClick={(e) => e.stopPropagation()} // Prevent row click
                                                                     >
-                                                                        Edit
-                                                                    </DropdownMenuItem>
-                                                                )}
-                                                                {canDelete && (
-                                                                    <DropdownMenuItem
-                                                                        className="text-red-600"
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            setSelectedTask(task); // Renamed state setter, param
-                                                                            setDeleteTaskDialogOpen(true); // Renamed state setter
-                                                                        }}
-                                                                    >
-                                                                        Delete
-                                                                    </DropdownMenuItem>
-                                                                )}
-                                                            </DropdownMenuContent>
-                                                        </DropdownMenu>
-                                                    )}
-                                                </TableCell>
+                                                                        <span className="sr-only">Open menu</span>
+                                                                        <MoreHorizontal className="h-4 w-4" />
+                                                                    </Button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuContent align="end">
+                                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                                    <DropdownMenuSeparator />
+                                                                    {canEdit && (
+                                                                        <DropdownMenuItem
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                router.push(
+                                                                                    `/circles/${circle.handle}/tasks/${task._id}/edit`, // Updated path
+                                                                                );
+                                                                            }}
+                                                                            disabled={task.stage === "resolved"} // Can't edit resolved tasks, Renamed variable
+                                                                        >
+                                                                            Edit
+                                                                        </DropdownMenuItem>
+                                                                    )}
+                                                                    {canDelete && (
+                                                                        <DropdownMenuItem
+                                                                            className="text-red-600"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setSelectedTask(task); // Renamed state setter, param
+                                                                                setDeleteTaskDialogOpen(true); // Renamed state setter
+                                                                            }}
+                                                                        >
+                                                                            Delete
+                                                                        </DropdownMenuItem>
+                                                                    )}
+                                                                </DropdownMenuContent>
+                                                            </DropdownMenu>
+                                                        )}
+                                                    </TableCell>
+                                                )}
                                             </motion.tr>
                                         );
                                     })
