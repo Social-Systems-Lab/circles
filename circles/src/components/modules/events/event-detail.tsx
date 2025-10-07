@@ -13,6 +13,7 @@ import type { Circle, Media } from "@/models/models";
 import InvitedUserList from "./invited-user-list";
 import InviteModal from "./invite-modal";
 import { CommentSection } from "../feeds/CommentSection";
+import RichText from "../feeds/RichText";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 
@@ -244,8 +245,8 @@ export default function EventDetail({
                 {event.description && (
                     <div className="px-4">
                         <div className="rounded-md border bg-white/50 p-3">
-                            <div className="prose max-h-40 max-w-none overflow-hidden whitespace-pre-wrap">
-                                {event.description}
+                            <div className="prose max-h-40 max-w-none overflow-hidden">
+                                <RichText content={event.description} />
                             </div>
                         </div>
                     </div>
@@ -394,7 +395,9 @@ export default function EventDetail({
 
                     {event.description && (
                         <div className="rounded-lg border bg-white/70 p-5 shadow-sm">
-                            <div className="prose max-w-none whitespace-pre-wrap">{event.description}</div>
+                            <div className="prose max-w-none">
+                                <RichText content={event.description} />
+                            </div>
                         </div>
                     )}
                 </div>

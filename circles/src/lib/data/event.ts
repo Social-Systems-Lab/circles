@@ -6,6 +6,8 @@ import { createPost } from "./feed";
 import { upsertVbdEvents } from "./vdb";
 import { notifyEventInvitation } from "./notifications";
 import { getUserPrivate } from "./user";
+import { isAuthorized } from "../auth/auth";
+import { features } from "./constants";
 
 // Safe projection for event queries
 export const SAFE_EVENT_PROJECTION = {
@@ -412,8 +414,18 @@ export const inviteUsersToEvent = async (
         return;
     }
 
+    // Only invite users who are permitted to view events in this circle
+    const permissionChecks = await Promise.all(
+        newUserDids.map((did) => isAuthorized(did, circleId, features.events.view)),
+    );
+    const targetUserDids = newUserDids.filter((_, idx) => permissionChecks[idx]);
+
+    if (targetUserDids.length === 0) {
+        return;
+    }
+
     const now = new Date();
-    const invitations: Omit<EventInvitation, "_id">[] = newUserDids.map((userDid) => ({
+    const invitations: Omit<EventInvitation, "_id">[] = targetUserDids.map((userDid) => ({
         eventId,
         circleId,
         userDid,
@@ -431,7 +443,7 @@ export const inviteUsersToEvent = async (
     }
 
     // Send notifications
-    for (const userDid of newUserDids) {
+    for (const userDid of targetUserDids) {
         const user = await getUserPrivate(userDid);
         if (user) {
             await notifyEventInvitation(event, inviter, user);

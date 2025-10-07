@@ -545,6 +545,7 @@ function deriveBody(notificationType: NotificationType, payload: { [key: string]
     const goalTitle = payload.goalTitle || "a goal";
     const oldGoalStage = payload.goalOldStage || "previous stage";
     const newGoalStage = payload.goalNewStage || "new stage";
+    const eventName = payload.eventName || "an event";
 
     switch (notificationType) {
         case "follow_request":
@@ -659,6 +660,8 @@ function deriveBody(notificationType: NotificationType, payload: { [key: string]
             return `Your goal "${goalTitle}" in ${circleName} was approved and is now Open`;
         case "goal_status_changed":
             return `Goal "${goalTitle}" in ${circleName} changed status from ${oldGoalStage} to ${newGoalStage}`;
+        case "event_invitation":
+            return `${userName} invited you to the event "${eventName}" in ${circleName}`;
         case "ranking_stale_reminder":
             return `You have new items to rank in ${circleName}.`;
         case "ranking_grace_period_ended":
