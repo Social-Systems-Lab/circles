@@ -3,12 +3,12 @@ import { getCircleByHandle } from "@/lib/data/circle";
 
 type PageProps = {
     params: Promise<{ handle: string }>;
-    searchParams?: { [key: string]: string | string[] | undefined };
+    searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
 export default async function CircleNotFoundPage({ params, searchParams }: PageProps) {
     const p = await params;
-    const sp = searchParams || {};
+    const sp = (await searchParams) || {};
     const handle = p.handle;
 
     // Extract context provided by middleware
@@ -29,7 +29,7 @@ export default async function CircleNotFoundPage({ params, searchParams }: PageP
             <div className="rounded-lg border border-gray-200 bg-white/60 p-6 shadow-sm backdrop-blur">
                 <h1 className="mb-2 text-2xl font-semibold">{title}</h1>
                 <p className="text-gray-600">
-                    We couldn't find {moduleText} in <span className="font-medium">{circle?.name}</span>.
+                    We couldn&apos;t find {moduleText} in <span className="font-medium">{circle?.name}</span>.
                 </p>
                 <p className="mt-1 text-gray-600">{description}</p>
             </div>

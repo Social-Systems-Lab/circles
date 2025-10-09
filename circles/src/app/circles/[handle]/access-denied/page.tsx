@@ -7,12 +7,12 @@ import { requestMembershipAction, cancelMembershipRequestAction } from "@/compon
 
 type PageProps = {
     params: Promise<{ handle: string }>;
-    searchParams?: { [key: string]: string | string[] | undefined };
+    searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
 export default async function AccessDeniedPage({ params, searchParams }: PageProps) {
     const p = await params;
-    const sp = searchParams || {};
+    const sp = (await searchParams) || {};
     const handle = p.handle;
 
     // Extract query params provided by middleware
@@ -50,7 +50,7 @@ export default async function AccessDeniedPage({ params, searchParams }: PagePro
             <div className="rounded-lg border border-gray-200 bg-white/60 p-6 shadow-sm backdrop-blur">
                 <h1 className="mb-2 text-2xl font-semibold">{title}</h1>
                 <p className="text-gray-600">
-                    You don't have permission to view {moduleText} in{" "}
+                    You don&apos;t have permission to view {moduleText} in{" "}
                     <span className="font-medium">{circle?.name}</span>.
                 </p>
                 <p className="mt-1 text-gray-600">{description}</p>

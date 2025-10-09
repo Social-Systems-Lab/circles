@@ -56,7 +56,7 @@ export default function RsvpDialog({ open, onOpenChange, circleHandle, eventId }
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[525px]">
                 <DialogHeader>
-                    <DialogTitle>RSVP: I'm going</DialogTitle>
+                    <DialogTitle>RSVP: I&apos;m going</DialogTitle>
                     <DialogDescription>
                         Add an optional message and choose if you want to appear publicly in the participants list.
                     </DialogDescription>
@@ -82,8 +82,8 @@ export default function RsvpDialog({ open, onOpenChange, circleHandle, eventId }
                         <div className="flex flex-col">
                             <Label htmlFor="rsvp-public">Show me publicly</Label>
                             <span className="text-sm text-muted-foreground">
-                                If disabled, you will still be counted as an attendee but won't appear in the public
-                                list.
+                                If disabled, you will still be counted as an attendee but won&apos;t appear in the
+                                public list.
                             </span>
                         </div>
                         <Switch

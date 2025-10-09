@@ -249,7 +249,7 @@ export default function EventDetail({
                             ) : (
                                 <>
                                     <Button size="sm" disabled={isPending} onClick={() => setRsvpDialogOpen(true)}>
-                                        I'm going
+                                        I&apos;m going
                                     </Button>
                                     <Button
                                         size="sm"
@@ -496,7 +496,7 @@ export default function EventDetail({
                             ) : (
                                 <>
                                     <Button size="sm" disabled={isPending} onClick={() => setRsvpDialogOpen(true)}>
-                                        I'm going
+                                        I&apos;m going
                                     </Button>
                                     <Button
                                         size="sm"
