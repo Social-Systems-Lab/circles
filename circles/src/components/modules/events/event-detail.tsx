@@ -12,6 +12,7 @@ import { Calendar, MapPin, Clock } from "lucide-react";
 import type { Circle, Media } from "@/models/models";
 import InvitedUserList from "./invited-user-list";
 import InviteModal from "./invite-modal";
+import AttendeesList from "./attendees-list";
 import { CommentSection } from "../feeds/CommentSection";
 import RichText from "../feeds/RichText";
 import { userAtom } from "@/lib/data/atoms";
@@ -229,20 +230,35 @@ export default function EventDetail({
                     <div className="rounded-md border bg-white/60 p-3">
                         <div className="mb-2 text-xs text-muted-foreground">RSVP</div>
                         <div className="flex flex-wrap gap-2">
-                            <Button size="sm" disabled={isPending} onClick={() => onRsvp("going")}>
-                                I&apos;m going
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={isPending}
-                                onClick={() => onRsvp("interested")}
-                            >
-                                Interested
-                            </Button>
-                            <Button size="sm" variant="ghost" disabled={isPending} onClick={onCancelRsvp}>
-                                Cancel RSVP
-                            </Button>
+                            {event.userRsvpStatus === "going" ? (
+                                <>
+                                    <Button size="sm" variant="destructive" disabled={isPending} onClick={onCancelRsvp}>
+                                        Cancel RSVP
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={isPending}
+                                        onClick={() => onRsvp("interested")}
+                                    >
+                                        Interested
+                                    </Button>
+                                </>
+                            ) : (
+                                <>
+                                    <Button size="sm" disabled={isPending} onClick={() => onRsvp("going")}>
+                                        I'm going
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={isPending}
+                                        onClick={() => onRsvp("interested")}
+                                    >
+                                        Interested
+                                    </Button>
+                                </>
+                            )}
                         </div>
                         <div className="mt-2 text-xs text-muted-foreground">
                             Attendees (going): {event.attendees ?? 0}
@@ -455,20 +471,35 @@ export default function EventDetail({
                     <div className="rounded-lg border bg-white/70 p-5 shadow-sm">
                         <div className="mb-2 text-sm font-medium text-muted-foreground">RSVP</div>
                         <div className="flex flex-wrap gap-2">
-                            <Button size="sm" disabled={isPending} onClick={() => onRsvp("going")}>
-                                I&apos;m going
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={isPending}
-                                onClick={() => onRsvp("interested")}
-                            >
-                                Interested
-                            </Button>
-                            <Button size="sm" variant="ghost" disabled={isPending} onClick={onCancelRsvp}>
-                                Cancel RSVP
-                            </Button>
+                            {event.userRsvpStatus === "going" ? (
+                                <>
+                                    <Button size="sm" variant="destructive" disabled={isPending} onClick={onCancelRsvp}>
+                                        Cancel RSVP
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={isPending}
+                                        onClick={() => onRsvp("interested")}
+                                    >
+                                        Interested
+                                    </Button>
+                                </>
+                            ) : (
+                                <>
+                                    <Button size="sm" disabled={isPending} onClick={() => onRsvp("going")}>
+                                        I'm going
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={isPending}
+                                        onClick={() => onRsvp("interested")}
+                                    >
+                                        Interested
+                                    </Button>
+                                </>
+                            )}
                         </div>
                         <div className="mt-3 text-sm text-muted-foreground">
                             Attendees (going): {event.attendees ?? 0}
@@ -477,6 +508,7 @@ export default function EventDetail({
                             <div className="mt-1 text-sm">Your status: {event.userRsvpStatus}</div>
                         )}
                     </div>
+                    <AttendeesList circleHandle={circleHandle} eventId={event._id!.toString()} />
                     {event.invitations && event.invitations.length > 0 && (
                         <InvitedUserList
                             userDids={event.invitations}

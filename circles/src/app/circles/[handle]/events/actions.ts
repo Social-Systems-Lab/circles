@@ -32,7 +32,7 @@ import {
     changeEventStage as changeEventStageDb,
 } from "@/lib/data/event";
 import { getCirclesByDids } from "@/lib/data/circle";
-import { upsertRsvp, cancelRsvp } from "@/lib/data/eventRsvp";
+import { upsertRsvp, cancelRsvp, listAttendees } from "@/lib/data/eventRsvp";
 import {
     notifyEventSubmittedForReview,
     notifyEventApproved,
@@ -710,6 +710,31 @@ export async function inviteUsersToEventAction(
     } catch (error) {
         console.error("Error inviting users to event:", error);
         return { success: false, message: "Failed to send invitations" };
+    }
+}
+
+type GetAttendeesActionResult = {
+    users: Circle[];
+};
+
+export async function getAttendeesAction(circleHandle: string, eventId: string): Promise<GetAttendeesActionResult> {
+    const defaultResult: GetAttendeesActionResult = { users: [] };
+
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) return defaultResult;
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) return defaultResult;
+
+        const canView = await isAuthorized(userDid, circle._id as string, features.events.view);
+        if (!canView) return defaultResult;
+
+        const users = await listAttendees(eventId, "going");
+        return { users };
+    } catch (error) {
+        console.error("Error in getAttendeesAction:", error);
+        return defaultResult;
     }
 }
 
