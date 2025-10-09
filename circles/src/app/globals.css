@@ -503,3 +503,17 @@ div.ReactTags__suggestions ul li.ReactTags__activeSuggestion {
     border-left: 4px solid #ef4444;
     padding-left: 6px;
 }
+
+/* FullCalendar: truncate long event titles in month and week views */
+.fc .fc-daygrid-event .fc-event-title,
+.fc .fc-timegrid-event .fc-event-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Ensure container does not allow overflow for timegrid events */
+.fc .fc-timegrid-event .fc-event-main,
+.fc .fc-timegrid-event .fc-event-main-frame {
+    overflow: hidden;
+}

@@ -69,7 +69,11 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events }) => 
         const style: React.CSSProperties = {};
         if (isCancelled) style.textDecoration = "line-through";
         if (isDraft) style.color = "#6c757d"; // grey text similar to Bootstrap secondary
-        return <div style={style}>{title}</div>;
+        return (
+            <div className="max-w-full truncate" style={style} title={arg.event.title}>
+                {title}
+            </div>
+        );
     };
 
     // Highlight ongoing events (now between start and end)

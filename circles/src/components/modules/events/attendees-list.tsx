@@ -4,6 +4,8 @@ import React, { useEffect, useState } from "react";
 import { Circle } from "@/models/models";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAttendeesAction } from "@/app/circles/[handle]/events/actions";
+import { useSetAtom } from "jotai";
+import { contentPreviewAtom } from "@/lib/data/atoms";
 
 type Props = {
     circleHandle: string;
@@ -13,6 +15,7 @@ type Props = {
 export default function AttendeesList({ circleHandle, eventId }: Props) {
     const [users, setUsers] = useState<Circle[]>([]);
     const [loading, setLoading] = useState(true);
+    const setContentPreview = useSetAtom(contentPreviewAtom);
 
     useEffect(() => {
         let mounted = true;
@@ -38,7 +41,11 @@ export default function AttendeesList({ circleHandle, eventId }: Props) {
             <div className="mb-2 text-sm text-muted-foreground">Participants</div>
             <div className="space-y-3">
                 {users.map((user) => (
-                    <div key={user.did} className="flex items-center gap-3">
+                    <div
+                        key={user.did}
+                        onClick={() => setContentPreview({ type: "user", content: user })}
+                        className="flex cursor-pointer items-center gap-3 rounded-md p-1 hover:bg-muted/50"
+                    >
                         <Avatar>
                             <AvatarImage src={user.picture?.url} />
                             <AvatarFallback>{user.name?.[0]}</AvatarFallback>
