@@ -48,6 +48,11 @@ export async function middleware(request: NextRequest) {
                 // This ensures post viewing uses the same permissions as feed viewing
                 moduleHandle = "feed";
             }
+
+            // Exempt in-circle error pages from access checks to avoid redirect loops
+            if (moduleHandle === "access-denied" || moduleHandle === "not-found") {
+                return;
+            }
         }
     } else {
         // route: /<module-handle>
@@ -64,18 +69,25 @@ export async function middleware(request: NextRequest) {
                 "Content-Type": "application/json",
             },
         });
-        const { authenticated, authorized, notFound, error } = await response.json();
+        const { authenticated, authorized, notFound, notFoundType, error } = await response.json();
         if (error) {
             return redirectToErrorPage(request);
         }
         if (notFound) {
-            return redirectToNotFound(request);
+            // If the circle itself is missing, use global not-found.
+            if (notFoundType === "circle") {
+                return redirectToNotFound(request);
+            }
+            // Otherwise, show the in-circle not-found page.
+            return redirectToCircleNotFound(request, circleHandle, moduleHandle);
         }
         if (!authenticated) {
-            return redirectToUnauthenticated(request);
+            // Show in-circle access denied for unauthenticated users.
+            return redirectToCircleAccessDenied(request, circleHandle, moduleHandle, "unauthenticated");
         }
         if (!authorized) {
-            return redirectToUnauthorized(request);
+            // Show in-circle access denied for authenticated users lacking permission.
+            return redirectToCircleAccessDenied(request, circleHandle, moduleHandle, "unauthorized");
         }
     } catch (error) {
         return redirectToErrorPage(request);
@@ -102,6 +114,26 @@ function redirectToUnauthenticated(request: NextRequest) {
 
 function redirectToErrorPage(request: NextRequest) {
     const redirectUrl = new URL("/error", request.url);
+    return Response.redirect(redirectUrl);
+}
+
+function redirectToCircleAccessDenied(
+    request: NextRequest,
+    circleHandle: string,
+    moduleHandle: string,
+    reason: "unauthenticated" | "unauthorized",
+) {
+    const redirectUrl = new URL(`/circles/${circleHandle}/access-denied`, request.url);
+    redirectUrl.searchParams.set("redirectTo", request.nextUrl.pathname);
+    redirectUrl.searchParams.set("module", moduleHandle);
+    redirectUrl.searchParams.set("reason", reason);
+    return Response.redirect(redirectUrl);
+}
+
+function redirectToCircleNotFound(request: NextRequest, circleHandle: string, moduleHandle: string) {
+    const redirectUrl = new URL(`/circles/${circleHandle}/not-found`, request.url);
+    redirectUrl.searchParams.set("redirectTo", request.nextUrl.pathname);
+    redirectUrl.searchParams.set("module", moduleHandle);
     return Response.redirect(redirectUrl);
 }
 

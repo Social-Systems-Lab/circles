@@ -18,13 +18,13 @@ export async function POST(req: Request) {
         }
 
         if (!circle) {
-            return NextResponse.json({ notFound: true }, { status: 404 });
+            return NextResponse.json({ notFound: true, notFoundType: "circle" }, { status: 404 });
         }
 
         // Check if module is enabled using enabledModules
         const moduleEnabled = isModuleEnabled(circle, moduleHandle);
         if (!moduleEnabled) {
-            return NextResponse.json({ notFound: true }, { status: 404 });
+            return NextResponse.json({ notFound: true, notFoundType: "module" }, { status: 404 });
         }
 
         // Check access rules
