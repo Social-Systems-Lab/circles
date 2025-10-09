@@ -65,7 +65,7 @@ export default function RsvpDialog({ open, onOpenChange, circleHandle, eventId }
                 <div className="space-y-4 py-2">
                     {isPublic && (
                         <div className="space-y-2">
-                            <Label htmlFor="rsvp-message">Message (optional)</Label>
+                            <Label htmlFor="rsvp-message">Public message (optional)</Label>
                             <Textarea
                                 id="rsvp-message"
                                 value={message}
