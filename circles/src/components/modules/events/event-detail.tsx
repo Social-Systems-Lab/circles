@@ -13,6 +13,7 @@ import type { Circle, Media } from "@/models/models";
 import InvitedUserList from "./invited-user-list";
 import InviteModal from "./invite-modal";
 import AttendeesList from "./attendees-list";
+import RsvpDialog from "./rsvp-dialog";
 import { CommentSection } from "../feeds/CommentSection";
 import RichText from "../feeds/RichText";
 import { userAtom } from "@/lib/data/atoms";
@@ -61,6 +62,7 @@ export default function EventDetail({
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [isInviteModalOpen, setInviteModalOpen] = useState(false);
+    const [isRsvpDialogOpen, setRsvpDialogOpen] = useState(false);
     const compact = !!isPreview;
 
     const start = event.startAt ? new Date(event.startAt as any) : null;
@@ -246,7 +248,7 @@ export default function EventDetail({
                                 </>
                             ) : (
                                 <>
-                                    <Button size="sm" disabled={isPending} onClick={() => onRsvp("going")}>
+                                    <Button size="sm" disabled={isPending} onClick={() => setRsvpDialogOpen(true)}>
                                         I'm going
                                     </Button>
                                     <Button
@@ -296,6 +298,12 @@ export default function EventDetail({
                     eventId={event._id!.toString()}
                     open={isInviteModalOpen}
                     onOpenChange={setInviteModalOpen}
+                />
+                <RsvpDialog
+                    circleHandle={circleHandle}
+                    eventId={event._id!.toString()}
+                    open={isRsvpDialogOpen}
+                    onOpenChange={setRsvpDialogOpen}
                 />
             </div>
         );
@@ -487,7 +495,7 @@ export default function EventDetail({
                                 </>
                             ) : (
                                 <>
-                                    <Button size="sm" disabled={isPending} onClick={() => onRsvp("going")}>
+                                    <Button size="sm" disabled={isPending} onClick={() => setRsvpDialogOpen(true)}>
                                         I'm going
                                     </Button>
                                     <Button
@@ -524,6 +532,12 @@ export default function EventDetail({
                 eventId={event._id!.toString()}
                 open={isInviteModalOpen}
                 onOpenChange={setInviteModalOpen}
+            />
+            <RsvpDialog
+                circleHandle={circleHandle}
+                eventId={event._id!.toString()}
+                open={isRsvpDialogOpen}
+                onOpenChange={setRsvpDialogOpen}
             />
 
             {event.commentPostId ? (

@@ -28,15 +28,20 @@ export const upsertRsvp = async (
     userDid: string,
     status: "going" | "interested" | "cancelled" | "waitlist",
     selectedRoles?: string[],
+    isPublic?: boolean,
+    message?: string,
 ): Promise<boolean> => {
     try {
         const now = new Date();
-        const update = {
+        const update: any = {
             eventId,
             circleId,
             userDid,
             status,
             selectedRoles: selectedRoles || [],
+            // default to true if not provided to preserve existing public behavior
+            isPublic: typeof isPublic === "boolean" ? isPublic : true,
+            message: message && message.trim().length > 0 ? message.trim() : undefined,
             updatedAt: now,
         };
         const result = await EventRsvps.updateOne(
@@ -109,6 +114,46 @@ export const listAttendees = async (eventId: string, status: "going" | "interest
         return users as unknown as Circle[];
     } catch (error) {
         console.error("Error listing attendees:", error);
+        return [];
+    }
+};
+
+/**
+ * List public attendees with optional messages for a given status.
+ * Returns an array of { user: Circle; message?: string }.
+ * Legacy RSVPs without isPublic are treated as public.
+ */
+export const listAttendeesWithDetails = async (
+    eventId: string,
+    status: "going" | "interested" | "waitlist",
+): Promise<{ user: Circle; message?: string }[]> => {
+    try {
+        const rsvps = await EventRsvps.find({
+            eventId,
+            status,
+            $or: [{ isPublic: { $exists: false } }, { isPublic: true }],
+        })
+            .project({ userDid: 1, message: 1, _id: 0 })
+            .toArray();
+
+        const dids = rsvps.map((r) => r.userDid).filter(Boolean);
+        if (dids.length === 0) return [];
+
+        const users = (await Circles.find({ did: { $in: dids }, circleType: "user" })
+            .project({ ...SAFE_CIRCLE_PROJECTION, _id: { $toString: "$_id" } as any })
+            .toArray()) as unknown as Circle[];
+
+        const userByDid = new Map(users.map((u) => [u.did!, u]));
+        const result: { user: Circle; message?: string }[] = [];
+        for (const r of rsvps) {
+            const u = userByDid.get(r.userDid);
+            if (u) {
+                result.push({ user: u, message: (r as any).message || undefined });
+            }
+        }
+        return result;
+    } catch (error) {
+        console.error("Error listing attendees with details:", error);
         return [];
     }
 };

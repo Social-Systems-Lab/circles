@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Circle } from "@/models/models";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getAttendeesAction } from "@/app/circles/[handle]/events/actions";
+import { getAttendeesWithDetailsAction } from "@/app/circles/[handle]/events/actions";
 import { useSetAtom } from "jotai";
 import { contentPreviewAtom } from "@/lib/data/atoms";
 
@@ -13,7 +13,7 @@ type Props = {
 };
 
 export default function AttendeesList({ circleHandle, eventId }: Props) {
-    const [users, setUsers] = useState<Circle[]>([]);
+    const [attendees, setAttendees] = useState<{ user: Circle; message?: string }[]>([]);
     const [loading, setLoading] = useState(true);
     const setContentPreview = useSetAtom(contentPreviewAtom);
 
@@ -21,8 +21,8 @@ export default function AttendeesList({ circleHandle, eventId }: Props) {
         let mounted = true;
         const fetchUsers = async () => {
             try {
-                const result = await getAttendeesAction(circleHandle, eventId);
-                if (mounted) setUsers(result.users || []);
+                const result = await getAttendeesWithDetailsAction(circleHandle, eventId);
+                if (mounted) setAttendees(result.attendees || []);
             } finally {
                 if (mounted) setLoading(false);
             }
@@ -34,13 +34,13 @@ export default function AttendeesList({ circleHandle, eventId }: Props) {
     }, [circleHandle, eventId]);
 
     if (loading) return <div>Loading participants...</div>;
-    if (!users || users.length === 0) return null;
+    if (!attendees || attendees.length === 0) return null;
 
     return (
         <div className="formatted rounded-md border p-4">
             <div className="mb-2 text-sm text-muted-foreground">Participants</div>
             <div className="space-y-3">
-                {users.map((user) => (
+                {attendees.map(({ user, message }) => (
                     <div
                         key={user.did}
                         onClick={() => setContentPreview({ type: "user", content: user })}
@@ -59,6 +59,7 @@ export default function AttendeesList({ circleHandle, eventId }: Props) {
                                     @{user.handle}
                                 </p>
                             ) : null}
+                            {message ? <p className="mt-1 text-sm italic text-muted-foreground">“{message}”</p> : null}
                         </div>
                     </div>
                 ))}

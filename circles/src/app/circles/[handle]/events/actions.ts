@@ -33,6 +33,7 @@ import {
 } from "@/lib/data/event";
 import { getCirclesByDids } from "@/lib/data/circle";
 import { upsertRsvp, cancelRsvp, listAttendees } from "@/lib/data/eventRsvp";
+import { listAttendeesWithDetails } from "@/lib/data/eventRsvp";
 import {
     notifyEventSubmittedForReview,
     notifyEventApproved,
@@ -738,6 +739,34 @@ export async function getAttendeesAction(circleHandle: string, eventId: string):
     }
 }
 
+type GetAttendeesWithDetailsActionResult = {
+    attendees: { user: Circle; message?: string }[];
+};
+
+export async function getAttendeesWithDetailsAction(
+    circleHandle: string,
+    eventId: string,
+): Promise<GetAttendeesWithDetailsActionResult> {
+    const defaultResult: GetAttendeesWithDetailsActionResult = { attendees: [] };
+
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) return defaultResult;
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) return defaultResult;
+
+        const canView = await isAuthorized(userDid, circle._id as string, features.events.view);
+        if (!canView) return defaultResult;
+
+        const attendees = await listAttendeesWithDetails(eventId, "going");
+        return { attendees };
+    } catch (error) {
+        console.error("Error in getAttendeesWithDetailsAction:", error);
+        return defaultResult;
+    }
+}
+
 /**
  * Get invited users for an event
  */
@@ -771,7 +800,49 @@ export async function getInvitedUsersAction(
 }
 
 /**
- * Get circle members
+ * RSVP with options (isPublic + message)
+ */
+export async function rsvpEventWithOptionsAction(
+    circleHandle: string,
+    eventId: string,
+    status: "going" | "interested" | "waitlist",
+    options?: { isPublic?: boolean; message?: string },
+): Promise<{ success: boolean; message?: string }> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) return { success: false, message: "User not authenticated" };
+
+        const user = await getUserByDid(userDid);
+        if (!user) return { success: false, message: "User not found" };
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) return { success: false, message: "Circle not found" };
+
+        const canRsvp = await isAuthorized(userDid, circle._id as string, features.events.rsvp);
+        if (!canRsvp) return { success: false, message: "Not authorized to RSVP" };
+
+        const ok = await upsertRsvp(
+            eventId,
+            circle._id!.toString(),
+            userDid,
+            status,
+            undefined,
+            options?.isPublic,
+            options?.message,
+        );
+        if (!ok) return { success: false, message: "Failed to RSVP" };
+
+        revalidatePath(`/circles/${circleHandle}/events`);
+        revalidatePath(`/circles/${circleHandle}/events/${eventId}`);
+        return { success: true, message: "RSVP updated" };
+    } catch (error) {
+        console.error("Error RSVPing with options:", error);
+        return { success: false, message: "Failed to RSVP" };
+    }
+}
+
+/**
+ * Cancel RSVP
  */
 export async function getCircleMembersAction(circleHandle: string): Promise<GetCircleMembersActionResult> {
     const defaultResult: GetCircleMembersActionResult = { members: [] };

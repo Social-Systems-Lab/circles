@@ -1368,6 +1368,8 @@ export const eventRsvpSchema = z.object({
     userDid: didSchema,
     status: z.enum(["going", "interested", "cancelled", "waitlist"]),
     selectedRoles: z.array(z.string()).optional(), // Optional roles/chores
+    isPublic: z.boolean().optional(), // Whether this RSVP is publicly visible
+    message: z.string().max(500).optional(), // Optional public message to display
     createdAt: z.date(),
     updatedAt: z.date(),
 });
