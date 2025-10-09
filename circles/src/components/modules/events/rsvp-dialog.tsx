@@ -36,7 +36,7 @@ export default function RsvpDialog({ open, onOpenChange, circleHandle, eventId }
         startTransition(async () => {
             const res = await rsvpEventWithOptionsAction(circleHandle, eventId, "going", {
                 isPublic,
-                message: message?.trim() || undefined,
+                message: isPublic ? message?.trim() || undefined : undefined,
             });
             if (res.success) {
                 toast({ title: "RSVP updated" });
@@ -63,18 +63,20 @@ export default function RsvpDialog({ open, onOpenChange, circleHandle, eventId }
                 </DialogHeader>
 
                 <div className="space-y-4 py-2">
-                    <div className="space-y-2">
-                        <Label htmlFor="rsvp-message">Message (optional)</Label>
-                        <Textarea
-                            id="rsvp-message"
-                            value={message}
-                            onChange={(e) => setMessage(e.target.value)}
-                            placeholder="Add a short note…"
-                            maxLength={500}
-                            className="min-h-[90px]"
-                        />
-                        <div className="text-right text-xs text-muted-foreground">{message.length}/500</div>
-                    </div>
+                    {isPublic && (
+                        <div className="space-y-2">
+                            <Label htmlFor="rsvp-message">Message (optional)</Label>
+                            <Textarea
+                                id="rsvp-message"
+                                value={message}
+                                onChange={(e) => setMessage(e.target.value)}
+                                placeholder="Add a short note…"
+                                maxLength={500}
+                                className="min-h-[90px]"
+                            />
+                            <div className="text-right text-xs text-muted-foreground">{message.length}/500</div>
+                        </div>
+                    )}
 
                     <div className="flex items-center justify-between rounded-md border p-3">
                         <div className="flex flex-col">
@@ -84,7 +86,14 @@ export default function RsvpDialog({ open, onOpenChange, circleHandle, eventId }
                                 list.
                             </span>
                         </div>
-                        <Switch id="rsvp-public" checked={isPublic} onCheckedChange={setIsPublic} />
+                        <Switch
+                            id="rsvp-public"
+                            checked={isPublic}
+                            onCheckedChange={(v) => {
+                                setIsPublic(v);
+                                if (!v) setMessage("");
+                            }}
+                        />
                     </div>
                 </div>
 
