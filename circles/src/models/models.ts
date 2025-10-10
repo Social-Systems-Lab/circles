@@ -1314,6 +1314,12 @@ export const eventStageSchema = z.enum(["draft", "review", "open", "cancelled"])
 export type EventStage = z.infer<typeof eventStageSchema>;
 
 /**
+ * Event visibility
+ */
+export const eventVisibilitySchema = z.enum(["public", "private"]);
+export type EventVisibility = z.infer<typeof eventVisibilitySchema>;
+
+/**
  * Event model
  */
 export const eventSchema = z.object({
@@ -1325,6 +1331,7 @@ export const eventSchema = z.object({
     title: z.string(),
     description: z.string(),
     stage: eventStageSchema.default("draft"),
+    visibility: eventVisibilitySchema.default("public"),
     userGroups: z.array(z.string()).default([]), // User groups that can see this event
     location: locationSchema.optional(),
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments

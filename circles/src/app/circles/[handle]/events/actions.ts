@@ -15,6 +15,7 @@ import {
     EventDisplay,
     EventStage,
     CircleType,
+    eventVisibilitySchema,
 } from "@/models/models";
 import { getCircleByHandle, ensureModuleIsEnabledOnCircle, getCirclesBySearchQuery } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -93,6 +94,7 @@ const createEventSchema = z.object({
     categories: z.array(z.string()).optional(),
     causes: z.array(z.string()).optional(),
     capacity: z.string().optional(), // parse to number
+    visibility: eventVisibilitySchema.optional(),
 });
 
 const updateEventSchema = createEventSchema;
@@ -215,6 +217,7 @@ export async function createEventAction(
             categories: formData.getAll("categories"),
             causes: formData.getAll("causes"),
             capacity: (formData.get("capacity") as string) ?? undefined,
+            visibility: (formData.get("visibility") as string) ?? undefined,
         });
         if (!validated.success) {
             return {
@@ -282,6 +285,7 @@ export async function createEventAction(
             categories: (data.categories as string[])?.filter(Boolean),
             causes: (data.causes as string[])?.filter(Boolean),
             capacity,
+            visibility: (data.visibility as any) ?? "public",
         };
 
         // Create in DB (will also create shadow post if feed exists)
@@ -344,6 +348,7 @@ export async function updateEventAction(
             categories: formData.getAll("categories"),
             causes: formData.getAll("causes"),
             capacity: (formData.get("capacity") as string) ?? undefined,
+            visibility: (formData.get("visibility") as string) ?? undefined,
         });
         if (!validated.success) {
             return {
@@ -424,6 +429,7 @@ export async function updateEventAction(
                 typeof data.capacity === "string" && data.capacity.trim().length > 0
                     ? Number(data.capacity)
                     : undefined,
+            visibility: (data.visibility as any) ?? event.visibility,
             updatedAt: new Date(),
         };
 

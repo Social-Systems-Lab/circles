@@ -32,6 +32,7 @@ export const SAFE_EVENT_PROJECTION = {
     categories: 1,
     causes: 1,
     capacity: 1,
+    visibility: 1,
     invitations: 1,
 } as const;
 
@@ -193,7 +194,45 @@ export const getEventsByCircleId = async (
                 },
             },
 
-            // 6) Final projection
+            // 6) Current user's invitation
+            {
+                $lookup: {
+                    from: "eventInvitations",
+                    let: { eId: { $toString: "$_id" } },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [{ $eq: ["$eventId", "$$eId"] }, { $eq: ["$userDid", userDid] }],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                _id: 0,
+                                status: 1,
+                            },
+                        },
+                    ],
+                    as: "userInvDocs",
+                },
+            },
+
+            // 7) Visibility gating
+            {
+                $match: {
+                    $expr: {
+                        $or: [
+                            { $ne: ["$visibility", "private"] }, // default/undefined treated as public
+                            { $eq: ["$createdBy", userDid] },
+                            { $gt: [{ $size: "$userRsvpDocs" }, 0] },
+                            { $gt: [{ $size: "$userInvDocs" }, 0] },
+                        ],
+                    },
+                },
+            },
+
+            // 8) Final projection
             {
                 $project: {
                     ...SAFE_EVENT_PROJECTION,
@@ -344,6 +383,44 @@ export const getEventById = async (eventId: string, userDid: string): Promise<Ev
                         },
                     ],
                     as: "userRsvpDocs",
+                },
+            },
+
+            // Current user's invitation
+            {
+                $lookup: {
+                    from: "eventInvitations",
+                    let: { eId: { $toString: "$_id" } },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [{ $eq: ["$eventId", "$$eId"] }, { $eq: ["$userDid", userDid] }],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                _id: 0,
+                                status: 1,
+                            },
+                        },
+                    ],
+                    as: "userInvDocs",
+                },
+            },
+
+            // Visibility gating
+            {
+                $match: {
+                    $expr: {
+                        $or: [
+                            { $ne: ["$visibility", "private"] },
+                            { $eq: ["$createdBy", userDid] },
+                            { $gt: [{ $size: "$userRsvpDocs" }, 0] },
+                            { $gt: [{ $size: "$userInvDocs" }, 0] },
+                        ],
+                    },
                 },
             },
 
@@ -738,6 +815,44 @@ export const getOpenEventsForMap = async (userDid: string, range?: Range): Promi
                         },
                     ],
                     as: "userRsvpDocs",
+                },
+            },
+
+            // Current user's invitation
+            {
+                $lookup: {
+                    from: "eventInvitations",
+                    let: { eId: { $toString: "$_id" } },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [{ $eq: ["$eventId", "$$eId"] }, { $eq: ["$userDid", userDid] }],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                _id: 0,
+                                status: 1,
+                            },
+                        },
+                    ],
+                    as: "userInvDocs",
+                },
+            },
+
+            // Visibility gating
+            {
+                $match: {
+                    $expr: {
+                        $or: [
+                            { $ne: ["$visibility", "private"] },
+                            { $eq: ["$createdBy", userDid] },
+                            { $gt: [{ $size: "$userRsvpDocs" }, 0] },
+                            { $gt: [{ $size: "$userInvDocs" }, 0] },
+                        ],
+                    },
                 },
             },
 

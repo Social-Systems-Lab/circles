@@ -57,6 +57,7 @@ export default function EventForm({ circleHandle, event, showCirclePicker }: Pro
     const [virtualUrl, setVirtualUrl] = useState<string>(event?.virtualUrl || "");
     const [allDay, setAllDay] = useState<boolean>(!!event?.allDay);
     const [capacity, setCapacity] = useState<string>(event?.capacity ? String(event.capacity) : "");
+    const [isPrivate, setIsPrivate] = useState<boolean>(event?.visibility === "private");
     const [location, setLocation] = useState<Location | undefined>(event?.location);
     const [images, setImages] = useState<ImageItem[]>([]);
 
@@ -174,6 +175,7 @@ export default function EventForm({ circleHandle, event, showCirclePicker }: Pro
                 fd.set("endAt", finalEnd.toISOString());
                 fd.set("allDay", allDay ? "on" : "");
                 if (capacity) fd.set("capacity", capacity);
+                fd.set("visibility", isPrivate ? "private" : "public");
 
                 let result: { success: boolean; message?: string; eventId?: string };
                 if (event?._id) {
@@ -334,6 +336,14 @@ export default function EventForm({ circleHandle, event, showCirclePicker }: Pro
                             onChange={(e) => setCapacity(e.target.value)}
                         />
                     </div>
+
+                    <div className="flex items-center gap-2">
+                        <Switch id="isPrivate" checked={isPrivate} onCheckedChange={setIsPrivate} />
+                        <Label htmlFor="isPrivate">Private event</Label>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                        Private events are visible only to the creator and invited participants.
+                    </p>
                 </div>
 
                 <div className="space-y-4">
