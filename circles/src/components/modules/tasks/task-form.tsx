@@ -12,12 +12,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Circle, Media, Task, Location, GoalDisplay, UserPrivate } from "@/models/models"; // Added UserPrivate
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, MapPinIcon, MapPin } from "lucide-react";
+import { Loader2, MapPinIcon, MapPin, CalendarIcon } from "lucide-react";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRouter, useSearchParams } from "next/navigation";
 import LocationPicker from "@/components/forms/location-picker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format, parseISO, isValid } from "date-fns";
+import { cn } from "@/lib/utils";
 import { getFullLocationName } from "@/lib/utils";
 import { createTaskAction, updateTaskAction } from "@/app/circles/[handle]/tasks/actions";
 import CircleSelector from "@/components/global-create/circle-selector"; // Added CircleSelector
@@ -30,12 +34,14 @@ const taskFormSchema = z.object({
     description: z.string().min(1, { message: "Description is required" }),
     images: z.array(z.any()).optional(),
     location: z.any().optional(),
+    targetDate: z.date().optional(),
     goalId: z.string().optional().nullable(), // Allow null or undefined
 });
 
-type TaskFormValues = Omit<z.infer<typeof taskFormSchema>, "images" | "location"> & {
+type TaskFormValues = Omit<z.infer<typeof taskFormSchema>, "images" | "location" | "targetDate"> & {
     images?: (File | Media)[];
     location?: Location;
+    targetDate?: Date;
     goalId?: string | null; // Allow null
 };
 
@@ -74,6 +80,14 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     const searchParams = useSearchParams();
     const isEditing = !!task;
     const preselectedGoalId = searchParams.get("goalId");
+    const targetDateFromQuery = searchParams.get("targetDate");
+    let prefilledDate: Date | undefined = undefined;
+    if (!isEditing && targetDateFromQuery) {
+        const parsedDate = parseISO(targetDateFromQuery);
+        if (isValid(parsedDate)) {
+            prefilledDate = parsedDate;
+        }
+    }
 
     const form = useForm<TaskFormValues>({
         resolver: zodResolver(taskFormSchema),
@@ -82,6 +96,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             description: task?.description || "",
             images: task?.images || [],
             location: task?.location,
+            targetDate: prefilledDate ?? (task?.targetDate ? new Date(task.targetDate) : undefined),
             goalId: task?.goalId || preselectedGoalId || null,
         },
     });
@@ -175,6 +190,10 @@ export const TaskForm: React.FC<TaskFormProps> = ({
 
         if (location) {
             formData.append("location", JSON.stringify(location));
+        }
+
+        if (values.targetDate) {
+            formData.append("targetDate", values.targetDate.toISOString());
         }
 
         // Add goalId if present and not null/empty/none
@@ -332,6 +351,51 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                     )}
                                 </div>{" "}
                                 {/* End grid container for first row */}
+                                <FormField
+                                    control={form.control}
+                                    name="targetDate"
+                                    render={({ field }) => (
+                                        <FormItem className="py-3 md:py-4">
+                                            <FormLabel>Target Date (Optional)</FormLabel>
+                                            <Popover>
+                                                <PopoverTrigger asChild>
+                                                    <FormControl>
+                                                        <Button
+                                                            variant={"outline"}
+                                                            className={cn(
+                                                                "w-full pl-3 text-left font-normal md:w-[240px]",
+                                                                !field.value && "text-muted-foreground",
+                                                            )}
+                                                            disabled={isSubmitting}
+                                                        >
+                                                            {field.value ? (
+                                                                format(field.value, "PPP")
+                                                            ) : (
+                                                                <span>Pick a date</span>
+                                                            )}
+                                                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                                        </Button>
+                                                    </FormControl>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-auto p-0" align="start">
+                                                    <Calendar
+                                                        mode="single"
+                                                        selected={field.value}
+                                                        onSelect={field.onChange}
+                                                        disabled={(date: Date) =>
+                                                            date < new Date("1900-01-01") || isSubmitting
+                                                        }
+                                                        initialFocus
+                                                    />
+                                                </PopoverContent>
+                                            </Popover>
+                                            <FormDescription>
+                                                Set an optional target completion date for this task.
+                                            </FormDescription>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
                                 <FormField
                                     control={form.control}
                                     name="description"

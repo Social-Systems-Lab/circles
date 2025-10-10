@@ -23,6 +23,7 @@ export const SAFE_ISSUE_PROJECTION = {
     location: 1,
     commentPostId: 1,
     images: 1,
+    targetDate: 1,
 } as const;
 
 /**

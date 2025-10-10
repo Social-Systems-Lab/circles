@@ -243,6 +243,7 @@ const createTaskSchema = z.object({
             },
             { message: "Invalid location data format" },
         ),
+    targetDate: z.string().datetime({ offset: true }).optional(), // Expect ISO string from form
     userGroups: z.array(z.string()).optional(), // Optional: User groups for visibility
     goalId: z.string().optional(), // Optional: Goal ID for task association
 });
@@ -279,6 +280,7 @@ export async function createTaskAction( // Renamed function
             description: formData.get("description"),
             images: formData.getAll("images"),
             location: formData.get("location") ?? undefined,
+            targetDate: formData.get("targetDate") ?? undefined,
             userGroups: formData.getAll("userGroups"), // Assuming multi-select or similar
             goalId: formData.get("goalId") ?? undefined, // Optional goal ID
         });
@@ -320,6 +322,18 @@ export async function createTaskAction( // Renamed function
             locationData = JSON.parse(data.location); // Already validated by Zod refine
         }
 
+        // --- Parse Target Date ---
+        let targetDateData: Task["targetDate"] = undefined;
+        if (data.targetDate) {
+            try {
+                const d = new Date(data.targetDate);
+                if (!isNaN(d.getTime())) {
+                    targetDateData = d;
+                }
+            } catch (e) {
+                console.error("Invalid target date format received:", data.targetDate);
+            }
+        }
         // --- Handle Image Uploads ---
         let uploadedImages: Media[] = [];
         // Use isFile helper to identify file objects
@@ -358,6 +372,7 @@ export async function createTaskAction( // Renamed function
             description: data.description,
             images: uploadedImages,
             location: locationData,
+            targetDate: targetDateData,
             circleId: circle._id as string,
             createdBy: userDid,
             createdAt: new Date(),
@@ -430,6 +445,7 @@ export async function updateTaskAction(
             images: formData.getAll("images"),
             location: formData.get("location") ?? undefined,
             userGroups: formData.getAll("userGroups"),
+            targetDate: formData.get("targetDate") ?? undefined,
             // Get goalId, treat empty string as intent to unset
             goalId: formData.get("goalId") || "", // Default to empty string if null/undefined
         });
@@ -477,6 +493,23 @@ export async function updateTaskAction(
             }
         }
 
+        // --- Parse Target Date (support unsetting with empty string) ---
+        const rawTargetDate = formData.get("targetDate");
+        let targetDateForUpdate: Date | null | undefined = undefined;
+        if (typeof rawTargetDate === "string") {
+            if (rawTargetDate.trim() === "") {
+                targetDateForUpdate = null; // unset
+            } else {
+                try {
+                    const d = new Date(rawTargetDate);
+                    if (!isNaN(d.getTime())) {
+                        targetDateForUpdate = d;
+                    }
+                } catch (e) {
+                    // ignore parse error
+                }
+            }
+        }
         // ... (image handling) ...
         const existingImages = task.images || [];
         const submittedImageEntries = data.images || [];
@@ -529,6 +562,7 @@ export async function updateTaskAction(
             description: data.description,
             images: finalImages,
             location: locationData,
+            targetDate: targetDateForUpdate,
             userGroups: data.userGroups || task.userGroups,
             updatedAt: new Date(),
             // Pass goalId directly (can be string or empty string for removal)

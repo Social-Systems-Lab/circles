@@ -11,12 +11,16 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Circle, Media, Issue, Location, UserPrivate } from "@/models/models"; // Added UserPrivate
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, MapPinIcon, MapPin } from "lucide-react";
+import { Loader2, MapPinIcon, MapPin, CalendarIcon } from "lucide-react";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import LocationPicker from "@/components/forms/location-picker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format, parseISO, isValid } from "date-fns";
+import { cn } from "@/lib/utils";
 import { getFullLocationName } from "@/lib/utils";
 import { createIssueAction, updateIssueAction } from "@/app/circles/[handle]/issues/actions";
 import CircleSelector from "@/components/global-create/circle-selector"; // Added CircleSelector
@@ -28,11 +32,13 @@ const issueFormSchema = z.object({
     description: z.string().min(1, { message: "Description is required" }),
     images: z.array(z.any()).optional(), // react-hook-form handles FileList/Media[]
     location: z.any().optional(), // Location object or undefined
+    targetDate: z.date().optional(),
 });
 
-type IssueFormValues = Omit<z.infer<typeof issueFormSchema>, "images" | "location"> & {
+type IssueFormValues = Omit<z.infer<typeof issueFormSchema>, "images" | "location" | "targetDate"> & {
     images?: (File | Media)[]; // Allow both File (new uploads) and Media (existing)
     location?: Location;
+    targetDate?: Date;
 };
 
 interface IssueFormProps {
@@ -63,7 +69,17 @@ export const IssueForm: React.FC<IssueFormProps> = ({
     const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
     const { toast } = useToast();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const isEditing = !!issue;
+
+    const targetDateFromQuery = searchParams.get("targetDate");
+    let prefilledDate: Date | undefined = undefined;
+    if (!isEditing && targetDateFromQuery) {
+        const parsedDate = parseISO(targetDateFromQuery);
+        if (isValid(parsedDate)) {
+            prefilledDate = parsedDate;
+        }
+    }
 
     const form = useForm<IssueFormValues>({
         resolver: zodResolver(issueFormSchema),
@@ -72,6 +88,7 @@ export const IssueForm: React.FC<IssueFormProps> = ({
             description: issue?.description || "",
             images: issue?.images || [],
             location: issue?.location,
+            targetDate: prefilledDate ?? (issue?.targetDate ? new Date(issue.targetDate) : undefined),
         },
     });
 
@@ -147,6 +164,10 @@ export const IssueForm: React.FC<IssueFormProps> = ({
 
         if (location) {
             formData.append("location", JSON.stringify(location));
+        }
+
+        if (values.targetDate) {
+            formData.append("targetDate", values.targetDate.toISOString());
         }
 
         if (values.images) {
@@ -234,6 +255,51 @@ export const IssueForm: React.FC<IssueFormProps> = ({
                                 <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-6">
                                     {" "}
                                     {/* Grid container */}
+                                    <FormField
+                                        control={form.control}
+                                        name="targetDate"
+                                        render={({ field }) => (
+                                            <FormItem className="py-3 md:py-4">
+                                                <FormLabel>Target Date (Optional)</FormLabel>
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <FormControl>
+                                                            <Button
+                                                                variant={"outline"}
+                                                                className={cn(
+                                                                    "w-full pl-3 text-left font-normal md:w-[240px]",
+                                                                    !field.value && "text-muted-foreground",
+                                                                )}
+                                                                disabled={isSubmitting}
+                                                            >
+                                                                {field.value ? (
+                                                                    format(field.value, "PPP")
+                                                                ) : (
+                                                                    <span>Pick a date</span>
+                                                                )}
+                                                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                                            </Button>
+                                                        </FormControl>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-auto p-0" align="start">
+                                                        <Calendar
+                                                            mode="single"
+                                                            selected={field.value}
+                                                            onSelect={field.onChange}
+                                                            disabled={(date: Date) =>
+                                                                date < new Date("1900-01-01") || isSubmitting
+                                                            }
+                                                            initialFocus
+                                                        />
+                                                    </PopoverContent>
+                                                </Popover>
+                                                <FormDescription>
+                                                    Set an optional target completion date for this issue.
+                                                </FormDescription>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
                                     <FormField
                                         control={form.control}
                                         name="title"

@@ -10,6 +10,9 @@ import { EventDisplay, Circle } from "@/models/models";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { getEventsAction } from "@/app/circles/[handle]/events/actions";
+import { getGoalsAction } from "@/app/circles/[handle]/goals/actions";
+import { getTasksAction } from "@/app/circles/[handle]/tasks/actions";
+import { getIssuesAction } from "@/app/circles/[handle]/issues/actions";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 
@@ -18,6 +21,8 @@ type Props = {
     events: EventDisplay[];
     canCreate: boolean;
 };
+
+type Milestone = { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string };
 
 export default function EventsTabs({ circle, events, canCreate }: Props) {
     const searchParams = useSearchParams();
@@ -34,6 +39,7 @@ export default function EventsTabs({ circle, events, canCreate }: Props) {
     const [includeCreated, setIncludeCreated] = useState(true);
     const [includeParticipating, setIncludeParticipating] = useState(true);
     const [filteredEvents, setFilteredEvents] = useState(events);
+    const [milestones, setMilestones] = useState<Milestone[]>([]);
 
     useEffect(() => {
         const fetchEvents = async () => {
@@ -45,6 +51,55 @@ export default function EventsTabs({ circle, events, canCreate }: Props) {
 
         fetchEvents();
     }, [includeCreated, includeParticipating, circle, user]);
+
+    useEffect(() => {
+        const fetchMilestones = async () => {
+            try {
+                const isSelfUserCircle = circle.circleType === "user" && user?.did === circle.did;
+                const includeCreatedFinal = isSelfUserCircle ? includeCreated : undefined;
+                const includeParticipatingFinal = isSelfUserCircle ? includeParticipating : undefined;
+
+                const [goalsRes, tasksRes, issuesRes] = await Promise.all([
+                    getGoalsAction(circle.handle!, includeCreatedFinal, includeParticipatingFinal),
+                    getTasksAction(circle.handle!, includeCreatedFinal, includeParticipatingFinal),
+                    getIssuesAction(circle.handle!, includeCreatedFinal, includeParticipatingFinal),
+                ]);
+
+                const goalMilestones: Milestone[] = (goalsRes?.goals || [])
+                    .filter((g: any) => g?.targetDate)
+                    .map((g: any) => ({
+                        id: (g as any)._id?.toString?.() || g._id,
+                        type: "goal",
+                        title: g.title,
+                        date: g.targetDate,
+                    }));
+
+                const taskMilestones: Milestone[] = (tasksRes?.tasks || [])
+                    .filter((t: any) => t?.targetDate)
+                    .map((t: any) => ({
+                        id: (t as any)._id?.toString?.() || t._id,
+                        type: "task",
+                        title: t.title,
+                        date: t.targetDate,
+                    }));
+
+                const issueMilestones: Milestone[] = (issuesRes || [])
+                    .filter((i: any) => i?.targetDate)
+                    .map((i: any) => ({
+                        id: (i as any)._id?.toString?.() || i._id,
+                        type: "issue",
+                        title: i.title,
+                        date: i.targetDate,
+                    }));
+
+                setMilestones([...goalMilestones, ...taskMilestones, ...issueMilestones]);
+            } catch (e) {
+                setMilestones([]);
+            }
+        };
+
+        fetchMilestones();
+    }, [circle, user, includeCreated, includeParticipating]);
 
     const onTabChange = (value: string) => {
         const newTab = (value === "timeline" ? "timeline" : "calendar") as "calendar" | "timeline";
@@ -113,13 +168,13 @@ export default function EventsTabs({ circle, events, canCreate }: Props) {
                     )}
 
                     <TabsContent value="timeline" className="mt-0">
-                        <EventTimeline circleHandle={circle.handle!} events={filteredEvents} />
+                        <EventTimeline circleHandle={circle.handle!} events={filteredEvents} milestones={milestones} />
                     </TabsContent>
                 </Tabs>
             </div>
             <Tabs value={tab} onValueChange={onTabChange} className="w-full">
                 <TabsContent value="calendar" className="mt-0">
-                    <CalendarView circleHandle={circle.handle!} events={filteredEvents} />
+                    <CalendarView circleHandle={circle.handle!} events={filteredEvents} milestones={milestones} />
                 </TabsContent>
             </Tabs>
         </div>

@@ -14,6 +14,7 @@ import { CalendarIcon, Clock, MapPin, Users } from "lucide-react";
 type Props = {
     circleHandle: string;
     events: EventDisplay[];
+    milestones?: { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string }[];
     condensed?: boolean;
 };
 
@@ -202,42 +203,88 @@ const EventCard: React.FC<{ e: EventDisplay; circleHandle: string; condensed?: b
     );
 };
 
-export default function EventTimeline({ circleHandle, events, condensed }: Props) {
-    // Only show upcoming or ongoing events; filter out past events and sort by start date
-    const sorted = useMemo(() => {
+// Condensed one-line milestone row
+const MilestoneRow: React.FC<{
+    m: { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string };
+    circleHandle: string;
+}> = ({ m, circleHandle }) => {
+    const icon = m.type === "goal" ? "🎯" : m.type === "task" ? "🧩" : "🐞";
+    const href =
+        m.type === "goal"
+            ? `/circles/${circleHandle}/goals/${m.id}`
+            : m.type === "task"
+              ? `/circles/${circleHandle}/tasks/${m.id}`
+              : `/circles/${circleHandle}/issues/${m.id}`;
+    return (
+        <Link href={href} className="group block">
+            <div className="flex items-center gap-2 truncate rounded border bg-white px-3 py-2 text-xs hover:bg-muted/40">
+                <span className="select-none">{icon}</span>
+                <span className="truncate">{m.title}</span>
+                <span className="ml-auto inline-flex items-center text-muted-foreground">
+                    <CalendarIcon className="mr-1 h-3 w-3" />
+                    {format(new Date(m.date), "MMM d, yyyy")}
+                </span>
+            </div>
+        </Link>
+    );
+};
+
+export default function EventTimeline({ circleHandle, events, milestones, condensed }: Props) {
+    // Build combined list of future/ongoing entries: events + dated milestones
+    const combined = useMemo(() => {
         const now = new Date();
-        const filtered = (events || []).filter((e) => {
-            const start = e.startAt ? new Date(e.startAt as any) : undefined;
-            const end = e.endAt ? new Date(e.endAt as any) : undefined;
-            if (end) return end >= now; // include ongoing or future (ends in future)
-            if (start) return start >= now; // include if start is in the future when no end
-            return false; // exclude undated events
-        });
-        return filtered.sort((a, b) => {
-            const sa = new Date(a.startAt).getTime();
-            const sb = new Date(b.startAt).getTime();
-            return sa - sb;
-        });
-    }, [events]);
+
+        const eventEntries =
+            (events || [])
+                .filter((e) => {
+                    const start = e.startAt ? new Date(e.startAt as any) : undefined;
+                    const end = e.endAt ? new Date(e.endAt as any) : undefined;
+                    if (end) return end >= now; // include ongoing or future (ends in future)
+                    if (start) return start >= now; // include if start is in the future when no end
+                    return false; // exclude undated events
+                })
+                .map((e) => ({
+                    kind: "event" as const,
+                    date: new Date(e.startAt),
+                    event: e,
+                })) || [];
+
+        const milestoneEntries =
+            (milestones || [])
+                .filter((m) => m.date)
+                .filter((m) => {
+                    const d = new Date(m.date);
+                    return d >= now;
+                })
+                .map((m) => ({
+                    kind: "milestone" as const,
+                    date: new Date(m.date),
+                    milestone: m,
+                })) || [];
+
+        const all = [...eventEntries, ...milestoneEntries];
+        all.sort((a, b) => a.date.getTime() - b.date.getTime());
+        return all;
+    }, [events, milestones]);
 
     // Group by Year -> Month
-    const grouped: Record<string, Record<number, EventDisplay[]>> = useMemo(() => {
-        const g: Record<string, Record<number, EventDisplay[]>> = {};
-        for (const e of sorted) {
-            const d = new Date(e.startAt);
+    const grouped: Record<string, Record<number, typeof combined>> = useMemo(() => {
+        const g: Record<string, Record<number, typeof combined>> = {};
+        for (const item of combined) {
+            const d = item.date;
             const year = String(d.getFullYear());
-            const month = d.getMonth(); // 0-11
+            const month = d.getMonth();
             if (!g[year]) g[year] = {};
             if (!g[year][month]) g[year][month] = [];
-            g[year][month].push(e);
+            g[year][month].push(item);
         }
         return g;
-    }, [sorted]);
+    }, [combined]);
 
     const yearKeys = useMemo(() => Object.keys(grouped).sort((a, b) => Number(a) - Number(b)), [grouped]);
 
-    if (sorted.length === 0) {
-        return <div className="p-8 text-center text-muted-foreground">No events found.</div>;
+    if (combined.length === 0) {
+        return <div className="p-8 text-center text-muted-foreground">No upcoming items found.</div>;
     }
 
     return (
@@ -247,7 +294,7 @@ export default function EventTimeline({ circleHandle, events, condensed }: Props
                     <div className="ml-12">
                         {Object.entries(grouped[year])
                             .sort(([a], [b]) => Number(a) - Number(b))
-                            .map(([mKey, monthEvents]) => {
+                            .map(([mKey, monthItems]) => {
                                 const monthNum = Number(mKey);
                                 const monthDate = new Date(Number(year), monthNum);
                                 return (
@@ -265,14 +312,22 @@ export default function EventTimeline({ circleHandle, events, condensed }: Props
                                         </div>
                                         {/* List (single column) */}
                                         <div className={cn("flex flex-col", condensed ? "gap-2" : "gap-4")}>
-                                            {monthEvents.map((e) => (
-                                                <EventCard
-                                                    key={(e as any)._id}
-                                                    e={e}
-                                                    circleHandle={circleHandle}
-                                                    condensed={condensed}
-                                                />
-                                            ))}
+                                            {monthItems.map((it, idx) =>
+                                                it.kind === "event" ? (
+                                                    <EventCard
+                                                        key={`${(it.event as any)._id}-${idx}`}
+                                                        e={it.event}
+                                                        circleHandle={circleHandle}
+                                                        condensed={condensed}
+                                                    />
+                                                ) : (
+                                                    <MilestoneRow
+                                                        key={`${it.milestone.type}:${it.milestone.id}-${idx}`}
+                                                        m={it.milestone}
+                                                        circleHandle={circleHandle}
+                                                    />
+                                                ),
+                                            )}
                                         </div>
                                     </div>
                                 );

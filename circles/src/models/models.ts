@@ -1245,6 +1245,7 @@ export const issueSchema = z.object({
     location: locationSchema.optional(),
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments
     images: z.array(mediaSchema).optional(), // Optional images/media attached to the issue
+    targetDate: z.date().nullable().optional(), // Target date for issue (optional)
 });
 
 export type Issue = z.infer<typeof issueSchema>;
@@ -1293,6 +1294,7 @@ export const taskSchema = z.object({
     location: locationSchema.optional(),
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments
     images: z.array(mediaSchema).optional(), // Optional images/media attached to the task
+    targetDate: z.date().nullable().optional(), // Target date for task (optional)
     goalId: z.string().optional(), // Optional link to a goal
 });
 

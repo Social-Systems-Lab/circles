@@ -159,6 +159,7 @@ const createIssueSchema = z.object({
             },
             { message: "Invalid location data format" },
         ),
+    targetDate: z.string().datetime({ offset: true }).optional(), // Expect ISO string from form
     userGroups: z.array(z.string()).optional(), // Optional: User groups for visibility
 });
 
@@ -189,6 +190,7 @@ export async function createIssueAction(
             description: formData.get("description"),
             images: formData.getAll("images"),
             location: formData.get("location") ?? undefined,
+            targetDate: formData.get("targetDate") ?? undefined,
             userGroups: formData.getAll("userGroups"), // Assuming multi-select or similar
         });
 
@@ -229,6 +231,18 @@ export async function createIssueAction(
             locationData = JSON.parse(data.location); // Already validated by Zod refine
         }
 
+        // --- Parse Target Date ---
+        let targetDateData: Issue["targetDate"] = undefined;
+        if (data.targetDate) {
+            try {
+                const d = new Date(data.targetDate);
+                if (!isNaN(d.getTime())) {
+                    targetDateData = d;
+                }
+            } catch (e) {
+                console.error("Invalid target date format received:", data.targetDate);
+            }
+        }
         // --- Handle Image Uploads ---
         let uploadedImages: Media[] = [];
         // Use isFile helper to identify file objects
@@ -266,6 +280,7 @@ export async function createIssueAction(
             description: data.description,
             images: uploadedImages,
             location: locationData,
+            targetDate: targetDateData,
             circleId: circle._id as string,
             createdBy: userDid,
             createdAt: new Date(),
@@ -333,6 +348,7 @@ export async function updateIssueAction(
             images: formData.getAll("images"),
             location: formData.get("location") ?? undefined,
             userGroups: formData.getAll("userGroups"),
+            targetDate: formData.get("targetDate") ?? undefined,
         });
 
         if (!validatedData.success) {
@@ -386,6 +402,23 @@ export async function updateIssueAction(
             locationData = undefined; // Explicitly remove if empty
         }
 
+        // --- Parse Target Date (support unsetting with empty string) ---
+        const rawTargetDate = formData.get("targetDate");
+        let targetDateForUpdate: Date | null | undefined = undefined;
+        if (typeof rawTargetDate === "string") {
+            if (rawTargetDate.trim() === "") {
+                targetDateForUpdate = null; // unset
+            } else {
+                try {
+                    const d = new Date(rawTargetDate);
+                    if (!isNaN(d.getTime())) {
+                        targetDateForUpdate = d;
+                    }
+                } catch (e) {
+                    // ignore parse error
+                }
+            }
+        }
         // --- Handle Image Updates (Similar logic to proposal update) ---
         const existingImages = issue.images || [];
         const submittedImageEntries = data.images || [];
@@ -440,6 +473,7 @@ export async function updateIssueAction(
             description: data.description,
             images: finalImages,
             location: locationData,
+            targetDate: targetDateForUpdate,
             userGroups: data.userGroups || issue.userGroups, // Keep existing if not provided
             updatedAt: new Date(),
         };

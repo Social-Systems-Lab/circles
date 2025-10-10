@@ -15,15 +15,16 @@ import { EventDisplay } from "@/models/models";
 type CalendarViewProps = {
     circleHandle: string;
     events: EventDisplay[];
+    milestones?: { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string }[];
 };
 
 const FullCalendar = dynamic(() => import("@fullcalendar/react"), { ssr: false });
 
-const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events }) => {
+const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events, milestones }) => {
     const router = useRouter();
 
-    const fcEvents = useMemo(
-        () =>
+    const fcEvents = useMemo(() => {
+        const eventItems =
             (events || []).map((e) => ({
                 id: (e as any)._id?.toString?.() || "",
                 title: e.title,
@@ -31,6 +32,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events }) => 
                 end: e.endAt ? new Date(e.endAt) : undefined,
                 allDay: !!e.allDay,
                 extendedProps: {
+                    type: "event",
+                    itemId: (e as any)._id?.toString?.() || "",
                     location: e.location,
                     isVirtual: e.isVirtual,
                     virtualUrl: e.virtualUrl,
@@ -39,9 +42,23 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events }) => 
                     userRsvpStatus: e.userRsvpStatus ?? "none",
                     stage: e.stage,
                 },
-            })),
-        [events],
-    );
+            })) || [];
+
+        const milestoneItems =
+            (milestones || []).map((m) => ({
+                id: `m:${m.type}:${m.id}`,
+                title: (m.type === "goal" ? "🎯 " : m.type === "task" ? "🧩 " : "🐞 ") + m.title,
+                start: m.date ? new Date(m.date) : undefined,
+                end: undefined,
+                allDay: true,
+                extendedProps: {
+                    type: m.type,
+                    itemId: m.id,
+                },
+            })) || [];
+
+        return [...eventItems, ...milestoneItems];
+    }, [events, milestones]);
 
     const handleDateClick = (arg: DateClickArg) => {
         // Prefill create form with clicked date (basic)
@@ -55,14 +72,38 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events }) => 
     };
 
     const handleEventClick = (clickInfo: EventClickArg) => {
-        const id = clickInfo.event.id;
-        if (id) {
-            router.push(`/circles/${circleHandle}/events/${id}`);
+        const ext = (clickInfo.event.extendedProps as any) || {};
+        const type = ext.type as string | undefined;
+        const itemId = (ext.itemId as string | undefined) || clickInfo.event.id;
+        if (!itemId) return;
+
+        if (type === "goal") {
+            router.push(`/circles/${circleHandle}/goals/${itemId}`);
+        } else if (type === "task") {
+            router.push(`/circles/${circleHandle}/tasks/${itemId}`);
+        } else if (type === "issue") {
+            router.push(`/circles/${circleHandle}/issues/${itemId}`);
+        } else {
+            // default to event
+            router.push(`/circles/${circleHandle}/events/${itemId}`);
         }
     };
 
     const renderEventContent = (arg: any) => {
-        const stage = (arg.event.extendedProps as any)?.stage as string | undefined;
+        const ext = (arg.event.extendedProps as any) || {};
+        const type = ext.type as string | undefined;
+
+        // Condensed rendering for milestones (goal/task/issue)
+        if (type === "goal" || type === "task" || type === "issue") {
+            return (
+                <div className="max-w-full truncate text-xs" title={arg.event.title}>
+                    {arg.event.title}
+                </div>
+            );
+        }
+
+        // Default rendering for events
+        const stage = ext?.stage as string | undefined;
         const isDraft = stage === "draft";
         const isCancelled = stage === "cancelled";
         const title = arg.event.title + (isDraft ? " (draft)" : "");
