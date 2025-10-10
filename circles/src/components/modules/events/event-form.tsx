@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useTransition } from "react";
+import React, { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createEventAction, updateEventAction } from "@/app/circles/[handle]/events/actions";
 import { EventDisplay, Location, Media } from "@/models/models";
@@ -68,15 +68,39 @@ export default function EventForm({ circleHandle, event, showCirclePicker }: Pro
     );
     const [startTime, setStartTime] = useState(() => (event?.startAt ? formatTime(new Date(event.startAt)) : "12:00"));
     const [endTime, setEndTime] = useState(() => (event?.endAt ? formatTime(new Date(event.endAt)) : "13:00"));
+    const [endDirty, setEndDirty] = useState(false);
+    const [startDirty, setStartDirty] = useState(false);
+    const seededRef = useRef(false);
 
     useEffect(() => {
         if (allDay) return;
+
+        // Only auto-sync when user changed start fields and end hasn't been manually edited
+        if (!startDirty || endDirty) return;
+
         const [h, m] = startTime.split(":").map(Number);
         const newStart = setMinutes(setHours(new Date(startDate), h), m);
         const newEnd = addHours(newStart, 1);
+
         setEndDate(formatDate(newEnd));
         setEndTime(formatTime(newEnd));
-    }, [startTime, startDate, allDay]);
+    }, [startTime, startDate, allDay, startDirty, endDirty]);
+
+    // Seed date/time from event once when it becomes available
+    useEffect(() => {
+        if (!event || seededRef.current) return;
+        if (event.startAt) {
+            const sd = new Date(event.startAt as any);
+            setStartDate(formatDate(sd));
+            setStartTime(formatTime(sd));
+        }
+        if (event.endAt) {
+            const ed = new Date(event.endAt as any);
+            setEndDate(formatDate(ed));
+            setEndTime(formatTime(ed));
+        }
+        seededRef.current = true;
+    }, [event]);
 
     // Seed images for edit
     useEffect(() => {
@@ -221,12 +245,25 @@ export default function EventForm({ circleHandle, event, showCirclePicker }: Pro
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <Label>Start Date</Label>
-                            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                            <Input
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => {
+                                    setStartDate(e.target.value);
+                                    setStartDirty(true);
+                                }}
+                            />
                         </div>
                         {!allDay && (
                             <div>
                                 <Label>Start Time</Label>
-                                <TimePicker value={startTime} onChange={setStartTime} />
+                                <TimePicker
+                                    value={startTime}
+                                    onChange={(val) => {
+                                        setStartTime(val);
+                                        setStartDirty(true);
+                                    }}
+                                />
                             </div>
                         )}
                     </div>
@@ -234,12 +271,25 @@ export default function EventForm({ circleHandle, event, showCirclePicker }: Pro
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <Label>End Date</Label>
-                            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                            <Input
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => {
+                                    setEndDate(e.target.value);
+                                    setEndDirty(true);
+                                }}
+                            />
                         </div>
                         {!allDay && (
                             <div>
                                 <Label>End Time</Label>
-                                <TimePicker value={endTime} onChange={setEndTime} />
+                                <TimePicker
+                                    value={endTime}
+                                    onChange={(val) => {
+                                        setEndTime(val);
+                                        setEndDirty(true);
+                                    }}
+                                />
                             </div>
                         )}
                     </div>
