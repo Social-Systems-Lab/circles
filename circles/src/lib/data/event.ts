@@ -900,3 +900,210 @@ export const getOpenEventsForMap = async (userDid: string, range?: Range): Promi
         throw error;
     }
 };
+
+/**
+ * Get open events across all circles for list display (includes virtual/no-geo events).
+ * - Includes events regardless of geocoded point
+ * - Filters by optional date range overlap or, if no range provided, to upcoming (endAt >= now)
+ * - Stage must be "open"
+ * - Applies visibility gating (public, creator, invited, or RSVP'ed)
+ */
+export const getOpenEventsForList = async (userDid: string, range?: Range): Promise<EventDisplay[]> => {
+    try {
+        const dateMatch = buildRangeMatch(range);
+        const now = new Date();
+
+        // Base match: open events; no lngLat requirement for list
+        const baseMatch: any = {
+            stage: "open",
+        };
+
+        // Apply date overlap if provided, otherwise only upcoming
+        if (range?.from || range?.to) {
+            Object.assign(baseMatch, dateMatch);
+        } else {
+            baseMatch.endAt = { $gte: now };
+        }
+
+        const events = (await Events.aggregate([
+            { $match: baseMatch },
+
+            // Author
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { authorDid: "$createdBy" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$did", "$$authorDid"] },
+                                        { $eq: ["$circleType", "user"] },
+                                        { $ne: ["$$authorDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" },
+                            },
+                        },
+                    ],
+                    as: "authorDetails",
+                },
+            },
+            { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: false } },
+
+            // Circle
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { cId: { $toObjectId: "$circleId" } },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ["$_id", "$$cId"] } } },
+                        {
+                            $project: {
+                                _id: { $toString: "$_id" },
+                                name: 1,
+                                handle: 1,
+                                picture: 1,
+                                enabledModules: 1,
+                            },
+                        },
+                    ],
+                    as: "circleDetails",
+                },
+            },
+            { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
+
+            // RSVP counts
+            {
+                $lookup: {
+                    from: "eventRsvps",
+                    let: { eId: { $toString: "$_id" } },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: { $eq: ["$eventId", "$$eId"] },
+                            },
+                        },
+                        {
+                            $group: {
+                                _id: "$status",
+                                count: { $sum: 1 },
+                            },
+                        },
+                    ],
+                    as: "rsvpCounts",
+                },
+            },
+
+            // user RSVP
+            {
+                $lookup: {
+                    from: "eventRsvps",
+                    let: { eId: { $toString: "$_id" } },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [{ $eq: ["$eventId", "$$eId"] }, { $eq: ["$userDid", userDid] }],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                _id: 0,
+                                status: 1,
+                            },
+                        },
+                    ],
+                    as: "userRsvpDocs",
+                },
+            },
+
+            // Current user's invitation
+            {
+                $lookup: {
+                    from: "eventInvitations",
+                    let: { eId: { $toString: "$_id" } },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [{ $eq: ["$eventId", "$$eId"] }, { $eq: ["$userDid", userDid] }],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                _id: 0,
+                                status: 1,
+                            },
+                        },
+                    ],
+                    as: "userInvDocs",
+                },
+            },
+
+            // Visibility gating
+            {
+                $match: {
+                    $expr: {
+                        $or: [
+                            { $ne: ["$visibility", "private"] },
+                            { $eq: ["$createdBy", userDid] },
+                            { $gt: [{ $size: "$userRsvpDocs" }, 0] },
+                            { $gt: [{ $size: "$userInvDocs" }, 0] },
+                        ],
+                    },
+                },
+            },
+
+            // Final projection
+            {
+                $project: {
+                    ...SAFE_EVENT_PROJECTION,
+                    _id: { $toString: "$_id" },
+                    author: "$authorDetails",
+                    circle: "$circleDetails",
+                    attendees: {
+                        $let: {
+                            vars: {
+                                goingObj: {
+                                    $first: {
+                                        $filter: {
+                                            input: "$rsvpCounts",
+                                            as: "rc",
+                                            cond: { $eq: ["$$rc._id", "going"] },
+                                        },
+                                    },
+                                },
+                            },
+                            in: { $ifNull: ["$$goingObj.count", 0] },
+                        },
+                    },
+                    userRsvpStatus: {
+                        $let: {
+                            vars: { firstRsvp: { $first: "$userRsvpDocs" } },
+                            in: {
+                                $ifNull: ["$$firstRsvp.status", "none"],
+                            },
+                        },
+                    },
+                },
+            },
+
+            // Sort soonest first
+            { $sort: { startAt: 1 } },
+        ]).toArray()) as EventDisplay[];
+
+        return events;
+    } catch (error) {
+        console.error("Error getting open events for list:", error);
+        throw error;
+    }
+};

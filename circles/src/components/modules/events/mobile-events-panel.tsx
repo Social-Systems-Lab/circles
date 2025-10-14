@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { ListFilter } from "@/components/utils/list-filter";
-import { getOpenEventsForMapAction } from "@/components/modules/circles/map-explorer-actions";
+import { getOpenEventsForListAction } from "@/components/modules/circles/map-explorer-actions";
 import type { EventDisplay, Cause as SDG } from "@/models/models";
 import { CalendarIcon, Clock, MapPin, Users } from "lucide-react";
 import { format } from "date-fns";
@@ -108,13 +108,14 @@ export default function MobileEventsPanel() {
     const [loading, setLoading] = useState(false);
     const [sort, setSort] = useState<string>("top");
     const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>([]);
+    const [hideVirtual, setHideVirtual] = useState<boolean>(false);
 
     useEffect(() => {
         let canceled = false;
         const load = async () => {
             setLoading(true);
             try {
-                const data = await getOpenEventsForMapAction();
+                const data = await getOpenEventsForListAction();
                 if (!canceled) setEvents((data || []).filter((e: any) => e?.startAt));
             } catch (e) {
                 if (!canceled) setEvents([]);
@@ -147,6 +148,9 @@ export default function MobileEventsPanel() {
         if (selectedSdgs.length > 0) {
             const chosen = new Set(selectedSdgs.map((s) => s.handle));
             list = list.filter((e) => (e.causes || []).some((c) => chosen.has(c)));
+        }
+        if (hideVirtual) {
+            list = list.filter((e) => !e.isVirtual);
         }
 
         const byAttendees = (a: EventDisplay, b: EventDisplay) => (b.attendees ?? 0) - (a.attendees ?? 0);
@@ -192,12 +196,23 @@ export default function MobileEventsPanel() {
     return (
         <div className="flex h-full flex-col">
             <div className="px-3 py-2">
-                <ListFilter
-                    defaultValue="top"
-                    onFilterChange={setSort}
-                    selectedSdgs={selectedSdgs}
-                    onSdgChange={setSelectedSdgs}
-                />
+                <div className="flex items-center justify-between gap-3">
+                    <ListFilter
+                        defaultValue="top"
+                        onFilterChange={setSort}
+                        selectedSdgs={selectedSdgs}
+                        onSdgChange={setSelectedSdgs}
+                    />
+                    <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-600">
+                        <input
+                            type="checkbox"
+                            checked={hideVirtual}
+                            onChange={(e) => setHideVirtual(e.target.checked)}
+                            className="h-4 w-4"
+                        />
+                        Hide virtual
+                    </label>
+                </div>
             </div>
             {loading && <div className="px-3 pb-2 text-sm text-muted-foreground">Loading…</div>}
             {!loading && filteredSorted.length === 0 && (
