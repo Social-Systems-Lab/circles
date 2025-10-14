@@ -14,7 +14,7 @@ import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { CgFeed } from "react-icons/cg";
 import { MdRssFeed } from "react-icons/md";
 import GlobalCreateButton from "./global-create-button";
-import { Bookmark, Plus } from "lucide-react";
+import { Bookmark, Plus, Calendar as CalendarIcon } from "lucide-react";
 import { Circle } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
 import PinPicker from "../modules/home/pin-picker";
@@ -74,7 +74,11 @@ export default function GlobalNavItems() {
                             setDrawerContent("explore");
                         }}
                         className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
-                            pathname === "/explore" && panelMode !== "activity" && drawerContent !== "announcements"
+                            pathname === "/explore" &&
+                            panelMode !== "activity" &&
+                            panelMode !== "events" &&
+                            drawerContent !== "announcements" &&
+                            drawerContent !== "events"
                                 ? "text-[#495cff]"
                                 : "text-[#696969]"
                         }`}
@@ -130,6 +134,45 @@ export default function GlobalNavItems() {
                             transition={{ duration: 0.3, delay: 0.2 + 0 * 0.1 }}
                         >
                             Announcements
+                        </motion.span>
+                    </motion.div>
+                </div>
+
+                {/* Events nav item */}
+                <div
+                    onClick={() => {
+                        if (isMobile) {
+                            if (pathname !== "/explore") {
+                                router.push("/explore");
+                            }
+                            setDrawerContent("events");
+                        } else {
+                            setSidePanelMode("events");
+                            router.push("/explore?panel=events&category=events");
+                        }
+                    }}
+                >
+                    <motion.div
+                        className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
+                            (pathname === "/explore" && panelMode === "events") ||
+                            (isMobile && drawerContent === "events" && pathname === "/explore")
+                                ? "text-[#495cff]"
+                                : "text-[#696969]"
+                        }`}
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.95 }}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: 0 * 0.1 }}
+                    >
+                        <CalendarIcon size={"24px"} />
+                        <motion.span
+                            className="mt-[4px] text-[11px]"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: 0.3, delay: 0.2 + 0 * 0.1 }}
+                        >
+                            Events
                         </motion.span>
                     </motion.div>
                 </div>

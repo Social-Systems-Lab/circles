@@ -46,7 +46,7 @@ import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CirclePicture } from "./circle-picture";
 import { completeSwipeOnboardingAction } from "./swipe-actions";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { searchContentAction } from "../search/actions";
 import CategoryFilter from "../search/category-filter";
 import SdgFilter from "../search/sdg-filter";
@@ -57,6 +57,7 @@ import ContentPreview from "@/components/layout/content-preview";
 import { getOpenEventsForMapAction } from "./map-explorer-actions";
 import { EventDisplay } from "@/models/models";
 import ActivityPanel from "@/components/layout/activity-panel";
+import MobileEventsPanel from "@/components/modules/events/mobile-events-panel";
 
 // mapItemToContent helper remains the same
 const mapItemToContent = (item: WithMetric<Content> | Circle | undefined): Content | null => {
@@ -85,7 +86,7 @@ interface MapExplorerProps {
 }
 
 type ViewMode = "cards" | "explore";
-type DrawerContent = "explore" | "announcements" | "preview";
+type DrawerContent = "explore" | "announcements" | "preview" | "events";
 
 // Define snap point indices for clarity
 const SNAP_INDEX_CLOSED = -1; // Not used by resizing drawer, but conceptually useful
@@ -104,6 +105,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const isMobile = useIsMobile();
     const { windowWidth, windowHeight } = useWindowDimensions();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [viewMode, setViewMode] = useState<ViewMode>("explore");
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -523,6 +525,22 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     // --- Effects ---
     useEffect(() => setIsMounted(true), []);
 
+    // Keep map category in sync with URL (?category=events)
+    useEffect(() => {
+        if (viewMode !== "explore") return;
+        const cat = searchParams.get("category");
+        if (cat === "events") {
+            setSelectedCategory("events");
+        }
+    }, [searchParams, viewMode]);
+
+    // When mobile drawer shows events, ensure events category is active on map
+    useEffect(() => {
+        if (drawerContent === "events") {
+            setSelectedCategory("events");
+        }
+    }, [drawerContent]);
+
     // Listen for map search commands from the left search panel (desktop)
     useEffect(() => {
         if (!mapSearchCommand) return;
@@ -621,7 +639,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     // Control drawer snap based on contentPreview state
     useEffect(() => {
         if (isMobile && viewMode === "explore") {
-            if (drawerContent === "announcements") {
+            if (drawerContent === "announcements" || drawerContent === "events") {
                 setTriggerSnapIndex(SNAP_INDEX_HALF);
             } else if (contentPreview) {
                 setDrawerContent("preview");
@@ -1106,6 +1124,13 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                         <div className="flex h-full flex-col">
                             <div className="flex-1 overflow-y-auto">
                                 <ActivityPanel />
+                            </div>
+                        </div>
+                    ) : drawerContent === "events" ? (
+                        // --- Events View (Mobile) ---
+                        <div className="flex h-full flex-col">
+                            <div className="flex-1 overflow-y-auto">
+                                <MobileEventsPanel />
                             </div>
                         </div>
                     ) : (

@@ -30,7 +30,7 @@ export const userToolboxDataAtom = atom<UserToolboxData | undefined>(undefined);
 export const sidePanelContentVisibleAtom = atom<"content" | "toolbox" | undefined>(undefined);
 
 // Left side panel (global) state
-export type SidePanelMode = "none" | "activity" | "search";
+export type SidePanelMode = "none" | "activity" | "search" | "events";
 
 export type SidePanelSearchState = {
     query: string;
@@ -43,7 +43,7 @@ export type SidePanelSearchState = {
 };
 
 export const sidePanelModeAtom = atom<SidePanelMode>("none");
-export const drawerContentAtom = atom<"explore" | "announcements" | "preview">("explore");
+export const drawerContentAtom = atom<"explore" | "announcements" | "preview" | "events">("explore");
 export const sidePanelSearchStateAtom = atom<SidePanelSearchState>({
     query: "",
     isSearching: false,

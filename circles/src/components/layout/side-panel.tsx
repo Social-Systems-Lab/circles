@@ -18,6 +18,7 @@ import ContentPreview from "./content-preview";
 import { UserToolbox } from "./user-toolbox";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import ActivityPanel from "./activity-panel";
+import EventsPanel from "./events-panel";
 import SearchResultsPanel from "./search-results-panel";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
 
@@ -44,7 +45,7 @@ export const SidePanel: React.FC = () => {
         if (isMobile) return;
         if (pathname !== "/explore") return;
         const panel = searchParams.get("panel");
-        if (panel === "activity" || panel === "search") {
+        if (panel === "activity" || panel === "search" || panel === "events") {
             setSidePanelMode(panel as any);
         }
         // If panel param is absent, don't force-close — allow programmatic open (e.g., search) to persist.
@@ -117,8 +118,14 @@ export const SidePanel: React.FC = () => {
 
                         {/* Panel content (no header, content starts at top) */}
                         <div className="flex h-full w-full flex-col overflow-hidden">
-                            <div className="flex-1 min-h-0">
-                                {sidePanelMode === "activity" ? <ActivityPanel /> : <SearchResultsPanel />}
+                            <div className="min-h-0 flex-1">
+                                {sidePanelMode === "activity" ? (
+                                    <ActivityPanel />
+                                ) : sidePanelMode === "events" ? (
+                                    <EventsPanel />
+                                ) : (
+                                    <SearchResultsPanel />
+                                )}
                             </div>
                         </div>
                     </motion.div>
