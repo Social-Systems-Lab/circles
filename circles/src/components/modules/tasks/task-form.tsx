@@ -10,7 +10,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Circle, Media, Task, Location, GoalDisplay, UserPrivate } from "@/models/models"; // Added UserPrivate
+import { Circle, Media, Task, Location, GoalDisplay, EventDisplay, UserPrivate } from "@/models/models"; // Added UserPrivate
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, MapPinIcon, MapPin, CalendarIcon } from "lucide-react";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
@@ -27,6 +27,7 @@ import { createTaskAction, updateTaskAction } from "@/app/circles/[handle]/tasks
 import CircleSelector from "@/components/global-create/circle-selector"; // Added CircleSelector
 import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Added CreatableItemDetail
 import { getGoalsAction } from "@/app/circles/[handle]/goals/actions"; // Corrected import for fetching goals
+import { getEventsAction } from "@/app/circles/[handle]/events/actions";
 
 // Form schema for creating/editing a task
 const taskFormSchema = z.object({
@@ -36,6 +37,7 @@ const taskFormSchema = z.object({
     location: z.any().optional(),
     targetDate: z.date().optional(),
     goalId: z.string().optional().nullable(), // Allow null or undefined
+    eventId: z.string().optional().nullable(), // Allow null or undefined
 });
 
 type TaskFormValues = Omit<z.infer<typeof taskFormSchema>, "images" | "location" | "targetDate"> & {
@@ -43,6 +45,7 @@ type TaskFormValues = Omit<z.infer<typeof taskFormSchema>, "images" | "location"
     location?: Location;
     targetDate?: Date;
     goalId?: string | null; // Allow null
+    eventId?: string | null;
 };
 
 interface TaskFormProps {
@@ -75,11 +78,15 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     const [goals, setGoals] = useState<GoalDisplay[]>([]);
     const [isLoadingGoals, setIsLoadingGoals] = useState(false);
     const [goalsModuleEnabled, setGoalsModuleEnabled] = useState(false);
+    const [events, setEvents] = useState<EventDisplay[]>([]);
+    const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+    const [eventsModuleEnabled, setEventsModuleEnabled] = useState(false);
     const { toast } = useToast();
     const router = useRouter();
     const searchParams = useSearchParams();
     const isEditing = !!task;
     const preselectedGoalId = searchParams.get("goalId");
+    const preselectedEventId = searchParams.get("eventId");
     const targetDateFromQuery = searchParams.get("targetDate");
     let prefilledDate: Date | undefined = undefined;
     if (!isEditing && targetDateFromQuery) {
@@ -98,6 +105,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             location: task?.location,
             targetDate: prefilledDate ?? (task?.targetDate ? new Date(task.targetDate) : undefined),
             goalId: task?.goalId || preselectedGoalId || null,
+            eventId: (task as any)?.eventId || preselectedEventId || null,
         },
     });
 
@@ -111,6 +119,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                 // Reset form fields that might depend on the circle, like goalId
                 ...form.getValues(), // keep existing values
                 goalId: null, // reset goalId
+                eventId: null, // reset eventId
             });
         },
         [form, setSelectedCircle, setGoals],
@@ -153,6 +162,31 @@ export const TaskForm: React.FC<TaskFormProps> = ({
         } else {
             setGoalsModuleEnabled(false);
             setGoals([]);
+        }
+    }, [selectedCircle]);
+
+    useEffect(() => {
+        if (selectedCircle?.handle) {
+            const isEventsModuleEnabled = selectedCircle.enabledModules?.includes("events") || false;
+            setEventsModuleEnabled(isEventsModuleEnabled);
+            if (isEventsModuleEnabled) {
+                setIsLoadingEvents(true);
+                getEventsAction(selectedCircle.handle)
+                    .then((result) => {
+                        if ((result as any)?.events) {
+                            setEvents((result as any).events);
+                        } else {
+                            setEvents([]);
+                        }
+                    })
+                    .catch(() => setEvents([]))
+                    .finally(() => setIsLoadingEvents(false));
+            } else {
+                setEvents([]);
+            }
+        } else {
+            setEventsModuleEnabled(false);
+            setEvents([]);
         }
     }, [selectedCircle]);
 
@@ -202,6 +236,14 @@ export const TaskForm: React.FC<TaskFormProps> = ({
         } else {
             // Explicitly handle unsetting the goal
             formData.append("goalId", ""); // Send empty string to indicate removal
+        }
+
+        // Add eventId if present and not null/empty/none
+        if (values.eventId && values.eventId !== "none") {
+            formData.append("eventId", values.eventId);
+        } else {
+            // Explicitly handle unsetting the event
+            formData.append("eventId", ""); // Send empty string to indicate removal
         }
 
         if (values.images) {
@@ -351,6 +393,52 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                     )}
                                 </div>{" "}
                                 {/* End grid container for first row */}
+                                {/* Event Selection Dropdown - Conditionally Rendered */}
+                                {eventsModuleEnabled && (
+                                    <FormField
+                                        control={form.control}
+                                        name="eventId"
+                                        render={({ field }) => (
+                                            <FormItem className="py-3 md:py-4">
+                                                <FormLabel>Assign to Event (Optional)</FormLabel>
+                                                <Select
+                                                    onValueChange={field.onChange}
+                                                    value={field.value ?? "none"}
+                                                    disabled={isSubmitting || isLoadingEvents || events.length === 0}
+                                                >
+                                                    <FormControl>
+                                                        <SelectTrigger>
+                                                            <SelectValue
+                                                                placeholder={
+                                                                    isLoadingEvents
+                                                                        ? "Loading events..."
+                                                                        : events.length === 0
+                                                                          ? "No events available"
+                                                                          : "Select an event"
+                                                                }
+                                                            />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                        <SelectItem value="none">-- None --</SelectItem>
+                                                        {events.map((event) => (
+                                                            <SelectItem
+                                                                key={(event as any)._id}
+                                                                value={(event as any)._id}
+                                                            >
+                                                                {event.title}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <FormDescription>
+                                                    Link this task to an existing event in this circle.
+                                                </FormDescription>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                )}
                                 <FormField
                                     control={form.control}
                                     name="targetDate"

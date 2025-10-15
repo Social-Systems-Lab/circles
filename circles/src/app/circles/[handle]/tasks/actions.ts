@@ -246,12 +246,14 @@ const createTaskSchema = z.object({
     targetDate: z.string().datetime({ offset: true }).optional(), // Expect ISO string from form
     userGroups: z.array(z.string()).optional(), // Optional: User groups for visibility
     goalId: z.string().optional(), // Optional: Goal ID for task association
+    eventId: z.string().optional(), // Optional: Event ID for task association
 });
 
 const updateTaskSchema = createTaskSchema.extend({
     // Renamed schema
     // Updates use the same base fields
     goalId: z.string().optional().nullable(),
+    eventId: z.string().optional().nullable(),
 });
 
 const assignTaskSchema = z.object({
@@ -283,6 +285,7 @@ export async function createTaskAction( // Renamed function
             targetDate: formData.get("targetDate") ?? undefined,
             userGroups: formData.getAll("userGroups"), // Assuming multi-select or similar
             goalId: formData.get("goalId") ?? undefined, // Optional goal ID
+            eventId: formData.get("eventId") ?? undefined, // Optional event ID
         });
 
         if (!validatedData.success) {
@@ -379,6 +382,7 @@ export async function createTaskAction( // Renamed function
             stage: initialStage,
             userGroups: data.userGroups || [], // Use provided groups or default to empty
             goalId: data.goalId, // Optional goal ID
+            eventId: data.eventId, // Optional event ID
         };
 
         // Create task in DB (Data function)
@@ -448,6 +452,8 @@ export async function updateTaskAction(
             targetDate: formData.get("targetDate") ?? undefined,
             // Get goalId, treat empty string as intent to unset
             goalId: formData.get("goalId") || "", // Default to empty string if null/undefined
+            // Get eventId, treat empty string as intent to unset
+            eventId: formData.get("eventId") || "", // Default to empty string if null/undefined
         });
 
         if (!validatedData.success) {
@@ -567,6 +573,7 @@ export async function updateTaskAction(
             updatedAt: new Date(),
             // Pass goalId directly (can be string or empty string for removal)
             goalId: data.goalId ?? "",
+            eventId: data.eventId ?? "",
         };
 
         // Update task in DB (Data function handles $set/$unset logic)

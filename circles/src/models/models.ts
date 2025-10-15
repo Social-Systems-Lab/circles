@@ -1296,6 +1296,7 @@ export const taskSchema = z.object({
     images: z.array(mediaSchema).optional(), // Optional images/media attached to the task
     targetDate: z.date().nullable().optional(), // Target date for task (optional)
     goalId: z.string().optional(), // Optional link to a goal
+    eventId: z.string().optional(), // Optional link to an event
 });
 
 export type Task = z.infer<typeof taskSchema>;
@@ -1307,6 +1308,7 @@ export interface TaskDisplay extends Task {
     circle?: Circle; // Circle details
     rank?: number; // Aggregated task rank
     goal?: GoalDisplay; // Associated goal details
+    event?: EventDisplay; // Associated event details
 }
 
 /**

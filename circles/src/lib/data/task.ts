@@ -30,6 +30,7 @@ export const SAFE_TASK_PROJECTION = {
     images: 1,
     targetDate: 1,
     goal: 1,
+    event: 1,
 } as const;
 
 /**
@@ -547,6 +548,11 @@ export const updateTask = async (taskId: string, updates: Partial<Task>): Promis
             delete updateData.goalId; // Remove from $set
             unsetFields.goalId = ""; // Add to $unset
         }
+        // Check if eventId is explicitly being set to empty string (signal for removal)
+        if (updateData.hasOwnProperty("eventId") && updateData.eventId === "") {
+            delete updateData.eventId; // Remove from $set
+            unsetFields.eventId = ""; // Add to $unset
+        }
 
         const updateOp: any = {};
         if (Object.keys(updateData).length > 0) {
@@ -809,6 +815,107 @@ export const getTasksByGoalId = async (goalId: string, circleId: string): Promis
         return tasks;
     } catch (error) {
         console.error(`Error getting tasks by goal ID (${goalId}):`, error);
+        throw error;
+    }
+};
+
+/**
+ * Get all tasks linked to a specific event ID, including author and assignee details.
+ * @param eventId The ID of the event
+ * @param circleId The ID of the circle (for context and potential filtering)
+ * @returns Array of tasks linked to the event
+ */
+export const getTasksByEventId = async (eventId: string, circleId: string): Promise<TaskDisplay[]> => {
+    try {
+        // Basic validation
+        if (!eventId || !circleId) {
+            return [];
+        }
+
+        const tasks = (await Tasks.aggregate([
+            // 1) Match tasks by eventId and circleId
+            {
+                $match: {
+                    eventId: eventId, // Match the specific event ID
+                    circleId: circleId, // Ensure task belongs to the correct circle
+                },
+            },
+
+            // 2) Lookup author details (same as getTasksByCircleId)
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { authorDid: "$createdBy" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$did", "$$authorDid"] },
+                                        { $eq: ["$circleType", "user"] },
+                                        { $ne: ["$$authorDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" },
+                            },
+                        },
+                    ],
+                    as: "authorDetails",
+                },
+            },
+            { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: false } },
+
+            // 3) Lookup assignee details (same as getTasksByCircleId)
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { assigneeDid: "$assignedTo" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$did", "$$assigneeDid"] },
+                                        { $eq: ["$circleType", "user"] },
+                                        { $ne: ["$$assigneeDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" },
+                            },
+                        },
+                    ],
+                    as: "assigneeDetails",
+                },
+            },
+            { $unwind: { path: "$assigneeDetails", preserveNullAndEmptyArrays: true } },
+
+            // 4) Final projection (similar to getTasksByCircleId)
+            {
+                $project: {
+                    ...SAFE_TASK_PROJECTION,
+                    _id: { $toString: "$_id" },
+                    author: "$authorDetails",
+                    assignee: "$assigneeDetails",
+                },
+            },
+
+            // 5) Sort by newest task first (optional)
+            { $sort: { createdAt: -1 } },
+        ]).toArray()) as TaskDisplay[];
+
+        return tasks;
+    } catch (error) {
+        console.error(`Error getting tasks by event ID (${eventId}):`, error);
         throw error;
     }
 };

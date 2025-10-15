@@ -14,6 +14,7 @@ import InvitedUserList from "./invited-user-list";
 import InviteModal from "./invite-modal";
 import AttendeesList from "./attendees-list";
 import RsvpDialog from "./rsvp-dialog";
+import EventTasksPanel from "./event-tasks-panel";
 import { CommentSection } from "../feeds/CommentSection";
 import RichText from "../feeds/RichText";
 import { userAtom } from "@/lib/data/atoms";
@@ -524,6 +525,7 @@ export default function EventDetail({
                             eventId={event._id!.toString()}
                         />
                     )}
+                    <EventTasksPanel circleHandle={circleHandle} eventId={event._id!.toString()} />
                 </div>
             </div>
 

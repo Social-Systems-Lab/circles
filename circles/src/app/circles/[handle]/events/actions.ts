@@ -16,6 +16,7 @@ import {
     EventStage,
     CircleType,
     eventVisibilitySchema,
+    TaskDisplay,
 } from "@/models/models";
 import { getCircleByHandle, ensureModuleIsEnabledOnCircle, getCirclesBySearchQuery } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -44,6 +45,7 @@ import { inviteUsersToEvent } from "@/lib/data/event";
 import { getMembers } from "@/lib/data/member";
 import { addCommentToDiscussion, getDiscussionWithComments } from "@/lib/data/discussion";
 import { Comment } from "@/models/models";
+import { getTasksByEventId } from "@/lib/data/task";
 
 // ----- Types -----
 
@@ -61,6 +63,10 @@ type GetCircleMembersActionResult = {
 
 type GetCirclesBySearchQueryActionResult = {
     circles: Circle[];
+};
+
+type GetTasksByEventActionResult = {
+    tasks: TaskDisplay[];
 };
 
 // ----- Zod Schemas -----
@@ -179,6 +185,34 @@ export async function getEventAction(circleHandle: string, eventId: string): Pro
     } catch (error) {
         console.error("Error in getEventAction:", error);
         return null;
+    }
+}
+
+/**
+ * Get tasks linked to an event
+ */
+export async function getTasksByEventAction(
+    circleHandle: string,
+    eventId: string,
+): Promise<GetTasksByEventActionResult> {
+    const defaultResult: GetTasksByEventActionResult = { tasks: [] };
+
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) return defaultResult;
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) return defaultResult;
+
+        // Require permission to view events (mirrors event detail access)
+        const canViewEvents = await isAuthorized(userDid, circle._id as string, features.events.view);
+        if (!canViewEvents) return defaultResult;
+
+        const tasks = await getTasksByEventId(eventId, circle._id!.toString());
+        return { tasks };
+    } catch (error) {
+        console.error("Error in getTasksByEventAction:", error);
+        return defaultResult;
     }
 }
 
