@@ -43,7 +43,7 @@ export default async function AccessDeniedPage({ params, searchParams }: PagePro
         ? "You must sign in to view this page."
         : isMember
           ? "Your current role in this circle does not include access to this module."
-          : "You are not a member of this circle. Request membership to get access.";
+          : "Request membership to get access.";
 
     return (
         <div className="mx-auto max-w-3xl px-4 py-10">
