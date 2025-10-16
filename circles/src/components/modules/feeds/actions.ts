@@ -274,7 +274,7 @@ export async function getInternalLinkPreviewData(url: string): Promise<InternalL
             const authorized = await isAuthorized(userDid, circle._id.toString(), features.feed.view);
             if (!authorized) return { error: "Unauthorized" };
             const post = await getPost(postId); // Assuming getPost fetches PostDisplay or similar
-            if (!post) return { error: "Announcement not found" };
+            if (!post) return { error: "Post not found" };
             // Ensure getPost returns PostDisplay or adapt as needed
             // This might require a new function like getPostDisplay(postId, userDid)
             // For now, assuming getPost is sufficient and we manually add author etc. if needed
@@ -374,7 +374,7 @@ export async function createPostAction(
 ): Promise<{ success: boolean; message?: string; post?: Post }> {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
-        return { success: false, message: "You need to be logged in to create an announcement" };
+        return { success: false, message: "You need to be logged in to create a post" };
     }
 
     try {
@@ -388,7 +388,7 @@ export async function createPostAction(
         // Get user groups from form data
         const userGroups = formData.getAll("userGroups") as string[];
 
-        // Title is required for announcements
+        // Title is required for posts
         if (!title || !title.trim()) {
             return { success: false, message: "Title is required" };
         }
@@ -430,7 +430,7 @@ export async function createPostAction(
         const feedId = feed._id.toString();
         const authorized = await isAuthorized(userDid, circleId, features.feed.post);
         if (!authorized) {
-            return { success: false, message: "You are not authorized to create announcements" };
+            return { success: false, message: "You are not authorized to create posts on the noticeboard" };
         }
 
         let post: Post = {
@@ -530,9 +530,9 @@ export async function createPostAction(
             // Non-critical, so don't fail the post creation
         }
 
-        return { success: true, message: "Announcement created successfully", post: newPost };
+        return { success: true, message: "Post created successfully", post: newPost };
     } catch (error) {
-        return { success: false, message: error instanceof Error ? error.message : "Failed to create announcement." };
+        return { success: false, message: error instanceof Error ? error.message : "Failed to create post." };
     }
 }
 
@@ -542,7 +542,7 @@ export async function updatePostAction(
     const userDid = await getAuthenticatedUserDid();
 
     if (!userDid) {
-        return { success: false, message: "You need to be logged in to edit an announcement" };
+        return { success: false, message: "You need to be logged in to edit a post" };
     }
 
     try {
@@ -575,10 +575,10 @@ export async function updatePostAction(
 
         const post = await getPost(postId);
         if (!post) {
-            return { success: false, message: "Announcement not found" };
+            return { success: false, message: "Post not found" };
         }
         if (post.createdBy !== userDid) {
-            return { success: false, message: "You are not authorized to edit this announcement" };
+            return { success: false, message: "You are not authorized to edit this post" };
         }
 
         if ((!post.title || post.title.trim() === "") && (!title || !title.toString().trim())) {
@@ -668,22 +668,22 @@ export async function updatePostAction(
         let circlePath = await getCirclePath({ _id: circleId } as Circle);
         revalidatePath(`${circlePath}feed`);
 
-        return { success: true, message: "Announcement updated successfully" };
+        return { success: true, message: "Post updated successfully" };
     } catch (error) {
-        return { success: false, message: error instanceof Error ? error.message : "Failed to update announcement." };
+        return { success: false, message: error instanceof Error ? error.message : "Failed to update post." };
     }
 }
 
 export async function deletePostAction(postId: string): Promise<{ success: boolean; message?: string }> {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
-        return { success: false, message: "You need to be logged in to delete an announcement" };
+        return { success: false, message: "You need to be logged in to delete a post" };
     }
 
     try {
         const post = await getPost(postId);
         if (!post) {
-            return { success: false, message: "Announcement not found" };
+            return { success: false, message: "Post not found" };
         }
 
         const feed = await getFeed(post.feedId);
@@ -694,16 +694,16 @@ export async function deletePostAction(postId: string): Promise<{ success: boole
 
         // check if user can moderate feed or is creator of the post
         if (post.createdBy !== userDid && !canModerate) {
-            return { success: false, message: "You are not authorized to delete this announcement" };
+            return { success: false, message: "You are not authorized to delete this post" };
         }
 
         // delete post
         await deletePost(postId);
 
-        return { success: true, message: "Announcement deleted successfully" };
+        return { success: true, message: "Post deleted successfully" };
     } catch (error) {
         console.error("Error deleting post:", error);
-        return { success: false, message: "An error occurred while deleting the announcement" };
+        return { success: false, message: "An error occurred while deleting the post" };
     }
 }
 
@@ -726,7 +726,7 @@ export async function createCommentAction(
         const post = await getPost(postId);
         if (!post) {
             console.log("🐞 [ACTION] Post not found:", postId);
-            return { success: false, message: "Announcement not found" };
+            return { success: false, message: "Post not found" };
         }
 
         // check if user is authorized to comment
@@ -739,7 +739,7 @@ export async function createCommentAction(
         const authorized = await isAuthorized(userDid, feed.circleId, features.feed.comment);
         if (!authorized) {
             console.log("🐞 [ACTION] User not authorized:", { userDid });
-            return { success: false, message: "You are not authorized to comment in Announcements" };
+            return { success: false, message: "You are not authorized to comment on the noticeboard" };
         }
 
         const user = await getUserByDid(userDid);
@@ -857,17 +857,17 @@ export async function getAllCommentsAction(
     try {
         let post = await getPost(postId);
         if (!post) {
-            return { success: false, message: "Announcement not found" };
+            return { success: false, message: "Post not found" };
         }
 
         const feed = await getFeed(post.feedId);
         if (!feed) {
-            return { success: false, message: "Announcements not found" };
+            return { success: false, message: "Noticeboard not found" };
         }
 
         const authorized = await isAuthorized(userDid, feed.circleId, features.feed.view);
         if (!authorized) {
-            return { success: false, message: "You are not authorized to view comments in Announcements" };
+            return { success: false, message: "You are not authorized to view comments on the noticeboard" };
         }
 
         const comments = await getAllComments(postId, userDid);
@@ -958,12 +958,12 @@ export async function deleteCommentAction(commentId: string): Promise<{ success:
 
         const post = await getPost(comment.postId);
         if (!post) {
-            return { success: false, message: "Announcement not found" };
+            return { success: false, message: "Post not found" };
         }
 
         const feed = await getFeed(post.feedId);
         if (!feed) {
-            return { success: false, message: "Announcements not found" };
+            return { success: false, message: "Noticeboard not found" };
         }
 
         const canModerate = await isAuthorized(userDid, feed.circleId, features.feed.moderate);
@@ -1003,14 +1003,14 @@ export async function likeContentAction(
 
         const post = await getPost(postId);
         if (!post) {
-            return { success: false, message: "Announcement not found" };
+            return { success: false, message: "Post not found" };
         }
 
         const feed = await getFeed(post.feedId);
         if (feed) {
             let canReact = await isAuthorized(userDid, feed.circleId, features.feed.view);
             if (!canReact) {
-                return { success: false, message: "You are not authorized to like content in Announcements" };
+                return { success: false, message: "You are not authorized to like content on the noticeboard" };
             }
         }
 

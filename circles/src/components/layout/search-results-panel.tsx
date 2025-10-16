@@ -122,7 +122,7 @@ export default function SearchResultsPanel() {
                                                 {(item as any).title}
                                             </span>
                                         ) : (
-                                            ("name" in item && item.name ? item.name : "Announcement")
+                                            ("name" in item && item.name ? item.name : "Post")
                                         )}
                                     </div>
                                     <div className="mt-1 line-clamp-2 p-0 text-xs text-gray-500">

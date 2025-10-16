@@ -150,7 +150,7 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
                                     <Image
                                         className="h-9 w-9 rounded-full border bg-cover bg-center"
                                         src="/images/default-post-picture.png"
-                                        alt="Announcement"
+                                        alt="Noticeboard post"
                                         width={36}
                                         height={36}
                                         style={{

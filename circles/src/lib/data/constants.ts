@@ -49,16 +49,16 @@ export const features = {
     },
     feed: {
         view: {
-            name: "View Announcements",
+            name: "View Noticeboard",
             handle: "view",
-            description: "View announcements",
+            description: "View noticeboard posts",
             defaultUserGroups: ["admins", "moderators", "members", "everyone"],
             module: "feed",
         } as Feature,
         post: {
-            name: "Create Announcement",
+            name: "Create Post",
             handle: "post",
-            description: "Create an announcement",
+            description: "Create a post on the noticeboard",
             defaultUserGroups: ["admins", "moderators"],
             module: "feed",
             needsToBeVerified: true,
@@ -66,15 +66,15 @@ export const features = {
         comment: {
             name: "Comment",
             handle: "comment",
-            description: "Comment on announcements",
+            description: "Comment on noticeboard posts",
             defaultUserGroups: ["admins", "moderators", "members", "everyone"],
             module: "feed",
             needsToBeVerified: true,
         } as Feature,
         moderate: {
-            name: "Moderate Announcements",
+            name: "Moderate Noticeboard",
             handle: "moderate",
-            description: "Moderate announcements",
+            description: "Moderate noticeboard posts",
             defaultUserGroups: ["admins", "moderators"],
             module: "feed",
             needsToBeVerified: true,
@@ -613,10 +613,10 @@ export const modules: ModuleInfo[] = [
             "Create, track, and celebrate the specific, measurable achievements your circle or project is working towards. Goals provide clear targets with defined victory conditions, helping to focus effort and measure progress. Link tasks directly to goals to see how day-to-day activities contribute to the bigger picture.",
     },
     {
-        name: "Announcements",
+        name: "Noticeboard",
         handle: "feed",
         description:
-            "A shared space for circle members to publish announcements, updates, and discussions. Serves as the central communication hub to foster transparent collaboration and community engagement.",
+            "A shared space for circle members to publish posts, updates, and discussions. Serves as the central communication hub to foster transparent collaboration and community engagement.",
     },
     {
         name: "Followers",

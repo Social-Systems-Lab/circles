@@ -425,7 +425,7 @@ export const PostItem = ({
                 return;
             } else {
                 toast({
-                    title: "Announcement updated successfully",
+                    title: "Post updated successfully",
                     variant: "success",
                 });
             }
@@ -445,7 +445,7 @@ export const PostItem = ({
                 return;
             } else {
                 toast({
-                    title: "Announcement deleted successfully",
+                    title: "Post deleted successfully",
                     variant: "success",
                 });
             }
@@ -692,7 +692,7 @@ export const PostItem = ({
                                         }}
                                     >
                                         <div className="hidden">
-                                            <DialogTitle>Edit announcement</DialogTitle>
+                                            <DialogTitle>Edit post</DialogTitle>
                                         </div>
                                         <PostForm
                                             user={user!}
@@ -726,9 +726,9 @@ export const PostItem = ({
                                     }}
                                 >
                                     <DialogHeader>
-                                        <DialogTitle>Delete Announcement</DialogTitle>
+                                        <DialogTitle>Delete Post</DialogTitle>
                                         <DialogDescription>
-                                            Are you sure you want to delete this announcement? This action cannot be
+                                            Are you sure you want to delete this post? This action cannot be
                                             undone.
                                         </DialogDescription>
                                     </DialogHeader>
@@ -892,7 +892,7 @@ export const PostItem = ({
                                                 }}
                                             >
                                                 <div className="hidden">
-                                                    <DialogTitle>Edit announcement</DialogTitle>
+                                                    <DialogTitle>Edit post</DialogTitle>
                                                 </div>
                                                 <PostForm
                                                     user={user!}
@@ -933,9 +933,9 @@ export const PostItem = ({
                                             }}
                                         >
                                             <DialogHeader>
-                                                <DialogTitle>Delete Announcement</DialogTitle>
+                                                <DialogTitle>Delete Post</DialogTitle>
                                                 <DialogDescription>
-                                                    Are you sure you want to delete this announcement? This action
+                                                    Are you sure you want to delete this post? This action
                                                     cannot be undone.
                                                 </DialogDescription>
                                             </DialogHeader>

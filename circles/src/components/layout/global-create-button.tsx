@@ -106,7 +106,7 @@ export function GlobalCreateButton() {
             } else {
                 // Handle case where user or userFeed is not available
                 toast({
-                    title: "Cannot create announcement",
+                    title: "Cannot create post",
                     description: "User or feed information is missing.",
                     variant: "destructive",
                 });

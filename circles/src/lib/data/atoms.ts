@@ -43,7 +43,7 @@ export type SidePanelSearchState = {
 };
 
 export const sidePanelModeAtom = atom<SidePanelMode>("none");
-export const drawerContentAtom = atom<"explore" | "announcements" | "preview" | "events">("explore");
+export const drawerContentAtom = atom<"explore" | "noticeboard" | "preview" | "events">("explore");
 export const sidePanelSearchStateAtom = atom<SidePanelSearchState>({
     query: "",
     isSearching: false,

@@ -492,7 +492,7 @@ export function PostForm({
             if (!title.trim()) {
                 toast({
                     title: "Error",
-                    description: "Please enter a title for your announcement.",
+                    description: "Please enter a title for your post.",
                     variant: "destructive",
                 });
                 return;
@@ -500,7 +500,7 @@ export function PostForm({
             if (!selectedCircleId) {
                 toast({
                     title: "Error",
-                    description: "Please select a circle to create an announcement in.",
+                    description: "Please select a circle to create a post in.",
                     variant: "destructive",
                 });
                 return;
@@ -596,8 +596,8 @@ export function PostForm({
                                     <div className="flex items-center">
                                         <Info className="mr-2 h-5 w-5 flex-shrink-0" />
                                         <p className="mt-0 pt-0" style={{ paddingTop: 0, marginTop: 0 }}>
-                                            Your account is not verified. Announcements from unverified accounts are not
-                                            shown to other users until the account is verified.
+                                            Your account is not verified. Noticeboard posts from unverified accounts are
+                                            not shown to other users until the account is verified.
                                         </p>
                                     </div>
                                 </div>
@@ -608,7 +608,7 @@ export function PostForm({
                                     <Input
                                         value={title}
                                         onChange={(e) => setTitle(e.target.value)}
-                                        placeholder="Enter a clear announcement title..."
+                                        placeholder="Enter a clear post title..."
                                         className="border-0 p-0 text-2xl font-semibold shadow-none placeholder:text-gray-400 focus-visible:ring-0"
                                     />
                                 </div>
@@ -617,7 +617,7 @@ export function PostForm({
                             <MentionsInput
                                 value={postContent}
                                 onChange={(e) => setPostContent(e.target.value)}
-                                placeholder="Write your announcement..."
+                                placeholder="Write your post..."
                                 className="flex-grow"
                                 autoFocus
                                 style={postMentionsInputStyle}
@@ -727,8 +727,7 @@ export function PostForm({
                                                 </Avatar>
                                                 <div>
                                                     <div className="text-xs text-gray-500">
-                                                        Announcement by{" "}
-                                                        {(internalPreview.data as PostDisplay).author?.name}
+                                                        Post by {(internalPreview.data as PostDisplay).author?.name}
                                                     </div>
                                                     <p className="text-sm text-gray-800">
                                                         {truncateText(
@@ -904,7 +903,7 @@ export function PostForm({
                                             {initialPost ? "Updating..." : "Announcing..."}
                                         </>
                                     ) : (
-                                        <>{initialPost ? "Update" : "Announce"}</>
+                                        <>{initialPost ? "Update" : "Post"}</>
                                     )}
                                 </Button>
                             </div>
@@ -952,17 +951,15 @@ export function PostForm({
                     }}
                 >
                     <DialogHeader>
-                        <DialogTitle className="text-center text-xl font-bold">
-                            Who can see your announcement?
-                        </DialogTitle>
+                        <DialogTitle className="text-center text-xl font-bold">Who can see your post?</DialogTitle>
                     </DialogHeader>
                     <div className="mt-2 space-y-4">
                         <div className="text-sm text-gray-600">
-                            Your announcement will be visible in feeds, on your profile, and in search results.
+                            Your post will be visible in feeds, on your profile, and in search results.
                         </div>
                         <div className="text-sm text-gray-600">
                             Your default audience is <span className="font-semibold">Everyone</span> but you can change
-                            the audience for this announcement.
+                            the audience for this post.
                         </div>
                         <div className="max-h-[300px] space-y-3 overflow-y-auto py-2">
                             <div className="flex items-center rounded-lg p-2 hover:bg-gray-100">

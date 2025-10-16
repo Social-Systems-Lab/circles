@@ -78,7 +78,7 @@ export default function GlobalNavItems() {
                             pathname === "/explore" &&
                             panelMode !== "activity" &&
                             panelMode !== "events" &&
-                            drawerContent !== "announcements" &&
+                            drawerContent !== "noticeboard" &&
                             drawerContent !== "events"
                                 ? "text-[#495cff]"
                                 : "text-[#696969]"
@@ -106,7 +106,7 @@ export default function GlobalNavItems() {
                             if (pathname !== "/explore") {
                                 router.push("/explore");
                             }
-                            setDrawerContent("announcements");
+                            setDrawerContent("noticeboard");
                         } else {
                             setSidePanelMode("activity");
                             router.push("/explore?panel=activity");
@@ -116,7 +116,7 @@ export default function GlobalNavItems() {
                     <motion.div
                         className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
                             (pathname === "/explore" && panelMode === "activity") ||
-                            (isMobile && drawerContent === "announcements" && pathname === "/explore")
+                            (isMobile && drawerContent === "noticeboard" && pathname === "/explore")
                                 ? "text-[#495cff]"
                                 : "text-[#696969]"
                         }`}
@@ -129,12 +129,12 @@ export default function GlobalNavItems() {
                         <PiScroll size={"24px"} />
                         {/* <IoPulseOutline size={"24px"} /> */}
                         <motion.span
-                            className="mt-[4px] text-[8px]"
+                            className="mt-[4px] text-[11px]"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.3, delay: 0.2 + 0 * 0.1 }}
                         >
-                            Announcements
+                            Feed
                         </motion.span>
                     </motion.div>
                 </div>

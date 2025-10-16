@@ -86,7 +86,7 @@ interface MapExplorerProps {
 }
 
 type ViewMode = "cards" | "explore";
-type DrawerContent = "explore" | "announcements" | "preview" | "events";
+type DrawerContent = "explore" | "noticeboard" | "preview" | "events";
 
 // Define snap point indices for clarity
 const SNAP_INDEX_CLOSED = -1; // Not used by resizing drawer, but conceptually useful
@@ -639,7 +639,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     // Control drawer snap based on contentPreview state
     useEffect(() => {
         if (isMobile && viewMode === "explore") {
-            if (drawerContent === "announcements" || drawerContent === "events") {
+            if (drawerContent === "noticeboard" || drawerContent === "events") {
                 setTriggerSnapIndex(SNAP_INDEX_HALF);
             } else if (contentPreview) {
                 setDrawerContent("preview");
@@ -962,7 +962,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                                 <MdOutlineTravelExplore className="h-4 w-4" /> Explore
                                             </Button>
                                             <Button onClick={goToFeed} className="mt-4 gap-2">
-                                                <Home className="h-4 w-4" /> Go to Announcements
+                                                <Home className="h-4 w-4" /> Go to Noticeboard
                                             </Button>
                                         </div>
                                     </motion.div>
@@ -983,7 +983,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                         <MdOutlineTravelExplore className="h-4 w-4" /> Explore
                                     </Button>
                                     <Button onClick={goToFeed} className="mt-4 gap-2">
-                                        <Home className="h-4 w-4" /> Go to Announcements
+                                        <Home className="h-4 w-4" /> Go to Noticeboard
                                     </Button>
                                 </div>
                             </motion.div>
@@ -1060,7 +1060,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                         <div className="relative flex-1 overflow-hidden pl-2">
                                             <div className="truncate p-0 text-sm font-medium">
                                                 {/* Handle name based on type */}
-                                                {"name" in item && item.name ? item.name : "Announcement"}
+                                                {"name" in item && item.name ? item.name : "Post"}
                                             </div>
                                             <div className="mt-1 line-clamp-2 p-0 text-xs text-gray-500">
                                                 {/* Handle description/content/mission based on type */}
@@ -1119,8 +1119,8 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                 <ContentPreview />
                             </div>
                         </div>
-                    ) : drawerContent === "announcements" ? (
-                        // --- Announcements View ---
+                    ) : drawerContent === "noticeboard" ? (
+                        // --- Noticeboard View ---
                         <div className="flex h-full flex-col">
                             <div className="flex-1 overflow-y-auto">
                                 <ActivityPanel />

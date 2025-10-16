@@ -36,13 +36,13 @@ export function FeedPostDialog() {
 
             if (!response.success) {
                 toast({
-                    title: response.message || "Failed to create announcement",
+                    title: response.message || "Failed to create post",
                     variant: "destructive",
                 });
                 return;
             } else {
                 toast({
-                    title: "Announcement created successfully",
+                    title: "Post created successfully",
                     variant: "success",
                 });
             }
@@ -63,7 +63,7 @@ export function FeedPostDialog() {
                 }}
             >
                 <div className="hidden">
-                    <DialogTitle>Create a new announcement</DialogTitle>
+                    <DialogTitle>Create a new post</DialogTitle>
                 </div>
                 <PostForm
                     user={user as UserPrivate}

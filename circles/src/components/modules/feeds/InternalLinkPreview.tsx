@@ -114,7 +114,7 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url, initialD
                             <AvatarFallback>{post.author?.name?.charAt(0) || "?"}</AvatarFallback>
                         </Avatar>
                         <div>
-                            <div className="text-xs text-gray-500">Announcement by {post.author?.name}</div>
+                            <div className="text-xs text-gray-500">Post by {post.author?.name}</div>
                             <p className="text-sm text-gray-800">{truncateText(post.content, 100)}</p>
                         </div>
                     </>

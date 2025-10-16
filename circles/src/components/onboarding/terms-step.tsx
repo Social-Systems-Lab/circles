@@ -54,7 +54,7 @@ By creating an account or otherwise using Kamooni, you affirm that you are at le
 ## 6. User Conduct
 You agree that you will not:  
 - Use the Platform for any unlawful or unauthorized purpose.  
-- Create announcements that are hateful, defamatory, obscene, or otherwise objectionable.
+- Create posts that are hateful, defamatory, obscene, or otherwise objectionable.
 - Interfere with or disrupt the security or performance of Kamooni.  
 - Use any automated system to scrape data or content from the Platform without our express written permission.
 
