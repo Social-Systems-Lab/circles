@@ -144,7 +144,7 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle }: 
                             {/* {!isCompact && <SocialLinks circle={circle} />} */}
                         </div>
 
-                        {parentCircle && (
+                        {parentCircle && parentCircle.circleType !== "user" && (
                             <div className="mt-2 text-sm text-gray-500">
                                 {circle.circleType === "project" ? "Project by " : "Subcommunity of "}
                                 <Link
