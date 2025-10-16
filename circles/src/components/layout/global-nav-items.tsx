@@ -19,6 +19,7 @@ import { Circle } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
 import PinPicker from "../modules/home/pin-picker";
 import { RiMegaphoneLine } from "react-icons/ri";
+import { PiScroll } from "react-icons/pi";
 
 export default function GlobalNavItems() {
     const pathname = usePathname();
@@ -125,7 +126,7 @@ export default function GlobalNavItems() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5, delay: 0 * 0.1 }}
                     >
-                        <RiMegaphoneLine size={"24px"} />
+                        <PiScroll size={"24px"} />
                         {/* <IoPulseOutline size={"24px"} /> */}
                         <motion.span
                             className="mt-[4px] text-[8px]"

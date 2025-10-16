@@ -492,7 +492,7 @@ export function DiscussionForm({
             if (!title.trim()) {
                 toast({
                     title: "Error",
-                    description: "Please enter a title for your discussion.",
+                    description: "Please enter a title for your forum post.",
                     variant: "destructive",
                 });
                 return;
@@ -502,7 +502,7 @@ export function DiscussionForm({
             if (!isEditing && !targetCircleId) {
                 toast({
                     title: "Error",
-                    description: "Please select a circle to create a discussion in.",
+                    description: "Please select a circle to create a forum post in.",
                     variant: "destructive",
                 });
                 return;
@@ -562,7 +562,7 @@ export function DiscussionForm({
                 const response = await updatePostAction(formData);
                 if (!response.success) {
                     toast({
-                        title: response.message || "Failed to update discussion.",
+                        title: response.message || "Failed to update forum post.",
                         variant: "destructive",
                     });
                     return;
@@ -574,18 +574,18 @@ export function DiscussionForm({
                     window.location.reload();
                 }
             } else {
-                // Creating new discussion
+                // Creating new forum post
                 formData.append("postType", "discussion");
                 const response = await createPostAction(formData);
 
                 if (!response.success) {
                     toast({
-                        title: response.message || "Failed to create discussion.",
+                        title: response.message || "Failed to create forum post.",
                         variant: "destructive",
                     });
                     return;
                 } else {
-                    // navigate to the newly created discussion
+                    // navigate to the newly created forum post
                     if (response.post?._id) {
                         if (selectedCircle?.handle) {
                             window.location.href = `/circles/${selectedCircle.handle}/discussions/${response.post._id}`;
@@ -671,7 +671,7 @@ export function DiscussionForm({
                                     <div className="flex items-center">
                                         <Info className="mr-2 h-5 w-5 flex-shrink-0" />
                                         <p className="mt-0 pt-0" style={{ paddingTop: 0, marginTop: 0 }}>
-                                            Your account is not verified. Discussions from unverified accounts are not
+                                            Your account is not verified. Forum posts from unverified accounts are not
                                             shown to other users until the account is verified.
                                         </p>
                                     </div>
@@ -683,7 +683,7 @@ export function DiscussionForm({
                                     <Input
                                         value={title}
                                         onChange={(e) => setTitle(e.target.value)}
-                                        placeholder="Enter a clear discussion title..."
+                                        placeholder="Enter a clear forum post title..."
                                         className="border-0 p-0 text-2xl font-semibold shadow-none placeholder:text-gray-400 focus-visible:ring-0"
                                     />
                                 </div>
@@ -692,7 +692,7 @@ export function DiscussionForm({
                             <MentionsInput
                                 value={postContent}
                                 onChange={(e) => setPostContent(e.target.value)}
-                                placeholder="Write your discussion..."
+                                placeholder="Write your forum post..."
                                 className="flex-grow"
                                 autoFocus
                                 style={postMentionsInputStyle}
@@ -802,7 +802,7 @@ export function DiscussionForm({
                                                 </Avatar>
                                                 <div>
                                                     <div className="text-xs text-gray-500">
-                                                        Discussion by{" "}
+                                                        Forum post by{" "}
                                                         {(internalPreview.data as PostDisplay).author?.name}
                                                     </div>
                                                     <p className="text-sm text-gray-800">
@@ -976,10 +976,10 @@ export function DiscussionForm({
                                     {isActuallySubmitting ? (
                                         <>
                                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                            {initialPost ? "Updating..." : "Creating discussion..."}
+                                            {initialPost ? "Updating..." : "Creating forum post..."}
                                         </>
                                     ) : (
-                                        <>{initialPost ? "Update" : "Create Discussion"}</>
+                                        <>{initialPost ? "Update" : "Create Forum Post"}</>
                                     )}
                                 </Button>
                             </div>
@@ -1028,13 +1028,13 @@ export function DiscussionForm({
                 >
                     <DialogHeader>
                         <DialogTitle className="text-center text-xl font-bold">
-                            Who can see your discussion?
+                            Who can see your forum post?
                         </DialogTitle>
                     </DialogHeader>
                     <div className="mt-2 space-y-4">
                         <div className="text-sm text-gray-600">
                             Your default audience is <span className="font-semibold">Everyone</span> but you can change
-                            the audience for this discussion.
+                            the audience for this forum post.
                         </div>
                         <div className="max-h-[300px] space-y-3 overflow-y-auto py-2">
                             <div className="flex items-center rounded-lg p-2 hover:bg-gray-100">

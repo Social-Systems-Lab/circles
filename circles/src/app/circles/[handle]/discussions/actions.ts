@@ -29,7 +29,7 @@ export async function createDiscussionAction(handle: string, data: Partial<Post>
 
     // For now, allow creation if user is authorized for posts in feeds (reuse feed.post permission)
     const canCreate = await isAuthorized(userDid, circle._id as string, features.feed.post);
-    if (!canCreate) throw new Error("Not authorized to create discussions");
+    if (!canCreate) throw new Error("Not authorized to create forum posts");
 
     let payload: any = {};
     if (data instanceof FormData) {
@@ -108,7 +108,7 @@ export async function addCommentAction(discussionId: string, data: Partial<Comme
     if (!user) throw new Error("User not found");
 
     const discussion = await getDiscussionWithComments(discussionId);
-    if (!discussion) throw new Error("Discussion not found");
+    if (!discussion) throw new Error("Forum post not found");
 
     const canComment = await isAuthorized(userDid, discussion.feedId, features.feed.comment);
     if (!canComment) throw new Error("Not authorized to comment");
@@ -127,10 +127,10 @@ export async function pinDiscussionAction(id: string, pinned: boolean) {
     if (!userDid) throw new Error("Unauthorized");
 
     const discussion = await getDiscussionWithComments(id);
-    if (!discussion) throw new Error("Discussion not found");
+    if (!discussion) throw new Error("Forum post not found");
 
     const canModerate = await isAuthorized(userDid, discussion.feedId, features.feed.moderate);
-    if (!canModerate) throw new Error("Not authorized to pin discussions");
+    if (!canModerate) throw new Error("Not authorized to pin forum posts");
 
     return pinDiscussion(id, pinned);
 }
@@ -143,10 +143,10 @@ export async function closeDiscussionAction(id: string) {
     if (!userDid) throw new Error("Unauthorized");
 
     const discussion = await getDiscussionWithComments(id);
-    if (!discussion) throw new Error("Discussion not found");
+    if (!discussion) throw new Error("Forum post not found");
 
     const canModerate = await isAuthorized(userDid, discussion.feedId, features.feed.moderate);
-    if (!canModerate) throw new Error("Not authorized to close discussions");
+    if (!canModerate) throw new Error("Not authorized to close forum posts");
 
     return closeDiscussion(id);
 }

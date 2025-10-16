@@ -428,7 +428,7 @@ export const DiscussionItem = ({
                 return;
             } else {
                 toast({
-                    title: "Discussion updated successfully",
+                    title: "Forum post updated successfully",
                     variant: "success",
                 });
             }
@@ -448,7 +448,7 @@ export const DiscussionItem = ({
                 return;
             } else {
                 toast({
-                    title: "Discussion deleted successfully",
+                    title: "Forum post deleted successfully",
                     variant: "success",
                 });
                 setOpenDropdown(false);
@@ -703,7 +703,7 @@ export const DiscussionItem = ({
                                         }}
                                     >
                                         <div className="hidden">
-                                            <DialogTitle>Edit discussion</DialogTitle>
+                                            <DialogTitle>Edit forum post</DialogTitle>
                                         </div>
                                         <DiscussionForm
                                             initialPost={post}
@@ -732,9 +732,9 @@ export const DiscussionItem = ({
                                     }}
                                 >
                                     <DialogHeader>
-                                        <DialogTitle>Delete Discussion</DialogTitle>
+                                        <DialogTitle>Delete Forum Post</DialogTitle>
                                         <DialogDescription>
-                                            Are you sure you want to delete this discussion? This action cannot be
+                                            Are you sure you want to delete this forum post? This action cannot be
                                             undone.
                                         </DialogDescription>
                                     </DialogHeader>
@@ -897,9 +897,9 @@ export const DiscussionItem = ({
                                                     e.preventDefault();
                                                 }}
                                             >
-                                                <div className="hidden">
-                                                    <DialogTitle>Edit discussion</DialogTitle>
-                                                </div>
+                                        <div className="hidden">
+                                            <DialogTitle>Edit forum post</DialogTitle>
+                                        </div>
                                                 <DiscussionForm
                                                     initialPost={post}
                                                     moduleHandle="feed"
@@ -927,9 +927,9 @@ export const DiscussionItem = ({
                                             }}
                                         >
                                             <DialogHeader>
-                                                <DialogTitle>Delete Discussion</DialogTitle>
+                                                <DialogTitle>Delete Forum Post</DialogTitle>
                                                 <DialogDescription>
-                                                    Are you sure you want to delete this discussion? This action cannot
+                                                    Are you sure you want to delete this forum post? This action cannot
                                                     be undone.
                                                 </DialogDescription>
                                             </DialogHeader>

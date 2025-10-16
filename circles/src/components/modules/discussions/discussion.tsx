@@ -81,14 +81,14 @@ export const DiscussionComponent = ({
                 <div className="flex w-full flex-row items-center gap-2">
                     <div className="flex flex-1 flex-col">
                         <Input
-                            placeholder="Search discussions by title..."
+                            placeholder="Search forum posts by title..."
                             value={searchQuery}
                             onChange={(event) => setSearchQuery(event.target.value)}
                         />
                     </div>
                     {canPost && (
                         <Button onClick={() => router.push(`/circles/${circle.handle}/discussions/new`)}>
-                            <Plus className="mr-2 h-4 w-4" /> Create Discussion
+                            <Plus className="mr-2 h-4 w-4" /> New Forum Post
                         </Button>
                     )}
                 </div>

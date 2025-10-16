@@ -153,7 +153,7 @@ export async function getDiscussionWithComments(id: string) {
 export async function addCommentToDiscussion(discussionId: string, data: Partial<Comment>) {
     const discussion = await Posts.findOne({ _id: new ObjectId(discussionId), postType: "discussion" });
     if (!discussion || discussion.closed) {
-        throw new Error("Discussion is closed or not found");
+        throw new Error("Forum post is closed or not found");
     }
     const result = await Comments.insertOne({
         ...data,
