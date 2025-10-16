@@ -163,7 +163,7 @@ export default function KamooniLandingPage() {
                 <div className="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
                     <Link href="/" className="group flex items-center">
                         <Image
-                            src="/images/logo-test.jpg"
+                            src="/images/logo-test3.jpg"
                             alt="Kamooni Logo Icon"
                             width={40}
                             height={40}

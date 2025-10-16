@@ -33,7 +33,7 @@ export default function GlobalNav() {
                             <div className="relative">
                                 <div className="relative h-[50px] w-[50px] transform cursor-pointer">
                                     <Image
-                                        src={"/images/logo-test.jpg"}
+                                        src={"/images/logo-test3.jpg"}
                                         alt="Logo"
                                         className="h-[50px] w-[50px] overflow-hidden rounded-full bg-white object-cover"
                                         width={100}
