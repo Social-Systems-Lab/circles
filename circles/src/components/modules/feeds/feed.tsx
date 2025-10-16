@@ -160,8 +160,8 @@ export const AggregateFeedComponent = ({
                 <Image src={emptyFeed} alt="No noticeboard posts yet" width={isMobile ? 230 : 300} />
                 <h4>No noticeboard posts</h4>
                 <div className="max-w-[700px] pl-4 pr-4">
-                    We couldn't find any noticeboard posts. Try the discover tab to find new content and start following
-                    users and circles.
+                    We couldn&apos;t find any noticeboard posts. Try the discover tab to find new content and start
+                    following users and circles.
                 </div>
                 <div className="mt-4 flex flex-row gap-2">
                     <Button variant={"outline"} onClick={() => updateQueryParam(router, "tab", "discover")}>
