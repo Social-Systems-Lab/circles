@@ -210,8 +210,8 @@ const EventCard: React.FC<{
             {isCancelled && onHideCancelled && eventId && (
                 <Button
                     size="sm"
-                    variant="outline"
-                    className="absolute bottom-2 right-2 z-10 bg-white/90"
+                    variant="default"
+                    className="absolute bottom-2 right-2 z-10 bg-black text-white hover:bg-black/80 focus-visible:ring-white disabled:bg-black/60 disabled:text-white/80"
                     disabled={hidePending}
                     onClick={(ev) => {
                         ev.preventDefault();
