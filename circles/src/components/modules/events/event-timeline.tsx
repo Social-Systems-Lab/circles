@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { EventDisplay } from "@/models/models";
@@ -10,12 +10,17 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { CalendarIcon, Clock, MapPin, Users } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+import { useAtom } from "jotai";
+import { userAtom } from "@/lib/data/atoms";
+import { hideCancelledEventAction } from "@/app/circles/[handle]/events/actions";
 
 type Props = {
     circleHandle: string;
     events: EventDisplay[];
     milestones?: { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string }[];
     condensed?: boolean;
+    onEventHidden?: (eventId: string) => void;
 };
 
 const monthColorClasses = [
@@ -85,16 +90,19 @@ function isWithinJoinWindow(evt: EventDisplay): boolean {
     return now >= startMinus5 && now <= fallbackEnd;
 }
 
-const EventCard: React.FC<{ e: EventDisplay; circleHandle: string; condensed?: boolean }> = ({
-    e,
-    circleHandle,
-    condensed,
-}) => {
+const EventCard: React.FC<{
+    e: EventDisplay;
+    circleHandle: string;
+    condensed?: boolean;
+    onHideCancelled?: (eventId: string) => Promise<void> | void;
+    hidePending?: boolean;
+}> = ({ e, circleHandle, condensed, onHideCancelled, hidePending }) => {
     const stage = e.stage;
     const isDraft = stage === "review";
     const isCancelled = stage === "cancelled";
     const attendees = e.attendees ?? 0;
     const ongoing = isOngoing(e);
+    const eventId = ((e as any)._id?.toString?.() || (e as any)._id || "") as string;
 
     return (
         <Card
@@ -199,6 +207,21 @@ const EventCard: React.FC<{ e: EventDisplay; circleHandle: string; condensed?: b
                     Join
                 </Button>
             )}
+            {isCancelled && onHideCancelled && eventId && (
+                <Button
+                    size="sm"
+                    variant="outline"
+                    className="absolute bottom-2 right-2 z-10 bg-white/90"
+                    disabled={hidePending}
+                    onClick={(ev) => {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        onHideCancelled(eventId);
+                    }}
+                >
+                    {hidePending ? "Hiding…" : "Hide"}
+                </Button>
+            )}
         </Card>
     );
 };
@@ -229,7 +252,52 @@ const MilestoneRow: React.FC<{
     );
 };
 
-export default function EventTimeline({ circleHandle, events, milestones, condensed }: Props) {
+export default function EventTimeline({ circleHandle, events, milestones, condensed, onEventHidden }: Props) {
+    const { toast } = useToast();
+    const [, setUser] = useAtom(userAtom);
+    const [locallyHiddenIds, setLocallyHiddenIds] = useState<string[]>([]);
+    const [pendingHideId, setPendingHideId] = useState<string | null>(null);
+
+    const handleHideCancelled = useCallback(
+        async (eventId: string) => {
+            if (!eventId) return;
+            setPendingHideId(eventId);
+            try {
+                const res = await hideCancelledEventAction(circleHandle, eventId);
+                if (res.success) {
+                    setLocallyHiddenIds((prev) => (prev.includes(eventId) ? prev : [...prev, eventId]));
+                    setUser((prev) => {
+                        if (!prev) return prev;
+                        const nextHidden = new Set(prev.hiddenCancelledEventIds || []);
+                        nextHidden.add(eventId);
+                        return { ...prev, hiddenCancelledEventIds: Array.from(nextHidden) };
+                    });
+                    onEventHidden?.(eventId);
+                    toast({
+                        title: "Event hidden",
+                        description: "This cancelled event will no longer appear in your event lists.",
+                    });
+                } else {
+                    toast({
+                        title: "Unable to hide event",
+                        description: res.message || "Please try again.",
+                        variant: "destructive",
+                    });
+                }
+            } catch (error) {
+                console.error("hideCancelledEventAction failed:", error);
+                toast({
+                    title: "Unable to hide event",
+                    description: "Something went wrong. Please try again.",
+                    variant: "destructive",
+                });
+            } finally {
+                setPendingHideId(null);
+            }
+        },
+        [circleHandle, onEventHidden, setUser, toast],
+    );
+
     // Build combined list of future/ongoing entries: events + dated milestones
     const combined = useMemo(() => {
         const now = new Date();
@@ -237,6 +305,10 @@ export default function EventTimeline({ circleHandle, events, milestones, conden
         const eventEntries =
             (events || [])
                 .filter((e) => {
+                    const id = ((e as any)._id?.toString?.() || (e as any)._id || "") as string;
+                    if (id && locallyHiddenIds.includes(id)) {
+                        return false;
+                    }
                     const start = e.startAt ? new Date(e.startAt as any) : undefined;
                     const end = e.endAt ? new Date(e.endAt as any) : undefined;
                     if (end) return end >= now; // include ongoing or future (ends in future)
@@ -265,7 +337,7 @@ export default function EventTimeline({ circleHandle, events, milestones, conden
         const all = [...eventEntries, ...milestoneEntries];
         all.sort((a, b) => a.date.getTime() - b.date.getTime());
         return all;
-    }, [events, milestones]);
+    }, [events, milestones, locallyHiddenIds]);
 
     // Group by Year -> Month
     const grouped: Record<string, Record<number, typeof combined>> = useMemo(() => {
@@ -312,22 +384,31 @@ export default function EventTimeline({ circleHandle, events, milestones, conden
                                         </div>
                                         {/* List (single column) */}
                                         <div className={cn("flex flex-col", condensed ? "gap-2" : "gap-4")}>
-                                            {monthItems.map((it, idx) =>
-                                                it.kind === "event" ? (
-                                                    <EventCard
-                                                        key={`${(it.event as any)._id}-${idx}`}
-                                                        e={it.event}
-                                                        circleHandle={circleHandle}
-                                                        condensed={condensed}
-                                                    />
-                                                ) : (
+                                            {monthItems.map((it, idx) => {
+                                                if (it.kind === "event") {
+                                                    const eventId =
+                                                        ((it.event as any)._id?.toString?.() ||
+                                                            (it.event as any)._id ||
+                                                            "") as string;
+                                                    return (
+                                                        <EventCard
+                                                            key={`${(it.event as any)._id}-${idx}`}
+                                                            e={it.event}
+                                                            circleHandle={circleHandle}
+                                                            condensed={condensed}
+                                                            onHideCancelled={handleHideCancelled}
+                                                            hidePending={pendingHideId === eventId}
+                                                        />
+                                                    );
+                                                }
+                                                return (
                                                     <MilestoneRow
                                                         key={`${it.milestone.type}:${it.milestone.id}-${idx}`}
                                                         m={it.milestone}
                                                         circleHandle={circleHandle}
                                                     />
-                                                ),
-                                            )}
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 );

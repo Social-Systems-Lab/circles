@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -40,6 +40,19 @@ export default function EventsTabs({ circle, events, canCreate }: Props) {
     const [includeParticipating, setIncludeParticipating] = useState(true);
     const [filteredEvents, setFilteredEvents] = useState(events);
     const [milestones, setMilestones] = useState<Milestone[]>([]);
+
+    const handleEventHidden = useCallback(
+        (eventId: string) => {
+            if (!eventId) return;
+            setFilteredEvents((prev) =>
+                prev.filter((evt) => {
+                    const id = ((evt as any)._id?.toString?.() || (evt as any)._id || "") as string;
+                    return id !== eventId;
+                }),
+            );
+        },
+        [setFilteredEvents],
+    );
 
     useEffect(() => {
         const fetchEvents = async () => {
@@ -168,7 +181,12 @@ export default function EventsTabs({ circle, events, canCreate }: Props) {
                     )}
 
                     <TabsContent value="timeline" className="mt-0">
-                        <EventTimeline circleHandle={circle.handle!} events={filteredEvents} milestones={milestones} />
+                        <EventTimeline
+                            circleHandle={circle.handle!}
+                            events={filteredEvents}
+                            milestones={milestones}
+                            onEventHidden={handleEventHidden}
+                        />
                     </TabsContent>
                 </Tabs>
             </div>

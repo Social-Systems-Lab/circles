@@ -20,7 +20,7 @@ import {
 } from "@/models/models";
 import { getCircleByHandle, ensureModuleIsEnabledOnCircle, getCirclesBySearchQuery } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
-import { getUserByDid, getUserPrivate } from "@/lib/data/user";
+import { getUserByDid, getUserPrivate, getPrivateUserByDid, updateUser } from "@/lib/data/user";
 import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage";
 import { features } from "@/lib/data/constants";
 
@@ -67,6 +67,11 @@ type GetCirclesBySearchQueryActionResult = {
 
 type GetTasksByEventActionResult = {
     tasks: TaskDisplay[];
+};
+
+type HideCancelledEventResult = {
+    success: boolean;
+    message?: string;
 };
 
 // ----- Zod Schemas -----
@@ -1009,5 +1014,117 @@ export async function searchEligibleUsersAction(
     } catch (error) {
         console.error("Error in searchEligibleUsersAction:", error);
         return defaultResult;
+    }
+}
+
+/**
+ * Hide a cancelled event from the current user's timelines and calendars.
+ */
+export async function hideCancelledEventAction(
+    circleHandle: string,
+    eventId: string,
+): Promise<HideCancelledEventResult> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "Not authenticated" };
+        }
+
+        if (!ObjectId.isValid(eventId)) {
+            return { success: false, message: "Invalid event ID" };
+        }
+
+        const [event, user] = await Promise.all([
+            getEventById(eventId, userDid),
+            getPrivateUserByDid(userDid),
+        ]);
+
+        if (!event) {
+            return { success: false, message: "Event not found" };
+        }
+
+        if (!user || !user._id) {
+            return { success: false, message: "User not found" };
+        }
+
+        const canView = await isAuthorized(userDid, event.circleId, features.events.view);
+        if (!canView) {
+            return { success: false, message: "Not authorized" };
+        }
+
+        if (event.circle?.handle && event.circle.handle !== circleHandle) {
+            return { success: false, message: "Event does not belong to this circle" };
+        }
+
+        if (event.stage !== "cancelled") {
+            return { success: false, message: "Only cancelled events can be hidden" };
+        }
+
+        const hidden = user.hiddenCancelledEventIds || [];
+        if (hidden.includes(eventId)) {
+            return { success: true, message: "Event already hidden" };
+        }
+
+        const updatedHidden = [...hidden, eventId];
+        await updateUser({ _id: user._id, hiddenCancelledEventIds: updatedHidden }, userDid);
+
+        return { success: true };
+    } catch (error) {
+        console.error("Error in hideCancelledEventAction:", error);
+        return { success: false, message: "Failed to hide event" };
+    }
+}
+
+/**
+ * Remove a cancelled event from the user's hidden list.
+ */
+export async function unhideCancelledEventAction(
+    circleHandle: string,
+    eventId: string,
+): Promise<HideCancelledEventResult> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "Not authenticated" };
+        }
+
+        if (!ObjectId.isValid(eventId)) {
+            return { success: false, message: "Invalid event ID" };
+        }
+
+        const [event, user] = await Promise.all([
+            getEventById(eventId, userDid),
+            getPrivateUserByDid(userDid),
+        ]);
+
+        if (!event) {
+            return { success: false, message: "Event not found" };
+        }
+
+        if (!user || !user._id) {
+            return { success: false, message: "User not found" };
+        }
+
+        const canView = await isAuthorized(userDid, event.circleId, features.events.view);
+        if (!canView) {
+            return { success: false, message: "Not authorized" };
+        }
+
+        if (event.circle?.handle && event.circle.handle !== circleHandle) {
+            return { success: false, message: "Event does not belong to this circle" };
+        }
+
+        const hidden = user.hiddenCancelledEventIds || [];
+        if (!hidden.includes(eventId)) {
+            return { success: true, message: "Event is not hidden" };
+        }
+
+        const updatedHidden = hidden.filter((id) => id !== eventId);
+        await updateUser({ _id: user._id, hiddenCancelledEventIds: updatedHidden }, userDid);
+
+        return { success: true };
+    } catch (error) {
+        console.error("Error in unhideCancelledEventAction:", error);
+        return { success: false, message: "Failed to unhide event" };
     }
 }

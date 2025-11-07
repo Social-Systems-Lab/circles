@@ -1,7 +1,7 @@
 //user-toolbox.tsx - Displays the user toolbox that contains the user's chat rooms, notifications, circles, contacts, and account settings
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -80,6 +80,18 @@ export const UserToolbox = () => {
         [];
 
     const [events, setEvents] = useState<EventDisplay[]>([]);
+    const handleToolboxEventHidden = useCallback(
+        (eventId: string) => {
+            if (!eventId) return;
+            setEvents((prev) =>
+                prev.filter((evt) => {
+                    const id = ((evt as any)._id?.toString?.() || (evt as any)._id || "") as string;
+                    return id !== eventId;
+                }),
+            );
+        },
+        [setEvents],
+    );
 
     const initialTasksData = {
         tasks: [],
@@ -286,7 +298,12 @@ export const UserToolbox = () => {
 
                     <TabsContent value="events" className="m-0 flex-grow overflow-auto pt-1">
                         {user ? (
-                            <EventTimeline circleHandle={user.handle!} events={events} condensed />
+                            <EventTimeline
+                                circleHandle={user.handle!}
+                                events={events}
+                                condensed
+                                onEventHidden={handleToolboxEventHidden}
+                            />
                         ) : (
                             <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
                                 Loading events...

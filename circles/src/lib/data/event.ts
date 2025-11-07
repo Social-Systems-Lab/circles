@@ -74,6 +74,17 @@ export const getEventsByCircleId = async (
             ...(dateMatch as Record<string, unknown>),
         };
 
+        let hiddenCancelledObjectIds: ObjectId[] = [];
+        try {
+            const viewer = await getUserPrivate(userDid);
+            const hiddenIds = (viewer?.hiddenCancelledEventIds || []) as string[];
+            hiddenCancelledObjectIds = hiddenIds
+                .filter((id) => ObjectId.isValid(id))
+                .map((id) => new ObjectId(id));
+        } catch (err) {
+            hiddenCancelledObjectIds = [];
+        }
+
         if (circle && circle.circleType === "user" && circle.did === userDid) {
             const userQueries = [];
             if (includeCreated) {
@@ -91,11 +102,23 @@ export const getEventsByCircleId = async (
             }
         }
 
+        const hideCancelledMatchStage =
+            hiddenCancelledObjectIds.length > 0
+                ? [
+                      {
+                          $match: {
+                              $or: [{ stage: { $ne: "cancelled" } }, { _id: { $nin: hiddenCancelledObjectIds } }],
+                          },
+                      },
+                  ]
+                : [];
+
         const events = (await Events.aggregate([
             // 1) Match circle and optional date overlap
             {
                 $match: matchQuery,
             },
+            ...hideCancelledMatchStage,
 
             // 2) Lookup author details
             {

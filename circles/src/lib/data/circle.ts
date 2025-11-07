@@ -51,6 +51,7 @@ export const SAFE_CIRCLE_PROJECTION = {
     websiteUrl: 1,
     bookmarkedCircles: 1,
     pinnedCircles: 1,
+    hiddenCancelledEventIds: 1,
 } as const;
 
 export const getCirclesByIds = async (ids: string[]): Promise<Circle[]> => {

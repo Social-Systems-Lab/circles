@@ -4,7 +4,13 @@ import React, { useState, useTransition } from "react";
 import { EventDisplay } from "@/models/models";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { rsvpEventAction, cancelRsvpAction, changeEventStageAction } from "@/app/circles/[handle]/events/actions";
+import {
+    rsvpEventAction,
+    cancelRsvpAction,
+    changeEventStageAction,
+    hideCancelledEventAction,
+    unhideCancelledEventAction,
+} from "@/app/circles/[handle]/events/actions";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import ImageCarousel from "@/components/ui/image-carousel";
@@ -59,12 +65,16 @@ export default function EventDetail({
     isPreview,
 }: Props) {
     const { toast } = useToast();
-    const [user] = useAtom(userAtom);
+    const [user, setUser] = useAtom(userAtom);
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [isInviteModalOpen, setInviteModalOpen] = useState(false);
     const [isRsvpDialogOpen, setRsvpDialogOpen] = useState(false);
     const compact = !!isPreview;
+    const [hideUpdating, setHideUpdating] = useState(false);
+    const eventId = ((event as any)._id?.toString?.() || (event as any)._id || "") as string;
+    const hiddenCancelledIds = user?.hiddenCancelledEventIds || [];
+    const isEventHidden = eventId ? hiddenCancelledIds.includes(eventId) : false;
 
     const start = event.startAt ? new Date(event.startAt as any) : null;
     const end = event.endAt ? new Date(event.endAt as any) : null;
@@ -164,6 +174,50 @@ export default function EventDetail({
                 toast({ title: "Error", description: res.message || "Failed to cancel", variant: "destructive" });
             }
         });
+    };
+
+    const onToggleHidden = () => {
+        if (!eventId) return;
+        const currentlyHidden = isEventHidden;
+        const action = currentlyHidden ? unhideCancelledEventAction : hideCancelledEventAction;
+        setHideUpdating(true);
+        action(circleHandle, eventId)
+            .then((res) => {
+                if (res.success) {
+                    setUser((prev) => {
+                        if (!prev) return prev;
+                        const nextHidden = new Set(prev.hiddenCancelledEventIds || []);
+                        if (currentlyHidden) {
+                            nextHidden.delete(eventId);
+                        } else {
+                            nextHidden.add(eventId);
+                        }
+                        return { ...prev, hiddenCancelledEventIds: Array.from(nextHidden) };
+                    });
+                    toast({
+                        title: currentlyHidden ? "Cancelled event restored" : "Cancelled event hidden",
+                        description: currentlyHidden
+                            ? "The event will appear again in your calendars."
+                            : "This event will no longer appear in your calendars.",
+                    });
+                    router.refresh();
+                } else {
+                    toast({
+                        title: "Unable to update event",
+                        description: res.message || "Please try again.",
+                        variant: "destructive",
+                    });
+                }
+            })
+            .catch((error) => {
+                console.error("toggle hidden cancelled event failed:", error);
+                toast({
+                    title: "Unable to update event",
+                    description: "Something went wrong. Please try again.",
+                    variant: "destructive",
+                });
+            })
+            .finally(() => setHideUpdating(false));
     };
 
     if (compact) {
@@ -391,6 +445,11 @@ export default function EventDetail({
                     {event.stage === "open" && (canReview || canModerate) && (
                         <Button disabled={isPending} variant="destructive" onClick={onCancelEvent}>
                             Cancel
+                        </Button>
+                    )}
+                    {(event.stage === "cancelled" || isEventHidden) && (
+                        <Button variant="outline" disabled={hideUpdating} onClick={onToggleHidden}>
+                            {hideUpdating ? "Updating…" : isEventHidden ? "Show again" : "Hide"}
                         </Button>
                     )}
                 </div>
