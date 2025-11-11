@@ -13,7 +13,11 @@ import {
 import { PostDisplay, SortingOptions, Feed } from "@/models/models";
 import { userAtom } from "@/lib/data/atoms";
 
-export default function ActivityPanel() {
+type ActivityPanelProps = {
+    mode?: "panel" | "full";
+};
+
+export default function ActivityPanel({ mode = "panel" }: ActivityPanelProps) {
     const [user] = useAtom(userAtom);
     const searchParams = useSearchParams();
     const [posts, setPosts] = useState<PostDisplay[]>([]);
@@ -59,18 +63,19 @@ export default function ActivityPanel() {
         });
     }, [activeTab, sorting, selectedSdgs.join(","), userDid]);
 
+    const isFullScreen = mode === "full";
+
     return (
         <div className="flex h-full w-full flex-col">
-            {/* Tabs should be visible for authenticated users to switch between Following/Discover */}
             {userDid && <FeedTabs currentTab={activeTab} />}
-            {/* Reuse aggregate feed renderer - compact + no create-post in panel */}
-            <div className="flex-1 overflow-y-auto scrollbar-hover">
+            <div className="flex-1 overflow-y-auto scrollbar-hover stable-scrollbar">
                 <AggregateFeedComponent
                     posts={posts}
                     userFeed={userFeed}
                     activeTab={activeTab}
-                    showCreateNew={false}
-                    compact={true}
+                    showCreateNew={isFullScreen}
+                    compact={!isFullScreen}
+                    fullWidth={isFullScreen}
                 />
             </div>
         </div>

@@ -88,19 +88,27 @@ export const SidePanel: React.FC = () => {
         return null;
     }
 
+    const isFullWidthActivity = !isMobile && pathname === "/explore" && sidePanelMode === "activity";
+
     return (
         <>
             {/* Left side panel (desktop only) */}
             <AnimatePresence>
                 {!isMobile && pathname === "/explore" && sidePanelMode !== "none" && (
                     <motion.div
-                        className="fixed left-[72px] top-0 z-[200] h-[100vh] flex-shrink-0 bg-[#fbfbfb] md:border-r md:shadow-sm"
-                        initial={{ width: 0 }}
-                        animate={{ width: 420 }}
-                        exit={{ width: 0 }}
-                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                        key={sidePanelMode}
+                        className={`fixed left-[72px] top-0 z-[200] flex h-[100vh] flex-shrink-0 flex-col bg-[#fbfbfb] ${
+                            isFullWidthActivity ? "" : "md:border-r md:shadow-sm"
+                        }`}
+                        initial={{ opacity: 0, x: -20, width: 0 }}
+                        animate={{
+                            opacity: 1,
+                            x: 0,
+                            width: isFullWidthActivity ? "calc(100vw - 72px)" : 420,
+                        }}
+                        exit={{ opacity: 0, x: -20, width: 0 }}
+                        transition={{ duration: 0.55, ease: "easeInOut" }}
                     >
-                        {/* Close (top-right, smaller) */}
                         <Button
                             variant="ghost"
                             size="icon"
@@ -116,11 +124,10 @@ export const SidePanel: React.FC = () => {
                             <X className="h-3.5 w-3.5" />
                         </Button>
 
-                        {/* Panel content (no header, content starts at top) */}
                         <div className="flex h-full w-full flex-col overflow-hidden">
                             <div className="min-h-0 flex-1">
                                 {sidePanelMode === "activity" ? (
-                                    <ActivityPanel />
+                                    <ActivityPanel mode={isFullWidthActivity ? "full" : "panel"} />
                                 ) : sidePanelMode === "events" ? (
                                     <EventsPanel />
                                 ) : (

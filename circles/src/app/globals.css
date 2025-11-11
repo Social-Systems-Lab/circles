@@ -22,6 +22,7 @@
 
 body {
     color: rgb(var(--foreground-rgb));
+    scrollbar-gutter: stable both-edges;
 }
 
 /* fixes issue with shadcn/ui adding padding to body  */
@@ -46,6 +47,10 @@ html {
 html,
 body {
     overflow-x: hidden;
+}
+
+.stable-scrollbar {
+    scrollbar-gutter: stable both-edges;
 }
 
 .heading,
@@ -463,27 +468,27 @@ div.ReactTags__suggestions ul li.ReactTags__activeSuggestion {
     border-radius: 50%;
 }
 
-/* Scrollbar hidden by default; shown on hover. Cross-browser. */
+/* Scrollbar styling: keep gutter stable across browsers, subtly emphasize on hover */
 .scrollbar-hover {
-    scrollbar-gutter: stable;
+    scrollbar-gutter: stable both-edges;
     /* Firefox */
-    scrollbar-width: none;
+    scrollbar-width: thin;
 }
 .scrollbar-hover:hover {
-    scrollbar-width: auto;
+    scrollbar-width: thin;
 }
 /* WebKit */
 .scrollbar-hover::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-}
-.scrollbar-hover:hover::-webkit-scrollbar {
     width: 8px;
     height: 8px;
 }
 .scrollbar-hover::-webkit-scrollbar-thumb {
-    background-color: rgba(0, 0, 0, 0.25);
+    background-color: rgba(0, 0, 0, 0.15);
     border-radius: 8px;
+    transition: background-color 0.2s ease;
+}
+.scrollbar-hover:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.3);
 }
 .scrollbar-hover::-webkit-scrollbar-track {
     background: transparent;

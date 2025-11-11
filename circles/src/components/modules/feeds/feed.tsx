@@ -96,6 +96,7 @@ export type AggregateFeedComponentProps = {
     activeTab: string;
     showCreateNew?: boolean; // when false, hide "create post" in aggregate view (e.g., side panel)
     compact?: boolean; // when true, render list in compact/mobile style (e.g., side panel)
+    fullWidth?: boolean; // when true, allow the feed to span the available viewport width
 };
 
 export const AggregateFeedComponent = ({
@@ -104,6 +105,7 @@ export const AggregateFeedComponent = ({
     activeTab,
     showCreateNew = true,
     compact = false,
+    fullWidth = false,
 }: AggregateFeedComponentProps) => {
     const isCompact = useIsCompact();
     const [user] = useAtom(userAtom);
@@ -172,15 +174,20 @@ export const AggregateFeedComponent = ({
         );
     }
 
+    const containerStyle = fullWidth
+        ? { flexGrow: 1, maxWidth: "100%" }
+        : {
+              flexGrow: isCompact ? "1" : "3",
+              maxWidth: isCompact ? "none" : "700px",
+          };
+
     return (
-        <div
-            className={`flex h-full min-h-screen w-full flex-1 items-start justify-center`}
-            style={{
-                flexGrow: isCompact ? "1" : "3",
-                maxWidth: isCompact ? "none" : "700px",
-            }}
-        >
-            <div className="flex w-full flex-col">
+        <div className={`flex h-full min-h-screen w-full flex-1 items-start justify-center`} style={containerStyle}>
+            <div
+                className={`flex w-full flex-col ${
+                    fullWidth ? "mx-auto max-w-[760px] px-4 sm:px-6 lg:px-8" : ""
+                }`}
+            >
                 {canPost && userFeed && (
                     <div>
                         {/* className="mt-6" */}

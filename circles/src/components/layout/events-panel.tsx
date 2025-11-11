@@ -237,7 +237,7 @@ export default function EventsPanel() {
                     </label>
                 </div>
             </div>
-            <div className="scrollbar-hover flex-1 overflow-y-auto p-2 pt-0">
+            <div className="scrollbar-hover stable-scrollbar flex-1 overflow-y-auto p-2 pt-0">
                 {filteredSorted.length === 0 && !loading && (
                     <div className="p-6 text-center text-sm text-muted-foreground">No upcoming events found.</div>
                 )}
