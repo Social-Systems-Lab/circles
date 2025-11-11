@@ -13,8 +13,7 @@ import {
 } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { UserPicture } from "../modules/members/user-picture";
-import { MessageCircle } from "lucide-react";
-import { LuClipboardCheck } from "react-icons/lu";
+import { Bell, MessageCircle } from "lucide-react";
 import { UserToolboxTab } from "@/models/models";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { VerifyAccountButton } from "../modules/auth/verify-account-button";
@@ -130,9 +129,9 @@ const ProfileMenuBar = () => {
                                 variant="ghost"
                                 size="icon"
                                 className="relative h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
-                                onClick={() => openUserToolbox("events")}
+                                onClick={() => openUserToolbox("notifications")}
                             >
-                                <LuClipboardCheck className="h-5 w-5" />
+                                <Bell className="h-5 w-5" />
                                 {unreadNotifications > 0 && (
                                     <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">
                                         {unreadNotifications}

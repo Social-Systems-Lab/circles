@@ -6,9 +6,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bell, MessageCircle, Circle as CircleIcon, CheckSquare, Hammer } from "lucide-react";
+import { Bell, MessageCircle, Circle as CircleIcon, Calendar, CheckSquare, Hammer } from "lucide-react";
 import { MdOutlineLogout } from "react-icons/md";
-import { LuClipboardCheck } from "react-icons/lu";
 import {
     authInfoAtom,
     contentPreviewAtom,
@@ -60,7 +59,7 @@ export const UserToolbox = () => {
 
     useEffect(() => {
         if (!userToolboxState?.tab) {
-            setTab("events");
+            setTab("chat");
         } else {
             setTab(userToolboxState.tab === "profile" ? "chat" : userToolboxState.tab);
         }
@@ -191,12 +190,6 @@ export const UserToolbox = () => {
                             <MessageCircle className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger
-                            value="events"
-                            className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
-                        >
-                            <LuClipboardCheck className="h-5 w-5" />
-                        </TabsTrigger>
-                        <TabsTrigger
                             value="notifications"
                             className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
                         >
@@ -221,6 +214,12 @@ export const UserToolbox = () => {
                             <CheckSquare className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger
+                            value="events"
+                            className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
+                        >
+                            <Calendar className="h-5 w-5" />
+                        </TabsTrigger>
+                        <TabsTrigger
                             value="account"
                             className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
                         >
@@ -230,20 +229,6 @@ export const UserToolbox = () => {
                     </TabsList>
                     <TabsContent value="chat" className="m-0 flex-grow overflow-auto pt-1">
                         <ChatList chats={user?.chatRoomMemberships?.map((m) => m.chatRoom) || []} />
-                    </TabsContent>
-                    <TabsContent value="events" className="m-0 flex-grow overflow-auto pt-1">
-                        {user ? (
-                            <EventTimeline
-                                circleHandle={user.handle!}
-                                events={events}
-                                condensed
-                                onEventHidden={handleToolboxEventHidden}
-                            />
-                        ) : (
-                            <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
-                                Loading events...
-                            </div>
-                        )}
                     </TabsContent>
                     <TabsContent value="notifications" className="m-0 flex-grow overflow-auto pt-1">
                         <Notifications />
@@ -307,6 +292,21 @@ export const UserToolbox = () => {
                         ) : (
                             <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
                                 Loading tasks...
+                            </div>
+                        )}
+                    </TabsContent>
+
+                    <TabsContent value="events" className="m-0 flex-grow overflow-auto pt-1">
+                        {user ? (
+                            <EventTimeline
+                                circleHandle={user.handle!}
+                                events={events}
+                                condensed
+                                onEventHidden={handleToolboxEventHidden}
+                            />
+                        ) : (
+                            <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
+                                Loading events...
                             </div>
                         )}
                     </TabsContent>
