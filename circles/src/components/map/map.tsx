@@ -24,6 +24,7 @@ import MapMarker from "./markers";
 import { isEqual } from "lodash"; // You might need to install lodash
 import { motion } from "framer-motion";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import ContentPreview from "../layout/content-preview";
 import { Content, ContentPreviewData, Location, PostDisplay, EventDisplay } from "@/models/models";
 import ImageGallery from "../layout/image-gallery";
@@ -236,13 +237,15 @@ export function MapDisplay({ mapboxKey }: { mapboxKey: string }) {
     const { windowWidth, windowHeight } = useWindowDimensions();
     const isMobile = windowWidth <= 768;
     const [panelMode] = useAtom(sidePanelModeAtom);
+    const pathname = usePathname();
 
     let innerWidth = 0;
     if (typeof document !== "undefined") {
         innerWidth = document.documentElement.offsetWidth;
     }
 
-    const panelWidth = !isMobile && panelMode !== "none" ? 420 : 0;
+    const isFullWidthActivity = !isMobile && pathname === "/explore" && panelMode === "activity";
+    const panelWidth = !isMobile && panelMode !== "none" && !isFullWidthActivity ? 420 : 0;
     const mapWidth = isMobile ? innerWidth : innerWidth - 72 - panelWidth;
 
     useEffect(() => {

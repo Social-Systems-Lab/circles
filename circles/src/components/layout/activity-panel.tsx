@@ -23,6 +23,7 @@ export default function ActivityPanel({ mode = "panel" }: ActivityPanelProps) {
     const [posts, setPosts] = useState<PostDisplay[]>([]);
     const [userFeed, setUserFeed] = useState<Feed | null>(null);
     const [isPending, startTransition] = useTransition();
+    const [isLoading, setIsLoading] = useState(true);
 
     const userDid = user?.did;
 
@@ -52,14 +53,19 @@ export default function ActivityPanel({ mode = "panel" }: ActivityPanelProps) {
     }, [userDid]);
 
     useEffect(() => {
+        setIsLoading(true);
         startTransition(async () => {
-            let newPosts: PostDisplay[] = [];
-            if (activeTab === "following" || !activeTab) {
-                newPosts = await getAggregatePostsAction(userDid, 20, 0, sorting, selectedSdgs);
-            } else {
-                newPosts = await getGlobalPostsAction(userDid, 20, 0, sorting, selectedSdgs);
+            try {
+                let newPosts: PostDisplay[] = [];
+                if (activeTab === "following" || !activeTab) {
+                    newPosts = await getAggregatePostsAction(userDid, 20, 0, sorting, selectedSdgs);
+                } else {
+                    newPosts = await getGlobalPostsAction(userDid, 20, 0, sorting, selectedSdgs);
+                }
+                setPosts(newPosts);
+            } finally {
+                setIsLoading(false);
             }
-            setPosts(newPosts);
         });
     }, [activeTab, sorting, selectedSdgs.join(","), userDid]);
 
@@ -76,6 +82,7 @@ export default function ActivityPanel({ mode = "panel" }: ActivityPanelProps) {
                     showCreateNew={isFullScreen}
                     compact={!isFullScreen}
                     fullWidth={isFullScreen}
+                    isLoading={isLoading}
                 />
             </div>
         </div>

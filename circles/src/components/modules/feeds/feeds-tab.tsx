@@ -23,29 +23,35 @@ export default function FeedTabs({ currentTab }: { currentTab?: string }) {
         }
     }, [currentTab, router, setSettings, settings.feedTab]);
 
+    const activeTab = (currentTab as TabOptions) || settings.feedTab;
     const containerMaxWidth = isCompact ? "none" : "760px";
-    const baseButtonClasses =
-        "rounded-t-lg px-6 py-2 text-sm font-semibold text-gray-600 transition-colors border-b-2 border-transparent focus:outline-none";
+    const tabs: { key: TabOptions; label: string }[] = [
+        { key: "following", label: "Following" },
+        { key: "discover", label: "Discover" },
+    ];
 
     return (
-        <div className="mb-4 flex w-full justify-center border-b border-gray-200" style={{ maxWidth: containerMaxWidth }}>
-            <div className="flex items-center justify-center gap-2">
-                <button
-                    className={`${baseButtonClasses} ${
-                        currentTab === "following" ? "border-blue-500 text-blue-600" : "hover:text-gray-900"
-                    }`}
-                    onClick={() => switchTab("following")}
-                >
-                    Following
-                </button>
-                <button
-                    className={`${baseButtonClasses} ${
-                        currentTab === "discover" ? "border-blue-500 text-blue-600" : "hover:text-gray-900"
-                    }`}
-                    onClick={() => switchTab("discover")}
-                >
-                    Discover
-                </button>
+        <div
+            className="mb-6 flex w-full justify-center px-2 sm:px-4"
+            style={{ maxWidth: containerMaxWidth, marginLeft: "auto", marginRight: "auto" }}
+        >
+            <div className="mx-auto flex w-full max-w-[540px] min-w-[320px] items-center justify-center gap-3 rounded-full bg-white/95 p-1.5 shadow-sm ring-1 ring-gray-200 backdrop-blur">
+                {tabs.map((tab) => {
+                    const isActive = activeTab === tab.key;
+                    return (
+                        <button
+                            key={tab.key}
+                            className={`relative flex flex-1 items-center justify-center rounded-full px-6 py-2 text-sm font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-2 ${
+                                isActive
+                                    ? "bg-blue-600 text-white shadow"
+                                    : "text-gray-600 hover:text-gray-900"
+                            }`}
+                            onClick={() => switchTab(tab.key)}
+                        >
+                            {tab.label}
+                        </button>
+                    );
+                })}
             </div>
         </div>
     );

@@ -14,6 +14,7 @@ import { ListFilter } from "@/components/utils/list-filter";
 import { Button } from "@/components/ui/button";
 import emptyFeed from "@images/empty-feed.png";
 import Image from "next/image";
+import kamooniLogo from "@images/kamooni_logo.png";
 import { updateQueryParam } from "@/lib/utils/helpers-client";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { useEffect, useState, useMemo } from "react";
@@ -28,6 +29,7 @@ export type FeedComponentProps = {
     onFilterChange?: (filter: string) => void;
     onSdgChange?: (sdgs: SDG[]) => void;
     selectedSdgsExternal?: SDG[];
+    isLoading?: boolean;
 };
 
 export const FeedComponent = ({
@@ -37,6 +39,7 @@ export const FeedComponent = ({
     onFilterChange,
     onSdgChange,
     selectedSdgsExternal,
+    isLoading = false,
 }: FeedComponentProps) => {
     const isCompact = useIsCompact();
     const [user] = useAtom(userAtom);
@@ -63,13 +66,26 @@ export const FeedComponent = ({
         updateQueryParam(router, "sort", filter);
     };
 
+    const containerStyle = {
+        flexGrow: isCompact ? "1" : "3",
+        maxWidth: isCompact ? "none" : "700px",
+    };
+
+    if (isLoading) {
+        return (
+            <div className="flex h-full min-h-[320px] w-full flex-1 items-center justify-center" style={containerStyle}>
+                <div className="flex w-full max-w-[700px] flex-col items-center text-center">
+                    <Image src={kamooniLogo} alt="Kamooni logo" width={72} height={72} priority />
+                    <p className="mt-4 text-sm font-medium text-gray-600">Feed loading…</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div
             className={`flex h-full min-h-screen w-full flex-1 items-start justify-center`}
-            style={{
-                flexGrow: isCompact ? "1" : "3",
-                maxWidth: isCompact ? "none" : "700px",
-            }}
+            style={containerStyle}
         >
             <div className="flex w-full flex-col">
                 {canPost && (
@@ -97,6 +113,7 @@ export type AggregateFeedComponentProps = {
     showCreateNew?: boolean; // when false, hide "create post" in aggregate view (e.g., side panel)
     compact?: boolean; // when true, render list in compact/mobile style (e.g., side panel)
     fullWidth?: boolean; // when true, allow the feed to span the available viewport width
+    isLoading?: boolean; // when true, show loading placeholder instead of feed content
 };
 
 export const AggregateFeedComponent = ({
@@ -106,6 +123,7 @@ export const AggregateFeedComponent = ({
     showCreateNew = true,
     compact = false,
     fullWidth = false,
+    isLoading = false,
 }: AggregateFeedComponentProps) => {
     const isCompact = useIsCompact();
     const [user] = useAtom(userAtom);
@@ -148,6 +166,28 @@ export const AggregateFeedComponent = ({
             handleSdgSelectionChange([...selectedSdgs, sdg]);
         }
     };
+
+    if (isLoading) {
+        const loadingContainerStyle = fullWidth
+            ? { flexGrow: 1, maxWidth: "100%" }
+            : {
+                  flexGrow: isCompact ? "1" : "3",
+                  maxWidth: isCompact ? "none" : "700px",
+              };
+
+        return (
+            <div className={`flex h-full min-h-[320px] w-full flex-1 items-center justify-center`} style={loadingContainerStyle}>
+                <div
+                    className={`flex w-full flex-col items-center text-center ${
+                        fullWidth ? "mx-auto max-w-[760px] px-4 sm:px-6 lg:px-8" : ""
+                    }`}
+                >
+                    <Image src={kamooniLogo} alt="Kamooni logo" width={72} height={72} priority />
+                    <p className="mt-4 text-base font-medium text-gray-600">Feed loading…</p>
+                </div>
+            </div>
+        );
+    }
 
     // If no posts in the "Following" feed, show a placeholder
     if (posts.length === 0 && activeTab === "following") {

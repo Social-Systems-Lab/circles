@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useAtom } from "jotai";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -68,6 +68,21 @@ export const SidePanel: React.FC = () => {
         setUserToolbox(undefined);
     };
 
+    const handleClosePanel = useCallback(() => {
+        setSidePanelMode("none");
+        setContentPreview(undefined);
+        setUserToolbox(undefined);
+
+        if (!isMobile && pathname === "/explore") {
+            const params = new URLSearchParams(searchParams.toString());
+            if (params.has("panel")) {
+                params.delete("panel");
+            }
+            const next = params.toString();
+            router.replace(next ? `/explore?${next}` : "/explore");
+        }
+    }, [isMobile, pathname, router, searchParams, setContentPreview, setSidePanelMode, setUserToolbox]);
+
     useEffect(() => {
         if (contentPreview) {
             setSidePanelContentVisible("content");
@@ -97,28 +112,20 @@ export const SidePanel: React.FC = () => {
                 {!isMobile && pathname === "/explore" && sidePanelMode !== "none" && (
                     <motion.div
                         key={sidePanelMode}
-                        className={`fixed left-[72px] top-0 z-[200] flex h-[100vh] flex-shrink-0 flex-col bg-[#fbfbfb] ${
+                        className={`fixed left-[72px] top-0 z-[200] flex h-[100vh] flex-shrink-0 flex-col bg-white ${
                             isFullWidthActivity ? "" : "md:border-r md:shadow-sm"
                         }`}
-                        initial={{ opacity: 0, x: -20, width: 0 }}
-                        animate={{
-                            opacity: 1,
-                            x: 0,
-                            width: isFullWidthActivity ? "calc(100vw - 72px)" : 420,
-                        }}
-                        exit={{ opacity: 0, x: -20, width: 0 }}
-                        transition={{ duration: 0.55, ease: "easeInOut" }}
+                        style={{ width: isFullWidthActivity ? "calc(100vw - 72px)" : 420 }}
+                        initial={{ x: "-100%" }}
+                        animate={{ x: 0 }}
+                        exit={{ x: "-100%" }}
+                        transition={{ duration: 0.35, ease: "easeInOut" }}
                     >
                         <Button
                             variant="ghost"
                             size="icon"
                             className="absolute right-2 top-2 z-[210] rounded-full bg-gray-100"
-                            onClick={() => {
-                                setSidePanelMode("none");
-                                if (pathname === "/explore") {
-                                    router.push("/explore");
-                                }
-                            }}
+                            onClick={handleClosePanel}
                             aria-label="Close panel"
                         >
                             <X className="h-3.5 w-3.5" />

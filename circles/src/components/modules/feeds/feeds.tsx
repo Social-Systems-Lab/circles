@@ -21,15 +21,21 @@ export default function FeedsModule(props: PageProps) {
     const [sorting, setSorting] = useState<SortingOptions>("top");
     const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>([]);
     const [isPending, startTransition] = useTransition();
+    const [isLoading, setIsLoading] = useState(true);
     const [user] = useAtom(userAtom);
 
     const fetchPosts = useCallback(async () => {
         if (!feed) return;
 
+        setIsLoading(true);
         startTransition(async () => {
-            const sdgHandles = selectedSdgs.map((s) => s.handle);
-            const newPosts = await getAggregatePostsAction(user?.did, 20, 0, sorting, sdgHandles, circle.handle);
-            setPosts(newPosts);
+            try {
+                const sdgHandles = selectedSdgs.map((s) => s.handle);
+                const newPosts = await getAggregatePostsAction(user?.did, 20, 0, sorting, sdgHandles, circle.handle);
+                setPosts(newPosts);
+            } finally {
+                setIsLoading(false);
+            }
         });
     }, [feed, sorting, selectedSdgs, user, circle.handle]);
 
@@ -41,6 +47,7 @@ export default function FeedsModule(props: PageProps) {
                 const searchParams = await searchParamsProp;
                 const initialSort = (searchParams?.sort as SortingOptions) || "top";
                 setSorting(initialSort);
+                setIsLoading(true);
             }
         }
         fetchInitialData();
@@ -59,7 +66,11 @@ export default function FeedsModule(props: PageProps) {
     };
 
     if (!feed) {
-        return <div></div>; // Or a loading spinner
+        return (
+            <div className="flex flex-1 items-center justify-center">
+                <div className="text-sm text-gray-500">Feed loading…</div>
+            </div>
+        );
     }
 
     return (
@@ -72,6 +83,7 @@ export default function FeedsModule(props: PageProps) {
                     onFilterChange={handleFilterChange}
                     onSdgChange={handleSdgChange}
                     selectedSdgsExternal={selectedSdgs}
+                    isLoading={isLoading}
                 />
             </div>
         </div>
