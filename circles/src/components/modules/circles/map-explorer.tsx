@@ -1,7 +1,7 @@
 // map-explorer.tsx
 "use client";
 
-import React, { useCallback, useEffect, useState, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Circle, WithMetric, Content, ContentPreviewData, MemberDisplay, Cause as SDG } from "@/models/models";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import useWindowDimensions from "@/components/utils/use-window-dimensions";
@@ -20,6 +20,7 @@ import {
     X,
     ArrowLeft,
     ChevronRight,
+    ChevronLeft,
     Globe,
     CalendarIcon,
     AudioLines,
@@ -48,7 +49,7 @@ import { CirclePicture } from "./circle-picture";
 import { completeSwipeOnboardingAction } from "./swipe-actions";
 import { useRouter, useSearchParams } from "next/navigation";
 import { searchContentAction } from "../search/actions";
-import CategoryFilter from "../search/category-filter";
+import CategoryFilter, { CategoryFilterProps } from "../search/category-filter";
 import SdgFilter from "../search/sdg-filter";
 import { SdgPanel } from "../search/SdgPanel";
 import Indicators from "@/components/utils/indicators";
@@ -78,6 +79,98 @@ const mapItemToContent = (item: WithMetric<Content> | Circle | undefined): Conte
     }
     console.warn("Unmappable item type in mapItemToContent:", item);
     return null;
+};
+
+const CategoryFilterCarousel: React.FC<CategoryFilterProps & { className?: string }> = ({ className, ...props }) => {
+    const scrollAreaRef = useRef<HTMLDivElement>(null);
+    const [canScrollLeft, setCanScrollLeft] = useState(false);
+    const [canScrollRight, setCanScrollRight] = useState(false);
+
+    const evaluateScrollability = useCallback(() => {
+        const el = scrollAreaRef.current;
+        if (!el) return;
+        const epsilon = 12;
+        const remainingLeft = el.scrollLeft;
+        const remainingRight = el.scrollWidth - el.clientWidth - el.scrollLeft;
+        const nextCanScrollLeft = remainingLeft > epsilon;
+        const nextCanScrollRight = remainingRight > epsilon;
+        setCanScrollLeft(nextCanScrollLeft);
+        setCanScrollRight(nextCanScrollRight);
+
+    }, []);
+
+    const handleArrowClick = useCallback(
+        (direction: "left" | "right") => {
+            const el = scrollAreaRef.current;
+            if (!el) return;
+            const amount = Math.max(el.clientWidth * 0.6, 220);
+            el.scrollBy({ left: direction === "left" ? -amount : amount, behavior: "smooth" });
+            window.requestAnimationFrame(evaluateScrollability);
+            window.setTimeout(evaluateScrollability, 260);
+        },
+        [evaluateScrollability],
+    );
+
+    useEffect(() => {
+        evaluateScrollability();
+    }, [
+        evaluateScrollability,
+        props.categories.length,
+        props.selectedCategory,
+        props.hasSearched,
+        props.categoryCounts,
+        props.displayLabelMap,
+    ]);
+
+    useEffect(() => {
+        const el = scrollAreaRef.current;
+        if (!el) return;
+        const handleResize = () => evaluateScrollability();
+        el.addEventListener("scroll", evaluateScrollability);
+        window.addEventListener("resize", handleResize);
+        handleResize();
+        return () => {
+            el.removeEventListener("scroll", evaluateScrollability);
+            window.removeEventListener("resize", handleResize);
+        };
+    }, [evaluateScrollability]);
+
+    return (
+        <div className={cn("relative flex min-w-[260px] flex-1 items-center", className)}>
+            <div
+                ref={scrollAreaRef}
+                className="no-scrollbar flex w-full items-center gap-2 overflow-x-auto overflow-y-hidden px-3 scroll-smooth"
+                style={{
+                    paddingLeft: 36,
+                    paddingRight: 36,
+                }}
+            >
+                <CategoryFilter {...props} />
+            </div>
+            <button
+                type="button"
+                className={cn(
+                    "absolute left-2 top-1/2 flex h-[30px] w-[30px] -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm transition hover:bg-white",
+                    !canScrollLeft && "pointer-events-none opacity-0",
+                )}
+                onClick={() => handleArrowClick("left")}
+                aria-label="Scroll filters left"
+            >
+                <ChevronLeft className="h-[14px] w-[14px] text-gray-600" />
+            </button>
+            <button
+                type="button"
+                className={cn(
+                    "absolute right-2 top-1/2 flex h-[30px] w-[30px] -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm transition hover:bg-white",
+                    !canScrollRight && "pointer-events-none opacity-0",
+                )}
+                onClick={() => handleArrowClick("right")}
+                aria-label="Scroll filters right"
+            >
+                <ChevronRight className="h-[14px] w-[14px] text-gray-600" />
+            </button>
+        </div>
+    );
 };
 
 interface MapExplorerProps {
@@ -702,25 +795,29 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
 
             {/* Top Bar Controls */}
             <div
-                className={`absolute ${isMobile ? "flex-col" : "flex-row"} z-[60] flex gap-2`} // Increased z-index
-                style={{ left: !isMobile && panelMode !== "none" ? 440 : 16, top: 16 }}
+                className={`absolute ${isMobile ? "flex-col" : "flex-row"} z-[30] flex gap-2`} // allow profile icons to sit above
+                style={{
+                    left: !isMobile && panelMode !== "none" ? 440 : 16,
+                    right: isMobile ? 16 : 420,
+                    top: 16,
+                }}
             >
                 {/* View Mode Toggle removed: Explore mode only */}
 
                 {/* Search Bar & Filters (Only in Explore Mode) */}
                 {viewMode === "explore" && !(sidePanelContentVisible === "toolbox" && isMobile) && (
-                    <div className="relative">
-                        <div className="absolute flex items-center gap-2">
+                    <div className="flex flex-col gap-2">
+                        <div className="flex flex-wrap items-center gap-2 md:flex-nowrap md:gap-3">
                             {/* Search Input (hidden on desktop when panel is open) */}
                             {showTopSearchInput && (
-                                <div className="flex items-center rounded-full bg-white p-1 px-3 shadow-md">
+                                <div className="flex flex-shrink-0 items-center rounded-full bg-white p-1 px-4 shadow-md">
                                     <input
                                         type="text"
                                         placeholder="Search..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
                                         onKeyDown={(e) => e.key === "Enter" && handleSearchTrigger()}
-                                        className="w-32 border-none bg-transparent pl-1 outline-none focus:ring-0 sm:w-48"
+                                        className="w-36 border-none bg-transparent pl-1 outline-none focus:ring-0 sm:w-60"
                                     />
                                     {searchQuery && (
                                         <Button
@@ -745,67 +842,28 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                 </div>
                             )}
                             {/* Filters */}
-                            <div className="flex items-center">
-                                {!isMobile && (
-                                    <CategoryFilter
-                                        categories={["communities", "projects", "users", "events"]}
-                                        categoryCounts={categoryCounts}
-                                        selectedCategory={selectedCategory}
-                                        onSelectionChange={setSelectedCategory}
-                                        hasSearched={true}
-                                        displayLabelMap={{ users: "people" }}
-                                    />
-                                )}
-                                <SdgFilter
-                                    selectedSdgs={selectedSdgs}
-                                    onSelectionChange={setSelectedSdgs}
-                                    displayAs="popover"
-                                    gridCols="grid-cols-3"
-                                    sdgCounts={sdgCounts}
-                                    trigger={
-                                        <Button
-                                            variant="ghost"
-                                            className="ml-2 flex h-auto items-center gap-2 rounded-full border bg-white px-5 py-1.5 text-sm shadow-sm data-[selected=true]:border-primary"
-                                            data-selected={selectedSdgs.length > 0}
-                                        >
-                                            {selectedSdgs.length === 0 ? (
-                                                <Image
-                                                    src="/images/sdgs/SDG_Wheel_WEB.png"
-                                                    alt="SDG Wheel"
-                                                    width={16}
-                                                    height={16}
-                                                    className="h-4 w-4"
-                                                />
-                                            ) : (
-                                                <div
-                                                    className="flex flex-row -space-x-2"
-                                                    style={{
-                                                        width: `calc(16px + ${12 * Math.min(selectedSdgs.length - 1, 2)}px)`,
-                                                    }}
-                                                >
-                                                    {selectedSdgs.slice(0, 3).map((sdg) => (
-                                                        <Image
-                                                            key={sdg.handle}
-                                                            src={sdg.picture?.url ?? "/images/default-picture.png"}
-                                                            alt={sdg.name}
-                                                            width={16}
-                                                            height={16}
-                                                            className="h-4 w-4 rounded-full border-2 border-white object-cover"
-                                                        />
-                                                    ))}
-                                                </div>
-                                            )}
-                                            <div className="hidden md:block">
-                                                SDGs {selectedSdgs.length > 0 && `(${selectedSdgs.length})`}
-                                            </div>
-                                        </Button>
-                                    }
+                            {!isMobile && (
+                                <CategoryFilterCarousel
+                                    categories={["communities", "projects", "users", "events"]}
+                                    categoryCounts={categoryCounts}
+                                    selectedCategory={selectedCategory}
+                                    onSelectionChange={setSelectedCategory}
+                                    hasSearched={true}
+                                    displayLabelMap={{ users: "people" }}
                                 />
-                            </div>
+                            )}
                         </div>
 
-                        {/* Resonance slider + Date filter */}
-                        <div className="absolute left-0 top-[56px] z-40 flex items-center gap-3 rounded-full bg-white/95 px-3 py-2 shadow-md backdrop-blur-sm">
+                        {/* Resonance slider + Date & SDG filters */}
+                        <div
+                            className={cn(
+                                "fixed z-40 flex items-center justify-center gap-2 rounded-full bg-white/90 px-3 py-2 shadow-md backdrop-blur-sm sm:px-4",
+                                "flex-nowrap",
+                                isMobile
+                                    ? "left-1/2 bottom-24 w-auto max-w-[calc(100%-3rem)] -translate-x-1/2"
+                                    : "left-1/2 bottom-6 max-w-[680px] -translate-x-1/2",
+                            )}
+                        >
                             <TooltipProvider delayDuration={200}>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
@@ -819,7 +877,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                 </Tooltip>
                             </TooltipProvider>
 
-                            <div className="w-[180px] sm:w-[200px]">
+                            <div className="w-[140px] shrink-0 sm:w-[220px] md:w-[260px]">
                                 <Slider
                                     min={0}
                                     max={100}
@@ -829,15 +887,15 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                 />
                             </div>
 
-                            <span className="rounded-full bg-gray-100/80 px-2 py-0.5 text-[10px] font-medium text-gray-700 ring-1 ring-black/5">
+                            <span className="shrink-0 rounded-full bg-gray-100/80 px-2.5 py-1 text-[11px] font-medium text-gray-700 ring-1 ring-black/5">
                                 {Math.round(simPercent)}%
                             </span>
 
-                            <div className="mx-2 h-4 w-px bg-gray-200/80" />
+                            <div className="mx-2 hidden h-4 w-px bg-gray-200/80 sm:block" />
 
                             <Popover>
                                 <PopoverTrigger asChild>
-                                    <button className="flex items-center gap-1 rounded-full border border-gray-200/70 bg-white/70 px-2.5 py-1 text-xs text-gray-700 shadow-sm hover:bg-white">
+                                    <button className="flex shrink-0 items-center gap-1 rounded-full border border-gray-200/70 bg-white/70 px-2 py-0.5 text-[11px] text-gray-700 shadow-sm hover:bg-white">
                                         <CalendarIcon className="h-3.5 w-3.5 text-gray-600" />
                                         <span className="max-w-[160px] truncate">{dateLabel}</span>
                                         <ChevronDown className="h-3 w-3 text-gray-500" />
@@ -887,6 +945,54 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                     </div>
                                 </PopoverContent>
                             </Popover>
+
+                            <div className="mx-2 hidden h-4 w-px bg-gray-200/80 sm:block" />
+
+                            <SdgFilter
+                                selectedSdgs={selectedSdgs}
+                                onSelectionChange={setSelectedSdgs}
+                                displayAs="popover"
+                                gridCols="grid-cols-3"
+                                sdgCounts={sdgCounts}
+                                trigger={
+                                    <Button
+                                        variant="ghost"
+                                        className="flex h-auto shrink-0 items-center gap-1.5 rounded-full border border-transparent bg-white/40 px-2 py-0.5 text-[11px] text-gray-700 shadow-sm backdrop-blur data-[selected=true]:border-primary data-[selected=true]:bg-white"
+                                        data-selected={selectedSdgs.length > 0}
+                                    >
+                                        {selectedSdgs.length === 0 ? (
+                                            <Image
+                                                src="/images/sdgs/SDG_Wheel_WEB.png"
+                                                alt="SDG Wheel"
+                                                width={16}
+                                                height={16}
+                                                className="h-4 w-4"
+                                            />
+                                        ) : (
+                                            <div
+                                                className="flex flex-row -space-x-2"
+                                                style={{
+                                                    width: `calc(16px + ${12 * Math.min(selectedSdgs.length - 1, 2)}px)`,
+                                                }}
+                                            >
+                                                {selectedSdgs.slice(0, 3).map((sdg) => (
+                                                    <Image
+                                                        key={sdg.handle}
+                                                        src={sdg.picture?.url ?? "/images/default-picture.png"}
+                                                        alt={sdg.name}
+                                                        width={16}
+                                                        height={16}
+                                                        className="h-4 w-4 rounded-full border-2 border-white object-cover"
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
+                                        <span className="hidden sm:inline">
+                                            SDGs {selectedSdgs.length > 0 && `(${selectedSdgs.length})`}
+                                        </span>
+                                    </Button>
+                                }
+                            />
                         </div>
                     </div>
                 )}

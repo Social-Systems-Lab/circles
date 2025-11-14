@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge"; // Import Badge for count display
 import { Users, User, Calendar, Hammer } from "lucide-react";
 
-interface CategoryFilterProps {
+export interface CategoryFilterProps {
     categories: string[]; // All available categories (e.g., ['circles', 'projects', 'users'])
     categoryCounts: { [key: string]: number }; // Counts for each category
     selectedCategory: string | null; // Single selected category or null
@@ -41,7 +41,7 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
             type="single"
             value={selectedCategory ?? ""} // Provide empty string if null for controlled component
             onValueChange={handleValueChange}
-            className="flex items-center gap-2"
+            className="flex flex-nowrap items-center gap-2 whitespace-nowrap"
         >
             {categories.map((category) => (
                 <ToggleGroupItem
@@ -50,7 +50,7 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
                     variant="outline"
                     size="sm"
                     className={cn(
-                        "flex h-auto items-center gap-2 rounded-full bg-white px-5 py-1.5 text-sm capitalize shadow-sm",
+                        "flex h-auto min-w-[138px] flex-shrink-0 items-center justify-center gap-2 rounded-full bg-white px-[19px] py-[5px] text-sm capitalize shadow-sm leading-none",
                         "data-[state=on]:bg-[#9cb5f7] data-[state=on]:text-primary",
                         "hover:bg-white",
                     )}
@@ -59,7 +59,7 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
                     <span className="text-gray-600">{iconMap[category]}</span>
                     <span>{displayLabelMap?.[category] ?? category}</span>
                     {hasSearched && (
-                        <Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0 text-[10px]">
+                        <Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-[2px] text-[10px]">
                             {categoryCounts[category] ?? 0}
                         </Badge>
                     )}

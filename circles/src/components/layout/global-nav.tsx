@@ -9,10 +9,12 @@ import { useEffect } from "react";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 import { usePathname } from "next/navigation";
+import { useIsMobile } from "@/components/utils/use-is-mobile";
 
 export default function GlobalNav() {
     const [user, setUser] = useAtom(userAtom);
     const pathname = usePathname();
+    const isMobile = useIsMobile();
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
             console.log("useEffect.GlobalNav.1");
@@ -23,11 +25,30 @@ export default function GlobalNav() {
         return null;
     }
 
+    const mobileNavHeight = 56; // px
+
     return (
         <>
-            <div className={`order-last h-[72px] w-full flex-shrink-0 md:order-first md:h-full md:w-[72px]`}></div>
-            <div className={`fixed bottom-0 z-[300] h-[72px] w-full bg-white shadow-md md:top-0 md:h-full md:w-[72px]`}>
-                <div className={`flex h-[72px] flex-row items-center justify-center md:h-auto md:w-[72px] md:flex-col`}>
+            <div
+                className={`order-last w-full flex-shrink-0 md:order-first md:h-full md:w-[72px]`}
+                style={
+                    isMobile
+                        ? { height: `calc(${mobileNavHeight}px + env(safe-area-inset-bottom, 0px))` }
+                        : undefined
+                }
+            ></div>
+            <div
+                className={`fixed bottom-0 z-[300] w-full bg-white shadow-md md:top-0 md:h-full md:w-[72px] md:shadow-none`}
+                style={
+                    isMobile
+                        ? {
+                              height: `calc(${mobileNavHeight}px + env(safe-area-inset-bottom, 0px))`,
+                              paddingBottom: "env(safe-area-inset-bottom, 0px)",
+                          }
+                        : undefined
+                }
+            >
+                <div className={`flex h-[56px] flex-row items-center justify-center md:h-auto md:w-[72px] md:flex-col`}>
                     <Link href="/circles/kamooni">
                         <div className="group relative ml-4 mr-4 hidden flex-shrink-0 flex-col items-center justify-center md:mb-4 md:ml-0 md:mr-0 md:mt-4 md:flex">
                             <div className="relative">

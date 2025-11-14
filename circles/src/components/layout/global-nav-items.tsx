@@ -63,7 +63,7 @@ export default function GlobalNavItems() {
     return (
         <>
             <motion.nav
-                className={`flex h-[72px] w-full flex-1 flex-row items-center justify-around overflow-hidden md:h-auto md:w-[72px] md:flex-col md:justify-normal`}
+                className={`flex h-[54px] w-full flex-1 flex-row items-center justify-around overflow-hidden md:h-auto md:w-[72px] md:flex-col md:justify-normal`}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, ease: "easeOut" }}
@@ -91,7 +91,7 @@ export default function GlobalNavItems() {
                     >
                         <LiaGlobeAfricaSolid size={"24px"} />
                         <motion.span
-                            className="mt-[4px] text-[11px]"
+                            className="mt-[2px] text-[11px]"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.3, delay: 0.2 + 0 * 0.1 }}
@@ -129,7 +129,7 @@ export default function GlobalNavItems() {
                         <PiScroll size={"24px"} />
                         {/* <IoPulseOutline size={"24px"} /> */}
                         <motion.span
-                            className="mt-[4px] text-[11px]"
+                            className="mt-[2px] text-[11px]"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.3, delay: 0.2 + 0 * 0.1 }}
@@ -168,7 +168,7 @@ export default function GlobalNavItems() {
                     >
                         <CalendarIcon size={"24px"} />
                         <motion.span
-                            className="mt-[4px] text-[11px]"
+                            className="mt-[2px] text-[11px]"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.3, delay: 0.2 + 0 * 0.1 }}
@@ -193,7 +193,7 @@ export default function GlobalNavItems() {
                     >
                         <Bookmark size={"24px"} />
                         <motion.span
-                            className="mt-[4px] text-[11px]"
+                            className="mt-[2px] text-[11px]"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.3, delay: 0.3 }}
@@ -217,8 +217,8 @@ export default function GlobalNavItems() {
                                 transition={{ duration: 0.5, delay: 2 * 0.1 }}
                             >
                                 <IoChatbubbleOutline size={"24px"} />
-                                <motion.span
-                                    className="mt-[4px] text-[11px]"
+                        <motion.span
+                            className="mt-[2px] text-[11px]"
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
                                     transition={{ duration: 0.3, delay: 0.2 + 2 * 0.1 }}
@@ -300,7 +300,7 @@ export default function GlobalNavItems() {
                     >
                         <LiaGlobeAfricaSolid size={"24px"} />
                         <motion.span
-                            className="mt-[4px] text-[11px]"
+                            className="mt-[2px] text-[11px]"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.3, delay: 0.2 + 3 * 0.1 }}
@@ -323,7 +323,7 @@ export default function GlobalNavItems() {
                     >
                         <AiOutlineSetting size={"24px"} />
                         <motion.span
-                            className="mt-[4px] text-[11px]"
+                            className="mt-[2px] text-[11px]"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.3, delay: 0.2 + 4 * 0.1 }}

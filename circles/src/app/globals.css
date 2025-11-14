@@ -522,3 +522,12 @@ div.ReactTags__suggestions ul li.ReactTags__activeSuggestion {
 .fc .fc-timegrid-event .fc-event-main-frame {
     overflow: hidden;
 }
+
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
