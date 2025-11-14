@@ -655,7 +655,7 @@ export const Notifications = () => {
                     </div>
                 ))
             ) : (
-                <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
+                <div className="flex h-full items-center justify-center p-8 text-center text-muted-foreground">
                     No notifications
                 </div>
             )}

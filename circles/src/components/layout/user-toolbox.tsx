@@ -6,8 +6,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bell, MessageCircle, Circle as CircleIcon, Calendar, CheckSquare, Hammer } from "lucide-react";
+import { Bell, Circle as CircleIcon, CheckSquare, Hammer } from "lucide-react";
 import { MdOutlineLogout } from "react-icons/md";
+import { LuClipboardCheck, LuMail, LuSettings } from "react-icons/lu";
 import {
     authInfoAtom,
     contentPreviewAtom,
@@ -136,6 +137,26 @@ export const UserToolbox = () => {
         router.push("/welcome");
     };
 
+    const userHandle = user?.handle;
+
+    const handleOpenSettings = useCallback(() => {
+        if (!userHandle) return;
+
+        setUserToolboxState(undefined);
+        router.push(`/circles/${userHandle}/settings/about`);
+    }, [router, setUserToolboxState, userHandle]);
+
+    const handleTabChange = useCallback(
+        (nextTab: string) => {
+            if (nextTab === "settings") {
+                handleOpenSettings();
+                return;
+            }
+            setTab(nextTab as UserToolboxTab | undefined);
+        },
+        [handleOpenSettings, setTab],
+    );
+
     if (userToolboxState === undefined) return null;
 
     return (
@@ -178,7 +199,7 @@ export const UserToolbox = () => {
             <CardContent className="p-0">
                 <Tabs
                     value={tab}
-                    onValueChange={(v) => setTab(v as UserToolboxTab | undefined)}
+                    onValueChange={handleTabChange}
                     className="flex h-full flex-col"
                 >
                     <TabsList className="grid h-auto w-full grid-cols-8 rounded-none border-b border-t-0 border-b-slate-200 border-t-slate-200 bg-white p-0 pb-2 pt-0">
@@ -187,7 +208,13 @@ export const UserToolbox = () => {
                             value="chat"
                             className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
                         >
-                            <MessageCircle className="h-5 w-5" />
+                            <LuMail className="h-5 w-5" />
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="events"
+                            className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
+                        >
+                            <LuClipboardCheck className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger
                             value="notifications"
@@ -214,10 +241,10 @@ export const UserToolbox = () => {
                             <CheckSquare className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger
-                            value="events"
+                            value="settings"
                             className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
                         >
-                            <Calendar className="h-5 w-5" />
+                            <LuSettings className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger
                             value="account"
@@ -251,7 +278,7 @@ export const UserToolbox = () => {
                                 </div>
                             ))
                         ) : (
-                            <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
+                            <div className="flex h-full items-center justify-center p-8 text-center text-muted-foreground">
                                 No communities followed
                             </div>
                         )}
@@ -274,7 +301,7 @@ export const UserToolbox = () => {
                                 </div>
                             ))
                         ) : (
-                            <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
+                            <div className="flex h-full items-center justify-center p-8 text-center text-muted-foreground">
                                 No projects yet
                             </div>
                         )}

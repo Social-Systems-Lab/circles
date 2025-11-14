@@ -741,7 +741,14 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
                                     })
                                 ) : (
                                     <TableRow>
-                                        <TableCell colSpan={columns.length + 1} className="h-24 text-center">
+                                        <TableCell
+                                            colSpan={columns.length + 1}
+                                            className={
+                                                inToolbox
+                                                    ? "p-8 text-center text-muted-foreground"
+                                                    : "h-24 text-center"
+                                            }
+                                        >
                                             No tasks found. {/* Updated text */}
                                         </TableCell>
                                     </TableRow>

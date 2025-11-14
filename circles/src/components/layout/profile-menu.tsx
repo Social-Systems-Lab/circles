@@ -13,10 +13,11 @@ import {
 } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { UserPicture } from "../modules/members/user-picture";
-import { Bell, MessageCircle } from "lucide-react";
+import { Bell } from "lucide-react";
 import { UserToolboxTab } from "@/models/models";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { VerifyAccountButton } from "../modules/auth/verify-account-button";
+import { LuClipboardCheck, LuMail } from "react-icons/lu";
 
 const ProfileMenuBar = () => {
     const router = useRouter();
@@ -117,12 +118,20 @@ const ProfileMenuBar = () => {
                                 className="relative h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
                                 onClick={() => openUserToolbox("chat")}
                             >
-                                <MessageCircle className="h-5 w-5" />
+                                <LuMail className="h-5 w-5" />
                                 {totalUnreadMessages > 0 && (
                                     <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">
                                         {totalUnreadMessages}
                                     </span>
                                 )}
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="relative h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
+                                onClick={() => openUserToolbox("events")}
+                            >
+                                <LuClipboardCheck className="h-5 w-5" />
                             </Button>
 
                             <Button
