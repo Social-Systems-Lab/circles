@@ -69,7 +69,9 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
     const router = useRouter();
     const memberCount = circle?.members ? (circleType === "user" ? circle.members - 1 : circle.members) : 0;
     const [, setImageGallery] = useAtom(imageGalleryAtom); // Keep for profile picture click
+    const [, setContentPreview] = useAtom(contentPreviewAtom);
     const [user] = useAtom(userAtom); // Keep user state here for CirclePreview specific logic if needed
+    const closeDelayMs = 400;
 
     // Keep handleImageClick for the profile picture
     const handleProfilePicClick = (name: string, image?: FileInfo) => {
@@ -123,7 +125,10 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                             className="m-2 w-full"
                             onClick={(e) => {
                                 e.stopPropagation();
-                                router.push(`/circles/${circle.handle}`);
+                                setContentPreview(undefined);
+                                window.setTimeout(() => {
+                                    router.push(`/circles/${circle.handle}`);
+                                }, closeDelayMs);
                             }}
                         >
                             Open
