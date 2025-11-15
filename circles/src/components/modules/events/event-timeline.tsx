@@ -21,6 +21,7 @@ type Props = {
     milestones?: { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string }[];
     condensed?: boolean;
     onEventHidden?: (eventId: string) => void;
+    onNavigate?: () => void;
 };
 
 const monthColorClasses = [
@@ -96,7 +97,8 @@ const EventCard: React.FC<{
     condensed?: boolean;
     onHideCancelled?: (eventId: string) => Promise<void> | void;
     hidePending?: boolean;
-}> = ({ e, circleHandle, condensed, onHideCancelled, hidePending }) => {
+    onNavigate?: () => void;
+}> = ({ e, circleHandle, condensed, onHideCancelled, hidePending, onNavigate }) => {
     const stage = e.stage;
     const isDraft = stage === "review";
     const isCancelled = stage === "cancelled";
@@ -113,7 +115,11 @@ const EventCard: React.FC<{
                 ongoing && !isCancelled && "border-2 border-red-500",
             )}
         >
-            <Link href={`/circles/${circleHandle}/events/${(e as any)._id}`} className="group block">
+            <Link
+                href={`/circles/${circleHandle}/events/${(e as any)._id}`}
+                className="group block"
+                onClick={() => onNavigate?.()}
+            >
                 <CardContent className={cn("flex items-start", condensed ? "space-x-3 p-3" : "space-x-4 p-4")}>
                     {e.images && e.images.length > 0 && (
                         <div
@@ -230,7 +236,8 @@ const EventCard: React.FC<{
 const MilestoneRow: React.FC<{
     m: { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string };
     circleHandle: string;
-}> = ({ m, circleHandle }) => {
+    onNavigate?: () => void;
+}> = ({ m, circleHandle, onNavigate }) => {
     const icon = m.type === "goal" ? "🎯" : m.type === "task" ? "🧩" : "🐞";
     const href =
         m.type === "goal"
@@ -239,7 +246,11 @@ const MilestoneRow: React.FC<{
               ? `/circles/${circleHandle}/tasks/${m.id}`
               : `/circles/${circleHandle}/issues/${m.id}`;
     return (
-        <Link href={href} className="group block">
+        <Link
+            href={href}
+            className="group block"
+            onClick={() => onNavigate?.()}
+        >
             <div className="flex items-center gap-2 truncate rounded border bg-white px-3 py-2 text-xs hover:bg-muted/40">
                 <span className="select-none">{icon}</span>
                 <span className="truncate">{m.title}</span>
@@ -252,7 +263,14 @@ const MilestoneRow: React.FC<{
     );
 };
 
-export default function EventTimeline({ circleHandle, events, milestones, condensed, onEventHidden }: Props) {
+export default function EventTimeline({
+    circleHandle,
+    events,
+    milestones,
+    condensed,
+    onEventHidden,
+    onNavigate,
+}: Props) {
     const { toast } = useToast();
     const [, setUser] = useAtom(userAtom);
     const [locallyHiddenIds, setLocallyHiddenIds] = useState<string[]>([]);
@@ -398,6 +416,7 @@ export default function EventTimeline({ circleHandle, events, milestones, conden
                                                             condensed={condensed}
                                                             onHideCancelled={handleHideCancelled}
                                                             hidePending={pendingHideId === eventId}
+                                                            onNavigate={onNavigate}
                                                         />
                                                     );
                                                 }
@@ -406,6 +425,7 @@ export default function EventTimeline({ circleHandle, events, milestones, conden
                                                         key={`${it.milestone.type}:${it.milestone.id}-${idx}`}
                                                         m={it.milestone}
                                                         circleHandle={circleHandle}
+                                                        onNavigate={onNavigate}
                                                     />
                                                 );
                                             })}

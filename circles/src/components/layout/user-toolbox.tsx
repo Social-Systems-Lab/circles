@@ -30,7 +30,13 @@ import { ChatList } from "../modules/chat/chat-list";
 import TasksList from "../modules/tasks/tasks-list";
 import EventTimeline from "../modules/events/event-timeline";
 import { getEventsAction } from "@/app/circles/[handle]/events/actions";
+import { getGoalsAction } from "@/app/circles/[handle]/goals/actions";
+import { getTasksAction } from "@/app/circles/[handle]/tasks/actions";
+import { getIssuesAction } from "@/app/circles/[handle]/issues/actions";
 import { getCircleByIdAction } from "@/components/modules/circles/actions";
+import { flushSync } from "react-dom";
+
+type Milestone = { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string };
 
 export const UserToolbox = () => {
     const [user, setUser] = useAtom(userAtom);
@@ -81,6 +87,7 @@ export const UserToolbox = () => {
         [];
 
     const [events, setEvents] = useState<EventDisplay[]>([]);
+    const [milestones, setMilestones] = useState<Milestone[]>([]);
     const handleToolboxEventHidden = useCallback(
         (eventId: string) => {
             if (!eventId) return;
@@ -112,18 +119,73 @@ export const UserToolbox = () => {
     };
 
     useEffect(() => {
-        const fetchEvents = async () => {
+        const fetchTimelineItems = async () => {
+            if (!user?.handle) {
+                setEvents([]);
+                setMilestones([]);
+                return;
+            }
+
             try {
-                if (user?.handle) {
-                    const data = await getEventsAction(user.handle, undefined, true, true);
-                    setEvents(data.events || []);
-                }
+                const [eventsRes, goalsRes, tasksRes, issuesRes] = await Promise.all([
+                    getEventsAction(user.handle, undefined, true, true),
+                    getGoalsAction(user.handle, true, true),
+                    getTasksAction(user.handle, true, true),
+                    getIssuesAction(user.handle, true, true),
+                ]);
+
+                setEvents(eventsRes.events || []);
+
+                const goalMilestones: Milestone[] =
+                    (goalsRes?.goals || [])
+                        .filter((goal: any) => goal?.targetDate)
+                        .map((goal: any) => ({
+                            id: (goal as any)._id?.toString?.() || goal._id,
+                            type: "goal" as const,
+                            title: goal.title,
+                            date: goal.targetDate,
+                        })) || [];
+
+                const taskMilestones: Milestone[] =
+                    (tasksRes?.tasks || [])
+                        .filter((task: any) => task?.targetDate)
+                        .map((task: any) => ({
+                            id: (task as any)._id?.toString?.() || task._id,
+                            type: "task" as const,
+                            title: task.title,
+                            date: task.targetDate,
+                        })) || [];
+
+                const issueMilestones: Milestone[] =
+                    (issuesRes || [])
+                        .filter((issue: any) => issue?.targetDate)
+                        .map((issue: any) => ({
+                            id: (issue as any)._id?.toString?.() || issue._id,
+                            type: "issue" as const,
+                            title: issue.title,
+                            date: issue.targetDate,
+                        })) || [];
+
+                setMilestones([...goalMilestones, ...taskMilestones, ...issueMilestones]);
             } catch (e) {
-                console.error("Failed to load user events for toolbox", e);
+                console.error("Failed to load toolbox timeline items", e);
             }
         };
-        fetchEvents();
+        fetchTimelineItems();
     }, [user?.handle]);
+
+    const closeToolbox = useCallback(() => {
+        setUserToolboxState(undefined);
+    }, [setUserToolboxState]);
+
+    const handleTimelineNavigate = useCallback(() => {
+        flushSync(() => {
+            closeToolbox();
+        });
+        if (typeof window !== "undefined") {
+            window.scrollTo({ top: 0 });
+        }
+    }, [closeToolbox]);
 
     const signOut = async () => {
         // clear the user data and redirect to the you've been signed out
@@ -132,7 +194,7 @@ export const UserToolbox = () => {
         setAuthInfo({ ...authInfo, authStatus: "unauthenticated" });
         setUser(undefined);
         // close the toolbox
-        setUserToolboxState(undefined);
+        closeToolbox();
 
         router.push("/welcome");
     };
@@ -142,9 +204,9 @@ export const UserToolbox = () => {
     const handleOpenSettings = useCallback(() => {
         if (!userHandle) return;
 
-        setUserToolboxState(undefined);
+        closeToolbox();
         router.push(`/circles/${userHandle}/settings/about`);
-    }, [router, setUserToolboxState, userHandle]);
+    }, [closeToolbox, router, userHandle]);
 
     const handleTabChange = useCallback(
         (nextTab: string) => {
@@ -315,6 +377,7 @@ export const UserToolbox = () => {
                                 permissions={defaultTaskPermissions}
                                 hideRank={true}
                                 inToolbox={true}
+                                onTaskNavigate={handleTimelineNavigate}
                             />
                         ) : (
                             <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
@@ -328,8 +391,10 @@ export const UserToolbox = () => {
                             <EventTimeline
                                 circleHandle={user.handle!}
                                 events={events}
+                                milestones={milestones}
                                 condensed
                                 onEventHidden={handleToolboxEventHidden}
+                                onNavigate={handleTimelineNavigate}
                             />
                         ) : (
                             <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">

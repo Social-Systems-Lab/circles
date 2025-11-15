@@ -88,6 +88,7 @@ interface TasksListProps {
     permissions: TaskPermissions;
     hideRank?: boolean;
     inToolbox?: boolean;
+    onTaskNavigate?: () => void;
 }
 
 const SortIcon = ({ sortDir }: { sortDir: string | boolean }) => {
@@ -145,7 +146,14 @@ const getStageInfo = (stage: TaskStage) => {
     }
 };
 
-const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, hideRank, inToolbox }) => {
+const TasksList: React.FC<TasksListProps> = ({
+    tasksData,
+    circle,
+    permissions,
+    hideRank,
+    inToolbox,
+    onTaskNavigate,
+}) => {
     // Renamed component, props
     const { tasks, hasUserRanked, totalRankers, unrankedCount, userRankBecameStaleAt } = tasksData;
     const [user] = useAtom(userAtom);
@@ -157,7 +165,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
             return filteredTasks;
         }
         return tasks;
-    }, [tasks, filteredTasks, circle, user]);
+    }, [tasks, filteredTasks, circle.circleType, circle.did, user?.did]);
     const [sorting, setSorting] = React.useState<SortingState>([{ id: "rank", desc: false }]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
     const [deleteTaskDialogOpen, setDeleteTaskDialogOpen] = useState<boolean>(false); // Renamed state
@@ -320,7 +328,12 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
                     return (
                         <Link
                             href={`/circles/${circle.handle}/tasks/${task._id}`} // Updated path
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (inToolbox) {
+                                    onTaskNavigate?.();
+                                }
+                            }}
                             className="flex items-center font-medium text-blue-600 hover:underline" // Added flex
                         >
                             {info.getValue() as string}
@@ -425,7 +438,7 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
                 cell: (info) => new Date(info.getValue() as Date).toLocaleDateString(),
             },
         ],
-        [isCompact, circle.handle, openAssignee, openAuthor], // Add dependencies
+        [isCompact, circle.handle, circle._id, openAssignee, openAuthor, inToolbox, onTaskNavigate], // Add dependencies
     );
 
     const table = useReactTable({
@@ -483,6 +496,12 @@ const TasksList: React.FC<TasksListProps> = ({ tasksData, circle, permissions, h
 
     const handleRowClick = (task: TaskDisplay) => {
         // Renamed param, type
+        if (inToolbox) {
+            onTaskNavigate?.();
+            router.push(`/circles/${circle.handle}/tasks/${task._id}`); // Updated path
+            return;
+        }
+
         if (isCompact) {
             router.push(`/circles/${circle.handle}/tasks/${task._id}`); // Updated path
             return;
