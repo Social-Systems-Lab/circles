@@ -161,11 +161,15 @@ const TasksList: React.FC<TasksListProps> = ({
     const [includeAssigned, setIncludeAssigned] = useState(true);
     const [filteredTasks, setFilteredTasks] = useState(tasksData.tasks);
     const data = React.useMemo(() => {
-        if (circle.circleType === "user" && user?.did === circle.did) {
-            return filteredTasks;
+        const baseTasks =
+            circle.circleType === "user" && user?.did === circle.did ? filteredTasks : tasks;
+
+        if (inToolbox) {
+            return baseTasks.filter((task) => task.stage !== "resolved");
         }
-        return tasks;
-    }, [tasks, filteredTasks, circle.circleType, circle.did, user?.did]);
+
+        return baseTasks;
+    }, [tasks, filteredTasks, circle.circleType, circle.did, user?.did, inToolbox]);
     const [sorting, setSorting] = React.useState<SortingState>([{ id: "rank", desc: false }]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
     const [deleteTaskDialogOpen, setDeleteTaskDialogOpen] = useState<boolean>(false); // Renamed state
