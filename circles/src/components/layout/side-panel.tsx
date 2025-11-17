@@ -13,6 +13,7 @@ import {
     sidePanelContentVisibleAtom,
     sidePanelModeAtom,
     sidePanelSearchStateAtom,
+    feedPanelDockedAtom,
 } from "@/lib/data/atoms";
 import ContentPreview from "./content-preview";
 import { UserToolbox } from "./user-toolbox";
@@ -29,6 +30,7 @@ export const SidePanel: React.FC = () => {
     const isMobile = useIsMobile();
     const [sidePanelContentVisible, setSidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [sidePanelMode, setSidePanelMode] = useAtom(sidePanelModeAtom);
+    const [feedPanelDocked, setFeedPanelDocked] = useAtom(feedPanelDockedAtom);
     const [searchPanelState] = useAtom(sidePanelSearchStateAtom);
     const searchParams = useSearchParams();
     const pathname = usePathname();
@@ -72,6 +74,7 @@ export const SidePanel: React.FC = () => {
         setSidePanelMode("none");
         setContentPreview(undefined);
         setUserToolbox(undefined);
+        setFeedPanelDocked(false);
 
         if (!isMobile && pathname === "/explore") {
             const params = new URLSearchParams(searchParams.toString());
@@ -81,7 +84,7 @@ export const SidePanel: React.FC = () => {
             const next = params.toString();
             router.replace(next ? `/explore?${next}` : "/explore");
         }
-    }, [isMobile, pathname, router, searchParams, setContentPreview, setSidePanelMode, setUserToolbox]);
+    }, [isMobile, pathname, router, searchParams, setContentPreview, setFeedPanelDocked, setSidePanelMode, setUserToolbox]);
 
     useEffect(() => {
         if (contentPreview) {
@@ -99,11 +102,18 @@ export const SidePanel: React.FC = () => {
         }
     }, [userToolbox]);
 
+    useEffect(() => {
+        if (sidePanelMode !== "activity") {
+            setFeedPanelDocked(false);
+        }
+    }, [sidePanelMode, setFeedPanelDocked]);
+
     if (isMobile && sidePanelContentVisible !== "toolbox") {
         return null;
     }
 
-    const isFullWidthActivity = !isMobile && pathname === "/explore" && sidePanelMode === "activity";
+    const isFullWidthActivity =
+        !isMobile && pathname === "/explore" && sidePanelMode === "activity" && !feedPanelDocked;
 
     return (
         <>

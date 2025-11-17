@@ -19,6 +19,7 @@ import {
     focusPostAtom,
     sidePanelContentVisibleAtom,
     sidePanelModeAtom,
+    feedPanelDockedAtom,
 } from "@/lib/data/atoms";
 import MapMarker from "./markers";
 import { isEqual } from "lodash"; // You might need to install lodash
@@ -44,11 +45,13 @@ const MapBox = ({
     panelMode,
     windowWidth,
     windowHeight,
+    feedPanelDocked,
 }: {
     mapboxKey: string;
     panelMode?: string;
     windowWidth: number;
     windowHeight: number;
+    feedPanelDocked?: boolean;
 }) => {
     const mapContainer = useRef(null);
     const map = useRef<mapboxgl.Map | null>(null);
@@ -129,13 +132,13 @@ const MapBox = ({
     // Ensure Mapbox resizes when panel animates or window size changes
     useEffect(() => {
         if (!map.current) return;
-        const id = setTimeout(() => {
+        let frame = requestAnimationFrame(() => {
             try {
                 map.current?.resize();
             } catch {}
-        }, 350); // align roughly with panel animation
-        return () => clearTimeout(id);
-    }, [panelMode, windowWidth, windowHeight]);
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [panelMode, windowWidth, windowHeight, feedPanelDocked]);
 
     useEffect(() => {
         if (!map.current || !displayedContent) return;
@@ -194,6 +197,31 @@ const MapBox = ({
             const maxZoom = 12; // City level zoom
             const finalZoom = Math.min(calculatedZoom, maxZoom);
 
+            const targetLng = (location.lngLat as any)?.lng;
+            const targetLat = (location.lngLat as any)?.lat;
+            if (typeof targetLng !== "number" || typeof targetLat !== "number") {
+                map.current?.flyTo({
+                    center: location.lngLat as any,
+                    zoom: finalZoom,
+                    essential: true,
+                });
+                return;
+            }
+
+            const currentCenter = map.current?.getCenter();
+            const currentZoom = map.current?.getZoom();
+            const centerTolerance = 0.00005; // ≈5m latitude/longitude tolerance
+            const zoomTolerance = 0.01;
+            const isCenterClose =
+                !!currentCenter &&
+                Math.abs(currentCenter.lng - targetLng) < centerTolerance &&
+                Math.abs(currentCenter.lat - targetLat) < centerTolerance;
+            const isZoomClose = currentZoom !== undefined && Math.abs(currentZoom - finalZoom) < zoomTolerance;
+
+            if (isCenterClose && isZoomClose) {
+                return;
+            }
+
             map.current?.flyTo({
                 center: location.lngLat,
                 zoom: finalZoom,
@@ -237,6 +265,7 @@ export function MapDisplay({ mapboxKey }: { mapboxKey: string }) {
     const { windowWidth, windowHeight } = useWindowDimensions();
     const isMobile = windowWidth <= 768;
     const [panelMode] = useAtom(sidePanelModeAtom);
+    const [feedPanelDocked] = useAtom(feedPanelDockedAtom);
     const pathname = usePathname();
 
     let innerWidth = 0;
@@ -244,9 +273,14 @@ export function MapDisplay({ mapboxKey }: { mapboxKey: string }) {
         innerWidth = document.documentElement.offsetWidth;
     }
 
-    const isFullWidthActivity = !isMobile && pathname === "/explore" && panelMode === "activity";
-    const panelWidth = !isMobile && panelMode !== "none" && !isFullWidthActivity ? 420 : 0;
+    const desktopPanelWidth = 420;
+    const isOverlayPanel =
+        !isMobile &&
+        pathname === "/explore" &&
+        ((panelMode === "activity" && !feedPanelDocked) || panelMode === "events");
+    const panelWidth = !isMobile && panelMode !== "none" && !isOverlayPanel ? desktopPanelWidth : 0;
     const mapWidth = isMobile ? innerWidth : innerWidth - 72 - panelWidth;
+    const widthTransition = "width 0.35s ease-in-out";
 
     useEffect(() => {
         if (mapboxKey) {
@@ -270,17 +304,26 @@ export function MapDisplay({ mapboxKey }: { mapboxKey: string }) {
                 <>
                     <div
                         className="relative"
-                        style={{ width: mapWidth, height: windowHeight - (isMobile ? 72 : 0) + "px" }}
+                        style={{
+                            width: mapWidth,
+                            height: windowHeight - (isMobile ? 72 : 0) + "px",
+                            transition: widthTransition,
+                        }}
                     ></div>
                     <div
                         className={"fixed right-0 z-30"}
-                        style={{ width: mapWidth, height: windowHeight - (isMobile ? 72 : 0) + "px" }}
+                        style={{
+                            width: mapWidth,
+                            height: windowHeight - (isMobile ? 72 : 0) + "px",
+                            transition: widthTransition,
+                        }}
                     >
                         <MapBox
                             mapboxKey={mapboxKey}
                             panelMode={panelMode}
                             windowWidth={windowWidth}
                             windowHeight={windowHeight}
+                            feedPanelDocked={feedPanelDocked}
                         />
                     </div>
                 </>

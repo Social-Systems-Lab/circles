@@ -41,13 +41,14 @@ import {
     sidePanelSearchStateAtom,
     mapSearchCommandAtom,
     drawerContentAtom,
+    feedPanelDockedAtom,
 } from "@/lib/data/atoms";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CirclePicture } from "./circle-picture";
 import { completeSwipeOnboardingAction } from "./swipe-actions";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { searchContentAction } from "../search/actions";
 import CategoryFilter, { CategoryFilterProps } from "../search/category-filter";
 import SdgFilter from "../search/sdg-filter";
@@ -198,6 +199,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const isMobile = useIsMobile();
     const { windowWidth, windowHeight } = useWindowDimensions();
     const router = useRouter();
+    const pathname = usePathname();
     const searchParams = useSearchParams();
     const [viewMode, setViewMode] = useState<ViewMode>("explore");
     const [searchQuery, setSearchQuery] = useState("");
@@ -260,10 +262,37 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const [triggerSnapIndex, setTriggerSnapIndex] = useState<number>(-1);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [panelMode, setSidePanelMode] = useAtom(sidePanelModeAtom);
+    const [feedPanelDocked] = useAtom(feedPanelDockedAtom);
     const [, setSearchPanelState] = useAtom(sidePanelSearchStateAtom);
     const [mapSearchCommand] = useAtom(mapSearchCommandAtom);
     const [lastSearchCmdTs, setLastSearchCmdTs] = useState<number>(-1);
     const showTopSearchInput = isMobile || panelMode !== "search";
+
+    const sliderLeft = useMemo(() => {
+        if (isMobile) {
+            return "50%";
+        }
+        if (!windowWidth) {
+            return "50%";
+        }
+
+        const NAV_WIDTH_DESKTOP = 72;
+        const DESKTOP_PANEL_WIDTH = 420;
+        const isOverlayPanel =
+            !isMobile &&
+            pathname === "/explore" &&
+            ((panelMode === "activity" && !feedPanelDocked) || panelMode === "events");
+        const panelWidth = !isMobile && panelMode !== "none" && !isOverlayPanel ? DESKTOP_PANEL_WIDTH : 0;
+        const navWidth = isMobile ? 0 : NAV_WIDTH_DESKTOP;
+        const mapWidth = windowWidth - navWidth - panelWidth;
+
+        if (mapWidth <= 0) {
+            return "50%";
+        }
+
+        const center = navWidth + panelWidth + mapWidth / 2;
+        return `${center}px`;
+    }, [isMobile, panelMode, pathname, windowWidth, feedPanelDocked]);
 
     // --- Memos ---
     const snapPoints = useMemo(() => [100, windowHeight * 0.4, windowHeight * 0.8, windowHeight], [windowHeight]);
@@ -860,9 +889,10 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                 "fixed z-40 flex items-center justify-center gap-2 rounded-full bg-white/90 px-3 py-2 shadow-md backdrop-blur-sm sm:px-4",
                                 "flex-nowrap",
                                 isMobile
-                                    ? "left-1/2 bottom-24 w-auto max-w-[calc(100%-3rem)] -translate-x-1/2"
-                                    : "left-1/2 bottom-6 max-w-[680px] -translate-x-1/2",
+                                    ? "bottom-24 w-auto max-w-[calc(100%-3rem)] -translate-x-1/2"
+                                    : "bottom-6 max-w-[680px] -translate-x-1/2",
                             )}
+                            style={{ left: sliderLeft }}
                         >
                             <TooltipProvider delayDuration={200}>
                                 <Tooltip>

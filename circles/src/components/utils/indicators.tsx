@@ -3,7 +3,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Content, Metrics } from "@/models/models";
 import { cn } from "@/lib/utils";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "../ui/hover-card";
-import { mapOpenAtom, triggerMapOpenAtom, zoomContentAtom } from "@/lib/data/atoms";
+import { triggerMapOpenAtom, zoomContentAtom, sidePanelModeAtom, feedPanelDockedAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 
 interface SimilarityScoreProps {
@@ -71,6 +71,8 @@ export function ProximityIndicator({
     const iconColor = color ?? defaultColor;
     const [, setZoomContent] = useAtom(zoomContentAtom);
     const [, setTriggerOpen] = useAtom(triggerMapOpenAtom);
+    const [sidePanelMode] = useAtom(sidePanelModeAtom);
+    const [feedPanelDocked, setFeedPanelDocked] = useAtom(feedPanelDockedAtom);
     const iconSize = size ?? "0.75rem";
 
     // Show tooltip on left for mobile, right for desktop in swipe view
@@ -95,9 +97,15 @@ export function ProximityIndicator({
     };
 
     const handleMapPinClick = () => {
+        const isFeedPost = (content as any)?.circleType === "post";
+        if (sidePanelMode === "activity" && isFeedPost) {
+            setFeedPanelDocked((prev) => !prev);
+        } else if (feedPanelDocked) {
+            setFeedPanelDocked(false);
+        }
+
         if (onMapPinClick) {
             onMapPinClick();
-            return;
         }
 
         if (!content) {
