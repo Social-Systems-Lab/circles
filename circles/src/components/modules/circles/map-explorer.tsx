@@ -278,10 +278,14 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
 
         const NAV_WIDTH_DESKTOP = 72;
         const DESKTOP_PANEL_WIDTH = 420;
-        const isOverlayPanel =
-            !isMobile &&
-            pathname === "/explore" &&
-            ((panelMode === "activity" && !feedPanelDocked) || panelMode === "events");
+        const OVERLAY_PANEL_WIDTH = DESKTOP_PANEL_WIDTH; // Events overlay uses the same footprint
+
+        const isEventsOverlay =
+            !isMobile && pathname === "/explore" && panelMode === "events";
+        const isActivityOverlay =
+            !isMobile && pathname === "/explore" && panelMode === "activity" && !feedPanelDocked;
+
+        const isOverlayPanel = isEventsOverlay || isActivityOverlay;
         const panelWidth = !isMobile && panelMode !== "none" && !isOverlayPanel ? DESKTOP_PANEL_WIDTH : 0;
         const navWidth = isMobile ? 0 : NAV_WIDTH_DESKTOP;
         const mapWidth = windowWidth - navWidth - panelWidth;
@@ -290,7 +294,12 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             return "50%";
         }
 
-        const center = navWidth + panelWidth + mapWidth / 2;
+        let center = navWidth + panelWidth + mapWidth / 2;
+
+        if (isEventsOverlay) {
+            center += OVERLAY_PANEL_WIDTH / 2;
+        }
+
         return `${center}px`;
     }, [isMobile, panelMode, pathname, windowWidth, feedPanelDocked]);
 
