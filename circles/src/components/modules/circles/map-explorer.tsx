@@ -137,21 +137,17 @@ const CategoryFilterCarousel: React.FC<CategoryFilterProps & { className?: strin
     }, [evaluateScrollability]);
 
     return (
-        <div className={cn("relative flex min-w-[260px] flex-1 items-center", className)}>
+        <div className={cn("relative flex min-w-0 flex-1 items-center", className)}>
             <div
                 ref={scrollAreaRef}
-                className="no-scrollbar flex w-full items-center gap-2 overflow-x-auto overflow-y-hidden px-3 scroll-smooth"
-                style={{
-                    paddingLeft: 36,
-                    paddingRight: 36,
-                }}
+                className="no-scrollbar flex w-full items-center gap-2 overflow-x-auto overflow-y-hidden mx-[22px] px-1 scroll-smooth"
             >
                 <CategoryFilter {...props} />
             </div>
             <button
                 type="button"
                 className={cn(
-                    "absolute left-2 top-1/2 flex h-[30px] w-[30px] -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm transition hover:bg-white",
+                    "absolute left-2 top-1/2 flex h-[28px] w-[28px] -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm transition hover:bg-white",
                     !canScrollLeft && "pointer-events-none opacity-0",
                 )}
                 onClick={() => handleArrowClick("left")}
@@ -162,7 +158,7 @@ const CategoryFilterCarousel: React.FC<CategoryFilterProps & { className?: strin
             <button
                 type="button"
                 className={cn(
-                    "absolute right-2 top-1/2 flex h-[30px] w-[30px] -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm transition hover:bg-white",
+                    "absolute right-2 top-1/2 flex h-[28px] w-[28px] -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm transition hover:bg-white",
                     !canScrollRight && "pointer-events-none opacity-0",
                 )}
                 onClick={() => handleArrowClick("right")}
@@ -836,7 +832,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 className={`absolute ${isMobile ? "flex-col" : "flex-row"} z-[30] flex gap-2`} // allow profile icons to sit above
                 style={{
                     left: !isMobile && panelMode !== "none" ? 440 : 16,
-                    right: isMobile ? 16 : 420,
+                    right: isMobile ? 16 : 280, // Reduced from 420 to 280 to give more space to pills
                     top: 16,
                 }}
             >
@@ -844,8 +840,8 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
 
                 {/* Search Bar & Filters (Only in Explore Mode) */}
                 {viewMode === "explore" && !(sidePanelContentVisible === "toolbox" && isMobile) && (
-                    <div className="flex flex-col gap-2">
-                        <div className="flex flex-wrap items-center gap-2 md:flex-nowrap md:gap-3">
+                    <div className="flex flex-1 flex-col gap-2 min-w-0">
+                        <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap md:gap-3">
                             {/* Search Input (hidden on desktop when panel is open) */}
                             {showTopSearchInput && (
                                 <div className="flex flex-shrink-0 items-center rounded-full bg-white p-1 px-4 shadow-md">
