@@ -64,6 +64,7 @@ export const SidePanel: React.FC = () => {
 
     const closeContentPreview = () => {
         setContentPreview(undefined);
+        setFeedPanelDocked(false);
     };
 
     const closeUsertoolbox = () => {

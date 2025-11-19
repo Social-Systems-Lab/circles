@@ -61,12 +61,14 @@ const MapBox = ({
     const [lat, setLat] = useState(20);
     const [zoom, setZoom] = useState(2.2);
     mapboxgl.accessToken = mapboxKey;
-    const [, setContentPreview] = useAtom(contentPreviewAtom);
+    const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [, setFocusPost] = useAtom(focusPostAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const isMobile = useIsMobile();
 
     const markersRef = useRef<Map<string, mapboxgl.Marker>>(new globalThis.Map());
+    const focusedMarkerIdsRef = useRef<Set<string>>(new Set());
+    const lastFocusedMarkerIdRef = useRef<string | null>(null);
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -103,7 +105,7 @@ const MapBox = ({
                 content === x?.content && sidePanelContentVisible === "content" ? undefined : nextPreview,
             );
         },
-        [setContentPreview],
+        [setContentPreview, sidePanelContentVisible],
     );
 
     const onMapPinClick = useCallback(
@@ -156,6 +158,7 @@ const MapBox = ({
                         existingMarker.setLngLat(item.location.lngLat);
                     }
                     currentMarkerIds.delete(markerId);
+                    focusedMarkerIdsRef.current.delete(markerId);
                 } else {
                     // Create new marker
                     const markerElement = document?.createElement("div");
@@ -173,13 +176,16 @@ const MapBox = ({
 
         // Remove markers that are no longer in displayedContent
         currentMarkerIds.forEach((id) => {
+            if (focusedMarkerIdsRef.current.has(id)) {
+                return;
+            }
             const markerToRemove = markersRef.current.get(id);
             if (markerToRemove) {
                 markerToRemove.remove();
                 markersRef.current.delete(id);
             }
         });
-    }, [displayedContent, onMarkerClick]);
+    }, [displayedContent, onMarkerClick, onMapPinClick]);
 
     useEffect(() => {
         // console.log("Zooming to content", zoomContent);
@@ -190,12 +196,58 @@ const MapBox = ({
         // zoom in on content
         let location = zoomContent?.location as Location;
         if (location?.lngLat) {
-            // Get the zoom level based on precision
-            let calculatedZoom = precisionLevels[location.precision].zoom ?? 14;
+            const markerId = (zoomContent as any)?._id;
+            if (markerId) {
+                const previousFocusedId = lastFocusedMarkerIdRef.current;
+                if (
+                    previousFocusedId &&
+                    previousFocusedId !== markerId &&
+                    focusedMarkerIdsRef.current.has(previousFocusedId)
+                ) {
+                    const previousMarker = markersRef.current.get(previousFocusedId);
+                    if (previousMarker) {
+                        previousMarker.remove();
+                        markersRef.current.delete(previousFocusedId);
+                    }
+                    focusedMarkerIdsRef.current.delete(previousFocusedId);
+                }
 
-            // Limit maximum zoom to city level (12), regardless of the precision setting
-            const maxZoom = 12; // City level zoom
-            const finalZoom = Math.min(calculatedZoom, maxZoom);
+                lastFocusedMarkerIdRef.current = markerId;
+
+                if (!markersRef.current.has(markerId) && map.current) {
+                    const markerElement = document?.createElement("div");
+                    const root = createRoot(markerElement);
+                    root.render(
+                        <MapMarker
+                            content={zoomContent}
+                            onClick={onMarkerClick}
+                            onMapPinClick={onMapPinClick}
+                        />,
+                    );
+
+                    const focusMarker = new mapboxgl.Marker(markerElement).setLngLat(location.lngLat).addTo(map.current);
+                    markersRef.current.set(markerId, focusMarker);
+                    focusedMarkerIdsRef.current.add(markerId);
+                }
+            }
+
+            // Get the zoom level based on precision
+            const computedPrecisionZoom = precisionLevels[location.precision as number]?.zoom;
+            const desiredZoom = computedPrecisionZoom ?? 14;
+
+            // Allow closer focus for street-level pins while keeping a sensible cap
+            const MAX_FOCUSED_PIN_ZOOM = 17;
+            const finalZoom =
+                typeof location.precision === "number" && location.precision >= 3
+                    ? Math.min(desiredZoom, MAX_FOCUSED_PIN_ZOOM)
+                    : desiredZoom;
+
+            const PREVIEW_PANEL_WIDTH = 400;
+            const PREVIEW_PANEL_GUTTER = 32;
+            const previewOffsetX =
+                !isMobile && (contentPreview || zoomContent)
+                    ? -(PREVIEW_PANEL_WIDTH / 2 + PREVIEW_PANEL_GUTTER)
+                    : 0;
 
             const targetLng = (location.lngLat as any)?.lng;
             const targetLat = (location.lngLat as any)?.lat;
@@ -203,6 +255,7 @@ const MapBox = ({
                 map.current?.flyTo({
                     center: location.lngLat as any,
                     zoom: finalZoom,
+                    offset: [previewOffsetX, 0],
                     essential: true,
                 });
                 return;
@@ -225,11 +278,12 @@ const MapBox = ({
             map.current?.flyTo({
                 center: location.lngLat,
                 zoom: finalZoom,
+                offset: [previewOffsetX, 0],
                 essential: true, // this animation is considered essential with respect to prefers-reduced-motion
             });
         }
         setZoomContent(undefined);
-    }, [zoomContent]);
+    }, [zoomContent, onMarkerClick, onMapPinClick, contentPreview, isMobile]);
 
     // Function to zoom in on user's location
     const zoomToUserLocation = useCallback(() => {

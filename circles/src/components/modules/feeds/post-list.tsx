@@ -15,7 +15,7 @@ import { sdgs } from "@/lib/data/sdgs";
 import { UserPicture } from "../members/user-picture";
 import { CirclePicture } from "../circles/circle-picture";
 import { Button } from "@/components/ui/button";
-import { Edit, Heart, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Trash2, Users } from "lucide-react"; // Added Users
+import { Edit, Heart, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Trash2, Users, X } from "lucide-react"; // Added Users
 import { Badge } from "@/components/ui/badge"; // Added Badge import
 import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import React, {
@@ -38,6 +38,7 @@ import {
     imageGalleryAtom,
     sidePanelContentVisibleAtom,
     userAtom,
+    feedPanelDockedAtom,
 } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import {
@@ -45,6 +46,7 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuLabel,
+    DropdownMenuPortal,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -300,6 +302,7 @@ export const PostItem = ({
     const [, setImageGallery] = useAtom(imageGalleryAtom);
     const [focusPost, setFocusPost] = useAtom(focusPostAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+    const [, setFeedPanelDocked] = useAtom(feedPanelDockedAtom);
     const router = useRouter();
 
     const [openDropdown, setOpenDropdown] = useState(false);
@@ -650,6 +653,22 @@ export const PostItem = ({
         setIsMounted(true);
     }, []);
 
+    const showAdminActions = isAuthor || canModerate;
+    const showInlineClose = inPreview;
+    const circleHandle = circle?.handle ?? (post as any)?.circle?.handle ?? (post as any)?.circleHandle;
+    const postId = post?._id;
+
+    const handleNavigateToNoticeboard = useCallback(() => {
+        if (!circleHandle) {
+            return;
+        }
+        const anchor = postId ? `#post-${postId}` : "";
+        const targetUrl = `/circles/${circleHandle}/feed${anchor}`;
+        setContentPreview(undefined);
+        setFeedPanelDocked(false);
+        router.push(targetUrl);
+    }, [circleHandle, postId, router, setContentPreview, setFeedPanelDocked]);
+
     if (!isMounted) {
         return null;
     }
@@ -661,18 +680,89 @@ export const PostItem = ({
                 isCompact || inPreview || embedded ? "" : "rounded-[15px] border-0 shadow-lg"
             } bg-white`}
         >
-            {(isAuthor || canModerate) && (
-                <div className="absolute right-2 top-2 z-10">
+            {(showInlineClose || showAdminActions) && (
+                <div className="absolute right-2 top-2 z-20 flex items-center gap-1">
+                {showInlineClose && (
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-full bg-gray-100 transition-colors hover:bg-gray-200"
+                        aria-label="Close preview"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            setContentPreview(undefined);
+                            setFeedPanelDocked(false);
+                        }}
+                    >
+                        <X className="h-4 w-4" />
+                    </Button>
+                )}
+                {showAdminActions && (
                     <DropdownMenu modal={false} open={openDropdown} onOpenChange={setOpenDropdown}>
                         <DropdownMenuTrigger asChild onClick={(event) => event.stopPropagation()}>
-                            <Button variant="ghost" size="icon" className="rounded-full">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="rounded-full bg-gray-100 transition-colors hover:bg-gray-200 data-[state=open]:bg-gray-200"
+                                aria-label="Post actions"
+                            >
                                 <MoreHorizontal className="h-4 w-4" />
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            {isAuthor && (
+                        <DropdownMenuPortal
+                            container={typeof document !== "undefined" ? document.body : undefined}
+                        >
+                            <DropdownMenuContent className="z-[5000]" align="end" sideOffset={6}>
+                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                {isAuthor &&
+                                    (inPreview ? (
+                                        <DropdownMenuItem
+                                            onSelect={(e) => {
+                                                e.stopPropagation();
+                                                e.preventDefault();
+                                                handleNavigateToNoticeboard();
+                                            }}
+                                        >
+                                            <Edit className="mr-2 h-4 w-4" />
+                                            <div>Edit</div>
+                                        </DropdownMenuItem>
+                                    ) : (
+                                        <Dialog onOpenChange={(open) => setOpenDropdown(open)}>
+                                            <DialogTrigger asChild>
+                                                <DropdownMenuItem
+                                                    onSelect={(e) => {
+                                                        e.stopPropagation();
+                                                        e.preventDefault();
+                                                    }}
+                                                >
+                                                    <Edit className="mr-2 h-4 w-4" />
+                                                    <div>Edit</div>
+                                                </DropdownMenuItem>
+                                            </DialogTrigger>
+                                            <DialogContent
+                                                className="h-[90vh] w-[95vw] max-w-3xl overflow-hidden rounded-[15px] p-0"
+                                                onInteractOutside={(e) => {
+                                                    e.preventDefault();
+                                                }}
+                                            >
+                                                <div className="hidden">
+                                                    <DialogTitle>Edit post</DialogTitle>
+                                                </div>
+                                                <PostForm
+                                                    user={user!}
+                                                    initialPost={post}
+                                                    onSubmit={async (formData, targetCircleId) => {
+                                                        await handleEditSubmit(formData);
+                                                    }}
+                                                    onCancel={() => setOpenDropdown(false)}
+                                                    moduleHandle="feed"
+                                                    createFeatureHandle="post"
+                                                    itemKey="post"
+                                                />
+                                            </DialogContent>
+                                        </Dialog>
+                                    ))}
                                 <Dialog onOpenChange={(open) => setOpenDropdown(open)}>
                                     <DialogTrigger asChild>
                                         <DropdownMenuItem
@@ -681,83 +771,50 @@ export const PostItem = ({
                                                 e.preventDefault();
                                             }}
                                         >
-                                            <Edit className="mr-2 h-4 w-4" />
-                                            <div>Edit</div>
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            <div>Delete</div>
                                         </DropdownMenuItem>
                                     </DialogTrigger>
                                     <DialogContent
-                                        className="h-[90vh] w-[95vw] max-w-3xl overflow-hidden rounded-[15px] p-0"
                                         onInteractOutside={(e) => {
                                             e.preventDefault();
                                         }}
                                     >
-                                        <div className="hidden">
-                                            <DialogTitle>Edit post</DialogTitle>
-                                        </div>
-                                        <PostForm
-                                            user={user!}
-                                            initialPost={post}
-                                            onSubmit={async (formData, targetCircleId) => {
-                                                await handleEditSubmit(formData);
-                                            }}
-                                            onCancel={() => setOpenDropdown(false)}
-                                            moduleHandle="feed"
-                                            createFeatureHandle="post"
-                                            itemKey="post"
-                                        />
+                                        <DialogHeader>
+                                            <DialogTitle>Delete Post</DialogTitle>
+                                            <DialogDescription>
+                                                Are you sure you want to delete this post? This action cannot be undone.
+                                            </DialogDescription>
+                                        </DialogHeader>
+                                        <DialogFooter>
+                                            <DialogClose asChild>
+                                                <Button variant="outline">Cancel</Button>
+                                            </DialogClose>
+                                            <Button
+                                                variant="destructive"
+                                                onClick={handleDeleteConfirm}
+                                                disabled={isPending}
+                                            >
+                                                {isPending ? (
+                                                    <>
+                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                        Deleting...
+                                                    </>
+                                                ) : (
+                                                    <>Delete</>
+                                                )}
+                                            </Button>
+                                        </DialogFooter>
                                     </DialogContent>
                                 </Dialog>
-                            )}
-                            <Dialog onOpenChange={(open) => setOpenDropdown(open)}>
-                                <DialogTrigger asChild>
-                                    <DropdownMenuItem
-                                        onSelect={(e) => {
-                                            e.stopPropagation();
-                                            e.preventDefault();
-                                        }}
-                                    >
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                        <div>Delete</div>
-                                    </DropdownMenuItem>
-                                </DialogTrigger>
-                                <DialogContent
-                                    onInteractOutside={(e) => {
-                                        e.preventDefault();
-                                    }}
-                                >
-                                    <DialogHeader>
-                                        <DialogTitle>Delete Post</DialogTitle>
-                                        <DialogDescription>
-                                            Are you sure you want to delete this post? This action cannot be
-                                            undone.
-                                        </DialogDescription>
-                                    </DialogHeader>
-                                    <DialogFooter>
-                                        <DialogClose asChild>
-                                            <Button variant="outline">Cancel</Button>
-                                        </DialogClose>
-                                        <Button
-                                            variant="destructive"
-                                            onClick={handleDeleteConfirm}
-                                            disabled={isPending}
-                                        >
-                                            {isPending ? (
-                                                <>
-                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                    Deleting...
-                                                </>
-                                            ) : (
-                                                <>Delete</>
-                                            )}
-                                        </Button>
-                                    </DialogFooter>
-                                </DialogContent>
-                            </Dialog>
-                        </DropdownMenuContent>
+                            </DropdownMenuContent>
+                        </DropdownMenuPortal>
                     </DropdownMenu>
-                </div>
-            )}
-            {/* Title */}
+                )}
+            </div>
+        )}
+
+        {/* Title */}
             {!hideContent && (
                 <div className="pl-4 pr-4 pt-4">
                     {post.title && <div className="text-xl font-semibold">{post.title}</div>}
@@ -855,7 +912,12 @@ export const PostItem = ({
 
                     <div className="flex items-center space-x-2">
                         {(isAuthor || canModerate) && (
-                            <DropdownMenu modal={false} open={openDropdown} onOpenChange={setOpenDropdown}>
+                    <DropdownMenu
+                        modal={false}
+                        open={openDropdown}
+                        onOpenChange={setOpenDropdown}
+                        modal={false}
+                    >
                                 <DropdownMenuTrigger asChild onClick={(event) => event.stopPropagation()}>
                                     <Button
                                         variant="ghost"
@@ -869,12 +931,15 @@ export const PostItem = ({
                                         <MoreHorizontal className="h-4 w-4" />
                                     </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                    <DropdownMenuSeparator />
-                                    {isAuthor && (
-                                        <Dialog onOpenChange={(open) => setOpenDropdown(open)}>
-                                            <DialogTrigger asChild>
+                                <DropdownMenuPortal
+                                    container={typeof document !== "undefined" ? document.body : undefined}
+                                >
+                                    <DropdownMenuContent className="z-[5000]" align="end" sideOffset={6}>
+                                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                        <DropdownMenuSeparator />
+                                        {isAuthor && (
+                                            <Dialog onOpenChange={(open) => setOpenDropdown(open)}>
+                                                <DialogTrigger asChild>
                                                 <DropdownMenuItem
                                                     onSelect={(e) => {
                                                         e.stopPropagation();
@@ -960,7 +1025,8 @@ export const PostItem = ({
                                             </DialogFooter>
                                         </DialogContent>
                                     </Dialog>
-                                </DropdownMenuContent>
+                                    </DropdownMenuContent>
+                                </DropdownMenuPortal>
                             </DropdownMenu>
                         )}
                     </div>
@@ -1673,18 +1739,22 @@ const CommentItem = ({
                                         <MoreHorizontal className="h-4 w-4" />
                                     </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    {isAuthor && (
-                                        <DropdownMenuItem onClick={handleEditClick}>
-                                            <Edit className="mr-2 h-4 w-4" />
-                                            <div>Edit</div>
+                                <DropdownMenuPortal
+                                    container={typeof document !== "undefined" ? document.body : undefined}
+                                >
+                                    <DropdownMenuContent className="z-[5000]" align="end" sideOffset={6}>
+                                        {isAuthor && (
+                                            <DropdownMenuItem onClick={handleEditClick}>
+                                                <Edit className="mr-2 h-4 w-4" />
+                                                <div>Edit</div>
+                                            </DropdownMenuItem>
+                                        )}
+                                        <DropdownMenuItem onClick={handleDeleteClick}>
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            <div>Delete</div>
                                         </DropdownMenuItem>
-                                    )}
-                                    <DropdownMenuItem onClick={handleDeleteClick}>
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                        <div>Delete</div>
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
+                                    </DropdownMenuContent>
+                                </DropdownMenuPortal>
                             </DropdownMenu>
                         </div>
                     </div>
