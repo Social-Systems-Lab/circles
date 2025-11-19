@@ -131,16 +131,20 @@ const MapBox = ({
         });
     }, [mapContainer, lat, lng, zoom, mapboxKey, displayedContent]);
 
-    // Ensure Mapbox resizes when panel animates or window size changes
+    // Ensure Mapbox resizes when container size changes (handles animations and window resize)
     useEffect(() => {
-        if (!map.current) return;
-        let frame = requestAnimationFrame(() => {
-            try {
-                map.current?.resize();
-            } catch {}
+        if (!map.current || !mapContainer.current) return;
+
+        const resizeObserver = new ResizeObserver(() => {
+            map.current?.resize();
         });
-        return () => cancelAnimationFrame(frame);
-    }, [panelMode, windowWidth, windowHeight, feedPanelDocked]);
+
+        resizeObserver.observe(mapContainer.current);
+
+        return () => {
+            resizeObserver.disconnect();
+        };
+    }, []);
 
     useEffect(() => {
         if (!map.current || !displayedContent) return;
@@ -334,7 +338,14 @@ export function MapDisplay({ mapboxKey }: { mapboxKey: string }) {
         ((panelMode === "activity" && !feedPanelDocked) || panelMode === "events");
     const panelWidth = !isMobile && panelMode !== "none" && !isOverlayPanel ? desktopPanelWidth : 0;
     const mapWidth = isMobile ? innerWidth : innerWidth - 72 - panelWidth;
-    const widthTransition = "width 0.35s ease-in-out";
+    const prevWindowWidth = useRef(windowWidth);
+    const isResizing = prevWindowWidth.current !== windowWidth;
+
+    useEffect(() => {
+        prevWindowWidth.current = windowWidth;
+    }, [windowWidth]);
+
+    const widthTransition = isResizing ? "none" : "width 0.35s ease-in-out";
 
     useEffect(() => {
         if (mapboxKey) {
