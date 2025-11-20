@@ -248,10 +248,12 @@ const MapBox = ({
 
             const PREVIEW_PANEL_WIDTH = 400;
             const PREVIEW_PANEL_GUTTER = 32;
-            const previewOffsetX =
-                !isMobile && (contentPreview || zoomContent)
-                    ? -(PREVIEW_PANEL_WIDTH / 2 + PREVIEW_PANEL_GUTTER)
-                    : 0;
+            let previewOffsetX = 0;
+            // User requested to center the pin on the screen, even if it's obscured by the panel.
+            // So we remove the offset calculation.
+            if (zoomContent) {
+                 previewOffsetX = 0;
+            }
 
             const targetLng = (location.lngLat as any)?.lng;
             const targetLat = (location.lngLat as any)?.lat;

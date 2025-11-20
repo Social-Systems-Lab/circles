@@ -732,8 +732,8 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     // Update map markers when in Explore mode
     useEffect(() => {
         if (viewMode === "explore") {
-            // When "events" category is selected, show only event markers
-            if (selectedCategory === "events") {
+            // When "events" category is selected OR side panel is in "events" mode, show only event markers
+            if (selectedCategory === "events" || panelMode === "events") {
                 setDisplayedContent(filteredEventsForMap as unknown as Content[]);
                 return;
             }
@@ -761,6 +761,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         setDisplayedContent,
         selectedCategory,
         filteredEventsForMap,
+        panelMode, // Added dependency
     ]);
 
     // Control drawer snap based on contentPreview state

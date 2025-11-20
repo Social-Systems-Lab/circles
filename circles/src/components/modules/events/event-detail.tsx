@@ -329,7 +329,7 @@ export default function EventDetail({
                 {event.description && (
                     <div className="px-4">
                         <div className="rounded-md border bg-white/50 p-3">
-                            <div className="prose max-h-40 max-w-none overflow-hidden">
+                            <div className="prose max-w-none">
                                 <RichText content={event.description} />
                             </div>
                         </div>

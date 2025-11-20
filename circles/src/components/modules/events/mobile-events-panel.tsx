@@ -41,7 +41,10 @@ function haversineKm(a?: [number, number], b?: [number, number]) {
     return R * c;
 }
 
+import { zoomContentAtom } from "@/lib/data/atoms";
+
 const MobileEventRow: React.FC<{ e: EventDisplay }> = ({ e }) => {
+    const [, setZoomContent] = useAtom(zoomContentAtom);
     const attendees = e.attendees ?? 0;
     const locationString = (() => {
         if (e.isVirtual) return "Online";
@@ -50,6 +53,12 @@ const MobileEventRow: React.FC<{ e: EventDisplay }> = ({ e }) => {
         return parts.length ? parts.join(", ") : undefined;
     })();
     const href = e?.circle?.handle && (e as any)._id ? `/circles/${e.circle!.handle}/events/${(e as any)._id}` : "#";
+
+    const handleLocationClick = (event: React.MouseEvent) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setZoomContent(e);
+    };
 
     return (
         <Link href={href} className="flex items-center gap-3 rounded px-3 py-2 active:bg-gray-100">
@@ -74,10 +83,14 @@ const MobileEventRow: React.FC<{ e: EventDisplay }> = ({ e }) => {
                 </div>
                 <div className="mt-0.5 flex items-center gap-3 text-[12px] text-muted-foreground">
                     {locationString && (
-                        <span className="inline-flex items-center">
-                            <MapPin className="mr-1 h-3 w-3" />
-                            {locationString}
-                        </span>
+                        <button
+                            onClick={handleLocationClick}
+                            className="inline-flex items-center rounded-full border border-transparent bg-gray-100 px-2 py-0.5 transition-colors hover:border-gray-300 hover:bg-gray-200"
+                            title="Zoom to location"
+                        >
+                            <MapPin className="mr-1 h-3 w-3 text-primary" />
+                            <span className="truncate max-w-[150px]">{locationString}</span>
+                        </button>
                     )}
                     {attendees > 0 && (
                         <span className="inline-flex items-center">
