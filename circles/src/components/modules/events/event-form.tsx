@@ -14,6 +14,7 @@ import { useToast } from "@/components/ui/use-toast";
 import LocationPicker from "@/components/forms/location-picker";
 import TimePicker from "@/components/forms/time-picker";
 import { format, addHours, setHours, setMinutes } from "date-fns";
+import { Bold, Italic, List, Link as LinkIcon, Heading1, Heading2 } from "lucide-react";
 
 type Props = {
     circleHandle?: string; // optional, can come from context or picker
@@ -72,6 +73,32 @@ export default function EventForm({ circleHandle, event, showCirclePicker }: Pro
     const [endDirty, setEndDirty] = useState(false);
     const [startDirty, setStartDirty] = useState(false);
     const seededRef = useRef(false);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    const insertMarkdown = (prefix: string, suffix: string = "") => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = description;
+        const before = text.substring(0, start);
+        const selection = text.substring(start, end);
+        const after = text.substring(end);
+
+        const newText = before + prefix + selection + suffix + after;
+        setDescription(newText);
+
+        // Restore focus and selection
+        setTimeout(() => {
+            textarea.focus();
+            const newCursorPos = start + prefix.length + selection.length + suffix.length;
+            textarea.setSelectionRange(
+                start + prefix.length,
+                selection.length ? start + prefix.length + selection.length : start + prefix.length
+            );
+        }, 0);
+    };
 
     useEffect(() => {
         if (allDay) return;
@@ -235,8 +262,73 @@ export default function EventForm({ circleHandle, event, showCirclePicker }: Pro
 
                     <div>
                         <Label htmlFor="description">Description</Label>
+                        <div className="mb-2 flex items-center gap-1 rounded-md border bg-gray-50 p-1">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => insertMarkdown("**", "**")}
+                                title="Bold"
+                            >
+                                <Bold className="h-4 w-4" />
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => insertMarkdown("*", "*")}
+                                title="Italic"
+                            >
+                                <Italic className="h-4 w-4" />
+                            </Button>
+                            <div className="mx-1 h-4 w-px bg-gray-300" />
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => insertMarkdown("- ")}
+                                title="List"
+                            >
+                                <List className="h-4 w-4" />
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => insertMarkdown("[", "](url)")}
+                                title="Link"
+                            >
+                                <LinkIcon className="h-4 w-4" />
+                            </Button>
+                            <div className="mx-1 h-4 w-px bg-gray-300" />
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => insertMarkdown("# ")}
+                                title="Heading 1"
+                            >
+                                <Heading1 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => insertMarkdown("## ")}
+                                title="Heading 2"
+                            >
+                                <Heading2 className="h-4 w-4" />
+                            </Button>
+                        </div>
                         <Textarea
                             id="description"
+                            ref={textareaRef}
                             className="min-h-[140px]"
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
