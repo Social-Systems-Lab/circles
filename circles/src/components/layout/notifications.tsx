@@ -104,7 +104,7 @@ type GroupedNotification = {
     eventName?: string;
 };
 
-export const Notifications = () => {
+export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
     const [user, setUser] = useAtom(userAtom);
     const [roomMessages] = useAtom(roomMessagesAtom);
     const [unreadCounts, setUnreadCounts] = useAtom(unreadCountsAtom);
@@ -321,6 +321,9 @@ export const Notifications = () => {
     }, [notifications, markLatestNotificationAsRead]);
 
     const handleNotificationClick = (groupedNotification: GroupedNotification) => {
+        if (onNavigate) {
+            onNavigate();
+        }
         const notification = groupedNotification.latestNotification;
         const circleHandle = notification.circle?.handle || "default"; // Use circle handle from notification if available
 

@@ -74,6 +74,7 @@ export const UserToolbox = () => {
 
     const openCircle = (circle: Circle) => {
         console.log("openCircle", circle.circleType, circle.parentCircleId);
+        closeToolbox();
         router.push(`/circles/${circle.handle}`);
     };
 
@@ -317,10 +318,13 @@ export const UserToolbox = () => {
                         {/* ... other tabs */}
                     </TabsList>
                     <TabsContent value="chat" className="m-0 flex-grow overflow-auto pt-1">
-                        <ChatList chats={user?.chatRoomMemberships?.map((m) => m.chatRoom) || []} />
+                        <ChatList
+                            chats={user?.chatRoomMemberships?.map((m) => m.chatRoom) || []}
+                            onChatClick={closeToolbox}
+                        />
                     </TabsContent>
                     <TabsContent value="notifications" className="m-0 flex-grow overflow-auto pt-1">
-                        <Notifications />
+                        <Notifications onNavigate={closeToolbox} />
                     </TabsContent>
                     <TabsContent value="circles" className="m-0 flex-grow overflow-auto pt-1">
                         {circles.length > 0 ? (
