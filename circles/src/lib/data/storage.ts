@@ -63,7 +63,41 @@ export const saveFile = async (
     fileName: string,
     circleId: string,
     overwrite: boolean,
-): Promise<FileInfo> => {
+): Promise<FileInfo> => {    // --- Local filesystem override for development ---
+    if (process.env.LOCAL_FS_STORAGE === "true" && process.env.NODE_ENV !== "production") {
+        const fs = await import("fs");
+        const path = await import("path");
+
+        const uploadDir = path.join(process.cwd(), "public", "uploads");
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+
+        // Convert file → Buffer
+        let buffer: Buffer;
+        if (file instanceof Buffer) {
+            buffer = file;
+        } else if (typeof file.arrayBuffer === "function") {
+            buffer = Buffer.from(await file.arrayBuffer());
+        } else if (typeof file === "string" && file.startsWith("data:")) {
+            const matches = file.match(/^data:(.+);base64,(.+)$/);
+            buffer = Buffer.from(matches?.[2] ?? "", "base64");
+        } else {
+            buffer = Buffer.from(file);
+        }
+
+        const finalName = `${Date.now()}-${fileName}`;
+        const filePath = path.join(uploadDir, finalName);
+        fs.writeFileSync(filePath, buffer);
+
+        return {
+            originalName: fileName,
+            fileName: finalName,
+            url: `/uploads/${finalName}`,
+        };
+    }
+    // --- End local override ---
+
     await ensureBucketExists();
     if (!overwrite) {
         let fileExists = await checkIfFileExists(circleId, fileName);
