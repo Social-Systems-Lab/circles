@@ -304,7 +304,12 @@ export const ContentPreview: React.FC = () => {
             const circleHandle = (evt as any)?.circle?.handle || "";
             return (
                 <div className="custom-scrollbar h-full overflow-y-auto">
-                    <EventDetail circleHandle={circleHandle} event={evt} isPreview={true} />
+                    <EventDetail
+                        circleHandle={circleHandle}
+                        event={evt}
+                        isPreview={true}
+                        onOpen={() => setContentPreview(undefined)}
+                    />
                 </div>
             );
         }
@@ -457,6 +462,7 @@ export const ContentPreview: React.FC = () => {
                             canModerate={props?.canModerate ?? false}
                             isAuthor={props?.isAuthor ?? inferredIsAuthor}
                             isPreview={true}
+                            onOpen={() => setContentPreview(undefined)}
                         />
                     </div>
                 );

@@ -65,6 +65,7 @@ const MapBox = ({
     const [, setFocusPost] = useAtom(focusPostAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const isMobile = useIsMobile();
+    const pathname = usePathname();
 
     const markersRef = useRef<Map<string, mapboxgl.Marker>>(new globalThis.Map());
     const focusedMarkerIdsRef = useRef<Set<string>>(new Set());
@@ -290,6 +291,39 @@ const MapBox = ({
         }
         setZoomContent(undefined);
     }, [zoomContent, onMarkerClick, onMapPinClick, contentPreview, isMobile]);
+
+    // Bring selected marker to front
+    const elevatedMarkerIdRef = useRef<string | null>(null);
+    useEffect(() => {
+        // Reset previous elevated marker
+        if (elevatedMarkerIdRef.current) {
+            const prevMarker = markersRef.current.get(elevatedMarkerIdRef.current);
+            if (prevMarker) {
+                prevMarker.getElement().style.zIndex = "";
+            }
+            elevatedMarkerIdRef.current = null;
+        }
+
+        let targetId = contentPreview?.content?._id;
+
+        // If no preview content, try to get ID from URL
+        if (!targetId && pathname) {
+            // Match /events/[id] but exclude /events/create
+            const match = pathname.match(/\/events\/([^\/]+)/);
+            if (match && match[1] && match[1] !== "create") {
+                targetId = match[1];
+            }
+        }
+
+        // Elevate new marker if content is selected
+        if (targetId) {
+            const marker = markersRef.current.get(targetId);
+            if (marker) {
+                marker.getElement().style.zIndex = "1000";
+                elevatedMarkerIdRef.current = targetId;
+            }
+        }
+    }, [contentPreview, pathname]);
 
     // Function to zoom in on user's location
     const zoomToUserLocation = useCallback(() => {

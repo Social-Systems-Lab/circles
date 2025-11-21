@@ -35,6 +35,7 @@ type Props = {
     canModerate?: boolean;
     isAuthor?: boolean;
     isPreview?: boolean;
+    onOpen?: () => void;
 };
 
 function googleCalendarUrl(e: EventDisplay) {
@@ -61,8 +62,9 @@ export default function EventDetail({
     canEdit,
     canReview,
     canModerate,
-    isAuthor,
     isPreview,
+    onOpen, // Callback when opening the event
+    isAuthor,
 }: Props) {
     const { toast } = useToast();
     const [user, setUser] = useAtom(userAtom);
@@ -338,11 +340,12 @@ export default function EventDetail({
 
                 <div className="px-4">
                     <Button
-                        className="w-full"
+                        className="w-full hover:bg-gray-300"
                         variant="secondary"
-                        onClick={() =>
-                            router.push(`/circles/${circleHandle}/events/${(event as any)._id?.toString?.() || ""}`)
-                        }
+                        onClick={() => {
+                            if (onOpen) onOpen();
+                            router.push(`/circles/${circleHandle}/events/${(event as any)._id?.toString?.() || ""}`);
+                        }}
                     >
                         Open Event
                     </Button>
