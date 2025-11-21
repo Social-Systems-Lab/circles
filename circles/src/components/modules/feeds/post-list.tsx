@@ -916,7 +916,6 @@ export const PostItem = ({
                         modal={false}
                         open={openDropdown}
                         onOpenChange={setOpenDropdown}
-                        modal={false}
                     >
                                 <DropdownMenuTrigger asChild onClick={(event) => event.stopPropagation()}>
                                     <Button
