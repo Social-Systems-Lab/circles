@@ -190,7 +190,7 @@ export function CircleTabs({ circle }: CircleTabsProps) {
     const activeTabInMore = hiddenTabs.find((module) => pathname.startsWith(getPath(module.handle)));
 
     return (
-        <div>
+        <div id="circle-tabs">
             <div className="mx-auto max-w-6xl px-4 pt-2">
                 <nav ref={tabsContainerRef} className="flex items-center gap-1 overflow-hidden" aria-label="Tabs">
                     {visibleTabs.map((tabModule, index) => {

@@ -188,6 +188,18 @@ export const UserToolbox = () => {
         }
     }, [closeToolbox]);
 
+    const handleEventNavigate = useCallback(() => {
+        flushSync(() => {
+            closeToolbox();
+        });
+        // Do not scroll to top as we use hash navigation for events
+    }, [closeToolbox]);
+
+    const handleTaskNavigate = useCallback(() => {
+        closeToolbox();
+        // Do not scroll to top as we use hash navigation for tasks
+    }, [closeToolbox]);
+
     const signOut = async () => {
         // clear the user data and redirect to the you've been signed out
         await logOut();
@@ -381,7 +393,7 @@ export const UserToolbox = () => {
                                 permissions={defaultTaskPermissions}
                                 hideRank={true}
                                 inToolbox={true}
-                                onTaskNavigate={handleTimelineNavigate}
+                                onTaskNavigate={handleTaskNavigate}
                             />
                         ) : (
                             <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
@@ -398,7 +410,7 @@ export const UserToolbox = () => {
                                 milestones={milestones}
                                 condensed
                                 onEventHidden={handleToolboxEventHidden}
-                                onNavigate={handleTimelineNavigate}
+                                onNavigate={handleEventNavigate}
                             />
                         ) : (
                             <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">

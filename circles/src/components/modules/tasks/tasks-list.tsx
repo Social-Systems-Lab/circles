@@ -331,7 +331,7 @@ const TasksList: React.FC<TasksListProps> = ({
                     const task = info.row.original; // Renamed variable
                     return (
                         <Link
-                            href={`/circles/${circle.handle}/tasks/${task._id}`} // Updated path
+                            href={`/circles/${circle.handle}/tasks/${task._id}#circle-tabs`} // Updated path
                             onClick={(e) => {
                                 e.stopPropagation();
                                 if (inToolbox) {
@@ -501,8 +501,8 @@ const TasksList: React.FC<TasksListProps> = ({
     const handleRowClick = (task: TaskDisplay) => {
         // Renamed param, type
         if (inToolbox) {
+            router.push(`/circles/${circle.handle}/tasks/${task._id}#circle-tabs`); // Updated path
             onTaskNavigate?.();
-            router.push(`/circles/${circle.handle}/tasks/${task._id}`); // Updated path
             return;
         }
 

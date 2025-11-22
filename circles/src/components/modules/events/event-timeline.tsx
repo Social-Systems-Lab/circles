@@ -116,7 +116,7 @@ const EventCard: React.FC<{
             )}
         >
             <Link
-                href={`/circles/${circleHandle}/events/${(e as any)._id}`}
+                href={`/circles/${circleHandle}/events/${(e as any)._id}#circle-tabs`}
                 className="group block"
                 onClick={() => onNavigate?.()}
             >
@@ -241,10 +241,10 @@ const MilestoneRow: React.FC<{
     const icon = m.type === "goal" ? "🎯" : m.type === "task" ? "🧩" : "🐞";
     const href =
         m.type === "goal"
-            ? `/circles/${circleHandle}/goals/${m.id}`
+            ? `/circles/${circleHandle}/goals/${m.id}#circle-tabs`
             : m.type === "task"
-              ? `/circles/${circleHandle}/tasks/${m.id}`
-              : `/circles/${circleHandle}/issues/${m.id}`;
+              ? `/circles/${circleHandle}/tasks/${m.id}#circle-tabs`
+              : `/circles/${circleHandle}/issues/${m.id}#circle-tabs`;
     return (
         <Link
             href={href}
