@@ -50,7 +50,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
                 <head>
                     <meta name="app-version" content={process.env.version} />
                 </head>
-                <body className={inter.className}>
+                <body className={inter.className} suppressHydrationWarning>
                     <main className="relative flex flex-col md:flex-row">
                         <GlobalNav />
                         <div className="relative flex w-full flex-row overflow-hidden">
