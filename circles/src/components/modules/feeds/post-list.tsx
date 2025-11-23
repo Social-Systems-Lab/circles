@@ -15,7 +15,7 @@ import { sdgs } from "@/lib/data/sdgs";
 import { UserPicture } from "../members/user-picture";
 import { CirclePicture } from "../circles/circle-picture";
 import { Button } from "@/components/ui/button";
-import { Edit, Heart, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Trash2, Users, X } from "lucide-react"; // Added Users
+import { Edit, Heart, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Trash2, Users, X, MapPin } from "lucide-react"; // Added Users, MapPin
 import { Badge } from "@/components/ui/badge"; // Added Badge import
 import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import React, {
@@ -39,6 +39,9 @@ import {
     sidePanelContentVisibleAtom,
     userAtom,
     feedPanelDockedAtom,
+    triggerMapOpenAtom,
+    zoomContentAtom,
+    sidePanelModeAtom,
 } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import {
@@ -89,7 +92,7 @@ import RichText from "./RichText";
 import UserBadge from "../users/user-badge";
 import { motion } from "framer-motion";
 import { ListFilter } from "@/components/utils/list-filter";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Indicators, { ProximityIndicator, SimilarityScore } from "@/components/utils/indicators";
 import Image from "next/image"; // Import Next Image
 import { Card, CardContent } from "@/components/ui/card"; // Import Card components
@@ -285,6 +288,7 @@ export const PostItem = ({
     hideContent,
     embedded,
     disableComments,
+    isDetailView,
 }: PostItemProps) => {
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
     const formattedDate = getPublishTime(post?.createdAt);
@@ -302,10 +306,58 @@ export const PostItem = ({
     const [, setImageGallery] = useAtom(imageGalleryAtom);
     const [focusPost, setFocusPost] = useAtom(focusPostAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
-    const [, setFeedPanelDocked] = useAtom(feedPanelDockedAtom);
+    const [feedPanelDocked, setFeedPanelDocked] = useAtom(feedPanelDockedAtom);
     const router = useRouter();
+    const [, setZoomContent] = useAtom(zoomContentAtom);
+    const [, setTriggerOpen] = useAtom(triggerMapOpenAtom);
+    const [sidePanelMode] = useAtom(sidePanelModeAtom);
+
+    const getDistanceString = (distance: number) => {
+        if (distance < 1) {
+            return `${Math.round(distance * 1000)} m`;
+        }
+        if (distance < 10) {
+            return `${distance.toFixed(1)} km`;
+        }
+        if (distance < 100) {
+            return `${(distance / 10).toFixed(1)} mil`;
+        }
+        return `${(distance / 10).toFixed(0)} mil`;
+    };
+
+    const getAddressString = (location?: any) => {
+        if (!location) return "";
+        const parts = [];
+        if (location.street) parts.push(location.street);
+        if (location.city) parts.push(location.city);
+        return parts.join(", ");
+    };
+
+    const handleMapPinClick = () => {
+        const isFeedPost = (post as any)?.circleType === "post";
+        if (sidePanelMode === "activity" && isFeedPost) {
+            setFeedPanelDocked((prev) => !prev);
+        } else if (feedPanelDocked) {
+            setFeedPanelDocked(false);
+        }
+
+        setZoomContent(post);
+        setTriggerOpen(true);
+    };
 
     const [openDropdown, setOpenDropdown] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [showDetailModal, setShowDetailModal] = useState(false);
+    const searchParams = useSearchParams();
+
+    useEffect(() => {
+        if (searchParams?.get("editPostId") === post._id) {
+            setIsEditing(true);
+        }
+    }, [searchParams, post._id]);
+
+
 
     // Determine user group name if applicable
     const userGroupName = useMemo(() => {
@@ -647,14 +699,8 @@ export const PostItem = ({
     //     console.log("re-rendering post-list");
     // }, []);
 
-    // fixes hydration error
-    const [isMounted, setIsMounted] = useState(false);
-    useEffect(() => {
-        setIsMounted(true);
-    }, []);
-
-    const showAdminActions = isAuthor || canModerate;
-    const showInlineClose = inPreview;
+    const showAdminActions = (isAuthor || canModerate) && (!inPreview || isDetailView);
+    const showInlineClose = inPreview && !isDetailView;
     const circleHandle = circle?.handle ?? (post as any)?.circle?.handle ?? (post as any)?.circleHandle;
     const postId = post?._id;
 
@@ -669,18 +715,16 @@ export const PostItem = ({
         router.push(targetUrl);
     }, [circleHandle, postId, router, setContentPreview, setFeedPanelDocked]);
 
-    if (!isMounted) {
-        return null;
-    }
-
     return (
         // Added min-w-0 and overflow-hidden to allow shrinking and clip content
         <div
+            id={`post-${post._id}`}
+            style={{ scrollMarginTop: "140px" }}
             className={`formatted relative flex min-w-0 flex-col gap-4 overflow-hidden ${
                 isCompact || inPreview || embedded ? "" : "rounded-[15px] border-0 shadow-lg"
             } bg-white`}
         >
-            {(showInlineClose || showAdminActions) && (
+            {(showInlineClose || showAdminActions || isDetailView) && (
                 <div className="absolute right-2 top-2 z-20 flex items-center gap-1">
                 {showInlineClose && (
                     <Button
@@ -697,6 +741,18 @@ export const PostItem = ({
                         <X className="h-4 w-4" />
                     </Button>
                 )}
+                {isDetailView && (
+                    <DialogClose asChild>
+                         <Button
+                            variant="ghost"
+                            size="icon"
+                            className="rounded-full bg-gray-100 transition-colors hover:bg-gray-200"
+                            aria-label="Close detail view"
+                        >
+                            <X className="h-4 w-4" />
+                        </Button>
+                    </DialogClose>
+                )}
                 {showAdminActions && (
                     <DropdownMenu modal={false} open={openDropdown} onOpenChange={setOpenDropdown}>
                         <DropdownMenuTrigger asChild onClick={(event) => event.stopPropagation()}>
@@ -712,107 +768,101 @@ export const PostItem = ({
                         <DropdownMenuPortal
                             container={typeof document !== "undefined" ? document.body : undefined}
                         >
-                            <DropdownMenuContent className="z-[5000]" align="end" sideOffset={6}>
+                            <DropdownMenuContent className="z-[10005]" align="end" sideOffset={6}>
                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
-                                {isAuthor &&
-                                    (inPreview ? (
-                                        <DropdownMenuItem
-                                            onSelect={(e) => {
-                                                e.stopPropagation();
-                                                e.preventDefault();
+                                {isAuthor && (
+                                    <DropdownMenuItem
+                                        onSelect={(e) => {
+                                            e.stopPropagation();
+                                            if (inPreview && !isDetailView) {
                                                 handleNavigateToNoticeboard();
-                                            }}
-                                        >
-                                            <Edit className="mr-2 h-4 w-4" />
-                                            <div>Edit</div>
-                                        </DropdownMenuItem>
-                                    ) : (
-                                        <Dialog onOpenChange={(open) => setOpenDropdown(open)}>
-                                            <DialogTrigger asChild>
-                                                <DropdownMenuItem
-                                                    onSelect={(e) => {
-                                                        e.stopPropagation();
-                                                        e.preventDefault();
-                                                    }}
-                                                >
-                                                    <Edit className="mr-2 h-4 w-4" />
-                                                    <div>Edit</div>
-                                                </DropdownMenuItem>
-                                            </DialogTrigger>
-                                            <DialogContent
-                                                className="h-[90vh] w-[95vw] max-w-3xl overflow-hidden rounded-[15px] p-0"
-                                                onInteractOutside={(e) => {
-                                                    e.preventDefault();
-                                                }}
-                                            >
-                                                <div className="hidden">
-                                                    <DialogTitle>Edit post</DialogTitle>
-                                                </div>
-                                                <PostForm
-                                                    user={user!}
-                                                    initialPost={post}
-                                                    onSubmit={async (formData, targetCircleId) => {
-                                                        await handleEditSubmit(formData);
-                                                    }}
-                                                    onCancel={() => setOpenDropdown(false)}
-                                                    moduleHandle="feed"
-                                                    createFeatureHandle="post"
-                                                    itemKey="post"
-                                                />
-                                            </DialogContent>
-                                        </Dialog>
-                                    ))}
-                                <Dialog onOpenChange={(open) => setOpenDropdown(open)}>
-                                    <DialogTrigger asChild>
-                                        <DropdownMenuItem
-                                            onSelect={(e) => {
-                                                e.stopPropagation();
-                                                e.preventDefault();
-                                            }}
-                                        >
-                                            <Trash2 className="mr-2 h-4 w-4" />
-                                            <div>Delete</div>
-                                        </DropdownMenuItem>
-                                    </DialogTrigger>
-                                    <DialogContent
-                                        onInteractOutside={(e) => {
-                                            e.preventDefault();
+                                            } else {
+                                                setIsEditing(true);
+                                            }
                                         }}
                                     >
-                                        <DialogHeader>
-                                            <DialogTitle>Delete Post</DialogTitle>
-                                            <DialogDescription>
-                                                Are you sure you want to delete this post? This action cannot be undone.
-                                            </DialogDescription>
-                                        </DialogHeader>
-                                        <DialogFooter>
-                                            <DialogClose asChild>
-                                                <Button variant="outline">Cancel</Button>
-                                            </DialogClose>
-                                            <Button
-                                                variant="destructive"
-                                                onClick={handleDeleteConfirm}
-                                                disabled={isPending}
-                                            >
-                                                {isPending ? (
-                                                    <>
-                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                        Deleting...
-                                                    </>
-                                                ) : (
-                                                    <>Delete</>
-                                                )}
-                                            </Button>
-                                        </DialogFooter>
-                                    </DialogContent>
-                                </Dialog>
+                                        <Edit className="mr-2 h-4 w-4" />
+                                        <div>Edit</div>
+                                    </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem
+                                    onSelect={(e) => {
+                                        e.stopPropagation();
+                                        setIsDeleting(true);
+                                    }}
+                                >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    <div>Delete</div>
+                                </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenuPortal>
                     </DropdownMenu>
                 )}
             </div>
         )}
+
+        {/* Edit Dialog */}
+        <Dialog open={isEditing} onOpenChange={setIsEditing}>
+            <DialogContent
+                className="z-[10010] h-[90vh] w-[95vw] max-w-3xl overflow-y-auto rounded-[15px] p-0"
+                onInteractOutside={(e) => {
+                    e.preventDefault();
+                }}
+            >
+                <div className="hidden">
+                    <DialogTitle>Edit post</DialogTitle>
+                </div>
+                <PostForm
+                    user={user!}
+                    initialPost={post}
+                    onSubmit={async (formData, targetCircleId) => {
+                        await handleEditSubmit(formData);
+                        setIsEditing(false);
+                    }}
+                    onCancel={() => setIsEditing(false)}
+                    moduleHandle="feed"
+                    createFeatureHandle="post"
+                    itemKey="post"
+                />
+            </DialogContent>
+        </Dialog>
+
+        {/* Delete Dialog */}
+        <Dialog open={isDeleting} onOpenChange={setIsDeleting}>
+            <DialogContent
+                className="z-[10010]"
+                onInteractOutside={(e) => {
+                    e.preventDefault();
+                }}
+            >
+                <DialogHeader>
+                    <DialogTitle>Delete Post</DialogTitle>
+                    <DialogDescription>
+                        Are you sure you want to delete this post? This action cannot be undone.
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button
+                        variant="destructive"
+                        onClick={handleDeleteConfirm}
+                        disabled={isPending}
+                    >
+                        {isPending ? (
+                            <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Deleting...
+                            </>
+                        ) : (
+                            <>Delete</>
+                        )}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
 
         {/* Title */}
             {!hideContent && (
@@ -911,7 +961,7 @@ export const PostItem = ({
                     )}
 
                     <div className="flex items-center space-x-2">
-                        {(isAuthor || canModerate) && (
+                        {(isAuthor || canModerate) && !inPreview && (
                     <DropdownMenu
                         modal={false}
                         open={openDropdown}
@@ -936,49 +986,44 @@ export const PostItem = ({
                                     <DropdownMenuContent className="z-[5000]" align="end" sideOffset={6}>
                                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                         <DropdownMenuSeparator />
-                                        {isAuthor && (
-                                            <Dialog onOpenChange={(open) => setOpenDropdown(open)}>
+                                        {isAuthor && !inPreview && (
+                                            <Dialog open={isEditing} onOpenChange={setIsEditing}>
                                                 <DialogTrigger asChild>
-                                                <DropdownMenuItem
-                                                    onSelect={(e) => {
-                                                        e.stopPropagation();
+                                                    <DropdownMenuItem
+                                                        onSelect={(e) => {
+                                                            e.stopPropagation();
+                                                            e.preventDefault();
+                                                            setIsEditing(true);
+                                                        }}
+                                                    >
+                                                        <Edit className="mr-2 h-4 w-4" />
+                                                        <div>Edit</div>
+                                                    </DropdownMenuItem>
+                                                </DialogTrigger>
+                                                <DialogContent
+                                                    className="z-[10001] max-h-[90vh] overflow-y-auto rounded-[15px] p-0 sm:max-w-[425px] sm:rounded-[15px]"
+                                                    onInteractOutside={(e) => {
                                                         e.preventDefault();
                                                     }}
                                                 >
-                                                    <Edit className="mr-2 h-4 w-4" />
-                                                    <div>Edit</div>
-                                                </DropdownMenuItem>
-                                            </DialogTrigger>
-                                            <DialogContent
-                                                className="overflow-hidden rounded-[15px] p-0 sm:max-w-[425px] sm:rounded-[15px]"
-                                                onInteractOutside={(e) => {
-                                                    e.preventDefault();
-                                                }}
-                                            >
-                                                <div className="hidden">
-                                                    <DialogTitle>Edit post</DialogTitle>
-                                                </div>
-                                                <PostForm
-                                                    user={user!}
-                                                    initialPost={post}
-                                                    onSubmit={async (formData, targetCircleId) => {
-                                                        // When editing, targetCircleId is the post's original circle.
-                                                        // updatePostAction uses postId from formData.
-                                                        // The circleId for updatePostAction is derived from the post object
-                                                        // or not strictly needed if only postId is used.
-                                                        // We ensure handleEditSubmit is called correctly.
-                                                        // If handleEditSubmit needs targetCircleId, pass post.circle._id!
-                                                        // For now, assuming handleEditSubmit only needs formData.
-                                                        await handleEditSubmit(formData);
-                                                    }}
-                                                    onCancel={() => setOpenDropdown(false)}
-                                                    moduleHandle="feed"
-                                                    createFeatureHandle="post" // Or "edit" if a specific edit feature exists
-                                                    itemKey="post"
-                                                />
-                                            </DialogContent>
-                                        </Dialog>
-                                    )}
+                                                    <div className="hidden">
+                                                        <DialogTitle>Edit post</DialogTitle>
+                                                    </div>
+                                                    <PostForm
+                                                        user={user!}
+                                                        initialPost={post}
+                                                        onSubmit={async (formData, targetCircleId) => {
+                                                            await handleEditSubmit(formData);
+                                                            setIsEditing(false);
+                                                        }}
+                                                        onCancel={() => setIsEditing(false)}
+                                                        moduleHandle="feed"
+                                                        createFeatureHandle="post"
+                                                        itemKey="post"
+                                                    />
+                                                </DialogContent>
+                                            </Dialog>
+                                        )}
                                     <Dialog onOpenChange={(open) => setOpenDropdown(open)}>
                                         <DialogTrigger asChild>
                                             <DropdownMenuItem
@@ -992,6 +1037,7 @@ export const PostItem = ({
                                             </DropdownMenuItem>
                                         </DialogTrigger>
                                         <DialogContent
+                                            className="z-[10001]"
                                             onInteractOutside={(e) => {
                                                 e.preventDefault();
                                             }}
@@ -1233,20 +1279,40 @@ export const PostItem = ({
                             </div>
                         )}
                         {post.metrics.distance !== undefined && (
-                            <div className="text-[16px]">
-                                <ProximityIndicator
-                                    distance={post.metrics.distance}
-                                    color={"#6b7280"}
-                                    content={post}
-                                    size={"1.25rem"}
-                                />
-                            </div>
+                            <HoverCard openDelay={200}>
+                                <HoverCardTrigger>
+                                    <div 
+                                        className="flex cursor-pointer items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-200"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleMapPinClick();
+                                        }}
+                                    >
+                                        <MapPin className="h-3 w-3 text-gray-700" />
+                                        <span className="max-w-[150px] truncate">{getAddressString(post.location)}</span>
+                                    </div>
+                                </HoverCardTrigger>
+                                <HoverCardContent className="z-[1000] w-auto p-2 text-xs">
+                                    {getDistanceString(post.metrics.distance)} from your location
+                                </HoverCardContent>
+                            </HoverCard>
                         )}
+
                     </div>
                 )}
 
                 {/* Comments Section */}
-                <div className="flex flex-1 cursor-pointer items-center justify-end gap-1.5" onClick={fetchComments}>
+                {/* Comments Section */}
+                <div
+                    className="flex flex-1 cursor-pointer items-center justify-end gap-1.5"
+                    onClick={() => {
+                        if (isDetailView) {
+                            fetchComments();
+                        } else {
+                            setShowDetailModal(true);
+                        }
+                    }}
+                >
                     <MessageCircle className="h-5 w-5" />
                     {post.comments > 0 && <div>{post.comments}</div>}
                 </div>
@@ -1263,18 +1329,27 @@ export const PostItem = ({
                     <>
                         {/* Show "Show more comments" if more than one comment and not showing all */}
                         {!showAllComments && post.comments > 1 && (
-                            <div
-                                className="cursor-pointer text-[15px] font-bold text-gray-500 hover:underline"
-                                onClick={fetchComments}
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-auto px-2 py-1 text-[15px] font-semibold text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                                onClick={() => {
+                                    if (isDetailView) {
+                                        fetchComments();
+                                    } else {
+                                        setShowDetailModal(true);
+                                    }
+                                }}
                             >
-                                Show more comments
-                            </div>
+                                View all {post.comments} comments
+                            </Button>
                         )}
                     </>
                 )}
 
                 {/* Display comments */}
-                {showAllComments
+                {/* Display comments */}
+                {(showAllComments || isDetailView)
                     ? topLevelComments.map((comment) => (
                           <CommentItem
                               key={comment._id}
@@ -1306,6 +1381,30 @@ export const PostItem = ({
                               onShowAllComments={fetchComments}
                           />
                       )}
+
+                {/* Post Detail Modal */}
+                {!isDetailView && (
+                    <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
+                        <DialogContent className="z-[10001] max-h-[90vh] w-full max-w-2xl overflow-y-auto p-0">
+                            <div className="hidden">
+                                <DialogTitle>Post Detail</DialogTitle>
+                            </div>
+                            <PostItem
+                                post={post}
+                                circle={circle}
+                                feed={feed}
+                                inPreview={inPreview}
+                                initialComments={initialComments}
+                                initialShowAllComments={true}
+                                isAggregateFeed={isAggregateFeed}
+                                hideContent={hideContent}
+                                embedded={embedded}
+                                disableComments={disableComments}
+                                isDetailView={true}
+                            />
+                        </DialogContent>
+                    </Dialog>
+                )}
 
                 {/* Comment input box */}
                 {user && canComment && !disableComments && (

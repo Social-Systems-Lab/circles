@@ -592,6 +592,7 @@ export type PostItemProps = {
     hideContent?: boolean;
     embedded?: boolean;
     disableComments?: boolean;
+    isDetailView?: boolean;
 };
 
 export type ContentPreviewData =

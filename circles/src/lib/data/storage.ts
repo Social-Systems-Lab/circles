@@ -88,6 +88,12 @@ export const saveFile = async (
 
         const finalName = `${Date.now()}-${fileName}`;
         const filePath = path.join(uploadDir, finalName);
+        
+        const fileDir = path.dirname(filePath);
+        if (!fs.existsSync(fileDir)) {
+            fs.mkdirSync(fileDir, { recursive: true });
+        }
+
         fs.writeFileSync(filePath, buffer);
 
         return {

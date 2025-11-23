@@ -676,6 +676,7 @@ export const getVbdSimilarity = async (
     let sourceUuid = uuidv5(sourceIdName, circleNs);
     let targetUuid = uuidv5(idName, targetNs);
 
+    // Force recompile check
     if (!idName) return undefined;
 
     try {
@@ -699,7 +700,7 @@ export const getVbdSimilarity = async (
         const similarity = calculateCosineSimilarity(sourceVector, targetVector);
         return similarity;
     } catch (error) {
-        console.error(`Error fetching similarity for ${collectionName} ${idName}:`, error);
+        console.warn(`Error fetching similarity for ${collectionName} ${idName}:`, error);
         return undefined;
     }
 };
