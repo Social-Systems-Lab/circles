@@ -43,8 +43,14 @@ function haversineKm(a?: [number, number], b?: [number, number]) {
 
 import { zoomContentAtom } from "@/lib/data/atoms";
 
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+// ... existing imports ...
+
 const MobileEventRow: React.FC<{ e: EventDisplay }> = ({ e }) => {
     const [, setZoomContent] = useAtom(zoomContentAtom);
+    const [isExpanded, setIsExpanded] = useState(false);
     const attendees = e.attendees ?? 0;
     const locationString = (() => {
         if (e.isVirtual) return "Online";
@@ -61,57 +67,80 @@ const MobileEventRow: React.FC<{ e: EventDisplay }> = ({ e }) => {
     };
 
     return (
-        <Link href={href} className="flex items-center gap-3 rounded px-3 py-2 active:bg-gray-100">
-            {e.images?.[0]?.fileInfo?.url && (
-                <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded border">
-                    <Image
-                        src={e.images[0].fileInfo.url}
-                        alt={e.title || "Event"}
-                        fill
-                        sizes="48px"
-                        className="object-cover"
-                    />
-                </div>
+        <div 
+            className={cn(
+                "flex flex-col rounded border px-3 py-2 transition-colors cursor-pointer",
+                isExpanded ? "bg-gray-50 border-gray-300" : "hover:bg-gray-50 border-transparent"
             )}
-            <div className="min-w-0 flex-1">
-                <div className="truncate text-[15px] font-semibold">{e.title || "Untitled"}</div>
-                <div className="mt-0.5 flex items-center gap-2 text-[12px] text-muted-foreground">
-                    <span className="inline-flex items-center">
-                        <CalendarIcon className="mr-1 h-3 w-3" />
-                        {fmtRange(e.startAt, e.endAt, e.allDay)}
-                    </span>
-                </div>
-                <div className="mt-0.5 flex items-center gap-3 text-[12px] text-muted-foreground">
-                    {locationString && (
-                        <button
-                            onClick={handleLocationClick}
-                            className="inline-flex items-center rounded-full border border-transparent bg-gray-100 px-2 py-0.5 transition-colors hover:border-gray-300 hover:bg-gray-200"
-                            title="Zoom to location"
-                        >
-                            <MapPin className="mr-1 h-3 w-3 text-primary" />
-                            <span className="truncate max-w-[150px]">{locationString}</span>
-                        </button>
-                    )}
-                    {attendees > 0 && (
+            onClick={() => setIsExpanded(!isExpanded)}
+        >
+            <div className="flex items-center gap-3">
+                {e.images?.[0]?.fileInfo?.url && (
+                    <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded border">
+                        <Image
+                            src={e.images[0].fileInfo.url}
+                            alt={e.title || "Event"}
+                            fill
+                            sizes="48px"
+                            className="object-cover"
+                        />
+                    </div>
+                )}
+                <div className="min-w-0 flex-1">
+                    <div className="truncate text-[15px] font-semibold">{e.title || "Untitled"}</div>
+                    <div className="mt-0.5 flex items-center gap-2 text-[12px] text-muted-foreground">
                         <span className="inline-flex items-center">
-                            <Users className="mr-1 h-3 w-3" />
-                            {attendees} going
+                            <CalendarIcon className="mr-1 h-3 w-3" />
+                            {fmtRange(e.startAt, e.endAt, e.allDay)}
                         </span>
-                    )}
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-3 text-[12px] text-muted-foreground">
+                        {locationString && (
+                            <button
+                                onClick={handleLocationClick}
+                                className="inline-flex items-center rounded-full border border-transparent bg-gray-100 px-2 py-0.5 transition-colors hover:border-gray-300 hover:bg-gray-200"
+                                title="Zoom to location"
+                            >
+                                <MapPin className="mr-1 h-3 w-3 text-primary" />
+                                <span className="truncate max-w-[150px]">{locationString}</span>
+                            </button>
+                        )}
+                        {attendees > 0 && (
+                            <span className="inline-flex items-center">
+                                <Users className="mr-1 h-3 w-3" />
+                                {attendees} going
+                            </span>
+                        )}
+                    </div>
                 </div>
+                {e.stage === "review" && (
+                    <span className="ml-auto inline-flex items-center rounded border border-yellow-400 bg-yellow-100 px-1.5 py-0.5 text-[10px] text-yellow-800">
+                        <Clock className="mr-1 h-3 w-3" />
+                        Review
+                    </span>
+                )}
+                {e.stage === "cancelled" && (
+                    <span className="ml-auto inline-flex items-center rounded border border-red-400 bg-red-100 px-1.5 py-0.5 text-[10px] text-red-800">
+                        Cancelled
+                    </span>
+                )}
             </div>
-            {e.stage === "review" && (
-                <span className="ml-auto inline-flex items-center rounded border border-yellow-400 bg-yellow-100 px-1.5 py-0.5 text-[10px] text-yellow-800">
-                    <Clock className="mr-1 h-3 w-3" />
-                    Review
-                </span>
+
+            {isExpanded && (
+                <div className="mt-3 border-t pt-3">
+                    {e.description && (
+                        <p className="mb-3 text-sm text-muted-foreground line-clamp-3">
+                            {e.description}
+                        </p>
+                    )}
+                    <Link href={href} onClick={(e) => e.stopPropagation()} className="block w-full">
+                        <Button className="w-full" size="sm">
+                            Open Event
+                        </Button>
+                    </Link>
+                </div>
             )}
-            {e.stage === "cancelled" && (
-                <span className="ml-auto inline-flex items-center rounded border border-red-400 bg-red-100 px-1.5 py-0.5 text-[10px] text-red-800">
-                    Cancelled
-                </span>
-            )}
-        </Link>
+        </div>
     );
 };
 
