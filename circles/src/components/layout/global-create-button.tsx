@@ -171,7 +171,7 @@ export function GlobalCreateButton() {
                     </motion.div>
                 </DialogTrigger>
                 <DialogContent
-                    className="z-[1000] max-h-[90vh] overflow-y-auto rounded-[15px] bg-white p-0 sm:max-w-[600px] md:max-w-[750px] lg:max-w-[900px]"
+                    className="max-h-[90vh] overflow-y-auto rounded-[15px] bg-white p-0 sm:max-w-[600px] md:max-w-[750px] lg:max-w-[900px]"
                     onInteractOutside={(e) => e.preventDefault()}
                 >
                     <GlobalCreateDialogContent

@@ -63,7 +63,7 @@ const MobileEventRow: React.FC<{ e: EventDisplay }> = ({ e }) => {
         const parts = [loc.street, loc.city, loc.region, loc.country].filter(Boolean) as string[];
         return parts.length ? parts.join(", ") : undefined;
     })();
-    const href = e?.circle?.handle && (e as any)._id ? `/circles/${e.circle!.handle}/events/${(e as any)._id}` : "#";
+    const href = e?.circle?.handle && (e as any)._id ? `/circles/${e.circle!.handle}/events/${(e as any)._id}#circle-tabs` : "#";
 
     const handleLocationClick = (event: React.MouseEvent) => {
         event.preventDefault();

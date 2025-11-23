@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { CalendarIcon, Clock, MapPin, Users } from "lucide-react";
+import { CalendarIcon, Clock, MapPin, Users, Pencil } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
@@ -237,7 +237,8 @@ const MilestoneRow: React.FC<{
     m: { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string };
     circleHandle: string;
     onNavigate?: () => void;
-}> = ({ m, circleHandle, onNavigate }) => {
+    isOverdue?: boolean;
+}> = ({ m, circleHandle, onNavigate, isOverdue }) => {
     const icon = m.type === "goal" ? "🎯" : m.type === "task" ? "🧩" : "🐞";
     const href =
         m.type === "goal"
@@ -245,21 +246,49 @@ const MilestoneRow: React.FC<{
             : m.type === "task"
               ? `/circles/${circleHandle}/tasks/${m.id}#circle-tabs`
               : `/circles/${circleHandle}/issues/${m.id}#circle-tabs`;
+
+    const editHref =
+        m.type === "goal"
+            ? `/circles/${circleHandle}/goals/${m.id}/edit`
+            : m.type === "task"
+              ? `/circles/${circleHandle}/tasks/${m.id}/edit`
+              : `/circles/${circleHandle}/issues/${m.id}/edit`;
+
     return (
-        <Link
-            href={href}
-            className="group block"
-            onClick={() => onNavigate?.()}
-        >
-            <div className="flex items-center gap-2 truncate rounded border bg-white px-3 py-2 text-xs hover:bg-muted/40">
-                <span className="select-none">{icon}</span>
-                <span className="truncate">{m.title}</span>
-                <span className="ml-auto inline-flex items-center text-muted-foreground">
-                    <CalendarIcon className="mr-1 h-3 w-3" />
-                    {format(new Date(m.date), "MMM d, yyyy")}
-                </span>
-            </div>
-        </Link>
+        <div className="group flex items-center gap-2">
+            <Link
+                href={href}
+                className="flex-grow block"
+                onClick={() => onNavigate?.()}
+            >
+                <div className={cn(
+                    "flex items-center gap-2 truncate rounded border bg-white px-3 py-2 text-xs hover:bg-muted/40",
+                    isOverdue && "border-red-200 bg-red-50 hover:bg-red-100/50"
+                )}>
+                    <span className="select-none">{icon}</span>
+                    <span className="truncate flex-grow">{m.title}</span>
+                    <span className={cn(
+                        "ml-auto inline-flex items-center",
+                        isOverdue ? "text-red-600 font-medium" : "text-muted-foreground"
+                    )}>
+                        <CalendarIcon className="mr-1 h-3 w-3" />
+                        {format(new Date(m.date), "MMM d, yyyy")}
+                    </span>
+                </div>
+            </Link>
+            <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                asChild
+                onClick={() => onNavigate?.()}
+            >
+                <Link href={editHref}>
+                    <Pencil className="h-4 w-4" />
+                    <span className="sr-only">Edit</span>
+                </Link>
+            </Button>
+        </div>
     );
 };
 
@@ -317,8 +346,12 @@ export default function EventTimeline({
     );
 
     // Build combined list of future/ongoing entries: events + dated milestones
-    const combined = useMemo(() => {
+    const { upcoming, overdue } = useMemo(() => {
         const now = new Date();
+        // Reset time part of 'now' to start of day for fair comparison if needed, 
+        // but for strict "overdue" (past date), exact comparison is usually fine.
+        // However, usually "today" isn't overdue. So let's say overdue is < today (start of day).
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
         const eventEntries =
             (events || [])
@@ -339,28 +372,28 @@ export default function EventTimeline({
                     event: e,
                 })) || [];
 
-        const milestoneEntries =
-            (milestones || [])
-                .filter((m) => m.date)
-                .filter((m) => {
-                    const d = new Date(m.date);
-                    return d >= now;
-                })
-                .map((m) => ({
-                    kind: "milestone" as const,
-                    date: new Date(m.date),
-                    milestone: m,
-                })) || [];
+        const allMilestones = (milestones || []).filter((m) => m.date).map(m => ({
+            kind: "milestone" as const,
+            date: new Date(m.date),
+            milestone: m,
+        }));
 
-        const all = [...eventEntries, ...milestoneEntries];
-        all.sort((a, b) => a.date.getTime() - b.date.getTime());
-        return all;
+        const overdueItems = allMilestones.filter(m => m.date < startOfToday);
+        const upcomingMilestones = allMilestones.filter(m => m.date >= startOfToday);
+
+        const upcomingItems = [...eventEntries, ...upcomingMilestones];
+        upcomingItems.sort((a, b) => a.date.getTime() - b.date.getTime());
+        
+        // Sort overdue items by date (oldest first? or newest first? usually oldest first to show most urgent)
+        overdueItems.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+        return { upcoming: upcomingItems, overdue: overdueItems };
     }, [events, milestones, locallyHiddenIds]);
 
     // Group by Year -> Month
-    const grouped: Record<string, Record<number, typeof combined>> = useMemo(() => {
-        const g: Record<string, Record<number, typeof combined>> = {};
-        for (const item of combined) {
+    const grouped: Record<string, Record<number, typeof upcoming>> = useMemo(() => {
+        const g: Record<string, Record<number, typeof upcoming>> = {};
+        for (const item of upcoming) {
             const d = item.date;
             const year = String(d.getFullYear());
             const month = d.getMonth();
@@ -369,16 +402,38 @@ export default function EventTimeline({
             g[year][month].push(item);
         }
         return g;
-    }, [combined]);
+    }, [upcoming]);
 
     const yearKeys = useMemo(() => Object.keys(grouped).sort((a, b) => Number(a) - Number(b)), [grouped]);
 
-    if (combined.length === 0) {
+    if (upcoming.length === 0 && overdue.length === 0) {
         return <div className="p-8 text-center text-muted-foreground">No upcoming items found.</div>;
     }
 
     return (
         <div className="relative pl-0 pr-2">
+            {/* Overdue Section */}
+            {overdue.length > 0 && (
+                <div className="mb-8">
+                    <div className="mb-3 ml-12 text-lg font-semibold text-red-600 flex items-center gap-2">
+                        <AlertCircle className="h-5 w-5" />
+                        Overdue
+                    </div>
+                    <div className="ml-12 flex flex-col gap-2">
+                        {overdue.map((it, idx) => (
+                            <MilestoneRow
+                                key={`overdue-${it.milestone.type}:${it.milestone.id}-${idx}`}
+                                m={it.milestone}
+                                circleHandle={circleHandle}
+                                onNavigate={onNavigate}
+                                isOverdue
+                            />
+                        ))}
+                    </div>
+                    <div className="my-6 ml-12 border-t border-dashed" />
+                </div>
+            )}
+
             {yearKeys.map((year) => (
                 <div key={year} className="relative">
                     <div className="ml-12">
@@ -439,3 +494,6 @@ export default function EventTimeline({
         </div>
     );
 }
+
+// Helper for AlertCircle since I forgot to import it in the main block above
+import { AlertCircle } from "lucide-react";

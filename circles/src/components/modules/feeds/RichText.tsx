@@ -139,8 +139,15 @@ const RichText = memo(({ content, mentions }: RichTextProps) => {
                 // Handle other internal links (if any) using Next Link
                 // Avoid passing potentially invalid props like 'node' to Next Link
                 const { node: _, ...linkProps } = props;
+                
+                // Check if it's an event link and append hash if missing
+                let finalHref = href;
+                if (href.match(/^\/circles\/[^\/]+\/events\/[^\/]+$/)) {
+                    finalHref = `${href}#circle-tabs`;
+                }
+
                 return (
-                    <Link href={href} {...linkProps} className="text-blue-600 hover:underline">
+                    <Link href={finalHref} {...linkProps} className="text-blue-600 hover:underline">
                         {children}
                     </Link>
                 );

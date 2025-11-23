@@ -276,6 +276,18 @@ export default function EventDetail({
                             {format(start, "MMM d")}
                         </div>
                     )}
+                    {start && (
+                        <div className="absolute bottom-2 left-2 z-10 rounded-md bg-black/45 px-2 py-1 text-xs text-white md:text-sm">
+                            {event.allDay ? (
+                                "All Day"
+                            ) : (
+                                <>
+                                    {format(start, "p")}
+                                    {end ? ` - ${format(end, "p")}` : ""}
+                                </>
+                            )}
+                        </div>
+                    )}
 
                     <a
                         className="absolute bottom-2 right-2 z-10"
