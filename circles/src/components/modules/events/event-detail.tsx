@@ -1,7 +1,9 @@
+
 "use client";
 
 import React, { useState, useTransition } from "react";
 import { EventDisplay } from "@/models/models";
+import { cn, haversineKm, getUserLocation } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import {
@@ -14,8 +16,23 @@ import {
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import ImageCarousel from "@/components/ui/image-carousel";
-import { Calendar, MapPin, Clock } from "lucide-react";
+import { Calendar, MapPin, Clock, X } from "lucide-react";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { MapDisplay } from "@/components/map/map";
 import type { Circle, Media } from "@/models/models";
+
+const getDistanceString = (distance: number) => {
+    if (distance < 1) {
+        return `${Math.round(distance * 1000)} m`;
+    }
+    if (distance < 10) {
+        return `${distance.toFixed(1)} km`;
+    }
+    if (distance < 100) {
+        return `${(distance / 10).toFixed(1)} mil`;
+    }
+    return `${(distance / 10).toFixed(0)} mil`;
+};
 import InvitedUserList from "./invited-user-list";
 import InviteModal from "./invite-modal";
 import AttendeesList from "./attendees-list";
@@ -23,7 +40,7 @@ import RsvpDialog from "./rsvp-dialog";
 import EventTasksPanel from "./event-tasks-panel";
 import { CommentSection } from "../feeds/CommentSection";
 import RichText from "../feeds/RichText";
-import { userAtom } from "@/lib/data/atoms";
+import { userAtom, mapboxKeyAtom, zoomContentAtom, triggerMapOpenAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 
 type Props = {
@@ -36,6 +53,7 @@ type Props = {
     isAuthor?: boolean;
     isPreview?: boolean;
     onOpen?: () => void;
+    onClose?: () => void;
 };
 
 function googleCalendarUrl(e: EventDisplay) {
@@ -64,10 +82,14 @@ export default function EventDetail({
     canModerate,
     isPreview,
     onOpen, // Callback when opening the event
+    onClose,
     isAuthor,
 }: Props) {
     const { toast } = useToast();
     const [user, setUser] = useAtom(userAtom);
+    const [mapboxKey] = useAtom(mapboxKeyAtom);
+    const [, setZoomContent] = useAtom(zoomContentAtom);
+    const [, setTriggerOpen] = useAtom(triggerMapOpenAtom);
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [isInviteModalOpen, setInviteModalOpen] = useState(false);
@@ -236,20 +258,25 @@ export default function EventDetail({
                         showDots={images.length > 1}
                         dotsPosition="bottom-right"
                     />
+                    {onClose && (
+                        <Button
+                            size="icon"
+                            variant="ghost"
+                            className="absolute right-2 top-2 z-20 h-8 w-8 rounded-full bg-black/30 text-white hover:bg-black/50"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onClose();
+                            }}
+                        >
+                            <X className="h-4 w-4" />
+                        </Button>
+                    )}
                     {start && (
                         <div className="absolute left-2 top-2 z-10 rounded-md bg-black/45 px-2 py-1 text-xs text-white md:text-sm">
                             {format(start, "MMM d")}
                         </div>
                     )}
-                    {(locationText || event.isVirtual || event.isHybrid) && (
-                        <div className="absolute bottom-2 left-2 z-10 flex items-center gap-1 rounded-md bg-black/40 px-2 py-1 text-xs text-white">
-                            <MapPin className="h-3 w-3" />
-                            <span>
-                                {event.isVirtual && !locationText ? "Virtual" : locationText}
-                                {event.isHybrid ? " · Hybrid" : ""}
-                            </span>
-                        </div>
-                    )}
+
                     <a
                         className="absolute bottom-2 right-2 z-10"
                         href={googleCalendarUrl(event)}
@@ -276,11 +303,48 @@ export default function EventDetail({
                             </span>
                         )} */}
                         {(locationText || event.isVirtual || event.isHybrid) && (
-                            <span className="inline-flex items-center gap-1">
-                                <MapPin className="h-4 w-4" />
-                                {event.isVirtual && !locationText ? "Virtual" : locationText}
-                                {event.isHybrid ? " · Hybrid" : ""}
-                            </span>
+                            <div className="inline-flex items-center gap-1">
+                                {event.location && event.location.lngLat ? (
+                                    <HoverCard openDelay={0} closeDelay={0}>
+                                        <HoverCardTrigger asChild>
+                                            <button
+                                                className="inline-flex items-center rounded-full border border-transparent bg-gray-100 px-2 py-0.5 transition-colors hover:border-gray-300 hover:bg-gray-200"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setZoomContent(event);
+                                                    setTriggerOpen(true);
+                                                }}
+                                                title="Zoom to location"
+                                            >
+                                                <MapPin className="mr-1 h-3 w-3 text-primary" />
+                                                <span className="truncate max-w-[200px]">
+                                                    {event.isVirtual && !locationText ? "Virtual" : locationText}
+                                                    {event.isHybrid ? " · Hybrid" : ""}
+                                                </span>
+                                            </button>
+                                        </HoverCardTrigger>
+                                        {(() => {
+                                            const dist = (event as any).distance ?? (
+                                                event.location?.lngLat && user
+                                                    ? haversineKm(event.location.lngLat, getUserLocation(user))
+                                                    : undefined
+                                            );
+                                            return dist !== undefined && dist !== Number.POSITIVE_INFINITY ? (
+                                                <HoverCardContent className="w-auto p-2" side="top" align="center">
+                                                    <div className="text-xs font-medium">
+                                                        {getDistanceString(dist)} from your location
+                                                    </div>
+                                                </HoverCardContent>
+                                            ) : null;
+                                        })()}
+                                    </HoverCard>
+                                ) : (
+                                    <span>
+                                        {event.isVirtual && !locationText ? "Virtual" : locationText}
+                                        {event.isHybrid ? " · Hybrid" : ""}
+                                    </span>
+                                )}
+                            </div>
                         )}
                     </div>
                 </div>
@@ -330,8 +394,8 @@ export default function EventDetail({
 
                 {event.description && (
                     <div className="px-4">
-                        <div className="rounded-md border bg-white/50 p-3">
-                            <div className="prose max-w-none">
+                        <div className="rounded-lg border bg-white/70 p-5 shadow-sm">
+                            <div className="prose prose-sm max-w-none">
                                 <RichText content={event.description} />
                             </div>
                         </div>
@@ -344,7 +408,7 @@ export default function EventDetail({
                         variant="secondary"
                         onClick={() => {
                             if (onOpen) onOpen();
-                            router.push(`/circles/${circleHandle}/events/${(event as any)._id?.toString?.() || ""}`);
+                            router.push(`/circles/${circleHandle}/events/${(event as any)._id?.toString?.() || ""}#circle-tabs`);
                         }}
                     >
                         Open Event

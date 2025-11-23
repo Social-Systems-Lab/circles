@@ -44,10 +44,20 @@ function haversineKm(a?: [number, number], b?: [number, number]) {
     return R * c;
 }
 
-import { zoomContentAtom } from "@/lib/data/atoms";
+import { zoomContentAtom, triggerMapOpenAtom } from "@/lib/data/atoms";
+
+import { cn } from "@/lib/utils";
+
+// ... existing imports ...
+
+import EventDetail from "../modules/events/event-detail";
+
+// ... existing imports ...
 
 const EventRow: React.FC<{ e: EventDisplay }> = ({ e }) => {
     const [, setZoomContent] = useAtom(zoomContentAtom);
+    const [, setTriggerOpen] = useAtom(triggerMapOpenAtom);
+    const [isExpanded, setIsExpanded] = useState(false);
     const attendees = e.attendees ?? 0;
     const locationString = (() => {
         if (e.isVirtual) return "Online";
@@ -55,75 +65,94 @@ const EventRow: React.FC<{ e: EventDisplay }> = ({ e }) => {
         const parts = [loc.street, loc.city, loc.region, loc.country].filter(Boolean) as string[];
         return parts.length ? parts.join(", ") : undefined;
     })();
-    const href = e?.circle?.handle && (e as any)._id ? `/circles/${e.circle!.handle}/events/${(e as any)._id}` : "#";
+    const href = e?.circle?.handle && (e as any)._id ? `/circles/${e.circle!.handle}/events/${(e as any)._id}#circle-tabs` : "#";
 
     const handleLocationClick = (event: React.MouseEvent) => {
         event.preventDefault();
         event.stopPropagation();
         setZoomContent(e);
+        setTriggerOpen(true);
     };
 
+    if (isExpanded) {
+        return (
+            <div className="mb-2 rounded border border-gray-300 bg-gray-50 p-3">
+                <EventDetail
+                    event={e}
+                    circleHandle={e.circle?.handle || ""}
+                    isPreview={true}
+                    onClose={() => setIsExpanded(false)}
+                />
+            </div>
+        );
+    }
+
     return (
-        <Link href={href} className="group block">
-            <Card className="relative transition-shadow hover:shadow-sm">
-                <CardContent className="flex items-start gap-3 p-3">
-                    {e.images?.[0]?.fileInfo?.url && (
-                        <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded border">
-                            <Image
-                                src={e.images[0].fileInfo.url}
-                                alt={e.title || "Event"}
-                                fill
-                                sizes="64px"
-                                className="object-cover"
-                            />
-                        </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                        <div className="mb-0.5 flex items-center justify-between gap-2">
-                            <div className="truncate text-[15px] font-semibold group-hover:text-primary">
-                                {e.title || "Untitled"}
+        <div 
+            className="group block cursor-pointer transition-all duration-200"
+            onClick={() => setIsExpanded(true)}
+        >
+            <Card className="relative transition-shadow hover:shadow-md hover:shadow-sm">
+                <CardContent className="p-3">
+                    <div className="flex items-start gap-3">
+                        {e.images?.[0]?.fileInfo?.url && (
+                            <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded border">
+                                <Image
+                                    src={e.images[0].fileInfo.url}
+                                    alt={e.title || "Event"}
+                                    fill
+                                    sizes="64px"
+                                    className="object-cover"
+                                />
                             </div>
-                            {e.stage === "cancelled" && (
-                                <Badge variant="outline" className="border-red-400 bg-red-100 text-xs text-red-800">
-                                    Cancelled
-                                </Badge>
-                            )}
-                            {e.stage === "review" && (
-                                <Badge
-                                    variant="outline"
-                                    className="border-yellow-400 bg-yellow-100 text-xs text-yellow-800"
-                                >
-                                    <Clock className="mr-1 h-3 w-3" />
-                                    Review
-                                </Badge>
-                            )}
-                        </div>
-                        <div className="mb-0.5 flex items-center text-xs text-muted-foreground">
-                            <CalendarIcon className="mr-1 h-3 w-3" />
-                            {fmtRange(e.startAt, e.endAt, e.allDay)}
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                            {locationString && (
-                                <button
-                                    onClick={handleLocationClick}
-                                    className="inline-flex items-center rounded-full border border-transparent bg-gray-100 px-2 py-0.5 transition-colors hover:border-gray-300 hover:bg-gray-200"
-                                    title="Zoom to location"
-                                >
-                                    <MapPin className="mr-1 h-3 w-3 text-primary" />
-                                    <span className="truncate max-w-[150px]">{locationString}</span>
-                                </button>
-                            )}
-                            {attendees > 0 && (
-                                <span className="inline-flex items-center">
-                                    <Users className="mr-1 h-3 w-3" />
-                                    {attendees} going
-                                </span>
-                            )}
+                        )}
+                        <div className="min-w-0 flex-1">
+                            <div className="mb-0.5 flex items-center justify-between gap-2">
+                                <div className="truncate text-[15px] font-semibold group-hover:text-primary">
+                                    {e.title || "Untitled"}
+                                </div>
+                                {e.stage === "cancelled" && (
+                                    <Badge variant="outline" className="border-red-400 bg-red-100 text-xs text-red-800">
+                                        Cancelled
+                                    </Badge>
+                                )}
+                                {e.stage === "review" && (
+                                    <Badge
+                                        variant="outline"
+                                        className="border-yellow-400 bg-yellow-100 text-xs text-yellow-800"
+                                    >
+                                        <Clock className="mr-1 h-3 w-3" />
+                                        Review
+                                    </Badge>
+                                )}
+                            </div>
+                            <div className="mb-0.5 flex items-center text-xs text-muted-foreground">
+                                <CalendarIcon className="mr-1 h-3 w-3" />
+                                {fmtRange(e.startAt, e.endAt, e.allDay)}
+                            </div>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                {locationString && (
+                                    <button
+                                        onClick={handleLocationClick}
+                                        className="inline-flex items-center rounded-full border border-transparent bg-gray-100 px-2 py-0.5 transition-colors hover:border-gray-300 hover:bg-gray-200"
+                                        title="Zoom to location"
+                                    >
+                                        <MapPin className="mr-1 h-3 w-3 text-primary" />
+                                        <span className="truncate max-w-[150px]">{locationString}</span>
+                                    </button>
+                                )}
+                                {attendees > 0 && (
+                                    <span className="inline-flex items-center">
+                                        <Users className="mr-1 h-3 w-3" />
+                                        {attendees} going
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </CardContent>
             </Card>
-        </Link>
+        </div>
     );
 };
 

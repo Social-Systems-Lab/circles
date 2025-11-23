@@ -283,3 +283,53 @@ export const truncateText = (text: string, maxLength: number): string => {
     }
     return text.substring(0, maxLength) + "...";
 };
+
+export function haversineKm(a?: [number, number] | { lng: number; lat: number }, b?: [number, number] | { lng: number; lat: number }) {
+    if (!a || !b) return Number.POSITIVE_INFINITY;
+    const toRad = (x: number) => (x * Math.PI) / 180;
+    
+    let lng1, lat1, lng2, lat2;
+
+    if (Array.isArray(a)) {
+        [lng1, lat1] = a;
+    } else {
+        lng1 = a.lng;
+        lat1 = a.lat;
+    }
+
+    if (Array.isArray(b)) {
+        [lng2, lat2] = b;
+    } else {
+        lng2 = b.lng;
+        lat2 = b.lat;
+    }
+
+    const R = 6371; // km
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lng2 - lng1);
+    const s1 = Math.sin(dLat / 2);
+    const s2 = Math.sin(dLon / 2);
+    const aa = s1 * s1 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * s2 * s2;
+    const c = 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1 - aa));
+    return R * c;
+}
+
+export function getUserLocation(user: any): [number, number] | undefined {
+    const loc = user?.location;
+    const ll = loc?.lngLat;
+    
+    if (ll) {
+        if (Array.isArray(ll) && ll.length === 2) {
+            return [ll[0], ll[1]];
+        }
+        if (typeof ll === "object" && "lng" in ll && "lat" in ll) {
+            return [ll.lng, ll.lat];
+        }
+    }
+
+    const coords = loc?.coordinates;
+    if (Array.isArray(coords) && coords.length === 2) {
+        return [coords[0], coords[1]] as [number, number];
+    }
+    return undefined;
+}

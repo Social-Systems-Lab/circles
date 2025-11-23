@@ -41,15 +41,20 @@ function haversineKm(a?: [number, number], b?: [number, number]) {
     return R * c;
 }
 
-import { zoomContentAtom } from "@/lib/data/atoms";
+import { zoomContentAtom, triggerMapOpenAtom } from "@/lib/data/atoms";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 // ... existing imports ...
 
+import EventDetail from "./event-detail";
+
+// ... existing imports ...
+
 const MobileEventRow: React.FC<{ e: EventDisplay }> = ({ e }) => {
     const [, setZoomContent] = useAtom(zoomContentAtom);
+    const [, setTriggerOpen] = useAtom(triggerMapOpenAtom);
     const [isExpanded, setIsExpanded] = useState(false);
     const attendees = e.attendees ?? 0;
     const locationString = (() => {
@@ -64,15 +69,26 @@ const MobileEventRow: React.FC<{ e: EventDisplay }> = ({ e }) => {
         event.preventDefault();
         event.stopPropagation();
         setZoomContent(e);
+        setTriggerOpen(true);
     };
+
+    if (isExpanded) {
+        return (
+            <div className="rounded border border-gray-300 bg-gray-50 p-3">
+                <EventDetail
+                    event={e}
+                    circleHandle={e.circle?.handle || ""}
+                    isPreview={true}
+                    onClose={() => setIsExpanded(false)}
+                />
+            </div>
+        );
+    }
 
     return (
         <div 
-            className={cn(
-                "flex flex-col rounded border px-3 py-2 transition-colors cursor-pointer",
-                isExpanded ? "bg-gray-50 border-gray-300" : "hover:bg-gray-50 border-transparent"
-            )}
-            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex flex-col rounded border border-transparent px-3 py-2 transition-colors cursor-pointer hover:bg-gray-50"
+            onClick={() => setIsExpanded(true)}
         >
             <div className="flex items-center gap-3">
                 {e.images?.[0]?.fileInfo?.url && (
@@ -125,21 +141,6 @@ const MobileEventRow: React.FC<{ e: EventDisplay }> = ({ e }) => {
                     </span>
                 )}
             </div>
-
-            {isExpanded && (
-                <div className="mt-3 border-t pt-3">
-                    {e.description && (
-                        <p className="mb-3 text-sm text-muted-foreground line-clamp-3">
-                            {e.description}
-                        </p>
-                    )}
-                    <Link href={href} onClick={(e) => e.stopPropagation()} className="block w-full">
-                        <Button className="w-full" size="sm">
-                            Open Event
-                        </Button>
-                    </Link>
-                </div>
-            )}
         </div>
     );
 };
