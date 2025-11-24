@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -24,7 +24,7 @@ type Props = {
 
 type Milestone = { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string };
 
-export default function EventsTabs({ circle, events, canCreate }: Props) {
+function EventsTabsContent({ circle, events, canCreate }: Props) {
     const searchParams = useSearchParams();
     const router = useRouter();
     const pathname = usePathname();
@@ -196,5 +196,13 @@ export default function EventsTabs({ circle, events, canCreate }: Props) {
                 </TabsContent>
             </Tabs>
         </div>
+    );
+}
+
+export default function EventsTabs(props: Props) {
+    return (
+        <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading events...</div>}>
+            <EventsTabsContent {...props} />
+        </Suspense>
     );
 }

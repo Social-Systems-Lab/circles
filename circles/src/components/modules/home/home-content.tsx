@@ -72,6 +72,7 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle }: 
                                         fill
                                         circleId={circle._id!}
                                         triggerGallery={true}
+                                        sizes="(max-width: 768px) 100px, 150px"
                                     />
                                 ) : (
                                     <>
@@ -80,6 +81,7 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle }: 
                                             src={circle?.picture?.url ?? "/images/default-picture.png"}
                                             alt="Picture"
                                             fill
+                                            sizes="(max-width: 768px) 100px, 150px"
                                         />
                                         <div className="absolute top-0 h-full w-full">
                                             <GalleryTrigger

@@ -21,6 +21,14 @@ const nextConfig = {
     env: {
         version,
     },
+    async rewrites() {
+        return [
+            {
+                source: "/storage/:path*",
+                destination: "http://127.0.0.1:9000/circles/:path*",
+            },
+        ];
+    },
     experimental: {
         serverActions: {
             bodySizeLimit: "50mb",

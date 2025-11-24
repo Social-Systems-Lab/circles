@@ -41,7 +41,7 @@ type Milestone = { id: string; type: "goal" | "task" | "issue"; title: string; d
 export const UserToolbox = () => {
     const [user, setUser] = useAtom(userAtom);
     const [userToolboxState, setUserToolboxState] = useAtom(userToolboxDataAtom);
-    const [tab, setTab] = useState<UserToolboxTab>(undefined);
+    const [tab, setTab] = useState<UserToolboxTab>("chat");
     const [authInfo, setAuthInfo] = useAtom(authInfoAtom);
     const pathname = usePathname();
     const [prevPath, setPrevPath] = useState(pathname);

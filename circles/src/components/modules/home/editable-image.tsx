@@ -20,6 +20,7 @@ type EditableImageProps = {
     circleId: string;
     setCircle?: React.Dispatch<React.SetStateAction<any>>;
     triggerGallery?: boolean;
+    sizes?: string;
 };
 
 const EditableImage: React.FC<EditableImageProps> = ({
@@ -33,6 +34,7 @@ const EditableImage: React.FC<EditableImageProps> = ({
     circleId,
     setCircle,
     triggerGallery,
+    sizes = "(max-width: 768px) 100px, 150px",
 }) => {
     const [currentSrc, setCurrentSrc] = useState(src);
     const { toast } = useToast();
@@ -106,6 +108,7 @@ const EditableImage: React.FC<EditableImageProps> = ({
                 width={width}
                 height={height}
                 fill={fill}
+                sizes={sizes}
                 onClick={imageClick}
             />
             <label
