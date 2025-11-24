@@ -79,7 +79,7 @@ export default function EventsTabs({ circle, events, canCreate }: Props) {
                 ]);
 
                 const goalMilestones: Milestone[] = (goalsRes?.goals || [])
-                    .filter((g: any) => g?.targetDate)
+                    .filter((g: any) => g?.targetDate && g?.stage !== "completed")
                     .map((g: any) => ({
                         id: (g as any)._id?.toString?.() || g._id,
                         type: "goal",
@@ -88,7 +88,7 @@ export default function EventsTabs({ circle, events, canCreate }: Props) {
                     }));
 
                 const taskMilestones: Milestone[] = (tasksRes?.tasks || [])
-                    .filter((t: any) => t?.targetDate)
+                    .filter((t: any) => t?.targetDate && t?.stage !== "resolved")
                     .map((t: any) => ({
                         id: (t as any)._id?.toString?.() || t._id,
                         type: "task",
@@ -97,7 +97,7 @@ export default function EventsTabs({ circle, events, canCreate }: Props) {
                     }));
 
                 const issueMilestones: Milestone[] = (issuesRes || [])
-                    .filter((i: any) => i?.targetDate)
+                    .filter((i: any) => i?.targetDate && i?.stage !== "resolved")
                     .map((i: any) => ({
                         id: (i as any)._id?.toString?.() || i._id,
                         type: "issue",

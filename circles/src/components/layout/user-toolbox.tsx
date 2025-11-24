@@ -149,7 +149,10 @@ export const UserToolbox = () => {
 
                 const taskMilestones: Milestone[] =
                     (tasksRes?.tasks || [])
-                        .filter((task: any) => task?.targetDate && task?.stage !== "resolved")
+                        .filter(
+                            (task: any) =>
+                                task?.targetDate && task?.stage !== "resolved" && task?.assignedTo === user?.did,
+                        )
                         .map((task: any) => ({
                             id: (task as any)._id?.toString?.() || task._id,
                             type: "task" as const,
