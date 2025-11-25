@@ -2,6 +2,7 @@
 
 import React, { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { EventDisplay } from "@/models/models";
 import { Card, CardContent } from "@/components/ui/card";
@@ -105,6 +106,7 @@ const EventCard: React.FC<{
     const attendees = e.attendees ?? 0;
     const ongoing = isOngoing(e);
     const eventId = ((e as any)._id?.toString?.() || (e as any)._id || "") as string;
+    const router = useRouter();
 
     return (
         <Card
@@ -185,10 +187,20 @@ const EventCard: React.FC<{
                         {/* Location & attendees */}
                         <div className="flex items-center gap-3 text-xs text-muted-foreground">
                             {locationToString(e) && (
-                                <span className="inline-flex items-center">
-                                    <MapPin className="mr-1 h-3 w-3" />
-                                    {locationToString(e)}
-                                </span>
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    className="h-6 max-w-full px-2 text-xs relative z-10 hover:bg-gray-300"
+                                    onClick={(ev) => {
+                                        ev.preventDefault();
+                                        ev.stopPropagation();
+                                        onNavigate?.();
+                                        router.push(`/explore?focusEvent=${eventId}`);
+                                    }}
+                                >
+                                    <MapPin className="mr-1 h-3 w-3 shrink-0" />
+                                    <span className="truncate">{locationToString(e)}</span>
+                                </Button>
                             )}
                             {attendees > 0 && (
                                 <span className="inline-flex items-center">
