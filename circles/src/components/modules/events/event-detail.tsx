@@ -120,6 +120,22 @@ export default function EventDetail({
             : event.location
               ? [event.location.city, event.location.region, event.location.country].filter(Boolean).join(", ")
               : "";
+    const locationLabel = event.isVirtual && !locationText ? "Virtual" : locationText;
+    const hasMapLocation = Boolean(event.location?.lngLat);
+    const resolvedDistance = hasMapLocation
+        ? (event as any).distance ??
+          (event.location?.lngLat && user ? haversineKm(event.location.lngLat, getUserLocation(user)) : undefined)
+        : undefined;
+
+    const handleAddressClick = () => {
+        if (!eventId || !hasMapLocation) return;
+        const params = new URLSearchParams({
+            category: "events",
+            panel: "events",
+            focusEvent: eventId,
+        });
+        router.push(`/explore?${params.toString()}`);
+    };
 
     // Improved date formatting
     const now = new Date();
@@ -335,20 +351,13 @@ export default function EventDetail({
                                                 </span>
                                             </button>
                                         </HoverCardTrigger>
-                                        {(() => {
-                                            const dist = (event as any).distance ?? (
-                                                event.location?.lngLat && user
-                                                    ? haversineKm(event.location.lngLat, getUserLocation(user))
-                                                    : undefined
-                                            );
-                                            return dist !== undefined && dist !== Number.POSITIVE_INFINITY ? (
-                                                <HoverCardContent className="w-auto p-2" side="top" align="center">
-                                                    <div className="text-xs font-medium">
-                                                        {getDistanceString(dist)} from your location
-                                                    </div>
-                                                </HoverCardContent>
-                                            ) : null;
-                                        })()}
+                                        {resolvedDistance !== undefined && resolvedDistance !== Number.POSITIVE_INFINITY && (
+                                            <HoverCardContent className="w-auto p-2" side="top" align="center">
+                                                <div className="text-xs font-medium">
+                                                    {getDistanceString(resolvedDistance)} from your location
+                                                </div>
+                                            </HoverCardContent>
+                                        )}
                                     </HoverCard>
                                 ) : (
                                     <span>
@@ -477,11 +486,36 @@ export default function EventDetail({
                             </span>
                         )}
                         {(locationText || event.isVirtual || event.isHybrid) && (
-                            <span className="inline-flex items-center gap-1">
-                                <MapPin className="h-4 w-4" />
-                                {event.isVirtual && !locationText ? "Virtual" : locationText}
-                                {event.isHybrid ? " · Hybrid" : ""}
-                            </span>
+                            hasMapLocation ? (
+                                <HoverCard openDelay={0} closeDelay={0}>
+                                    <HoverCardTrigger asChild>
+                                        <button
+                                            type="button"
+                                            className="inline-flex items-center gap-1 rounded-full border border-transparent bg-gray-100 px-3 py-1 text-sm transition-colors hover:border-gray-300 hover:bg-gray-200"
+                                            onClick={handleAddressClick}
+                                        >
+                                            <MapPin className="h-4 w-4 text-primary" />
+                                            <span className="truncate max-w-[220px] text-left">
+                                                {locationLabel}
+                                                {event.isHybrid ? " · Hybrid" : ""}
+                                            </span>
+                                        </button>
+                                    </HoverCardTrigger>
+                                    {resolvedDistance !== undefined && resolvedDistance !== Number.POSITIVE_INFINITY && (
+                                        <HoverCardContent className="w-auto p-2" side="top" align="center">
+                                            <div className="text-xs font-medium">
+                                                {getDistanceString(resolvedDistance)} from your location
+                                            </div>
+                                        </HoverCardContent>
+                                    )}
+                                </HoverCard>
+                            ) : (
+                                <span className="inline-flex items-center gap-1">
+                                    <MapPin className="h-4 w-4" />
+                                    {locationLabel}
+                                    {event.isHybrid ? " · Hybrid" : ""}
+                                </span>
+                            )
                         )}
                     </div>
                 </div>

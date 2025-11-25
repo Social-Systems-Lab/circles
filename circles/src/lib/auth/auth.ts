@@ -21,7 +21,14 @@ export const PUBLIC_KEY_FILENAME = "publicKey.pem";
 export const PRIVATE_KEY_FILENAME = "privateKey.pem";
 export const ENCRYPTED_PRIVATE_KEY_FILENAME = "privateKey.pem.enc";
 export const ENCRYPTION_ALGORITHM = "aes-256-cbc";
-export const APP_DIR = "/circles";
+export const APP_DIR =
+    process.env.APP_DIR ||
+    (process.env.NODE_ENV === "production" ? "/circles" : path.join(process.cwd(), "circles_data"));
+
+console.log("DEBUG AUTH: NODE_ENV", process.env.NODE_ENV);
+console.log("DEBUG AUTH: APP_DIR", APP_DIR);
+console.log("DEBUG AUTH: CWD", process.cwd());
+
 export const USERS_DIR = path.join(APP_DIR, "users");
 export const SERVER_DIR = path.join(APP_DIR, "server"); // Also export SERVER_DIR if needed elsewhere, otherwise keep as const
 

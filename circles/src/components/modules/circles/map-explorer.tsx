@@ -208,6 +208,8 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     // Events dataset for map
     const [eventsForMap, setEventsForMap] = useState<EventDisplay[]>([]);
     const [isEventsLoading, setIsEventsLoading] = useState(false);
+    const [pendingFocusEventId, setPendingFocusEventId] = useState<string | null>(searchParams.get("focusEvent"));
+    const [hasAppliedFocusEvent, setHasAppliedFocusEvent] = useState(false);
     const filteredEventsForMap = useMemo(() => {
         let list = eventsForMap;
         if (selectedSdgs.length > 0) {
@@ -650,7 +652,17 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     };
 
     // --- Effects ---
+    const getEventId = useCallback((evt: EventDisplay) => {
+        return ((evt as any)._id?.toString?.() || (evt as any)._id || "") as string;
+    }, []);
+
     useEffect(() => setIsMounted(true), []);
+
+    useEffect(() => {
+        const focusEventParam = searchParams.get("focusEvent");
+        setPendingFocusEventId(focusEventParam);
+        setHasAppliedFocusEvent(false);
+    }, [searchParams]);
 
     // Keep map category in sync with URL (?category=events)
     useEffect(() => {
@@ -714,6 +726,53 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             canceled = true;
         };
     }, [dateRange?.from, dateRange?.to]);
+
+    useEffect(() => {
+        if (!pendingFocusEventId || hasAppliedFocusEvent) return;
+        const targetEvent = eventsForMap.find((evt) => getEventId(evt) === pendingFocusEventId);
+        if (!targetEvent) return;
+
+        setSelectedCategory("events");
+        setZoomContent(targetEvent);
+        setDisplayedContent((filteredEventsForMap.length ? filteredEventsForMap : [targetEvent]) as unknown as Content[]);
+        setContentPreview({
+            type: "event",
+            content: targetEvent,
+            props: { circleHandle: targetEvent.circle?.handle || "" },
+        });
+        if (isMobile) {
+            setDrawerContent("events");
+            setTriggerSnapIndex((prev) => (prev < SNAP_INDEX_HALF ? SNAP_INDEX_HALF : prev));
+        } else {
+            setSidePanelMode("events");
+        }
+
+        setHasAppliedFocusEvent(true);
+
+        if (searchParams.get("focusEvent")) {
+            const params = new URLSearchParams(searchParams.toString());
+            params.delete("focusEvent");
+            const next = params.toString();
+            router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+        }
+    }, [
+        pendingFocusEventId,
+        hasAppliedFocusEvent,
+        eventsForMap,
+        getEventId,
+        isMobile,
+        setDrawerContent,
+        setZoomContent,
+        setContentPreview,
+        setSidePanelMode,
+        setSelectedCategory,
+        setDisplayedContent,
+        filteredEventsForMap,
+        router,
+        pathname,
+        searchParams,
+        setTriggerSnapIndex,
+    ]);
 
     // Reset index when swipe circles change
     useEffect(() => setCurrentIndex(0), [displayedSwipeCircles]);

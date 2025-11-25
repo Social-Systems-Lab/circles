@@ -35,6 +35,7 @@ import { getTasksAction } from "@/app/circles/[handle]/tasks/actions";
 import { getIssuesAction } from "@/app/circles/[handle]/issues/actions";
 import { getCircleByIdAction } from "@/components/modules/circles/actions";
 import { flushSync } from "react-dom";
+import { LoadingSpinner } from "../ui/loading-spinner";
 
 type Milestone = { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string };
 
@@ -88,6 +89,7 @@ export const UserToolbox = () => {
         [];
 
     const [events, setEvents] = useState<EventDisplay[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [milestones, setMilestones] = useState<Milestone[]>([]);
     const handleToolboxEventHidden = useCallback(
         (eventId: string) => {
@@ -173,6 +175,8 @@ export const UserToolbox = () => {
                 setMilestones([...goalMilestones, ...taskMilestones, ...issueMilestones]);
             } catch (e) {
                 console.error("Failed to load toolbox timeline items", e);
+            } finally {
+                setIsLoading(false);
             }
         };
         fetchTimelineItems();
@@ -389,7 +393,11 @@ export const UserToolbox = () => {
                     </TabsContent>
 
                     <TabsContent value="tasks" className="m-0 flex-grow overflow-auto pt-1">
-                        {user ? (
+                        {isLoading ? (
+                            <div className="flex h-full items-center justify-center pt-4">
+                                <LoadingSpinner />
+                            </div>
+                        ) : user ? (
                             <TasksList
                                 tasksData={initialTasksData as any}
                                 circle={user as any}
@@ -406,7 +414,11 @@ export const UserToolbox = () => {
                     </TabsContent>
 
                     <TabsContent value="events" className="m-0 flex-grow overflow-auto pt-1">
-                        {user ? (
+                        {isLoading ? (
+                            <div className="flex h-full items-center justify-center pt-4">
+                                <LoadingSpinner />
+                            </div>
+                        ) : user ? (
                             <EventTimeline
                                 circleHandle={user.handle!}
                                 events={events}
