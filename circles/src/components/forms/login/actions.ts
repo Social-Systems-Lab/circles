@@ -10,9 +10,14 @@ export const submitLoginFormAction = async (values: Record<string, any>): Promis
         let email = values.email;
         let password = values.password;
 
-        // get user by email
-        let user = await Circles.findOne({ email: email });
+        // get user by email (case-insensitive)
+        const emailRegex = new RegExp(`^${email.trim()}$`, "i");
+        console.log(`Login attempt for email: '${email.trim()}' with regex: ${emailRegex}`);
+        let user = await Circles.findOne({ email: { $regex: emailRegex } });
+        console.log("User found:", user ? user._id : "null");
+        
         if (!user) {
+            console.error("Login failed: Account does not exist for email:", email);
             throw new AuthenticationError("Account does not exist");
         }
 

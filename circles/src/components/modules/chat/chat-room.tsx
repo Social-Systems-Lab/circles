@@ -460,6 +460,10 @@ const ChatInput = ({ chatRoom }: ChatInputProps) => {
 
     const handleSendMessage = async () => {
         if (!user) return;
+        if (!user.matrixAccessToken || !user.matrixUrl) {
+            console.error("Missing Matrix credentials:", user);
+            return;
+        }
         if (newMessage.trim() !== "") {
             try {
                 await sendRoomMessage(

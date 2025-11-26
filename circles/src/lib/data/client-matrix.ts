@@ -291,7 +291,9 @@ export async function sendRoomMessage(
     );
 
     if (!response.ok) {
-        throw new Error("Failed to send message");
+        const errorBody = await response.text();
+        console.error("Failed to send message:", response.status, errorBody);
+        throw new Error(`Failed to send message: ${response.status} ${errorBody}`);
     }
 
     return await response.json();
