@@ -138,3 +138,72 @@ export const findOrCreateDMRoomAction = async (
 export const getAllUsersAction = async (): Promise<Circle[]> => {
     return await getAllUsers();
 };
+
+export const sendMessageAction = async (
+    roomId: string,
+    content: string,
+    replyToEventId?: string
+): Promise<{ success: boolean; message?: string; eventId?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to send messages" };
+    }
+
+    try {
+        console.log("📤 Sending message to room:", roomId);
+        const user = await getPrivateUserByDid(userDid);
+        if (!user?.matrixAccessToken) {
+            console.error("❌ User does not have a valid Matrix access token");
+            return { success: false, message: "User does not have a valid Matrix access token" };
+        }
+
+        // Import server-side Matrix function
+        const { sendMatrixMessage } = await import("@/lib/data/matrix");
+        
+        const result = await sendMatrixMessage(
+            user.matrixAccessToken,
+            roomId,
+            content,
+            replyToEventId
+        );
+
+        console.log("✅ Message sent successfully! Event ID:", result.event_id);
+        return { success: true, eventId: result.event_id };
+    } catch (error) {
+        console.error("❌ Error sending message:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to send message" };
+    }
+};
+
+export const fetchRoomMessagesAction = async (
+    roomId: string,
+    limit: number = 50
+): Promise<{ success: boolean; messages?: any[]; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to fetch messages" };
+    }
+
+    try {
+        const user = await getPrivateUserByDid(userDid);
+        if (!user?.matrixAccessToken) {
+            return { success: false, message: "User does not have a valid Matrix access token" };
+        }
+
+        // Import server-side Matrix function
+        const { fetchRoomMessages } = await import("@/lib/data/matrix");
+        
+        const messages = await fetchRoomMessages(
+            user.matrixAccessToken,
+            roomId,
+            limit
+        );
+
+        return { success: true, messages };
+    } catch (error) {
+        console.error("❌ Error fetching messages:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to fetch messages" };
+    }
+};
+
+

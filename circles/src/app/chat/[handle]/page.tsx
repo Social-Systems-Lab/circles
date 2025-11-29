@@ -23,5 +23,32 @@ export default async function ChatRoomPage(props: ChatRoomPageProps) {
         redirect("/unauthorized");
     }
 
+    // If this is a DM without a Matrix room, create one
+    console.log("Chat room check:", {
+        isDirect: chatRoom.isDirect,
+        hasMatrixRoomId: !!chatRoom.matrixRoomId,
+        matrixRoomId: chatRoom.matrixRoomId,
+        handle: params.handle
+    });
+    
+    if (chatRoom.isDirect && !chatRoom.matrixRoomId) {
+        console.log("Creating Matrix room for DM without one");
+        const { findOrCreateDMRoom } = await import("@/lib/data/chat");
+        const { getCircleById } = await import("@/lib/data/circle");
+        
+        // Get the other participant
+        const otherParticipantId = chatRoom.dmParticipants?.find((id) => id !== privateUser._id);
+        if (otherParticipantId) {
+            const otherParticipant = await getCircleById(otherParticipantId);
+            if (otherParticipant) {
+                const currentUser = await getCircleById(privateUser._id!);
+                if (currentUser) {
+                    // This will create the Matrix room if it doesn't exist
+                    chatRoom = await findOrCreateDMRoom(currentUser, otherParticipant);
+                }
+            }
+        }
+    }
+
     return <ChatRoomComponent chatRoom={chatRoom} circle={chatRoom.circle} />;
 }

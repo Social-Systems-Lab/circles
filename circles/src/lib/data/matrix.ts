@@ -168,6 +168,75 @@ export async function checkIfMatrixUserExists(username: string): Promise<boolean
     return response.ok;
 }
 
+// Wrapper function for sending messages from server actions
+export async function sendMatrixMessage(
+    accessToken: string,
+    roomId: string,
+    content: string,
+    replyToEventId?: string
+): Promise<{ event_id: string }> {
+    const txnId = Date.now();
+    const messageContent: any = {
+        msgtype: "m.text",
+        body: content,
+    };
+
+    if (replyToEventId) {
+        messageContent["m.relates_to"] = {
+            "m.in_reply_to": {
+                event_id: replyToEventId,
+            },
+        };
+    }
+
+    const response = await fetch(
+        `${MATRIX_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${txnId}`,
+        {
+            method: "PUT",
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(messageContent),
+        },
+    );
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to send message: ${response.status} ${errorText}`);
+    }
+
+    return await response.json();
+}
+
+// Fetch messages from a room (server-side)
+export async function fetchRoomMessages(
+    accessToken: string,
+    roomId: string,
+    limit: number = 50
+): Promise<any[]> {
+    const response = await fetch(
+        `${MATRIX_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/messages?dir=b&limit=${limit}`,
+        {
+            method: "GET",
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+            },
+        },
+    );
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch messages: ${response.status} ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data.chunk || [];
+}
+
+
+
 export async function loginMatrixUser(username: string, password: string): Promise<string> {
     const response = await fetch(`${MATRIX_URL}/_matrix/client/v3/login`, {
         method: "POST",

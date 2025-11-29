@@ -166,6 +166,19 @@ export const findOrCreateDMRoom = async (userA: Circle, userB: Circle): Promise<
     if (existingRoom) {
         existingRoom._id = existingRoom._id.toString();
 
+        // If the room doesn't have a Matrix room, create one
+        if (!existingRoom.matrixRoomId) {
+            console.log("Creating Matrix room for existing DM");
+            const matrixRoom = await createMatrixRoom(existingRoom._id, existingRoom.name, "Private Conversation");
+            if (matrixRoom.roomId) {
+                existingRoom.matrixRoomId = matrixRoom.roomId;
+                await ChatRooms.updateOne(
+                    { _id: new ObjectId(existingRoom._id) },
+                    { $set: { matrixRoomId: matrixRoom.roomId } }
+                );
+            }
+        }
+
         // add user to matrix chat room again to make sure in case process failed before
         if (existingRoom.matrixRoomId) {
             // add users to matrix room

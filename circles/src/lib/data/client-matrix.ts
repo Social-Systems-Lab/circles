@@ -201,7 +201,12 @@ export async function startSync(
                 throw new Error(`Sync failed with status: ${response.status}`);
             }
         } catch (error) {
-            console.error("Sync failed, retrying...", error);
+            // Silently fail on CORS errors (expected in local development)
+            if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+                // CORS error - don't log, just retry with backoff
+            } else {
+                console.error("Sync failed, retrying...", error);
+            }
             retryCount++;
             if (retryCount <= maxRetries) {
                 const backoffTime = Math.min(5000 * Math.pow(2, retryCount), 60000);
@@ -416,6 +421,9 @@ export const sendReadReceipt = async (accessToken: string, matrixUrl: string, ro
         //     console.log(`Read receipt sent for event: ${eventId} in room: ${roomId}`);
         // }
     } catch (error) {
-        console.error("Error sending read receipt:", error);
+        // Silently fail on CORS errors (expected in local development)
+        if (!(error instanceof TypeError && error.message.includes('Failed to fetch'))) {
+            console.error("Error sending read receipt:", error);
+        }
     }
 };

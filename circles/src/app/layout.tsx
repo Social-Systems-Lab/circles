@@ -11,7 +11,8 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import ImageGallery from "@/components/layout/image-gallery";
 import Onboarding from "@/components/onboarding/onboarding";
 import Script from "next/script";
-import { MatrixSync } from "@/components/modules/chat/matrix-sync";
+import { UnreadCountCalculator } from "@/components/modules/chat/unread-count-calculator";
+import { BackgroundMessagePoller } from "@/components/modules/chat/background-message-poller";
 import { getServerSettings } from "@/lib/data/server-settings";
 import { SidePanel } from "@/components/layout/side-panel";
 import { Metadata } from "next";
@@ -66,7 +67,8 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
                         <Authenticator />
                         <ImageGallery />
                         <Onboarding />
-                        <MatrixSync />
+                        <UnreadCountCalculator /> {/* Calculates unread counts for notifications */}
+                        <BackgroundMessagePoller /> {/* Polls for messages in all chat rooms */}
                         <MapboxInitializer mapboxKey={serverConfig.mapboxKey} />
                         <SupportButton />
                         <FeedPostDialog /> {/* Add FeedPostDialog here */}

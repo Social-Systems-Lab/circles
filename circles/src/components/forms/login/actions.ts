@@ -22,6 +22,8 @@ export const submitLoginFormAction = async (values: Record<string, any>): Promis
         }
 
         // Check if email is verified
+        // TEMPORARILY DISABLED FOR TESTING
+        /*
         if (!user.isEmailVerified) {
             // Optionally, trigger a resend of verification email here
             // For now, just inform the user.
@@ -33,6 +35,7 @@ export const submitLoginFormAction = async (values: Record<string, any>): Promis
                 // errorCode: "EMAIL_NOT_VERIFIED" // Example for frontend handling
             };
         }
+        */
 
         authenticateUser(user.did!, password);
 

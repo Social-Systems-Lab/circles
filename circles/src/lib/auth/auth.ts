@@ -390,9 +390,16 @@ export async function createUserSession(user: UserPrivate, userDid: string): Pro
 
     try {
         // check if user has a matrix account
+        console.log("Attempting to register/login Matrix user for:", user.name, user.did);
         await registerOrLoginMatrixUser(user, userDid);
+        console.log("Successfully registered/logged in Matrix user");
     } catch (error) {
-        console.error("Error creating matrix session", error);
+        console.error("Error creating matrix session for user:", user.name);
+        console.error("Error details:", error);
+        if (error instanceof Error) {
+            console.error("Error message:", error.message);
+            console.error("Error stack:", error.stack);
+        }
     }
 
     return token;
