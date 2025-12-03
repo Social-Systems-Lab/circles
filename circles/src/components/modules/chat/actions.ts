@@ -158,17 +158,38 @@ export const sendMessageAction = async (
         }
 
         // Import server-side Matrix function
-        const { sendMatrixMessage } = await import("@/lib/data/matrix");
+        const { sendMatrixMessage, addUserToRoom } = await import("@/lib/data/matrix");
         
-        const result = await sendMatrixMessage(
-            user.matrixAccessToken,
-            roomId,
-            content,
-            replyToEventId
-        );
-
-        console.log("✅ Message sent successfully! Event ID:", result.event_id);
-        return { success: true, eventId: result.event_id };
+        try {
+            const result = await sendMatrixMessage(
+                user.matrixAccessToken,
+                roomId,
+                content,
+                replyToEventId
+            );
+            console.log("✅ Message sent successfully! Event ID:", result.event_id);
+            return { success: true, eventId: result.event_id };
+        } catch (innerError) {
+            // Check for "not in room" error and try to join
+            if (innerError instanceof Error && 
+                (innerError.message.includes("not in room") || innerError.message.includes("M_FORBIDDEN")) && 
+                innerError.message.includes("403")) {
+                
+                console.log("⚠️ User not in room, attempting to join...");
+                await addUserToRoom(user.matrixAccessToken, roomId);
+                
+                // Retry sending
+                const result = await sendMatrixMessage(
+                    user.matrixAccessToken,
+                    roomId,
+                    content,
+                    replyToEventId
+                );
+                console.log("✅ Message sent successfully after join! Event ID:", result.event_id);
+                return { success: true, eventId: result.event_id };
+            }
+            throw innerError;
+        }
     } catch (error) {
         console.error("❌ Error sending message:", error);
         return { success: false, message: error instanceof Error ? error.message : "Failed to send message" };
@@ -207,3 +228,87 @@ export const fetchRoomMessagesAction = async (
 };
 
 
+
+export const sendAttachmentAction = async (
+    formData: FormData
+): Promise<{ success: boolean; message?: string; eventId?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to send attachments" };
+    }
+
+    const roomId = formData.get("roomId") as string;
+    const file = formData.get("file") as File;
+    const replyToEventId = formData.get("replyToEventId") as string | undefined;
+
+    if (!roomId || !file) {
+        return { success: false, message: "Missing room ID or file" };
+    }
+
+    // Enforce 5MB limit
+    const MAX_SIZE = 5 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+        return { success: false, message: "File size exceeds 5MB limit" };
+    }
+
+    try {
+        const user = await getPrivateUserByDid(userDid);
+        if (!user?.matrixAccessToken) {
+            return { success: false, message: "User does not have a valid Matrix access token" };
+        }
+
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const { uploadMatrixMedia, sendMatrixAttachment, addUserToRoom } = await import("@/lib/data/matrix");
+
+        // Upload media
+        const mxcUrl = await uploadMatrixMedia(
+            user.matrixAccessToken,
+            buffer,
+            file.type,
+            file.name
+        );
+
+        // Determine msgtype
+        const msgtype = file.type.startsWith("image/") ? "m.image" : "m.file";
+
+        try {
+            // Send attachment message
+            const result = await sendMatrixAttachment(
+                user.matrixAccessToken,
+                roomId,
+                mxcUrl,
+                { name: file.name, size: file.size, mimetype: file.type },
+                msgtype,
+                replyToEventId
+            );
+
+            console.log("✅ Attachment sent successfully! Event ID:", result.event_id);
+            return { success: true, eventId: result.event_id };
+        } catch (innerError) {
+             // Check for "not in room" error and try to join
+             if (innerError instanceof Error && 
+                (innerError.message.includes("not in room") || innerError.message.includes("M_FORBIDDEN")) && 
+                innerError.message.includes("403")) {
+                
+                console.log("⚠️ User not in room, attempting to join...");
+                await addUserToRoom(user.matrixAccessToken, roomId);
+                
+                // Retry sending
+                const result = await sendMatrixAttachment(
+                    user.matrixAccessToken,
+                    roomId,
+                    mxcUrl,
+                    { name: file.name, size: file.size, mimetype: file.type },
+                    msgtype,
+                    replyToEventId
+                );
+                console.log("✅ Attachment sent successfully after join! Event ID:", result.event_id);
+                return { success: true, eventId: result.event_id };
+            }
+            throw innerError;
+        }
+    } catch (error) {
+        console.error("❌ Error sending attachment:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to send attachment" };
+    }
+};

@@ -16,7 +16,7 @@ import { sendRoomMessage, sendReadReceipt, redactRoomMessage, sendReaction } fro
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { fetchMatrixUsers } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { IoArrowBack, IoClose, IoSend, IoTrashOutline, IoAddCircleOutline, IoArrowDown } from "react-icons/io5";
+import { IoArrowBack, IoClose, IoSend, IoTrashOutline, IoAddCircleOutline, IoArrowDown, IoAttach, IoDocumentText } from "react-icons/io5";
 import { MdReply } from "react-icons/md";
 import { BsEmojiSmile } from "react-icons/bs";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
@@ -45,14 +45,115 @@ export const renderCircleSuggestion = (
     </div>
 );
 
+const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
+    if (preview) {
+        return (
+            <span>
+                <b>{message.author.name}: </b>
+                {message?.content?.body as string}
+            </span>
+        );
+    } else {
+        const body = (message?.content?.body as string) || "";
+        const isReply = body.includes("\n\n") && body.startsWith("> ");
+        const replyText = isReply ? body.substring(body.indexOf("\n\n") + 2) : body;
+        const originalMessage = isReply ? body.substring(body.indexOf("> ") + 2, body.indexOf("\n\n")) : "";
+        const originalAuthor = isReply ? originalMessage.substring(1, originalMessage.indexOf(">")) : "";
+        const originalAuthorColor = generateColorFromString(originalAuthor);
+
+        return (
+            <div className="max-w-full overflow-hidden">
+                {isReply && (
+                    <div className="mb-2 rounded-md border-l-4 border-gray-400 bg-[#f3f3f3] p-2 pl-2">
+                        <div
+                            className="text-xs font-semibold"
+                            style={{ color: originalAuthorColor }}
+                        >
+                            {originalAuthor}
+                        </div>
+                        <p className="truncate text-sm text-gray-600">
+                            {originalMessage.substring(originalMessage.indexOf(">") + 2)}
+                        </p>
+                    </div>
+                )}
+                <RichText content={replyText} />
+            </div>
+        );
+    }
+};
+
 // Renderer for different message types
 export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean }> = ({ message, preview }) => {
+    const [user] = useAtom(userAtom);
     const displayName = message.author?.name || message.createdBy;
     switch (message.type) {
         case "m.room.message":
             if (!Object.keys(message.content).length) {
                 return <span className="italic text-gray-500">Message deleted</span>;
             }
+            const msgtype = (message.content as any).msgtype;
+            if (msgtype === "m.image") {
+                const mxcUrl = (message.content as any).url;
+                if (mxcUrl && typeof mxcUrl === "string") {
+                     // Convert MXC URI to HTTP URL using authenticated endpoint
+                     // Format: mxc://<server-name>/<media-id> -> http://localhost/_matrix/client/v1/media/download/<server-name>/<media-id>?access_token=...
+                     const mediaId = mxcUrl.replace("mxc://", "");
+                     // Construct URL - use port 80 for localhost to go through nginx
+                     const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https' : 'http';
+                     const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+                     const port = hostname === 'localhost' ? ':80' : '';
+                     const accessToken = user?.matrixAccessToken || '';
+                     const imageUrl = `${protocol}://${hostname}${port}/_matrix/client/v1/media/download/${mediaId}?access_token=${encodeURIComponent(accessToken)}`;
+                     
+                     console.log(`🖼️ [Chat] Image URL: ${imageUrl.replace(accessToken, 'REDACTED')} (MediaID: ${mediaId})`);
+                     
+                     return (
+                         <div className="max-w-xs sm:max-w-sm">
+                             {/* eslint-disable-next-line @next/next/no-img-element */}
+                             <img 
+                                 src={imageUrl} 
+                                 alt={(message.content as any).body || "Image attachment"} 
+                                 className="rounded-lg object-contain max-h-60 w-full cursor-pointer hover:opacity-90"
+                                 onClick={() => window.open(imageUrl, "_blank")}
+                             />
+                         </div>
+                     );
+                }
+            } else if (msgtype === "m.file") {
+                const mxcUrl = (message.content as any).url;
+                if (mxcUrl && typeof mxcUrl === "string") {
+                     const mediaId = mxcUrl.replace("mxc://", "");
+                     const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https' : 'http';
+                     const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+                     const port = hostname === 'localhost' ? ':80' : '';
+                     const accessToken = user?.matrixAccessToken || '';
+                     const fileUrl = `${protocol}://${hostname}${port}/_matrix/client/v1/media/download/${mediaId}?access_token=${encodeURIComponent(accessToken)}`;
+                     const fileName = (message.content as any).body || "File attachment";
+                     const fileSize = (message.content as any).info?.size;
+                     
+                     return (
+                         <a 
+                             href={fileUrl} 
+                             target="_blank" 
+                             rel="noopener noreferrer"
+                             className="flex items-center gap-2 rounded-lg bg-gray-100 p-3 hover:bg-gray-200 transition-colors"
+                         >
+                             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                                 <IoDocumentText className="h-6 w-6" />
+                             </div>
+                             <div className="flex flex-col overflow-hidden">
+                                 <span className="truncate font-medium text-gray-700">{fileName}</span>
+                                 {fileSize && (
+                                     <span className="text-xs text-gray-500">
+                                         {(fileSize / 1024).toFixed(1)} KB
+                                     </span>
+                                 )}
+                             </div>
+                         </a>
+                     );
+                }
+            }
+            
             return renderChatMessage(message, preview);
 
         case "m.room.member": {
@@ -72,42 +173,6 @@ export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean
 
         default:
             return null; // Hide unknown events as well
-    }
-};
-
-const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
-    if (preview) {
-        return (
-            <span>
-                <b>{message.author.name}: </b>
-                {message?.content?.body as string}
-            </span>
-        );
-    } else {
-        const body = (message?.content?.body as string) || "";
-        const isReply = body.includes("\n\n") && body.startsWith("> ");
-        const replyText = isReply ? body.substring(body.indexOf("\n\n") + 2) : body;
-        const originalMessage = isReply ? body.substring(body.indexOf("> ") + 2, body.indexOf("\n\n")) : "";
-        const originalAuthor = isReply ? originalMessage.substring(1, originalMessage.indexOf(">")) : "";
-
-        return (
-            <div className="max-w-full overflow-hidden">
-                {isReply && (
-                    <div className="mb-2 rounded-md border-l-4 border-gray-400 bg-[#f3f3f3] p-2 pl-2">
-                        <div
-                            className="text-xs font-semibold"
-                            style={{ color: generateColorFromString(originalAuthor) }}
-                        >
-                            {originalAuthor}
-                        </div>
-                        <p className="truncate text-sm text-gray-600">
-                            {originalMessage.substring(originalMessage.indexOf(">") + 2)}
-                        </p>
-                    </div>
-                )}
-                <RichText content={replyText} />
-            </div>
-        );
     }
 };
 
@@ -493,6 +558,55 @@ const ChatInput = ({ chatRoom }: ChatInputProps) => {
         }
     };
 
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isUploading, setIsUploading] = useState(false);
+
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Reset input so the same file can be selected again
+        e.target.value = "";
+
+        if (!user) return;
+        
+        if (!chatRoom.matrixRoomId) {
+            console.error("Chat room does not have a Matrix room ID");
+            return;
+        }
+
+        // Check size (5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            alert("File size exceeds 5MB limit.");
+            return;
+        }
+
+        setIsUploading(true);
+        try {
+            const formData = new FormData();
+            formData.append("roomId", chatRoom.matrixRoomId);
+            formData.append("file", file);
+            if (replyToMessage) {
+                formData.append("replyToEventId", replyToMessage.id);
+            }
+
+            const { sendAttachmentAction } = await import("./actions");
+            const result = await sendAttachmentAction(formData);
+
+            if (result.success) {
+                setReplyToMessage(null);
+            } else {
+                console.error("Failed to send attachment:", result.message);
+                alert(`Failed to send attachment: ${result.message}`);
+            }
+        } catch (error) {
+            console.error("Failed to send attachment:", error);
+            alert("An error occurred while uploading the file.");
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
     const handleCommentKeyDown = (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
@@ -513,7 +627,27 @@ const ChatInput = ({ chatRoom }: ChatInputProps) => {
                     </Button>
                 </div>
             )}
-            <div className="flex w-full">
+            <div className="flex w-full items-end gap-2">
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    onChange={handleFileSelect}
+                />
+                <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-10 w-10 shrink-0 rounded-full text-gray-500 hover:bg-gray-200"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                >
+                    {isUploading ? (
+                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
+                    ) : (
+                        <IoAttach className="h-6 w-6" />
+                    )}
+                </Button>
+                
                 <MentionsInput
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}

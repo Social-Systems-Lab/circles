@@ -773,3 +773,75 @@ export async function sendMessage(
 
     return await response.json();
 }
+
+export async function uploadMatrixMedia(
+    accessToken: string,
+    fileBuffer: Buffer,
+    contentType: string,
+    fileName: string
+): Promise<string> {
+    const url = `${MATRIX_URL}/_matrix/media/v3/upload?filename=${encodeURIComponent(fileName)}`;
+    const response = await fetch(url, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": contentType,
+        },
+        body: fileBuffer as any,
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to upload media: ${response.status} ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data.content_uri;
+}
+
+export async function sendMatrixAttachment(
+    accessToken: string,
+    roomId: string,
+    mxcUrl: string,
+    fileInfo: { name: string; size: number; mimetype: string },
+    msgtype: "m.image" | "m.file",
+    replyToEventId?: string
+): Promise<{ event_id: string }> {
+    const txnId = Date.now();
+    const content: any = {
+        msgtype: msgtype,
+        body: fileInfo.name,
+        url: mxcUrl,
+        info: {
+            mimetype: fileInfo.mimetype,
+            size: fileInfo.size,
+        },
+    };
+
+    if (replyToEventId) {
+        content["m.relates_to"] = {
+            "m.in_reply_to": {
+                event_id: replyToEventId,
+            },
+        };
+    }
+
+    const response = await fetch(
+        `${MATRIX_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${txnId}`,
+        {
+            method: "PUT",
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(content),
+        },
+    );
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to send attachment: ${response.status} ${errorText}`);
+    }
+
+    return await response.json();
+}
