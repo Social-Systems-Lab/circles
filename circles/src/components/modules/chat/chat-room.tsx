@@ -652,7 +652,7 @@ const ChatInput = ({ chatRoom }: ChatInputProps) => {
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyDown={handleCommentKeyDown}
-                    placeholder="Type a message..."
+                    placeholder="Type message and click icon or return to send..."
                     className="flex-grow rounded-[20px] bg-gray-100"
                     style={{
                         ...defaultMentionsInputStyle,
@@ -672,6 +672,16 @@ const ChatInput = ({ chatRoom }: ChatInputProps) => {
                         markup="[__display__](/circles/__id__)"
                     />
                 </MentionsInput>
+                
+                <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-10 w-10 shrink-0 rounded-full text-blue-600 hover:bg-blue-50"
+                    onClick={handleSendMessage}
+                    disabled={!newMessage.trim()}
+                >
+                    <IoSend className="h-5 w-5" />
+                </Button>
                 {isMobile && (
                     <Button onClick={handleSendMessage} className="ml-2 rounded-full text-white">
                         <IoSend />
