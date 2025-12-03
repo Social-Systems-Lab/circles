@@ -37,41 +37,90 @@ export const BackgroundMessagePoller = () => {
 
                     if (result.success && result.messages) {
                         // Convert Matrix messages to ChatMessage format
-                        const formattedMessages: ChatMessage[] = await Promise.all(
+                        const formattedMessages = await Promise.all(
                             result.messages
                                 .filter((msg: any) => msg.type === "m.room.message")
                                 .map(async (msg: any) => {
-                                    // Get or cache user info
-                                    let author = matrixUserCache[msg.sender];
+                                    const senderMatrixName = msg.sender;
+                                    let author = matrixUserCache[senderMatrixName];
                                     if (!author) {
-                                        const users = await fetchMatrixUsers([msg.sender]);
-                                        author = users[0];
+                                        const fetchedAuthors = await fetchMatrixUsers([senderMatrixName]);
+                                        author = fetchedAuthors[0] || undefined;
                                         if (author) {
-                                            setMatrixUserCache((prev) => ({ ...prev, [msg.sender]: author }));
+                                            setMatrixUserCache((prev) => ({ ...prev, [senderMatrixName]: author! }));
                                         }
                                     }
-
                                     return {
                                         id: msg.event_id,
-                                        roomId: roomId,
+                                        roomId,
                                         type: msg.type,
                                         content: msg.content,
                                         createdBy: msg.sender,
                                         createdAt: new Date(msg.origin_server_ts),
                                         author: author || undefined,
                                         reactions: {},
+                                        isRedacted: !!msg.unsigned?.redacted_because,
                                     } as ChatMessage;
                                 })
                         );
 
-                        // Only update if message count changed
+                        // Process edit events - update original messages instead of adding new ones
                         const currentMessages = roomMessagesRef.current[roomId] || [];
-                        if (formattedMessages.length !== currentMessages.length) {
+                        const updatedMessages = [...currentMessages];
+                        const newMessages: ChatMessage[] = [];
+
+                        for (const msg of formattedMessages) {
+                            // Handle redactions
+                            if (msg.isRedacted) {
+                                const originalIndex = updatedMessages.findIndex(m => m.id === msg.id);
+                                if (originalIndex !== -1) {
+                                    updatedMessages.splice(originalIndex, 1);
+                                }
+                                continue;
+                            }
+
+                            const relatesTo = (msg.content as any)?.["m.relates_to"];
+                            if (relatesTo?.rel_type === "m.replace" && relatesTo?.event_id) {
+                                // This is an edit - find and update the original message
+                                const originalIndex = updatedMessages.findIndex(m => m.id === relatesTo.event_id);
+                                if (originalIndex !== -1) {
+                                    // Update the original message with new content
+                                    updatedMessages[originalIndex] = {
+                                        ...updatedMessages[originalIndex],
+                                        content: {
+                                            ...msg.content,
+                                            body: (msg.content as any)["m.new_content"]?.body || (msg.content as any).body,
+                                        },
+                                    };
+                                }
+                            } else {
+                                // Regular message - add if not already in the list
+                                if (!updatedMessages.some(m => m.id === msg.id)) {
+                                    newMessages.push(msg);
+                                }
+                            }
+                        }
+
+                        // Combine existing messages with new ones
+                        const finalMessages = [...updatedMessages, ...newMessages];
+
+                        // Check if anything changed (new messages, edits, or different count)
+                        const hasChanges = 
+                            finalMessages.length !== currentMessages.length || 
+                            newMessages.length > 0 ||
+                            // Check if any message content changed (edits)
+                            finalMessages.some((msg, idx) => {
+                                const currentMsg = currentMessages[idx];
+                                return !currentMsg || 
+                                       JSON.stringify(msg.content) !== JSON.stringify(currentMsg.content);
+                            });
+
+                        if (hasChanges) {
                             setRoomMessages((prev) => ({
                                 ...prev,
-                                [roomId]: formattedMessages.reverse(),
+                                [roomId]: finalMessages,
                             }));
-                            console.log(`📨 [Background Poll] Updated ${roomId} with ${formattedMessages.length} messages`);
+                            console.log(`📨 [Background Poll] Updated ${roomId} with ${finalMessages.length} messages (${newMessages.length} new)`);
                         }
                     }
                 } catch (error) {

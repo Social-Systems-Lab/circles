@@ -209,6 +209,48 @@ export async function sendMatrixMessage(
     return await response.json();
 }
 
+// Edit an existing message
+export async function editRoomMessage(
+    accessToken: string,
+    matrixUrl: string,
+    roomId: string,
+    eventId: string,
+    newContent: string
+): Promise<{ event_id: string }> {
+    const txnId = Date.now();
+    const messageContent: any = {
+        msgtype: "m.text",
+        body: `* ${newContent}`, // Fallback for clients that don't support edits
+        "m.new_content": {
+            msgtype: "m.text",
+            body: newContent,
+        },
+        "m.relates_to": {
+            rel_type: "m.replace",
+            event_id: eventId,
+        },
+    };
+
+    const response = await fetch(
+        `${matrixUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${txnId}`,
+        {
+            method: "PUT",
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(messageContent),
+        },
+    );
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to edit message: ${response.status} ${errorText}`);
+    }
+
+    return await response.json();
+}
+
 // Fetch messages from a room (server-side)
 export async function fetchRoomMessages(
     accessToken: string,
@@ -844,4 +886,33 @@ export async function sendMatrixAttachment(
     }
 
     return await response.json();
+}
+
+export async function redactRoomMessage(
+    accessToken: string,
+    matrixUrl: string,
+    roomId: string,
+    eventId: string,
+    reason: string = "Message deleted by user",
+) {
+    const txnId = Date.now();
+    const response = await fetch(
+        `${matrixUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/redact/${encodeURIComponent(eventId)}/${txnId}`,
+        {
+            method: "PUT",
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ reason }),
+        },
+    );
+
+    if (!response.ok) {
+        const errorBody = await response.text();
+        console.error("Failed to delete message:", response.status, errorBody);
+        throw new Error(`Failed to delete message: ${response.status}`);
+    }
+    // Redaction responses are typically empty, so we don't try to parse JSON
+    return {};
 }

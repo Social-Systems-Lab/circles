@@ -338,6 +338,7 @@ export interface ChatMessage {
     author: Circle; // User data from your database
     replyTo?: Partial<ChatMessage>; // The message this is a reply to
     reactions?: Record<string, ReactionAggregation[]>; // { [emoji]: [{sender, eventId}, ...] }
+    isRedacted?: boolean;
 }
 
 export type ReactionAggregation = {

@@ -12,13 +12,14 @@ import { CirclePicture } from "../circles/circle-picture";
 import RichText from "../feeds/RichText";
 import { Mention, MentionsInput } from "react-mentions";
 import { defaultMentionsInputStyle, defaultMentionStyle, handleMentionQuery } from "../feeds/post-list";
-import { sendRoomMessage, sendReadReceipt, redactRoomMessage, sendReaction } from "@/lib/data/client-matrix";
+import { sendRoomMessage, sendReadReceipt, sendReaction } from "@/lib/data/client-matrix";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { fetchMatrixUsers } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { IoArrowBack, IoClose, IoSend, IoTrashOutline, IoAddCircleOutline, IoArrowDown, IoAttach, IoDocumentText } from "react-icons/io5";
+import { IoArrowBack, IoClose, IoSend, IoAddCircleOutline, IoArrowDown, IoAttach, IoDocumentText } from "react-icons/io5";
 import { MdReply } from "react-icons/md";
 import { BsEmojiSmile } from "react-icons/bs";
+import { GrEdit, GrTrash } from "react-icons/gr";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -154,7 +155,15 @@ export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean
                 }
             }
             
-            return renderChatMessage(message, preview);
+            // Check if message has been edited
+            const isEdited = (message.content as any)["m.new_content"] !== undefined;
+            
+            return (
+                <span>
+                    {renderChatMessage(message, preview)}
+                    {isEdited && <span className="ml-1 text-xs text-gray-500 italic">(edited)</span>}
+                </span>
+            );
 
         case "m.room.member": {
             const membership = (message.content as { membership: string }).membership;
@@ -183,6 +192,7 @@ type ChatMessagesProps = {
     messagesEndRef?: React.RefObject<HTMLDivElement | null>;
     onMessagesRendered?: () => void;
     handleDelete: (message: ChatMessage) => Promise<void>;
+    handleEdit: (message: ChatMessage) => void;
 };
 
 const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
@@ -191,7 +201,7 @@ const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
     return message1.author._id === message2.author._id;
 };
 
-const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, onMessagesRendered, handleDelete }) => {
+const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, onMessagesRendered, handleDelete, handleEdit }) => {
     const [user] = useAtom(userAtom);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
     const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
@@ -411,14 +421,24 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                 {(hoveredMessageId === message.id || pickerOpenForMessage === message.id) && (
                                     <div className="absolute bottom-1 right-0 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm">
                                         {user?.fullMatrixName === message.createdBy && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-6 w-6"
-                                                onClick={() => handleDelete(message)}
-                                            >
-                                                <IoTrashOutline className="h-4 w-4" />
-                                            </Button>
+                                            <>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6"
+                                                    onClick={() => handleEdit(message)}
+                                                >
+                                                    <GrEdit className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6"
+                                                    onClick={() => handleDelete(message)}
+                                                >
+                                                    <GrTrash className="h-4 w-4" />
+                                                </Button>
+                                            </>
                                         )}
                                         <Button
                                             variant="ghost"
@@ -515,15 +535,33 @@ export const LatestMessage: React.FC<LatestMessageProps> = ({ roomId, latestMess
 
 type ChatInputProps = {
     chatRoom: ChatRoomDisplay;
+    editingMessage: ChatMessage | null;
+    setEditingMessage: (message: ChatMessage | null) => void;
 };
 
-const ChatInput = ({ chatRoom }: ChatInputProps) => {
+const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputProps) => {
     const [user] = useAtom(userAtom);
     const [newMessage, setNewMessage] = useState("");
     const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
     const isMobile = useIsMobile();
+    
+    // Populate input when editing
+    useEffect(() => {
+        if (editingMessage) {
+            setNewMessage(editingMessage.content.body as string);
+        }
+    }, [editingMessage]);
 
     const handleSendMessage = async () => {
+        console.log("📤 [Send] handleSendMessage called", {
+            hasUser: !!user,
+            hasAccessToken: !!user?.matrixAccessToken,
+            hasRoomId: !!chatRoom.matrixRoomId,
+            messageLength: newMessage.trim().length,
+            isEditing: !!editingMessage,
+            editingMessageId: editingMessage?.id
+        });
+        
         if (!user) return;
         
         if (!user.matrixAccessToken) {
@@ -537,6 +575,14 @@ const ChatInput = ({ chatRoom }: ChatInputProps) => {
         }
         
         if (newMessage.trim() !== "") {
+            // If editing, handle edit instead of send
+            if (editingMessage) {
+                console.log("📤 [Send] Routing to handleEditSubmit...");
+                await handleEditSubmit();
+                return;
+            }
+            
+            console.log("📤 [Send] Sending new message...");
             try {
                 // Use server action to send message (avoids CORS issues)
                 const { sendMessageAction } = await import("./actions");
@@ -555,6 +601,50 @@ const ChatInput = ({ chatRoom }: ChatInputProps) => {
             } catch (error) {
                 console.error("Failed to send message:", error);
             }
+        }
+    };
+
+    const handleEditSubmit = async () => {
+        console.log("✏️ [Edit] Starting edit submission", { 
+            hasEditingMessage: !!editingMessage, 
+            messageId: editingMessage?.id,
+            newContent: newMessage.trim(),
+            roomId: chatRoom.matrixRoomId
+        });
+        
+        if (!editingMessage || !newMessage.trim()) {
+            console.log("✏️ [Edit] Aborted - missing message or content");
+            return;
+        }
+        
+        try {
+            console.log("✏️ [Edit] Importing editMessageAction...");
+            const { editMessageAction } = await import("./actions");
+            console.log("✏️ [Edit] Calling editMessageAction with:", {
+                roomId: chatRoom.matrixRoomId,
+                eventId: editingMessage.id,
+                content: newMessage.trim()
+            });
+            
+            const result = await editMessageAction(
+                chatRoom.matrixRoomId!,
+                editingMessage.id,
+                newMessage.trim()
+            );
+            
+            console.log("✏️ [Edit] Server response:", result);
+            
+            if (result.success) {
+                console.log("✏️ [Edit] Success! Clearing state...");
+                setNewMessage("");
+                setEditingMessage(null);
+            } else {
+                console.error("✏️ [Edit] Failed:", result.message);
+                alert(`Failed to edit message: ${result.message}`);
+            }
+        } catch (error) {
+            console.error("✏️ [Edit] Exception:", error);
+            alert("Failed to edit message. Please try again.");
         }
     };
 
@@ -610,13 +700,31 @@ const ChatInput = ({ chatRoom }: ChatInputProps) => {
     const handleCommentKeyDown = (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
-            handleSendMessage();
+            if (editingMessage) {
+                handleEditSubmit();
+            } else {
+                handleSendMessage();
+            }
+        } else if (e.key === "Escape" && editingMessage) {
+            setEditingMessage(null);
+            setNewMessage("");
         }
     };
 
     return (
         <div className="flex w-full flex-col">
-            {replyToMessage && (
+            {editingMessage && (
+                <div className="mb-2 flex items-center justify-between rounded-lg bg-blue-100 p-2">
+                    <div className="flex-grow overflow-hidden">
+                        <div className="font-semibold text-blue-700">Editing message</div>
+                        <p className="truncate text-sm text-blue-600">{editingMessage.content.body as string}</p>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => { setEditingMessage(null); setNewMessage(""); }}>
+                        <IoClose className="h-5 w-5" />
+                    </Button>
+                </div>
+            )}
+            {replyToMessage && !editingMessage && (
                 <div className="mb-2 flex items-center justify-between rounded-lg bg-gray-200 p-2">
                     <div className="flex-grow overflow-hidden">
                         <div className="font-semibold text-gray-700">Replying to {replyToMessage.author.name}</div>
@@ -751,6 +859,8 @@ export const ChatRoomComponent: React.FC<{
     const [roomMessages, setRoomMessages] = useAtom(roomMessagesAtom);
     const [unreadCounts, setUnreadCounts] = useAtom(unreadCountsAtom);
     const [lastReadTimestamps, setLastReadTimestamps] = useAtom(lastReadTimestampsAtom);
+    const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
+    const [, setReplyToMessage] = useAtom(replyToMessageAtom);
     const router = useRouter();
 
     const handleDelete = async (message: ChatMessage) => {
@@ -763,15 +873,24 @@ export const ChatRoomComponent: React.FC<{
                 return newRoomMessages;
             });
 
-            if (!user?.matrixAccessToken || !user?.matrixUrl) return;
             try {
-                await redactRoomMessage(user.matrixAccessToken, user.matrixUrl, message.roomId, message.id);
+                const { deleteMessageAction } = await import("./actions");
+                const result = await deleteMessageAction(message.roomId, message.id);
+                
+                if (!result.success) {
+                    console.error("Failed to delete message:", result.message);
+                    alert(`Failed to delete message: ${result.message}`);
+                }
             } catch (error) {
-                console.error("Failed to delete message:", error);
-                // Revert UI update on failure by re-fetching or relying on sync
-                // For simplicity, we'll let the next sync correct the state
+                console.error("Exception deleting message:", error);
+                alert("Failed to delete message. Please try again.");
             }
         }
+    };
+
+    const handleEdit = (message: ChatMessage) => {
+        setEditingMessage(message);
+        setReplyToMessage(null); // Clear reply when editing
     };
 
     useEffect(() => {
@@ -1044,6 +1163,7 @@ export const ChatRoomComponent: React.FC<{
                                     messagesEndRef={messagesEndRef}
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
+                                    handleEdit={handleEdit}
                                 />
                             )}
                         </div>
@@ -1060,6 +1180,7 @@ export const ChatRoomComponent: React.FC<{
                                     messagesEndRef={messagesEndRef}
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
+                                    handleEdit={handleEdit}
                                 />
                             )}
                         </div>
@@ -1085,7 +1206,11 @@ export const ChatRoomComponent: React.FC<{
                         }}
                     >
                         <div className="flex h-[50px] items-end bg-[#fbfbfb] pb-1 pl-2 pr-2">
-                            <ChatInput chatRoom={chatRoom} />
+                            <ChatInput 
+                                chatRoom={chatRoom} 
+                                editingMessage={editingMessage}
+                                setEditingMessage={setEditingMessage}
+                            />
                         </div>
                     </div>
                 </div>

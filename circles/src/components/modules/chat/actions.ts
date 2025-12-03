@@ -312,3 +312,67 @@ export const sendAttachmentAction = async (
         return { success: false, message: error instanceof Error ? error.message : "Failed to send attachment" };
     }
 };
+
+export const editMessageAction = async (
+    roomId: string,
+    eventId: string,
+    newContent: string
+): Promise<{ success: boolean; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to edit messages" };
+    }
+
+    try {
+        const user = await getPrivateUserByDid(userDid);
+        if (!user?.matrixAccessToken) {
+            return { success: false, message: "User does not have valid Matrix credentials" };
+        }
+
+        const { editRoomMessage } = await import("@/lib/data/matrix");
+        const matrixUrl = `http://${process.env.MATRIX_HOST || "127.0.0.1"}:${process.env.MATRIX_PORT || "8008"}`;
+        await editRoomMessage(
+            user.matrixAccessToken,
+            matrixUrl,
+            roomId,
+            eventId,
+            newContent
+        );
+
+        return { success: true };
+    } catch (error) {
+        console.error("❌ Error editing message:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to edit message" };
+    }
+};
+
+export const deleteMessageAction = async (
+    roomId: string,
+    eventId: string
+): Promise<{ success: boolean; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to delete messages" };
+    }
+
+    try {
+        const user = await getPrivateUserByDid(userDid);
+        if (!user?.matrixAccessToken) {
+            return { success: false, message: "User does not have valid Matrix credentials" };
+        }
+
+        const { redactRoomMessage } = await import("@/lib/data/matrix");
+        const matrixUrl = `http://${process.env.MATRIX_HOST || "127.0.0.1"}:${process.env.MATRIX_PORT || "8008"}`;
+        await redactRoomMessage(
+            user.matrixAccessToken,
+            matrixUrl,
+            roomId,
+            eventId
+        );
+
+        return { success: true };
+    } catch (error) {
+        console.error("❌ Error deleting message:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to delete message" };
+    }
+};
