@@ -82,3 +82,9 @@ export const mapSearchCommandAtom = atom<{ query: string; timestamp: number } | 
 
 // Tracks whether the activity feed panel is docked (showing map alongside)
 export const feedPanelDockedAtom = atom<boolean>(false);
+
+// Chat settings modal state: { chatRoomId: string, isOpen: boolean }
+export const chatSettingsModalAtom = atom<{ chatRoomId: string | null; isOpen: boolean }>({
+    chatRoomId: null,
+    isOpen: false,
+});

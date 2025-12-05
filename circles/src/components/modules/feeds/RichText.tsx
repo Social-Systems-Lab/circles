@@ -86,7 +86,7 @@ const RichText = memo(({ content, mentions }: RichTextProps) => {
                 if (mentionMatch && hasMentions) {
                     const mentionIdOrHandle = mentionMatch[1];
                     // Match by ID first, then handle as fallback if needed
-                    const mention = mentions!.find(
+                    const mention = mentions?.find(
                         (m) => m.id === mentionIdOrHandle || m.circle?.handle === mentionIdOrHandle,
                     );
                     if (mention?.circle) {
@@ -94,7 +94,7 @@ const RichText = memo(({ content, mentions }: RichTextProps) => {
                         return <MentionHoverCard mention={mention}>{children}</MentionHoverCard>;
                     } else {
                         // If mention data is incomplete, render as plain text or a basic link
-                        console.warn("Incomplete mention data for:", href);
+                        // console.warn("Incomplete mention data for:", href);
                         return <span className="font-semibold">{children}</span>; // Or render as a basic link: <a href={href} {...props}>{children}</a>
                     }
                 }

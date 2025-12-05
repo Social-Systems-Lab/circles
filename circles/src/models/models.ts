@@ -877,6 +877,7 @@ export const chatRoomMemberSchema = z.object({
     chatRoomId: z.string(),
     circleId: z.string().optional(),
     joinedAt: z.date(),
+    role: z.enum(["admin", "member"]).default("member"),
 });
 
 export const challengeSchema = z.object({

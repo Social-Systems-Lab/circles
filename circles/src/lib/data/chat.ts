@@ -118,7 +118,11 @@ export const getChatRoomMember = async (userDid: string, chatRoomId: string): Pr
     return await ChatRoomMembers.findOne({ userDid: userDid, chatRoomId: chatRoomId });
 };
 
-export const addChatRoomMember = async (userDid: string, chatRoomId: string): Promise<ChatRoomMember> => {
+export const addChatRoomMember = async (
+    userDid: string,
+    chatRoomId: string,
+    role: "admin" | "member" = "member"
+): Promise<ChatRoomMember> => {
     const existingMember = await ChatRoomMembers.findOne({ userDid: userDid, chatRoomId: chatRoomId });
     if (existingMember) {
         return existingMember;
@@ -134,6 +138,7 @@ export const addChatRoomMember = async (userDid: string, chatRoomId: string): Pr
         chatRoomId,
         circleId: chatRoom.circleId,
         joinedAt: new Date(),
+        role,
     };
     const result = await ChatRoomMembers.insertOne(member);
     return { ...member, _id: result.insertedId.toString() };
@@ -145,6 +150,17 @@ export const removeChatRoomMember = async (userDid: string, chatRoomId: string):
 
 export const getChatRoomMembers = async (chatRoomId: string): Promise<ChatRoomMember[]> => {
     return await ChatRoomMembers.find({ chatRoomId: chatRoomId }).toArray();
+};
+
+export const updateChatRoomMemberRole = async (
+    userDid: string, 
+    chatRoomId: string, 
+    role: "admin" | "member"
+): Promise<void> => {
+    await ChatRoomMembers.updateOne(
+        { userDid, chatRoomId },
+        { $set: { role } }
+    );
 };
 
 export const findOrCreateDMRoom = async (userA: Circle, userB: Circle): Promise<ChatRoom> => {
@@ -275,13 +291,14 @@ export const createGroupChatRoom = async (
     const result = await ChatRooms.insertOne(newRoom);
     newRoom._id = result.insertedId.toString();
 
-    // Add creator and participants as members
-    const allMembers = [creatorDid, ...participantDids];
-    // Remove duplicates just in case
-    const uniqueMembers = Array.from(new Set(allMembers));
+    // Add creator as admin
+    await addChatRoomMember(creatorDid, newRoom._id, "admin");
 
-    for (const did of uniqueMembers) {
-        await addChatRoomMember(did, newRoom._id);
+    // Add other participants as members
+    for (const did of participantDids) {
+        if (did !== creatorDid) { // Skip creator since already added
+            await addChatRoomMember(did, newRoom._id, "member");
+        }
     }
 
     return newRoom;

@@ -6,8 +6,9 @@ import { useAtom } from "jotai";
 import { ChatRoom, ChatRoomDisplay } from "@/models/models";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import { LatestMessage } from "@/components/modules/chat/chat-room";
-import { latestMessagesAtom, unreadCountsAtom } from "@/lib/data/atoms";
+import { latestMessagesAtom, unreadCountsAtom, chatSettingsModalAtom } from "@/lib/data/atoms";
 import { useRouter, useParams } from "next/navigation";
+import { Settings } from "lucide-react";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import Image from "next/image";
 import clsx from "clsx";
@@ -23,6 +24,7 @@ interface ChatListProps {
 export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
     const [latestMessages] = useAtom(latestMessagesAtom);
     const [unreadCounts] = useAtom(unreadCountsAtom);
+    const [, setChatSettingsModal] = useAtom(chatSettingsModalAtom);
     const isMobile = useIsMobile();
     const router = useRouter();
     const params = useParams();
@@ -67,7 +69,7 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
                         <div
                             key={chat._id}
                             className={clsx(
-                                "m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100",
+                                "group m-1 flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-gray-100",
                                 {
                                     "bg-gray-200 dark:bg-gray-700": activeChatHandle === (chat.circle?.handle || chat.handle),
                                 },
@@ -90,12 +92,26 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
                                     </span>
                                 )}
                             </div>
-                            <div className="flex-1 overflow-hidden">
+                            <div className="flex-1 min-w-0 overflow-hidden">
                                 <p className="truncate text-sm font-medium">{chat.name}</p>
                                 <p className="truncate text-xs text-muted-foreground">
                                     <LatestMessage roomId={chat.matrixRoomId!} latestMessages={latestMessages} />
                                 </p>
                             </div>
+                            {/* Settings Icon - shows on hover */}
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation(); // Prevent chat click
+                                    setChatSettingsModal({
+                                        chatRoomId: chat._id,
+                                        isOpen: true,
+                                    });
+                                }}
+                                className="flex-shrink-0 opacity-0 group-hover:opacity-100 p-2 hover:bg-gray-200 rounded-full transition-opacity"
+                                aria-label="Chat settings"
+                            >
+                                <Settings className="h-4 w-4 text-gray-600" />
+                            </button>
                         </div>
                     );
                 })

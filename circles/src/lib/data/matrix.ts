@@ -31,7 +31,7 @@ const MATRIX_HOST = process.env.MATRIX_HOST || "127.0.0.1";
 const MATRIX_PORT = parseInt(process.env.MATRIX_PORT || "8008");
 const MATRIX_URL = `http://${MATRIX_HOST}:${MATRIX_PORT}`;
 const MATRIX_SHARED_SECRET = process.env.MATRIX_SHARED_SECRET || "your_shared_secret";
-const MATRIX_DOMAIN = process.env.MATRIX_DOMAIN || "yourdomain.com";
+export const MATRIX_DOMAIN = process.env.MATRIX_DOMAIN || "yourdomain.com";
 const GLOBAL_ROOM_ALIAS = "global";
 
 export async function getAdminAccessToken(): Promise<string> {
@@ -298,6 +298,30 @@ export async function addUserToRoom(accessToken: string, roomId: string): Promis
     if (!response.ok) throw new Error(`Failed to add user to room ${roomId}: ${await response.text()}`);
 }
 
+export async function inviteUserToRoom(accessToken: string, roomId: string, userId: string): Promise<void> {
+    const response = await fetch(`${MATRIX_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/invite`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId }),
+    });
+
+    if (!response.ok) {
+        // specific handling for "already in room" which is not a critical error
+        const errorText = await response.text();
+        if (errorText.includes("M_LIMIT_EXCEEDED")) {
+             // Rate limit, maybe wait? For now just throw
+             throw new Error(`Rate limit exceeded inviting ${userId}: ${errorText}`);
+        }
+        // If already in room, Matrix usually returns 403 or 400 depending on state, 
+        // but often it's better to swallow "already joined" if we just want to ensure they are there.
+        // For invite, if they are already joined, it might fail.
+        
+        // Log but throw to let caller decide
+        // console.error(`Failed to invite user ${userId} to room ${roomId}: ${errorText}`);
+        throw new Error(`Failed to invite user ${userId} to room ${roomId}: ${errorText}`);
+    }
+}
+
 async function getUserNotificationsRoom(user: UserPrivate): Promise<string> {
     let adminAccessToken = await getAdminAccessToken();
     let notificationsRoomId = `${user._id!.toString()}-notification`;
@@ -324,6 +348,77 @@ async function getUserNotificationsRoom(user: UserPrivate): Promise<string> {
     });
     if (!createResponse.ok) throw new Error("Failed to create user notifications chat room");
     return (await createResponse.json()).room_id;
+}
+
+
+
+export async function forceUserJoinRoom(userId: string, roomId: string): Promise<void> {
+    const adminAccessToken = await getAdminAccessToken();
+    const tryJoin = async (targetUserId: string) => {
+        return fetch(`${MATRIX_URL}/_synapse/admin/v1/join/${encodeURIComponent(roomId)}`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${adminAccessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ user_id: targetUserId }),
+        });
+    };
+
+    let response = await tryJoin(userId);
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        // If admin is not in room (M_FORBIDDEN or specific message), try to make admin join first
+        // Also handle "no servers" error which implies the server isn't participating (room empty?)
+        if (
+            errorText.includes("not in room") || 
+            errorText.includes("no servers") || 
+            errorText.includes("M_UNKNOWN") || // Covers the specific error code
+            response.status === 403
+        ) {
+             console.log("⚠️ forceUserJoinRoom failed (Admin likely not in room), attempting to force admin join first...", { roomId, error: errorText });
+             
+             // Get admin user ID (assuming standard setup or parsing from token if possible, but safer to use known admin)
+             // We can assume the admin user is the one associated with the token.
+             // We can try to use the admin API to join the ADMIN USER to the room.
+             // We need the admin's matrix ID. Ideally we hardcode it or fetch it.
+             // For now, let's try to 'whoami' or just assume @admin:domain
+             
+             let adminUserId = "";
+             try {
+                 const whoami = await fetch(`${MATRIX_URL}/_matrix/client/v3/account/whoami`, {
+                    headers: { Authorization: `Bearer ${adminAccessToken}` }
+                 });
+                 if (whoami.ok) {
+                     adminUserId = (await whoami.json()).user_id;
+                 }
+             } catch (e) {
+                 console.error("Failed to get admin user ID", e);
+             }
+
+             if (adminUserId) {
+                 // Force join the admin
+                 console.log(`🤖 Forcing Admin (${adminUserId}) to join room ${roomId} first...`);
+                 const adminJoinRes = await tryJoin(adminUserId);
+                 
+                 if (adminJoinRes.ok) {
+                     console.log("✅ Admin joined successfully. Retrying target user join...");
+                     // Retry target user join
+                     response = await tryJoin(userId);
+                     
+                     // Cleanup: Admin leaves (optional, but good for privacy)
+                     // await fetch(`${MATRIX_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/leave`, {
+                     //    method: "POST",
+                     //    headers: { Authorization: `Bearer ${adminAccessToken}` }
+                     // });
+                 } else {
+                     console.error("❌ Admin force join failed:", await adminJoinRes.text());
+                 }
+             }
+        }
+        
+        if (!response.ok) { // Check again after retry
+             throw new Error(`Failed to force join user ${userId} to room ${roomId}: ${errorText}`);
+        }
+    }
 }
 
 export async function addUserNotificationsRoom(user: UserPrivate): Promise<string> {
@@ -376,22 +471,31 @@ export async function removeUserFromRoom(userId: string, roomId: string): Promis
 }
 export async function updateMatrixRoomNameAndAvatar(roomId: string, newName: string, avatarUrl?: string) {
     const adminAccessToken = await getAdminAccessToken();
-    await fetch(`${MATRIX_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/state/m.room.name`, {
+    
+    const nameResponse = await fetch(`${MATRIX_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/state/m.room.name`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${adminAccessToken}`, "Content-Type": "application/json" },
         body: JSON.stringify({ name: newName }),
-    }).then((res) => {
-        if (!res.ok) throw new Error(`Failed updating room name: ${res.statusText}`);
     });
+    
+    if (!nameResponse.ok) {
+        const errorBody = await nameResponse.text();
+        console.error("Failed updating room name:", nameResponse.status, errorBody);
+        throw new Error(`Failed updating room name: ${nameResponse.statusText}`);
+    }
 
     if (avatarUrl) {
-        await fetch(`${MATRIX_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/state/m.room.avatar`, {
+        const avatarResponse = await fetch(`${MATRIX_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/state/m.room.avatar`, {
             method: "PUT",
             headers: { Authorization: `Bearer ${adminAccessToken}`, "Content-Type": "application/json" },
             body: JSON.stringify({ url: avatarUrl }),
-        }).then((res) => {
-            if (!res.ok) throw new Error(`Failed updating room avatar: ${res.statusText}`);
         });
+        
+        if (!avatarResponse.ok) {
+            const errorBody = await avatarResponse.text();
+            console.error("Failed updating room avatar:", avatarResponse.status, errorBody);
+            throw new Error(`Failed updating room avatar: ${avatarResponse.statusText}`);
+        }
     }
 }
 

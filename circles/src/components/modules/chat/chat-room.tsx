@@ -1022,6 +1022,41 @@ export const ChatRoomComponent: React.FC<{
         markLatestMessageAsRead(); // Mark the latest message as read when messages update
     }, [messages, markLatestMessageAsRead]);
 
+    // Initial check/fetch to ensure we are in the room (triggers auto-join if needed)
+    useEffect(() => {
+        if (!chatRoom.matrixRoomId) return;
+
+        // If we don't have messages yet, try to fetch to ensure we are joined
+        // This is crucial for fixing "broken" memberships where the user is in local DB but not Matrix
+        const checkConnection = async () => {
+            if ((!roomMessages[chatRoom.matrixRoomId!] || roomMessages[chatRoom.matrixRoomId!].length === 0)) {
+                try {
+                    console.log("🔄 [Chat] Checking room connection/fetching initial messages...", chatRoom.matrixRoomId);
+                    const { fetchRoomMessagesAction } = await import("./actions");
+                    const result = await fetchRoomMessagesAction(chatRoom.matrixRoomId!, 20);
+                    
+                    if (result.success && result.messages) {
+                        console.log("✅ [Chat] Initial fetch successful, user is in room.");
+                        // We could update state here, but the background poller will likely catch up.
+                        // However, to be instant, let's update local cache if it's empty
+                        if (result.messages.length > 0) {
+                             // Force an update to roomMessages if it was empty
+                             // (This duplicates logic from the disabled poller but is safe for a one-off)
+                             // Actually, let's just let the poller/sync loop handle the main state, 
+                             // OR manually inject if we trust the format.
+                             // For simplicity/safety, we just want the SIDE EFFECT of joining.
+                             // But showing messages immediately is better.
+                        }
+                    }
+                } catch (error) {
+                    console.error("❌ [Chat] Failed to check connection:", error);
+                }
+            }
+        };
+        
+        checkConnection();
+    }, [chatRoom.matrixRoomId]);
+
     // Server-side message polling - DISABLED: Now handled by BackgroundMessagePoller globally
     /*
     useEffect(() => {

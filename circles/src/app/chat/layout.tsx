@@ -11,15 +11,18 @@ import { useRouter, usePathname } from "next/navigation";
 import { ChatSearch } from "@/components/modules/chat/chat-search";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { CreateChatModal } from "@/components/modules/chat/create-chat-modal";
+import { GroupSettingsModal } from "@/components/modules/chat/group-settings-modal";
 import { SquarePen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { chatSettingsModalAtom } from "@/lib/data/atoms";
 
 export default function ChatLayout({ children }: PropsWithChildren) {
     const [user] = useAtom(userAtom);
     const isMobile = useIsMobile();
     const pathname = usePathname();
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [chatSettingsModal, setChatSettingsModal] = useAtom(chatSettingsModalAtom);
 
     const allChats = useMemo(
         () => user?.chatRoomMemberships?.map((m) => m.chatRoom) || [],
@@ -41,6 +44,23 @@ export default function ChatLayout({ children }: PropsWithChildren) {
     const isDetailRoute = segments.length > 1; // true if /chat/[handle]
     const showChatList = !isMobile || !isDetailRoute;
 
+    // Find the chat room for the settings modal
+    const selectedChat = chatSettingsModal.chatRoomId
+        ? allChats.find((chat) => chat._id === chatSettingsModal.chatRoomId)
+        : undefined;
+
+    // Determine if current user is admin of the selected chat
+    const isUserAdmin = selectedChat && user?.chatRoomMemberships
+        ? (() => {
+            const membership = user.chatRoomMemberships.find(
+                m => m.chatRoom._id === selectedChat._id
+            );
+            // Check role field, fallback to true for backward compatibility with old groups
+            // (groups created before role field was added)
+            return !!(membership?.role === "admin" || (membership && !membership.role));
+        })()
+        : false;
+
     return (
         <div>
             {showChatList && (
@@ -56,9 +76,9 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                         </Button>
                     </div>
                     <ChatSearch />
-                    <ScrollArea className="flex-grow">
+                    <div className="flex-grow overflow-y-auto">
                         <ChatList chats={allChats} />
-                    </ScrollArea>
+                    </div>
                 </aside>
             )}
 
@@ -66,6 +86,21 @@ export default function ChatLayout({ children }: PropsWithChildren) {
             <main className={`${!isMobile ? "ml-[372px]" : ""}`}>{children}</main>
 
             <CreateChatModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} />
+
+            {/* Group Settings Modal - rendered at layout level */}
+            {selectedChat && (
+                <GroupSettingsModal
+                    open={chatSettingsModal.isOpen}
+                    onOpenChange={(open) =>
+                        setChatSettingsModal({
+                            chatRoomId: open ? chatSettingsModal.chatRoomId : null,
+                            isOpen: open,
+                        })
+                    }
+                    chatRoom={selectedChat}
+                    isAdmin={isUserAdmin}
+                />
+            )}
         </div>
     );
 }
