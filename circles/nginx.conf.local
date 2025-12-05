@@ -40,5 +40,41 @@ http {
             proxy_set_header Host $host;
             proxy_buffering off;
         }
+
+        # Direct media serving - bypass Matrix database check
+        # Media files are stored as: /data/media_store/local_content/AB/CD/EFGHIJKLMNOP
+        # where ABCDEFGHIJKLMNOP is the media ID
+        location ~ "^/_matrix/media/v3/download/[^/]+/([A-Za-z0-9]+)$" {
+            # Extract first 2 and next 2 chars using rewrite
+            set $media_id $1;
+            set $dir1 "";
+            set $dir2 "";
+            set $filename "";
+            
+            # Use Perl regex to extract subdirectories
+            if ($media_id ~ ^([A-Za-z0-9][A-Za-z0-9])([A-Za-z0-9][A-Za-z0-9])(.+)$) {
+                set $dir1 $1;
+                set $dir2 $2;
+                set $filename $3;
+            }
+            
+            # Construct path: /synapse_media/media_store/local_content/AB/CD/EFGHIJKLMNOP
+            # Note: filename is just the remaining chars, not the full media ID
+            alias /synapse_media/media_store/local_content/$dir1/$dir2/$filename;
+            
+            # Add CORS headers for browser access
+            add_header Access-Control-Allow-Origin *;
+            add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS";
+            
+            # If file not found, fall back to Matrix proxy
+            try_files $uri @matrix_proxy;
+        }
+
+        location @matrix_proxy {
+            proxy_pass http://synapse:8008;
+            proxy_set_header X-Forwarded-For $remote_addr;
+            proxy_set_header Host $host;
+            proxy_buffering off;
+        }
     }
 }

@@ -90,11 +90,18 @@ export const getUserByDid = async (did: string): Promise<Circle> => {
     return user;
 };
 
-export const getPrivateUserByDid = async (did: string): Promise<Circle> => {
-    let user = (await Circles.findOne({ did })) as Circle;
+export const getPrivateUserByDid = async (did: string): Promise<UserPrivate> => {
+    let user = (await Circles.findOne({ did })) as UserPrivate;
     if (user?._id) {
         user._id = user._id.toString();
     }
+    
+    // append matrix username details
+    user.matrixUrl = process.env.NEXT_PUBLIC_MATRIX_URL;
+    if (user.matrixUsername) {
+        user.fullMatrixName = `@${user.matrixUsername}:${process.env.MATRIX_DOMAIN}`;
+    }
+
     return user;
 };
 
@@ -313,26 +320,32 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
                 joinedAt: 1,
                 chatRoom: {
                     _id: { $toString: "$chatRoom._id" },
-                    name: "$circle.name", // Always use `circle.name`, whether user or group
-                    handle: "$circle.handle",
+                    name: { $ifNull: ["$circle.name", "$chatRoom.name"] },
+                    handle: { $ifNull: ["$circle.handle", "$chatRoom.handle"] },
                     circleId: "$chatRoom.circleId",
                     createdAt: "$chatRoom.createdAt",
                     userGroups: "$chatRoom.userGroups",
                     matrixRoomId: "$chatRoom.matrixRoomId",
-                    picture: "$circle.picture", // Always use `circle.picture`, whether user or group
+                    picture: { $ifNull: ["$circle.picture", "$chatRoom.picture"] },
                     isDirect: "$chatRoom.isDirect",
                     dmParticipants: "$chatRoom.dmParticipants",
                     circle: {
-                        _id: { $toString: "$circle._id" },
-                        name: "$circle.name",
-                        handle: "$circle.handle",
-                        did: "$circle.did",
-                        description: "$circle.description",
-                        picture: "$circle.picture",
-                        images: "$circle.images", // Use images field
-                        mission: "$circle.mission",
-                        location: "$circle.location",
-                        circleType: "$circle.circleType",
+                        $cond: {
+                            if: "$circle",
+                            then: {
+                                _id: { $toString: "$circle._id" },
+                                name: "$circle.name",
+                                handle: "$circle.handle",
+                                did: "$circle.did",
+                                description: "$circle.description",
+                                picture: "$circle.picture",
+                                images: "$circle.images",
+                                mission: "$circle.mission",
+                                location: "$circle.location",
+                                circleType: "$circle.circleType",
+                            },
+                            else: null
+                        }
                     },
                 },
             },

@@ -92,6 +92,7 @@ services:
             - .env.local
         volumes:
             - ./nginx.conf.local:/etc/nginx/nginx.conf:ro
+            - synapse_data:/synapse_media:ro
         ports:
             - "80:80"
         networks:
@@ -100,6 +101,7 @@ services:
             - "host.docker.internal:host-gateway"
         depends_on:
             - minio
+            - synapse
 
     cron:
         build:

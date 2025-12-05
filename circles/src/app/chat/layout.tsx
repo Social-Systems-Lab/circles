@@ -10,11 +10,17 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useRouter, usePathname } from "next/navigation";
 import { ChatSearch } from "@/components/modules/chat/chat-search";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import { CreateChatModal } from "@/components/modules/chat/create-chat-modal";
+import { SquarePen } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
 
 export default function ChatLayout({ children }: PropsWithChildren) {
     const [user] = useAtom(userAtom);
     const isMobile = useIsMobile();
     const pathname = usePathname();
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
     const allChats = useMemo(
         () => user?.chatRoomMemberships?.map((m) => m.chatRoom) || [],
         [user?.chatRoomMemberships],
@@ -43,7 +49,12 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                         isMobile ? "w-full" : "fixed left-0 top-0 h-screen w-80 border-r border-gray-200 md:left-[72px]"
                     } flex flex-col bg-white p-2`}
                 >
-                    <h2 className="mb-4 mt-2 pl-2 pt-0 text-xl font-semibold">Chats</h2>
+                    <div className="flex items-center justify-between mb-4 mt-2 pl-2 pt-0">
+                        <h2 className="text-xl font-semibold">Chats</h2>
+                        <Button variant="ghost" size="icon" onClick={() => setIsCreateModalOpen(true)}>
+                            <SquarePen className="h-5 w-5" />
+                        </Button>
+                    </div>
                     <ChatSearch />
                     <ScrollArea className="flex-grow">
                         <ChatList chats={allChats} />
@@ -53,6 +64,8 @@ export default function ChatLayout({ children }: PropsWithChildren) {
 
             {/* main content: either the 'no chat selected' or the chosen chat */}
             <main className={`${!isMobile ? "ml-[372px]" : ""}`}>{children}</main>
+
+            <CreateChatModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} />
         </div>
     );
 }

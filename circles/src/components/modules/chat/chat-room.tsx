@@ -12,7 +12,7 @@ import { CirclePicture } from "../circles/circle-picture";
 import RichText from "../feeds/RichText";
 import { Mention, MentionsInput } from "react-mentions";
 import { defaultMentionsInputStyle, defaultMentionStyle, handleMentionQuery } from "../feeds/post-list";
-import { sendRoomMessage, sendReadReceipt, sendReaction } from "@/lib/data/client-matrix";
+import { sendRoomMessage, sendReaction, redactRoomMessage } from "@/lib/data/client-matrix";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { fetchMatrixUsers } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -839,7 +839,7 @@ export const fetchAndCacheMatrixUsers = async (
 export const ChatRoomComponent: React.FC<{
     chatRoom: ChatRoomDisplay;
     setSelectedChat?: Dispatch<SetStateAction<ChatRoomDisplay | undefined>>;
-    circle: Circle;
+    circle?: Circle;
     inToolbox?: boolean;
 }> = ({ chatRoom, setSelectedChat, circle, inToolbox }) => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -940,38 +940,43 @@ export const ChatRoomComponent: React.FC<{
                 console.log(`💬 [Chat] - Content: ${contentPreview}...`);
             }
 
-            await sendReadReceipt(user.matrixAccessToken, user.matrixUrl!, latestMessage.roomId, latestMessage.id);
-            lastReadMessageIdRef.current = latestMessage.id;
-            
-            // Update last read timestamp for this room
-            const messageTimestamp = latestMessage.createdAt instanceof Date 
-                ? latestMessage.createdAt.getTime() 
-                : new Date(latestMessage.createdAt).getTime();
+            try {
+                const { sendReadReceiptAction } = await import("./actions");
+                await sendReadReceiptAction(latestMessage.roomId, latestMessage.id);
+                lastReadMessageIdRef.current = latestMessage.id;
                 
-            if (chatRoom.matrixRoomId) {
-                setLastReadTimestamps((prev) => ({
-                    ...prev,
-                    [chatRoom.matrixRoomId!]: messageTimestamp
-                }));
+                // Update last read timestamp for this room
+                const messageTimestamp = latestMessage.createdAt instanceof Date 
+                    ? latestMessage.createdAt.getTime() 
+                    : new Date(latestMessage.createdAt).getTime();
+                    
+                if (chatRoom.matrixRoomId) {
+                    setLastReadTimestamps((prev) => ({
+                        ...prev,
+                        [chatRoom.matrixRoomId!]: messageTimestamp
+                    }));
+                    
+                    console.log(`💬 [Chat] Updated last read timestamp for room ${chatRoom.matrixRoomId} to ${new Date(messageTimestamp).toISOString()}`);
+                }
                 
-                console.log(`💬 [Chat] Updated last read timestamp for room ${chatRoom.matrixRoomId} to ${new Date(messageTimestamp).toISOString()}`);
-            }
-            
-            // Clear unread count for this room
-            if (chatRoom.matrixRoomId) {
-                setUnreadCounts((prev) => {
-                    const newCounts = { ...prev };
-                    // Clear all entries for this room (handles both with and without user ID suffix)
-                    Object.keys(newCounts).forEach(key => {
-                        if (key.startsWith(chatRoom.matrixRoomId!)) {
-                            delete newCounts[key];
-                        }
+                // Clear unread count for this room
+                if (chatRoom.matrixRoomId) {
+                    setUnreadCounts((prev) => {
+                        const newCounts = { ...prev };
+                        // Clear all entries for this room (handles both with and without user ID suffix)
+                        Object.keys(newCounts).forEach(key => {
+                            if (key.startsWith(chatRoom.matrixRoomId!)) {
+                                delete newCounts[key];
+                            }
+                        });
+                        return newCounts;
                     });
-                    return newCounts;
-                });
+                }
+                
+                console.log(`💬 [Chat] Read receipt sent successfully`);
+            } catch (error) {
+                console.error("Failed to send read receipt:", error);
             }
-            
-            console.log(`💬 [Chat] Read receipt sent successfully`);
         } else {
             console.log(`💬 [Chat] No messages to mark as read for room ${chatRoom.name || chatRoom.matrixRoomId}`);
         }
@@ -1137,7 +1142,7 @@ export const ChatRoomComponent: React.FC<{
                 }}
             >
                 <div ref={inputRef} className="relative flex h-full w-full flex-col">
-                    {!inToolbox && (
+                    {!inToolbox && circle && (
                         <Link href={`/circles/${circle.handle}`}>
                             <div className="fixed top-4 z-[20] cursor-pointer" style={pillStyle}>
                                 <div className="flex items-center gap-2 rounded-full bg-white p-2 shadow-lg hover:bg-gray-100">

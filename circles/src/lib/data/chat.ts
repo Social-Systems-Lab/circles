@@ -241,3 +241,48 @@ export const findOrCreateDMRoom = async (userA: Circle, userB: Circle): Promise<
 
     return newRoom;
 };
+
+export const createGroupChatRoom = async (
+    name: string,
+    creatorDid: string,
+    participantDids: string[],
+    matrixRoomId: string,
+    avatarUrl?: string
+): Promise<ChatRoom> => {
+    // Convert Matrix mxc:// URL to HTTP URL if needed
+    let httpAvatarUrl: string | undefined;
+    if (avatarUrl) {
+        if (avatarUrl.startsWith("mxc://")) {
+            // Use localhost (nginx) to benefit from direct file serving
+            const matrixUrl = "http://localhost";
+            httpAvatarUrl = `${matrixUrl}/_matrix/media/v3/download/${avatarUrl.replace("mxc://", "")}`;
+        } else {
+            httpAvatarUrl = avatarUrl;
+        }
+    }
+
+    const newRoom: ChatRoom = {
+        name: name,
+        handle: `group-${Date.now()}`, // Generate a unique handle
+        createdAt: new Date(),
+        userGroups: [],
+        isDirect: false,
+        matrixRoomId: matrixRoomId,
+        picture: httpAvatarUrl ? { url: httpAvatarUrl } : undefined,
+    };
+
+    // Insert into DB
+    const result = await ChatRooms.insertOne(newRoom);
+    newRoom._id = result.insertedId.toString();
+
+    // Add creator and participants as members
+    const allMembers = [creatorDid, ...participantDids];
+    // Remove duplicates just in case
+    const uniqueMembers = Array.from(new Set(allMembers));
+
+    for (const did of uniqueMembers) {
+        await addChatRoomMember(did, newRoom._id);
+    }
+
+    return newRoom;
+};

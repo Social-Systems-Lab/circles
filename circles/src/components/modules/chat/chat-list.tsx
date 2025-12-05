@@ -43,7 +43,7 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
     }, [chats, latestMessages]);
 
     const handleChatClick = (chat: ChatRoomDisplay) => {
-        const path = `/chat/${chat.circle.handle}`;
+        const path = chat.circle ? `/chat/${chat.circle.handle}` : `/chat/${chat.handle}`;
         router.push(path);
         if (onChatClick) {
             onChatClick(chat);
@@ -69,7 +69,7 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
                             className={clsx(
                                 "m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100",
                                 {
-                                    "bg-gray-200 dark:bg-gray-700": activeChatHandle === chat.circle.handle,
+                                    "bg-gray-200 dark:bg-gray-700": activeChatHandle === (chat.circle?.handle || chat.handle),
                                 },
                             )}
                             onClick={() => handleChatClick(chat)}
@@ -82,7 +82,7 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
                                         circleType: chat.circle?.circleType || "circle",
                                     }}
                                     size="40px"
-                                    showTypeIndicator={chat.circle?.circleType !== "user"}
+                                    showTypeIndicator={chat.circle?.circleType !== "user" && !!chat.circle}
                                 />
                                 {unreadCount > 0 && (
                                     <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">

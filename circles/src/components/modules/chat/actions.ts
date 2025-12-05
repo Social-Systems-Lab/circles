@@ -260,9 +260,12 @@ export const sendAttachmentAction = async (
         const buffer = Buffer.from(await file.arrayBuffer());
         const { uploadMatrixMedia, sendMatrixAttachment, addUserToRoom } = await import("@/lib/data/matrix");
 
+        const matrixUrl = user.matrixUrl || `http://${process.env.MATRIX_HOST || "127.0.0.1"}:${process.env.MATRIX_PORT || "8008"}`;
+
         // Upload media
         const mxcUrl = await uploadMatrixMedia(
             user.matrixAccessToken,
+            matrixUrl,
             buffer,
             file.type,
             file.name
@@ -374,5 +377,113 @@ export const deleteMessageAction = async (
     } catch (error) {
         console.error("❌ Error deleting message:", error);
         return { success: false, message: error instanceof Error ? error.message : "Failed to delete message" };
+    }
+};
+
+export const createGroupChatAction = async (
+    formData: FormData
+): Promise<{ success: boolean; roomId?: string; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to create a group chat" };
+    }
+
+    const name = formData.get("name") as string;
+    const participantDidsJson = formData.get("participants") as string;
+    const avatarFile = formData.get("avatar") as File | null;
+
+    if (!name || !participantDidsJson) {
+        return { success: false, message: "Missing group name or participants" };
+    }
+
+    let participantDids: string[] = [];
+    try {
+        participantDids = JSON.parse(participantDidsJson);
+    } catch (e) {
+        return { success: false, message: "Invalid participants data" };
+    }
+
+    try {
+        const user = await getPrivateUserByDid(userDid);
+        if (!user?.matrixAccessToken) {
+            return { success: false, message: "User does not have valid Matrix credentials" };
+        }
+
+        const matrixUrl = user.matrixUrl || `http://${process.env.MATRIX_HOST || "127.0.0.1"}:${process.env.MATRIX_PORT || "8008"}`;
+
+        const { createRoom, uploadMatrixMedia } = await import("@/lib/data/matrix");
+        const { getPrivateUserByDid: getUser } = await import("@/lib/data/user");
+
+        // Resolve participant DIDs to Matrix IDs
+        const inviteList: string[] = [];
+        for (const did of participantDids) {
+            const participant = await getUser(did);
+            if (participant?.fullMatrixName) {
+                inviteList.push(participant.fullMatrixName);
+            }
+        }
+
+        let avatarUrl: string | undefined;
+        if (avatarFile && avatarFile.size > 0) {
+            const buffer = Buffer.from(await avatarFile.arrayBuffer());
+            const uploadResult = await uploadMatrixMedia(
+                user.matrixAccessToken,
+                matrixUrl,
+                buffer,
+                avatarFile.type,
+                avatarFile.name
+            );
+            avatarUrl = uploadResult;
+        }
+
+        const roomResult = await createRoom(user.matrixAccessToken, matrixUrl, {
+            name,
+            invite: inviteList,
+            preset: "private_chat",
+            creation_content: { "m.federate": true },
+            initial_state: avatarUrl
+                ? [
+                      {
+                          type: "m.room.avatar",
+                          state_key: "",
+                          content: { url: avatarUrl },
+                      },
+                  ]
+                : undefined,
+        });
+
+        // Create the chat room in our local database
+        const { createGroupChatRoom } = await import("@/lib/data/chat");
+        await createGroupChatRoom(name, userDid, participantDids, roomResult.room_id, avatarUrl);
+
+        return { success: true, roomId: roomResult.room_id };
+    } catch (error) {
+        console.error("❌ Error creating group chat:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to create group chat" };
+    }
+};
+
+export const sendReadReceiptAction = async (
+    roomId: string,
+    eventId: string
+): Promise<{ success: boolean; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to send read receipts" };
+    }
+
+    try {
+        const user = await getPrivateUserByDid(userDid);
+        if (!user?.matrixAccessToken) {
+            return { success: false, message: "User does not have valid Matrix credentials" };
+        }
+
+        const { sendReadReceipt } = await import("@/lib/data/matrix");
+        await sendReadReceipt(user.matrixAccessToken, roomId, eventId);
+
+        return { success: true };
+    } catch (error) {
+        console.error("❌ Error sending read receipt:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to send read receipt" };
     }
 };

@@ -18,8 +18,17 @@ export default async function ChatRoomPage(props: ChatRoomPageProps) {
 
     // check if user has access to chat room
     let privateUser = await getUserPrivate(userDid);
-    let chatRoom = privateUser.chatRoomMemberships.find((m) => m.chatRoom.circle.handle === params.handle)?.chatRoom;
+    
+    console.log("Looking for chat with handle:", params.handle);
+    console.log("Available chat handles:", privateUser.chatRoomMemberships.map(m => ({
+        circleHandle: m.chatRoom.circle?.handle,
+        chatHandle: m.chatRoom.handle,
+        name: m.chatRoom.name
+    })));
+    
+    let chatRoom = privateUser.chatRoomMemberships.find((m) => m.chatRoom.circle?.handle === params.handle || m.chatRoom.handle === params.handle)?.chatRoom;
     if (!chatRoom) {
+        console.error("Chat room not found for handle:", params.handle);
         redirect("/unauthorized");
     }
 

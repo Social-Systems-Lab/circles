@@ -302,7 +302,7 @@ export const chatRoomSchema = z.object({
 export type ChatRoom = z.infer<typeof chatRoomSchema>;
 
 export type ChatRoomDisplay = ChatRoom & {
-    
+    circle?: Circle;
 };
 
 export type MatrixMessageContent =

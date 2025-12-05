@@ -8,6 +8,7 @@ import { Circle, ContentPreviewData, FileInfo, CircleType } from "@/models/model
 import { useAtom } from "jotai";
 import { useRouter } from "next/navigation";
 import CircleTypeIndicator from "@/components/utils/circle-type-indicator";
+import { convertMxcToHttp } from "@/lib/utils/matrix-utils";
 
 // Define a more flexible type for the prop
 interface CircleLike {
@@ -78,7 +79,11 @@ export const CirclePicture = ({
                 onClick={openPreview ? onOpenPreview : undefined}
                 style={size ? { width: size, height: size } : {}}
             >
-                <AvatarImage src={circle?.picture?.url} />
+                <AvatarImage src={convertMxcToHttp(
+                    typeof circle?.picture === 'string' 
+                        ? circle.picture 
+                        : circle?.picture?.url
+                )} />
                 <AvatarFallback>{getInitials()}</AvatarFallback>
             </Avatar>
 

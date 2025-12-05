@@ -818,11 +818,12 @@ export async function sendMessage(
 
 export async function uploadMatrixMedia(
     accessToken: string,
+    matrixUrl: string,
     fileBuffer: Buffer,
     contentType: string,
     fileName: string
 ): Promise<string> {
-    const url = `${MATRIX_URL}/_matrix/media/v3/upload?filename=${encodeURIComponent(fileName)}`;
+    const url = `${matrixUrl}/_matrix/media/v3/upload?filename=${encodeURIComponent(fileName)}`;
     const response = await fetch(url, {
         method: "POST",
         headers: {
@@ -915,4 +916,69 @@ export async function redactRoomMessage(
     }
     // Redaction responses are typically empty, so we don't try to parse JSON
     return {};
+}
+
+export async function createRoom(
+    accessToken: string,
+    matrixUrl: string,
+    options: {
+        name?: string;
+        topic?: string;
+        invite?: string[];
+        preset?: "private_chat" | "public_chat" | "trusted_private_chat";
+        isDirect?: boolean;
+        creation_content?: any;
+        initial_state?: any[];
+    }
+): Promise<{ room_id: string }> {
+    const response = await fetch(`${matrixUrl}/_matrix/client/v3/createRoom`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            name: options.name,
+            topic: options.topic,
+            invite: options.invite,
+            preset: options.preset || "private_chat",
+            is_direct: options.isDirect,
+            creation_content: options.creation_content,
+            initial_state: options.initial_state,
+        }),
+    });
+
+    if (!response.ok) {
+        const errorBody = await response.text();
+        console.error("Failed to create room:", response.status, errorBody);
+        throw new Error(`Failed to create room: ${response.status} ${errorBody}`);
+    }
+
+    return await response.json();
+}
+
+export async function sendReadReceipt(
+    accessToken: string,
+    roomId: string,
+    eventId: string
+): Promise<void> {
+    const encodedRoomId = encodeURIComponent(roomId);
+    const encodedEventId = encodeURIComponent(eventId);
+
+    const url = `${MATRIX_URL}/_matrix/client/v3/rooms/${encodedRoomId}/receipt/m.read/${encodedEventId}`;
+
+    const response = await fetch(url, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        // Silently fail on some errors if needed, or throw
+        throw new Error(`Failed to send read receipt: ${response.status} ${errorText}`);
+    }
 }
