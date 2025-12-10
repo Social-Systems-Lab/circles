@@ -1328,6 +1328,17 @@ export const eventVisibilitySchema = z.enum(["public", "private"]);
 export type EventVisibility = z.infer<typeof eventVisibilitySchema>;
 
 /**
+ * Recurrence model
+ */
+export const recurrenceSchema = z.object({
+    frequency: z.enum(["daily", "weekly", "monthly", "yearly"]),
+    interval: z.number().min(1).default(1),
+    endDate: z.date().optional(),
+    count: z.number().optional(),
+});
+export type Recurrence = z.infer<typeof recurrenceSchema>;
+
+/**
  * Event model
  */
 export const eventSchema = z.object({
@@ -1359,6 +1370,15 @@ export const eventSchema = z.object({
     capacity: z.number().optional(),
     // Invitations
     invitations: z.array(didSchema).optional(),
+    // Recurrence
+    recurrence: z
+        .object({
+            frequency: z.enum(["daily", "weekly", "monthly", "yearly"]),
+            interval: z.number().min(1).default(1),
+            endDate: z.date().optional(),
+            count: z.number().optional(),
+        })
+        .optional(),
 });
 
 export type Event = z.infer<typeof eventSchema>;
