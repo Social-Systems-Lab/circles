@@ -1,5 +1,6 @@
 import { Circles, Events, EventRsvps, Feeds, Posts, EventInvitations } from "./db";
 import { ObjectId } from "mongodb";
+import { RRule, RRuleSet, rrulestr } from "rrule";
 import { Event, EventDisplay, EventStage, EventRsvp, Circle, Post, Media, EventInvitation } from "@/models/models";
 import { SAFE_CIRCLE_PROJECTION } from "./circle";
 import { createPost } from "./feed";
@@ -34,6 +35,7 @@ export const SAFE_EVENT_PROJECTION = {
     capacity: 1,
     visibility: 1,
     invitations: 1,
+    recurrence: 1,
 } as const;
 
 type Range = { from?: Date; to?: Date };
@@ -56,6 +58,50 @@ function buildRangeMatch(range?: Range) {
 }
 
 /**
+ * Expand a recurring event into multiple instances within a range.
+ */
+function expandRecurringEvent(event: EventDisplay, range: Range): EventDisplay[] {
+    if (!event.recurrence || !range.from || !range.to) return [event];
+
+    const { frequency, interval, endDate, count } = event.recurrence;
+    const rruleFreq =
+        frequency === "daily"
+            ? RRule.DAILY
+            : frequency === "weekly"
+              ? RRule.WEEKLY
+              : frequency === "monthly"
+                ? RRule.MONTHLY
+                : RRule.YEARLY;
+
+    const rule = new RRule({
+        freq: rruleFreq,
+        interval: interval,
+        dtstart: new Date(event.startAt),
+        until: endDate ? new Date(endDate) : undefined,
+        count: count,
+    });
+
+    // Get instances between range.from and range.to
+    // Note: rrule.between(after, before, inc)
+    const instances = rule.between(range.from, range.to, true);
+
+    return instances.map((date: Date, idx: number) => {
+        // Calculate duration to shift endAt correctly
+        const duration = new Date(event.endAt).getTime() - new Date(event.startAt).getTime();
+        const instanceEnd = new Date(date.getTime() + duration);
+
+        return {
+            ...event,
+            _id: `${event._id}_${date.getTime()}`, // Virtual ID
+            startAt: date,
+            endAt: instanceEnd,
+            isRecurringInstance: true,
+            originalEventId: event._id,
+        } as unknown as EventDisplay; // Type assertion since we are adding virtual props
+    });
+}
+
+/**
  * Get all events for a circle (optionally within a time range),
  * including author, circle, user RSVP status and 'going' count.
  */
@@ -71,8 +117,29 @@ export const getEventsByCircleId = async (
         const circle = await Circles.findOne({ _id: new ObjectId(circleId) });
         const matchQuery: any = {
             circleId,
-            ...(dateMatch as Record<string, unknown>),
+            $or: [
+                 dateMatch,
+                 { recurrence: { $exists: true } } // Always fetch recurring events to check for expansion
+            ]
         };
+        // Clean up if dateMatch is empty (meaning no range)
+        if (Object.keys(dateMatch).length === 0) {
+            delete matchQuery.$or;
+        } else {
+             // If we have a range, use the $or. But wait, $or requires array of expressions.
+             // If dateMatch is empty, $or is invalid if used blindly.
+             // A better way: match (circleId) AND ( (dateMatch) OR (recurrence exists) )
+             // If dateMatch is empty, this logic simplifies to just circleId.
+             // Code below handles this manually.
+        }
+
+        const baseMatch: any = { circleId };
+        if (Object.keys(dateMatch).length > 0) {
+            baseMatch.$or = [
+                dateMatch,
+                { "recurrence": { $exists: true, $ne: null } }
+            ];
+        }
 
         let hiddenCancelledObjectIds: ObjectId[] = [];
         try {
@@ -115,8 +182,9 @@ export const getEventsByCircleId = async (
 
         const events = (await Events.aggregate([
             // 1) Match circle and optional date overlap
+            // 1) Match circle and optional date overlap OR recurrence
             {
-                $match: matchQuery,
+                $match: baseMatch,
             },
             ...hideCancelledMatchStage,
 

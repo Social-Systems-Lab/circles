@@ -106,6 +106,21 @@ const createEventSchema = z.object({
     causes: z.array(z.string()).optional(),
     capacity: z.string().optional(), // parse to number
     visibility: eventVisibilitySchema.optional(),
+    recurrence: z
+        .string()
+        .optional()
+        .refine(
+            (val) => {
+                if (!val) return true;
+                try {
+                    const parsed = JSON.parse(val);
+                    return parsed.frequency && ["daily", "weekly", "monthly", "yearly"].includes(parsed.frequency);
+                } catch {
+                    return false;
+                }
+            },
+            { message: "Invalid recurrence format" },
+        ),
 });
 
 const updateEventSchema = createEventSchema;
@@ -281,6 +296,15 @@ export async function createEventAction(
             locationData = JSON.parse(data.location);
         }
 
+        let recurrenceData: EventModel["recurrence"] = undefined;
+        if (data.recurrence) {
+            recurrenceData = JSON.parse(data.recurrence);
+            // Ensure dates are parsed back to Date objects if needed (though JSON.parse usually keeps strings)
+             if (recurrenceData?.endDate) {
+                 recurrenceData.endDate = new Date(recurrenceData.endDate);
+             }
+        }
+
         // Handle images
         const imageFiles = (data.images || []).filter(isFile);
         let uploadedImages: Media[] = [];
@@ -325,6 +349,7 @@ export async function createEventAction(
             causes: (data.causes as string[])?.filter(Boolean),
             capacity,
             visibility: (data.visibility as any) ?? "public",
+            recurrence: recurrenceData,
         };
 
         // Create in DB (will also create shadow post if feed exists)
@@ -406,6 +431,25 @@ export async function updateEventAction(
             }
         }
 
+
+        let recurrenceData: EventModel["recurrence"] | null = event.recurrence ?? undefined;
+        const rawRecurrence = formData.get("recurrence") as string | null;
+        console.log(`[updateEventAction] Event ${eventId} - Raw Recurrence:`, rawRecurrence);
+
+        if (rawRecurrence && rawRecurrence.trim() !== "") {
+            try {
+                recurrenceData = JSON.parse(rawRecurrence);
+                if (recurrenceData?.endDate) {
+                    recurrenceData.endDate = new Date(recurrenceData.endDate);
+                }
+            } catch (e) { 
+                console.error("[updateEventAction] Failed to parse recurrence:", e);
+            }
+        } else if (rawRecurrence === "") {
+             console.log("[updateEventAction] Clearing recurrence");
+             recurrenceData = null; // Explicitly clear
+        }
+
         // Reconcile images
         const existingImages = event.images || [];
         const submittedImageEntries = data.images || [];
@@ -469,6 +513,7 @@ export async function updateEventAction(
                     ? Number(data.capacity)
                     : undefined,
             visibility: (data.visibility as any) ?? event.visibility,
+            recurrence: recurrenceData as any,
             updatedAt: new Date(),
         };
 

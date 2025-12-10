@@ -45,7 +45,9 @@ export const BackgroundMessagePoller = () => {
                                     let author = matrixUserCache[senderMatrixName];
                                     if (!author) {
                                         const fetchedAuthors = await fetchMatrixUsers([senderMatrixName]);
-                                        author = fetchedAuthors[0] || undefined;
+                                        if (fetchedAuthors?.[0]) {
+                                            author = fetchedAuthors[0];
+                                        }
                                         if (author) {
                                             setMatrixUserCache((prev) => ({ ...prev, [senderMatrixName]: author! }));
                                         }

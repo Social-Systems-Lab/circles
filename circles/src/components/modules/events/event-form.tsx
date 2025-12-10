@@ -15,6 +15,13 @@ import LocationPicker from "@/components/forms/location-picker";
 import TimePicker from "@/components/forms/time-picker";
 import { format, addHours, setHours, setMinutes } from "date-fns";
 import { Bold, Italic, List, Link as LinkIcon, Heading1, Heading2 } from "lucide-react";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 type Props = {
     circleHandle?: string; // optional, can come from context or picker
@@ -45,6 +52,7 @@ import CircleSelector from "@/components/global-create/circle-selector";
 import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content";
 
 export default function EventForm({ circleHandle, event, showCirclePicker }: Props) {
+    console.log("EventForm mounted/updated. Event recurrence:", event?.recurrence);
     const [selectedCircle, setSelectedCircle] = useState<string | undefined>(circleHandle);
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -61,6 +69,26 @@ export default function EventForm({ circleHandle, event, showCirclePicker }: Pro
     const [isPrivate, setIsPrivate] = useState<boolean>(event?.visibility === "private");
     const [location, setLocation] = useState<Location | undefined>(event?.location);
     const [images, setImages] = useState<ImageItem[]>([]);
+
+    // Recurrence State
+    const [isRecurring, setIsRecurring] = useState<boolean>(!!event?.recurrence);
+    const [recurrenceFreq, setRecurrenceFreq] = useState<"daily" | "weekly" | "monthly" | "yearly">(
+        event?.recurrence?.frequency || "daily"
+    );
+    const [recurrenceInterval, setRecurrenceInterval] = useState<string>(
+        event?.recurrence?.interval ? String(event?.recurrence.interval) : "1"
+    );
+    const [recurrenceEndMode, setRecurrenceEndMode] = useState<"date" | "count">(
+        event?.recurrence?.count ? "count" : "date"
+    );
+    const [recurrenceEndDate, setRecurrenceEndDate] = useState<string>(
+        event?.recurrence?.endDate
+            ? formatDate(new Date(event.recurrence.endDate))
+            : formatDate(addHours(new Date(), 24 * 7)) // Default to one week later
+    );
+    const [recurrenceCount, setRecurrenceCount] = useState<string>(
+        event?.recurrence?.count ? String(event.recurrence.count) : "7"
+    );
 
     const [startDate, setStartDate] = useState(() =>
         event?.startAt ? formatDate(new Date(event.startAt)) : format(new Date(), "yyyy-MM-dd"),
@@ -203,6 +231,18 @@ export default function EventForm({ circleHandle, event, showCirclePicker }: Pro
                 fd.set("allDay", allDay ? "on" : "");
                 if (capacity) fd.set("capacity", capacity);
                 fd.set("visibility", isPrivate ? "private" : "public");
+
+                if (isRecurring) {
+                    const recurrenceData = {
+                        frequency: recurrenceFreq,
+                        interval: parseInt(recurrenceInterval) || 1,
+                        endDate: recurrenceEndMode === "date" ? new Date(recurrenceEndDate).toISOString() : undefined,
+                        count: recurrenceEndMode === "count" ? parseInt(recurrenceCount) : undefined,
+                    };
+                    fd.set("recurrence", JSON.stringify(recurrenceData));
+                } else {
+                    fd.set("recurrence", "");
+                }
 
                 let result: { success: boolean; message?: string; eventId?: string };
                 if (event?._id) {
@@ -363,17 +403,19 @@ export default function EventForm({ circleHandle, event, showCirclePicker }: Pro
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <Label>End Date</Label>
-                            <Input
-                                type="date"
-                                value={endDate}
-                                onChange={(e) => {
-                                    setEndDate(e.target.value);
-                                    setEndDirty(true);
-                                }}
-                            />
-                        </div>
+                        {!isRecurring && (
+                            <div>
+                                <Label>End Date</Label>
+                                <Input
+                                    type="date"
+                                    value={endDate}
+                                    onChange={(e) => {
+                                        setEndDate(e.target.value);
+                                        setEndDirty(true);
+                                    }}
+                                />
+                            </div>
+                        )}
                         {!allDay && (
                             <div>
                                 <Label>End Time</Label>
@@ -402,6 +444,137 @@ export default function EventForm({ circleHandle, event, showCirclePicker }: Pro
                             <Switch id="isHybrid" checked={isHybrid} onCheckedChange={setIsHybrid} />
                             <Label htmlFor="isHybrid">Hybrid</Label>
                         </div>
+                    </div>
+
+                    <div className="space-y-4 rounded-lg border p-4">
+                        <div className="flex items-center gap-2">
+                            <Switch
+                                id="isRecurring"
+                                checked={isRecurring}
+                                onCheckedChange={(checked) => {
+                                    setIsRecurring(checked);
+                                    if (checked) {
+                                        // Reset end date to start date to avoid multi-day recurrence confusion
+                                        setEndDate(startDate); 
+                                        if (!recurrenceFreq) {
+                                            setRecurrenceFreq("daily");
+                                            setRecurrenceInterval("1");
+                                            setRecurrenceEndMode("date");
+                                            setRecurrenceEndDate(endDate); 
+                                        }
+                                    }
+                                }}
+                            />
+                            <Label htmlFor="isRecurring" className="font-medium">
+                                Recurring meeting
+                            </Label>
+                        </div>
+
+                        {isRecurring && (
+                            <div className="grid gap-4 pl-6 pt-2">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label>Recurrence</Label>
+                                        <Select
+                                            value={recurrenceFreq}
+                                            onValueChange={(val) => setRecurrenceFreq(val as any)}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="daily">Daily</SelectItem>
+                                                <SelectItem value="weekly">Weekly</SelectItem>
+                                                <SelectItem value="monthly">Monthly</SelectItem>
+                                                <SelectItem value="yearly">Yearly</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Repeat every</Label>
+                                        <div className="flex items-center gap-2">
+                                            <Input
+                                                type="number"
+                                                min="1"
+                                                value={recurrenceInterval}
+                                                onChange={(e) => setRecurrenceInterval(e.target.value)}
+                                            />
+                                            <span className="text-sm text-muted-foreground">
+                                                {recurrenceFreq === "daily"
+                                                    ? "day(s)"
+                                                    : recurrenceFreq === "weekly"
+                                                      ? "week(s)"
+                                                      : recurrenceFreq === "monthly"
+                                                        ? "month(s)"
+                                                        : "year(s)"}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>End Date</Label>
+                                    <div className="flex flex-col gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <div
+                                                className={`flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border ${
+                                                    recurrenceEndMode === "date"
+                                                        ? "border-primary bg-primary text-primary-foreground"
+                                                        : "border-input"
+                                                }`}
+                                                onClick={() => setRecurrenceEndMode("date")}
+                                            >
+                                                {recurrenceEndMode === "date" && (
+                                                    <div className="h-2 w-2 rounded-full bg-white" />
+                                                )}
+                                            </div>
+                                            <Label
+                                                className="cursor-pointer font-normal"
+                                                onClick={() => setRecurrenceEndMode("date")}
+                                            >
+                                                By
+                                            </Label>
+                                            <Input
+                                                type="date"
+                                                disabled={recurrenceEndMode !== "date"}
+                                                value={recurrenceEndDate}
+                                                onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                                                className="w-40"
+                                            />
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div
+                                                className={`flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border ${
+                                                    recurrenceEndMode === "count"
+                                                        ? "border-primary bg-primary text-primary-foreground"
+                                                        : "border-input"
+                                                }`}
+                                                onClick={() => setRecurrenceEndMode("count")}
+                                            >
+                                                {recurrenceEndMode === "count" && (
+                                                    <div className="h-2 w-2 rounded-full bg-white" />
+                                                )}
+                                            </div>
+                                            <Label
+                                                className="cursor-pointer font-normal"
+                                                onClick={() => setRecurrenceEndMode("count")}
+                                            >
+                                                After
+                                            </Label>
+                                            <Input
+                                                type="number"
+                                                min="1"
+                                                disabled={recurrenceEndMode !== "count"}
+                                                value={recurrenceCount}
+                                                onChange={(e) => setRecurrenceCount(e.target.value)}
+                                                className="w-20"
+                                            />
+                                            <span className="text-sm text-muted-foreground">occurrences</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {isVirtual && (

@@ -35,7 +35,16 @@ export default async function EventsModule({ circle }: Props) {
 
     const canCreateEvents = await isAuthorized(userDid, circle._id!.toString(), features.events.create);
 
-    const { events } = await getEventsAction(circle.handle!, undefined, true, true);
+    const today = new Date();
+    const nextYear = new Date(today);
+    nextYear.setFullYear(today.getFullYear() + 1);
+
+    const { events } = await getEventsAction(
+        circle.handle!,
+        { from: today.toISOString(), to: nextYear.toISOString() },
+        true,
+        true
+    );
 
     return (
         <div className="space-y-4 p-2 md:p-4">
