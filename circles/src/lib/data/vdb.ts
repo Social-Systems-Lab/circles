@@ -22,8 +22,41 @@ import { v5 as uuidv5 } from "uuid";
 
 let qdrantClient: QdrantClient | undefined = undefined;
 let openAiClient: OpenAI | undefined = undefined;
+let hasLoggedVdbDisabled = false;
+
+const isVdbEnabled = () => {
+    const flag = process.env.VDB_ENABLED;
+    if (flag === undefined || flag === null) {
+        return true;
+    }
+
+    const normalized = flag.trim().toLowerCase();
+    if (!normalized) {
+        return true;
+    }
+
+    return normalized !== "false" && normalized !== "0" && normalized !== "off";
+};
+
+class VdbDisabledError extends Error {
+    constructor() {
+        super("Vector database features are disabled via VDB_ENABLED env variable.");
+        this.name = "VdbDisabledError";
+    }
+}
+
+const logVdbDisabled = (context: string) => {
+    if (!hasLoggedVdbDisabled) {
+        console.info(`[VDB] Disabled locally – skipping ${context}. Set VDB_ENABLED=true to enable Qdrant/OpenAI features.`);
+        hasLoggedVdbDisabled = true;
+    }
+};
 
 export const getQdrantClient = async () => {
+    if (!isVdbEnabled()) {
+        throw new VdbDisabledError();
+    }
+
     if (!qdrantClient) {
         qdrantClient = new QdrantClient({
             host: process.env.QDRANT_HOST ?? "qdrant",
@@ -661,8 +694,6 @@ export const getVbdSimilarity = async (
 ): Promise<number | undefined> => {
     if (!source || !item) return undefined;
 
-    const client = await getQdrantClient();
-
     // Determine whether the item is a Circle or a Post, and select the appropriate collection
     const isCircle =
         (item as any)?.circleType === "circle" ||
@@ -680,6 +711,8 @@ export const getVbdSimilarity = async (
     if (!idName) return undefined;
 
     try {
+        const client = await getQdrantClient();
+
         // Fetch the vectors for both the source circle and the target item
         const sourceResponse = await client.retrieve("circles", {
             ids: [sourceUuid],
@@ -700,6 +733,10 @@ export const getVbdSimilarity = async (
         const similarity = calculateCosineSimilarity(sourceVector, targetVector);
         return similarity;
     } catch (error) {
+        if (error instanceof VdbDisabledError) {
+            logVdbDisabled("similarity scoring");
+            return undefined;
+        }
         console.warn(`Error fetching similarity for ${collectionName} ${idName}:`, error);
         return undefined;
     }
@@ -728,6 +765,11 @@ export const semanticSearchContent = async (options: {
     sdgHandles?: string[];
 }): Promise<SearchResultItem[]> => {
     const { query, categories, limit = 20, sdgHandles } = options;
+
+    if (!isVdbEnabled()) {
+        logVdbDisabled("semantic search");
+        return [];
+    }
 
     if ((!query || query.trim() === "") && (!sdgHandles || sdgHandles.length === 0)) {
         return [];

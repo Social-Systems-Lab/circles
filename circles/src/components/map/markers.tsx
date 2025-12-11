@@ -3,7 +3,7 @@
 import { contentPreviewAtom, zoomContentAtom } from "@/lib/data/atoms";
 import { Content, WithMetric } from "@/models/models";
 import { useAtom } from "jotai";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "../ui/hover-card";
 import { HoverCardArrow } from "@radix-ui/react-hover-card";
 import Indicators from "../utils/indicators";
@@ -12,7 +12,7 @@ import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import ImageCarousel from "../ui/image-carousel";
 import { Media } from "@/models/models";
 import { Button } from "../ui/button";
-import { ArrowUpRight, Calendar as CalendarIcon } from "lucide-react";
+import { ArrowUpRight, Calendar as CalendarIcon, Search } from "lucide-react";
 import { format } from "date-fns";
 
 interface MapMarkerProps {
@@ -24,6 +24,7 @@ interface MapMarkerProps {
 const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }) => {
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [, setZoomContent] = useAtom(zoomContentAtom);
+    const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -47,10 +48,7 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
         : (content as any)?.circleType === "post"
           ? (content as any)?.content
           : (content as any)?.name;
-    const description = isEvent
-        ? (content as any)?.description
-        : (content as any)?.mission || (content as any)?.description;
-    const images: Media[] = (() => {
+    const resolveImages = useCallback((): Media[] => {
         const anyContent: any = content;
         let imgs: Media[] = [];
         if (anyContent?.images?.length) {
@@ -69,17 +67,18 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
         return imgs.length
             ? imgs
             : [{ name: "default", type: "image", fileInfo: { url: fallbackUrl } as any } as Media];
-    })();
+    }, [content]);
     const isPost = (content as any)?.circleType === "post";
-    const markerImgUrl = isEvent
-        ? images?.[0]?.fileInfo?.url
-        : ((content as any)?.picture?.url ?? images?.[0]?.fileInfo?.url);
-    const dateStr =
-        isEvent && (content as any)?.startAt
-            ? `${format(new Date((content as any).startAt), "PPpp")}${
-                  (content as any)?.endAt ? " — " + format(new Date((content as any).endAt), "PPpp") : ""
-              }`
-            : "";
+    const primaryImageUrl = useMemo(() => {
+        const imgs = resolveImages();
+        return imgs?.[0]?.fileInfo?.url;
+    }, [resolveImages]);
+    const markerImgUrl = useMemo(() => {
+        if (isEvent) {
+            return primaryImageUrl;
+        }
+        return (content as any)?.picture?.url ?? primaryImageUrl;
+    }, [content, isEvent, primaryImageUrl]);
 
     // Calendar image for events (e.g., /images/cal/c10_1.png for Oct 1)
     const startDate = isEvent && (content as any)?.startAt ? new Date((content as any).startAt) : undefined;
@@ -110,8 +109,100 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
         }
     };
 
+    const renderHoverContent = () => {
+        const images = resolveImages();
+        const description = isEvent
+            ? (content as any)?.description
+            : (content as any)?.mission || (content as any)?.description;
+        const dateStr =
+            isEvent && (content as any)?.startAt
+                ? `${format(new Date((content as any).startAt), "PPpp")}${
+                      (content as any)?.endAt ? " — " + format(new Date((content as any).endAt), "PPpp") : ""
+                  }`
+                : "";
+
+        return (
+            <HoverCardContent
+                className="z-[9999] w-auto cursor-pointer rounded-[15px] border-0 bg-white p-0"
+                onClick={handleClick}
+                style={{ zIndex: 99999 }}
+            >
+                <HoverCardArrow className="opacity-0" fill="transparent" color="transparent" />
+                <div className="relative h-[200px] w-[320px] overflow-hidden rounded-[15px]">
+                    <div
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <ImageCarousel
+                            images={images}
+                            containerClassName="h-[200px] w-[320px]"
+                            imageClassName="h-full w-full object-cover"
+                            showArrows={true}
+                            showDots={true}
+                        />
+                    </div>
+                    <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-[60%] bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+                    {(content as WithMetric<Content>)?.metrics && (
+                        <div className="absolute left-2 top-2 z-10">
+                            <Indicators
+                                metrics={(content as WithMetric<Content>).metrics!}
+                                className="bg-transparent pl-0 shadow-none"
+                                color="#ffffff"
+                                content={content}
+                                disableProximity
+                            />
+                        </div>
+                    )}
+                    <div className="absolute bottom-0 left-0 right-0 z-10 p-3">
+                        {isEvent && dateStr && (
+                            <div className="mb-1 inline-flex items-center gap-1 text-[12px] font-medium text-white/90">
+                                <CalendarIcon className="h-3.5 w-3.5" />
+                                <span className="truncate">{dateStr}</span>
+                            </div>
+                        )}
+                        <p className="mb-1 line-clamp-1 text-[16px] font-semibold text-white">{title}</p>
+                        {description && <p className="line-clamp-2 text-[13px] text-white/90">{description}</p>}
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-9 flex-1 rounded-full border-white/30 bg-white/10 text-white hover:bg-white/20"
+                                onClick={handleOpen}
+                            >
+                                <ArrowUpRight className="mr-1 h-4 w-4" />
+                                Open
+                            </Button>
+                            {!isEvent && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-9 flex-1 rounded-full border-white/30 bg-white/10 text-white hover:bg-white/20"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (onMapPinClick && content) {
+                                            onMapPinClick(content);
+                                        }
+                                        setZoomContent(content);
+                                        setContentPreview({
+                                            type: (content as any)?.circleType || "circle",
+                                            content: content as any,
+                                        });
+                                    }}
+                                >
+                                    <Search className="mr-1 h-4 w-4" />
+                                    Zoom in
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </HoverCardContent>
+        );
+    };
+
     return (
-        <HoverCard openDelay={200}>
+        <HoverCard openDelay={200} open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
             <HoverCardTrigger>
                 <div className="group relative cursor-pointer" onClick={handleClick}>
                     <div className="absolute bottom-[4px] left-1/2 -translate-x-1/2 transform">
@@ -178,61 +269,7 @@ const MapMarker: React.FC<MapMarkerProps> = ({ content, onClick, onMapPinClick }
                     <div className={`absolute bottom-0 left-1/2 ${isEvent ? "h-[6px] w-[6px]" : "h-2 w-2"} -translate-x-1/2 transform rounded-full bg-white shadow-md`} />
                 </div>
             </HoverCardTrigger>
-            <HoverCardContent
-                className="z-[9999] w-auto cursor-pointer rounded-[15px] border-0 bg-white p-0"
-                onClick={handleClick}
-                style={{ zIndex: 99999 }}
-            >
-                <HoverCardArrow className="opacity-0" fill="transparent" color="transparent" />
-                <div className="relative h-[200px] w-[320px] overflow-hidden rounded-[15px]">
-                    <div
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <ImageCarousel
-                            images={images}
-                            containerClassName="h-[200px] w-[320px]"
-                            imageClassName="h-full w-full object-cover"
-                            showArrows={true}
-                            showDots={true}
-                        />
-                    </div>
-                    <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-[60%] bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
-                    {(content as WithMetric<Content>)?.metrics && (
-                        <div className="absolute left-2 top-2 z-10">
-                            <Indicators
-                                metrics={(content as WithMetric<Content>).metrics!}
-                                className="bg-transparent pl-0 shadow-none"
-                                color="#ffffff"
-                                content={content}
-                                disableProximity
-                            />
-                        </div>
-                    )}
-                    {openHref && (
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="absolute right-2 top-2 z-10 h-7 w-7 rounded-full bg-black/40 hover:bg-black/60"
-                            onClick={handleOpen}
-                            title="Open"
-                        >
-                            <ArrowUpRight className="h-4 w-4 text-white" />
-                        </Button>
-                    )}
-                    <div className="absolute bottom-0 left-0 right-0 z-10 p-3">
-                        {isEvent && dateStr && (
-                            <div className="mb-1 inline-flex items-center gap-1 text-[12px] font-medium text-white/90">
-                                <CalendarIcon className="h-3.5 w-3.5" />
-                                <span className="truncate">{dateStr}</span>
-                            </div>
-                        )}
-                        <p className="mb-1 line-clamp-1 text-[16px] font-semibold text-white">{title}</p>
-                        {description && <p className="line-clamp-2 text-[13px] text-white/90">{description}</p>}
-                    </div>
-                </div>
-            </HoverCardContent>
+            {isPopoverOpen && renderHoverContent()}
         </HoverCard>
     );
 };

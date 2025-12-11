@@ -339,6 +339,7 @@ export interface ChatMessage {
     replyTo?: Partial<ChatMessage>; // The message this is a reply to
     reactions?: Record<string, ReactionAggregation[]>; // { [emoji]: [{sender, eventId}, ...] }
     isRedacted?: boolean;
+    status?: "pending" | "sent" | "failed";
 }
 
 export type ReactionAggregation = {

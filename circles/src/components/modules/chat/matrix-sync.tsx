@@ -16,8 +16,28 @@ import { useEffect, useRef, useState } from "react";
 import { fetchAndCacheMatrixUsers } from "./chat-room";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { getUserPrivateAction } from "../home/actions";
+import { usePathname } from "next/navigation";
+
+const parseEnvFlag = (value?: string) => {
+    if (value === undefined || value === null) return true;
+    const normalized = value.trim().toLowerCase();
+    return normalized !== "false" && normalized !== "0" && normalized !== "off";
+};
+
+const MATRIX_SYNC_ENABLED = parseEnvFlag(process.env.NEXT_PUBLIC_MATRIX_ENABLED);
 
 export const MatrixSync = () => {
+    const pathname = usePathname();
+    const shouldSync = MATRIX_SYNC_ENABLED && pathname?.startsWith("/chat");
+
+    if (!shouldSync) {
+        return null;
+    }
+
+    return <MatrixSyncInner />;
+};
+
+const MatrixSyncInner = () => {
     const [user, setUser] = useAtom(userAtom);
     const [unreadCounts, setUnreadCounts] = useAtom(unreadCountsAtom);
     const [latestMessages, setLatestMessages] = useAtom(latestMessagesAtom);

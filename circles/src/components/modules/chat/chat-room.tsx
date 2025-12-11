@@ -543,6 +543,7 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
     const [user] = useAtom(userAtom);
     const [newMessage, setNewMessage] = useState("");
     const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
+    const [, setRoomMessages] = useAtom(roomMessagesAtom);
     const isMobile = useIsMobile();
     
     // Populate input when editing
@@ -553,11 +554,12 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
     }, [editingMessage]);
 
     const handleSendMessage = async () => {
+        const trimmedMessage = newMessage.trim();
         console.log("📤 [Send] handleSendMessage called", {
             hasUser: !!user,
             hasAccessToken: !!user?.matrixAccessToken,
             hasRoomId: !!chatRoom.matrixRoomId,
-            messageLength: newMessage.trim().length,
+            messageLength: trimmedMessage.length,
             isEditing: !!editingMessage,
             editingMessageId: editingMessage?.id
         });
@@ -574,33 +576,113 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
             return;
         }
         
-        if (newMessage.trim() !== "") {
-            // If editing, handle edit instead of send
-            if (editingMessage) {
-                console.log("📤 [Send] Routing to handleEditSubmit...");
-                await handleEditSubmit();
-                return;
+        if (!trimmedMessage) {
+            return;
+        }
+        
+        // If editing, handle edit instead of send
+        if (editingMessage) {
+            console.log("📤 [Send] Routing to handleEditSubmit...");
+            await handleEditSubmit();
+            return;
+        }
+
+        const roomId = chatRoom.matrixRoomId;
+        const replyTarget = replyToMessage;
+        const tempId =
+            typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+                ? `temp-${crypto.randomUUID()}`
+                : `temp-${Date.now()}`;
+        const optimisticMessage: ChatMessage = {
+            id: tempId,
+            roomId,
+            type: "m.room.message",
+            content: {
+                msgtype: "m.text",
+                body: trimmedMessage,
+            },
+            createdBy:
+                user.fullMatrixName ||
+                (user.matrixUsername ? `@${user.matrixUsername}:${process.env.NEXT_PUBLIC_MATRIX_DOMAIN}` : user.name) ||
+                user.handle ||
+                "You",
+            createdAt: new Date(),
+            author: user,
+            reactions: {},
+            replyTo: replyTarget
+                ? {
+                      id: replyTarget.id,
+                      author: replyTarget.author,
+                      content: replyTarget.content,
+                  }
+                : undefined,
+            status: "pending",
+        };
+
+        setRoomMessages((prev) => {
+            const current = prev[roomId] || [];
+            return {
+                ...prev,
+                [roomId]: [...current, optimisticMessage],
+            };
+        });
+
+        setNewMessage("");
+        setReplyToMessage(null);
+        
+        const removeOptimisticMessage = () => {
+            setRoomMessages((prev) => {
+                const current = prev[roomId] || [];
+                return {
+                    ...prev,
+                    [roomId]: current.filter((msg) => msg.id !== tempId),
+                };
+            });
+        };
+
+        const rollbackOptimisticMessage = (reason?: string) => {
+            console.error("Failed to send message:", reason);
+            removeOptimisticMessage();
+            setNewMessage(trimmedMessage);
+            if (replyTarget) {
+                setReplyToMessage(replyTarget);
             }
+        };
+        
+        console.log("📤 [Send] Sending new message...");
+        try {
+            const { sendMessageAction } = await import("./actions");
+            const result = await sendMessageAction(roomId, trimmedMessage, replyTarget?.id);
             
-            console.log("📤 [Send] Sending new message...");
-            try {
-                // Use server action to send message (avoids CORS issues)
-                const { sendMessageAction } = await import("./actions");
-                const result = await sendMessageAction(
-                    chatRoom.matrixRoomId,
-                    newMessage,
-                    replyToMessage?.id
-                );
-                
-                if (result.success) {
-                    setNewMessage("");
-                    setReplyToMessage(null);
-                } else {
-                    console.error("Failed to send message:", result.message);
-                }
-            } catch (error) {
-                console.error("Failed to send message:", error);
+            if (result.success) {
+                setRoomMessages((prev) => {
+                    const current = prev[roomId] || [];
+                    if (!result.eventId) {
+                        return {
+                            ...prev,
+                            [roomId]: current.map((msg) =>
+                                msg.id === tempId ? { ...msg, status: "sent" } : msg
+                            ),
+                        };
+                    }
+
+                    const alreadyExists = current.some((msg) => msg.id === result.eventId);
+                    const nextMessages = alreadyExists
+                        ? current.filter((msg) => msg.id !== tempId)
+                        : current.map((msg) =>
+                              msg.id === tempId ? { ...msg, id: result.eventId, status: "sent" } : msg
+                          );
+
+                    return {
+                        ...prev,
+                        [roomId]: nextMessages,
+                    };
+                });
+            } else {
+                rollbackOptimisticMessage(result.message);
             }
+        } catch (error) {
+            rollbackOptimisticMessage(error instanceof Error ? error.message : String(error));
         }
     };
 

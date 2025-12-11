@@ -20,12 +20,24 @@ import {
 import { addUserToRoom } from "@/lib/data/matrix";
 import { features } from "@/lib/data/constants";
 
+const parseEnvFlag = (value?: string | null) => {
+    if (value === undefined || value === null) return true;
+    const normalized = value.trim().toLowerCase();
+    return normalized !== "false" && normalized !== "0" && normalized !== "off";
+};
+
+const isMatrixEnabled = () => parseEnvFlag(process.env.MATRIX_ENABLED);
+const matrixDisabledMessage = "Matrix chat is disabled in this environment.";
+
 export async function joinChatRoomAction(
     chatRoomId: string,
 ): Promise<{ success: boolean; message?: string; chatRoomMember?: ChatRoomMember }> {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to join a chat room" };
+    }
+    if (!isMatrixEnabled()) {
+        return { success: false, message: matrixDisabledMessage };
     }
 
     try {
@@ -148,6 +160,9 @@ export const sendMessageAction = async (
     if (!userDid) {
         return { success: false, message: "You need to be logged in to send messages" };
     }
+    if (!isMatrixEnabled()) {
+        return { success: false, message: matrixDisabledMessage };
+    }
 
     try {
         console.log("📤 Sending message to room:", roomId);
@@ -205,6 +220,9 @@ export const fetchRoomMessagesAction = async (
     if (!userDid) {
         return { success: false, message: "You need to be logged in to fetch messages" };
     }
+    if (!isMatrixEnabled()) {
+        return { success: false, message: matrixDisabledMessage };
+    }
 
     try {
         const user = await getPrivateUserByDid(userDid);
@@ -257,6 +275,9 @@ export const sendAttachmentAction = async (
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to send attachments" };
+    }
+    if (!isMatrixEnabled()) {
+        return { success: false, message: matrixDisabledMessage };
     }
 
     const roomId = formData.get("roomId") as string;

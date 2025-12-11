@@ -4,12 +4,32 @@ import { useAtom } from "jotai";
 import { useEffect, useRef } from "react";
 import { roomMessagesAtom, userAtom, matrixUserCacheAtom } from "@/lib/data/atoms";
 import { ChatMessage } from "@/models/models";
+import { usePathname } from "next/navigation";
+
+const parseEnvFlag = (value?: string) => {
+    if (value === undefined || value === null) return true;
+    const normalized = value.trim().toLowerCase();
+    return normalized !== "false" && normalized !== "0" && normalized !== "off";
+};
+
+const MATRIX_POLLING_ENABLED = parseEnvFlag(process.env.NEXT_PUBLIC_MATRIX_ENABLED);
 
 /**
  * Background polling component that fetches messages for all chat rooms
- * regardless of which page the user is on
+ * but only mounts on chat routes to avoid slowing other pages.
  */
 export const BackgroundMessagePoller = () => {
+    const pathname = usePathname();
+    const shouldPoll = MATRIX_POLLING_ENABLED && pathname?.startsWith("/chat");
+
+    if (!shouldPoll) {
+        return null;
+    }
+
+    return <BackgroundMessagePollerInner />;
+};
+
+const BackgroundMessagePollerInner = () => {
     const [user] = useAtom(userAtom);
     const [roomMessages, setRoomMessages] = useAtom(roomMessagesAtom);
     const [matrixUserCache, setMatrixUserCache] = useAtom(matrixUserCacheAtom);
