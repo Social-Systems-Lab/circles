@@ -24,7 +24,7 @@ import { getCirclesByDids, updateCircle } from "./circle";
 import { getServerSettings, updateServerSettings } from "./server-settings";
 import { getPrivateUserByDid, getUser } from "./user";
 import { getMembers } from "./member";
-import { UserNotificationSettings, DefaultNotificationSettings, Notifications } from "./db";
+import { UserNotificationSettings, DefaultNotificationSettings, Notifications, ChatRooms } from "./db";
 import { checkUserPermissionForNotification } from "@/lib/actions/notificationSettings";
 
 const MATRIX_HOST = process.env.MATRIX_HOST || "127.0.0.1";
@@ -32,6 +32,14 @@ const MATRIX_PORT = parseInt(process.env.MATRIX_PORT || "8008");
 const MATRIX_URL = `http://${MATRIX_HOST}:${MATRIX_PORT}`;
 const MATRIX_SHARED_SECRET = process.env.MATRIX_SHARED_SECRET || "your_shared_secret";
 export const MATRIX_DOMAIN = process.env.MATRIX_DOMAIN || "yourdomain.com";
+const RAW_FEDERATION_HINTS = (process.env.MATRIX_FEDERATION_HINTS || "")
+    .split(",")
+    .map((server) => server.trim())
+    .filter((server) => server.length > 0);
+
+const NORMALIZED_FEDERATION_HINTS = RAW_FEDERATION_HINTS
+    .map((hint) => hint.replace(/^https?:\/\//, "").trim())
+    .filter((hint) => hint.length > 0);
 const GLOBAL_ROOM_ALIAS = "global";
 
 export async function getAdminAccessToken(): Promise<string> {
@@ -291,7 +299,8 @@ export async function loginMatrixUser(username: string, password: string): Promi
 }
 
 export async function addUserToRoom(accessToken: string, roomId: string): Promise<void> {
-    const response = await fetch(`${MATRIX_URL}/_matrix/client/v3/join/${encodeURIComponent(roomId)}`, {
+    const joinEndpoint = buildClientJoinEndpoint(roomId);
+    const response = await fetch(joinEndpoint, {
         method: "POST",
         headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     });
@@ -352,71 +361,233 @@ async function getUserNotificationsRoom(user: UserPrivate): Promise<string> {
 
 
 
+function normalizeServerName(server?: string | null): string | null {
+    if (!server) return null;
+    return server.replace(/^https?:\/\//, "").trim();
+}
+
+function extractServerFromMxid(mxid: string): string | null {
+    const colonIndex = mxid.indexOf(":");
+    if (colonIndex === -1) return null;
+    return mxid.slice(colonIndex + 1);
+}
+
+function getCandidateServerNames(roomIdOrAlias: string, extraServers: string[] = []): string[] {
+    const servers = new Set<string>();
+    const homeServer = normalizeServerName(MATRIX_DOMAIN);
+    let roomServer: string | null = null;
+
+    const colonIndex = roomIdOrAlias.indexOf(":");
+    if (colonIndex !== -1) {
+        roomServer = normalizeServerName(roomIdOrAlias.slice(colonIndex + 1));
+    }
+
+    const treatAsRemote = !homeServer || !roomServer || roomServer !== homeServer;
+
+    if (treatAsRemote && roomServer) {
+        servers.add(roomServer);
+    }
+
+    if (treatAsRemote) {
+        NORMALIZED_FEDERATION_HINTS.forEach((hint) => {
+            if (hint !== homeServer) {
+                servers.add(hint);
+            }
+        });
+    }
+
+    extraServers.forEach((server) => {
+        const normalized = normalizeServerName(server);
+        if (normalized && normalized !== homeServer) {
+            servers.add(normalized);
+        }
+    });
+
+    return Array.from(servers);
+}
+
+function buildAdminJoinEndpoint(roomIdOrAlias: string): string {
+    const encodedRoom = encodeURIComponent(roomIdOrAlias);
+    return `${MATRIX_URL}/_synapse/admin/v1/join/${encodedRoom}`;
+}
+
+function buildClientJoinEndpoint(roomIdOrAlias: string, baseUrl: string = MATRIX_URL, extraServers: string[] = []): string {
+    const encodedRoom = encodeURIComponent(roomIdOrAlias);
+    const servers = getCandidateServerNames(roomIdOrAlias, extraServers);
+    if (!servers.length) return `${baseUrl}/_matrix/client/v3/join/${encodedRoom}`;
+    const query = servers.map((server) => `server_name=${encodeURIComponent(server)}`).join("&");
+    return `${baseUrl}/_matrix/client/v3/join/${encodedRoom}?${query}`;
+}
+
+async function getChatRoomAlias(roomId: string): Promise<string | null> {
+    try {
+        const chatRoom = await ChatRooms.findOne({ matrixRoomId: roomId });
+        if (chatRoom?.handle) {
+            return `#${chatRoom.handle}:${MATRIX_DOMAIN}`;
+        }
+    } catch (error) {
+        console.warn("Failed to look up chat room alias for Matrix room", roomId, error);
+    }
+    return null;
+}
+
+async function lookupServersViaAlias(alias: string, adminAccessToken: string): Promise<string[]> {
+    try {
+        const response = await fetch(
+            `${MATRIX_URL}/_matrix/client/v3/directory/room/${encodeURIComponent(alias)}`,
+            { method: "GET", headers: { Authorization: `Bearer ${adminAccessToken}` } },
+        );
+        if (!response.ok) return [];
+        const data = await response.json();
+        const aliasServers: string[] = Array.isArray(data?.servers) ? data.servers : [];
+        return aliasServers
+            .map((server) => normalizeServerName(server))
+            .filter((server): server is string => !!server);
+    } catch (error) {
+        console.warn("Failed to resolve alias servers for", alias, error);
+        return [];
+    }
+}
+
+async function lookupServersViaMembers(roomId: string, adminAccessToken: string): Promise<string[]> {
+    try {
+        const response = await fetch(
+            `${MATRIX_URL}/_synapse/admin/v1/rooms/${encodeURIComponent(roomId)}/members`,
+            { method: "GET", headers: { Authorization: `Bearer ${adminAccessToken}` } },
+        );
+        if (!response.ok) return [];
+        const data = await response.json();
+        const members: string[] = Array.isArray(data?.members)
+            ? data.members
+            : Array.isArray(data?.results)
+              ? data.results
+              : [];
+        const servers = new Set<string>();
+        members.forEach((mxid) => {
+            const normalized = normalizeServerName(extractServerFromMxid(mxid));
+            if (normalized) servers.add(normalized);
+        });
+        return Array.from(servers);
+    } catch (error) {
+        console.warn("Failed to inspect room members for server hints", roomId, error);
+        return [];
+    }
+}
+
+async function discoverAdditionalServers(roomId: string, adminAccessToken: string): Promise<string[]> {
+    const discovered = new Set<string>();
+    const alias = await getChatRoomAlias(roomId);
+    if (alias) {
+        const aliasServers = await lookupServersViaAlias(alias, adminAccessToken);
+        aliasServers.forEach((server) => discovered.add(server));
+    }
+    const memberServers = await lookupServersViaMembers(roomId, adminAccessToken);
+    memberServers.forEach((server) => discovered.add(server));
+    return Array.from(discovered);
+}
+
 export async function forceUserJoinRoom(userId: string, roomId: string): Promise<void> {
     const adminAccessToken = await getAdminAccessToken();
-    const tryJoin = async (targetUserId: string) => {
-        return fetch(`${MATRIX_URL}/_synapse/admin/v1/join/${encodeURIComponent(roomId)}`, {
+    const tryJoin = async (targetUserId: string, viaServers: string[] = []) => {
+        const serverHints = getCandidateServerNames(roomId, viaServers);
+        const payload: Record<string, any> = { user_id: targetUserId };
+        if (serverHints.length) {
+            payload.server_name = serverHints;
+        }
+        return fetch(buildAdminJoinEndpoint(roomId), {
             method: "POST",
             headers: { Authorization: `Bearer ${adminAccessToken}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ user_id: targetUserId }),
+            body: JSON.stringify(payload),
         });
     };
 
+    let discoveredServers: string[] = [];
     let response = await tryJoin(userId);
+    let lastErrorText = "";
 
     if (!response.ok) {
-        const errorText = await response.text();
-        // If admin is not in room (M_FORBIDDEN or specific message), try to make admin join first
-        // Also handle "no servers" error which implies the server isn't participating (room empty?)
+        lastErrorText = await response.text();
+
+        if (lastErrorText.includes("no servers")) {
+            discoveredServers = await discoverAdditionalServers(roomId, adminAccessToken);
+            if (!discoveredServers.length && NORMALIZED_FEDERATION_HINTS.length) {
+                discoveredServers = [...NORMALIZED_FEDERATION_HINTS];
+            }
+            if (discoveredServers.length) {
+                console.log("🛰️ Retrying force join with additional server hints", { roomId, discoveredServers });
+                response = await tryJoin(userId, discoveredServers);
+                if (!response.ok) {
+                    lastErrorText = await response.text();
+                }
+            }
+        }
+
         if (
-            errorText.includes("not in room") || 
-            errorText.includes("no servers") || 
-            errorText.includes("M_UNKNOWN") || // Covers the specific error code
+            lastErrorText.includes("not in room") ||
+            lastErrorText.includes("no servers") ||
+            lastErrorText.includes("M_UNKNOWN") ||
             response.status === 403
         ) {
-             console.log("⚠️ forceUserJoinRoom failed (Admin likely not in room), attempting to force admin join first...", { roomId, error: errorText });
-             
-             // Get admin user ID (assuming standard setup or parsing from token if possible, but safer to use known admin)
-             // We can assume the admin user is the one associated with the token.
-             // We can try to use the admin API to join the ADMIN USER to the room.
-             // We need the admin's matrix ID. Ideally we hardcode it or fetch it.
-             // For now, let's try to 'whoami' or just assume @admin:domain
-             
-             let adminUserId = "";
-             try {
-                 const whoami = await fetch(`${MATRIX_URL}/_matrix/client/v3/account/whoami`, {
-                    headers: { Authorization: `Bearer ${adminAccessToken}` }
-                 });
-                 if (whoami.ok) {
-                     adminUserId = (await whoami.json()).user_id;
-                 }
-             } catch (e) {
-                 console.error("Failed to get admin user ID", e);
-             }
+            console.log("⚠️ forceUserJoinRoom failed (Admin likely not in room), attempting to force admin join first...", {
+                roomId,
+                error: lastErrorText,
+            });
 
-             if (adminUserId) {
-                 // Force join the admin
-                 console.log(`🤖 Forcing Admin (${adminUserId}) to join room ${roomId} first...`);
-                 const adminJoinRes = await tryJoin(adminUserId);
-                 
-                 if (adminJoinRes.ok) {
-                     console.log("✅ Admin joined successfully. Retrying target user join...");
-                     // Retry target user join
-                     response = await tryJoin(userId);
-                     
-                     // Cleanup: Admin leaves (optional, but good for privacy)
-                     // await fetch(`${MATRIX_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/leave`, {
-                     //    method: "POST",
-                     //    headers: { Authorization: `Bearer ${adminAccessToken}` }
-                     // });
-                 } else {
-                     console.error("❌ Admin force join failed:", await adminJoinRes.text());
-                 }
-             }
+            let adminUserId = "";
+            try {
+                const whoami = await fetch(`${MATRIX_URL}/_matrix/client/v3/account/whoami`, {
+                    headers: { Authorization: `Bearer ${adminAccessToken}` },
+                });
+                if (whoami.ok) {
+                    adminUserId = (await whoami.json()).user_id;
+                }
+            } catch (e) {
+                console.error("Failed to get admin user ID", e);
+            }
+
+            if (adminUserId) {
+                console.log(`🤖 Forcing Admin (${adminUserId}) to join room ${roomId} first...`);
+                const adminJoinRes = await tryJoin(adminUserId, discoveredServers);
+
+                if (adminJoinRes.ok) {
+                    console.log("✅ Admin joined successfully. Retrying target user join...");
+                    response = await tryJoin(userId, discoveredServers);
+                    if (!response.ok) {
+                        lastErrorText = await response.text();
+                    }
+                } else {
+                    const adminErrorText = await adminJoinRes.text().catch(() => "");
+                    console.error("❌ Admin force join failed:", adminErrorText || lastErrorText);
+
+                    if (!discoveredServers.length && adminErrorText.includes("no servers")) {
+                        discoveredServers = await discoverAdditionalServers(roomId, adminAccessToken);
+                        if (!discoveredServers.length && NORMALIZED_FEDERATION_HINTS.length) {
+                            discoveredServers = [...NORMALIZED_FEDERATION_HINTS];
+                        }
+                        if (discoveredServers.length) {
+                            console.log("🛰️ Retrying user force join with newly discovered servers", {
+                                roomId,
+                                discoveredServers,
+                            });
+                            response = await tryJoin(userId, discoveredServers);
+                            if (!response.ok) {
+                                lastErrorText = await response.text();
+                            }
+                        } else {
+                            lastErrorText = adminErrorText || lastErrorText;
+                        }
+                    } else {
+                        lastErrorText = adminErrorText || lastErrorText;
+                    }
+                }
+            }
         }
-        
-        if (!response.ok) { // Check again after retry
-             throw new Error(`Failed to force join user ${userId} to room ${roomId}: ${errorText}`);
+
+        if (!response.ok) {
+            if (!response.bodyUsed) {
+                lastErrorText = await response.text();
+            }
+            throw new Error(`Failed to force join user ${userId} to room ${roomId}: ${lastErrorText}`);
         }
     }
 }

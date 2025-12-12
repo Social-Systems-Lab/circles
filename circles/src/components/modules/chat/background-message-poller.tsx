@@ -14,34 +14,28 @@ const parseEnvFlag = (value?: string) => {
 
 const MATRIX_POLLING_ENABLED = parseEnvFlag(process.env.NEXT_PUBLIC_MATRIX_ENABLED);
 
-/**
- * Background polling component that fetches messages for all chat rooms
- * but only mounts on chat routes to avoid slowing other pages.
- */
 export const BackgroundMessagePoller = () => {
     const pathname = usePathname();
     const shouldPoll = MATRIX_POLLING_ENABLED && pathname?.startsWith("/chat");
-
-    if (!shouldPoll) {
-        return null;
-    }
-
-    return <BackgroundMessagePollerInner />;
-};
-
-const BackgroundMessagePollerInner = () => {
     const [user] = useAtom(userAtom);
     const [roomMessages, setRoomMessages] = useAtom(roomMessagesAtom);
     const [matrixUserCache, setMatrixUserCache] = useAtom(matrixUserCacheAtom);
     const roomMessagesRef = useRef(roomMessages);
+    const failedRoomCooldownsRef = useRef<Map<string, number>>(new Map());
 
-    // Keep ref in sync with state
+    // Keep refs in sync with state
     useEffect(() => {
         roomMessagesRef.current = roomMessages;
     }, [roomMessages]);
 
     useEffect(() => {
-        if (!user?.chatRoomMemberships) return;
+        if (!shouldPoll) {
+            failedRoomCooldownsRef.current.clear();
+        }
+    }, [shouldPoll]);
+
+    useEffect(() => {
+        if (!shouldPoll || !user?.chatRoomMemberships) return;
 
         const pollAllRooms = async () => {
             const { fetchRoomMessagesAction, fetchMatrixUsers } = await import("./actions");
@@ -52,6 +46,11 @@ const BackgroundMessagePollerInner = () => {
                 .filter((id): id is string => !!id);
 
             for (const roomId of roomIds) {
+                const cooldownUntil = failedRoomCooldownsRef.current.get(roomId);
+                if (cooldownUntil && cooldownUntil > Date.now()) {
+                    continue;
+                }
+
                 try {
                     const result = await fetchRoomMessagesAction(roomId, 50);
 
@@ -146,11 +145,12 @@ const BackgroundMessagePollerInner = () => {
                         }
                     }
                 } catch (error) {
-                    // Silently skip rooms with 403 errors (user not in room)
                     const errorMessage = error instanceof Error ? error.message : String(error);
-                    if (!errorMessage.includes('403') && !errorMessage.includes('M_FORBIDDEN')) {
-                        console.error(`Failed to poll messages for room ${roomId}:`, error);
+                    if (errorMessage.includes("403") || errorMessage.includes("M_FORBIDDEN")) {
+                        failedRoomCooldownsRef.current.set(roomId, Date.now() + 5 * 60 * 1000); // 5-minute cooldown
+                        continue;
                     }
+                    console.error(`Failed to poll messages for room ${roomId}:`, error);
                 }
             }
         };
@@ -164,7 +164,7 @@ const BackgroundMessagePollerInner = () => {
         return () => {
             if (intervalId) clearInterval(intervalId);
         };
-    }, [user?.chatRoomMemberships, matrixUserCache, setMatrixUserCache, setRoomMessages]);
+    }, [shouldPoll, user?.chatRoomMemberships, matrixUserCache, setMatrixUserCache, setRoomMessages]);
 
     return null;
 };

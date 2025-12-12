@@ -16,7 +16,7 @@ import { sendRoomMessage, sendReaction, redactRoomMessage } from "@/lib/data/cli
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { fetchMatrixUsers } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { IoArrowBack, IoClose, IoSend, IoAddCircleOutline, IoArrowDown, IoAttach, IoDocumentText } from "react-icons/io5";
+import { IoArrowBack, IoClose, IoSend, IoAddCircleOutline, IoArrowDown, IoAttach, IoDocumentText, IoTimeOutline, IoWarningOutline } from "react-icons/io5";
 import { MdReply } from "react-icons/md";
 import { BsEmojiSmile } from "react-icons/bs";
 import { GrEdit, GrTrash } from "react-icons/gr";
@@ -352,6 +352,15 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                 const borderRadiusClass = `${isFirstInChain ? "rounded-t-lg" : ""} ${
                     isLastInChain ? "rounded-b-lg" : ""
                 } ${!isFirstInChain && !isLastInChain ? "rounded-none" : ""}`;
+                const isOwnMessage = message.createdBy === user?.fullMatrixName;
+                const canEditMessage = isOwnMessage && !message.status;
+                const canDeleteMessage = isOwnMessage && message.status !== "pending";
+                const bubbleStatusClasses =
+                    message.status === "pending"
+                        ? "opacity-70"
+                        : message.status === "failed"
+                        ? "border border-red-200"
+                        : "";
 
                 if (isSystemMessage) {
                     acc.push(
@@ -383,7 +392,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                             )}
 
                             <div className="relative flex min-w-[100px] max-w-full flex-col overflow-hidden">
-                                <div className={`bg-white p-2 pr-4 shadow-md ${borderRadiusClass}`}>
+                                <div className={`bg-white p-2 pr-4 shadow-md ${borderRadiusClass} ${bubbleStatusClasses}`}>
                                     {isFirstInChain && (
                                         <div
                                             className="text-xs font-semibold"
@@ -391,7 +400,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                         >
                                             {message.author.name}
                                         </div>
-                                    )}
+                                        )}
                                     <MessageRenderer message={message} />
                                     {message.reactions && Object.keys(message.reactions).length > 0 && (
                                         <div className="mt-1 flex flex-wrap gap-1">
@@ -413,31 +422,47 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                     )}
                                 </div>
                                 {isLastInChain && (
-                                    <span className="mt-1 text-xs text-gray-500">
-                                        {formatChatDate(new Date(message.createdAt))}
-                                    </span>
+                                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                                        <span>{formatChatDate(new Date(message.createdAt))}</span>
+                                        {isOwnMessage && message.status === "pending" && (
+                                            <span className="flex items-center gap-1 text-blue-500">
+                                                <IoTimeOutline className="h-3 w-3" />
+                                                Sending…
+                                            </span>
+                                        )}
+                                        {isOwnMessage && message.status === "failed" && (
+                                            <span className="flex items-center gap-1 text-red-500">
+                                                <IoWarningOutline className="h-3 w-3" />
+                                                Failed to send
+                                            </span>
+                                        )}
+                                    </div>
                                 )}
 
                                 {(hoveredMessageId === message.id || pickerOpenForMessage === message.id) && (
                                     <div className="absolute bottom-1 right-0 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm">
-                                        {user?.fullMatrixName === message.createdBy && (
+                                        {isOwnMessage && (
                                             <>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-6 w-6"
-                                                    onClick={() => handleEdit(message)}
-                                                >
-                                                    <GrEdit className="h-4 w-4" />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-6 w-6"
-                                                    onClick={() => handleDelete(message)}
-                                                >
-                                                    <GrTrash className="h-4 w-4" />
-                                                </Button>
+                                                {canEditMessage && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-6 w-6"
+                                                        onClick={() => handleEdit(message)}
+                                                    >
+                                                        <GrEdit className="h-4 w-4" />
+                                                    </Button>
+                                                )}
+                                                {canDeleteMessage && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-6 w-6"
+                                                        onClick={() => handleDelete(message)}
+                                                    >
+                                                        <GrTrash className="h-4 w-4" />
+                                                    </Button>
+                                                )}
                                             </>
                                         )}
                                         <Button
@@ -619,30 +644,43 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
             status: "pending",
         };
 
+        const applyToTempMessage = (transform: (message: ChatMessage) => ChatMessage | null) => {
+            setRoomMessages((prev) => {
+                const current = prev[roomId] || [];
+                const next = current.flatMap((msg) => {
+                    if (msg.id !== tempId) {
+                        return [msg];
+                    }
+                    const updated = transform(msg);
+                    return updated ? [updated] : [];
+                });
+
+                return {
+                    ...prev,
+                    [roomId]: next,
+                };
+            });
+        };
+
         setRoomMessages((prev) => {
             const current = prev[roomId] || [];
+            const withoutRetriedFailures = current.filter((msg) => {
+                if (msg.status !== "failed") return true;
+                const body = typeof (msg.content as any)?.body === "string" ? (msg.content as any).body : "";
+                return !(body === trimmedMessage && msg.createdBy === optimisticMessage.createdBy);
+            });
             return {
                 ...prev,
-                [roomId]: [...current, optimisticMessage],
+                [roomId]: [...withoutRetriedFailures, optimisticMessage],
             };
         });
 
         setNewMessage("");
         setReplyToMessage(null);
-        
-        const removeOptimisticMessage = () => {
-            setRoomMessages((prev) => {
-                const current = prev[roomId] || [];
-                return {
-                    ...prev,
-                    [roomId]: current.filter((msg) => msg.id !== tempId),
-                };
-            });
-        };
 
         const rollbackOptimisticMessage = (reason?: string) => {
             console.error("Failed to send message:", reason);
-            removeOptimisticMessage();
+            applyToTempMessage((msg) => ({ ...msg, status: "failed" }));
             setNewMessage(trimmedMessage);
             if (replyTarget) {
                 setReplyToMessage(replyTarget);
@@ -655,29 +693,24 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
             const result = await sendMessageAction(roomId, trimmedMessage, replyTarget?.id);
             
             if (result.success) {
-                setRoomMessages((prev) => {
-                    const current = prev[roomId] || [];
-                    if (!result.eventId) {
+                if (!result.eventId) {
+                    applyToTempMessage((msg) => ({ ...msg, status: undefined }));
+                } else {
+                    setRoomMessages((prev) => {
+                        const current = prev[roomId] || [];
+                        const alreadyExists = current.some((msg) => msg.id === result.eventId);
+                        const nextMessages = alreadyExists
+                            ? current.filter((msg) => msg.id !== tempId)
+                            : current.map((msg) =>
+                                  msg.id === tempId ? { ...msg, id: result.eventId, status: undefined } : msg,
+                              );
+
                         return {
                             ...prev,
-                            [roomId]: current.map((msg) =>
-                                msg.id === tempId ? { ...msg, status: "sent" } : msg
-                            ),
+                            [roomId]: nextMessages,
                         };
-                    }
-
-                    const alreadyExists = current.some((msg) => msg.id === result.eventId);
-                    const nextMessages = alreadyExists
-                        ? current.filter((msg) => msg.id !== tempId)
-                        : current.map((msg) =>
-                              msg.id === tempId ? { ...msg, id: result.eventId, status: "sent" } : msg
-                          );
-
-                    return {
-                        ...prev,
-                        [roomId]: nextMessages,
-                    };
-                });
+                    });
+                }
             } else {
                 rollbackOptimisticMessage(result.message);
             }
@@ -955,6 +988,10 @@ export const ChatRoomComponent: React.FC<{
                 return newRoomMessages;
             });
 
+            if (message.status && message.status !== "sent") {
+                return;
+            }
+
             try {
                 const { deleteMessageAction } = await import("./actions");
                 const result = await deleteMessageAction(message.roomId, message.id);
@@ -1062,7 +1099,7 @@ export const ChatRoomComponent: React.FC<{
         } else {
             console.log(`💬 [Chat] No messages to mark as read for room ${chatRoom.name || chatRoom.matrixRoomId}`);
         }
-    }, [chatRoom?.matrixRoomId, chatRoom?.name, messages, user?.matrixAccessToken, user?.matrixUrl, setUnreadCounts, setLastReadTimestamps]);
+    }, [chatRoom?.matrixRoomId, chatRoom?.name, messages, user?.matrixAccessToken, setUnreadCounts, setLastReadTimestamps]);
 
     const scrollToBottom = (behavior: "smooth" | "auto" = "auto") => {
         if (messagesEndRef.current) {
@@ -1137,7 +1174,7 @@ export const ChatRoomComponent: React.FC<{
         };
         
         checkConnection();
-    }, [chatRoom.matrixRoomId]);
+    }, [chatRoom.matrixRoomId, roomMessages]);
 
     // Server-side message polling - DISABLED: Now handled by BackgroundMessagePoller globally
     /*
