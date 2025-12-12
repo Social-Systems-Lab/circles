@@ -693,16 +693,18 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
             const result = await sendMessageAction(roomId, trimmedMessage, replyTarget?.id);
             
             if (result.success) {
-                if (!result.eventId) {
+                const eventId = result.eventId;
+
+                if (!eventId) {
                     applyToTempMessage((msg) => ({ ...msg, status: undefined }));
                 } else {
                     setRoomMessages((prev) => {
                         const current = prev[roomId] || [];
-                        const alreadyExists = current.some((msg) => msg.id === result.eventId);
+                        const alreadyExists = current.some((msg) => msg.id === eventId);
                         const nextMessages = alreadyExists
                             ? current.filter((msg) => msg.id !== tempId)
                             : current.map((msg) =>
-                                  msg.id === tempId ? { ...msg, id: result.eventId, status: undefined } : msg,
+                                  msg.id === tempId ? { ...msg, id: eventId, status: undefined } : msg,
                               );
 
                         return {
