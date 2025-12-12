@@ -2,6 +2,20 @@ import { verifyUserToken } from "@/lib/auth/jwt";
 import type { NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
+    const pathname = request.nextUrl.pathname;
+    const isMaintenanceMode = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true";
+
+    if (isMaintenanceMode) {
+        const maintenanceBypassPrefixes = ["/holding"];
+        const isBypassed = maintenanceBypassPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+
+        if (!isBypassed) {
+            const redirectUrl = new URL("/holding", request.url);
+            redirectUrl.searchParams.set("redirectTo", pathname);
+            return Response.redirect(redirectUrl);
+        }
+    }
+
     let userDid = undefined;
 
     // determine host and port based on environment
@@ -139,6 +153,6 @@ function redirectToCircleNotFound(request: NextRequest, circleHandle: string, mo
 
 export const config = {
     matcher: [
-        "/((?!api|explore|map|chat|settings|logged-out|foryou|login|reset-password|verify-email|forgot-password|unauthorized|unauthenticated|error|not-found|signup|welcome|holding|demo/moviedb|demo/tech|demo/ratings|public/images|_next/static|robots.txt|sitemap.xml|favicon.ico|_next/image|.*\\.svg|.*\\.jpg|.*\\.png$).*)",
+        "/((?!api|_next/static|_next/image|robots.txt|sitemap.xml|favicon.ico|.*\\.(?:css|js|json|txt|svg|jpg|jpeg|png|gif|webp|ico|pdf|mp4|webm|ogg|woff|woff2|ttf|eot|webmanifest)$).*)",
     ],
 };
