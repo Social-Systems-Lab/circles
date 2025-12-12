@@ -21,7 +21,9 @@ export default function GlobalNav() {
         }
     }, []);
 
-    if (!user && pathname === "/welcome") {
+    const hideNavForGuests = ["/welcome", "/holding"];
+
+    if (!user && pathname && hideNavForGuests.includes(pathname)) {
         return null;
     }
 
