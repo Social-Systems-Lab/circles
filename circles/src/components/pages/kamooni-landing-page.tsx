@@ -28,7 +28,7 @@ interface KamooniLandingPageProps {
 
 export default function KamooniLandingPage({
     variant = "welcome",
-    maintenanceMessage = "Kamooni is being updated. Back online Monday 15 December",
+    maintenanceMessage = "Maintenance and updates. We should be running smoothly again on Tuesday, 16 September.",
 }: KamooniLandingPageProps) {
     const [showAllFaqs, setShowAllFaqs] = useState(false);
     const isHoldingPage = variant === "holding";
@@ -231,35 +231,33 @@ export default function KamooniLandingPage({
                     <p className="mb-8 text-xl text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)] sm:text-2xl">
                         No Ads. No Big Tech. Ethical and Open-Source
                     </p>
-                {isHoldingPage ? (
-                    <>
-                        <Button
-                            onClick={(event) => event.preventDefault()}
-                            className="mb-4 cursor-default bg-[#c84521] px-8 py-3 text-lg font-semibold text-white shadow-md shadow-black/10 transition-colors hover:bg-[#a83218]"
-                        >
-                            {maintenanceMessage}
-                        </Button>
+                    <Button
+                        onClick={(event) => event.preventDefault()}
+                        className="mb-6 cursor-default bg-[#c84521] px-8 py-3 text-lg font-semibold text-white shadow-md shadow-black/10 transition-colors hover:bg-[#a83218]"
+                    >
+                        {maintenanceMessage}
+                    </Button>
+                    {isHoldingPage ? (
                         <p className="text-lg font-medium text-white">
-                            We&apos;re making some improvements right now. Thanks for your patience while we deploy
-                            the updates.
+                            We&apos;re making some improvements right now. Thanks for your patience while we deploy the
+                            updates.
                         </p>
-                    </>
-                ) : (
-                        <>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
                             <Link href="/signup">
-                                <Button className="mb-4 bg-kam-button-red-orange px-8 py-3 text-lg text-white hover:bg-kam-button-red-orange/90">
+                                <Button className="bg-kam-button-red-orange px-8 py-3 text-lg text-white hover:bg-kam-button-red-orange/90">
                                     Test Pilot Signup <ChevronRight className="ml-2 h-5 w-5" />
                                 </Button>
                             </Link>
                             <Link href="/explore">
                                 <Button
                                     variant="outline"
-                                    className="text-md ml-2 border-kam-button-red-orange px-6 py-2 text-kam-button-red-orange hover:bg-kam-button-red-orange hover:text-white"
+                                    className="text-md border-kam-button-red-orange px-6 py-2 text-kam-button-red-orange hover:bg-kam-button-red-orange hover:text-white"
                                 >
                                     Explore the platform
                                 </Button>
                             </Link>
-                        </>
+                        </div>
                     )}
                 </div>
             </section>
