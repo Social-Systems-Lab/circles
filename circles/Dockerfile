@@ -17,7 +17,7 @@ COPY . .
 
 ENV IS_BUILD=true
 
-RUN bun run build
+RUN NODE_OPTIONS=--max-old-space-size=3072 bun run build
 
 # Production image, copy all the files and run next
 FROM node:18-slim AS runner
