@@ -34,7 +34,7 @@ import { getGoalsAction } from "@/app/circles/[handle]/goals/actions";
 import { getTasksAction } from "@/app/circles/[handle]/tasks/actions";
 import { getIssuesAction } from "@/app/circles/[handle]/issues/actions";
 import { getCircleByIdAction } from "@/components/modules/circles/actions";
-import { flushSync } from "react-dom";
+const { flushSync } = require("react-dom");
 import { LoadingSpinner } from "../ui/loading-spinner";
 
 type Milestone = { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string };
