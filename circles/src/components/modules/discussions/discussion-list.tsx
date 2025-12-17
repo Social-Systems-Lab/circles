@@ -58,7 +58,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
-import TextareaAutosize from "react-textarea-autosize";
+const TextareaAutosize = require("react-textarea-autosize");
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
     createCommentAction,
