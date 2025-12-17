@@ -1807,7 +1807,7 @@ const CommentItem = ({
                             <div className="mb-1 text-xs text-gray-500">Replying to {comment.author.name}</div>
                             <TextareaAutosize
                                 value={newReplyContent}
-                                onChange={(e) => setNewReplyContent(e.target.value)}
+                                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewReplyContent(e.target.value)}
                                 onKeyDown={handleReplyKeyDown}
                                 placeholder="Write a reply..."
                                 className="w-full resize-none rounded-[20px] bg-gray-100 p-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
