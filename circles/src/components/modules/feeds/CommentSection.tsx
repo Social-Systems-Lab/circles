@@ -31,7 +31,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import TextareaAutosize from "react-textarea-autosize";
+const TextareaAutosize = require("react-textarea-autosize");
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
     createCommentAction,
