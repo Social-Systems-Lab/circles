@@ -1,5 +1,5 @@
 import { verifyUserToken } from "@/lib/auth/jwt";
-import type { NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
     const pathname = request.nextUrl.pathname;
@@ -34,6 +34,12 @@ export async function middleware(request: NextRequest) {
         }
     } catch (error) {
         console.error("Error verifying token", error);
+
+        // If a user has an old/invalid cookie (e.g. after a deploy or secret change),
+        // clear it automatically and reload the same URL once.
+        const res = NextResponse.redirect(request.nextUrl);
+        res.cookies.set("token", "", { maxAge: 0, path: "/" });
+        return res;
     }
 
     // get circle handle and module handle from url
