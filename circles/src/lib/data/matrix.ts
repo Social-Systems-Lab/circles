@@ -178,12 +178,14 @@ export async function checkIfMatrixUserExists(username: string): Promise<boolean
 
 // Wrapper function for sending messages from server actions
 export async function sendMatrixMessage(
+// Wrapper function for sending messages from server actions
+export async function sendMatrixMessage(
     accessToken: string,
     roomId: string,
     content: string,
     replyToEventId?: string
 ): Promise<{ event_id: string }> {
-    const txnId = Date.now();
+
     const messageContent: any = {
         msgtype: "m.text",
         body: content,
@@ -197,24 +199,42 @@ export async function sendMatrixMessage(
         };
     }
 
-    const response = await fetch(
-        `${MATRIX_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${txnId}`,
-        {
-            method: "PUT",
-            headers: {
-                Authorization: `Bearer ${accessToken}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(messageContent),
-        },
-    );
+    const sendOnce = async () => {
+        const txnId = Date.now();
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to send message: ${response.status} ${errorText}`);
+        const response = await fetch(
+            `${MATRIX_URL}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${txnId}`,
+            {
+                method: "PUT",
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(messageContent),
+            }
+        );
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText);
+        }
+
+        return await response.json();
+    };
+
+    try {
+        return await sendOnce();
+    } catch (err: any) {
+        const msg = String(err?.message || "");
+
+        if (msg.includes("not in room")) {
+            const userId = await whoAmI(accessToken);
+            await forceUserJoinRoom(userId, roomId);
+            return await sendOnce();
+        }
+
+        throw err;
     }
-
-    return await response.json();
 }
 
 // Edit an existing message
@@ -374,41 +394,43 @@ function extractServerFromMxid(mxid: string): string | null {
 
 function getCandidateServerNames(roomIdOrAlias: string, extraServers: string[] = []): string[] {
     const servers = new Set<string>();
-    const homeServer = normalizeServerName(MATRIX_DOMAIN);
-    let roomServer: string | null = null;
 
+    // Always try the server implied by the roomId/alias (even if it's our own domain).
+    let roomServer: string | null = null;
     const colonIndex = roomIdOrAlias.indexOf(":");
     if (colonIndex !== -1) {
         roomServer = normalizeServerName(roomIdOrAlias.slice(colonIndex + 1));
     }
+    if (roomServer) servers.add(roomServer);
 
-    const treatAsRemote = !homeServer || !roomServer || roomServer !== homeServer;
+    // Add federation hints (if any)
+    NORMALIZED_FEDERATION_HINTS.forEach((hint) => {
+        const normalized = normalizeServerName(hint);
+        if (normalized) servers.add(normalized);
+    });
 
-    if (treatAsRemote && roomServer) {
-        servers.add(roomServer);
-    }
-
-    if (treatAsRemote) {
-        NORMALIZED_FEDERATION_HINTS.forEach((hint) => {
-            if (hint !== homeServer) {
-                servers.add(hint);
-            }
-        });
-    }
-
+    // Add discovered/extra servers
     extraServers.forEach((server) => {
         const normalized = normalizeServerName(server);
-        if (normalized && normalized !== homeServer) {
-            servers.add(normalized);
-        }
+        if (normalized) servers.add(normalized);
     });
 
     return Array.from(servers);
 }
 
-function buildAdminJoinEndpoint(roomIdOrAlias: string): string {
+
+function buildAdminJoinEndpoint(roomIdOrAlias: string, extraServers: string[] = []): string {
     const encodedRoom = encodeURIComponent(roomIdOrAlias);
-    return `${MATRIX_URL}/_synapse/admin/v1/join/${encodedRoom}`;
+    const servers = getCandidateServerNames(roomIdOrAlias, extraServers);
+
+    // Synapse admin join supports providing server_name hints as query params
+    // to help join remote rooms when the homeserver lacks routing info.
+    if (!servers.length) {
+        return `${MATRIX_URL}/_synapse/admin/v1/join/${encodedRoom}`;
+    }
+
+    const query = servers.map((server) => `server_name=${encodeURIComponent(server)}`).join("&");
+    return `${MATRIX_URL}/_synapse/admin/v1/join/${encodedRoom}?${query}`;
 }
 
 function buildClientJoinEndpoint(roomIdOrAlias: string, baseUrl: string = MATRIX_URL, extraServers: string[] = []): string {
@@ -494,7 +516,7 @@ export async function forceUserJoinRoom(userId: string, roomId: string): Promise
         if (serverHints.length) {
             payload.server_name = serverHints;
         }
-        return fetch(buildAdminJoinEndpoint(roomId), {
+        return fetch(buildAdminJoinEndpoint(roomId, serverHints), {
             method: "POST",
             headers: { Authorization: `Bearer ${adminAccessToken}`, "Content-Type": "application/json" },
             body: JSON.stringify(payload),
