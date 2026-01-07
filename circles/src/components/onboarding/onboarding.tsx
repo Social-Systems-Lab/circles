@@ -164,44 +164,44 @@ export default function Onboarding() {
         }
     }, [isOpen, steps.length]);
 
-    // Helper function to get step titles
+  // Helper function to get step titles
     function getStepTitle(stepId: string) {
-        switch (stepId) {
-            case "welcome":
-                return "Welcome to Kamooni";
-            case "terms":
-                return "Terms and Privacy";
-            case "member":
-                return "Become a Member";
-            case "mission":
-                return "Your Mission";
-            case "profile":
-                return "About You";
-            case "location":
-                return "Your Location";
-            case "sdgs":
-                return "Choose Your SDGs";
-            case "skills":
-                return "Your Skills and Powers";
-            case "final":
-                return "Welcome, Changemaker!";
-            default:
-                return "Onboarding";
-        }
+      switch (stepId) {
+        case "welcome":
+          return "Welcome to Kamooni";
+        case "terms":
+          return "Terms and Privacy";
+        case "member":
+          return "Become a Member";
+        case "mission":
+          return "Your Mission";
+        case "profile":
+          return "About You";
+        case "location":
+          return "Your Location";
+        case "sdgs":
+          return "Choose Your SDGs";
+        case "skills":
+          return "Your Skills and Powers";
+        case "final":
+          return "Welcome, Changemaker!";
+        default:
+          return "Onboarding";
     }
+  }
 
     const totalSteps = steps.length;
 
-    const nextStep = () => {
-        if (currentStepIndex + 1 < steps.length) {
-            // Explicitly set the next step index
-            const nextStepIndex = currentStepIndex + 1;
-            setCurrentStepIndex(nextStepIndex);
-        } else {
-            setIsOpen(false);
-            setHasClosedOnboarding(true);
-        }
-    };
+      const nextStep = () => {
+    if (currentStepIndex + 1 < steps.length) {
+      // Explicitly set the next step index
+      const nextStepIndex = currentStepIndex + 1;
+      setCurrentStepIndex(nextStepIndex);
+    } else {
+      setIsOpen(false);
+      setHasClosedOnboarding(true);
+    }
+  };
 
     const prevStep = () => {
         if (currentStepIndex > 0) {
@@ -211,17 +211,17 @@ export default function Onboarding() {
 
     const CurrentStepComponent = steps[currentStepIndex]?.component;
 
-    if (!isOpen || !userData) {
-        return (
-            <div
-                className="absolute right-0 top-0 z-[600] h-[30px] w-[30px] cursor-pointer"
-                onDoubleClick={() => {
-                    setForceShowOnboarding(true);
-                    setIsOpen(true);
-                }}
-            ></div>
-        );
-    }
+        if (!isOpen || !userData) {
+          return (
+              <div
+                  className="absolute right-0 top-0 z-[600] h-[30px] w-[30px] cursor-pointer"
+                  onDoubleClick={() => {
+                      setForceShowOnboarding(true);
+                      setIsOpen(true);
+                  }}
+              ></div>
+            );
+        }
 
     return (
         <div className="fixed z-[500] flex h-screen w-screen items-center justify-center bg-gradient-to-br from-[#dce5ffcf] to-[#e3eaffcf] p-4">
