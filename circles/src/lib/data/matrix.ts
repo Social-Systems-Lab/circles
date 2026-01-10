@@ -174,10 +174,30 @@ export async function checkIfMatrixUserExists(username: string): Promise<boolean
         headers: { Authorization: `Bearer ${adminAccessToken}` },
     });
     return response.ok;
+    }
+
+    async function whoAmI(accessToken: string): Promise<string> {
+    const response = await fetch(`${MATRIX_URL}/_matrix/client/v3/account/whoami`, {
+        method: "GET",
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+        },
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Matrix whoami failed: ${errorText}`);
+    }
+
+    const data = (await response.json()) as { user_id?: string };
+    if (!data.user_id) {
+        throw new Error(`Matrix whoami failed: missing user_id`);
+    }
+
+    return data.user_id;
 }
 
-// Wrapper function for sending messages from server actions
-export async function sendMatrixMessage(
 // Wrapper function for sending messages from server actions
 export async function sendMatrixMessage(
     accessToken: string,
