@@ -1,7 +1,7 @@
 
 services:
     circles:
-        image: sslorg/circles:latest
+        image: circles-circles:latest
         ports:
             - "${CIRCLES_PORT}:${CIRCLES_PORT}"
         env_file:
@@ -32,6 +32,28 @@ services:
         restart: unless-stopped
         networks:
             - webnet
+
+    minio_loopback:
+        image: alpine:3.19
+        network_mode: "service:circles"
+        depends_on:
+            - circles
+            - minio
+        restart: unless-stopped
+        command: >
+            sh -lc "apk add --no-cache socat &&
+            socat TCP-LISTEN:9000,fork,reuseaddr TCP:minio:9000"
+
+    nginx_loopback:
+        image: alpine:3.19
+        network_mode: "service:circles"
+        depends_on:
+            - circles
+            - nginx
+        restart: unless-stopped
+        command: >
+            sh -lc "apk add --no-cache socat &&
+            socat TCP-LISTEN:80,fork,reuseaddr TCP:nginx:80"
 
     db:
         image: mongo:7.0
@@ -115,7 +137,10 @@ services:
             - "80:80"
             - "443:443"
         networks:
-            - webnet
+            webnet:
+              aliases:
+                - kamooni.org
+                - www.kamooni.org
         restart: unless-stopped
         depends_on:
             - circles

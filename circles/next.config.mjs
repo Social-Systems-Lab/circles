@@ -7,6 +7,7 @@ const version = packageJson.version;
 const nextConfig = {
     output: "standalone",
     images: {
+        unoptimized: true,
         remotePatterns: [
             {
                 protocol: "http",
@@ -25,7 +26,7 @@ const nextConfig = {
         return [
             {
                 source: "/storage/:path*",
-                destination: "http://127.0.0.1:9000/circles/:path*",
+                destination: "http://minio:9000/circles/:path*",
             },
         ];
     },
