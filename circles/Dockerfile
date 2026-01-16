@@ -25,7 +25,20 @@ WORKDIR /app
 
 ENV NODE_ENV production
 # Uncomment the following line in case you want to disable telemetry during runtime.
-# ENV NEXT_TELEMETRY_DISABLED 1
+COPY package.json bun.lock ./
+
+# Runtime deps for sharp (Next image optimization + server-side thumbnails)
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libc6 \
+    libstdc++6 \
+    libgcc-s1 \
+    libvips \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install sharp into runtime node_modules (do not rely on Next standalone tracing)
+RUN npm install --omit=dev --no-audit --no-fund --legacy-peer-deps sharp@0.33.5
 
 COPY --from=builder  /app/.next/standalone ./
 COPY --from=builder  /app/.next/static ./.next/static

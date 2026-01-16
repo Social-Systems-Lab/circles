@@ -7,7 +7,6 @@ const version = packageJson.version;
 const nextConfig = {
     output: "standalone",
     images: {
-        unoptimized: true,
         remotePatterns: [
             {
                 protocol: "http",

@@ -41,3 +41,6 @@ NOTES*
 /public/uploads
 /circles_data
 
+
+# Local backup files
+*.bak.*
