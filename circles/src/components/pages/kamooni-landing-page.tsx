@@ -28,7 +28,7 @@ interface KamooniLandingPageProps {
 
 export default function KamooniLandingPage({
     variant = "welcome",
-    maintenanceMessage = "Maintenance and updates. We should be running smoothly again on Tuesday, 16 September.",
+    maintenanceMessage = "Maintenance and updates. We should be running smoothly again on Wednesday, 28 January, 2026.",
 }: KamooniLandingPageProps) {
     const [showAllFaqs, setShowAllFaqs] = useState(false);
     const isHoldingPage = variant === "holding";
