@@ -174,9 +174,9 @@ export async function checkIfMatrixUserExists(username: string): Promise<boolean
         headers: { Authorization: `Bearer ${adminAccessToken}` },
     });
     return response.ok;
-    }
+}
 
-    async function whoAmI(accessToken: string): Promise<string> {
+async function whoAmI(accessToken: string): Promise<string> {
     const response = await fetch(`${MATRIX_URL}/_matrix/client/v3/account/whoami`, {
         method: "GET",
         headers: {

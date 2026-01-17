@@ -25,7 +25,7 @@ const nextConfig = {
         return [
             {
                 source: "/storage/:path*",
-                destination: "http://127.0.0.1:9000/circles/:path*",
+                destination: "http://minio:9000/circles/:path*",
             },
         ];
     },
