@@ -1,10 +1,7 @@
 
 services:
     circles:
-        build:
-            context: .
-            dockerfile: Dockerfile
-        image: circles-circles:local
+        image: circles-circles:latest
         ports:
             - "${CIRCLES_PORT}:${CIRCLES_PORT}"
         env_file:
