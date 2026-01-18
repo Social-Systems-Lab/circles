@@ -5,5 +5,6 @@ export const metadata = {
 };
 
 export default function WelcomePage() {
-    return <KamooniLandingPage variant="welcome" />;
+    const maintenanceMessage = process.env.NEXT_PUBLIC_MAINTENANCE_MESSAGE;
+    return <KamooniLandingPage variant="welcome" maintenanceMessage={maintenanceMessage} />;
 }
