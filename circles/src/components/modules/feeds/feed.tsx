@@ -71,7 +71,7 @@ export const FeedComponent = ({
 
     const containerStyle = {
         flexGrow: isCompact ? "1" : "3",
-        maxWidth: isCompact ? "none" : "700px",
+        maxWidth: isCompact ? "none" : viewMode === "grid" ? "1280px" : "700px",
     };
 
     if (isLoading) {
@@ -92,16 +92,21 @@ export const FeedComponent = ({
         >
             <div className="flex w-full flex-col">
                 {canPost && (
-                    <div>
-                        {/* className="mt-6" */}
-                        <CreateNewPost circle={circle} feed={feed} />
+                    <div className="flex w-full justify-center">
+                        <div className="w-full max-w-[700px]">
+                            <CreateNewPost circle={circle} feed={feed} />
+                        </div>
                     </div>
                 )}
-                <ListFilter
-                    onFilterChange={onFilterChange ?? handleFilterChange}
-                    onSdgChange={onSdgChange ?? handleSdgSelectionChange}
-                    selectedSdgs={selectedSdgsExternal ?? selectedSdgs}
-                />
+                <div className="flex w-full justify-center">
+                    <div className="w-full max-w-[700px]">
+                        <ListFilter
+                            onFilterChange={onFilterChange ?? handleFilterChange}
+                            onSdgChange={onSdgChange ?? handleSdgSelectionChange}
+                            selectedSdgs={selectedSdgsExternal ?? selectedSdgs}
+                        />
+                    </div>
+                </div>
 
                 {viewMode === "grid" ? (
                     <PostGrid posts={posts} feed={feed} circle={circle} isLoading={false} />

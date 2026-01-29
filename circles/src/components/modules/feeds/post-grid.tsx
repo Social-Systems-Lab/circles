@@ -127,8 +127,8 @@ export function PostGrid({ posts, circle, feed, isLoading }: PostGridProps) {
                 variants={containerVariants}
                 initial="hidden"
                 animate="visible"
-                className="mt-4 grid gap-6"
-                style={{ gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gridAutoRows: "1fr" }}
+                className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3"
+                style={{ gridAutoRows: "1fr" }}
             >
                 <AnimatePresence mode="popLayout">
                     {posts.map((post, index) => {
