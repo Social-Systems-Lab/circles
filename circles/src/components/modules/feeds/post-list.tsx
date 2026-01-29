@@ -674,10 +674,13 @@ export const PostItem = ({
         setComments((prev) => prev.filter((c) => c._id !== commentId));
     };
 
-    const handleImageClick = (index: number) => {
+    const handleImageClick = (index: number, e?: React.MouseEvent) => {
+        if (e) {
+            e.stopPropagation();
+        }
         if (post.media && post.media.length > 0) {
-            // open content preview
-            if (!isMobile) {
+            // open content preview only if NOT in detail view
+            if (!isMobile && !isDetailView) {
                 let contentPreviewData: ContentPreviewData = {
                     type: "post",
                     content: post,
@@ -909,7 +912,7 @@ export const PostItem = ({
                                     src={mediaItem.fileInfo.url}
                                     alt={mediaItem.name}
                                     className="h-64 w-full rounded-lg object-cover"
-                                    onClick={() => handleImageClick(index)}
+                                    onClick={(e) => handleImageClick(index, e)}
                                 />
                             </CarouselItem>
                         ))}
