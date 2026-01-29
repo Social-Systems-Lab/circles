@@ -5,6 +5,7 @@ import { useIsCompact } from "@/components/utils/use-is-compact";
 import { Circle, Feed, PostDisplay, Cause as SDG } from "@/models/models"; // Removed DynamicForm and Page imports
 import { CreateNewPost } from "./create-new-post";
 import PostList from "./post-list";
+import { PostGrid } from "./post-grid";
 import { features, LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
@@ -30,6 +31,7 @@ export type FeedComponentProps = {
     onSdgChange?: (sdgs: SDG[]) => void;
     selectedSdgsExternal?: SDG[];
     isLoading?: boolean;
+    viewMode?: "list" | "grid"; // Add viewMode prop
 };
 
 export const FeedComponent = ({
@@ -40,6 +42,7 @@ export const FeedComponent = ({
     onSdgChange,
     selectedSdgsExternal,
     isLoading = false,
+    viewMode = "list", // Default to list view
 }: FeedComponentProps) => {
     const isCompact = useIsCompact();
     const [user] = useAtom(userAtom);
@@ -100,7 +103,11 @@ export const FeedComponent = ({
                     selectedSdgs={selectedSdgsExternal ?? selectedSdgs}
                 />
 
-                <PostList posts={posts} feed={feed} circle={circle} />
+                {viewMode === "grid" ? (
+                    <PostGrid posts={posts} feed={feed} circle={circle} isLoading={false} />
+                ) : (
+                    <PostList posts={posts} feed={feed} circle={circle} />
+                )}
             </div>
         </div>
     );

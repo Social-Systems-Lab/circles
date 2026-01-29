@@ -84,6 +84,7 @@ export default function FeedsModule(props: PageProps) {
                     onSdgChange={handleSdgChange}
                     selectedSdgsExternal={selectedSdgs}
                     isLoading={isLoading}
+                    viewMode="grid"
                 />
             </div>
         </div>

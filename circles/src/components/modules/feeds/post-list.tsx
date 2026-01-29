@@ -215,6 +215,40 @@ const MemoizedPostContent = memo(({ content, mentions }: { content: string; ment
 
 MemoizedPostContent.displayName = "MemoizedPostContent";
 
+const TruncatedPostContent = memo(({ content, mentions, shouldTruncate }: { content: string; mentions?: MentionDisplay[], shouldTruncate: boolean }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    
+    // Simple heuristic: approximate generic paragraph length around 280-320 chars
+    // Setting a limit that allows roughly one substantial paragraph
+    const maxLength = 350; 
+    
+    // Check if content needs truncation
+    const needsTruncation = shouldTruncate && content.length > maxLength;
+
+    const displayedContent = needsTruncation && !isExpanded 
+        ? content.slice(0, maxLength) + "..." 
+        : content;
+
+    return (
+        <div className="formatted min-w-0 break-words pl-4 pr-4 text-lg">
+            <RichText content={displayedContent} mentions={mentions} />
+            {needsTruncation && !isExpanded && (
+                <button 
+                    className="mt-1 font-semibold text-gray-500 hover:underline"
+                    onClick={(e) => {
+                        e.stopPropagation(); // Prevent post click
+                        setIsExpanded(true);
+                    }}
+                >
+                    See More
+                </button>
+            )}
+        </div>
+    );
+});
+
+TruncatedPostContent.displayName = "TruncatedPostContent";
+
 // In post-list.tsx, add this near the other memoized components at the top
 
 const MemoizedCommentContent = memo(({ content, mentions }: { content: string; mentions?: MentionDisplay[] }) => (
@@ -864,11 +898,45 @@ export const PostItem = ({
             </DialogContent>
         </Dialog>
 
+        {/* Media carousel (moved to top) */}
+        {!hideContent && post.media && post.media.length > 0 && (
+            <div className="relative h-64 w-full rounded-lg pl-4 pr-4 pt-4">
+                <Carousel setApi={setCarouselApi}>
+                    <CarouselContent>
+                        {post.media.map((mediaItem, index) => (
+                            <CarouselItem key={index}>
+                                <img
+                                    src={mediaItem.fileInfo.url}
+                                    alt={mediaItem.name}
+                                    className="h-64 w-full rounded-lg object-cover"
+                                    onClick={() => handleImageClick(index)}
+                                />
+                            </CarouselItem>
+                        ))}
+                    </CarouselContent>
+                </Carousel>
+                {post.media.length > 1 && (
+                    <div className="relative flex justify-center">
+                        <div className="absolute bottom-[7px] flex flex-row items-center justify-center">
+                            {post.media.map((_, index) => (
+                                <button
+                                    key={index}
+                                    onClick={() => carouselApi?.scrollTo(index)}
+                                    className={`mx-1 h-1.5 w-1.5 rounded-full ${
+                                        index === currentImageIndex ? "bg-blue-500" : "bg-gray-300"
+                                    }`}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        )}
+
         {/* Title */}
-            {!hideContent && (
+            {!hideContent && post.title && (
                 <div className="pl-4 pr-4 pt-4">
-                    {post.title && <div className="text-xl font-semibold">{post.title}</div>}
-                    <div className="text-sm text-gray-500">{formattedDate}</div>
+                    <div className="text-xl font-semibold">{post.title}</div>
                 </div>
             )}
 
@@ -1078,8 +1146,14 @@ export const PostItem = ({
                 </div>
             )}
 
-            {/* Post content */}
-            {!hideContent && <MemoizedPostContent content={post.content} mentions={post.mentionsDisplay} />}
+            {/* Post content - using TruncatedPostContent for See More functionality */}
+            {!hideContent && (
+                <TruncatedPostContent
+                    content={post.content}
+                    mentions={post.mentionsDisplay}
+                    shouldTruncate={!isDetailView && !inPreview}
+                />
+            )}
 
             {/* --- Link Preview --- */}
             {!hideContent && (post.internalPreviewUrl || post.linkPreviewUrl) && (
@@ -1100,53 +1174,17 @@ export const PostItem = ({
             )}
             {/* --- End Link Preview --- */}
 
-            {/* Media carousel (if exists) */}
-            {!hideContent && post.media && post.media.length > 0 && (
-                <div className="relative h-64 w-full rounded-lg pl-4 pr-4">
-                    {/* Keep padding */}
-                    <Carousel setApi={setCarouselApi}>
-                        <CarouselContent>
-                            {post.media.map((mediaItem, index) => (
-                                <CarouselItem key={index}>
-                                    <img
-                                        src={mediaItem.fileInfo.url}
-                                        alt={mediaItem.name}
-                                        className="h-64 w-full rounded-lg object-cover"
-                                        onClick={() => handleImageClick(index)}
-                                    />
-                                </CarouselItem>
-                            ))}
-                        </CarouselContent>
-                    </Carousel>
-                    {post.media.length > 1 && (
-                        <div className="relative flex justify-center">
-                            <div className="absolute bottom-[7px] flex flex-row items-center justify-center">
-                                {post.media.map((_, index) => (
-                                    <button
-                                        key={index}
-                                        onClick={() => carouselApi?.scrollTo(index)}
-                                        className={`mx-1 h-1.5 w-1.5 rounded-full ${
-                                            index === currentImageIndex ? "bg-blue-500" : "bg-gray-300"
-                                        }`}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* Author (moved below content) */}
+            {/* Author moved to bottom right after media */}
             {!hideContent && (
                 <div
-                    className="flex items-center justify-end pl-4 pr-4"
+                    className="flex items-center justify-end gap-2 pl-4 pr-4 pb-2"
                     onClick={(e) => {
                         e.stopPropagation();
-                        handlePostClick();
                     }}
                 >
                     {isAggregateFeed && post.circle && post.circle?._id !== post.author._id ? (
-                        <div className="flex items-center gap-4">
+                        // Aggregate feed: Show circle with overlapping author profile pic
+                        <>
                             <div className="relative h-10 w-10">
                                 <CirclePicture circle={post.circle!} size="40px" openPreview={true} />
                                 <div
@@ -1163,23 +1201,23 @@ export const PostItem = ({
                                     />
                                 </div>
                             </div>
-                            <div className="flex flex-col">
+                            <div
+                                className="flex cursor-pointer flex-col text-right"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                }}
+                            >
                                 <div
-                                    className="flex cursor-pointer flex-row items-center font-semibold"
+                                    className="text-xs font-semibold text-gray-700"
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         handleCircleClick(post.circle!);
                                     }}
                                 >
                                     {post.circle!.name}
-                                    {userGroupName && (
-                                        <Badge variant="secondary" className="ml-2">
-                                            {userGroupName}
-                                        </Badge>
-                                    )}
                                 </div>
                                 <div
-                                    className="cursor-pointer text-sm text-gray-500"
+                                    className="text-xs text-gray-500"
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         handleAuthorClick(post.author);
@@ -1188,38 +1226,31 @@ export const PostItem = ({
                                     {post.author.name} • {formattedDate}
                                 </div>
                             </div>
-                        </div>
+                        </>
                     ) : (
-                        <div className="flex items-center gap-4">
+                        // Regular feed: Show only author
+                        <>
                             <UserPicture
                                 name={post.author?.name}
                                 picture={post.author?.picture?.url}
                                 circleType={post.author?.circleType}
+                                size="24px"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     handleAuthorClick(post.author);
                                 }}
                             />
-                            <div className="flex flex-col">
-                                <div
-                                    className="flex cursor-pointer flex-row items-center font-semibold"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleAuthorClick(post.author);
-                                    }}
-                                >
-                                    <UserBadge user={post.author} />
-                                    {userGroupName && (
-                                        <Badge variant="secondary" className="ml-2">
-                                            {userGroupName}
-                                        </Badge>
-                                    )}
-                                </div>
-                                <div className="flex cursor-pointer items-center text-sm text-gray-500">
-                                    {formattedDate}
-                                </div>
+                            <div
+                                className="flex cursor-pointer flex-col text-right"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAuthorClick(post.author);
+                                }}
+                            >
+                                <div className="text-xs font-medium text-gray-700">{post.author?.name}</div>
+                                <div className="text-xs text-gray-500">{formattedDate}</div>
                             </div>
-                        </div>
+                        </>
                     )}
                 </div>
             )}
