@@ -11,11 +11,12 @@ import { contentPreviewAtom, sidePanelContentVisibleAtom, userAtom } from "@/lib
 import { useRouter } from "next/navigation";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { getPublishTime } from "@/lib/utils";
-import { Heart, MessageCircle, X } from "lucide-react";
+import { Heart, MapPin, MessageCircle, X } from "lucide-react";
 import { UserPicture } from "../members/user-picture";
 import emptyFeed from "@images/empty-feed.png";
 import { PostItem } from "./post-list";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 
 interface PostGridProps {
     posts: PostDisplay[];
@@ -31,6 +32,27 @@ export function PostGrid({ posts, circle, feed, isLoading }: PostGridProps) {
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [expandedPost, setExpandedPost] = React.useState<PostDisplay | null>(null);
+
+    const getDistanceString = (distance: number) => {
+        if (distance < 1) {
+            return `${Math.round(distance * 1000)} m`;
+        }
+        if (distance < 10) {
+            return `${distance.toFixed(1)} km`;
+        }
+        if (distance < 100) {
+            return `${(distance / 10).toFixed(1)} mil`;
+        }
+        return `${(distance / 10).toFixed(0)} mil`;
+    };
+
+    const getAddressString = (location?: any) => {
+        if (!location) return "";
+        const parts = [];
+        if (location.street) parts.push(location.street);
+        if (location.city) parts.push(location.city);
+        return parts.join(", ");
+    };
 
     const containerVariants = {
         hidden: {},
@@ -158,16 +180,42 @@ export function PostGrid({ posts, circle, feed, isLoading }: PostGridProps) {
                                     </p>
 
                                     {/* Author Info and Date at Bottom Right */}
-                                    <div className="flex items-center justify-end gap-2">
-                                        <UserPicture
-                                            name={author?.name}
-                                            picture={author?.picture?.url}
-                                            size="24px"
-                                            circleType={author?.circleType}
-                                        />
-                                        <div className="text-right">
-                                            <div className="text-xs font-medium text-gray-700">{author?.name}</div>
-                                            <div className="text-xs text-gray-500">{formattedDate}</div>
+                                    <div className="flex items-center justify-between gap-2">
+                                        {post.location && post.metrics?.distance !== undefined ? (
+                                            <HoverCard openDelay={200}>
+                                                <HoverCardTrigger>
+                                                    <div className="flex items-center gap-1 rounded-full bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-600 transition-colors hover:bg-gray-100">
+                                                        <MapPin className="h-3 w-3 text-gray-500" />
+                                                        <span className="max-w-[100px] truncate">
+                                                            {getAddressString(post.location)}
+                                                        </span>
+                                                    </div>
+                                                </HoverCardTrigger>
+                                                <HoverCardContent className="z-[11000] w-auto p-2 text-xs">
+                                                    {getDistanceString(post.metrics.distance)} from your location
+                                                </HoverCardContent>
+                                            </HoverCard>
+                                        ) : post.location ? (
+                                            <div className="flex items-center gap-1 rounded-full bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+                                                <MapPin className="h-3 w-3 text-gray-500" />
+                                                <span className="max-w-[100px] truncate">
+                                                    {getAddressString(post.location)}
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <div />
+                                        )}
+                                        <div className="flex items-center gap-2">
+                                            <UserPicture
+                                                name={author?.name}
+                                                picture={author?.picture?.url}
+                                                size="24px"
+                                                circleType={author?.circleType}
+                                            />
+                                            <div className="text-right">
+                                                <div className="text-xs font-medium text-gray-700">{author?.name}</div>
+                                                <div className="text-xs text-gray-500">{formattedDate}</div>
+                                            </div>
                                         </div>
                                     </div>
 

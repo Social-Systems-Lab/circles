@@ -1323,7 +1323,7 @@ export const PostItem = ({
                                         <span className="max-w-[150px] truncate">{getAddressString(post.location)}</span>
                                     </div>
                                 </HoverCardTrigger>
-                                <HoverCardContent className="z-[1000] w-auto p-2 text-xs">
+                                <HoverCardContent className="z-[11000] w-auto p-2 text-xs">
                                     {getDistanceString(post.metrics.distance)} from your location
                                 </HoverCardContent>
                             </HoverCard>

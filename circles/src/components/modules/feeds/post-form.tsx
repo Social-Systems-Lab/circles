@@ -196,7 +196,12 @@ export function PostForm({
     const [showPollCreator, setShowPollCreator] = useState(false);
     const [selectedCircleId, setSelectedCircleId] = useState<string | null>(initialSelectedCircleId || null);
     const [selectedCircle, setSelectedCircle] = useState<Circle | null>(null);
-    const [images, setImages] = useState<ImageItem[]>([]);
+    const [images, setImages] = useState<ImageItem[]>(
+        initialPost?.media?.map((m) => ({
+            preview: m.fileInfo.url,
+            media: m,
+        })) || [],
+    );
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [dragging, setDragging] = useState(false);
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
@@ -859,7 +864,7 @@ export function PostForm({
                                     displayAs="popover"
                                     selectedSdgs={selectedSdgs}
                                     onSelectionChange={setSelectedSdgs}
-                                    popoverContentClassName="z-[111]"
+                                    popoverContentClassName="z-[11000]"
                                     gridCols="grid-cols-4"
                                     trigger={
                                         <Button variant="ghost" size="icon" className="rounded-full">
@@ -915,7 +920,7 @@ export function PostForm({
                         )}
                         <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
                             <DialogContent
-                                className="z-[111]"
+                                className="z-[11000]"
                                 onInteractOutside={(e) => {
                                     e.preventDefault();
                                 }}
@@ -945,7 +950,7 @@ export function PostForm({
             {/* UserGroups Dialog is a direct child of the root div */}
             <Dialog open={isUserGroupsDialogOpen} onOpenChange={setIsUserGroupsDialogOpen}>
                 <DialogContent
-                    className="z-[111] max-w-md"
+                    className="z-[11000] max-w-md"
                     onInteractOutside={(e) => {
                         e.preventDefault();
                     }}
