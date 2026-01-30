@@ -173,10 +173,9 @@ export const sendMessageAction = async (
         }
 
         // Import server-side Matrix function
-        const { sendMatrixMessage, forceUserJoinRoom } = await import("@/lib/data/matrix");
-        
+        const { sendMatrixMessage, forceUserJoinRoom } = await import("@/lib/data/matrix");  
         try {
-            const result = await sendMatrixMessage(
+               const result = await sendMatrixMessage(
                 user.matrixAccessToken,
                 roomId,
                 content,
@@ -190,8 +189,10 @@ export const sendMessageAction = async (
                 (innerError.message.includes("not in room") || innerError.message.includes("M_FORBIDDEN") || innerError.message.includes("403"))) {
                 
                 console.log("⚠️ User not in room, attempting to force join...", roomId);
-                if (user.fullMatrixName) {
-                    await forceUserJoinRoom(user.fullMatrixName, roomId);
+                if (!user.fullMatrixName) {
+                    throw new Error("User is missing fullMatrixName; cannot force join room");
+                }
+                await forceUserJoinRoom(user.fullMatrixName, roomId);
                     
                     // Retry sending
                     const result = await sendMatrixMessage(
