@@ -172,10 +172,13 @@ export const findOrCreateDMRoom = async (userA: Circle, userB: Circle): Promise<
     console.log("Searching for DM room between", dmParticipants);
 
     // Check if a DM already exists between these users
-    const existingRoom = (await ChatRooms.findOne({
-        isDirect: true,
-        dmParticipants: { $all: dmParticipants },
-    })) as ChatRoom;
+  const existingRoom = (await ChatRooms.findOne({
+    isDirect: true,
+    dmParticipants: { $all: dmParticipants },
+    archived: { $ne: true },
+})) as ChatRoom;
+
+
 
     console.log("Found existing room?", JSON.stringify(existingRoom));
 
