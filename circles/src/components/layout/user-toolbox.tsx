@@ -130,14 +130,20 @@ export const UserToolbox = () => {
             }
 
             try {
-                const [eventsRes, goalsRes, tasksRes, issuesRes] = await Promise.all([
-                    getEventsAction(user.handle, undefined, true, true),
+
+	        const results = await Promise.allSettled([
+		    getEventsAction(user.handle, undefined, true, true),
                     getGoalsAction(user.handle, true, true),
                     getTasksAction(user.handle, true, true),
                     getIssuesAction(user.handle, true, true),
-                ]);
+                ] as const);
 
-                setEvents(eventsRes.events || []);
+	        const eventsRes = results[0].status === "fulfilled" ? results[0].value : undefined;
+		const goalsRes = results[1].status === "fulfilled" ? results[1].value : undefined;
+		const tasksRes = results[2].status === "fulfilled" ? results[2].value : undefined;
+		const issuesRes = results[3].status === "fulfilled" ? results[3].value : undefined;
+
+		setEvents(eventsRes?.events ?? []);
 
                 const goalMilestones: Milestone[] =
                     (goalsRes?.goals || [])

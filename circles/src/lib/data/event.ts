@@ -164,7 +164,10 @@ export const getEventsByCircleId = async (
             }
 
             if (userQueries.length > 0) {
-                matchQuery.$or = [{ circleId }, ...userQueries];
+                // User profile circle:
+// show events the user CREATED or is PARTICIPATING in,
+// regardless of which circle the event belongs to
+matchQuery.$or = userQueries;
                 delete matchQuery.circleId;
             }
         }
@@ -184,7 +187,7 @@ export const getEventsByCircleId = async (
             // 1) Match circle and optional date overlap
             // 1) Match circle and optional date overlap OR recurrence
             {
-                $match: baseMatch,
+                $match: matchQuery,
             },
             ...hideCancelledMatchStage,
 

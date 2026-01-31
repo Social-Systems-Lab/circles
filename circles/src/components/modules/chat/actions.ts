@@ -184,27 +184,38 @@ export const sendMessageAction = async (
             console.log("✅ Message sent successfully! Event ID:", result.event_id);
             return { success: true, eventId: result.event_id };
         } catch (innerError) {
-            // Check for "not in room" error and try to join
-            if (innerError instanceof Error && 
-                (innerError.message.includes("not in room") || innerError.message.includes("M_FORBIDDEN") || innerError.message.includes("403"))) {
-                
-                console.log("⚠️ User not in room, attempting to force join...", roomId);
-                if (!user.fullMatrixName) {
-                    throw new Error("User is missing fullMatrixName; cannot force join room");
-                }
-                await forceUserJoinRoom(user.fullMatrixName, roomId);
-                    
-                    // Retry sending
-                    const result = await sendMatrixMessage(
-                        user.matrixAccessToken,
-                        roomId,
-                        content,
-                        replyToEventId
-                    );
-                    console.log("✅ Message sent successfully after force join! Event ID:", result.event_id);
-                    return { success: true, eventId: result.event_id };
-                }
-            }
+            // Check for "not in room" error/M_FORBIDDEN and try to join
+	    if (
+    		innerError instanceof Error &&
+    		(innerError.message.includes("M_FORBIDDEN") ||
+        	  innerError.message.includes("not in room") ||
+         	  innerError.message.includes("403"))
+	    ) {
+console.log("⚠️ User not in room, attempting to force join...", roomId);
+
+const { MATRIX_DOMAIN } = await import("@/lib/data/matrix");
+
+const mxid =
+  user.fullMatrixName ||
+  (user.matrixUsername ? `@${user.matrixUsername}:${MATRIX_DOMAIN}` : null);
+
+if (!mxid) {
+  throw new Error("User is missing Matrix identity (fullMatrixName/matrixUsername); cannot force join room");
+}
+
+await forceUserJoinRoom(mxid, roomId);
+
+// Retry sending
+const retryResult = await sendMatrixMessage(
+  user.matrixAccessToken,
+  roomId,
+  content,
+  replyToEventId
+);
+
+console.log("✅ Message sent successfully after force join! Event ID:", retryResult.event_id);
+return { success: true, eventId: retryResult.event_id };
+}
             throw innerError;
         }
     } catch (error) {
@@ -241,10 +252,14 @@ export const fetchRoomMessagesAction = async (
                 limit
             );
             return { success: true, messages };
-        } catch (innerError) {
+	} catch (innerError) {
              // Check for "not in room" error/M_FORBIDDEN and try to join
-            if (innerError instanceof Error && 
-                (innerError.message.includes("M_FORBIDDEN") || innerError.message.includes("not in room") || innerError.message.includes("403"))) {
+            if (
+               innerError instanceof Error &&
+               (innerError.message.includes("M_FORBIDDEN") ||
+                   innerError.message.includes("not in room") ||
+                   innerError.message.includes("403"))
+           ) {
                 
                 console.log("⚠️ User not in room (fetch failed), attempting to force join...", roomId);
                 if (user.fullMatrixName) {

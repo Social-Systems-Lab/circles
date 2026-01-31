@@ -433,7 +433,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                         {isOwnMessage && message.status === "failed" && (
                                             <span className="flex items-center gap-1 text-red-500">
                                                 <IoWarningOutline className="h-3 w-3" />
-                                                Failed to send
+                                                {message.errorMessage || "Failed to send"}
                                             </span>
                                         )}
                                     </div>
@@ -680,8 +680,12 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
 
         const rollbackOptimisticMessage = (reason?: string) => {
             console.error("Failed to send message:", reason);
-            applyToTempMessage((msg) => ({ ...msg, status: "failed" }));
-            setNewMessage(trimmedMessage);
+            applyToTempMessage((msg) => ({
+                ...msg,
+                status: "failed",
+                errorMessage: reason || "Failed to send",
+            }));
+	    setNewMessage(trimmedMessage);
             if (replyTarget) {
                 setReplyToMessage(replyTarget);
             }

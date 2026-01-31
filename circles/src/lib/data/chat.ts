@@ -184,7 +184,12 @@ export const findOrCreateDMRoom = async (userA: Circle, userB: Circle): Promise<
 
     if (existingRoom) {
         existingRoom._id = existingRoom._id.toString();
-
+ console.log("[DM RESOLVE]", {
+    userA: userA?.did,
+    userB: userB?.did,
+    roomId: existingRoom?._id,
+    archived: existingRoom?.archived
+  });
         // If the room doesn't have a Matrix room, create one
         if (!existingRoom.matrixRoomId) {
             console.log("Creating Matrix room for existing DM");

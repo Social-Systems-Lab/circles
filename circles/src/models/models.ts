@@ -297,6 +297,7 @@ export const chatRoomSchema = z.object({
     picture: fileInfoSchema.optional(),
     isDirect: z.boolean().optional(),
     dmParticipants: z.array(z.string()).optional(),
+    archived: z.boolean().optional(),
 });
 
 export type ChatRoom = z.infer<typeof chatRoomSchema>;
@@ -340,6 +341,8 @@ export interface ChatMessage {
     reactions?: Record<string, ReactionAggregation[]>; // { [emoji]: [{sender, eventId}, ...] }
     isRedacted?: boolean;
     status?: "pending" | "sent" | "failed";
+    errorMessage?: string;
+
 }
 
 export type ReactionAggregation = {

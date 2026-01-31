@@ -453,12 +453,43 @@ function buildAdminJoinEndpoint(roomIdOrAlias: string, extraServers: string[] = 
     return `${MATRIX_URL}/_synapse/admin/v1/join/${encodedRoom}?${query}`;
 }
 
-function buildClientJoinEndpoint(roomIdOrAlias: string, baseUrl: string = MATRIX_URL, extraServers: string[] = []): string {
+function buildClientJoinEndpoint(
+    roomIdOrAlias: string,
+    baseUrl: string = MATRIX_URL,
+    extraServers: string[] = [],
+): string {
     const encodedRoom = encodeURIComponent(roomIdOrAlias);
     const servers = getCandidateServerNames(roomIdOrAlias, extraServers);
-    if (!servers.length) return `${baseUrl}/_matrix/client/v3/join/${encodedRoom}`;
-    const query = servers.map((server) => `server_name=${encodeURIComponent(server)}`).join("&");
+
+    if (!servers.length) {
+        return `${baseUrl}/_matrix/client/v3/join/${encodedRoom}`;
+    }
+
+    const query = servers
+        .map((server) => `server_name=${encodeURIComponent(server)}`)
+        .join("&");
+
     return `${baseUrl}/_matrix/client/v3/join/${encodedRoom}?${query}`;
+}
+export async function joinRoomAsUser(
+    userAccessToken: string,
+    roomIdOrAlias: string,
+    extraServers: string[] = [],
+): Promise<void> {
+    const endpoint = buildClientJoinEndpoint(roomIdOrAlias, MATRIX_URL, extraServers);
+    const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${userAccessToken}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+    });
+
+    if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`User join failed: ${res.status} ${txt}`);
+    }
 }
 
 async function getChatRoomAlias(roomId: string): Promise<string | null> {
