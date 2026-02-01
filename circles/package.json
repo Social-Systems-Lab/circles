@@ -7,7 +7,8 @@
         "dev:turbo": "next dev --turbo",
         "build": "cross-env IS_BUILD=true next build",
         "start": "next start",
-        "lint": "next lint"
+        "lint": "next lint",
+        "check:chat-actions": "tsc --pretty false --noEmit -p tsconfig.json"
     },
     "dependencies": {
         "@ai-sdk/openai": "^0.0.13",
