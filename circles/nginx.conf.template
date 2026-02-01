@@ -5,27 +5,37 @@ events {
 }
 
 http {
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    resolver_timeout 5s;
     include       mime.types;
     default_type  application/octet-stream;
 
     sendfile        on;
     keepalive_timeout  65;
+server {
+    listen 80;
+    server_name ${CIRCLES_DOMAIN} www.${CIRCLES_DOMAIN};
 
-    server {
-        listen 80;
-        server_name ${CIRCLES_DOMAIN} www.${CIRCLES_DOMAIN};
-
-        # Allow Let's Encrypt HTTP challenge
-        location /.well-known/acme-challenge/ {
-            root /usr/share/nginx/html;
-            allow all;
-        }
-
-        # Redirect all other HTTP requests to HTTPS
-        location / {
-            return 301 https://$host$request_uri;
-        }
+    # Allow Let's Encrypt HTTP challenge
+    location /.well-known/acme-challenge/ {
+        root /usr/share/nginx/html;
+        allow all;
     }
+
+    # IMPORTANT: Serve storage over HTTP (for internal Next.js image optimizer fetches)
+    location /storage/ {
+        proxy_pass http://minio:9000/circles/;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Redirect everything else to HTTPS
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
 
     server {
         listen 443 ssl;
