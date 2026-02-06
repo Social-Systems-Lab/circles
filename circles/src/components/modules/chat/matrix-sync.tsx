@@ -12,7 +12,7 @@ import {
 } from "@/lib/data/atoms";
 import { RoomData, startSync, fetchRoomMessages } from "@/lib/data/client-matrix";
 import { useAtom } from "jotai";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchAndCacheMatrixUsers } from "./chat-room";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { getUserPrivateAction } from "../home/actions";
@@ -47,6 +47,13 @@ const MatrixSyncInner = () => {
     const roomMessagesRef = useRef(roomMessages);
     const [matrixUserCache, setMatrixUserCache] = useAtom(matrixUserCacheAtom);
     const matrixUserCacheRef = useRef(matrixUserCache);
+    
+    // Holds the current stop function for the active sync loop (so we can stop it before starting a new one)
+    const stopSyncRef = useRef<null | (() => void)>(null);
+
+    // Increments each time we (re)start syncing, so stale async work can be ignored safely
+    const syncGenerationRef = useRef(0);
+
 
     // Fixes hydration errors
     const [isMounted, setIsMounted] = useState(false);
@@ -173,133 +180,157 @@ const MatrixSyncInner = () => {
         setUnreadCounts(updatedUnreadCounts);
     }, [roomMessages, lastReadTimestamps, user?.matrixUsername, user?.matrixNotificationsRoomId, setUnreadCounts]);
 
-    // Start the sync process
-    useEffect(() => {
-        if (!user?.matrixAccessToken) return;
+    // Stable, memoized roomIds list for initial sync (avoids complex deps)
+        const roomIdsForInitialSync = useMemo(() => {
+    const ids = (user?.chatRoomMemberships || [])
+        .map((m) => m.chatRoom.matrixRoomId)
+        .filter(Boolean);
 
-        const handleSyncData = async (data: {
-            rooms: Record<string, RoomData>;
-            latestMessages: Record<string, any>;
-            lastReadTimestamps: Record<string, number>;
-        }) => {
-            // console.log("handleSyncData called");
-            setLatestMessages((prev) => ({ ...prev, ...data.latestMessages }));
-            setRoomData((prev) => ({ ...prev, ...data.rooms }));
-            setLastReadTimestamps((prev) => ({ ...prev, ...data.lastReadTimestamps }));
+    if (user?.matrixNotificationsRoomId) ids.push(user.matrixNotificationsRoomId);
 
-            let newRoomFound = false;
-            const newRoomMessages: Record<string, any[]> = {};
-            for (const [roomId, roomData] of Object.entries(data.rooms)) {
-                const timelineEvents = roomData.timeline?.events || [];
-                const newUsernames = timelineEvents
-                    .filter((event: any) => event.type === "m.room.message")
-                    .map((event: any) => event.sender)
-                    .filter((username: string) => !matrixUserCache[username]);
+    return ids;
+    }, [user?.chatRoomMemberships, user?.matrixNotificationsRoomId]);
 
-                const updatedCache = await fetchAndCacheMatrixUsers(
-                    newUsernames,
-                    matrixUserCacheRef.current,
-                    setMatrixUserCache,
-                );
+        // Start the sync process
+useEffect(() => {
+    // If we don’t have the Matrix credentials yet, do nothing.
+    if (!user?.matrixAccessToken || !user?.matrixUrl || !user?.matrixUsername) return;
 
-                const messages = timelineEvents.map((event) => ({
+    // Bump generation so any in-flight async work from a previous run becomes stale.
+    syncGenerationRef.current += 1;
+    const myGen = syncGenerationRef.current;
+
+    // Always stop any previous loop before starting a new one.
+    if (stopSyncRef.current) {
+        stopSyncRef.current();
+        stopSyncRef.current = null;
+    }
+
+    const handleSyncData = async (data: {
+        rooms: Record<string, RoomData>;
+        latestMessages: Record<string, any>;
+        lastReadTimestamps: Record<string, number>;
+    }) => {
+        // Ignore stale updates (e.g., Strict Mode double-invocation / fast refresh / deps changes)
+        if (syncGenerationRef.current !== myGen) return;
+
+        setLatestMessages((prev) => ({ ...prev, ...data.latestMessages }));
+        setRoomData((prev) => ({ ...prev, ...data.rooms }));
+        setLastReadTimestamps((prev) => ({ ...prev, ...data.lastReadTimestamps }));
+
+        // Merge incoming messages into roomMessages without duplicating events
+        const newRoomMessages: Record<string, any[]> = {};
+        for (const [roomId, room] of Object.entries(data.rooms)) {
+            const timelineEvents = room?.timeline?.events || [];
+            const messages = timelineEvents
+                .filter((event: any) => event?.type === "m.room.message")
+                .map((event: any) => ({
                     id: event.event_id,
                     roomId,
                     createdBy: event.sender,
                     createdAt: new Date(event.origin_server_ts),
                     content: event.content,
                     type: event.type,
-                    author: updatedCache[event.sender] || { name: event.sender },
+                    author: matrixUserCacheRef.current?.[event.sender] || { name: event.sender },
                     reactions: event.reactions,
                 }));
 
-                const existingMessages = roomMessagesRef.current[roomId] || [];
-                const messageMap = new Map(existingMessages.map((msg) => [msg.id, msg]));
-
-                for (const msg of messages) {
-                    messageMap.set(msg.id, { ...(messageMap.get(msg.id) || {}), ...msg });
-                }
-
-                newRoomMessages[roomId] = Array.from(messageMap.values());
-
-                newRoomFound =
-                    newRoomFound ||
-                    (!user.chatRoomMemberships?.some((m) => m.chatRoom.matrixRoomId === roomId) &&
-                        roomId !== user.matrixNotificationsRoomId);
+            const existing = roomMessagesRef.current?.[roomId] || [];
+            const map = new Map<string, any>(existing.map((m: any) => [m.id, m]));
+            for (const m of messages) {
+                map.set(m.id, { ...(map.get(m.id) || {}), ...m });
             }
 
-            if (newRoomFound) {
-                console.warn("New room detected");
-                let newUser = await getUserPrivateAction();
-                if (newUser) {
-                    setUser(newUser);
-                }
-            }
+            newRoomMessages[roomId] = Array.from(map.values()).sort(
+                (a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+            );
+        }
 
+        if (Object.keys(newRoomMessages).length) {
             setRoomMessages((prev) => ({ ...prev, ...newRoomMessages }));
-        };
+        }
+    };
 
-        const initialSync = async () => {
-            const syncToken = localStorage.getItem("syncToken");
-            if (!syncToken) {
-                console.log("No sync token found, performing initial sync...");
-                const roomIds = user.chatRoomMemberships?.map((m) => m.chatRoom.matrixRoomId) || [];
-                if (user.matrixNotificationsRoomId) {
-                    roomIds.push(user.matrixNotificationsRoomId);
-                }
+    const initialSync = async () => {
+        // If we became stale before starting, abort.
+        if (syncGenerationRef.current !== myGen) return;
 
-                for (const roomId of roomIds) {
-                    if (roomId) {
-                        try {
-                            const { messages: historicalMessages } = await fetchRoomMessages(
-                                user.matrixAccessToken!,
-                                user.matrixUrl!,
-                                roomId,
-                                50, // Fetch last 50 messages
-                            );
+        const syncToken = localStorage.getItem("syncToken");
+        if (!syncToken) {
+            for (const roomId of roomIdsForInitialSync) {
+                // Abort if stale mid-loop
+                if (syncGenerationRef.current !== myGen) return;
+                if (!roomId) continue;
 
-                            const formattedMessages = historicalMessages.map((event: any) => ({
-                                id: event.event_id,
-                                roomId,
-                                createdBy: event.sender,
-                                createdAt: new Date(event.origin_server_ts),
-                                content: event.content,
-                                type: event.type,
-                                author: matrixUserCache[event.sender] || { name: event.sender },
-                                reactions: event.reactions,
-                            }));
+                try {
+                    const { messages: historicalMessages } = await fetchRoomMessages(
+                        user.matrixAccessToken!,
+                        user.matrixUrl!,
+                        roomId,
+                        50,
+                    );
 
-                            setRoomMessages((prev) => ({
-                                ...prev,
-                                [roomId]: [...(prev[roomId] || []), ...formattedMessages].sort(
-                                    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-                                ),
-                            }));
-                        } catch (error) {
-                            console.error(`Failed to fetch historical messages for room ${roomId}:`, error);
-                        }
-                    }
+                    // Abort if stale after await
+                    if (syncGenerationRef.current !== myGen) return;
+
+                    const formattedMessages = historicalMessages.map((event: any) => ({
+                        id: event.event_id,
+                        roomId,
+                        createdBy: event.sender,
+                        createdAt: new Date(event.origin_server_ts),
+                        content: event.content,
+                        type: event.type,
+                        author: matrixUserCacheRef.current?.[event.sender] || { name: event.sender },
+                        reactions: event.reactions,
+                    }));
+
+                    setRoomMessages((prev) => ({
+                        ...prev,
+                        [roomId]: [...(prev[roomId] || []), ...formattedMessages].sort(
+                            (a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+                        ),
+                    }));
+                } catch (error) {
+                    console.error(`Failed to fetch historical messages for room ${roomId}:`, error);
                 }
             }
-            startSync(user.matrixAccessToken!, user.matrixUrl!, user.matrixUsername!, handleSyncData);
-        };
+        }
 
-        initialSync();
-    }, [
-        setLatestMessages,
-        setUnreadCounts,
-        setRoomData,
-        setRoomMessages,
-        setUser,
-        user?.matrixAccessToken,
-        user?.chatRoomMemberships,
-        user?.matrixNotificationsRoomId,
-        setMatrixUserCache,
-        matrixUserCache,
-        user?.matrixUsername,
-        user?.matrixUrl,
-        setLastReadTimestamps,
-    ]);
+        // Abort if stale right before starting the long-running loop
+        if (syncGenerationRef.current !== myGen) return;
+
+        // Start the live sync loop
+        stopSyncRef.current = startSync(
+            user.matrixAccessToken!,
+            user.matrixUrl!,
+            user.matrixUsername!,
+            handleSyncData,
+        );
+    };
+
+    // Fire and forget; generation guards handle safety.
+    initialSync();
+
+    return () => {
+        // Mark this run stale and stop the active loop.
+        syncGenerationRef.current += 1;
+        if (stopSyncRef.current) {
+            stopSyncRef.current();
+            stopSyncRef.current = null;
+        }
+    };
+}, [
+    user?.matrixAccessToken,
+    user?.matrixUrl,
+    user?.matrixUsername,
+    user?.matrixNotificationsRoomId,
+    roomIdsForInitialSync,
+
+    setLatestMessages,
+    setRoomData,
+    setRoomMessages,
+    setLastReadTimestamps,
+]);
 
     return null;
 };
