@@ -780,6 +780,12 @@ export async function sendNotifications(
     recipients: UserPrivate[],
     payload: { [key: string]: any },
 ): Promise<void> {
+    const chatProvider = process.env.CHAT_PROVIDER || "matrix";
+    if (chatProvider === "mongo") {
+        // TODO: Implement in-app notifications for mongo chat provider.
+        return;
+    }
+
     for (const recipientDoc of recipients) {
         if (!recipientDoc.did) {
             console.warn("Recipient has no DID, skipping notification:", recipientDoc.name);

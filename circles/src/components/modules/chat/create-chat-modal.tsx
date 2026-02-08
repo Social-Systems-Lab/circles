@@ -6,7 +6,7 @@ import { userAtom } from "@/lib/data/atoms";
 import { Circle } from "@/models/models";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import { useRouter } from "next/navigation";
-import { getAllUsersAction, createGroupChatAction } from "./actions";
+import { getAllUsersAction, createGroupChatAction, createMongoGroupChatAction } from "./actions";
 import { getUserPrivateAction } from "../home/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,7 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
     const [groupAvatar, setGroupAvatar] = useState<File | null>(null);
     const [groupAvatarPreview, setGroupAvatarPreview] = useState<string | null>(null);
     const [isCreating, setIsCreating] = useState(false);
+    const provider = process.env.NEXT_PUBLIC_CHAT_PROVIDER || "matrix";
 
     useEffect(() => {
         if (isOpen && allUsers.length === 0) {
@@ -77,6 +78,12 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
 
     const handleUserClick = (clickedUser: Circle) => {
         if (step === "select-type") {
+            if (provider === "mongo") {
+                router.push(`/chat/${clickedUser.handle}`);
+                onClose();
+                return;
+            }
+
             // Check for existing DM
             const existingMembership = user?.chatRoomMemberships?.find((m) => {
                 return (
@@ -141,7 +148,10 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
                 formData.append("avatar", groupAvatar);
             }
 
-            const result = await createGroupChatAction(formData);
+            const result =
+                provider === "mongo"
+                    ? await createMongoGroupChatAction(formData)
+                    : await createGroupChatAction(formData);
 
             if (result.success && result.roomId) {
                 toast({

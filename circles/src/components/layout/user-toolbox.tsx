@@ -18,7 +18,7 @@ import {
 } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { useRouter, usePathname } from "next/navigation";
-import { Circle, MemberDisplay, UserToolboxTab, EventDisplay, TaskPermissions } from "@/models/models";
+import { Circle, MemberDisplay, UserToolboxTab, EventDisplay, TaskPermissions, ChatRoomDisplay } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { logOut } from "../auth/actions";
 import { VerifyAccountButton } from "../modules/auth/verify-account-button";
@@ -34,6 +34,7 @@ import { getGoalsAction } from "@/app/circles/[handle]/goals/actions";
 import { getTasksAction } from "@/app/circles/[handle]/tasks/actions";
 import { getIssuesAction } from "@/app/circles/[handle]/issues/actions";
 import { getCircleByIdAction } from "@/components/modules/circles/actions";
+import { listChatRoomsAction } from "@/components/modules/chat/actions";
 const { flushSync } = require("react-dom");
 import { LoadingSpinner } from "../ui/loading-spinner";
 
@@ -91,6 +92,7 @@ export const UserToolbox = () => {
     const [events, setEvents] = useState<EventDisplay[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [milestones, setMilestones] = useState<Milestone[]>([]);
+    const [chatRooms, setChatRooms] = useState<ChatRoomDisplay[]>([]);
     const handleToolboxEventHidden = useCallback(
         (eventId: string) => {
             if (!eventId) return;
@@ -187,6 +189,29 @@ export const UserToolbox = () => {
         };
         fetchTimelineItems();
     }, [user?.handle]);
+
+    useEffect(() => {
+        let isMounted = true;
+        const loadRooms = async () => {
+            if (!user) {
+                if (isMounted) setChatRooms([]);
+                return;
+            }
+            try {
+                const result = await listChatRoomsAction();
+                if (isMounted && result.success && result.rooms) {
+                    setChatRooms(result.rooms);
+                }
+            } catch (error) {
+                console.error("Failed to load chat rooms:", error);
+            }
+        };
+
+        loadRooms();
+        return () => {
+            isMounted = false;
+        };
+    }, [user]);
 
     const closeToolbox = useCallback(() => {
         setUserToolboxState(undefined);
@@ -344,7 +369,7 @@ export const UserToolbox = () => {
                     </TabsList>
                     <TabsContent value="chat" className="m-0 flex-grow overflow-auto pt-1">
                         <ChatList
-                            chats={user?.chatRoomMemberships?.map((m) => m.chatRoom) || []}
+                            chats={chatRooms}
                             onChatClick={closeToolbox}
                         />
                     </TabsContent>

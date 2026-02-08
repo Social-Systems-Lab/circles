@@ -6,6 +6,9 @@ import { ChatRoom, ChatRoomMember, ChatRoomDisplay, Circle } from "@/models/mode
 import { getCircleById, updateCircle } from "./circle";
 import { addUserToRoom, createMatrixRoom } from "./matrix";
 import { getPrivateUserByDid } from "./user";
+import { listConversationsForUser } from "./mongo-chat";
+
+const getChatProvider = () => process.env.CHAT_PROVIDER || "matrix";
 
 // Chat Room Functions
 
@@ -40,6 +43,20 @@ export const getChatRooms = async (circleId: string): Promise<ChatRoom[]> => {
         }
     });
     return chatRooms;
+};
+
+export const listChatRoomsForUser = async (userDid: string): Promise<ChatRoomDisplay[]> => {
+    const provider = getChatProvider();
+    if (provider === "mongo") {
+        const user = await getPrivateUserByDid(userDid);
+        const circleIds = (user?.memberships || [])
+            .map((membership) => membership.circleId)
+            .filter(Boolean);
+        return await listConversationsForUser(userDid, circleIds);
+    }
+
+    const user = await getPrivateUserByDid(userDid);
+    return user?.chatRoomMemberships?.map((membership) => membership.chatRoom) || [];
 };
 
 export const getDefaultChatRoomByCircleHandle = async (circleHandle: string): Promise<ChatRoomDisplay | null> => {

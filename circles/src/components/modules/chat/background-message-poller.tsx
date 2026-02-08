@@ -13,10 +13,11 @@ const parseEnvFlag = (value?: string) => {
 };
 
 const MATRIX_POLLING_ENABLED = parseEnvFlag(process.env.NEXT_PUBLIC_MATRIX_ENABLED);
+const CHAT_PROVIDER = process.env.NEXT_PUBLIC_CHAT_PROVIDER || "matrix";
 
 export const BackgroundMessagePoller = () => {
     const pathname = usePathname();
-    const shouldPoll = MATRIX_POLLING_ENABLED && pathname?.startsWith("/chat");
+    const shouldPoll = MATRIX_POLLING_ENABLED && CHAT_PROVIDER === "matrix" && pathname?.startsWith("/chat");
     const [user] = useAtom(userAtom);
     const [roomMessages, setRoomMessages] = useAtom(roomMessagesAtom);
     const [matrixUserCache, setMatrixUserCache] = useAtom(matrixUserCacheAtom);

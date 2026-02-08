@@ -13,9 +13,13 @@ export const UnreadCountCalculator = () => {
     const [lastReadTimestamps] = useAtom(lastReadTimestampsAtom);
     const [, setUnreadCounts] = useAtom(unreadCountsAtom);
     const [user] = useAtom(userAtom);
+    const chatProvider = process.env.NEXT_PUBLIC_CHAT_PROVIDER || "matrix";
 
     // Recalculate unreadCounts whenever roomMessages or lastReadTimestamps change
     useEffect(() => {
+        if (chatProvider === "mongo") {
+            return;
+        }
         if (!Object.keys(roomMessages).length || !Object.keys(lastReadTimestamps).length) {
             console.log("🔔 [Unread] Waiting for hydration...");
             return; // Wait for hydration
@@ -60,7 +64,7 @@ export const UnreadCountCalculator = () => {
 
         console.log("🔔 [Unread] Final unread counts:", updatedUnreadCounts);
         setUnreadCounts(updatedUnreadCounts);
-    }, [roomMessages, lastReadTimestamps, user?.matrixUsername, user?.matrixNotificationsRoomId, setUnreadCounts]);
+    }, [chatProvider, roomMessages, lastReadTimestamps, user?.matrixUsername, user?.matrixNotificationsRoomId, setUnreadCounts]);
 
     return null;
 };

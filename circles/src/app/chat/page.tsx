@@ -8,13 +8,14 @@ import { useAtom } from "jotai";
 import Image from "next/image";
 import emptyFeed from "@images/empty-feed.png";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import { ChatRoomDisplay } from "@/models/models";
 
 export default function ChatPage() {
     const isMobile = useIsMobile();
     const [user] = useAtom(userAtom);
-    const allChats = user?.chatRoomMemberships?.map((m) => m.chatRoom) || [];
+    const [chatRooms, setChatRooms] = useState<ChatRoomDisplay[]>([]);
     const router = useRouter();
 
     useEffect(() => {
@@ -23,12 +24,36 @@ export default function ChatPage() {
         }
     }, []);
 
+    useEffect(() => {
+        let isMounted = true;
+        const loadRooms = async () => {
+            if (!user) {
+                if (isMounted) setChatRooms([]);
+                return;
+            }
+            try {
+                const { listChatRoomsAction } = await import("@/components/modules/chat/actions");
+                const result = await listChatRoomsAction();
+                if (isMounted && result.success && result.rooms) {
+                    setChatRooms(result.rooms);
+                }
+            } catch (error) {
+                console.error("Failed to load chat rooms:", error);
+            }
+        };
+
+        loadRooms();
+        return () => {
+            isMounted = false;
+        };
+    }, [user]);
+
     if (isMobile) {
         return null;
     }
 
     // If no chats => Show full screen "No chats" message
-    if (allChats.length <= 0) {
+    if (chatRooms.length <= 0) {
         return (
             <div className="flex h-screen flex-col items-center justify-center gap-4 p-4">
                 <Image src={emptyFeed} alt="No chats yet" width={300} />

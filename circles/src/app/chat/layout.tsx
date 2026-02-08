@@ -1,7 +1,7 @@
 // chat/layout.tsx - chat layout component, lists all chat rooms and shows selected chat room
 "use client";
 
-import { PropsWithChildren, useEffect, useMemo } from "react";
+import { PropsWithChildren, useEffect, useState } from "react";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
@@ -14,8 +14,8 @@ import { CreateChatModal } from "@/components/modules/chat/create-chat-modal";
 import { GroupSettingsModal } from "@/components/modules/chat/group-settings-modal";
 import { SquarePen } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
 import { chatSettingsModalAtom } from "@/lib/data/atoms";
+import { ChatRoomDisplay } from "@/models/models";
 
 export default function ChatLayout({ children }: PropsWithChildren) {
     const [user] = useAtom(userAtom);
@@ -24,10 +24,31 @@ export default function ChatLayout({ children }: PropsWithChildren) {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [chatSettingsModal, setChatSettingsModal] = useAtom(chatSettingsModalAtom);
 
-    const allChats = useMemo(
-        () => user?.chatRoomMemberships?.map((m) => m.chatRoom) || [],
-        [user?.chatRoomMemberships],
-    );
+    const [chatRooms, setChatRooms] = useState<ChatRoomDisplay[]>([]);
+
+    useEffect(() => {
+        let isMounted = true;
+        const loadRooms = async () => {
+            if (!user) {
+                if (isMounted) setChatRooms([]);
+                return;
+            }
+            try {
+                const { listChatRoomsAction } = await import("@/components/modules/chat/actions");
+                const result = await listChatRoomsAction();
+                if (isMounted && result.success && result.rooms) {
+                    setChatRooms(result.rooms);
+                }
+            } catch (error) {
+                console.error("Failed to load chat rooms:", error);
+            }
+        };
+
+        loadRooms();
+        return () => {
+            isMounted = false;
+        };
+    }, [user]);
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -46,7 +67,7 @@ export default function ChatLayout({ children }: PropsWithChildren) {
 
     // Find the chat room for the settings modal
     const selectedChat = chatSettingsModal.chatRoomId
-        ? allChats.find((chat) => chat._id === chatSettingsModal.chatRoomId)
+        ? chatRooms.find((chat) => chat._id === chatSettingsModal.chatRoomId)
         : undefined;
 
     // Determine if current user is admin of the selected chat
@@ -77,7 +98,7 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                     </div>
                     <ChatSearch />
                     <div className="flex-grow overflow-y-auto">
-                        <ChatList chats={allChats} />
+                        <ChatList chats={chatRooms} />
                     </div>
                 </aside>
             )}

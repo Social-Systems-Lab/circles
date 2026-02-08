@@ -14,6 +14,7 @@ import { Loader2 } from "lucide-react";
 export function ChatSearch() {
     const [user, setUser] = useAtom(userAtom);
     const router = useRouter();
+    const provider = process.env.NEXT_PUBLIC_CHAT_PROVIDER || "matrix";
 
     // Local states
     const [searchTerm, setSearchTerm] = useState("");
@@ -53,6 +54,14 @@ export function ChatSearch() {
     // Called when user clicks a result
     const handleUserClick = async (clickedUser: Circle) => {
         try {
+            if (provider === "mongo") {
+                setRecipient(clickedUser);
+                setShowDM(true);
+                setShowResults(false);
+                setSearchTerm("");
+                return;
+            }
+
             // Check if there's an existing DM in user.chatRoomMemberships
             const existingMembership = user?.chatRoomMemberships?.find((m) => {
                 return (

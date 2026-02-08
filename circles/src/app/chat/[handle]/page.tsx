@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { ChatRoomComponent } from "@/components/modules/chat/chat-room";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getUserPrivate } from "@/lib/data/user";
+import { getCircleByDid, getCircleByHandle } from "@/lib/data/circle";
 
 type ChatRoomPageProps = {
     params: Promise<{ handle: string }>;
@@ -18,6 +19,39 @@ export default async function ChatRoomPage(props: ChatRoomPageProps) {
 
     // check if user has access to chat room
     let privateUser = await getUserPrivate(userDid);
+
+    const chatProvider = process.env.CHAT_PROVIDER || "matrix";
+    if (chatProvider === "mongo") {
+        const { listConversationsForUser, findOrCreateDmConversation } = await import("@/lib/data/mongo-chat");
+        const circleIds = (privateUser?.memberships || [])
+            .map((membership) => membership.circleId)
+            .filter(Boolean);
+
+        let chats = await listConversationsForUser(userDid, circleIds);
+        let chatRoom = chats.find(
+            (chat) => chat.circle?.handle === params.handle || chat.handle === params.handle,
+        );
+
+        if (!chatRoom) {
+            const target = await getCircleByHandle(params.handle);
+            if (target?.did && target.did !== userDid) {
+                const currentUser = await getCircleByDid(userDid);
+                if (currentUser) {
+                    await findOrCreateDmConversation(currentUser, target);
+                    chats = await listConversationsForUser(userDid, circleIds);
+                    chatRoom = chats.find(
+                        (chat) => chat.circle?.handle === params.handle || chat.handle === params.handle,
+                    );
+                }
+            }
+        }
+
+        if (!chatRoom) {
+            redirect("/unauthorized");
+        }
+
+        return <ChatRoomComponent chatRoom={chatRoom} circle={chatRoom.circle} chatProvider="mongo" />;
+    }
     
     console.log("Looking for chat with handle:", params.handle);
     console.log("Available chat handles:", privateUser.chatRoomMemberships.map(m => ({
@@ -59,5 +93,5 @@ export default async function ChatRoomPage(props: ChatRoomPageProps) {
         }
     }
 
-    return <ChatRoomComponent chatRoom={chatRoom} circle={chatRoom.circle} />;
+    return <ChatRoomComponent chatRoom={chatRoom} circle={chatRoom.circle} chatProvider="matrix" />;
 }
