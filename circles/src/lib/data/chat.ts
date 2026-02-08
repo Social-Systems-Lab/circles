@@ -1,6 +1,6 @@
 // chat.ts - chat logic
 
-import { ChatRooms, Circles, ChatRoomMembers } from "./db";
+import { ChatRooms, Circles, Members } from "./db";
 import { ObjectId } from "mongodb";
 import { ChatRoom, ChatRoomMember, ChatRoomDisplay, Circle } from "@/models/models";
 import { getCircleById, updateCircle } from "./circle";
@@ -48,11 +48,9 @@ export const getChatRooms = async (circleId: string): Promise<ChatRoom[]> => {
 export const listChatRoomsForUser = async (userDid: string): Promise<ChatRoomDisplay[]> => {
     const provider = getChatProvider();
     if (provider === "mongo") {
-        const user = await getPrivateUserByDid(userDid);
-        const circleIds = (user?.memberships || [])
-            .map((membership) => membership.circleId)
-            .filter(Boolean);
-        return await listConversationsForUser(userDid, circleIds);
+      const memberships = await Members.find({ userDid }).toArray();
+      const circleIds = memberships.map((m) => m.circleId).filter(Boolean);
+      return await listConversationsForUser(userDid, circleIds);
     }
 
     const user = await getPrivateUserByDid(userDid);

@@ -45,3 +45,7 @@ NOTES*
 
 # Local backup files
 *.bak.*
+
+# Local secrets
+.env
+.env.local

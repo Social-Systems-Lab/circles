@@ -30,11 +30,9 @@ import {
 import { AggregateRank } from "./ranking";
 import { ChatConversation, ChatMessageDoc } from "@/lib/chat/mongo-types";
 
-const MONGO_HOST = process.env.MONGO_HOST || "127.0.0.1";
-const MONGO_PORT = parseInt(process.env.MONGO_PORT || "27017");
-const MONGO_ADMIN_USER = process.env.MONGO_ROOT_USERNAME || "admin";
-const MONGO_ADMIN_PASSWORD = process.env.MONGO_ROOT_PASSWORD || "password";
-const MONGO_CONNECTION_STRING = `mongodb://${MONGO_ADMIN_USER}:${MONGO_ADMIN_PASSWORD}@${MONGO_HOST}:${MONGO_PORT}`;
+const MONGODB_URI =
+    process.env.MONGODB_URI ||
+    `mongodb://${process.env.MONGO_ROOT_USERNAME || "admin"}:${process.env.MONGO_ROOT_PASSWORD || "password"}@${process.env.MONGO_HOST || "127.0.0.1"}:${process.env.MONGO_PORT || "27017"}`;
 
 const options: MongoClientOptions = {};
 
@@ -73,8 +71,7 @@ let ChatMessageDocs: Collection<ChatMessageDoc>;
 
 // Only initialize the database connection if not in build mode
 if (process.env.IS_BUILD !== "true") {
-    client = new MongoClient(MONGO_CONNECTION_STRING, options);
-
+    client = new MongoClient(MONGODB_URI, options);
     // Connect the client - this establishes the connection more reliably
     client.connect().catch((err) => {
         console.error("MongoDB connection error:", err);

@@ -350,6 +350,11 @@ export const fetchRoomMessagesAction = async (
     if (!userDid) {
         return { success: false, message: "You need to be logged in to fetch messages" };
     }
+    const provider = getChatProvider();
+    if (provider === "mongo") {
+        const result = await fetchMongoMessagesActionInternal(roomId, limit);
+        return { success: result.success, messages: result.messages, message: result.message };
+    }
     if (!isMatrixEnabled()) {
         return { success: false, message: matrixDisabledMessage };
     }
