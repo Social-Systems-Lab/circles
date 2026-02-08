@@ -28,6 +28,7 @@ import {
     Notification,
 } from "@/models/models";
 import { AggregateRank } from "./ranking";
+import { ChatConversation, ChatMessageDoc } from "@/lib/chat/mongo-types";
 
 const MONGO_HOST = process.env.MONGO_HOST || "127.0.0.1";
 const MONGO_PORT = parseInt(process.env.MONGO_PORT || "27017");
@@ -67,6 +68,8 @@ let AggregateRanks: Collection<AggregateRank>;
 let UserNotificationSettings: Collection<UserNotificationSetting>; // Added UserNotificationSettings collection
 let DefaultNotificationSettings: Collection<DefaultNotificationSetting>; // Added DefaultNotificationSettings collection
 let Notifications: Collection<Notification>;
+let ChatConversations: Collection<ChatConversation>;
+let ChatMessageDocs: Collection<ChatMessageDoc>;
 
 // Only initialize the database connection if not in build mode
 if (process.env.IS_BUILD !== "true") {
@@ -106,6 +109,8 @@ if (process.env.IS_BUILD !== "true") {
     UserNotificationSettings = db.collection<UserNotificationSetting>("userNotificationSettings");
     DefaultNotificationSettings = db.collection<DefaultNotificationSetting>("defaultNotificationSettings");
     Notifications = db.collection<Notification>("notifications");
+    ChatConversations = db.collection<ChatConversation>("chatConversations");
+    ChatMessageDocs = db.collection<ChatMessageDoc>("chatMessageDocs");
 }
 
 export {
@@ -138,4 +143,6 @@ export {
     UserNotificationSettings,
     DefaultNotificationSettings,
     Notifications,
+    ChatConversations,
+    ChatMessageDocs,
 };

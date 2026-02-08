@@ -12,7 +12,7 @@ import { CirclePicture } from "../circles/circle-picture";
 import RichText from "../feeds/RichText";
 import { Mention, MentionsInput } from "react-mentions";
 import { defaultMentionsInputStyle, defaultMentionStyle, handleMentionQuery } from "../feeds/post-list";
-import { sendRoomMessage, sendReaction, redactRoomMessage } from "@/lib/data/client-matrix";
+import { sendReaction, redactRoomMessage } from "@/lib/data/client-matrix";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { fetchMatrixUsers } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -27,6 +27,8 @@ import { generateColorFromString } from "@/lib/utils/color";
 import { EmojiClickData } from "emoji-picker-react";
 import LazyEmojiPicker from "./LazyEmojiPicker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MemoizedReactMarkdown } from "@/components/utils/memoized-markdown";
+import { useMongoChat } from "./useMongoChat";
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -56,11 +58,18 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
         );
     } else {
         const body = (message?.content?.body as string) || "";
-        const isReply = body.includes("\n\n") && body.startsWith("> ");
-        const replyText = isReply ? body.substring(body.indexOf("\n\n") + 2) : body;
-        const originalMessage = isReply ? body.substring(body.indexOf("> ") + 2, body.indexOf("\n\n")) : "";
-        const originalAuthor = isReply ? originalMessage.substring(1, originalMessage.indexOf(">")) : "";
+        const replyTo = message.replyTo;
+        const hasInlineReply = body.includes("\n\n") && body.startsWith("> ");
+        const isReply = !!replyTo || hasInlineReply;
+        const replyText = hasInlineReply ? body.substring(body.indexOf("\n\n") + 2) : body;
+        const originalMessage = hasInlineReply
+            ? body.substring(body.indexOf("> ") + 2, body.indexOf("\n\n"))
+            : (replyTo?.content?.body as string) || "";
+        const originalAuthor = hasInlineReply
+            ? originalMessage.substring(1, originalMessage.indexOf(">"))
+            : replyTo?.author?.name || replyTo?.author?._id || "";
         const originalAuthorColor = generateColorFromString(originalAuthor);
+        const isMarkdown = (message as any)?.format === "markdown";
 
         return (
             <div className="max-w-full overflow-hidden">
@@ -73,11 +82,11 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
                             {originalAuthor}
                         </div>
                         <p className="truncate text-sm text-gray-600">
-                            {originalMessage.substring(originalMessage.indexOf(">") + 2)}
+                            {hasInlineReply ? originalMessage.substring(originalMessage.indexOf(">") + 2) : originalMessage}
                         </p>
                     </div>
                 )}
-                <RichText content={replyText} />
+                {isMarkdown ? <MemoizedReactMarkdown>{replyText}</MemoizedReactMarkdown> : <RichText content={replyText} />}
             </div>
         );
     }
@@ -156,11 +165,55 @@ export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean
             }
             
             // Check if message has been edited
-            const isEdited = (message.content as any)["m.new_content"] !== undefined;
+            const isEdited = (message.content as any)["m.new_content"] !== undefined || !!(message as any)?.editedAt;
+            const attachments = (message as any)?.attachments as
+                | { url: string; name: string; mimeType?: string; size?: number }[]
+                | undefined;
             
             return (
                 <span>
                     {renderChatMessage(message, preview)}
+                    {Array.isArray(attachments) && attachments.length > 0 && (
+                        <div className="mt-2 space-y-2">
+                            {attachments.map((attachment, index) => {
+                                const isImage = attachment.mimeType?.startsWith("image/");
+                                if (isImage) {
+                                    return (
+                                        <div key={`${attachment.url}-${index}`} className="max-w-xs sm:max-w-sm">
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img
+                                                src={attachment.url}
+                                                alt={attachment.name || "Image attachment"}
+                                                className="rounded-lg object-contain max-h-60 w-full cursor-pointer hover:opacity-90"
+                                                onClick={() => window.open(attachment.url, "_blank")}
+                                            />
+                                        </div>
+                                    );
+                                }
+                                return (
+                                    <a
+                                        key={`${attachment.url}-${index}`}
+                                        href={attachment.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-2 rounded-lg bg-gray-100 p-3 hover:bg-gray-200 transition-colors"
+                                    >
+                                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                                            <IoDocumentText className="h-6 w-6" />
+                                        </div>
+                                        <div className="flex flex-col overflow-hidden">
+                                            <span className="truncate font-medium text-gray-700">{attachment.name}</span>
+                                            {attachment.size && (
+                                                <span className="text-xs text-gray-500">
+                                                    {(attachment.size / 1024).toFixed(1)} KB
+                                                </span>
+                                            )}
+                                        </div>
+                                    </a>
+                                );
+                            })}
+                        </div>
+                    )}
                     {isEdited && <span className="ml-1 text-xs text-gray-500 italic">(edited)</span>}
                 </span>
             );
@@ -193,6 +246,7 @@ type ChatMessagesProps = {
     onMessagesRendered?: () => void;
     handleDelete: (message: ChatMessage) => Promise<void>;
     handleEdit: (message: ChatMessage) => void;
+    chatProvider?: "matrix" | "mongo";
 };
 
 const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
@@ -201,13 +255,14 @@ const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
     return message1.author._id === message2.author._id;
 };
 
-const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, onMessagesRendered, handleDelete, handleEdit }) => {
+const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, onMessagesRendered, handleDelete, handleEdit, chatProvider }) => {
     const [user] = useAtom(userAtom);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
     const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
     const [pickerOpenForMessage, setPickerOpenForMessage] = useState<string | null>(null);
     const [, setRoomMessages] = useAtom(roomMessagesAtom);
     const isMobile = useIsMobile();
+    const provider = chatProvider || "matrix";
 
     const handleReply = (message: ChatMessage) => {
         setReplyToMessage(message);
@@ -216,11 +271,14 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
     const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
     const handleReaction = async (message: ChatMessage, emoji: string) => {
-        if (!user?.matrixAccessToken || !user?.matrixUrl || !user.fullMatrixName) return;
+        if (!user) return;
+        if (provider === "matrix" && (!user.matrixAccessToken || !user.matrixUrl || !user.fullMatrixName)) return;
+        if (provider === "mongo" && !user.did) return;
 
+        const reactionSender = provider === "mongo" ? user.did! : user.fullMatrixName!;
         const anyExistingReaction = Object.entries(message.reactions || {})
             .map(([key, reactions]) => {
-                const userReaction = reactions.find((r) => r.sender === user.fullMatrixName);
+                const userReaction = reactions.find((r) => r.sender === reactionSender);
                 return userReaction ? { ...userReaction, key } : null;
             })
             .find((r) => r !== null);
@@ -238,7 +296,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
             // Remove any existing reaction from the user
             if (anyExistingReaction) {
                 reactions[anyExistingReaction.key] = reactions[anyExistingReaction.key].filter(
-                    (r) => r.sender !== user.fullMatrixName,
+                    (r) => r.sender !== reactionSender,
                 );
                 if (reactions[anyExistingReaction.key].length === 0) {
                     delete reactions[anyExistingReaction.key];
@@ -248,7 +306,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
             // Add the new reaction, unless it was the same as the one removed
             if (!anyExistingReaction || anyExistingReaction.key !== emoji) {
                 const newReaction: ReactionAggregation = {
-                    sender: user.fullMatrixName!,
+                    sender: reactionSender,
                     eventId: `temp-id-${Date.now()}`,
                 };
                 reactions[emoji] = [...(reactions[emoji] || []), newReaction];
@@ -261,18 +319,35 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
         });
 
         try {
+            if (provider === "mongo") {
+                const { toggleMongoReactionAction } = await import("./actions");
+                const result = await toggleMongoReactionAction(message.id, emoji);
+                if (result.success && result.reactions) {
+                    setRoomMessages((prev) => {
+                        const newRooms = { ...prev };
+                        const roomMessages = [...(newRooms[message.roomId] || [])];
+                        const messageIndex = roomMessages.findIndex((m) => m.id === message.id);
+                        if (messageIndex === -1) return prev;
+                        roomMessages[messageIndex] = { ...roomMessages[messageIndex], reactions: result.reactions };
+                        newRooms[message.roomId] = roomMessages;
+                        return newRooms;
+                    });
+                }
+                return;
+            }
+
             // If there was an old reaction, redact it first
             if (anyExistingReaction) {
                 await redactRoomMessage(
-                    user.matrixAccessToken,
-                    user.matrixUrl,
+                    user.matrixAccessToken!,
+                    user.matrixUrl!,
                     message.roomId,
                     anyExistingReaction.eventId,
                 );
             }
             // If the new reaction is different from the old one, send it
             if (!anyExistingReaction || anyExistingReaction.key !== emoji) {
-                await sendReaction(user.matrixAccessToken, user.matrixUrl, message.roomId, message.id, emoji);
+                await sendReaction(user.matrixAccessToken!, user.matrixUrl!, message.roomId, message.id, emoji);
             }
         } catch (error) {
             console.error("Failed to update reaction:", error);
@@ -352,7 +427,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                 const borderRadiusClass = `${isFirstInChain ? "rounded-t-lg" : ""} ${
                     isLastInChain ? "rounded-b-lg" : ""
                 } ${!isFirstInChain && !isLastInChain ? "rounded-none" : ""}`;
-                const isOwnMessage = message.createdBy === user?.fullMatrixName;
+                const selfIdentifier = provider === "mongo" ? user?.did : user?.fullMatrixName;
+                const isOwnMessage = message.createdBy === selfIdentifier;
                 const canEditMessage = isOwnMessage && !message.status;
                 const canDeleteMessage = isOwnMessage && message.status !== "pending";
                 const bubbleStatusClasses =
@@ -562,14 +638,16 @@ type ChatInputProps = {
     chatRoom: ChatRoomDisplay;
     editingMessage: ChatMessage | null;
     setEditingMessage: (message: ChatMessage | null) => void;
+    chatProvider?: "matrix" | "mongo";
 };
 
-const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputProps) => {
+const ChatInput = ({ chatRoom, editingMessage, setEditingMessage, chatProvider }: ChatInputProps) => {
     const [user] = useAtom(userAtom);
     const [newMessage, setNewMessage] = useState("");
     const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
     const [, setRoomMessages] = useAtom(roomMessagesAtom);
     const isMobile = useIsMobile();
+    const provider = chatProvider || "matrix";
     
     // Populate input when editing
     useEffect(() => {
@@ -590,14 +668,16 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
         });
         
         if (!user) return;
-        
-        if (!user.matrixAccessToken) {
-            console.error("Missing Matrix credentials. User needs to log out and log back in to trigger Matrix registration.");
-            return;
+
+        if (provider === "matrix") {
+            if (!user.matrixAccessToken) {
+                console.error("Missing Matrix credentials. User needs to log out and log back in to trigger Matrix registration.");
+                return;
+            }
         }
-        
+
         if (!chatRoom.matrixRoomId) {
-            console.error("Chat room does not have a Matrix room ID");
+            console.error("Chat room does not have a room ID");
             return;
         }
         
@@ -627,10 +707,12 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
                 body: trimmedMessage,
             },
             createdBy:
-                user.fullMatrixName ||
-                (user.matrixUsername ? `@${user.matrixUsername}:${process.env.NEXT_PUBLIC_MATRIX_DOMAIN}` : user.name) ||
-                user.handle ||
-                "You",
+                provider === "mongo"
+                    ? user.did || user.handle || user.name || "You"
+                    : user.fullMatrixName ||
+                      (user.matrixUsername ? `@${user.matrixUsername}:${process.env.NEXT_PUBLIC_MATRIX_DOMAIN}` : user.name) ||
+                      user.handle ||
+                      "You",
             createdAt: new Date(),
             author: user,
             reactions: {},
@@ -697,7 +779,7 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
             const result = await sendMessageAction(roomId, trimmedMessage, replyTarget?.id);
             
             if (result.success) {
-                const eventId = result.eventId;
+                const eventId = (result as any).eventId || (result as any).messageId;
 
                 if (!eventId) {
                     applyToTempMessage((msg) => ({ ...msg, status: undefined }));
@@ -746,12 +828,8 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
                 eventId: editingMessage.id,
                 content: newMessage.trim()
             });
-            
-            const result = await editMessageAction(
-                chatRoom.matrixRoomId!,
-                editingMessage.id,
-                newMessage.trim()
-            );
+
+            const result = await editMessageAction(chatRoom.matrixRoomId!, editingMessage.id, newMessage.trim());
             
             console.log("✏️ [Edit] Server response:", result);
             
@@ -782,7 +860,7 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
         if (!user) return;
         
         if (!chatRoom.matrixRoomId) {
-            console.error("Chat room does not have a Matrix room ID");
+            console.error("Chat room does not have a room ID");
             return;
         }
 
@@ -962,7 +1040,8 @@ export const ChatRoomComponent: React.FC<{
     setSelectedChat?: Dispatch<SetStateAction<ChatRoomDisplay | undefined>>;
     circle?: Circle;
     inToolbox?: boolean;
-}> = ({ chatRoom, setSelectedChat, circle, inToolbox }) => {
+    chatProvider?: "matrix" | "mongo";
+}> = ({ chatRoom, setSelectedChat, circle, inToolbox, chatProvider }) => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -983,6 +1062,12 @@ export const ChatRoomComponent: React.FC<{
     const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
     const router = useRouter();
+    const provider = chatProvider || "matrix";
+    const { isLoading: isLoadingMongo } = useMongoChat({
+        roomId: chatRoom.matrixRoomId,
+        enabled: provider === "mongo",
+        setRoomMessages,
+    });
 
     const handleDelete = async (message: ChatMessage) => {
         if (window.confirm("Are you sure you want to delete this message?")) {
@@ -999,8 +1084,11 @@ export const ChatRoomComponent: React.FC<{
             }
 
             try {
-                const { deleteMessageAction } = await import("./actions");
-                const result = await deleteMessageAction(message.roomId, message.id);
+                const actions = await import("./actions");
+                const result =
+                    provider === "mongo"
+                        ? await actions.deleteMongoMessageAction(message.id)
+                        : await actions.deleteMessageAction(message.roomId, message.id);
                 
                 if (!result.success) {
                     console.error("Failed to delete message:", result.message);
@@ -1035,14 +1123,21 @@ export const ChatRoomComponent: React.FC<{
             }
         };
 
+        if (provider === "mongo") {
+            return;
+        }
+
         if (chatRoom.matrixRoomId) {
             markPmsAsRead();
         }
-    }, [chatRoom.matrixRoomId]);
+    }, [provider, chatRoom.matrixRoomId]);
 
     const lastReadMessageIdRef = useRef<string | null>(null);
 
     const markLatestMessageAsRead = useCallback(async () => {
+        if (provider === "mongo") {
+            return;
+        }
         if (messages.length > 0 && user?.matrixAccessToken) {
             const latestMessage = messages[messages.length - 1];
 
@@ -1105,7 +1200,7 @@ export const ChatRoomComponent: React.FC<{
         } else {
             console.log(`💬 [Chat] No messages to mark as read for room ${chatRoom.name || chatRoom.matrixRoomId}`);
         }
-    }, [chatRoom?.matrixRoomId, chatRoom?.name, messages, user?.matrixAccessToken, setUnreadCounts, setLastReadTimestamps]);
+    }, [provider, chatRoom?.matrixRoomId, chatRoom?.name, messages, user?.matrixAccessToken, setUnreadCounts, setLastReadTimestamps]);
 
     const scrollToBottom = (behavior: "smooth" | "auto" = "auto") => {
         if (messagesEndRef.current) {
@@ -1149,6 +1244,7 @@ export const ChatRoomComponent: React.FC<{
 
     // Initial check/fetch to ensure we are in the room (triggers auto-join if needed)
     useEffect(() => {
+        if (provider === "mongo") return;
         if (!chatRoom.matrixRoomId) return;
 
         // If we don't have messages yet, try to fetch to ensure we are joined
@@ -1180,7 +1276,7 @@ export const ChatRoomComponent: React.FC<{
         };
         
         checkConnection();
-    }, [chatRoom.matrixRoomId, roomMessages]);
+    }, [provider, chatRoom.matrixRoomId, roomMessages]);
 
     // Server-side message polling - DISABLED: Now handled by BackgroundMessagePoller globally
     /*
@@ -1321,7 +1417,7 @@ export const ChatRoomComponent: React.FC<{
                                 height: "calc(100vh - 300px)",
                             }}
                         >
-                            {isLoadingMessages && <div className="text-center text-gray-500">Loading messages...</div>}
+                            {(isLoadingMessages || isLoadingMongo) && <div className="text-center text-gray-500">Loading messages...</div>}
                             {!isLoadingMessages && (
                                 <ChatMessages
                                     messages={messages}
@@ -1329,6 +1425,7 @@ export const ChatRoomComponent: React.FC<{
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
                                     handleEdit={handleEdit}
+                                    chatProvider={chatProvider}
                                 />
                             )}
                         </div>
@@ -1338,7 +1435,7 @@ export const ChatRoomComponent: React.FC<{
                             onScroll={handleScroll}
                             className="flex-grow overflow-y-auto p-4 pb-[144px]"
                         >
-                            {isLoadingMessages && <div className="text-center text-gray-500">Loading messages...</div>}
+                            {(isLoadingMessages || isLoadingMongo) && <div className="text-center text-gray-500">Loading messages...</div>}
                             {!isLoadingMessages && (
                                 <ChatMessages
                                     messages={messages}
@@ -1346,6 +1443,7 @@ export const ChatRoomComponent: React.FC<{
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
                                     handleEdit={handleEdit}
+                                    chatProvider={chatProvider}
                                 />
                             )}
                         </div>
@@ -1375,6 +1473,7 @@ export const ChatRoomComponent: React.FC<{
                                 chatRoom={chatRoom} 
                                 editingMessage={editingMessage}
                                 setEditingMessage={setEditingMessage}
+                                chatProvider={chatProvider}
                             />
                         </div>
                     </div>

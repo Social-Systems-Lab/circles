@@ -19,6 +19,18 @@ import {
 } from "@/lib/data/chat";
 import { addUserToRoom } from "@/lib/data/matrix";
 import { features } from "@/lib/data/constants";
+import { listChatRoomsForUser } from "@/lib/data/chat";
+import {
+    listChatRoomsAction as listMongoChatRoomsAction,
+    fetchMongoMessagesAction as fetchMongoMessagesActionInternal,
+    sendMongoMessageAction as sendMongoMessageActionInternal,
+    sendMongoAttachmentAction as sendMongoAttachmentActionInternal,
+    editMongoMessageAction as editMongoMessageActionInternal,
+    deleteMongoMessageAction as deleteMongoMessageActionInternal,
+    toggleMongoReactionAction as toggleMongoReactionActionInternal,
+    findOrCreateDMConversationAction as findOrCreateDMConversationActionInternal,
+    createMongoGroupChatAction as createMongoGroupChatActionInternal,
+} from "./mongo-actions";
 
 const parseEnvFlag = (value?: string | null) => {
     if (value === undefined || value === null) return true;
@@ -28,6 +40,7 @@ const parseEnvFlag = (value?: string | null) => {
 
 const isMatrixEnabled = () => parseEnvFlag(process.env.MATRIX_ENABLED);
 const matrixDisabledMessage = "Matrix chat is disabled in this environment.";
+const getChatProvider = () => process.env.CHAT_PROVIDER || "matrix";
 
 export async function joinChatRoomAction(
     chatRoomId: string,
@@ -126,6 +139,12 @@ export const fetchMatrixUsers = async (usernames: string[]): Promise<(Circle | n
 export const findOrCreateDMRoomAction = async (
     inRecipient: Circle,
 ): Promise<{ success: boolean; message?: string; chatRoom?: ChatRoom; user?: UserPrivate }> => {
+    const provider = getChatProvider();
+    if (provider === "mongo") {
+        const result = await findOrCreateDMConversationActionInternal(inRecipient);
+        return { success: result.success, message: result.message, chatRoom: result.chatRoom as ChatRoom };
+    }
+
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to send PM" };
@@ -151,11 +170,110 @@ export const getAllUsersAction = async (): Promise<Circle[]> => {
     return await getAllUsers();
 };
 
+export const listChatRoomsAction = async (): Promise<{ success: boolean; rooms?: ChatRoomDisplay[]; message?: string }> => {
+    const provider = getChatProvider();
+    if (provider === "mongo") {
+        return await listMongoChatRoomsAction();
+    }
+
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to view chats" };
+    }
+
+    try {
+        const rooms = await listChatRoomsForUser(userDid);
+        return { success: true, rooms };
+    } catch (error) {
+        console.error("❌ Error listing chat rooms:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to load chats" };
+    }
+};
+
+export const fetchMongoMessagesAction = async (
+    conversationId: string,
+    sinceId?: string,
+    limit: number = 50,
+) => {
+    const provider = getChatProvider();
+    if (provider !== "mongo") {
+        return { success: false, message: "Mongo chat is disabled in this environment." };
+    }
+    return await fetchMongoMessagesActionInternal(conversationId, sinceId, limit);
+};
+
+export const sendMongoMessageAction = async (
+    conversationId: string,
+    content: string,
+    replyToMessageId?: string,
+    format?: "markdown",
+) => {
+    const provider = getChatProvider();
+    if (provider !== "mongo") {
+        return { success: false, message: "Mongo chat is disabled in this environment." };
+    }
+    return await sendMongoMessageActionInternal(conversationId, content, replyToMessageId, format);
+};
+
+export const sendMongoAttachmentAction = async (formData: FormData) => {
+    const provider = getChatProvider();
+    if (provider !== "mongo") {
+        return { success: false, message: "Mongo chat is disabled in this environment." };
+    }
+    return await sendMongoAttachmentActionInternal(formData);
+};
+
+export const editMongoMessageAction = async (messageId: string, content: string) => {
+    const provider = getChatProvider();
+    if (provider !== "mongo") {
+        return { success: false, message: "Mongo chat is disabled in this environment." };
+    }
+    return await editMongoMessageActionInternal(messageId, content);
+};
+
+export const deleteMongoMessageAction = async (messageId: string) => {
+    const provider = getChatProvider();
+    if (provider !== "mongo") {
+        return { success: false, message: "Mongo chat is disabled in this environment." };
+    }
+    return await deleteMongoMessageActionInternal(messageId);
+};
+
+export const toggleMongoReactionAction = async (messageId: string, emoji: string) => {
+    const provider = getChatProvider();
+    if (provider !== "mongo") {
+        return { success: false, message: "Mongo chat is disabled in this environment." };
+    }
+    return await toggleMongoReactionActionInternal(messageId, emoji);
+};
+
+export const findOrCreateDMConversationAction = async (inRecipient: Circle) => {
+    const provider = getChatProvider();
+    if (provider !== "mongo") {
+        return { success: false, message: "Mongo chat is disabled in this environment." };
+    }
+    return await findOrCreateDMConversationActionInternal(inRecipient);
+};
+
+export const createMongoGroupChatAction = async (formData: FormData) => {
+    const provider = getChatProvider();
+    if (provider !== "mongo") {
+        return { success: false, message: "Mongo chat is disabled in this environment." };
+    }
+    return await createMongoGroupChatActionInternal(formData);
+};
+
 export const sendMessageAction = async (
     roomId: string,
     content: string,
     replyToEventId?: string
 ): Promise<{ success: boolean; message?: string; eventId?: string }> => {
+    const provider = getChatProvider();
+    if (provider === "mongo") {
+        const result = await sendMongoMessageActionInternal(roomId, content, replyToEventId);
+        return { success: result.success, message: result.message, eventId: result.messageId };
+    }
+
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to send messages" };
@@ -288,6 +406,12 @@ export const fetchRoomMessagesAction = async (
 export const sendAttachmentAction = async (
     formData: FormData
 ): Promise<{ success: boolean; message?: string; eventId?: string }> => {
+    const provider = getChatProvider();
+    if (provider === "mongo") {
+        const result = await sendMongoAttachmentActionInternal(formData);
+        return { success: result.success, message: result.message, eventId: result.messageId };
+    }
+
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to send attachments" };
@@ -380,6 +504,11 @@ export const editMessageAction = async (
     eventId: string,
     newContent: string
 ): Promise<{ success: boolean; message?: string }> => {
+    const provider = getChatProvider();
+    if (provider === "mongo") {
+        return await editMongoMessageActionInternal(eventId, newContent);
+    }
+
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to edit messages" };
@@ -412,6 +541,11 @@ export const deleteMessageAction = async (
     roomId: string,
     eventId: string
 ): Promise<{ success: boolean; message?: string }> => {
+    const provider = getChatProvider();
+    if (provider === "mongo") {
+        return await deleteMongoMessageActionInternal(eventId);
+    }
+
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to delete messages" };
@@ -442,6 +576,11 @@ export const deleteMessageAction = async (
 export const createGroupChatAction = async (
     formData: FormData
 ): Promise<{ success: boolean; roomId?: string; message?: string }> => {
+    const provider = getChatProvider();
+    if (provider === "mongo") {
+        return await createMongoGroupChatActionInternal(formData);
+    }
+
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to create a group chat" };
