@@ -30,6 +30,8 @@ import {
     toggleMongoReactionAction as toggleMongoReactionActionInternal,
     findOrCreateDMConversationAction as findOrCreateDMConversationActionInternal,
     createMongoGroupChatAction as createMongoGroupChatActionInternal,
+    getUnreadCountsAction as getUnreadCountsActionInternal,
+    markConversationReadAction as markConversationReadActionInternal,
 } from "./mongo-actions";
 
 const parseEnvFlag = (value?: string | null) => {
@@ -261,6 +263,22 @@ export const createMongoGroupChatAction = async (formData: FormData) => {
         return { success: false, message: "Mongo chat is disabled in this environment." };
     }
     return await createMongoGroupChatActionInternal(formData);
+};
+
+export const getUnreadCountsAction = async (conversationIds: string[]) => {
+    const provider = getChatProvider();
+    if (provider !== "mongo") {
+        return { success: false, message: "Mongo chat is disabled in this environment." };
+    }
+    return await getUnreadCountsActionInternal(conversationIds);
+};
+
+export const markConversationReadAction = async (conversationId: string, lastSeenMessageId: string | null) => {
+    const provider = getChatProvider();
+    if (provider !== "mongo") {
+        return { success: false, message: "Mongo chat is disabled in this environment." };
+    }
+    return await markConversationReadActionInternal(conversationId, lastSeenMessageId);
 };
 
 export const sendMessageAction = async (

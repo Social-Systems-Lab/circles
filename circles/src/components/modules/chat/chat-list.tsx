@@ -29,6 +29,7 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
     const router = useRouter();
     const params = useParams();
     const activeChatHandle = params.handle as string;
+    const provider = process.env.NEXT_PUBLIC_CHAT_PROVIDER || "matrix";
 
     const sortedChats = useMemo(() => {
         const chatsCopy = [...chats];
@@ -62,8 +63,12 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
         <div>
             {sortedChats.length > 0 ? (
                 sortedChats.map((chat) => {
+                    const mongoUnread =
+                        typeof (chat as any).unreadCount === "number" ? (chat as any).unreadCount : undefined;
                     const unreadCount =
-                        Object.entries(unreadCounts).find(([key]) => key.startsWith(chat.matrixRoomId!))?.[1] || 0;
+                        provider === "mongo"
+                            ? mongoUnread || 0
+                            : Object.entries(unreadCounts).find(([key]) => key.startsWith(chat.matrixRoomId!))?.[1] || 0;
 
                     return (
                         <div

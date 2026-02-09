@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { fetchMongoMessagesAction } from "./actions";
+import { fetchMongoMessagesAction, markConversationReadAction } from "./actions";
 import { ChatMessage } from "@/models/models";
 
 type UseMongoChatOptions = {
@@ -14,6 +14,7 @@ export const useMongoChat = ({ roomId, enabled, setRoomMessages }: UseMongoChatO
     const [isLoading, setIsLoading] = useState(false);
     const sinceIdRef = useRef<string | null>(null);
     const hasLoadedRef = useRef(false);
+    const lastMarkedIdRef = useRef<string | null>(null);
 
     useEffect(() => {
         if (!enabled || !roomId) return;
@@ -21,6 +22,7 @@ export const useMongoChat = ({ roomId, enabled, setRoomMessages }: UseMongoChatO
         let intervalId: NodeJS.Timeout;
         sinceIdRef.current = null;
         hasLoadedRef.current = false;
+        lastMarkedIdRef.current = null;
 
         const pollMessages = async () => {
             try {
@@ -32,6 +34,11 @@ export const useMongoChat = ({ roomId, enabled, setRoomMessages }: UseMongoChatO
                 if (result.success && result.messages) {
                     if (result.messages.length > 0) {
                         sinceIdRef.current = result.nextSinceId || sinceIdRef.current;
+                        const latestId = result.nextSinceId || result.messages[result.messages.length - 1]?.id;
+                        if (latestId && latestId !== lastMarkedIdRef.current) {
+                            await markConversationReadAction(roomId, latestId);
+                            lastMarkedIdRef.current = latestId;
+                        }
                         setRoomMessages((prev) => {
                             const current = prev[roomId] || [];
                             const existingIds = new Set(current.map((msg) => msg.id));
