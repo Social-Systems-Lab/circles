@@ -9,6 +9,8 @@ import {
     fetchMessagesSince,
     findConversationById,
     findOrCreateDmConversation,
+    getUnreadCountsForUser,
+    markConversationRead,
     toggleReaction,
     updateMessage,
 } from "@/lib/data/mongo-chat";
@@ -48,7 +50,13 @@ export const listChatRoomsAction = async (): Promise<{ success: boolean; rooms?:
 
     try {
         const rooms = await listChatRoomsForUser(userDid);
-        return { success: true, rooms };
+        const conversationIds = rooms.map((room) => room.matrixRoomId).filter(Boolean) as string[];
+        const unreadCounts = await getUnreadCountsForUser(userDid, conversationIds);
+        const roomsWithUnread = rooms.map((room) => ({
+            ...room,
+            unreadCount: room.matrixRoomId ? unreadCounts[room.matrixRoomId] || 0 : 0,
+        }));
+        return { success: true, rooms: roomsWithUnread };
     } catch (error) {
         console.error("❌ Error listing chat rooms:", error);
         return { success: false, message: error instanceof Error ? error.message : "Failed to load chats" };
@@ -373,5 +381,40 @@ export const createMongoGroupChatAction = async (
     } catch (error) {
         console.error("❌ Error creating mongo group chat:", error);
         return { success: false, message: error instanceof Error ? error.message : "Failed to create group chat" };
+    }
+};
+
+export const getUnreadCountsAction = async (
+    conversationIds: string[],
+): Promise<{ success: boolean; counts?: Record<string, number>; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to view unread counts" };
+    }
+
+    try {
+        const counts = await getUnreadCountsForUser(userDid, conversationIds);
+        return { success: true, counts };
+    } catch (error) {
+        console.error("❌ Error fetching unread counts:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to fetch unread counts" };
+    }
+};
+
+export const markConversationReadAction = async (
+    conversationId: string,
+    lastSeenMessageId: string | null,
+): Promise<{ success: boolean; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to mark messages as read" };
+    }
+
+    try {
+        await markConversationRead(userDid, conversationId, lastSeenMessageId);
+        return { success: true };
+    } catch (error) {
+        console.error("❌ Error marking conversation read:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to mark conversation read" };
     }
 };

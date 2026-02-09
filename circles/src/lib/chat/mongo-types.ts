@@ -41,3 +41,11 @@ export type ChatMessageDoc = {
     reactions?: ChatReaction[];
     format?: "markdown";
 };
+
+export type ChatReadState = {
+    _id?: any;
+    conversationId: string;
+    userDid: string;
+    lastReadMessageId: string | null;
+    updatedAt: Date;
+};

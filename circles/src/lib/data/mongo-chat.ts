@@ -1,7 +1,7 @@
 import { ObjectId } from "mongodb";
 import { ChatRoomDisplay, Circle } from "@/models/models";
 import { ChatConversation, ChatMessageDoc, ChatReaction } from "@/lib/chat/mongo-types";
-import { ChatConversations, ChatMessageDocs } from "./db";
+import { ChatConversations, ChatMessageDocs, ChatReadStates } from "./db";
 import { getCircleByHandle, getCircleById, getCirclesByDids } from "./circle";
 
 const toObjectId = (value?: string | null) => {
@@ -228,4 +228,50 @@ export const toggleReaction = async (
 
     await ChatMessageDocs.updateOne({ _id: objectId }, { $set: { reactions } });
     return reactions;
+};
+
+export const markConversationRead = async (
+    userDid: string,
+    conversationId: string,
+    lastReadMessageId: string | null,
+): Promise<void> => {
+    await ChatReadStates.updateOne(
+        { conversationId, userDid },
+        {
+            $set: {
+                lastReadMessageId,
+                updatedAt: new Date(),
+            },
+        },
+        { upsert: true },
+    );
+};
+
+export const getUnreadCountsForUser = async (
+    userDid: string,
+    conversationIds: string[],
+): Promise<Record<string, number>> => {
+    if (!conversationIds.length) return {};
+
+    const readStates = await ChatReadStates.find({
+        userDid,
+        conversationId: { $in: conversationIds },
+    }).toArray();
+
+    const lastReadByConversation = new Map(
+        readStates.map((state) => [state.conversationId, state.lastReadMessageId]),
+    );
+
+    const counts: Record<string, number> = {};
+    for (const conversationId of conversationIds) {
+        const lastReadId = lastReadByConversation.get(conversationId);
+        const query: any = { conversationId, senderDid: { $ne: userDid } };
+        const lastReadObjectId = toObjectId(lastReadId);
+        if (lastReadObjectId) {
+            query._id = { $gt: lastReadObjectId };
+        }
+        counts[conversationId] = await ChatMessageDocs.countDocuments(query);
+    }
+
+    return counts;
 };

@@ -28,7 +28,7 @@ import {
     Notification,
 } from "@/models/models";
 import { AggregateRank } from "./ranking";
-import { ChatConversation, ChatMessageDoc } from "@/lib/chat/mongo-types";
+import { ChatConversation, ChatMessageDoc, ChatReadState } from "@/lib/chat/mongo-types";
 
 const MONGODB_URI =
     process.env.MONGODB_URI ||
@@ -68,6 +68,7 @@ let DefaultNotificationSettings: Collection<DefaultNotificationSetting>; // Adde
 let Notifications: Collection<Notification>;
 let ChatConversations: Collection<ChatConversation>;
 let ChatMessageDocs: Collection<ChatMessageDoc>;
+let ChatReadStates: Collection<ChatReadState>;
 
 // Only initialize the database connection if not in build mode
 if (process.env.IS_BUILD !== "true") {
@@ -108,6 +109,7 @@ if (process.env.IS_BUILD !== "true") {
     Notifications = db.collection<Notification>("notifications");
     ChatConversations = db.collection<ChatConversation>("chatConversations");
     ChatMessageDocs = db.collection<ChatMessageDoc>("chatMessageDocs");
+    ChatReadStates = db.collection<ChatReadState>("chatReadStates");
 }
 
 export {
@@ -142,4 +144,5 @@ export {
     Notifications,
     ChatConversations,
     ChatMessageDocs,
+    ChatReadStates,
 };
