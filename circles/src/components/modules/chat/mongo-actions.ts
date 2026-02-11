@@ -14,7 +14,7 @@ import {
     toggleReaction,
     updateMessage,
 } from "@/lib/data/mongo-chat";
-import { ChatMessageDocs } from "@/lib/data/db";
+import { ChatMessageDocs, Members } from "@/lib/data/db";
 import { getCircleByDid, getCircleById, getCirclesByDids } from "@/lib/data/circle";
 import { saveFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -27,13 +27,50 @@ const resolveMongoConversationAccess = async (conversationId: string, userDid: s
         return { ok: false, message: "Chat not found" };
     }
 
-    if (conversation.circleId) {
-        const authorized = await isAuthorized(userDid, conversation.circleId, features.chat.view);
-        if (!authorized) {
+    console.log("DEBUG resolveMongoConversationAccess", {
+        conversationId,
+        userDid,
+        conversation: {
+            _id: (conversation as any)?._id,
+            type: (conversation as any)?.type,
+            handle: (conversation as any)?.handle,
+            circleId: (conversation as any)?.circleId,
+            participants: (conversation as any)?.participants,
+        },
+    });
+
+    // DM access should be based on participants, not circle membership.
+    // Some legacy/bootstrapped DM conversations may have a circleId set; ignore it for DMs.
+    if (conversation.type === "dm") {
+        if (!conversation.participants?.includes(userDid)) {
             return { ok: false, message: "You are not authorized to access this chat" };
         }
         return { ok: true, conversation };
     }
+
+    if (conversation.circleId) {
+        const circle = await getCircleById(conversation.circleId);
+
+        // 🔒 Security: user-circle chats must never be world-readable.
+        // If a "user" circle is being treated as a group chat, only the owner may access it.
+        // (DMs should be conversation.type === "dm" and authorized via participants below.)
+        if (circle?.circleType === "user") {
+        if (!circle.did) {
+            return { ok: false, message: "You are not authorized to access this chat" };
+            }
+        if (circle.did !== userDid) {
+            return { ok: false, message: "You are not authorized to access this chat" };
+        }
+        return { ok: true, conversation };
+    }
+
+    // Normal circle/group chat authorization
+    const authorized = await isAuthorized(userDid, conversation.circleId, features.chat.view);
+    if (!authorized) {
+        return { ok: false, message: "You are not authorized to access this chat" };
+    }
+    return { ok: true, conversation };
+}
 
     if (!conversation.participants?.includes(userDid)) {
         return { ok: false, message: "You are not authorized to access this chat" };
@@ -330,8 +367,13 @@ export const findOrCreateDMConversationAction = async (
     }
 
     await findOrCreateDmConversation(currentUser, recipient);
+
+    // DM rooms use handle: dm-<didA>-<didB> (sorted)
+    const participants = [currentUser.did!, recipient.did!].sort();
+    const dmHandle = `dm-${participants[0]}-${participants[1]}`;
+
     const rooms = await listChatRoomsForUser(userDid);
-    const chatRoom = rooms.find((room) => room.handle === recipient.handle);
+    const chatRoom = rooms.find((room) => room.handle === dmHandle || room.matrixRoomId === dmHandle);
 
     return chatRoom
         ? { success: true, chatRoom }
@@ -406,15 +448,24 @@ export const markConversationReadAction = async (
     lastSeenMessageId: string | null,
 ): Promise<{ success: boolean; message?: string }> => {
     const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        return { success: false, message: "You need to be logged in to mark messages as read" };
+    if (!userDid) return { success: false, message: "You need to be logged in." };
+
+    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    if (!access.ok) return { success: false, message: access.message };
+
+    let effectiveLastSeen = lastSeenMessageId;
+
+    // If caller passes null, mark up to the true latest message in the conversation.
+    if (effectiveLastSeen === null) {
+        const latest = await ChatMessageDocs
+            .find({ conversationId })
+            .sort({ _id: -1 })
+            .limit(1)
+            .toArray();
+
+        effectiveLastSeen = latest?.[0]?._id ? latest[0]._id.toString() : null;
     }
 
-    try {
-        await markConversationRead(userDid, conversationId, lastSeenMessageId);
-        return { success: true };
-    } catch (error) {
-        console.error("❌ Error marking conversation read:", error);
-        return { success: false, message: error instanceof Error ? error.message : "Failed to mark conversation read" };
-    }
+    await markConversationRead(userDid, conversationId, effectiveLastSeen);
+    return { success: true };
 };

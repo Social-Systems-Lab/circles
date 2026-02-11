@@ -45,21 +45,45 @@ export const findConversationByHandleForUser = async (
     userDid: string,
     handle: string,
 ): Promise<ChatConversation | null> => {
+    console.log('DEBUG findConversationByHandleForUser', { userDid, handle });
+    // 1) Group chats by circle handle
     const circle = await getCircleByHandle(handle);
     if (circle?._id) {
         const circleConversation = await findConversationByCircleId(circle._id as string);
-        if (circleConversation) {
-            return circleConversation;
+        if (circleConversation) return circleConversation;
+    }
+
+    // 2) DM bootstrap for legacy URLs: dm-<id>-<id>
+    // Only allow if conversation already exists (do NOT auto-create from handle)
+    if (handle.startsWith("dm-")) {
+        const parts = handle.split("-");
+        if (parts.length === 3) {
+            const a = parts[1];
+            const b = parts[2];
+            if (a === userDid || b === userDid) {
+                const participants = [a, b].sort();
+                const existing = (await ChatConversations.findOne({
+                    type: "dm",
+                    participants: { $all: participants },
+                    archived: { $ne: true },
+                })) as ChatConversation | null;
+
+                // Only return existing conversation — do NOT auto-create
+                if (existing) return normalizeConversation(existing);
+            }
         }
     }
 
+    // 3) Fallback: existing conversation by handle that includes the user
     const conversation = (await ChatConversations.findOne({
         handle,
         participants: userDid,
         archived: { $ne: true },
     })) as ChatConversation | null;
+
     return conversation ? normalizeConversation(conversation) : null;
 };
+ 
 
 export const findOrCreateDmConversation = async (userA: Circle, userB: Circle): Promise<ChatConversation> => {
     const participants = [userA.did!, userB.did!].sort();
@@ -142,10 +166,10 @@ export const listConversationsForUser = async (userDid: string, circleIds: strin
             : undefined;
 
         return {
-            _id: conversation._id,
-            matrixRoomId: conversation._id,
+            _id: conversation._id.toString(),
+            matrixRoomId: conversation._id.toString(),
             name: circle?.name || otherCircle?.name || conversation.name || "Chat",
-            handle: circle?.handle || otherCircle?.handle || conversation.handle || "chat",
+            handle: circle?.handle || (isDirect ? conversation.handle : otherCircle?.handle) || conversation.handle || "chat",
             circleId: conversation.circleId,
             createdAt: conversation.createdAt,
             userGroups: [],

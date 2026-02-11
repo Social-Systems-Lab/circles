@@ -48,10 +48,33 @@ export const getChatRooms = async (circleId: string): Promise<ChatRoom[]> => {
 export const listChatRoomsForUser = async (userDid: string): Promise<ChatRoomDisplay[]> => {
     const provider = getChatProvider();
     if (provider === "mongo") {
-      const memberships = await Members.find({ userDid }).toArray();
-      const circleIds = memberships.map((m) => m.circleId).filter(Boolean);
-      return await listConversationsForUser(userDid, circleIds);
-    }
+  const memberships = await Members.find({ userDid }).toArray();
+  const circleIds = memberships.map((m) => m.circleId).filter(Boolean) as string[];
+
+  // Only include:
+  // - non-user circles (communities/projects/etc)
+  // - OR your own user-circle (circle.did === userDid)
+  const circleObjectIds = circleIds
+    .map((id) => {
+      try {
+        return new ObjectId(id);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean) as ObjectId[];
+
+  const circles = await Circles.find(
+    { _id: { $in: circleObjectIds } },
+    { projection: { _id: 1, did: 1, circleType: 1 } },
+  ).toArray();
+
+  const allowedCircleIds = circles
+    .filter((c: any) => c.circleType !== "user" || c.did === userDid)
+    .map((c: any) => c._id.toString());
+
+  return await listConversationsForUser(userDid, allowedCircleIds);
+}
 
     const user = await getPrivateUserByDid(userDid);
     return user?.chatRoomMemberships?.map((membership) => membership.chatRoom) || [];

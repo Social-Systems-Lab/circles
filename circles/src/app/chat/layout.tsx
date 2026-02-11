@@ -45,8 +45,13 @@ export default function ChatLayout({ children }: PropsWithChildren) {
         };
 
         loadRooms();
-        return () => {
-            isMounted = false;
+	
+	// poll so unreadCount updates (mongo chat)
+	const interval = setInterval(loadRooms, 3000);
+	  
+	return () => {
+ 	  isMounted = false;
+  	  clearInterval(interval);
         };
     }, [user]);
 
@@ -98,7 +103,21 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                     </div>
                     <ChatSearch />
                     <div className="flex-grow overflow-y-auto">
-                        <ChatList chats={chatRooms} />
+                        <ChatList
+                            chats={chatRooms}
+                            onChatClick={async (chat) => {
+                              // Optimistic UI: clear immediately
+                              setChatRooms((prev) => prev.map((r) => (r._id === chat._id ? ({ ...r, unreadCount: 0 } as any) : r)));
+
+                              // Persist: mark conversation as read on the server (mongo only)
+                              const convoId = chat.matrixRoomId;
+                              if (convoId) {
+                                const { markConversationReadAction } = await import("@/components/modules/chat/actions");
+                                await markConversationReadAction(convoId, null); // null = mark up to latest
+                            }
+                         }}
+                    />
+
                     </div>
                 </aside>
             )}
