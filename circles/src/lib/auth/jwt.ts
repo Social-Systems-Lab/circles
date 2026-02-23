@@ -14,6 +14,7 @@ export const createSession = async (token: string) => {
     (await cookies()).set("token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
         maxAge: 60 * 60 * 24 * 90, // 90 days
         path: "/",
     });
