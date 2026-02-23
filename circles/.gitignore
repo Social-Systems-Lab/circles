@@ -49,3 +49,7 @@ NOTES*
 # Local secrets
 .env
 .env.local
+
+# Local-only
+.DS_Store
+backups/

@@ -114,6 +114,12 @@ if (process.env.IS_BUILD !== "true") {
     ChatMessageDocs = db.collection<ChatMessageDoc>("chatMessageDocs");
     ChatReadStates = db.collection<ChatReadState>("chatReadStates");
 }
+export async function getDb() {
+  if (!client) throw new Error("Mongo client not initialised (IS_BUILD=true?)");
+  // If not connected yet (or got reloaded), ensure connection is established
+  await client.connect();
+  return client.db("circles");
+}
 
 export {
     client,

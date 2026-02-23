@@ -19,6 +19,7 @@ import {
 } from "@/lib/data/chat";
 import { addUserToRoom } from "@/lib/data/matrix";
 import { features } from "@/lib/data/constants";
+import { ensureConversationForCircle } from "@/lib/data/mongo-chat";
 import { listChatRoomsForUser } from "@/lib/data/chat";
 import {
     listChatRoomsAction as listMongoChatRoomsAction,
@@ -265,6 +266,23 @@ export const createMongoGroupChatAction = async (formData: FormData) => {
     return await createMongoGroupChatActionInternal(formData);
 };
 
+export const ensureCircleConversationAction = async (
+    circleId: string,
+): Promise<{ success: boolean; roomId?: string; message?: string }> => {
+    const provider = getChatProvider();
+    if (provider !== "mongo") {
+        return { success: false, message: "Mongo chat is disabled in this environment." };
+    }
+
+    try {
+        const conversation = await ensureConversationForCircle(circleId);
+        return { success: true, roomId: conversation._id as string };
+    } catch (error) {
+        console.error("❌ Error ensuring circle conversation:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to ensure circle chat" };
+    }
+};
+
 export const getUnreadCountsAction = async (conversationIds: string[]) => {
     const provider = getChatProvider();
     if (provider !== "mongo") {
@@ -370,7 +388,7 @@ export const fetchRoomMessagesAction = async (
     }
     const provider = getChatProvider();
     if (provider === "mongo") {
-        const result = await fetchMongoMessagesActionInternal(roomId, limit);
+        const result = await fetchMongoMessagesActionInternal(roomId, undefined, limit);
         return { success: result.success, messages: result.messages, message: result.message };
     }
     if (!isMatrixEnabled()) {
@@ -700,6 +718,9 @@ export const sendReadReceiptAction = async (
     if (!userDid) {
         return { success: false, message: "You need to be logged in to send read receipts" };
     }
+    if (!isMatrixEnabled()) {
+        return { success: true, message: matrixDisabledMessage };
+    }
 
     try {
         const user = await getPrivateUserByDid(userDid);
@@ -724,7 +745,6 @@ export const deleteGroupChatAction = async (
     if (!userDid) {
         return { success: false, message: "You need to be logged in to delete a group" };
     }
-
     try {
         const chatRoom = await getChatRoom(chatRoomId);
         if (!chatRoom) {

@@ -2,6 +2,9 @@
 services:
     circles:
         image: circles-circles:latest
+        build:
+            context: .
+            dockerfile: Dockerfile
         ports:
             - "${CIRCLES_PORT}:${CIRCLES_PORT}"
         env_file:
@@ -22,6 +25,8 @@ services:
             - POSTMARK_API_TOKEN=${POSTMARK_API_TOKEN}
             - POSTMARK_SENDER_EMAIL=${POSTMARK_SENDER_EMAIL}
             - CIRCLES_URL=${CIRCLES_URL}
+            - NEXT_PUBLIC_CHAT_PROVIDER=mongo
+
         volumes:
             - circles:/circles
             - circles_users:/circles/users
@@ -65,6 +70,8 @@ services:
             - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
         volumes:
             - db:/data/db
+        ports:
+            - "27017:27017"
         restart: always
         networks:
             - webnet
@@ -79,6 +86,8 @@ services:
         command: server /data --console-address :9001
         volumes:
             - storage:/data
+        ports:
+            - "9000:9000"
         restart: unless-stopped
         networks:
             - webnet

@@ -45,7 +45,13 @@ export async function checkAuth(): Promise<CheckAuthResponse> {
 
 export async function logOut(): Promise<void> {
     // clear session
-    (await cookies()).set("token", "", { maxAge: 0 });
+    (await cookies()).set("token", "", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 0,
+    });
 
     // clear cache
     revalidatePath(`/`);

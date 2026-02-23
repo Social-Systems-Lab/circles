@@ -301,12 +301,12 @@ useEffect(() => {
         if (syncGenerationRef.current !== myGen) return;
 
         // Start the live sync loop
-        stopSyncRef.current = startSync(
+        stopSyncRef.current = (startSync(
             user.matrixAccessToken!,
             user.matrixUrl!,
             user.matrixUsername!,
-            handleSyncData,
-        );
+            handleSyncData
+        ) as unknown as () => void);
     };
 
     // Fire and forget; generation guards handle safety.

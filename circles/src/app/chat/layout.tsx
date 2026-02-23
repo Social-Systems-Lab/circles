@@ -16,6 +16,7 @@ import { SquarePen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { chatSettingsModalAtom } from "@/lib/data/atoms";
 import { ChatRoomDisplay } from "@/models/models";
+import { listChatRoomsAction, markConversationReadAction } from "@/components/modules/chat/actions";
 
 export default function ChatLayout({ children }: PropsWithChildren) {
     const [user] = useAtom(userAtom);
@@ -34,7 +35,6 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                 return;
             }
             try {
-                const { listChatRoomsAction } = await import("@/components/modules/chat/actions");
                 const result = await listChatRoomsAction();
                 if (isMounted && result.success && result.rooms) {
                     setChatRooms(result.rooms);
@@ -110,9 +110,8 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                               setChatRooms((prev) => prev.map((r) => (r._id === chat._id ? ({ ...r, unreadCount: 0 } as any) : r)));
 
                               // Persist: mark conversation as read on the server (mongo only)
-                              const convoId = chat.matrixRoomId;
+                              const convoId = String(chat._id || chat.matrixRoomId || "");
                               if (convoId) {
-                                const { markConversationReadAction } = await import("@/components/modules/chat/actions");
                                 await markConversationReadAction(convoId, null); // null = mark up to latest
                             }
                          }}

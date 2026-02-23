@@ -23,7 +23,19 @@ export const ENCRYPTED_PRIVATE_KEY_FILENAME = "privateKey.pem.enc";
 export const ENCRYPTION_ALGORITHM = "aes-256-cbc";
 export const APP_DIR =
     process.env.APP_DIR ||
-    (process.env.NODE_ENV === "production" ? "/circles" : path.join(process.cwd(), "circles_data"));
+    (() => {
+        const circlesUrl = process.env.CIRCLES_URL || "";
+        const isLocalLikeRuntime =
+            process.env.CIRCLES_LOCAL_AUTH_DIR === "true" ||
+            process.env.CIRCLES_HOST === "db" ||
+            circlesUrl.includes("://db") ||
+            circlesUrl.includes("://localhost") ||
+            circlesUrl.includes("://127.0.0.1");
+        if (isLocalLikeRuntime) {
+            return path.join(process.cwd(), "circles_data");
+        }
+        return process.env.NODE_ENV === "production" ? "/circles" : path.join(process.cwd(), "circles_data");
+    })();
 
 console.log("DEBUG AUTH: NODE_ENV", process.env.NODE_ENV);
 console.log("DEBUG AUTH: APP_DIR", APP_DIR);
@@ -221,7 +233,8 @@ export class AuthenticationError extends Error {
 export const getUserPrivateKey = (did: string, password: string): string => {
     const accountPath = path.join(USERS_DIR, did);
     if (!fs.existsSync(accountPath)) {
-        throw new AuthenticationError("Account does not exist");
+        console.error("Login failed: auth credential directory missing", { did, accountPath });
+        throw new AuthenticationError("Account credentials are missing. Please reset your password.");
     }
 
     const salt: Buffer = fs.readFileSync(path.join(accountPath, SALT_FILENAME));
@@ -242,6 +255,11 @@ export const getUserPrivateKey = (did: string, password: string): string => {
         decryptedPrivateKey = decipher.update(encryptedPrivateKeyStr, "hex", "utf8"); // Use the string variable
         decryptedPrivateKey += decipher.final("utf8");
     } catch (error) {
+        if (process.env.NODE_ENV !== "production") {
+            console.log(
+                `[LOGIN_DIAG] did=${did} credentialSource=file path=${accountPath} exists=true verificationBranch=password_mismatch`,
+            );
+        }
         throw new AuthenticationError("Incorrect password");
     }
 

@@ -2,11 +2,33 @@
 
 import fs from "fs-extra";
 import path from "path";
-import { APP_DIR } from "../auth/auth";
 import { Client as MinioClient } from "minio";
 
+const resolveMinioHost = () => {
+    const configuredHost = process.env.MINIO_HOST || "127.0.0.1";
+    if (process.env.NODE_ENV !== "production" && (configuredHost === "db" || configuredHost === "minio")) {
+        return "127.0.0.1";
+    }
+    return configuredHost;
+};
+
+const resolveFileExtension = (originalName?: string, mimeType?: string) => {
+    const extFromName = originalName ? path.extname(originalName).toLowerCase() : "";
+    if (extFromName) {
+        return extFromName;
+    }
+    const mimeMap: Record<string, string> = {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+        "image/gif": ".gif",
+        "application/pdf": ".pdf",
+    };
+    return mimeType ? mimeMap[mimeType] || "" : "";
+};
+
 const minioClient = new MinioClient({
-    endPoint: process.env.MINIO_HOST || "127.0.0.1",
+    endPoint: resolveMinioHost(),
     port: parseInt(process.env.MINIO_PORT || "9000"),
     useSSL: false,
     accessKey: process.env.MINIO_ROOT_USERNAME || "minioadmin",
@@ -65,9 +87,6 @@ export const saveFile = async (
     overwrite: boolean,
 ): Promise<FileInfo> => {    // --- Local filesystem override for development ---
     if (process.env.LOCAL_FS_STORAGE === "true" && process.env.NODE_ENV !== "production") {
-        const fs = await import("fs");
-        const path = await import("path");
-
         const uploadDir = path.join(process.cwd(), "public", "uploads");
         if (!fs.existsSync(uploadDir)) {
             fs.mkdirSync(uploadDir, { recursive: true });
@@ -86,7 +105,9 @@ export const saveFile = async (
             buffer = Buffer.from(file);
         }
 
-        const finalName = `${Date.now()}-${fileName}`;
+        const originalName = typeof file?.name === "string" ? file.name : fileName;
+        const extension = resolveFileExtension(originalName, file?.type);
+        const finalName = `${Date.now()}-${fileName}${extension}`;
         const filePath = path.join(uploadDir, finalName);
         
         const fileDir = path.dirname(filePath);
@@ -97,7 +118,7 @@ export const saveFile = async (
         fs.writeFileSync(filePath, buffer);
 
         return {
-            originalName: fileName,
+            originalName,
             fileName: finalName,
             url: `/uploads/${finalName}`,
         };
@@ -112,7 +133,7 @@ export const saveFile = async (
         }
     }
 
-    const objectName = `${circleId}/${fileName + Date.now()}`;
+    const objectBaseName = `${fileName}${Date.now()}`;
     let buffer: Buffer;
     let contentType = "application/octet-stream";
     let originalName = "unknown";
@@ -153,19 +174,16 @@ export const saveFile = async (
 
         console.log("saveFile: buffer length", buffer.length);
 
+        const extension = resolveFileExtension(originalName, contentType);
+        const objectName = `${circleId}/${objectBaseName}${extension}`;
         await minioClient.putObject(bucketName, objectName, buffer, buffer.length, {
             "Content-Type": contentType,
         });
 
         let fileInfo: FileInfo = {
             originalName: originalName,
-            fileName: fileName,
-            url:
-                (process.env.NODE_ENV === "production"
-                    ? process.env.CIRCLES_URL
-                    : `http://${process.env.MINIO_HOST || "127.0.0.1"}`) +
-                "/storage/" +
-                objectName,
+            fileName: `${objectBaseName}${extension}`,
+            url: "/storage/" + objectName,
         };
         return fileInfo;
     } catch (error) {

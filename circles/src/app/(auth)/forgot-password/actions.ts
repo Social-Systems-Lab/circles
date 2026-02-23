@@ -2,6 +2,7 @@
 
 import { Circles } from "@/lib/data/db";
 import { sendEmail, generateSecureToken, hashToken } from "@/lib/data/email";
+import { headers } from "next/headers";
 import { z } from "zod";
 import { emailSchema } from "@/models/models"; // Assuming emailSchema is in models
 
@@ -13,6 +14,55 @@ interface RequestPasswordResetResponse {
 const requestResetSchema = z.object({
     email: emailSchema,
 });
+
+function normalizeBaseUrl(url: string): string {
+    return url.replace(/\/+$/, "");
+}
+
+function isLocalHost(hostname: string): boolean {
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+async function resolveResetBaseUrl(): Promise<string> {
+    const explicitBaseUrl =
+        process.env.NEXT_PUBLIC_APP_URL ||
+        process.env.APP_URL ||
+        process.env.SITE_URL ||
+        (process.env.NODE_ENV === "production" ? process.env.CIRCLES_URL : undefined);
+
+    let requestOrigin: string | undefined;
+    try {
+        const h = await headers();
+        const originHeader = h.get("origin");
+        if (originHeader) {
+            requestOrigin = new URL(originHeader).origin;
+        } else {
+            const host = h.get("x-forwarded-host") || h.get("host");
+            const proto = h.get("x-forwarded-proto") || (process.env.NODE_ENV === "production" ? "https" : "http");
+            if (host) {
+                requestOrigin = `${proto}://${host}`;
+            }
+        }
+    } catch {
+        // No request scope (e.g., direct script invocation)
+    }
+
+    const fallbackUrl = process.env.CIRCLES_URL || "http://localhost:3000";
+    let baseUrl = explicitBaseUrl || requestOrigin || fallbackUrl;
+
+    // Guard against internal docker host links in all local-style runs.
+    // If configured base is internal-only (e.g. http://db), prefer request origin.
+    try {
+        const parsed = new URL(baseUrl);
+        if (parsed.hostname === "db") {
+            baseUrl = requestOrigin || "http://localhost:3000";
+        }
+    } catch {
+        baseUrl = requestOrigin || "http://localhost:3000";
+    }
+
+    return normalizeBaseUrl(baseUrl);
+}
 
 export async function requestPasswordResetAction(email: string): Promise<RequestPasswordResetResponse> {
     const validation = requestResetSchema.safeParse({ email });
@@ -40,7 +90,21 @@ export async function requestPasswordResetAction(email: string): Promise<Request
                 },
             );
 
-            const resetLink = `${process.env.CIRCLES_URL || "http://localhost:3000"}/reset-password?token=${unhashedToken}`;
+            const baseUrl = await resolveResetBaseUrl();
+            const resetLink = `${baseUrl}/reset-password?token=${unhashedToken}`;
+            let isLocalBaseUrl = false;
+            try {
+                isLocalBaseUrl = isLocalHost(new URL(baseUrl).hostname);
+            } catch {
+                isLocalBaseUrl = false;
+            }
+            const shouldLogResetLink =
+                isLocalBaseUrl ||
+                (process.env.CIRCLES_DEV_LOG_PASSWORD_RESET === "true" && process.env.NODE_ENV !== "production");
+
+            if (shouldLogResetLink) {
+                console.log(`[DEV_RESET_LINK] email=${user.email} url=${resetLink} token=${unhashedToken}`);
+            }
 
             try {
                 await sendEmail({
@@ -50,8 +114,8 @@ export async function requestPasswordResetAction(email: string): Promise<Request
                         name: user.name || "User",
                         actionUrl: resetLink,
                         product_name: "Kamooni", // Or from process.env
-                        product_url: process.env.CIRCLES_URL || "http://localhost:3000",
-                        support_url: `${process.env.CIRCLES_URL || "http://localhost:3000"}/support`, // Example, adjust as needed
+                        product_url: baseUrl,
+                        support_url: `${baseUrl}/support`, // Example, adjust as needed
                         company_name: "Social Systems Lab", // Or from process.env
                         company_address: "Illerstigen 8, 170 71 Solna, Sweden", // Or from process.env
                         current_year: new Date().getFullYear().toString(),

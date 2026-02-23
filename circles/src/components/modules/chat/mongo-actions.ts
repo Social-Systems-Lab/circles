@@ -21,8 +21,35 @@ import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { listChatRoomsForUser } from "@/lib/data/chat";
 
-const resolveMongoConversationAccess = async (conversationId: string, userDid: string) => {
-    const conversation = await findConversationById(conversationId);
+const normalizeMediaUrl = (url?: string): string | undefined => {
+    if (!url) return url;
+
+    if (url.startsWith("/storage/") || url.startsWith("/uploads/")) {
+        return url;
+    }
+
+    const storageIndex = url.indexOf("/storage/");
+    if (storageIndex >= 0) {
+        return url.slice(storageIndex);
+    }
+
+    const hostStyleMatch = url.match(/^[A-Za-z0-9.-]+\/storage\/.+$/);
+    if (hostStyleMatch) {
+        return `/${url.slice(url.indexOf("storage/"))}`;
+    }
+
+    return url;
+};
+
+export const resolveMongoConversationAccess = async (conversationId: string, userDid: string) => {
+    let conversation = await findConversationById(conversationId);
+
+    // If conversationId is actually a handle (e.g. "dm-..."), try resolving by handle.
+    if (!conversation) {
+    // You'll need the correct collection name here (likely ChatConversations)
+        const { ChatConversations } = await import("@/lib/data/db"); // or wherever it is
+        conversation = await ChatConversations.findOne({ handle: conversationId });
+    }
     if (!conversation) {
         return { ok: false, message: "Chat not found" };
     }
@@ -188,7 +215,13 @@ export const fetchMongoMessagesAction = async (
                     : undefined,
             };
 
-            (message as any).attachments = doc.attachments;
+            const normalizedAttachments = Array.isArray(doc.attachments)
+                ? doc.attachments.map((attachment) => ({
+                      ...attachment,
+                      url: normalizeMediaUrl(attachment?.url) || attachment?.url,
+                  }))
+                : doc.attachments;
+            (message as any).attachments = normalizedAttachments;
             (message as any).editedAt = doc.editedAt;
             (message as any).format = doc.format;
 
@@ -327,6 +360,24 @@ export const toggleMongoReactionAction = async (
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to react" };
+    }
+
+    let messageDoc: { conversationId?: string } | null = null;
+    try {
+        messageDoc = (await ChatMessageDocs.findOne({ _id: new ObjectId(messageId) }, { projection: { conversationId: 1 } })) as
+            | { conversationId?: string }
+            | null;
+    } catch {
+        return { success: false, message: "Invalid message id" };
+    }
+
+    if (!messageDoc?.conversationId) {
+        return { success: false, message: "Message not found" };
+    }
+
+    const access = await resolveMongoConversationAccess(messageDoc.conversationId, userDid);
+    if (!access.ok) {
+        return { success: false, message: access.message };
     }
 
     const reactions = await toggleReaction(messageId, userDid, emoji);

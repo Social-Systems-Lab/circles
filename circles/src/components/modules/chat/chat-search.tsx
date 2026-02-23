@@ -6,15 +6,16 @@ import { userAtom } from "@/lib/data/atoms";
 import { Circle } from "@/models/models";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import { useRouter } from "next/navigation";
-import { findOrCreateDMRoomAction, getAllUsersAction } from "../chat/actions";
-import { sendRoomMessage } from "@/lib/data/client-matrix";
+import { findOrCreateDMConversationAction, getAllUsersAction } from "../chat/actions";
 import { DmChatModal } from "./dm-chat-modal";
 import { Loader2 } from "lucide-react";
 
 export function ChatSearch() {
-    const [user, setUser] = useAtom(userAtom);
+    const [user] = useAtom(userAtom);
     const router = useRouter();
-    const provider = process.env.NEXT_PUBLIC_CHAT_PROVIDER || "matrix";
+    const provider: "mongo" | "matrix" = process.env.NEXT_PUBLIC_CHAT_PROVIDER === "mongo" ? "mongo" : "matrix";
+    console.log("[ChatSearch] NEXT_PUBLIC_CHAT_PROVIDER =", process.env.NEXT_PUBLIC_CHAT_PROVIDER, "provider =", provider);
+
 
     // Local states
     const [searchTerm, setSearchTerm] = useState("");
@@ -53,12 +54,23 @@ export function ChatSearch() {
 
     // Called when user clicks a result
     const handleUserClick = async (clickedUser: Circle) => {
+        console.log("🔴 DROPDOWN HANDLER RAN", clickedUser.handle);
+        
         try {
             if (provider === "mongo") {
-                setRecipient(clickedUser);
-                setShowDM(true);
+                // Mongo: create/find the DM conversation, then route to /chat/<conversationId>
                 setShowResults(false);
                 setSearchTerm("");
+
+                const result = await findOrCreateDMConversationAction(clickedUser);
+
+                const conversationId = (result as any)?.chatRoom?._id || (result as any)?.roomId || null;
+                if (result?.success && conversationId) {
+                router.push("/chat/" + conversationId);
+                return;
+                }
+
+                console.error("Mongo DM create/find failed:", result);
                 return;
             }
 
@@ -73,7 +85,7 @@ export function ChatSearch() {
 
             if (existingMembership) {
                 // The DM already exists, so just route to it
-                router.push(`/chat/${clickedUser.handle}`);
+                router.push(`/chat/${existingMembership.chatRoom._id}`);
             } else {
                 // Otherwise, create a DM
                 setRecipient(clickedUser);
@@ -126,7 +138,12 @@ export function ChatSearch() {
                                 <li
                                     key={circle._id}
                                     className="flex cursor-pointer items-center gap-2 p-2 hover:bg-gray-100"
-                                    onClick={() => handleUserClick(circle)}
+                                    onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleUserClick(circle);
+                                }}
+
                                 >
                                     <CirclePicture circle={circle} size="30px" />
                                     <div>

@@ -14,14 +14,24 @@ import { Mention, MentionsInput } from "react-mentions";
 import { defaultMentionsInputStyle, defaultMentionStyle, handleMentionQuery } from "../feeds/post-list";
 import { sendReaction, redactRoomMessage } from "@/lib/data/client-matrix";
 import { useIsCompact } from "@/components/utils/use-is-compact";
-import { fetchMatrixUsers } from "./actions";
+import {
+    deleteMessageAction,
+    deleteMongoMessageAction,
+    editMessageAction,
+    fetchMatrixUsers,
+    fetchRoomMessagesAction,
+    sendAttachmentAction,
+    sendMessageAction,
+    sendReadReceiptAction,
+    toggleMongoReactionAction,
+} from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { IoArrowBack, IoClose, IoSend, IoAddCircleOutline, IoArrowDown, IoAttach, IoDocumentText, IoTimeOutline, IoWarningOutline } from "react-icons/io5";
 import { MdReply } from "react-icons/md";
 import { BsEmojiSmile } from "react-icons/bs";
 import { GrEdit, GrTrash } from "react-icons/gr";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { generateColorFromString } from "@/lib/utils/color";
 import { EmojiClickData } from "emoji-picker-react";
@@ -318,11 +328,10 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
             return newRooms;
         });
 
-        try {
-            if (provider === "mongo") {
-                const { toggleMongoReactionAction } = await import("./actions");
-                const result = await toggleMongoReactionAction(message.id, emoji);
-                if (result.success && result.reactions) {
+            try {
+                if (provider === "mongo") {
+                    const result = await toggleMongoReactionAction(message.id, emoji);
+                    if (result.success && result.reactions) {
                     setRoomMessages((prev) => {
                         const newRooms = { ...prev };
                         const roomMessages = [...(newRooms[message.roomId] || [])];
@@ -484,7 +493,9 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                                 <div
                                                     key={reaction}
                                                     className={`flex items-center rounded-full border bg-gray-100 px-2 py-0.5 text-xs ${
-                                                        reactions.some((r) => r.sender === user?.fullMatrixName)
+                                                        reactions.some((r) =>
+                                                            r.sender === (provider === "mongo" ? user?.did : user?.fullMatrixName),
+                                                        )
                                                             ? "border-blue-500"
                                                             : "border-gray-300"
                                                     }`}
@@ -635,13 +646,13 @@ export const LatestMessage: React.FC<LatestMessageProps> = ({ roomId, latestMess
 };
 
 type ChatInputProps = {
-    chatRoom: ChatRoomDisplay;
+    roomId: string | null;
     editingMessage: ChatMessage | null;
     setEditingMessage: (message: ChatMessage | null) => void;
     chatProvider?: "matrix" | "mongo";
 };
 
-const ChatInput = ({ chatRoom, editingMessage, setEditingMessage, chatProvider }: ChatInputProps) => {
+const ChatInput = ({ roomId, editingMessage, setEditingMessage, chatProvider }: ChatInputProps) => {
     const [user] = useAtom(userAtom);
     const [newMessage, setNewMessage] = useState("");
     const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -661,7 +672,9 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage, chatProvider }
         console.log("📤 [Send] handleSendMessage called", {
             hasUser: !!user,
             hasAccessToken: !!user?.matrixAccessToken,
-            hasRoomId: !!chatRoom.matrixRoomId,
+            hasRoomId: !!roomId,
+            roomId,
+            provider,
             messageLength: trimmedMessage.length,
             isEditing: !!editingMessage,
             editingMessageId: editingMessage?.id
@@ -676,7 +689,7 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage, chatProvider }
             }
         }
 
-        if (!chatRoom.matrixRoomId) {
+        if (!roomId) {
             console.error("Chat room does not have a room ID");
             return;
         }
@@ -692,7 +705,6 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage, chatProvider }
             return;
         }
 
-        const roomId = chatRoom.matrixRoomId;
         const replyTarget = replyToMessage;
         const tempId =
             typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -775,7 +787,6 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage, chatProvider }
         
         console.log("📤 [Send] Sending new message...");
         try {
-            const { sendMessageAction } = await import("./actions");
             const result = await sendMessageAction(roomId, trimmedMessage, replyTarget?.id);
             
             if (result.success) {
@@ -812,7 +823,7 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage, chatProvider }
             hasEditingMessage: !!editingMessage, 
             messageId: editingMessage?.id,
             newContent: newMessage.trim(),
-            roomId: chatRoom.matrixRoomId
+            roomId
         });
         
         if (!editingMessage || !newMessage.trim()) {
@@ -822,14 +833,13 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage, chatProvider }
         
         try {
             console.log("✏️ [Edit] Importing editMessageAction...");
-            const { editMessageAction } = await import("./actions");
             console.log("✏️ [Edit] Calling editMessageAction with:", {
-                roomId: chatRoom.matrixRoomId,
+                roomId,
                 eventId: editingMessage.id,
                 content: newMessage.trim()
             });
 
-            const result = await editMessageAction(chatRoom.matrixRoomId!, editingMessage.id, newMessage.trim());
+            const result = await editMessageAction(roomId!, editingMessage.id, newMessage.trim());
             
             console.log("✏️ [Edit] Server response:", result);
             
@@ -859,8 +869,8 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage, chatProvider }
 
         if (!user) return;
         
-        if (!chatRoom.matrixRoomId) {
-            console.error("Chat room does not have a room ID");
+        if (provider === "matrix" && !roomId) {
+            console.error("Matrix chat room does not have a room ID");
             return;
         }
 
@@ -873,13 +883,17 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage, chatProvider }
         setIsUploading(true);
         try {
             const formData = new FormData();
-            formData.append("roomId", chatRoom.matrixRoomId);
+            if (!roomId) {
+                console.error("Chat room does not have a room ID");
+                return; 
+            }
+            formData.append("roomId", roomId);
             formData.append("file", file);
+
             if (replyToMessage) {
                 formData.append("replyToEventId", replyToMessage.id);
             }
 
-            const { sendAttachmentAction } = await import("./actions");
             const result = await sendAttachmentAction(formData);
 
             if (result.success) {
@@ -1062,15 +1076,41 @@ export const ChatRoomComponent: React.FC<{
     const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
     const router = useRouter();
-    const provider = chatProvider || "matrix";
+    const params = useParams<{ handle?: string | string[] }>();
+    const routeHandleParam = params?.handle;
+    const routeHandle = Array.isArray(routeHandleParam) ? routeHandleParam[0] : routeHandleParam;
+    const configuredProvider: "matrix" | "mongo" =
+        process.env.NEXT_PUBLIC_CHAT_PROVIDER === "mongo" ? "mongo" : "matrix";
+    // Compute provider and roomId safely
+    // Decide provider based on what this room actually has.
+    // If caller explicitly forces "mongo", respect it.
+    // Otherwise: use Matrix only when matrixRoomId exists, else Mongo.
+    const provider: "matrix" | "mongo" =
+        chatProvider || (configuredProvider === "mongo" ? "mongo" : (chatRoom?.matrixRoomId ? "matrix" : "mongo"));
+
+    const roomId =
+        provider === "mongo"
+            ? (routeHandle || (chatRoom as any)?._id || (chatRoom as any)?.id || (chatRoom as any)?.matrixRoomId || null)
+            : chatRoom?.matrixRoomId || null;
+
+    useEffect(() => {
+        if (process.env.NODE_ENV === "production") return;
+        console.log("CHAT DEBUG provider:", provider);
+        console.log("CHAT DEBUG routeParam:", routeHandle ?? null);
+        console.log("CHAT DEBUG roomId:", roomId);
+        console.log("CHAT DEBUG roomMessages keys:", Object.keys(roomMessages));
+    }, [provider, routeHandle, roomId, roomMessages]);
+
     const { isLoading: isLoadingMongo } = useMongoChat({
-        roomId: chatRoom.matrixRoomId,
-        enabled: provider === "mongo",
+        roomId,
+        enabled: provider === "mongo" && !!roomId,
         setRoomMessages,
     });
 
     const handleDelete = async (message: ChatMessage) => {
         if (window.confirm("Are you sure you want to delete this message?")) {
+            const originalRoomMessages = roomMessages[message.roomId] || [];
+            const originalIndex = originalRoomMessages.findIndex((m) => m.id === message.id);
             // Optimistic UI update
             setRoomMessages((prev) => {
                 const newRoomMessages = { ...prev };
@@ -1084,18 +1124,36 @@ export const ChatRoomComponent: React.FC<{
             }
 
             try {
-                const actions = await import("./actions");
                 const result =
                     provider === "mongo"
-                        ? await actions.deleteMongoMessageAction(message.id)
-                        : await actions.deleteMessageAction(message.roomId, message.id);
+                        ? await deleteMongoMessageAction(message.id)
+                        : await deleteMessageAction(message.roomId, message.id);
                 
                 if (!result.success) {
                     console.error("Failed to delete message:", result.message);
+                    // Roll back the optimistic delete so local state matches persisted state.
+                    setRoomMessages((prev) => {
+                        const current = prev[message.roomId] || [];
+                        if (current.some((m) => m.id === message.id)) return prev;
+                        const next = [...current];
+                        const insertionIndex =
+                            originalIndex >= 0 && originalIndex <= next.length ? originalIndex : next.length;
+                        next.splice(insertionIndex, 0, message);
+                        return { ...prev, [message.roomId]: next };
+                    });
                     alert(`Failed to delete message: ${result.message}`);
                 }
             } catch (error) {
                 console.error("Exception deleting message:", error);
+                // Roll back optimistic delete on unexpected failure.
+                setRoomMessages((prev) => {
+                    const current = prev[message.roomId] || [];
+                    if (current.some((m) => m.id === message.id)) return prev;
+                    const next = [...current];
+                    const insertionIndex = originalIndex >= 0 && originalIndex <= next.length ? originalIndex : next.length;
+                    next.splice(insertionIndex, 0, message);
+                    return { ...prev, [message.roomId]: next };
+                });
                 alert("Failed to delete message. Please try again.");
             }
         }
@@ -1130,7 +1188,7 @@ export const ChatRoomComponent: React.FC<{
         if (chatRoom.matrixRoomId) {
             markPmsAsRead();
         }
-    }, [provider, chatRoom.matrixRoomId]);
+    }, [provider, chatRoom?.matrixRoomId]);
 
     const lastReadMessageIdRef = useRef<string | null>(null);
 
@@ -1161,7 +1219,6 @@ export const ChatRoomComponent: React.FC<{
             }
 
             try {
-                const { sendReadReceiptAction } = await import("./actions");
                 await sendReadReceiptAction(latestMessage.roomId, latestMessage.id);
                 lastReadMessageIdRef.current = latestMessage.id;
                 
@@ -1228,10 +1285,11 @@ export const ChatRoomComponent: React.FC<{
     }, [messages, userHasScrolledUp]);
 
     useEffect(() => {
-        const roomId = chatRoom.matrixRoomId!;
-        const roomMessagesForChat = roomMessages[roomId] || [];
-        setMessages(roomMessagesForChat);
-    }, [chatRoom.matrixRoomId, roomMessages, matrixUserCache]);
+    if (!roomId) return;
+
+    const roomMessagesForChat = roomMessages[roomId] || [];
+    setMessages(roomMessagesForChat);   
+    }, [roomId, roomMessages]);
 
     const messagesRef = useRef<ChatMessage[]>([]);
     useEffect(() => {
@@ -1253,7 +1311,6 @@ export const ChatRoomComponent: React.FC<{
             if ((!roomMessages[chatRoom.matrixRoomId!] || roomMessages[chatRoom.matrixRoomId!].length === 0)) {
                 try {
                     console.log("🔄 [Chat] Checking room connection/fetching initial messages...", chatRoom.matrixRoomId);
-                    const { fetchRoomMessagesAction } = await import("./actions");
                     const result = await fetchRoomMessagesAction(chatRoom.matrixRoomId!, 20);
                     
                     if (result.success && result.messages) {
@@ -1276,7 +1333,7 @@ export const ChatRoomComponent: React.FC<{
         };
         
         checkConnection();
-    }, [provider, chatRoom.matrixRoomId, roomMessages]);
+    }, [provider, chatRoom?.matrixRoomId, roomMessages]);
 
     // Server-side message polling - DISABLED: Now handled by BackgroundMessagePoller globally
     /*
@@ -1425,7 +1482,7 @@ export const ChatRoomComponent: React.FC<{
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
                                     handleEdit={handleEdit}
-                                    chatProvider={chatProvider}
+                                    chatProvider={provider}
                                 />
                             )}
                         </div>
@@ -1443,7 +1500,7 @@ export const ChatRoomComponent: React.FC<{
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
                                     handleEdit={handleEdit}
-                                    chatProvider={chatProvider}
+                                    chatProvider={provider}
                                 />
                             )}
                         </div>
@@ -1470,10 +1527,10 @@ export const ChatRoomComponent: React.FC<{
                     >
                         <div className="flex h-[50px] items-end bg-[#fbfbfb] pb-1 pl-2 pr-2">
                             <ChatInput 
-                                chatRoom={chatRoom} 
+                                roomId={roomId}
                                 editingMessage={editingMessage}
                                 setEditingMessage={setEditingMessage}
-                                chatProvider={chatProvider}
+                                chatProvider={provider}
                             />
                         </div>
                     </div>

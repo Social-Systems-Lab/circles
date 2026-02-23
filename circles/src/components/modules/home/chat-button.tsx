@@ -1,11 +1,12 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { MessageCircle } from "lucide-react";
 import { Circle } from "@/models/models";
 import { useIsCompact } from "@/components/utils/use-is-compact";
+import { ensureCircleConversationAction } from "@/components/modules/chat/actions";
 
 interface ChatButtonProps {
     circle: Circle;
@@ -13,20 +14,38 @@ interface ChatButtonProps {
 }
 
 const ChatButton: React.FC<ChatButtonProps> = ({ circle, renderCompact }) => {
+    const router = useRouter();
     const isCompact = useIsCompact();
     const compact = isCompact || renderCompact;
 
+    const handleClick = async (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const provider = process.env.NEXT_PUBLIC_CHAT_PROVIDER || "matrix";
+
+        // Mongo: ensure a conversation exists for this circle, then route by _id
+        if (provider === "mongo") {
+            const res = await ensureCircleConversationAction(String(circle._id));
+            if (res.success && res.roomId) {
+                router.push("/chat/" + res.roomId);
+            }
+            return;
+        }
+
+        // Matrix (legacy): keep handle routing
+        router.push("/chat/" + circle.handle);
+    };
+
     return (
-        <Link href={`/chat/${circle.handle}`} passHref>
-            <Button
-                variant={compact ? "ghost" : "outline"}
-                className={compact ? "h-[32px] w-[32px] p-0" : "gap-2 rounded-full"}
-                asChild={false} // Ensure this doesn't act as a slot for the Link
-            >
-                <MessageCircle className="h-4 w-4" />
-                {compact ? "" : "Chat"}
-            </Button>
-        </Link>
+        <Button
+            onClick={handleClick}
+            variant={compact ? "ghost" : "outline"}
+            className={compact ? "h-[32px] w-[32px] p-0" : "gap-2 rounded-full"}
+        >
+            <MessageCircle className="h-4 w-4" />
+            {compact ? "" : "Chat"}
+        </Button>
     );
 };
 

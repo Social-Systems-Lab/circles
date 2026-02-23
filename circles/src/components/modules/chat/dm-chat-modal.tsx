@@ -35,7 +35,8 @@ export const DmChatModal: React.FC<DMModalProps> = ({ recipient, onClose, initia
         try {
             if (provider === "mongo") {
                 const result = await findOrCreateDMConversationAction(recipient);
-                if (!result.success || !result.chatRoom?.matrixRoomId) {
+                const conversationId = result.chatRoom?._id || result.chatRoom?.matrixRoomId;
+                if (!result.success || !conversationId) {
                     toast({
                         title: "Send Error",
                         description: "Failed to send chat message: " + result.message,
@@ -45,8 +46,8 @@ export const DmChatModal: React.FC<DMModalProps> = ({ recipient, onClose, initia
                     return;
                 }
 
-                await sendMongoMessageAction(result.chatRoom.matrixRoomId, message);
-                router.push(`/chat/${recipient.handle}`);
+                await sendMongoMessageAction(conversationId, message);
+                router.push("/chat/" + conversationId);
                 return;
             }
 
@@ -72,7 +73,7 @@ export const DmChatModal: React.FC<DMModalProps> = ({ recipient, onClose, initia
             }
 
             // Redirect to the chat
-            router.push(`/chat/${recipient.handle}`);
+            router.push("/chat/" + recipient.handle);
         } catch (error) {
             console.error("Error sending DM:", error);
         } finally {

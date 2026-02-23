@@ -35,14 +35,14 @@ export const useMongoChat = ({ roomId, enabled, setRoomMessages }: UseMongoChatO
                     if (result.messages.length > 0) {
                         sinceIdRef.current = result.nextSinceId || sinceIdRef.current;
                         const latestId = result.nextSinceId || result.messages[result.messages.length - 1]?.id;
-                        //if (latestId && latestId !== lastMarkedIdRef.current) {
-                        //  await markConversationReadAction(roomId, latestId);
-                        //  lastMarkedIdRef.current = latestId;
-                        //}
+                        if (latestId && latestId !== lastMarkedIdRef.current) {
+                            await markConversationReadAction(roomId, latestId);
+                            lastMarkedIdRef.current = latestId;
+                        }
                         setRoomMessages((prev) => {
                             const current = prev[roomId] || [];
                             const existingIds = new Set(current.map((msg) => msg.id));
-                            const merged = [...current, ...result.messages.filter((msg) => !existingIds.has(msg.id))];
+                            const merged = [...current, ...(result.messages ?? []).filter((msg) => !existingIds.has(msg.id))];
                             return {
                                 ...prev,
                                 [roomId]: merged,

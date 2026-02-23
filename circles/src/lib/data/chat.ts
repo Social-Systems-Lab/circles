@@ -1,6 +1,6 @@
 // chat.ts - chat logic
 
-import { ChatRooms, Circles, Members } from "./db";
+import { ChatRooms, ChatRoomMembers, Circles, Members } from "./db";
 import { ObjectId } from "mongodb";
 import { ChatRoom, ChatRoomMember, ChatRoomDisplay, Circle } from "@/models/models";
 import { getCircleById, updateCircle } from "./circle";

@@ -15,6 +15,7 @@ export default async function AdminPage() {
         redirect("/unauthenticated");
     }
     let user = await getUserPrivate(userDid);
+    console.log("[ADMIN DEBUG]", { userDid, email: user.email, isAdmin: user.isAdmin, id: user._id });
     if (!user.isAdmin) {
         redirect("/unauthorized");
     }
