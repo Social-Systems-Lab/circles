@@ -3,10 +3,11 @@ import { Client as MinioClient } from "minio";
 
 export async function GET(
   _req: NextRequest,
-  context: { params: Promise<{ path: string[] }> }
+  { params }: { params: Promise<{ path: string[] }> },
 ) {
+  const { path } = await params;
 
-  const { path } = await context.params;
+  // (keep your existing production guard if you want it)
 
   const host = process.env.MINIO_HOST || "127.0.0.1";
   const port = parseInt(process.env.MINIO_PORT || "9000", 10);
@@ -14,8 +15,8 @@ export async function GET(
   const secretKey = process.env.MINIO_ROOT_PASSWORD || "minioadmin";
   const bucket = process.env.MINIO_BUCKET || "circles";
 
-  const raw = (path || []).join("/");
-  if (!raw) {
+  const objectName = (path || []).join("/");
+  if (!objectName) {
     return NextResponse.json({ error: "Missing object path" }, { status: 400 });
   }
 
@@ -27,28 +28,10 @@ export async function GET(
     secretKey,
   });
 
-  const tryKeys = [raw, `uploads/${raw}`];
-
   try {
-    let stream: any;
-    let objectNameUsed = raw;
+    const stream = await client.getObject(bucket, objectName);
 
-    for (const key of tryKeys) {
-      try {
-        stream = await client.getObject(bucket, key);
-        objectNameUsed = key;
-        break;
-      } catch (err: any) {
-        // Only fallback on missing key; anything else is a real error
-        if (err?.code !== "NoSuchKey") throw err;
-      }
-    }
-
-    if (!stream) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
-    const lower = objectNameUsed.toLowerCase();
+    const lower = objectName.toLowerCase();
     const contentType =
       lower.endsWith(".png") ? "image/png" :
       lower.endsWith(".jpg") || lower.endsWith(".jpeg") ? "image/jpeg" :
@@ -57,7 +40,7 @@ export async function GET(
       lower.endsWith(".svg") ? "image/svg+xml" :
       "application/octet-stream";
 
-    return new NextResponse(stream, {
+    return new NextResponse(stream as any, {
       status: 200,
       headers: {
         "Content-Type": contentType,
@@ -65,7 +48,7 @@ export async function GET(
       },
     });
   } catch (err: any) {
-    console.error("[uploads proxy] failed", { bucket, objectName: raw, host, port, err });
+    console.error("[storage proxy] failed", { bucket, objectName, host, port, err });
     return NextResponse.json({ error: "Storage fetch failed" }, { status: 502 });
   }
 }

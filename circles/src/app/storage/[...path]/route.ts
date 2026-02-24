@@ -3,8 +3,11 @@ import { Client as MinioClient } from "minio";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { path: string[] } }
+  { params }: { params: Promise<{ path: string[] }> },
 ) {
+  const { path } = await params;
+
+  // (keep your existing production guard if you want it)
   if (process.env.NODE_ENV === "production") {
     return NextResponse.json({ error: "Not available in production" }, { status: 404 });
   }
@@ -15,7 +18,7 @@ export async function GET(
   const secretKey = process.env.MINIO_ROOT_PASSWORD || "minioadmin";
   const bucket = process.env.MINIO_BUCKET || "circles";
 
-  const objectName = (params.path || []).join("/");
+  const objectName = (path || []).join("/");
   if (!objectName) {
     return NextResponse.json({ error: "Missing object path" }, { status: 400 });
   }
