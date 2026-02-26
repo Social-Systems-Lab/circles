@@ -104,76 +104,13 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
 
 // Renderer for different message types
 export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean }> = ({ message, preview }) => {
-    const [user] = useAtom(userAtom);
     const displayName = message.author?.name || message.createdBy;
     switch (message.type) {
         case "m.room.message":
             if (!Object.keys(message.content).length) {
                 return <span className="italic text-gray-500">Message deleted</span>;
             }
-            const msgtype = (message.content as any).msgtype;
-            if (msgtype === "m.image") {
-                const mxcUrl = (message.content as any).url;
-                if (mxcUrl && typeof mxcUrl === "string") {
-                     // Convert MXC URI to HTTP URL using authenticated endpoint
-                     // Format: mxc://<server-name>/<media-id> -> http://localhost/_matrix/client/v1/media/download/<server-name>/<media-id>?access_token=...
-                     const mediaId = mxcUrl.replace("mxc://", "");
-                     // Construct URL - use port 80 for localhost to go through nginx
-                     const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https' : 'http';
-                     const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-                     const port = hostname === 'localhost' ? ':80' : '';
-                     const accessToken = user?.matrixAccessToken || '';
-                     const imageUrl = `${protocol}://${hostname}${port}/_matrix/client/v1/media/download/${mediaId}?access_token=${encodeURIComponent(accessToken)}`;
-                     
-                     console.log(`🖼️ [Chat] Image URL: ${imageUrl.replace(accessToken, 'REDACTED')} (MediaID: ${mediaId})`);
-                     
-                     return (
-                         <div className="max-w-xs sm:max-w-sm">
-                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                             <img 
-                                 src={imageUrl} 
-                                 alt={(message.content as any).body || "Image attachment"} 
-                                 className="rounded-lg object-contain max-h-60 w-full cursor-pointer hover:opacity-90"
-                                 onClick={() => window.open(imageUrl, "_blank")}
-                             />
-                         </div>
-                     );
-                }
-            } else if (msgtype === "m.file") {
-                const mxcUrl = (message.content as any).url;
-                if (mxcUrl && typeof mxcUrl === "string") {
-                     const mediaId = mxcUrl.replace("mxc://", "");
-                     const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https' : 'http';
-                     const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-                     const port = hostname === 'localhost' ? ':80' : '';
-                     const accessToken = user?.matrixAccessToken || '';
-                     const fileUrl = `${protocol}://${hostname}${port}/_matrix/client/v1/media/download/${mediaId}?access_token=${encodeURIComponent(accessToken)}`;
-                     const fileName = (message.content as any).body || "File attachment";
-                     const fileSize = (message.content as any).info?.size;
-                     
-                     return (
-                         <a 
-                             href={fileUrl} 
-                             target="_blank" 
-                             rel="noopener noreferrer"
-                             className="flex items-center gap-2 rounded-lg bg-gray-100 p-3 hover:bg-gray-200 transition-colors"
-                         >
-                             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600">
-                                 <IoDocumentText className="h-6 w-6" />
-                             </div>
-                             <div className="flex flex-col overflow-hidden">
-                                 <span className="truncate font-medium text-gray-700">{fileName}</span>
-                                 {fileSize && (
-                                     <span className="text-xs text-gray-500">
-                                         {(fileSize / 1024).toFixed(1)} KB
-                                     </span>
-                                 )}
-                             </div>
-                         </a>
-                     );
-                }
-            }
-            
+
             // Check if message has been edited
             const isEdited = (message.content as any)["m.new_content"] !== undefined || !!(message as any)?.editedAt;
             const attachments = (message as any)?.attachments as
