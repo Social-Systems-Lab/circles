@@ -4,7 +4,6 @@ import { ChatRooms, ChatRoomMembers, Circles, Members } from "./db";
 import { ObjectId } from "mongodb";
 import { ChatRoom, ChatRoomMember, ChatRoomDisplay, Circle } from "@/models/models";
 import { getCircleById, updateCircle } from "./circle";
-import { addUserToRoom, createMatrixRoom } from "./matrix";
 import { getPrivateUserByDid } from "./user";
 import { listConversationsForUser } from "./mongo-chat";
 
@@ -135,15 +134,6 @@ export const createDefaultChatRooms = async (circleId: string, userDid: string):
         membersChat = await createChatRoom(membersChat);
     }
 
-    if (!membersChat.matrixRoomId) {
-        // create matrix room
-        let matrixRoom = await createMatrixRoom(membersChat._id, membersChat.name, membersChat.name);
-        if (matrixRoom) {
-            membersChat.matrixRoomId = matrixRoom.roomId;
-            await updateChatRoom(membersChat);
-        }
-    }
-
     chatRooms.push(membersChat);
 
     let existingChatRooms = await getChatRooms(circleId);
@@ -228,37 +218,8 @@ export const findOrCreateDMRoom = async (userA: Circle, userB: Circle): Promise<
     roomId: existingRoom?._id,
     archived: existingRoom?.archived
   });
-        // If the room doesn't have a Matrix room, create one
-        if (!existingRoom.matrixRoomId) {
-            console.log("Creating Matrix room for existing DM");
-            const matrixRoom = await createMatrixRoom(existingRoom._id, existingRoom.name, "Private Conversation");
-            if (matrixRoom.roomId) {
-                existingRoom.matrixRoomId = matrixRoom.roomId;
-                await ChatRooms.updateOne(
-                    { _id: new ObjectId(existingRoom._id) },
-                    { $set: { matrixRoomId: matrixRoom.roomId } }
-                );
-            }
-        }
-
-        // add user to matrix chat room again to make sure in case process failed before
-        if (existingRoom.matrixRoomId) {
-            // add users to matrix room
-            try {
-                // get private user
-                let privateA = await getPrivateUserByDid(userA.did!);
-                let privateB = await getPrivateUserByDid(userB.did!);
-
-                // add users as members to chat room
-                await addChatRoomMember(userA.did!, existingRoom._id);
-                await addChatRoomMember(userB.did!, existingRoom._id);
-
-                await addUserToRoom(privateA.matrixAccessToken!, existingRoom.matrixRoomId);
-                await addUserToRoom(privateB.matrixAccessToken!, existingRoom.matrixRoomId);
-            } catch (error) {
-                console.error("Error adding users to matrix room", error);
-            }
-        }
+        await addChatRoomMember(userA.did!, existingRoom._id);
+        await addChatRoomMember(userB.did!, existingRoom._id);
 
         return existingRoom;
     }
@@ -281,25 +242,6 @@ export const findOrCreateDMRoom = async (userA: Circle, userB: Circle): Promise<
     // add users as members to chat room
     await addChatRoomMember(userA.did!, newRoom._id);
     await addChatRoomMember(userB.did!, newRoom._id);
-
-    // Create a corresponding Matrix room
-    const matrixRoom = await createMatrixRoom(newRoom._id, newRoom.name, "Private Conversation");
-    if (matrixRoom.roomId) {
-        newRoom.matrixRoomId = matrixRoom.roomId;
-        await ChatRooms.updateOne({ _id: result.insertedId }, { $set: { matrixRoomId: matrixRoom.roomId } });
-
-        // add users to matrix room
-        try {
-            // get private user
-            let privateA = await getPrivateUserByDid(userA.did!);
-            let privateB = await getPrivateUserByDid(userB.did!);
-
-            await addUserToRoom(privateA.matrixAccessToken!, newRoom.matrixRoomId);
-            await addUserToRoom(privateB.matrixAccessToken!, newRoom.matrixRoomId);
-        } catch (error) {
-            console.error("Error adding users to matrix room", error);
-        }
-    }
 
     return newRoom;
 };
