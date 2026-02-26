@@ -2,8 +2,8 @@
 "use client";
 
 import { Dispatch, KeyboardEvent, SetStateAction, useCallback, useMemo, useTransition } from "react";
-import { Circle, ChatMessage, MatrixUserCache, ChatRoomDisplay, ReactionAggregation } from "@/models/models";
-import { mapOpenAtom, matrixUserCacheAtom, replyToMessageAtom, roomMessagesAtom, userAtom, unreadCountsAtom, lastReadTimestampsAtom } from "@/lib/data/atoms";
+import { Circle, ChatMessage, ChatRoomDisplay, ReactionAggregation } from "@/models/models";
+import { mapOpenAtom, replyToMessageAtom, roomMessagesAtom, userAtom, unreadCountsAtom, lastReadTimestampsAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
@@ -12,17 +12,12 @@ import { CirclePicture } from "../circles/circle-picture";
 import RichText from "../feeds/RichText";
 import { Mention, MentionsInput } from "react-mentions";
 import { defaultMentionsInputStyle, defaultMentionStyle, handleMentionQuery } from "../feeds/post-list";
-import { sendReaction, redactRoomMessage } from "@/lib/data/client-matrix";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import {
-    deleteMessageAction,
     deleteMongoMessageAction,
     editMessageAction,
-    fetchMatrixUsers,
-    fetchRoomMessagesAction,
     sendAttachmentAction,
     sendMessageAction,
-    sendReadReceiptAction,
     toggleMongoReactionAction,
 } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -30,7 +25,6 @@ import { IoArrowBack, IoClose, IoSend, IoAddCircleOutline, IoArrowDown, IoAttach
 import { MdReply } from "react-icons/md";
 import { BsEmojiSmile } from "react-icons/bs";
 import { GrEdit, GrTrash } from "react-icons/gr";
-import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { generateColorFromString } from "@/lib/utils/color";
@@ -202,15 +196,13 @@ const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
     return message1.author._id === message2.author._id;
 };
 
-const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, onMessagesRendered, handleDelete, handleEdit, chatProvider }) => {
+const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, onMessagesRendered, handleDelete, handleEdit }) => {
     const [user] = useAtom(userAtom);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
     const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
     const [pickerOpenForMessage, setPickerOpenForMessage] = useState<string | null>(null);
     const [, setRoomMessages] = useAtom(roomMessagesAtom);
     const isMobile = useIsMobile();
-    const provider: "mongo" = "mongo";
-
     const handleReply = (message: ChatMessage) => {
         setReplyToMessage(message);
     };
@@ -219,10 +211,9 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
 
     const handleReaction = async (message: ChatMessage, emoji: string) => {
         if (!user) return;
-        if (provider !== "mongo" && (!user.matrixAccessToken || !user.matrixUrl || !user.fullMatrixName)) return;
-        if (provider === "mongo" && !user.did) return;
+        if (!user.did) return;
 
-        const reactionSender = provider === "mongo" ? user.did! : user.fullMatrixName!;
+        const reactionSender = user.did;
         const anyExistingReaction = Object.entries(message.reactions || {})
             .map(([key, reactions]) => {
                 const userReaction = reactions.find((r) => r.sender === reactionSender);
@@ -265,35 +256,18 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
             return newRooms;
         });
 
-            try {
-                if (provider === "mongo") {
-                    const result = await toggleMongoReactionAction(message.id, emoji);
-                    if (result.success && result.reactions) {
-                    setRoomMessages((prev) => {
-                        const newRooms = { ...prev };
-                        const roomMessages = [...(newRooms[message.roomId] || [])];
-                        const messageIndex = roomMessages.findIndex((m) => m.id === message.id);
-                        if (messageIndex === -1) return prev;
-                        roomMessages[messageIndex] = { ...roomMessages[messageIndex], reactions: result.reactions };
-                        newRooms[message.roomId] = roomMessages;
-                        return newRooms;
-                    });
-                }
-                return;
-            }
-
-            // If there was an old reaction, redact it first
-            if (anyExistingReaction) {
-                await redactRoomMessage(
-                    user.matrixAccessToken!,
-                    user.matrixUrl!,
-                    message.roomId,
-                    anyExistingReaction.eventId,
-                );
-            }
-            // If the new reaction is different from the old one, send it
-            if (!anyExistingReaction || anyExistingReaction.key !== emoji) {
-                await sendReaction(user.matrixAccessToken!, user.matrixUrl!, message.roomId, message.id, emoji);
+        try {
+            const result = await toggleMongoReactionAction(message.id, emoji);
+            if (result.success && result.reactions) {
+                setRoomMessages((prev) => {
+                    const newRooms = { ...prev };
+                    const roomMessages = [...(newRooms[message.roomId] || [])];
+                    const messageIndex = roomMessages.findIndex((m) => m.id === message.id);
+                    if (messageIndex === -1) return prev;
+                    roomMessages[messageIndex] = { ...roomMessages[messageIndex], reactions: result.reactions };
+                    newRooms[message.roomId] = roomMessages;
+                    return newRooms;
+                });
             }
         } catch (error) {
             console.error("Failed to update reaction:", error);
@@ -373,7 +347,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                 const borderRadiusClass = `${isFirstInChain ? "rounded-t-lg" : ""} ${
                     isLastInChain ? "rounded-b-lg" : ""
                 } ${!isFirstInChain && !isLastInChain ? "rounded-none" : ""}`;
-                const selfIdentifier = provider === "mongo" ? user?.did : user?.fullMatrixName;
+                const selfIdentifier = user?.did;
                 const isOwnMessage = message.createdBy === selfIdentifier;
                 const canEditMessage = isOwnMessage && !message.status;
                 const canDeleteMessage = isOwnMessage && message.status !== "pending";
@@ -431,7 +405,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                                     key={reaction}
                                                     className={`flex items-center rounded-full border bg-gray-100 px-2 py-0.5 text-xs ${
                                                         reactions.some((r) =>
-                                                            r.sender === (provider === "mongo" ? user?.did : user?.fullMatrixName),
+                                                            r.sender === user?.did,
                                                         )
                                                             ? "border-blue-500"
                                                             : "border-gray-300"
@@ -537,7 +511,6 @@ interface LatestMessageProps {
 }
 
 export const LatestMessage: React.FC<LatestMessageProps> = ({ roomId, latestMessages }) => {
-    const [matrixUserCache, setMatrixUserCache] = useAtom(matrixUserCacheAtom);
     const latestMessage = useMemo(() => {
         const matchingEntry = Object.entries(latestMessages).find(([key]) => key.startsWith(roomId));
         if (!matchingEntry) {
@@ -547,37 +520,11 @@ export const LatestMessage: React.FC<LatestMessageProps> = ({ roomId, latestMess
         return matchingEntry[1];
     }, [latestMessages, roomId]);
 
-    const latestSender = useMemo(async () => {
-        let sender = latestMessage?.sender;
-        if (!sender) return null;
-
-        if (!matrixUserCache[sender]) {
-            console.log("Fetching matrix users");
-            // console.log(JSON.stringify(matrixUserCache, null, 2));
-            //await fetchAndCacheMatrixUsers([sender], matrixUserCache, setMatrixUserCache);
-        }
-
-        return (
-            matrixUserCache[sender] || {
-                _id: sender,
-                name: sender,
-                picture: { url: "/placeholder.svg" },
-            }
-        );
-    }, [latestMessage?.sender, matrixUserCache]);
-
-    const formattedMessage = useMemo(() => {
-        return {
-            ...latestMessage,
-            author: latestSender,
-        } as ChatMessage;
-    }, [latestMessage, latestSender]);
-
-    if (!formattedMessage) {
+    if (!latestMessage) {
         return <span>No messages yet</span>;
     }
 
-    return <span>{formattedMessage?.content?.body as string}</span>;
+    return <span>{latestMessage?.content?.body as string}</span>;
 
     // <MessageRenderer message={formattedMessage} preview={true} />;
 };
@@ -589,14 +536,12 @@ type ChatInputProps = {
     chatProvider?: "matrix" | "mongo";
 };
 
-const ChatInput = ({ roomId, editingMessage, setEditingMessage, chatProvider }: ChatInputProps) => {
+const ChatInput = ({ roomId, editingMessage, setEditingMessage }: ChatInputProps) => {
     const [user] = useAtom(userAtom);
     const [newMessage, setNewMessage] = useState("");
     const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
     const [, setRoomMessages] = useAtom(roomMessagesAtom);
     const isMobile = useIsMobile();
-    const provider: "mongo" = "mongo";
-    
     // Populate input when editing
     useEffect(() => {
         if (editingMessage) {
@@ -608,23 +553,16 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage, chatProvider }: 
         const trimmedMessage = newMessage.trim();
         console.log("📤 [Send] handleSendMessage called", {
             hasUser: !!user,
-            hasAccessToken: !!user?.matrixAccessToken,
+            hasDid: !!user?.did,
             hasRoomId: !!roomId,
             roomId,
-            provider,
+            provider: "mongo",
             messageLength: trimmedMessage.length,
             isEditing: !!editingMessage,
             editingMessageId: editingMessage?.id
         });
         
         if (!user) return;
-
-        if (provider !== "mongo") {
-            if (!user.matrixAccessToken) {
-                console.error("Missing Matrix credentials. User needs to log out and log back in to trigger Matrix registration.");
-                return;
-            }
-        }
 
         if (!roomId) {
             console.error("Chat room does not have a room ID");
@@ -655,13 +593,7 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage, chatProvider }: 
                 msgtype: "m.text",
                 body: trimmedMessage,
             },
-            createdBy:
-                provider === "mongo"
-                    ? user.did || user.handle || user.name || "You"
-                    : user.fullMatrixName ||
-                      (user.matrixUsername ? `@${user.matrixUsername}:${process.env.NEXT_PUBLIC_MATRIX_DOMAIN}` : user.name) ||
-                      user.handle ||
-                      "You",
+            createdBy: user.did || user.handle || user.name || "You",
             createdAt: new Date(),
             author: user,
             reactions: {},
@@ -805,11 +737,6 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage, chatProvider }: 
         e.target.value = "";
 
         if (!user) return;
-        
-        if (provider !== "mongo" && !roomId) {
-            console.error("Matrix chat room does not have a room ID");
-            return;
-        }
 
         // Check size (5MB)
         if (file.size > 5 * 1024 * 1024) {
@@ -950,42 +877,6 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage, chatProvider }: 
     );
 };
 
-export const fetchAndCacheMatrixUsers = async (
-    matrixUsernames: string[],
-    matrixUserCache: MatrixUserCache,
-    setMatrixUserCache: Dispatch<SetStateAction<MatrixUserCache>>,
-): Promise<MatrixUserCache> => {
-    // Deduplicate usernames
-    const uniqueUsernames = Array.from(new Set(matrixUsernames));
-    const uncachedUsernames = uniqueUsernames.filter((username) => !matrixUserCache[username]);
-
-    if (uncachedUsernames.length === 0) {
-        return matrixUserCache; // Nothing to fetch
-    }
-
-    try {
-        const userData: (Circle | null)[] = await fetchMatrixUsers(uncachedUsernames);
-
-        // Update cache with fetched users
-        const updatedCache = {
-            ...matrixUserCache,
-            ...userData.reduce((acc, user, index) => {
-                const matrixUsername = uncachedUsernames[index];
-                if (user) {
-                    acc[matrixUsername] = user;
-                }
-                return acc;
-            }, {} as MatrixUserCache),
-        };
-
-        setMatrixUserCache(updatedCache);
-        return updatedCache;
-    } catch (error) {
-        console.error("Failed to fetch Matrix users:", error);
-        return matrixUserCache; // Return the current cache even on failure
-    }
-};
-
 export const ChatRoomComponent: React.FC<{
     chatRoom: ChatRoomDisplay;
     setSelectedChat?: Dispatch<SetStateAction<ChatRoomDisplay | undefined>>;
@@ -1005,8 +896,6 @@ export const ChatRoomComponent: React.FC<{
     const [isLoadingMessages, startLoadingMessagesTransition] = useTransition();
     const inputRef = useRef<HTMLDivElement>(null);
     const [mapOpen] = useAtom(mapOpenAtom);
-    const [user, setUser] = useAtom(userAtom);
-    const [matrixUserCache, setMatrixUserCache] = useAtom(matrixUserCacheAtom);
     const [roomMessages, setRoomMessages] = useAtom(roomMessagesAtom);
     const [unreadCounts, setUnreadCounts] = useAtom(unreadCountsAtom);
     const [lastReadTimestamps, setLastReadTimestamps] = useAtom(lastReadTimestampsAtom);
@@ -1054,10 +943,7 @@ export const ChatRoomComponent: React.FC<{
             }
 
             try {
-                const result =
-                    provider === "mongo"
-                        ? await deleteMongoMessageAction(message.id)
-                        : await deleteMessageAction(message.roomId, message.id);
+                const result = await deleteMongoMessageAction(message.id);
                 
                 if (!result.success) {
                     console.error("Failed to delete message:", result.message);
@@ -1094,100 +980,39 @@ export const ChatRoomComponent: React.FC<{
         setReplyToMessage(null); // Clear reply when editing
     };
 
-    useEffect(() => {
-        if (logLevel >= LOG_LEVEL_TRACE) {
-            console.log("useEffect.ChatRoomComponent.1");
-        }
-
-        const markPmsAsRead = async () => {
-            try {
-                await fetch("/api/notifications/mark-pms-as-read", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ roomId: chatRoom.matrixRoomId }),
-                });
-            } catch (error) {
-                console.error("Error marking PMs as read:", error);
-            }
-        };
-
-        if (provider === "mongo") {
-            return;
-        }
-
-        if (chatRoom.matrixRoomId) {
-            markPmsAsRead();
-        }
-    }, [provider, chatRoom?.matrixRoomId]);
-
     const lastReadMessageIdRef = useRef<string | null>(null);
 
     const markLatestMessageAsRead = useCallback(async () => {
-        if (provider === "mongo") {
+        if (!roomId || messages.length === 0) {
             return;
         }
-        if (messages.length > 0 && user?.matrixAccessToken) {
-            const latestMessage = messages[messages.length - 1];
 
-            // Prevent infinite loop - only mark as read if it's a new message
-            if (lastReadMessageIdRef.current === latestMessage.id) {
-                return;
-            }
-
-            console.log(`💬 [Chat] Marking latest message as read in room ${chatRoom.name}:`);
-            console.log(`💬 [Chat] - Room ID: ${latestMessage.roomId}`);
-            console.log(`💬 [Chat] - Message ID: ${latestMessage.id}`);
-            console.log(`💬 [Chat] - Time: ${new Date(latestMessage.createdAt).toISOString()}`);
-            console.log(`💬 [Chat] - From: ${latestMessage.createdBy}`);
-
-            if (latestMessage.type === "m.room.message") {
-                const contentPreview =
-                    typeof latestMessage.content?.body === "string"
-                        ? JSON.stringify(latestMessage.content?.body).substring(0, 50)
-                        : "N/A";
-                console.log(`💬 [Chat] - Content: ${contentPreview}...`);
-            }
-
-            try {
-                await sendReadReceiptAction(latestMessage.roomId, latestMessage.id);
-                lastReadMessageIdRef.current = latestMessage.id;
-                
-                // Update last read timestamp for this room
-                const messageTimestamp = latestMessage.createdAt instanceof Date 
-                    ? latestMessage.createdAt.getTime() 
-                    : new Date(latestMessage.createdAt).getTime();
-                    
-                if (chatRoom.matrixRoomId) {
-                    setLastReadTimestamps((prev) => ({
-                        ...prev,
-                        [chatRoom.matrixRoomId!]: messageTimestamp
-                    }));
-                    
-                    console.log(`💬 [Chat] Updated last read timestamp for room ${chatRoom.matrixRoomId} to ${new Date(messageTimestamp).toISOString()}`);
-                }
-                
-                // Clear unread count for this room
-                if (chatRoom.matrixRoomId) {
-                    setUnreadCounts((prev) => {
-                        const newCounts = { ...prev };
-                        // Clear all entries for this room (handles both with and without user ID suffix)
-                        Object.keys(newCounts).forEach(key => {
-                            if (key.startsWith(chatRoom.matrixRoomId!)) {
-                                delete newCounts[key];
-                            }
-                        });
-                        return newCounts;
-                    });
-                }
-                
-                console.log(`💬 [Chat] Read receipt sent successfully`);
-            } catch (error) {
-                console.error("Failed to send read receipt:", error);
-            }
-        } else {
-            console.log(`💬 [Chat] No messages to mark as read for room ${chatRoom.name || chatRoom.matrixRoomId}`);
+        const latestMessage = messages[messages.length - 1];
+        if (lastReadMessageIdRef.current === latestMessage.id) {
+            return;
         }
-    }, [provider, chatRoom?.matrixRoomId, chatRoom?.name, messages, user?.matrixAccessToken, setUnreadCounts, setLastReadTimestamps]);
+
+        lastReadMessageIdRef.current = latestMessage.id;
+        const messageTimestamp =
+            latestMessage.createdAt instanceof Date
+                ? latestMessage.createdAt.getTime()
+                : new Date(latestMessage.createdAt).getTime();
+
+        setLastReadTimestamps((prev) => ({
+            ...prev,
+            [roomId]: messageTimestamp,
+        }));
+
+        setUnreadCounts((prev) => {
+            const newCounts = { ...prev };
+            Object.keys(newCounts).forEach((key) => {
+                if (key.startsWith(roomId)) {
+                    delete newCounts[key];
+                }
+            });
+            return newCounts;
+        });
+    }, [messages, roomId, setUnreadCounts, setLastReadTimestamps]);
 
     const scrollToBottom = (behavior: "smooth" | "auto" = "auto") => {
         if (messagesEndRef.current) {
@@ -1229,115 +1054,6 @@ export const ChatRoomComponent: React.FC<{
     useEffect(() => {
         markLatestMessageAsRead(); // Mark the latest message as read when messages update
     }, [messages, markLatestMessageAsRead]);
-
-    // Initial check/fetch to ensure we are in the room (triggers auto-join if needed)
-    useEffect(() => {
-        if (provider === "mongo") return;
-        if (!chatRoom.matrixRoomId) return;
-
-        // If we don't have messages yet, try to fetch to ensure we are joined
-        // This is crucial for fixing "broken" memberships where the user is in local DB but not Matrix
-        const checkConnection = async () => {
-            if ((!roomMessages[chatRoom.matrixRoomId!] || roomMessages[chatRoom.matrixRoomId!].length === 0)) {
-                try {
-                    console.log("🔄 [Chat] Checking room connection/fetching initial messages...", chatRoom.matrixRoomId);
-                    const result = await fetchRoomMessagesAction(chatRoom.matrixRoomId!, 20);
-                    
-                    if (result.success && result.messages) {
-                        console.log("✅ [Chat] Initial fetch successful, user is in room.");
-                        // We could update state here, but the background poller will likely catch up.
-                        // However, to be instant, let's update local cache if it's empty
-                        if (result.messages.length > 0) {
-                             // Force an update to roomMessages if it was empty
-                             // (This duplicates logic from the disabled poller but is safe for a one-off)
-                             // Actually, let's just let the poller/sync loop handle the main state, 
-                             // OR manually inject if we trust the format.
-                             // For simplicity/safety, we just want the SIDE EFFECT of joining.
-                             // But showing messages immediately is better.
-                        }
-                    }
-                } catch (error) {
-                    console.error("❌ [Chat] Failed to check connection:", error);
-                }
-            }
-        };
-        
-        checkConnection();
-    }, [provider, chatRoom?.matrixRoomId, roomMessages]);
-
-    // Server-side message polling - DISABLED: Now handled by BackgroundMessagePoller globally
-    /*
-    useEffect(() => {
-        if (!chatRoom.matrixRoomId) return;
-
-        let intervalId: NodeJS.Timeout;
-        let lastMessageCount = 0;
-        
-        const pollMessages = async () => {
-            try {
-                const { fetchRoomMessagesAction } = await import("./actions");
-                const result = await fetchRoomMessagesAction(chatRoom.matrixRoomId!, 50);
-                
-                if (result.success && result.messages) {
-                    // Only process if message count changed
-                    if (result.messages.length === lastMessageCount) {
-                        return;
-                    }
-                    
-                    lastMessageCount = result.messages.length;
-                    
-                    // Convert Matrix messages to ChatMessage format and update roomMessages
-                    const formattedMessages: ChatMessage[] = await Promise.all(
-                        result.messages
-                            .filter((msg: any) => msg.type === "m.room.message")
-                            .map(async (msg: any) => {
-                                // Get or cache user info
-                                let author = matrixUserCache[msg.sender];
-                                if (!author) {
-                                    const users = await fetchMatrixUsers([msg.sender]);
-                                    author = users[0];
-                                    if (author) {
-                                        setMatrixUserCache((prev) => ({ ...prev, [msg.sender]: author }));
-                                    }
-                                }
-
-                                return {
-                                    id: msg.event_id,
-                                    roomId: chatRoom.matrixRoomId!,
-                                    type: msg.type,
-                                    content: msg.content,
-                                    createdBy: msg.sender,
-                                    createdAt: new Date(msg.origin_server_ts),
-                                    author: author || undefined,
-                                    reactions: {},
-                                } as ChatMessage;
-                            })
-                    );
-
-                    // Update room messages if we have new messages
-                    if (formattedMessages.length > 0) {
-                        setRoomMessages((prev) => ({
-                            ...prev,
-                            [chatRoom.matrixRoomId!]: formattedMessages.reverse(),
-                        }));
-                    }
-                }
-            } catch (error) {
-                console.error("Failed to poll messages:", error);
-            }
-        };
-
-        // Initial fetch
-        pollMessages();
-
-        // Poll every 3 seconds
-        intervalId = setInterval(pollMessages, 3000);
-
-        return () => {
-            if (intervalId) clearInterval(intervalId);
-        };
-    }, [chatRoom.matrixRoomId, matrixUserCache, setMatrixUserCache, setRoomMessages]);
-    */
 
 
     useEffect(() => {
