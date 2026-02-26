@@ -12,7 +12,6 @@ import { createSession, generateUserToken, verifyUserToken } from "./jwt";
 import { createNewUser, getUserById, getUserPrivate } from "../data/user";
 import { addMember, getMembers } from "../data/member";
 import { getCircleById, getCirclesByDids, getCirclesByIds, getDefaultCircle } from "../data/circle";
-import { registerOrLoginMatrixUser } from "../data/matrix";
 import { generateSecureToken, hashToken, sendEmail } from "../data/email"; // Added sendEmail for now, will be sendVerificationEmail
 
 export const SALT_FILENAME = "salt.bin";
@@ -402,23 +401,9 @@ export const getAuthorizedMembers = async (circle: string | Circle, feature: Fea
     return await getCirclesByDids(memberDids);
 };
 
-export async function createUserSession(user: UserPrivate, userDid: string): Promise<string> {
+export async function createUserSession(_user: UserPrivate, userDid: string): Promise<string> {
     let token = await generateUserToken(userDid);
     await createSession(token);
-
-    try {
-        // check if user has a matrix account
-        console.log("Attempting to register/login Matrix user for:", user.name, user.did);
-        await registerOrLoginMatrixUser(user, userDid);
-        console.log("Successfully registered/logged in Matrix user");
-    } catch (error) {
-        console.error("Error creating matrix session for user:", user.name);
-        console.error("Error details:", error);
-        if (error instanceof Error) {
-            console.error("Error message:", error.message);
-            console.error("Error stack:", error.stack);
-        }
-    }
 
     return token;
 }
