@@ -272,7 +272,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
     const [pickerOpenForMessage, setPickerOpenForMessage] = useState<string | null>(null);
     const [, setRoomMessages] = useAtom(roomMessagesAtom);
     const isMobile = useIsMobile();
-    const provider = chatProvider || "matrix";
+    const provider: "mongo" = "mongo";
 
     const handleReply = (message: ChatMessage) => {
         setReplyToMessage(message);
@@ -282,7 +282,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
 
     const handleReaction = async (message: ChatMessage, emoji: string) => {
         if (!user) return;
-        if (provider === "matrix" && (!user.matrixAccessToken || !user.matrixUrl || !user.fullMatrixName)) return;
+        if (provider !== "mongo" && (!user.matrixAccessToken || !user.matrixUrl || !user.fullMatrixName)) return;
         if (provider === "mongo" && !user.did) return;
 
         const reactionSender = provider === "mongo" ? user.did! : user.fullMatrixName!;
@@ -658,7 +658,7 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage, chatProvider }: 
     const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
     const [, setRoomMessages] = useAtom(roomMessagesAtom);
     const isMobile = useIsMobile();
-    const provider = chatProvider || "matrix";
+    const provider: "mongo" = "mongo";
     
     // Populate input when editing
     useEffect(() => {
@@ -682,7 +682,7 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage, chatProvider }: 
         
         if (!user) return;
 
-        if (provider === "matrix") {
+        if (provider !== "mongo") {
             if (!user.matrixAccessToken) {
                 console.error("Missing Matrix credentials. User needs to log out and log back in to trigger Matrix registration.");
                 return;
@@ -869,7 +869,7 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage, chatProvider }: 
 
         if (!user) return;
         
-        if (provider === "matrix" && !roomId) {
+        if (provider !== "mongo" && !roomId) {
             console.error("Matrix chat room does not have a room ID");
             return;
         }
@@ -1079,14 +1079,7 @@ export const ChatRoomComponent: React.FC<{
     const params = useParams<{ handle?: string | string[] }>();
     const routeHandleParam = params?.handle;
     const routeHandle = Array.isArray(routeHandleParam) ? routeHandleParam[0] : routeHandleParam;
-    const configuredProvider: "matrix" | "mongo" =
-        process.env.NEXT_PUBLIC_CHAT_PROVIDER === "mongo" ? "mongo" : "matrix";
-    // Compute provider and roomId safely
-    // Decide provider based on what this room actually has.
-    // If caller explicitly forces "mongo", respect it.
-    // Otherwise: use Matrix only when matrixRoomId exists, else Mongo.
-    const provider: "matrix" | "mongo" =
-        chatProvider || (configuredProvider === "mongo" ? "mongo" : (chatRoom?.matrixRoomId ? "matrix" : "mongo"));
+    const provider: "mongo" = "mongo";
 
     const roomId =
         provider === "mongo"
