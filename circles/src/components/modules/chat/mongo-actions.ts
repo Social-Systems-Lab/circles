@@ -114,11 +114,11 @@ export const listChatRoomsAction = async (): Promise<{ success: boolean; rooms?:
 
     try {
         const rooms = await listChatRoomsForUser(userDid);
-        const conversationIds = rooms.map((room) => room.matrixRoomId).filter(Boolean) as string[];
+        const conversationIds = rooms.map((room) => room._id || room.handle).filter(Boolean) as string[];
         const unreadCounts = await getUnreadCountsForUser(userDid, conversationIds);
         const roomsWithUnread = rooms.map((room) => ({
             ...room,
-            unreadCount: room.matrixRoomId ? unreadCounts[room.matrixRoomId] || 0 : 0,
+            unreadCount: room._id || room.handle ? unreadCounts[(room._id || room.handle) as string] || 0 : 0,
         }));
         return { success: true, rooms: roomsWithUnread };
     } catch (error) {
@@ -424,7 +424,7 @@ export const findOrCreateDMConversationAction = async (
     const dmHandle = `dm-${participants[0]}-${participants[1]}`;
 
     const rooms = await listChatRoomsForUser(userDid);
-    const chatRoom = rooms.find((room) => room.handle === dmHandle || room.matrixRoomId === dmHandle);
+    const chatRoom = rooms.find((room) => room.handle === dmHandle);
 
     return chatRoom
         ? { success: true, chatRoom }

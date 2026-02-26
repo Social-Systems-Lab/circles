@@ -43,7 +43,7 @@ const parseEnvFlag = (value?: string | null) => {
 
 const isMatrixEnabled = () => parseEnvFlag(process.env.MATRIX_ENABLED);
 const matrixDisabledMessage = "Matrix chat is disabled in this environment.";
-const getChatProvider = () => process.env.CHAT_PROVIDER || "matrix";
+const getChatProvider = () => "mongo";
 
 export async function joinChatRoomAction(
     chatRoomId: string,
@@ -643,67 +643,12 @@ export const createGroupChatAction = async (
     }
 
     try {
-        const user = await getPrivateUserByDid(userDid);
-        if (!user?.matrixAccessToken) {
-            return { success: false, message: "User does not have valid Matrix credentials" };
-        }
 
-        const matrixUrl = user.matrixUrl || `http://${process.env.MATRIX_HOST || "127.0.0.1"}:${process.env.MATRIX_PORT || "8008"}`;
-
-        const { createRoom, uploadMatrixMedia } = await import("@/lib/data/matrix");
-        const { getPrivateUserByDid: getUser } = await import("@/lib/data/user");
-
-        // Resolve participant DIDs to Matrix IDs
-        const inviteList: string[] = [];
-        for (const did of participantDids) {
-            const participant = await getUser(did);
-            if (participant?.fullMatrixName) {
-                inviteList.push(participant.fullMatrixName);
-            }
-        }
-        
-        // Always invite the Admin user to ensure "God Mode" repairs work
-        // (Administrator needs to be in private rooms to use Admin API)
-        const { MATRIX_DOMAIN } = await import("@/lib/data/matrix");
-        const adminMxId = `@admin:${MATRIX_DOMAIN}`;
-        if (!inviteList.includes(adminMxId)) {
-            inviteList.push(adminMxId);
-        }
-
-        let avatarUrl: string | undefined;
-        if (avatarFile && avatarFile.size > 0) {
-            const buffer = Buffer.from(await avatarFile.arrayBuffer());
-            const uploadResult = await uploadMatrixMedia(
-                user.matrixAccessToken,
-                matrixUrl,
-                buffer,
-                avatarFile.type,
-                avatarFile.name
-            );
-            avatarUrl = uploadResult;
-        }
-
-        const roomResult = await createRoom(user.matrixAccessToken, matrixUrl, {
-            name,
-            invite: inviteList,
-            preset: "private_chat",
-            creation_content: { "m.federate": true },
-            initial_state: avatarUrl
-                ? [
-                      {
-                          type: "m.room.avatar",
-                          state_key: "",
-                          content: { url: avatarUrl },
-                      },
-                  ]
-                : undefined,
-        });
-
-        // Create the chat room in our local database
+        // Create the chat room in our local database (Mongo-only)
         const { createGroupChatRoom } = await import("@/lib/data/chat");
-        await createGroupChatRoom(name, userDid, participantDids, roomResult.room_id, avatarUrl);
+        const room = await createGroupChatRoom(name, userDid, participantDids);
 
-        return { success: true, roomId: roomResult.room_id };
+        return { success: true, roomId: room._id };
     } catch (error) {
         console.error("❌ Error creating group chat:", error);
         return { success: false, message: error instanceof Error ? error.message : "Failed to create group chat" };
@@ -718,24 +663,9 @@ export const sendReadReceiptAction = async (
     if (!userDid) {
         return { success: false, message: "You need to be logged in to send read receipts" };
     }
-    if (!isMatrixEnabled()) {
-        return { success: true, message: matrixDisabledMessage };
-    }
 
-    try {
-        const user = await getPrivateUserByDid(userDid);
-        if (!user?.matrixAccessToken) {
-            return { success: false, message: "User does not have valid Matrix credentials" };
-        }
-
-        const { sendReadReceipt } = await import("@/lib/data/matrix");
-        await sendReadReceipt(user.matrixAccessToken, roomId, eventId);
-
-        return { success: true };
-    } catch (error) {
-        console.error("❌ Error sending read receipt:", error);
-        return { success: false, message: error instanceof Error ? error.message : "Failed to send read receipt" };
-    }
+    // Mongo-only: read receipts are handled in Mongo (no Matrix side-effects)
+    return { success: true };
 };
 
 export const deleteGroupChatAction = async (
@@ -802,31 +732,6 @@ export const leaveGroupChatAction = async (
 
         // Remove user from chat room in our database
         await removeChatRoomMember(userDid, chatRoomId);
-
-        // Leave the Matrix room using user's own access token
-        const user = await getPrivateUserByDid(userDid);
-        if (user?.matrixAccessToken && chatRoom.matrixRoomId) {
-            // Use Matrix API to leave room
-            const matrixUrl = process.env.MATRIX_URL || `http://${process.env.MATRIX_HOST}:${process.env.MATRIX_PORT}`;
-            const response = await fetch(
-                `${matrixUrl}/_matrix/client/r0/rooms/${encodeURIComponent(chatRoom.matrixRoomId)}/leave`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${user.matrixAccessToken}`,
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({}),
-                }
-            );
-
-            if (!response.ok) {
-                const error = await response.json();
-                console.error("Failed to leave Matrix room:", error);
-                // Don't fail the whole operation if Matrix leave fails
-            }
-        }
-
         return { success: true };
     } catch (error) {
         console.error("❌ Error leaving group chat:", error);

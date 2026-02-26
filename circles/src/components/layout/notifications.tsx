@@ -23,7 +23,6 @@ import {
     Event,
 } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
-import { sendReadReceipt } from "@/lib/data/client-matrix";
 import { MdOutlineArticle } from "react-icons/md";
 import { Hammer, AlertCircle } from "lucide-react"; // Gavel icon for proposals, AlertCircle for issues
 import { AiFillHeart } from "react-icons/ai";
@@ -42,6 +41,7 @@ type Notification = {
     postId?: string;
     commentId?: string;
     reaction?: string;
+    roomId?: string;
     project?: Circle;
     projectId?: string;
     // Proposal fields
@@ -183,6 +183,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                     postId: content.postId,
                     commentId: content.commentId,
                     reaction: content.reaction,
+                    roomId: msg.roomId,
                     project: content.project,
                     projectId: content.projectId,
                     proposalId: content.proposalId,
@@ -269,52 +270,28 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
     }, [notifications]);
 
     const markLatestNotificationAsRead = useCallback(async () => {
-        if (notifications.length > 0 && user?.matrixAccessToken) {
-            // Use index 0 since array is sorted by newest first
-            const latestNotification = notifications[0];
+        if (!notifications.length) return;
 
-            console.log(`📩 [Notifications] Marking latest notification as read:`);
-            console.log(`📩 [Notifications] - ID: ${latestNotification.id}`);
-            console.log(`📩 [Notifications] - Message: ${latestNotification.message}`);
-            console.log(`📩 [Notifications] - Type: ${latestNotification.notificationType}`);
-            console.log(`📩 [Notifications] - Room ID: ${user.matrixNotificationsRoomId}`);
+        const latestNotification = notifications[0];
 
-            await sendReadReceipt(
-                user.matrixAccessToken,
-                user.matrixUrl!,
-                user.matrixNotificationsRoomId!,
-                latestNotification.id,
-            );
-
-            try {
-                await fetch("/api/notifications/mark-as-read", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ notificationId: latestNotification.id }),
-                });
-            } catch (error) {
-                console.error("Error marking notification as read in DB:", error);
-            }
-
-            console.log(`📩 [Notifications] Read receipt sent successfully`);
-
-            // Reset unread count for notifications
-            setUnreadCounts((counts) => {
-                console.log(
-                    `📩 [Notifications] Resetting unread count from ${counts[user.matrixNotificationsRoomId!] || 0} to 0`,
-                );
-                return {
-                    ...counts,
-                    [user.matrixNotificationsRoomId!]: 0,
-                };
+        try {
+            await fetch("/api/notifications/mark-as-read", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ notificationId: latestNotification.id }),
             });
-        } else {
-            console.log(`📩 [Notifications] No notifications to mark as read`);
-            if (!user?.matrixAccessToken) {
-                console.log(`📩 [Notifications] Missing Matrix access token`);
-            }
+        } catch (error) {
+            console.error("Error marking notification as read in DB:", error);
         }
-    }, [notifications, user?.matrixAccessToken, user?.matrixUrl, user?.matrixNotificationsRoomId, setUnreadCounts]);
+
+        // Reset unread count for notification room locally when available
+        if (latestNotification.roomId) {
+            setUnreadCounts((counts) => ({
+                ...counts,
+                [latestNotification.roomId!]: 0,
+            }));
+        }
+    }, [notifications, setUnreadCounts]);
 
     useEffect(() => {
         markLatestNotificationAsRead();

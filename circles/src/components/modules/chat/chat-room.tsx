@@ -907,10 +907,7 @@ export const ChatRoomComponent: React.FC<{
     const routeHandle = Array.isArray(routeHandleParam) ? routeHandleParam[0] : routeHandleParam;
     const provider: "mongo" = "mongo";
 
-    const roomId =
-        provider === "mongo"
-            ? (routeHandle || (chatRoom as any)?._id || (chatRoom as any)?.id || (chatRoom as any)?.matrixRoomId || null)
-            : chatRoom?.matrixRoomId || null;
+    const roomId = routeHandle || (chatRoom as any)?._id || (chatRoom as any)?.id || (chatRoom as any)?.handle || null;
 
     useEffect(() => {
         if (process.env.NODE_ENV === "production") return;

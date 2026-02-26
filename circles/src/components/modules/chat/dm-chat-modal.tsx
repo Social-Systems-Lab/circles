@@ -32,7 +32,7 @@ export const DmChatModal: React.FC<DMModalProps> = ({ recipient, onClose, initia
 
         try {
             const result = await findOrCreateDMConversationAction(recipient);
-            const conversationId = result.chatRoom?._id || result.chatRoom?.matrixRoomId;
+            const conversationId = result.chatRoom?._id || result.chatRoom?.handle;
             if (!result.success || !conversationId) {
                 toast({
                     title: "Send Error",

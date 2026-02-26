@@ -110,7 +110,7 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                               setChatRooms((prev) => prev.map((r) => (r._id === chat._id ? ({ ...r, unreadCount: 0 } as any) : r)));
 
                               // Persist: mark conversation as read on the server (mongo only)
-                              const convoId = String(chat._id || chat.matrixRoomId || "");
+                              const convoId = String(chat._id || chat.handle || "");
                               if (convoId) {
                                 await markConversationReadAction(convoId, null); // null = mark up to latest
                             }

@@ -37,8 +37,10 @@ const ProfileMenuBar = () => {
         // get sum of unread messages in all chat rooms
         return user?.chatRoomMemberships
             .map((room) => {
+                const conversationId = room.chatRoom._id || room.chatRoom.handle;
+                if (!conversationId) return 0;
                 const unread = Object.entries(unreadCounts).find(([key]) =>
-                    key.startsWith(room.chatRoom.matrixRoomId!),
+                    key.startsWith(conversationId),
                 )?.[1];
                 if (unread) {
                     return unread;

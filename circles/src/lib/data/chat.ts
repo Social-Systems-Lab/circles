@@ -250,20 +250,8 @@ export const createGroupChatRoom = async (
     name: string,
     creatorDid: string,
     participantDids: string[],
-    matrixRoomId: string,
     avatarUrl?: string
 ): Promise<ChatRoom> => {
-    // Convert Matrix mxc:// URL to HTTP URL if needed
-    let httpAvatarUrl: string | undefined;
-    if (avatarUrl) {
-        if (avatarUrl.startsWith("mxc://")) {
-            // Use localhost (nginx) to benefit from direct file serving
-            const matrixUrl = "http://localhost";
-            httpAvatarUrl = `${matrixUrl}/_matrix/media/v3/download/${avatarUrl.replace("mxc://", "")}`;
-        } else {
-            httpAvatarUrl = avatarUrl;
-        }
-    }
 
     const newRoom: ChatRoom = {
         name: name,
@@ -271,8 +259,7 @@ export const createGroupChatRoom = async (
         createdAt: new Date(),
         userGroups: [],
         isDirect: false,
-        matrixRoomId: matrixRoomId,
-        picture: httpAvatarUrl ? { url: httpAvatarUrl } : undefined,
+        picture: avatarUrl ? { url: avatarUrl } : undefined,
     };
 
     // Insert into DB
