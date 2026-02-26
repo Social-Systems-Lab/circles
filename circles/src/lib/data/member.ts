@@ -6,8 +6,6 @@ import { filterLocations } from "../utils";
 import { getMetrics } from "../utils/metrics";
 import { SAFE_CIRCLE_PROJECTION } from "./circle";
 import { addChatRoomMember, getChatRoomByHandle, removeChatRoomMember } from "./chat";
-import { getPrivateUserByDid } from "./user";
-import { addUserToRoom, removeUserFromRoom } from "./matrix";
 
 export const getMember = async (userDid: string, circleId: string): Promise<Member | null> => {
     return await Members.findOne({ userDid: userDid, circleId: circleId });
@@ -162,28 +160,18 @@ export const countAdmins = async (circleId: string): Promise<number> => {
 async function autoAddToMemberChats(userDid: string, circleId: string) {
     // Find the “members” chat in that circle
     const membersChat = await getChatRoomByHandle(circleId, "members");
-    if (!membersChat?.matrixRoomId) return;
+    if (!membersChat?._id) return;
 
     // Add the user to the DB membership for that chat
     await addChatRoomMember(userDid, membersChat._id);
-
-    // Add them to Matrix
-    const user = await getPrivateUserByDid(userDid);
-    if (!user?.matrixAccessToken) return;
-    await addUserToRoom(user.matrixAccessToken, membersChat.matrixRoomId);
 }
 
 async function autoRemoveFromMemberChats(userDid: string, circleId: string) {
     const membersChat = await getChatRoomByHandle(circleId, "members");
-    if (!membersChat?.matrixRoomId) return;
+    if (!membersChat?._id) return;
 
     // Remove from DB membership
     await removeChatRoomMember(userDid, membersChat._id);
-
-    // Remove from Matrix
-    const user = await getPrivateUserByDid(userDid);
-    if (!user?.matrixUsername) return;
-    await removeUserFromRoom(user.matrixUsername, membersChat.matrixRoomId);
 }
 
 /**
