@@ -29,15 +29,14 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
     const router = useRouter();
     const params = useParams();
     const activeChatHandle = params.handle as string;
-    const provider = process.env.NEXT_PUBLIC_CHAT_PROVIDER || "matrix";
-    const getCanonicalRoomId = (chat: ChatRoomDisplay) => String(chat._id || chat.matrixRoomId || chat.handle || "");
+    const getConversationId = (chat: ChatRoomDisplay) => String(chat._id || chat.matrixRoomId || chat.handle || "");
 
     const sortedChats = useMemo(() => {
         const chatsCopy = [...chats];
 
         chatsCopy.sort((a, b) => {
-            const keyA = provider === "mongo" ? getCanonicalRoomId(a) : a.matrixRoomId!;
-            const keyB = provider === "mongo" ? getCanonicalRoomId(b) : b.matrixRoomId!;
+            const keyA = getConversationId(a);
+            const keyB = getConversationId(b);
             const messageA = Object.entries(latestMessages).find(([key]) => key.startsWith(keyA))?.[1];
             const messageB = Object.entries(latestMessages).find(([key]) => key.startsWith(keyB))?.[1];
 
@@ -46,13 +45,10 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
             return latestB - latestA; // Sort descending by timestamp
         });
         return chatsCopy;
-    }, [chats, latestMessages, provider]);
+    }, [chats, latestMessages]);
 
     const handleChatClick = (chat: ChatRoomDisplay) => {
-        const path =
-            provider === "mongo"
-                ? `/chat/${getCanonicalRoomId(chat)}`
-                : (chat.circle ? `/chat/${chat.circle.handle}` : `/chat/${chat.handle}`);
+        const path = `/chat/${getConversationId(chat)}`;
         router.push(path);
         if (onChatClick) {
             onChatClick(chat);
@@ -72,9 +68,9 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
                     const mongoUnread =
                         typeof (chat as any).unreadCount === "number" ? (chat as any).unreadCount : undefined;
                     const unreadCount =
-                        provider === "mongo"
-                            ? mongoUnread || 0
-                            : Object.entries(unreadCounts).find(([key]) => key.startsWith(chat.matrixRoomId!))?.[1] || 0;
+                        mongoUnread ||
+                        Object.entries(unreadCounts).find(([key]) => key.startsWith(getConversationId(chat)))?.[1] ||
+                        0;
 
                     return (
                         <div
@@ -83,9 +79,8 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
                                 "group m-1 flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-gray-100",
                                 {
                                     "bg-gray-200 dark:bg-gray-700":
-                                        provider === "mongo"
-                                            ? activeChatHandle === getCanonicalRoomId(chat)
-                                            : activeChatHandle === (chat.circle?.handle || chat.handle),
+                                        activeChatHandle === getConversationId(chat) ||
+                                        activeChatHandle === (chat.circle?.handle || chat.handle),
                                 },
                             )}
                             onClick={() => handleChatClick(chat)}
@@ -109,10 +104,7 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
                             <div className="flex-1 min-w-0 overflow-hidden">
                                 <p className="truncate text-sm font-medium">{chat.name}</p>
                                 <p className="truncate text-xs text-muted-foreground">
-                                    <LatestMessage
-                                        roomId={provider === "mongo" ? getCanonicalRoomId(chat) : chat.matrixRoomId!}
-                                        latestMessages={latestMessages}
-                                    />
+                                    <LatestMessage roomId={getConversationId(chat)} latestMessages={latestMessages} />
                                 </p>
                             </div>
                             {/* Settings Icon - shows on hover */}

@@ -6,7 +6,7 @@ import { userAtom } from "@/lib/data/atoms";
 import { Circle } from "@/models/models";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import { useRouter } from "next/navigation";
-import { getAllUsersAction, createGroupChatAction, createMongoGroupChatAction, listChatRoomsAction, findOrCreateDMConversationAction } from "./actions";
+import { getAllUsersAction, createMongoGroupChatAction, listChatRoomsAction, findOrCreateDMConversationAction } from "./actions";
 import { getUserPrivateAction } from "../home/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,8 +38,6 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
     const [groupAvatar, setGroupAvatar] = useState<File | null>(null);
     const [groupAvatarPreview, setGroupAvatarPreview] = useState<string | null>(null);
     const [isCreating, setIsCreating] = useState(false);
-    const provider = process.env.NEXT_PUBLIC_CHAT_PROVIDER || "matrix";
-        const isObjectId = (s: string) => /^[a-fA-F0-9]{24}$/.test(s);
 
 
     useEffect(() => {
@@ -64,15 +62,14 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
             const users = await getAllUsersAction();
             setAllUsers(users || []);
 
-            // Mongo: restrict "New Chat" list to users with an existing DM conversation
-            if (provider === "mongo") {
-                try {
-                    const res = await listChatRoomsAction();
-                    const rooms = (res as any)?.rooms || [];
-                    const ids = new Set<string>();
+            // Restrict "New Chat" list to users with an existing DM conversation
+            try {
+                const res = await listChatRoomsAction();
+                const rooms = (res as any)?.rooms || [];
+                const ids = new Set<string>();
 
-                    for (const room of rooms) {
-                        if (!room?.isDirect) continue;
+                for (const room of rooms) {
+                    if (!room?.isDirect) continue;
 
                     // Mongo DM participants are DIDs (not ObjectIds)
                     const dmDids: any[] =
@@ -91,16 +88,12 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
                         ids.add(didStr);
                     }
                 }
-
-console.log("Mongo DM Contact DIDs:", Array.from(ids));
-
-      
-                    setDmContactIds(ids);
-                    console.log("Mongo DM Contact IDs:", Array.from(ids));
-                } catch (e) {
-                    console.error("Error fetching mongo DM contacts:", e);
-                    setDmContactIds(new Set());
-                }
+                console.log("Mongo DM Contact DIDs:", Array.from(ids));
+                setDmContactIds(ids);
+                console.log("Mongo DM Contact IDs:", Array.from(ids));
+            } catch (e) {
+                console.error("Error fetching mongo DM contacts:", e);
+                setDmContactIds(new Set());
             }
         } catch (err) {
             console.error("Error fetching users:", err);
@@ -120,12 +113,12 @@ console.log("Mongo DM Contact DIDs:", Array.from(ids));
                 return false;
             }
 
-            // Mongo: only restrict the default (non-search) New Chat list.
+            // Only restrict the default (non-search) New Chat list.
             // If the user is searching, show normal search results.
-            if (provider === "mongo" && step === "select-type" && !term) {
-            // Mongo DM participants are identified by DID (not Mongo _id)
-                    if (!u.did) return false;
-            return dmContactIds.has(String(u.did));
+            if (step === "select-type" && !term) {
+                // Mongo DM participants are identified by DID (not Mongo _id)
+                if (!u.did) return false;
+                return dmContactIds.has(String(u.did));
             }
 
             const nameMatch = u.name?.toLowerCase().includes(term);
@@ -133,12 +126,10 @@ console.log("Mongo DM Contact DIDs:", Array.from(ids));
 
             return nameMatch || handleMatch;
         });
-    }, [allUsers, searchTerm, user?._id, provider, step, dmContactIds]);
+    }, [allUsers, searchTerm, user?._id, step, dmContactIds]);
 
     const handleUserClick = (clickedUser: Circle) => {
-    if (step === "select-type") {
-        // Mongo: just navigate to /chat/[handle]
-        if (provider === "mongo") {
+        if (step === "select-type") {
             onClose();
             setTimeout(async () => {
                 const result = await findOrCreateDMConversationAction(clickedUser);
@@ -149,20 +140,10 @@ console.log("Mongo DM Contact DIDs:", Array.from(ids));
             return;
         }
 
-        // Matrix: we route to /chat/[handle] (chat page will resolve/create as needed)
-
-        // Either way: go to /chat/[handle], but close modal first to avoid UI overlay glitches
-        onClose();
-        setTimeout(() => {
-            router.push(`/chat/${clickedUser.handle}`);
-        }, 0);
-        return;
-    }
-
-    if (step === "select-members") {
-        toggleMemberSelection(clickedUser);
-    }
-};
+        if (step === "select-members") {
+            toggleMemberSelection(clickedUser);
+        }
+    };
 
     const toggleMemberSelection = (member: Circle) => {
         if (selectedMembers.find((m) => m._id === member._id)) {
@@ -197,10 +178,7 @@ console.log("Mongo DM Contact DIDs:", Array.from(ids));
                 formData.append("avatar", groupAvatar);
             }
 
-            const result =
-                provider === "mongo"
-                    ? await createMongoGroupChatAction(formData)
-                    : await createGroupChatAction(formData);
+            const result = await createMongoGroupChatAction(formData);
 
             if (result.success && result.roomId) {
                 toast({

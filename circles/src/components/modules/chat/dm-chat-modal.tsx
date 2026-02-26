@@ -7,11 +7,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Circle } from "@/models/models";
 import { CirclePicture } from "../circles/circle-picture";
-import { findOrCreateDMRoomAction, findOrCreateDMConversationAction, sendMongoMessageAction } from "./actions";
+import { findOrCreateDMConversationAction, sendMongoMessageAction } from "./actions";
 import { useToast } from "@/components/ui/use-toast";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
-import { sendRoomMessage } from "@/lib/data/client-matrix";
 
 interface DMModalProps {
     recipient: Circle;
@@ -20,12 +19,11 @@ interface DMModalProps {
 }
 
 export const DmChatModal: React.FC<DMModalProps> = ({ recipient, onClose, initialMessage }) => {
-    const [user, setUser] = useAtom(userAtom);
+    const [user] = useAtom(userAtom);
     const [message, setMessage] = useState(initialMessage || "");
     const [loading, setLoading] = useState(false);
     const router = useRouter();
     const { toast } = useToast();
-    const provider = process.env.NEXT_PUBLIC_CHAT_PROVIDER || "matrix";
 
     const handleSendMessage = async () => {
         if (!user) return;
@@ -33,28 +31,9 @@ export const DmChatModal: React.FC<DMModalProps> = ({ recipient, onClose, initia
         setLoading(true);
 
         try {
-            if (provider === "mongo") {
-                const result = await findOrCreateDMConversationAction(recipient);
-                const conversationId = result.chatRoom?._id || result.chatRoom?.matrixRoomId;
-                if (!result.success || !conversationId) {
-                    toast({
-                        title: "Send Error",
-                        description: "Failed to send chat message: " + result.message,
-                        variant: "destructive",
-                        icon: "error",
-                    });
-                    return;
-                }
-
-                await sendMongoMessageAction(conversationId, message);
-                router.push("/chat/" + conversationId);
-                return;
-            }
-
-            // Get or create the DM room
-            const result = await findOrCreateDMRoomAction(recipient);
-
-            if (!result.success) {
+            const result = await findOrCreateDMConversationAction(recipient);
+            const conversationId = result.chatRoom?._id || result.chatRoom?.matrixRoomId;
+            if (!result.success || !conversationId) {
                 toast({
                     title: "Send Error",
                     description: "Failed to send chat message: " + result.message,
@@ -64,16 +43,8 @@ export const DmChatModal: React.FC<DMModalProps> = ({ recipient, onClose, initia
                 return;
             }
 
-            // send the message
-            await sendRoomMessage(user.matrixAccessToken!, user.matrixUrl!, result.chatRoom!.matrixRoomId!, message);
-
-            // update user private data as it will have new chat membership data
-            if (result.user) {
-                setUser(result.user);
-            }
-
-            // Redirect to the chat
-            router.push("/chat/" + recipient.handle);
+            await sendMongoMessageAction(conversationId, message);
+            router.push("/chat/" + conversationId);
         } catch (error) {
             console.error("Error sending DM:", error);
         } finally {
