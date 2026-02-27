@@ -46,65 +46,59 @@ export const resolveMongoConversationAccess = async (conversationId: string, use
 
     // If conversationId is actually a handle (e.g. "dm-..."), try resolving by handle.
     if (!conversation) {
-    // You'll need the correct collection name here (likely ChatConversations)
-        const { ChatConversations } = await import("@/lib/data/db"); // or wherever it is
+        const { ChatConversations } = await import("@/lib/data/db");
         conversation = await ChatConversations.findOne({ handle: conversationId });
     }
+
     if (!conversation) {
         return { ok: false, message: "Chat not found" };
     }
 
-    console.log("DEBUG resolveMongoConversationAccess", {
-        conversationId,
-        userDid,
-        conversation: {
-            _id: (conversation as any)?._id,
-            type: (conversation as any)?.type,
-            handle: (conversation as any)?.handle,
-            circleId: (conversation as any)?.circleId,
-            participants: (conversation as any)?.participants,
-        },
-    });
+    const unauthorized = { ok: false as const, message: "You are not authorized to access this chat" };
 
-    // DM access should be based on participants, not circle membership.
-    // Some legacy/bootstrapped DM conversations may have a circleId set; ignore it for DMs.
+    // DM: authorize strictly by participants list
     if (conversation.type === "dm") {
-        if (!conversation.participants?.includes(userDid)) {
-            return { ok: false, message: "You are not authorized to access this chat" };
-        }
+        if (!conversation.participants?.includes(userDid)) return unauthorized;
         return { ok: true, conversation };
     }
 
+    // Owner "user circle" group: allow only the owner DID (even if membership doc missing)
     if (conversation.circleId) {
         const circle = await getCircleById(conversation.circleId);
-
-        // 🔒 Security: user-circle chats must never be world-readable.
-        // If a "user" circle is being treated as a group chat, only the owner may access it.
-        // (DMs should be conversation.type === "dm" and authorized via participants below.)
         if (circle?.circleType === "user") {
-        if (!circle.did) {
-            return { ok: false, message: "You are not authorized to access this chat" };
-            }
-        if (circle.did !== userDid) {
-            return { ok: false, message: "You are not authorized to access this chat" };
+            if (!circle.did) return unauthorized;
+            if (circle.did !== userDid) return unauthorized;
+            return { ok: true, conversation };
         }
-        return { ok: true, conversation };
     }
 
-    // Normal circle/group chat authorization
-    const authorized = await isAuthorized(userDid, conversation.circleId, features.chat.view);
-    if (!authorized) {
-        return { ok: false, message: "You are not authorized to access this chat" };
-    }
-    return { ok: true, conversation };
-}
+    // Non-DM: enforce strict membership in ChatRoomMembers
+    const { ChatRoomMembers } = await import("@/lib/data/db");
+    const { ObjectId } = await import("mongodb");
 
-    if (!conversation.participants?.includes(userDid)) {
-        return { ok: false, message: "You are not authorized to access this chat" };
+    const chatRoomId = String((conversation as any)._id);
+    const membershipQuery: any = { userDid, chatRoomId };
+    // Handle both string and ObjectId-stored chatRoomId values
+    if (ObjectId.isValid(chatRoomId)) {
+        membershipQuery.$or = [{ userDid, chatRoomId }, { userDid, chatRoomId: new ObjectId(chatRoomId) }];
+        delete membershipQuery.chatRoomId;
     }
+
+    const membership: any = await ChatRoomMembers.findOne(membershipQuery);
+    if (!membership) return unauthorized;
+
+    // Reject explicit removed/left/inactive statuses (and any other non-active status if present)
+    const membershipStatus = typeof membership.status === "string" ? membership.status.toLowerCase() : undefined;
+    if (membershipStatus === "removed" || membershipStatus === "left" || membershipStatus === "inactive") return unauthorized;
+    if (membershipStatus && membershipStatus !== "active") return unauthorized;
+
+    // Reject boolean flags if present
+    if ((membership as any).active === false || (membership as any).isActive === false) return unauthorized;
 
     return { ok: true, conversation };
 };
+
+
 
 export const listChatRoomsAction = async (): Promise<{ success: boolean; rooms?: ChatRoomDisplay[]; message?: string }> => {
     const userDid = await getAuthenticatedUserDid();
