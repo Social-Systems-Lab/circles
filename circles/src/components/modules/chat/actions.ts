@@ -817,50 +817,22 @@ export const updateGroupAvatarAction = async (
             return { success: false, message: "Cannot update avatar for direct messages" };
         }
 
-        const user = await getPrivateUserByDid(userDid);
-        if (!user?.matrixAccessToken) {
-            return { success: false, message: "User does not have a valid Matrix access token" };
+        const { saveFile } = await import("@/lib/data/storage");
+        const { getCircleByDid, getCircleById } = await import("@/lib/data/circle");
+        const ownerCircle = chatRoom.circleId ? await getCircleById(chatRoom.circleId) : await getCircleByDid(userDid);
+        if (!ownerCircle?._id) {
+            return { success: false, message: "Could not resolve storage owner" };
         }
 
-        const { uploadMatrixMedia, updateMatrixRoomNameAndAvatar } = await import("@/lib/data/matrix");
-        const matrixUrl = user.matrixUrl || `http://${process.env.MATRIX_HOST || "127.0.0.1"}:${process.env.MATRIX_PORT || "8008"}`;
-        
-        const buffer = Buffer.from(await file.arrayBuffer());
-        
-        // Upload media to Matrix
-        const mxcUrl = await uploadMatrixMedia(
-            user.matrixAccessToken,
-            matrixUrl,
-            buffer,
-            file.type,
-            file.name
-        );
-
-        // Convert MXC URL to HTTP URL for local DB
-        let httpAvatarUrl = mxcUrl;
-        if (mxcUrl.startsWith("mxc://")) {
-            // Use localhost (nginx) to benefit from direct file serving
-            // In production this would be the public media repo URL
-            httpAvatarUrl = `${matrixUrl}/_matrix/media/v3/download/${mxcUrl.replace("mxc://", "")}`;
-        }
-
-        // Update Matrix room avatar
-        if (chatRoom.matrixRoomId) {
-            try {
-                await updateMatrixRoomNameAndAvatar(chatRoom.matrixRoomId, chatRoom.name, mxcUrl);
-            } catch (matrixError) {
-                console.error("Failed to update Matrix room avatar:", matrixError);
-                // Continue to update local DB
-            }
-        }
+        const fileInfo = await saveFile(file, "chat-group-avatar", ownerCircle._id as string, true);
 
         // Update in our database
         await import("@/lib/data/chat").then(m => m.updateChatRoom({
             _id: chatRoomId,
-            picture: { url: httpAvatarUrl }
+            picture: { url: fileInfo.url }
         }));
 
-        return { success: true, pictureUrl: httpAvatarUrl };
+        return { success: true, pictureUrl: fileInfo.url };
     } catch (error) {
         console.error("❌ Error updating group avatar:", error);
         return { success: false, message: error instanceof Error ? error.message : "Failed to update group avatar" };
