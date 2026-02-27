@@ -18,7 +18,7 @@ import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 interface ChatListProps {
     chats: ChatRoomDisplay[];
-    onChatClick?: (chat: ChatRoomDisplay) => void;
+    onChatClick?: (chat: ChatRoomDisplay) => void | Promise<void>;
 }
 
 export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
@@ -47,11 +47,11 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
         return chatsCopy;
     }, [chats, latestMessages]);
 
-    const handleChatClick = (chat: ChatRoomDisplay) => {
+    const handleChatClick = async (chat: ChatRoomDisplay) => {
         const path = `/chat/${getConversationId(chat)}`;
         router.push(path);
         if (onChatClick) {
-            onChatClick(chat);
+            await onChatClick(chat);
         }
     };
 
@@ -65,6 +65,10 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
         <div>
             {sortedChats.length > 0 ? (
                 sortedChats.map((chat) => {
+                    const groupMemberCount =
+                        !chat.isDirect && typeof (chat as any).memberCount === "number"
+                            ? ((chat as any).memberCount as number)
+                            : undefined;
                     const mongoUnread =
                         typeof (chat as any).unreadCount === "number" ? (chat as any).unreadCount : undefined;
                     const unreadCount =
@@ -83,7 +87,9 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
                                         activeChatHandle === (chat.circle?.handle || chat.handle),
                                 },
                             )}
-                            onClick={() => handleChatClick(chat)}
+                            onClick={() => {
+                                void handleChatClick(chat);
+                            }}
                         >
                             <div className="relative">
                                 <CirclePicture
@@ -102,7 +108,14 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
                                 )}
                             </div>
                             <div className="flex-1 min-w-0 overflow-hidden">
-                                <p className="truncate text-sm font-medium">{chat.name}</p>
+                                <p className="truncate text-sm font-medium">
+                                    {chat.name}
+                                    {groupMemberCount !== undefined && (
+                                        <span className="ml-1 text-xs font-normal text-muted-foreground">
+                                            · {groupMemberCount} {groupMemberCount === 1 ? "member" : "members"}
+                                        </span>
+                                    )}
+                                </p>
                                 <p className="truncate text-xs text-muted-foreground">
                                     <LatestMessage roomId={getConversationId(chat)} latestMessages={latestMessages} />
                                 </p>

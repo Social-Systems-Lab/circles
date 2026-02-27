@@ -14,11 +14,10 @@ import {
     toggleReaction,
     updateMessage,
 } from "@/lib/data/mongo-chat";
-import { ChatMessageDocs, Members } from "@/lib/data/db";
+import { ChatMessageDocs, ChatRoomMembers, ChatRooms, Members } from "@/lib/data/db";
 import { getCircleByDid, getCircleById, getCirclesByDids } from "@/lib/data/circle";
 import { saveFile } from "@/lib/data/storage";
-import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
-import { features } from "@/lib/data/constants";
+import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { listChatRoomsForUser } from "@/lib/data/chat";
 
 const normalizeMediaUrl = (url?: string): string | undefined => {
@@ -39,6 +38,17 @@ const normalizeMediaUrl = (url?: string): string | undefined => {
     }
 
     return url;
+};
+
+const isActiveGroupMembership = (membership: any): boolean => {
+    if (!membership) return false;
+
+    const membershipStatus = typeof membership.status === "string" ? membership.status.toLowerCase() : undefined;
+    if (membershipStatus === "removed" || membershipStatus === "left" || membershipStatus === "inactive") return false;
+    if (membershipStatus && membershipStatus !== "active") return false;
+    if ((membership as any).active === false || (membership as any).isActive === false) return false;
+
+    return true;
 };
 
 export const resolveMongoConversationAccess = async (conversationId: string, userDid: string) => {
@@ -62,20 +72,7 @@ export const resolveMongoConversationAccess = async (conversationId: string, use
         return { ok: true, conversation };
     }
 
-    // Owner "user circle" group: allow only the owner DID (even if membership doc missing)
-    if (conversation.circleId) {
-        const circle = await getCircleById(conversation.circleId);
-        if (circle?.circleType === "user") {
-            if (!circle.did) return unauthorized;
-            if (circle.did !== userDid) return unauthorized;
-            return { ok: true, conversation };
-        }
-    }
-
     // Non-DM: enforce strict membership in ChatRoomMembers
-    const { ChatRoomMembers } = await import("@/lib/data/db");
-    const { ObjectId } = await import("mongodb");
-
     const chatRoomId = String((conversation as any)._id);
     const membershipQuery: any = { userDid, chatRoomId };
     // Handle both string and ObjectId-stored chatRoomId values
@@ -87,13 +84,7 @@ export const resolveMongoConversationAccess = async (conversationId: string, use
     const membership: any = await ChatRoomMembers.findOne(membershipQuery);
     if (!membership) return unauthorized;
 
-    // Reject explicit removed/left/inactive statuses (and any other non-active status if present)
-    const membershipStatus = typeof membership.status === "string" ? membership.status.toLowerCase() : undefined;
-    if (membershipStatus === "removed" || membershipStatus === "left" || membershipStatus === "inactive") return unauthorized;
-    if (membershipStatus && membershipStatus !== "active") return unauthorized;
-
-    // Reject boolean flags if present
-    if ((membership as any).active === false || (membership as any).isActive === false) return unauthorized;
+    if (!isActiveGroupMembership(membership)) return unauthorized;
 
     return { ok: true, conversation };
 };
@@ -108,10 +99,45 @@ export const listChatRoomsAction = async (): Promise<{ success: boolean; rooms?:
 
     try {
         const rooms = await listChatRoomsForUser(userDid);
+        const groupRoomIds = rooms
+            .filter((room) => !room.isDirect && typeof room._id === "string" && room._id.length > 0)
+            .map((room) => room._id as string);
+        const groupRoomObjectIds = groupRoomIds.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id));
+
+        const groupRooms = groupRoomObjectIds.length
+            ? await ChatRooms.find({ _id: { $in: groupRoomObjectIds } }, { projection: { _id: 1, picture: 1 } }).toArray()
+            : [];
+        const groupRoomById = new Map(groupRooms.map((room: any) => [room._id.toString(), room]));
+
+        const memberQuery: any = { $or: [{ chatRoomId: { $in: groupRoomIds } }] };
+        if (groupRoomObjectIds.length > 0) {
+            memberQuery.$or.push({ chatRoomId: { $in: groupRoomObjectIds } });
+        }
+        const memberships =
+            groupRoomIds.length > 0
+                ? await ChatRoomMembers.find(memberQuery, {
+                      projection: { chatRoomId: 1, status: 1, active: 1, isActive: 1 },
+                  }).toArray()
+                : [];
+
+        const groupMemberCounts = new Map<string, number>();
+        for (const membership of memberships) {
+            if (!isActiveGroupMembership(membership)) continue;
+            const rawChatRoomId = (membership as any).chatRoomId;
+            const chatRoomId = typeof rawChatRoomId === "string" ? rawChatRoomId : rawChatRoomId?.toString?.();
+            if (!chatRoomId) continue;
+            groupMemberCounts.set(chatRoomId, (groupMemberCounts.get(chatRoomId) || 0) + 1);
+        }
+
         const conversationIds = rooms.map((room) => room._id || room.handle).filter(Boolean) as string[];
         const unreadCounts = await getUnreadCountsForUser(userDid, conversationIds);
         const roomsWithUnread = rooms.map((room) => ({
             ...room,
+            picture:
+                room.picture ||
+                (!room.isDirect && typeof room._id === "string" ? (groupRoomById.get(room._id)?.picture as any) : undefined),
+            memberCount:
+                !room.isDirect && typeof room._id === "string" ? groupMemberCounts.get(room._id) || 0 : undefined,
             unreadCount: room._id || room.handle ? unreadCounts[(room._id || room.handle) as string] || 0 : 0,
         }));
         return { success: true, rooms: roomsWithUnread };
