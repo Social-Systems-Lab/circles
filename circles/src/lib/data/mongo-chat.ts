@@ -37,6 +37,50 @@ const isActiveGroupMembership = (membership: any): boolean => {
     return true;
 };
 
+const normalizeMediaUrl = (url?: string): string | undefined => {
+    if (!url) return undefined;
+
+    if (url.startsWith("/storage/") || url.startsWith("/uploads/")) {
+        return url;
+    }
+
+    const storageIndex = url.indexOf("/storage/");
+    if (storageIndex >= 0) {
+        return url.slice(storageIndex);
+    }
+
+    const hostStyleMatch = url.match(/^[A-Za-z0-9.-]+\/storage\/.+$/);
+    if (hostStyleMatch) {
+        return `/${url.slice(url.indexOf("storage/"))}`;
+    }
+
+    return url;
+};
+
+type ConversationMediaKind = "image" | "video" | "file";
+
+type ConversationMediaItem = {
+    url: string;
+    mime: string;
+    name?: string;
+    size?: number;
+    kind: ConversationMediaKind;
+    createdAt: Date;
+    messageId: string;
+};
+
+const inferMediaKind = (mimeType?: string, name?: string): ConversationMediaKind => {
+    const normalizedMime = (mimeType || "").toLowerCase();
+    if (normalizedMime.startsWith("image/")) return "image";
+    if (normalizedMime.startsWith("video/")) return "video";
+
+    const normalizedName = (name || "").toLowerCase();
+    if (/\.(png|jpe?g|gif|webp|bmp|svg|avif)$/i.test(normalizedName)) return "image";
+    if (/\.(mp4|mov|webm|avi|mkv|m4v)$/i.test(normalizedName)) return "video";
+
+    return "file";
+};
+
 export const createConversation = async (conversation: ChatConversation): Promise<ChatConversation> => {
     const result = await ChatConversations.insertOne(conversation);
     return normalizeConversation({ ...conversation, _id: result.insertedId.toString() });
@@ -354,3 +398,56 @@ export const getUnreadCountsForUser = async (
 
     return counts;
 };
+
+export async function listConversationMedia(
+    conversationId: string,
+    kind?: "image" | "video" | "file",
+    limit: number = 50,
+): Promise<ConversationMediaItem[]> {
+    if (!conversationId) return [];
+
+    const safeLimit = Math.min(Math.max(limit, 1), 200);
+    const messages = (await ChatMessageDocs.find(
+        {
+            conversationId,
+            attachments: { $exists: true, $ne: [] },
+        },
+        {
+            projection: { _id: 1, createdAt: 1, attachments: 1 },
+        },
+    )
+        .sort({ createdAt: -1, _id: -1 })
+        .toArray()) as Array<Pick<ChatMessageDoc, "_id" | "createdAt" | "attachments">>;
+
+    const media: ConversationMediaItem[] = [];
+    for (const message of messages) {
+        const messageId = message?._id ? String(message._id) : "";
+        if (!messageId || !Array.isArray(message.attachments)) {
+            continue;
+        }
+
+        for (const attachment of message.attachments) {
+            const url = normalizeMediaUrl(attachment?.url) || attachment?.url;
+            if (!url) continue;
+
+            const attachmentKind = inferMediaKind(attachment?.mimeType, attachment?.name);
+            if (kind && attachmentKind !== kind) continue;
+
+            media.push({
+                url,
+                mime: attachment?.mimeType || "application/octet-stream",
+                name: attachment?.name,
+                size: attachment?.size,
+                kind: attachmentKind,
+                createdAt: message.createdAt,
+                messageId,
+            });
+
+            if (media.length >= safeLimit) {
+                return media;
+            }
+        }
+    }
+
+    return media;
+}

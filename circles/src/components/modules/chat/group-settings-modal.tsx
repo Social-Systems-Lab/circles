@@ -88,7 +88,7 @@ export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: Gr
                         </TabsContent>
 
                         <TabsContent value="media" className="mt-0">
-                            <MediaTab chatRoom={chatRoom} />
+                            <MediaTab chatRoom={chatRoom} isActive={activeTab === "media"} />
                         </TabsContent>
 
                         <TabsContent value="settings" className="mt-0">
@@ -635,26 +635,163 @@ function MembersTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin:
 }
 
 // Media Tab Component
-function MediaTab({ chatRoom }: { chatRoom: ChatRoomDisplay }) {
+type ConversationMediaItem = {
+    url: string;
+    mime: string;
+    name?: string;
+    size?: number;
+    kind: "image" | "video" | "file";
+    createdAt: string | Date;
+    messageId: string;
+};
+
+const formatBytes = (value?: number): string => {
+    if (typeof value !== "number" || Number.isNaN(value) || value <= 0) return "";
+    if (value < 1024) return `${value} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+function MediaTab({ chatRoom, isActive }: { chatRoom: ChatRoomDisplay; isActive: boolean }) {
+    const [activeMediaType, setActiveMediaType] = useState<"image" | "video" | "file">("image");
+    const [mediaItems, setMediaItems] = useState<ConversationMediaItem[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!isActive || !chatRoom?._id) {
+            return;
+        }
+
+        let cancelled = false;
+        const loadMedia = async () => {
+            setIsLoading(true);
+            setError(null);
+
+            try {
+                const { listConversationMediaAction } = await import("./actions");
+                const result = await listConversationMediaAction(chatRoom._id as string);
+                if (cancelled) return;
+                if (result.success) {
+                    setMediaItems(result.media || []);
+                } else {
+                    setError(result.message || "Failed to load media");
+                    setMediaItems([]);
+                }
+            } catch (loadError) {
+                console.error("Error loading conversation media:", loadError);
+                if (!cancelled) {
+                    setError("Failed to load media");
+                    setMediaItems([]);
+                }
+            } finally {
+                if (!cancelled) {
+                    setIsLoading(false);
+                }
+            }
+        };
+
+        void loadMedia();
+        return () => {
+            cancelled = true;
+        };
+    }, [isActive, chatRoom?._id]);
+
+    const images = mediaItems.filter((item) => item.kind === "image");
+    const videos = mediaItems.filter((item) => item.kind === "video");
+    const files = mediaItems.filter((item) => item.kind === "file");
+    const visibleItems = activeMediaType === "image" ? images : activeMediaType === "video" ? videos : files;
+
     return (
         <div className="space-y-4">
             <div className="flex gap-2 border-b">
-                <button className="px-4 py-2 border-b-2 border-blue-500 font-medium">
+                <button
+                    onClick={() => setActiveMediaType("image")}
+                    className={`px-4 py-2 ${activeMediaType === "image" ? "border-b-2 border-blue-500 font-medium" : "text-gray-500 hover:text-gray-700"}`}
+                >
                     Images
                 </button>
-                <button className="px-4 py-2 text-gray-500 hover:text-gray-700">
+                <button
+                    onClick={() => setActiveMediaType("video")}
+                    className={`px-4 py-2 ${activeMediaType === "video" ? "border-b-2 border-blue-500 font-medium" : "text-gray-500 hover:text-gray-700"}`}
+                >
                     Videos
                 </button>
-                <button className="px-4 py-2 text-gray-500 hover:text-gray-700">
+                <button
+                    onClick={() => setActiveMediaType("file")}
+                    className={`px-4 py-2 ${activeMediaType === "file" ? "border-b-2 border-blue-500 font-medium" : "text-gray-500 hover:text-gray-700"}`}
+                >
                     Files
                 </button>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
-                <p className="col-span-3 text-center text-sm text-gray-500 py-8">
-                    No media shared yet
-                </p>
-            </div>
+            {isLoading && <p className="text-center text-sm text-gray-500 py-8">Loading media...</p>}
+            {!isLoading && error && <p className="text-center text-sm text-red-500 py-8">{error}</p>}
+
+            {!isLoading && !error && activeMediaType === "image" && (
+                <div className="grid grid-cols-3 gap-2">
+                    {visibleItems.length === 0 ? (
+                        <p className="col-span-3 text-center text-sm text-gray-500 py-8">No media shared yet</p>
+                    ) : (
+                        visibleItems.map((item) => (
+                            <a key={`${item.messageId}-${item.url}`} href={item.url} target="_blank" rel="noopener noreferrer">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                    src={item.url}
+                                    alt={item.name || "Image attachment"}
+                                    className="h-24 w-full rounded-md object-cover hover:opacity-90"
+                                />
+                            </a>
+                        ))
+                    )}
+                </div>
+            )}
+
+            {!isLoading && !error && activeMediaType === "video" && (
+                <div className="space-y-3">
+                    {visibleItems.length === 0 ? (
+                        <p className="text-center text-sm text-gray-500 py-8">No media shared yet</p>
+                    ) : (
+                        visibleItems.map((item) => (
+                            <div key={`${item.messageId}-${item.url}`} className="rounded-lg border p-3">
+                                <video controls className="w-full rounded-md max-h-64">
+                                    <source src={item.url} type={item.mime || "video/mp4"} />
+                                </video>
+                                <div className="mt-2 text-sm text-gray-600">
+                                    <p className="truncate font-medium text-gray-800">{item.name || "Video file"}</p>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            )}
+
+            {!isLoading && !error && activeMediaType === "file" && (
+                <div className="space-y-2">
+                    {visibleItems.length === 0 ? (
+                        <p className="text-center text-sm text-gray-500 py-8">No media shared yet</p>
+                    ) : (
+                        visibleItems.map((item) => (
+                            <a
+                                key={`${item.messageId}-${item.url}`}
+                                href={item.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-between rounded-lg border p-3 hover:bg-gray-50"
+                            >
+                                <div className="min-w-0">
+                                    <p className="truncate font-medium text-gray-800">{item.name || "File attachment"}</p>
+                                    <p className="text-xs text-gray-500">
+                                        {item.mime}
+                                        {item.size ? ` · ${formatBytes(item.size)}` : ""}
+                                    </p>
+                                </div>
+                                <span className="ml-3 text-xs text-blue-600">Open</span>
+                            </a>
+                        ))
+                    )}
+                </div>
+            )}
         </div>
     );
 }

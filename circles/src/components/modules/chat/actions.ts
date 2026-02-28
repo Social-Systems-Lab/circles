@@ -19,7 +19,7 @@ import {
 } from "@/lib/data/chat";
 import { addUserToRoom } from "@/lib/data/matrix";
 import { features } from "@/lib/data/constants";
-import { ensureConversationForCircle } from "@/lib/data/mongo-chat";
+import { ensureConversationForCircle, listConversationMedia } from "@/lib/data/mongo-chat";
 import { listChatRoomsForUser } from "@/lib/data/chat";
 import {
     listChatRoomsAction as listMongoChatRoomsAction,
@@ -33,6 +33,7 @@ import {
     createMongoGroupChatAction as createMongoGroupChatActionInternal,
     getUnreadCountsAction as getUnreadCountsActionInternal,
     markConversationReadAction as markConversationReadActionInternal,
+    resolveMongoConversationAccess as resolveMongoConversationAccessInternal,
 } from "./mongo-actions";
 
 const parseEnvFlag = (value?: string | null) => {
@@ -350,6 +351,39 @@ export const markConversationReadAction = async (conversationId: string, lastSee
         return { success: false, message: "Mongo chat is disabled in this environment." };
     }
     return await markConversationReadActionInternal(conversationId, lastSeenMessageId);
+};
+
+export const listConversationMediaAction = async (
+    conversationId: string,
+    kind?: "image" | "video" | "file",
+    limit: number = 50,
+): Promise<{
+    success: boolean;
+    media?: Awaited<ReturnType<typeof listConversationMedia>>;
+    message?: string;
+}> => {
+    const provider = getChatProvider();
+    if (provider !== "mongo") {
+        return { success: false, message: "Mongo chat is disabled in this environment." };
+    }
+
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to view media" };
+    }
+
+    const access = await resolveMongoConversationAccessInternal(conversationId, userDid);
+    if (!access.ok) {
+        return { success: false, message: access.message };
+    }
+
+    try {
+        const media = await listConversationMedia(conversationId, kind, limit);
+        return { success: true, media };
+    } catch (error) {
+        console.error("❌ Error listing conversation media:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to load media" };
+    }
 };
 
 export const sendMessageAction = async (
