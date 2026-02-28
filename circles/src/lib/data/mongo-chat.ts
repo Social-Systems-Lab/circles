@@ -223,6 +223,7 @@ export const listConversationsForUser = async (userDid: string, circleIds: strin
             _id: conversation._id.toString(),
             matrixRoomId: conversation._id.toString(),
             name: circle?.name || otherCircle?.name || conversation.name || "Chat",
+            description: conversation.description || circle?.description,
             handle: circle?.handle || (isDirect ? conversation.handle : otherCircle?.handle) || conversation.handle || "chat",
             circleId: conversation.circleId,
             createdAt: conversation.createdAt,

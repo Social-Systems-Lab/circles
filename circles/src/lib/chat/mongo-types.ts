@@ -20,6 +20,7 @@ export type ChatConversation = {
     _id?: any;
     type: ChatConversationType;
     name?: string;
+    description?: string;
     handle?: string;
     circleId?: string;
     participants: string[];

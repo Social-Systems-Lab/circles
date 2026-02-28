@@ -16,6 +16,37 @@ interface GroupSettingsModalProps {
 
 export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: GroupSettingsModalProps) {
     const [activeTab, setActiveTab] = useState("info");
+    const [canEditInfo, setCanEditInfo] = useState(false);
+
+    useEffect(() => {
+        if (!open || !chatRoom?._id) {
+            setCanEditInfo(false);
+            return;
+        }
+
+        let cancelled = false;
+
+        const checkEditPermission = async () => {
+            try {
+                const { canEditGroupInfoAction } = await import("./actions");
+                const result = await canEditGroupInfoAction(chatRoom._id as string);
+                if (!cancelled) {
+                    setCanEditInfo(result.success && result.isAdmin === true);
+                }
+            } catch (error) {
+                console.error("Error checking group info permissions:", error);
+                if (!cancelled) {
+                    setCanEditInfo(false);
+                }
+            }
+        };
+
+        void checkEditPermission();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [open, chatRoom?._id]);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -49,7 +80,7 @@ export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: Gr
 
                     <div className="flex-1 overflow-y-auto mt-4">
                         <TabsContent value="info" className="mt-0">
-                            <InfoTab chatRoom={chatRoom} isAdmin={isAdmin} />
+                            <InfoTab chatRoom={chatRoom} canEditInfo={canEditInfo} />
                         </TabsContent>
 
                         <TabsContent value="members" className="mt-0">
@@ -71,12 +102,44 @@ export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: Gr
 }
 
 // Info Tab Component
-function InfoTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin: boolean }) {
+function InfoTab({ chatRoom, canEditInfo }: { chatRoom: ChatRoomDisplay; canEditInfo: boolean }) {
+    const initialDescription = typeof chatRoom.description === "string" ? chatRoom.description : "";
     const [isEditing, setIsEditing] = useState(false);
     const [editedName, setEditedName] = useState(chatRoom.name);
-    const [editedDescription, setEditedDescription] = useState("");
+    const [editedDescription, setEditedDescription] = useState(initialDescription);
     const [isSaving, setIsSaving] = useState(false);
+    const [memberCount, setMemberCount] = useState<number>(
+        typeof (chatRoom as any).memberCount === "number" ? ((chatRoom as any).memberCount as number) : 0,
+    );
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const fetchMemberCount = async () => {
+            try {
+                const { getActiveChatRoomMemberCountAction } = await import("./actions");
+                const result = await getActiveChatRoomMemberCountAction(chatRoom._id as string);
+                if (!cancelled && result.success && typeof result.memberCount === "number") {
+                    setMemberCount(result.memberCount);
+                }
+            } catch (error) {
+                console.error("Error fetching member count:", error);
+            }
+        };
+
+        void fetchMemberCount();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [chatRoom._id]);
+
+    useEffect(() => {
+        setEditedName(chatRoom.name);
+        setEditedDescription(typeof chatRoom.description === "string" ? chatRoom.description : "");
+        setIsEditing(false);
+    }, [chatRoom._id, chatRoom.name, chatRoom.description]);
 
     const handleSave = async () => {
         setIsSaving(true);
@@ -137,7 +200,7 @@ function InfoTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin: bo
 
     const handleCancel = () => {
         setEditedName(chatRoom.name);
-        setEditedDescription("");
+        setEditedDescription(typeof chatRoom.description === "string" ? chatRoom.description : "");
         setIsEditing(false);
     };
 
@@ -153,7 +216,7 @@ function InfoTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin: bo
                     }}
                     size="120px"
                 />
-                {isAdmin && (
+                {canEditInfo && (
                     <>
                         <input
                             type="file"
@@ -177,7 +240,7 @@ function InfoTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin: bo
             <div>
                 <label className="text-sm font-medium text-gray-500">Group Name</label>
                 <div className="mt-1">
-                    {isAdmin && isEditing ? (
+                    {canEditInfo && isEditing ? (
                         <input
                             type="text"
                             value={editedName}
@@ -195,7 +258,7 @@ function InfoTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin: bo
             <div>
                 <label className="text-sm font-medium text-gray-500">Description</label>
                 <div className="mt-1">
-                    {isAdmin && isEditing ? (
+                    {canEditInfo && isEditing ? (
                         <textarea
                             value={editedDescription}
                             onChange={(e) => setEditedDescription(e.target.value)}
@@ -212,7 +275,7 @@ function InfoTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin: bo
             </div>
 
             {/* Edit/Save/Cancel Buttons */}
-            {isAdmin && (
+            {canEditInfo && (
                 <div className="flex gap-2">
                     {isEditing ? (
                         <>
@@ -245,7 +308,7 @@ function InfoTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin: bo
             {/* Group Info */}
             <div className="space-y-2 text-sm text-gray-600">
                 <p>Created {new Date(chatRoom.createdAt).toLocaleDateString()}</p>
-                <p>Group · 0 members</p>
+                <p>Group · {memberCount} {memberCount === 1 ? "member" : "members"}</p>
             </div>
         </div>
     );

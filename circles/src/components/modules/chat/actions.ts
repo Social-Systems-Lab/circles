@@ -45,6 +45,59 @@ const isMatrixEnabled = () => parseEnvFlag(process.env.MATRIX_ENABLED);
 const matrixDisabledMessage = "Matrix chat is disabled in this environment.";
 const getChatProvider = () => "mongo";
 
+const isActiveChatRoomMembership = (membership: any): boolean => {
+    if (!membership) return false;
+
+    const membershipStatus = typeof membership.status === "string" ? membership.status.toLowerCase() : undefined;
+    if (membershipStatus === "removed" || membershipStatus === "left" || membershipStatus === "inactive") {
+        return false;
+    }
+    if (membershipStatus && membershipStatus !== "active") {
+        return false;
+    }
+    if (membership.active === false || membership.isActive === false) {
+        return false;
+    }
+
+    return true;
+};
+
+const getMembershipJoinedAt = (membership: any): number => {
+    if (!membership?.joinedAt) return Number.MAX_SAFE_INTEGER;
+    const timestamp = new Date(membership.joinedAt).getTime();
+    return Number.isNaN(timestamp) ? Number.MAX_SAFE_INTEGER : timestamp;
+};
+
+const isRequesterAdmin = (userDid: string, members: any[]): boolean => {
+    const requester = members.find((member) => member.userDid === userDid);
+    if (!requester) return false;
+
+    if (requester.role === "admin") {
+        return true;
+    }
+
+    const hasExplicitAdmin = members.some((member) => member.role === "admin");
+    if (hasExplicitAdmin) {
+        return false;
+    }
+
+    // Backward-compat fallback for legacy rooms without role data:
+    // treat the earliest joined member as the effective admin.
+    const earliestMember = members.reduce(
+        (earliest, current) =>
+            getMembershipJoinedAt(current) < getMembershipJoinedAt(earliest) ? current : earliest,
+        members[0],
+    );
+
+    return earliestMember?.userDid === userDid;
+};
+
+const canUserEditGroupInfo = async (chatRoomId: string, userDid: string): Promise<boolean> => {
+    const { getChatRoomMembers } = await import("@/lib/data/chat");
+    const members = await getChatRoomMembers(chatRoomId);
+    return isRequesterAdmin(userDid, members as any[]);
+};
+
 export async function joinChatRoomAction(
     chatRoomId: string,
 ): Promise<{ success: boolean; message?: string; chatRoomMember?: ChatRoomMember }> {
@@ -758,31 +811,64 @@ export const updateGroupInfoAction = async (
             return { success: false, message: "Cannot update a direct message" };
         }
 
-        // TODO: Check if user is admin
-        // For now, we'll allow any member to update (should be restricted to admins)
+        const canEdit = await canUserEditGroupInfo(chatRoomId, userDid);
+        if (!canEdit) {
+            return { success: false, message: "You are not authorized to update group info" };
+        }
 
-        // Update in our database
+        const conversationUpdates: Record<string, any> = {};
+        if (typeof updates.name === "string") {
+            conversationUpdates.name = updates.name;
+        }
+        if (typeof updates.description === "string") {
+            conversationUpdates.description = updates.description;
+        }
+        conversationUpdates.updatedAt = new Date();
+
+        // Keep ChatRooms in sync for legacy readers.
         await import("@/lib/data/chat").then(m => m.updateChatRoom({
             _id: chatRoomId,
             ...updates,
         }));
 
-        // Update in Matrix if name changed (non-blocking)
-        if (updates.name && chatRoom.matrixRoomId) {
-            try {
-                const { updateMatrixRoomNameAndAvatar } = await import("@/lib/data/matrix");
-                await updateMatrixRoomNameAndAvatar(chatRoom.matrixRoomId, updates.name);
-            } catch (matrixError) {
-                console.error("Failed to update Matrix room name:", matrixError);
-                // Don't fail the whole operation if Matrix update fails
-                // The database update succeeded, which is what matters
-            }
+        // Mongo chat source-of-truth for list/detail display.
+        const { ChatConversations } = await import("@/lib/data/db");
+        const { ObjectId } = await import("mongodb");
+        if (!ObjectId.isValid(chatRoomId)) {
+            return { success: false, message: "Invalid chat room ID" };
         }
+        await ChatConversations.updateOne({ _id: new ObjectId(chatRoomId) }, { $set: conversationUpdates });
 
         return { success: true };
     } catch (error) {
         console.error("❌ Error updating group info:", error);
         return { success: false, message: error instanceof Error ? error.message : "Failed to update group info" };
+    }
+};
+
+export const canEditGroupInfoAction = async (
+    chatRoomId: string,
+): Promise<{ success: boolean; isAdmin?: boolean; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in" };
+    }
+
+    try {
+        const chatRoom = await getChatRoom(chatRoomId);
+        if (!chatRoom) {
+            return { success: false, message: "Chat room not found" };
+        }
+
+        if (chatRoom.isDirect) {
+            return { success: true, isAdmin: false };
+        }
+
+        const canEdit = await canUserEditGroupInfo(chatRoomId, userDid);
+        return { success: true, isAdmin: canEdit };
+    } catch (error) {
+        console.error("❌ Error checking group edit permissions:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to check permissions" };
     }
 };
 
@@ -817,6 +903,12 @@ export const updateGroupAvatarAction = async (
             return { success: false, message: "Cannot update avatar for direct messages" };
         }
 
+        const { getChatRoomMembers } = await import("@/lib/data/chat");
+        const members = await getChatRoomMembers(chatRoomId);
+        if (!isRequesterAdmin(userDid, members as any[])) {
+            return { success: false, message: "You are not authorized to update the group avatar" };
+        }
+
         const { saveFile } = await import("@/lib/data/storage");
         const { getCircleByDid, getCircleById } = await import("@/lib/data/circle");
         const ownerCircle = chatRoom.circleId ? await getCircleById(chatRoom.circleId) : await getCircleByDid(userDid);
@@ -836,6 +928,31 @@ export const updateGroupAvatarAction = async (
     } catch (error) {
         console.error("❌ Error updating group avatar:", error);
         return { success: false, message: error instanceof Error ? error.message : "Failed to update group avatar" };
+    }
+};
+
+export const getActiveChatRoomMemberCountAction = async (
+    chatRoomId: string,
+): Promise<{ success: boolean; memberCount?: number; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in" };
+    }
+
+    try {
+        const chatRoom = await getChatRoom(chatRoomId);
+        if (!chatRoom) {
+            return { success: false, message: "Chat room not found" };
+        }
+
+        const { getChatRoomMembers } = await import("@/lib/data/chat");
+        const members = await getChatRoomMembers(chatRoomId);
+        const activeMemberCount = (members as any[]).filter(isActiveChatRoomMembership).length;
+
+        return { success: true, memberCount: activeMemberCount };
+    } catch (error) {
+        console.error("❌ Error fetching active member count:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to fetch member count" };
     }
 };
 
