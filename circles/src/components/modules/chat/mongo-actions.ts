@@ -10,11 +10,12 @@ import {
     findConversationById,
     findOrCreateDmConversation,
     getUnreadCountsForUser,
+    mapConversationToChatRoomDisplay,
     markConversationRead,
     toggleReaction,
     updateMessage,
 } from "@/lib/data/mongo-chat";
-import { ChatMessageDocs, ChatRoomMembers, ChatRooms, Members } from "@/lib/data/db";
+import { ChatConversations, ChatMessageDocs, ChatRoomMembers, ChatRooms } from "@/lib/data/db";
 import { getCircleByDid, getCircleById, getCirclesByDids } from "@/lib/data/circle";
 import { saveFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
@@ -442,13 +443,27 @@ export const findOrCreateDMConversationAction = async (
     // DM rooms use handle: dm-<didA>-<didB> (sorted)
     const participants = [currentUser.did!, recipient.did!].sort();
     const dmHandle = `dm-${participants[0]}-${participants[1]}`;
+    // Why this broke: list-based rediscovery depends on Members -> allowedCircleIds.
+    // In prod, incomplete Members can hide the DM even when it was just created.
+    const dmConversation =
+        (await ChatConversations.findOne({
+            type: "dm",
+            handle: dmHandle,
+            participants: { $all: participants },
+            archived: { $ne: true },
+        })) ||
+        (await ChatConversations.findOne({
+            type: "dm",
+            participants: { $all: participants },
+            archived: { $ne: true },
+        }));
 
-    const rooms = await listChatRoomsForUser(userDid);
-    const chatRoom = rooms.find((room) => room.handle === dmHandle);
+    if (!dmConversation) {
+        return { success: false, message: "Failed to create DM room" };
+    }
 
-    return chatRoom
-        ? { success: true, chatRoom }
-        : { success: false, message: "Failed to create DM room" };
+    const chatRoom = await mapConversationToChatRoomDisplay(userDid, dmConversation as any);
+    return chatRoom ? { success: true, chatRoom } : { success: false, message: "Failed to create DM room" };
 };
 
 export const createMongoGroupChatAction = async (

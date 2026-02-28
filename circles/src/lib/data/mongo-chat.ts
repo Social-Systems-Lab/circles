@@ -182,6 +182,67 @@ export const ensureConversationForCircle = async (circleId: string): Promise<Cha
     });
 };
 
+const mapConversationsToChatRoomDisplays = async (
+    userDid: string,
+    conversations: ChatConversation[],
+): Promise<ChatRoomDisplay[]> => {
+    const participantDids = Array.from(
+        new Set(conversations.flatMap((conversation) => conversation.participants || [])),
+    );
+    const circles = participantDids.length ? await getCirclesByDids(participantDids) : [];
+    const circleByDid = new Map(circles.map((circle) => [circle.did, circle]));
+
+    const circleIdsToLoad = Array.from(
+        new Set(conversations.map((conversation) => conversation.circleId).filter(Boolean) as string[]),
+    );
+    const circleById = new Map<string, Circle>();
+    for (const id of circleIdsToLoad) {
+        const circle = await getCircleById(id);
+        if (circle) {
+            circleById.set(id, circle);
+        }
+    }
+
+    return conversations.map((conversation) => {
+        const isDirect = conversation.type === "dm";
+        const circle = conversation.circleId ? circleById.get(conversation.circleId) : undefined;
+        const otherDid = isDirect
+            ? conversation.participants.find((participant) => participant !== userDid)
+            : undefined;
+        const otherCircle = otherDid ? circleByDid.get(otherDid) : undefined;
+        const dmParticipants = isDirect
+            ? conversation.participants
+                  .map((did) => circleByDid.get(did)?._id)
+                  .filter(Boolean)
+                  .map((id) => id as string)
+            : undefined;
+
+        return {
+            _id: conversation._id.toString(),
+            matrixRoomId: conversation._id.toString(),
+            name: circle?.name || otherCircle?.name || conversation.name || "Chat",
+            description: conversation.description || circle?.description,
+            handle: circle?.handle || (isDirect ? conversation.handle : otherCircle?.handle) || conversation.handle || "chat",
+            circleId: conversation.circleId,
+            createdAt: conversation.createdAt,
+            userGroups: [],
+            picture: circle?.picture || otherCircle?.picture,
+            isDirect,
+            dmParticipants,
+            circle,
+        } as ChatRoomDisplay;
+    });
+};
+
+export const mapConversationToChatRoomDisplay = async (
+    userDid: string,
+    conversation: ChatConversation,
+): Promise<ChatRoomDisplay | null> => {
+    const normalizedConversation = normalizeConversation({ ...conversation });
+    const rooms = await mapConversationsToChatRoomDisplays(userDid, [normalizedConversation]);
+    return rooms[0] || null;
+};
+
 export const listConversationsForUser = async (userDid: string, circleIds: string[]): Promise<ChatRoomDisplay[]> => {
     const circleConversationIds: string[] = [];
     for (const circleId of circleIds) {
@@ -189,12 +250,30 @@ export const listConversationsForUser = async (userDid: string, circleIds: strin
         circleConversationIds.push(conversation._id as string);
     }
 
-    const conversations = (await ChatConversations.find({
-        $or: [{ participants: userDid }, { _id: { $in: circleConversationIds.map((id) => new ObjectId(id)) } }],
+    const circleConversationObjectIds = circleConversationIds
+        .filter((id) => ObjectId.isValid(id))
+        .map((id) => new ObjectId(id));
+    const dmConversations = (await ChatConversations.find({
+        type: "dm",
+        participants: userDid,
         archived: { $ne: true },
     }).toArray()) as ChatConversation[];
+    // Why this broke: on prod, incomplete Members rows can make allowed circle ids empty.
+    // DMs must never depend on circle-derived visibility to show up after creation.
+    const groupConversations = (await ChatConversations.find({
+        type: { $ne: "dm" },
+        archived: { $ne: true },
+        $or: [{ participants: userDid }, { _id: { $in: circleConversationObjectIds } }],
+    }).toArray()) as ChatConversation[];
 
-    const normalized = conversations.map(normalizeConversation);
+    const normalized = Array.from(
+        new Map(
+            [...dmConversations, ...groupConversations].map((conversation) => [
+                conversation._id.toString(),
+                normalizeConversation(conversation),
+            ]),
+        ).values(),
+    );
     const groupConversationIds = normalized
         .filter((conversation) => conversation.type === "group" && conversation?._id)
         .map((conversation) => conversation._id.toString());
@@ -232,52 +311,7 @@ export const listConversationsForUser = async (userDid: string, circleIds: strin
         if (conversation.type === "dm") return true;
         return activeGroupConversationIds.has(conversation._id.toString());
     });
-    const participantDids = Array.from(
-        new Set(visibleConversations.flatMap((conversation) => conversation.participants || [])),
-    );
-    const circles = participantDids.length ? await getCirclesByDids(participantDids) : [];
-    const circleByDid = new Map(circles.map((circle) => [circle.did, circle]));
-
-    const circleIdsToLoad = Array.from(
-        new Set(visibleConversations.map((conversation) => conversation.circleId).filter(Boolean) as string[]),
-    );
-    const circleById = new Map<string, Circle>();
-    for (const id of circleIdsToLoad) {
-        const circle = await getCircleById(id);
-        if (circle) {
-            circleById.set(id, circle);
-        }
-    }
-
-    return visibleConversations.map((conversation) => {
-        const isDirect = conversation.type === "dm";
-        const circle = conversation.circleId ? circleById.get(conversation.circleId) : undefined;
-        const otherDid = isDirect
-            ? conversation.participants.find((participant) => participant !== userDid)
-            : undefined;
-        const otherCircle = otherDid ? circleByDid.get(otherDid) : undefined;
-        const dmParticipants = isDirect
-            ? conversation.participants
-                  .map((did) => circleByDid.get(did)?._id)
-                  .filter(Boolean)
-                  .map((id) => id as string)
-            : undefined;
-
-        return {
-            _id: conversation._id.toString(),
-            matrixRoomId: conversation._id.toString(),
-            name: circle?.name || otherCircle?.name || conversation.name || "Chat",
-            description: conversation.description || circle?.description,
-            handle: circle?.handle || (isDirect ? conversation.handle : otherCircle?.handle) || conversation.handle || "chat",
-            circleId: conversation.circleId,
-            createdAt: conversation.createdAt,
-            userGroups: [],
-            picture: circle?.picture || otherCircle?.picture,
-            isDirect,
-            dmParticipants,
-            circle,
-        } as ChatRoomDisplay;
-    });
+    return mapConversationsToChatRoomDisplays(userDid, visibleConversations);
 };
 
 export const fetchMessagesSince = async (
