@@ -5,7 +5,6 @@ import { useEffect, useMemo } from "react";
 import { useAtom } from "jotai";
 import { ChatRoom, ChatRoomDisplay } from "@/models/models";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
-import { LatestMessage } from "@/components/modules/chat/chat-room";
 import { latestMessagesAtom, unreadCountsAtom, chatSettingsModalAtom } from "@/lib/data/atoms";
 import { useRouter, useParams } from "next/navigation";
 import { Settings } from "lucide-react";
@@ -115,9 +114,6 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
                                             · {groupMemberCount} {groupMemberCount === 1 ? "member" : "members"}
                                         </span>
                                     )}
-                                </p>
-                                <p className="truncate text-xs text-muted-foreground">
-                                    <LatestMessage roomId={getConversationId(chat)} latestMessages={latestMessages} />
                                 </p>
                             </div>
                             {/* Settings Icon - shows on hover */}

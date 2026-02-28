@@ -1,7 +1,7 @@
 import { ObjectId } from "mongodb";
 import { ChatRoomDisplay, Circle } from "@/models/models";
 import { ChatConversation, ChatMessageDoc, ChatReaction } from "@/lib/chat/mongo-types";
-import { ChatConversations, ChatMessageDocs, ChatReadStates } from "./db";
+import { ChatConversations, ChatMessageDocs, ChatReadStates, ChatRoomMembers } from "./db";
 import { getCircleByHandle, getCircleById, getCirclesByDids } from "./circle";
 
 const toObjectId = (value?: string | null) => {
@@ -18,6 +18,23 @@ const normalizeConversation = (conversation: ChatConversation) => {
         conversation._id = conversation._id.toString();
     }
     return conversation;
+};
+
+const isActiveGroupMembership = (membership: any): boolean => {
+    if (!membership) return false;
+
+    const membershipStatus = typeof membership.status === "string" ? membership.status.toLowerCase() : undefined;
+    if (membershipStatus === "removed" || membershipStatus === "left" || membershipStatus === "inactive") {
+        return false;
+    }
+    if (membershipStatus && membershipStatus !== "active") {
+        return false;
+    }
+    if (membership.active === false || membership.isActive === false) {
+        return false;
+    }
+
+    return true;
 };
 
 export const createConversation = async (conversation: ChatConversation): Promise<ChatConversation> => {
@@ -134,14 +151,51 @@ export const listConversationsForUser = async (userDid: string, circleIds: strin
     }).toArray()) as ChatConversation[];
 
     const normalized = conversations.map(normalizeConversation);
+    const groupConversationIds = normalized
+        .filter((conversation) => conversation.type === "group" && conversation?._id)
+        .map((conversation) => conversation._id.toString());
+    const groupConversationObjectIds = groupConversationIds
+        .filter((id) => ObjectId.isValid(id))
+        .map((id) => new ObjectId(id));
+
+    const activeGroupConversationIds = new Set<string>();
+    if (groupConversationIds.length > 0) {
+        const membershipQuery: any = {
+            userDid,
+            $or: [{ chatRoomId: { $in: groupConversationIds } }],
+        };
+        if (groupConversationObjectIds.length > 0) {
+            membershipQuery.$or.push({ chatRoomId: { $in: groupConversationObjectIds } });
+        }
+
+        const memberships = await ChatRoomMembers.find(membershipQuery, {
+            projection: { chatRoomId: 1, status: 1, active: 1, isActive: 1 },
+        }).toArray();
+
+        for (const membership of memberships) {
+            if (!isActiveGroupMembership(membership)) {
+                continue;
+            }
+            const rawChatRoomId = (membership as { chatRoomId?: unknown }).chatRoomId;
+            const chatRoomId = rawChatRoomId ? String(rawChatRoomId) : undefined;
+            if (chatRoomId) {
+                activeGroupConversationIds.add(chatRoomId);
+            }
+        }
+    }
+
+    const visibleConversations = normalized.filter((conversation) => {
+        if (conversation.type === "dm") return true;
+        return activeGroupConversationIds.has(conversation._id.toString());
+    });
     const participantDids = Array.from(
-        new Set(normalized.flatMap((conversation) => conversation.participants || [])),
+        new Set(visibleConversations.flatMap((conversation) => conversation.participants || [])),
     );
     const circles = participantDids.length ? await getCirclesByDids(participantDids) : [];
     const circleByDid = new Map(circles.map((circle) => [circle.did, circle]));
 
     const circleIdsToLoad = Array.from(
-        new Set(normalized.map((conversation) => conversation.circleId).filter(Boolean) as string[]),
+        new Set(visibleConversations.map((conversation) => conversation.circleId).filter(Boolean) as string[]),
     );
     const circleById = new Map<string, Circle>();
     for (const id of circleIdsToLoad) {
@@ -151,7 +205,7 @@ export const listConversationsForUser = async (userDid: string, circleIds: strin
         }
     }
 
-    return normalized.map((conversation) => {
+    return visibleConversations.map((conversation) => {
         const isDirect = conversation.type === "dm";
         const circle = conversation.circleId ? circleById.get(conversation.circleId) : undefined;
         const otherDid = isDirect
