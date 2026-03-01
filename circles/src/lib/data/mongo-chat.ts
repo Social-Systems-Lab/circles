@@ -340,6 +340,12 @@ export const fetchMessagesSince = async (
 
 export const createMessage = async (message: ChatMessageDoc): Promise<ChatMessageDoc> => {
     const result = await ChatMessageDocs.insertOne(message);
+    // Why this broke: conversation.updatedAt was never bumped on message send,
+    // so new DMs never appeared active in the chat list on prod.
+    await ChatConversations.updateOne(
+        { _id: new ObjectId(message.conversationId) },
+        { $set: { updatedAt: new Date() } },
+    );
     return { ...message, _id: result.insertedId.toString() };
 };
 
