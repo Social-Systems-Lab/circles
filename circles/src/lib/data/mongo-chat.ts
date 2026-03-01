@@ -253,6 +253,29 @@ export const listConversationsForUser = async (userDid: string, circleIds: strin
     const circleConversationObjectIds = circleConversationIds
         .filter((id) => ObjectId.isValid(id))
         .map((id) => new ObjectId(id));
+    // Ensure Notes-to-self exists (DM with self) and always shows up.
+    const selfParticipants = [userDid, userDid].sort();
+    const selfHandle = `dm-${selfParticipants[0]}-${selfParticipants[1]}`;
+
+    await ChatConversations.updateOne(
+        {
+            type: "dm",
+            handle: selfHandle,
+            participants: { $all: selfParticipants },
+        },
+        {
+            $setOnInsert: {
+                type: "dm",
+                handle: selfHandle,
+                participants: selfParticipants,
+                createdAt: new Date(),
+            },
+            // Keep it pinned at the top by making it "most recently updated".
+            $set: { updatedAt: new Date(), archived: false },
+        },
+        { upsert: true },
+    );
+
     const dmConversations = (await ChatConversations.find({
         type: "dm",
         participants: userDid,
