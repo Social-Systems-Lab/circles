@@ -311,6 +311,16 @@ export const listConversationsForUser = async (userDid: string, circleIds: strin
         if (conversation.type === "dm") return true;
         return activeGroupConversationIds.has(conversation._id.toString());
     });
+
+    // Why this broke: Mongo does not guarantee document order.
+    // Without explicit sorting, production can render inconsistent or empty lists.
+    // Always sort by latest activity.
+    visibleConversations.sort((a, b) => {
+        const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        return bTime - aTime;
+    });
+    
     return mapConversationsToChatRoomDisplays(userDid, visibleConversations);
 };
 
