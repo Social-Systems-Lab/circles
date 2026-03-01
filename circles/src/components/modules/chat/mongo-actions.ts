@@ -526,6 +526,27 @@ export const createMongoGroupChatAction = async (
             updatedAt: new Date(),
         });
 
+        const conversationId = conversation._id as string;
+        const now = new Date();
+        for (const participantDid of participants) {
+            const role = participantDid === userDid ? "admin" : "member";
+            await ChatRoomMembers.updateOne(
+                {
+                    userDid: participantDid,
+                    chatRoomId: conversationId,
+                },
+                {
+                    $setOnInsert: {
+                        userDid: participantDid,
+                        chatRoomId: conversationId,
+                        joinedAt: now,
+                    },
+                    $set: { role, status: "active", active: true, isActive: true } as any,
+                },
+                { upsert: true },
+            );
+        }
+
         return { success: true, roomId: conversation._id as string };
     } catch (error) {
         console.error("❌ Error creating mongo group chat:", error);

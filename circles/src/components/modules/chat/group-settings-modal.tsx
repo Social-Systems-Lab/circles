@@ -84,7 +84,7 @@ export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: Gr
                         </TabsContent>
 
                         <TabsContent value="members" className="mt-0">
-                            <MembersTab chatRoom={chatRoom} isAdmin={isAdmin} />
+                            <MembersTab chatRoom={chatRoom} isAdmin={isAdmin || canEditInfo} />
                         </TabsContent>
 
                         <TabsContent value="media" className="mt-0">
@@ -92,7 +92,7 @@ export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: Gr
                         </TabsContent>
 
                         <TabsContent value="settings" className="mt-0">
-                            <SettingsTab chatRoom={chatRoom} isAdmin={isAdmin} />
+                            <SettingsTab chatRoom={chatRoom} isAdmin={isAdmin || canEditInfo} />
                         </TabsContent>
                     </div>
                 </Tabs>

@@ -1,6 +1,7 @@
 // chat/actions.ts - server actions for joining chat rooms
 "use server";
 
+import { ObjectId } from "mongodb";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { Circle, ChatRoomMember, ChatRoom, ChatRoomDisplay, UserPrivate } from "@/models/models";
 import {
@@ -17,6 +18,7 @@ import {
     getChatRoomMember,
     removeChatRoomMember,
 } from "@/lib/data/chat";
+import { ChatConversations, ChatRoomMembers } from "@/lib/data/db";
 import { addUserToRoom } from "@/lib/data/matrix";
 import { features } from "@/lib/data/constants";
 import { ensureConversationForCircle, listConversationMedia } from "@/lib/data/mongo-chat";
@@ -93,7 +95,33 @@ const isRequesterAdmin = (userDid: string, members: any[]): boolean => {
     return earliestMember?.userDid === userDid;
 };
 
+const buildMongoMembershipQuery = (chatRoomId: string): Record<string, unknown> => {
+    if (!ObjectId.isValid(chatRoomId)) {
+        return { chatRoomId };
+    }
+    return {
+        $or: [{ chatRoomId }, { chatRoomId: new ObjectId(chatRoomId) }],
+    };
+};
+
+const getMongoConversation = async (chatRoomId: string) => {
+    if (!ObjectId.isValid(chatRoomId)) return null;
+    return await ChatConversations.findOne({
+        _id: new ObjectId(chatRoomId),
+        archived: { $ne: true },
+    });
+};
+
+const listMongoChatRoomMembers = async (chatRoomId: string): Promise<any[]> => {
+    return await ChatRoomMembers.find(buildMongoMembershipQuery(chatRoomId)).toArray();
+};
+
 const canUserEditGroupInfo = async (chatRoomId: string, userDid: string): Promise<boolean> => {
+    if (getChatProvider() === "mongo") {
+        const members = await listMongoChatRoomMembers(chatRoomId);
+        const activeMembers = members.filter(isActiveChatRoomMembership);
+        return isRequesterAdmin(userDid, activeMembers);
+    }
     const { getChatRoomMembers } = await import("@/lib/data/chat");
     const members = await getChatRoomMembers(chatRoomId);
     return isRequesterAdmin(userDid, members as any[]);
@@ -763,6 +791,32 @@ export const deleteGroupChatAction = async (
         return { success: false, message: "You need to be logged in to delete a group" };
     }
     try {
+        if (getChatProvider() === "mongo") {
+            const conversation = await getMongoConversation(chatRoomId);
+            if (!conversation) {
+                return { success: false, message: "Chat room not found" };
+            }
+            if (conversation.type === "dm") {
+                return { success: false, message: "Cannot delete a direct message" };
+            }
+
+            const members = (await listMongoChatRoomMembers(chatRoomId)).filter(isActiveChatRoomMembership);
+            if (!isRequesterAdmin(userDid, members)) {
+                return { success: false, message: "Only admins can delete groups" };
+            }
+
+            await ChatRoomMembers.updateMany(
+                buildMongoMembershipQuery(chatRoomId),
+                { $set: { status: "removed", active: false, isActive: false } as any },
+            );
+            await ChatConversations.updateOne(
+                { _id: new ObjectId(chatRoomId) },
+                { $set: { archived: true, updatedAt: new Date() } },
+            );
+
+            return { success: true };
+        }
+
         const chatRoom = await getChatRoom(chatRoomId);
         if (!chatRoom) {
             return { success: false, message: "Chat room not found" };
@@ -808,6 +862,26 @@ export const leaveGroupChatAction = async (
     }
 
     try {
+        if (getChatProvider() === "mongo") {
+            const conversation = await getMongoConversation(chatRoomId);
+            if (!conversation) {
+                return { success: false, message: "Chat room not found" };
+            }
+            if (conversation.type === "dm") {
+                return { success: false, message: "Cannot leave a direct message" };
+            }
+
+            await ChatRoomMembers.updateMany(
+                { userDid, ...buildMongoMembershipQuery(chatRoomId) },
+                { $set: { status: "left", active: false, isActive: false } as any },
+            );
+            await ChatConversations.updateOne(
+                { _id: new ObjectId(chatRoomId) },
+                { $set: { updatedAt: new Date() } },
+            );
+            return { success: true };
+        }
+
         const chatRoom = await getChatRoom(chatRoomId);
         if (!chatRoom) {
             return { success: false, message: "Chat room not found" };
@@ -836,6 +910,34 @@ export const updateGroupInfoAction = async (
     }
 
     try {
+        if (getChatProvider() === "mongo") {
+            const conversation = await getMongoConversation(chatRoomId);
+            if (!conversation) {
+                return { success: false, message: "Chat room not found" };
+            }
+            if (conversation.type === "dm") {
+                return { success: false, message: "Cannot update a direct message" };
+            }
+
+            const canEdit = await canUserEditGroupInfo(chatRoomId, userDid);
+            if (!canEdit) {
+                return { success: false, message: "You are not authorized to update group info" };
+            }
+
+            // Why this broke: Group Settings modal used legacy ChatRooms/provider-switched path,
+            // so Mongo conversations had no matching ChatRooms doc -> "Chat room not found" and empty member list.
+            const conversationUpdates: Record<string, any> = { updatedAt: new Date() };
+            if (typeof updates.name === "string") {
+                conversationUpdates.name = updates.name;
+            }
+            if (typeof updates.description === "string") {
+                conversationUpdates.description = updates.description;
+            }
+
+            await ChatConversations.updateOne({ _id: new ObjectId(chatRoomId) }, { $set: conversationUpdates });
+            return { success: true };
+        }
+
         const chatRoom = await getChatRoom(chatRoomId);
         if (!chatRoom) {
             return { success: false, message: "Chat room not found" };
@@ -866,8 +968,6 @@ export const updateGroupInfoAction = async (
         }));
 
         // Mongo chat source-of-truth for list/detail display.
-        const { ChatConversations } = await import("@/lib/data/db");
-        const { ObjectId } = await import("mongodb");
         if (!ObjectId.isValid(chatRoomId)) {
             return { success: false, message: "Invalid chat room ID" };
         }
@@ -889,6 +989,19 @@ export const canEditGroupInfoAction = async (
     }
 
     try {
+        if (getChatProvider() === "mongo") {
+            const conversation = await getMongoConversation(chatRoomId);
+            if (!conversation) {
+                return { success: false, message: "Chat room not found" };
+            }
+            if (conversation.type === "dm") {
+                return { success: true, isAdmin: false };
+            }
+
+            const canEdit = await canUserEditGroupInfo(chatRoomId, userDid);
+            return { success: true, isAdmin: canEdit };
+        }
+
         const chatRoom = await getChatRoom(chatRoomId);
         if (!chatRoom) {
             return { success: false, message: "Chat room not found" };
@@ -928,6 +1041,36 @@ export const updateGroupAvatarAction = async (
     }
 
     try {
+        if (getChatProvider() === "mongo") {
+            const conversation = await getMongoConversation(chatRoomId);
+            if (!conversation) {
+                return { success: false, message: "Chat room not found" };
+            }
+            if (conversation.type === "dm") {
+                return { success: false, message: "Cannot update avatar for direct messages" };
+            }
+
+            const members = (await listMongoChatRoomMembers(chatRoomId)).filter(isActiveChatRoomMembership);
+            if (!isRequesterAdmin(userDid, members)) {
+                return { success: false, message: "You are not authorized to update the group avatar" };
+            }
+
+            const { saveFile } = await import("@/lib/data/storage");
+            const { getCircleByDid, getCircleById } = await import("@/lib/data/circle");
+            const ownerCircle = conversation.circleId ? await getCircleById(conversation.circleId) : await getCircleByDid(userDid);
+            if (!ownerCircle?._id) {
+                return { success: false, message: "Could not resolve storage owner" };
+            }
+
+            const fileInfo = await saveFile(file, "chat-group-avatar", ownerCircle._id as string, true);
+            await ChatConversations.updateOne(
+                { _id: new ObjectId(chatRoomId) },
+                { $set: { picture: { url: fileInfo.url }, updatedAt: new Date() } as any },
+            );
+
+            return { success: true, pictureUrl: fileInfo.url };
+        }
+
         const chatRoom = await getChatRoom(chatRoomId);
         if (!chatRoom) {
             return { success: false, message: "Chat room not found" };
@@ -974,6 +1117,20 @@ export const getActiveChatRoomMemberCountAction = async (
     }
 
     try {
+        if (getChatProvider() === "mongo") {
+            const conversation = await getMongoConversation(chatRoomId);
+            if (!conversation) {
+                return { success: false, message: "Chat room not found" };
+            }
+            if (conversation.type === "dm") {
+                return { success: true, memberCount: 0 };
+            }
+
+            const members = await listMongoChatRoomMembers(chatRoomId);
+            const activeMemberCount = members.filter(isActiveChatRoomMembership).length;
+            return { success: true, memberCount: activeMemberCount };
+        }
+
         const chatRoom = await getChatRoom(chatRoomId);
         if (!chatRoom) {
             return { success: false, message: "Chat room not found" };
@@ -999,6 +1156,60 @@ export const getChatRoomMembersAction = async (
     }
 
     try {
+        if (getChatProvider() === "mongo") {
+            const conversation = await getMongoConversation(chatRoomId);
+            if (!conversation) {
+                return { success: false, message: "Chat room not found" };
+            }
+            if (conversation.type === "dm") {
+                return { success: true, members: [] };
+            }
+
+            // Ensure requester can read group membership for this conversation.
+            const access = await resolveMongoConversationAccessInternal(chatRoomId, userDid);
+            if (!access.ok) {
+                return { success: false, message: access.message };
+            }
+
+            let members = (await listMongoChatRoomMembers(chatRoomId)).filter(isActiveChatRoomMembership);
+
+            // Auto-migration: If no admins exist, make the earliest active member an admin.
+            const hasAdmin = members.some((member) => member.role === "admin");
+            if (!hasAdmin && members.length > 0) {
+                const earliestMember = members.reduce((prev, current) =>
+                    new Date(prev.joinedAt).getTime() <= new Date(current.joinedAt).getTime() ? prev : current,
+                );
+                await ChatRoomMembers.updateOne(
+                    { userDid: earliestMember.userDid, ...buildMongoMembershipQuery(chatRoomId) },
+                    { $set: { role: "admin", status: "active", active: true, isActive: true } as any },
+                );
+                members = members.map((member) =>
+                    member.userDid === earliestMember.userDid ? { ...member, role: "admin" } : member,
+                );
+            }
+
+            const membersWithDetails = await Promise.all(
+                members.map(async (member) => {
+                    const user = await getUserByDid(member.userDid);
+                    return {
+                        ...member,
+                        _id: member._id?.toString?.() || member._id,
+                        role: member.role || "member",
+                        user: user
+                            ? {
+                                  did: user.did,
+                                  name: user.name,
+                                  handle: user.handle,
+                                  picture: user.picture,
+                              }
+                            : null,
+                    };
+                }),
+            );
+
+            return { success: true, members: membersWithDetails };
+        }
+
         const chatRoom = await getChatRoom(chatRoomId);
         if (!chatRoom) {
             return { success: false, message: "Chat room not found" };
@@ -1062,6 +1273,46 @@ export const addMembersAction = async (
     }
 
     try {
+        if (getChatProvider() === "mongo") {
+            const conversation = await getMongoConversation(chatRoomId);
+            if (!conversation) {
+                return { success: false, message: "Chat room not found" };
+            }
+            if (conversation.type === "dm") {
+                return { success: false, message: "Cannot add members to a direct message" };
+            }
+
+            const members = (await listMongoChatRoomMembers(chatRoomId)).filter(isActiveChatRoomMembership);
+            if (!isRequesterAdmin(userDid, members)) {
+                return { success: false, message: "Only admins can add members" };
+            }
+
+            const uniqueMemberDids = Array.from(new Set(memberDids.filter(Boolean)));
+            const now = new Date();
+            for (const newMemberDid of uniqueMemberDids) {
+                await ChatRoomMembers.updateOne(
+                    { userDid: newMemberDid, ...buildMongoMembershipQuery(chatRoomId) },
+                    {
+                        $setOnInsert: {
+                            userDid: newMemberDid,
+                            chatRoomId,
+                            joinedAt: now,
+                            role: "member",
+                        },
+                        $set: { status: "active", active: true, isActive: true } as any,
+                    },
+                    { upsert: true },
+                );
+            }
+
+            await ChatConversations.updateOne(
+                { _id: new ObjectId(chatRoomId) },
+                { $addToSet: { participants: { $each: uniqueMemberDids } }, $set: { updatedAt: now } },
+            );
+
+            return { success: true };
+        }
+
         const { getChatRoomMembers, addChatRoomMember } = await import("@/lib/data/chat");
         
         // Check if requester is admin (or just a member if we allow members to add others)
@@ -1134,6 +1385,34 @@ export const removeMemberAction = async (
     }
 
     try {
+        if (getChatProvider() === "mongo") {
+            const conversation = await getMongoConversation(chatRoomId);
+            if (!conversation) {
+                return { success: false, message: "Chat room not found" };
+            }
+            if (conversation.type === "dm") {
+                return { success: false, message: "Cannot remove members from a direct message" };
+            }
+
+            const members = (await listMongoChatRoomMembers(chatRoomId)).filter(isActiveChatRoomMembership);
+            if (!isRequesterAdmin(userDid, members)) {
+                return { success: false, message: "Only admins can remove members" };
+            }
+            if (memberDid === userDid) {
+                return { success: false, message: "Use the leave option to remove yourself" };
+            }
+
+            await ChatRoomMembers.updateMany(
+                { userDid: memberDid, ...buildMongoMembershipQuery(chatRoomId) },
+                { $set: { status: "removed", active: false, isActive: false } as any },
+            );
+            await ChatConversations.updateOne(
+                { _id: new ObjectId(chatRoomId) },
+                { $set: { updatedAt: new Date() } },
+            );
+            return { success: true };
+        }
+
         const { getChatRoomMembers, removeChatRoomMember } = await import("@/lib/data/chat");
         
         // Check if requester is admin
@@ -1197,6 +1476,31 @@ export const promoteMemberAction = async (
     }
 
     try {
+        if (getChatProvider() === "mongo") {
+            const conversation = await getMongoConversation(chatRoomId);
+            if (!conversation) {
+                return { success: false, message: "Chat room not found" };
+            }
+            if (conversation.type === "dm") {
+                return { success: false, message: "Cannot promote members in a direct message" };
+            }
+
+            const members = (await listMongoChatRoomMembers(chatRoomId)).filter(isActiveChatRoomMembership);
+            if (!isRequesterAdmin(userDid, members)) {
+                return { success: false, message: "Only admins can promote members" };
+            }
+
+            const result = await ChatRoomMembers.updateOne(
+                { userDid: targetUserDid, ...buildMongoMembershipQuery(chatRoomId) },
+                { $set: { role: "admin", status: "active", active: true, isActive: true } as any },
+            );
+            if (result.matchedCount === 0) {
+                return { success: false, message: "Member not found" };
+            }
+
+            return { success: true };
+        }
+
         const { getChatRoomMembers, updateChatRoomMemberRole } = await import("@/lib/data/chat");
         
         // Check if requester is admin
