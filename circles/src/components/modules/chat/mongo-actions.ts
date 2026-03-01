@@ -10,16 +10,16 @@ import {
     findConversationById,
     findOrCreateDmConversation,
     getUnreadCountsForUser,
+    listConversationsForUser,
     mapConversationToChatRoomDisplay,
     markConversationRead,
     toggleReaction,
     updateMessage,
 } from "@/lib/data/mongo-chat";
-import { ChatConversations, ChatMessageDocs, ChatRoomMembers, ChatRooms } from "@/lib/data/db";
+import { ChatConversations, ChatMessageDocs, ChatRoomMembers, ChatRooms, Circles, Members } from "@/lib/data/db";
 import { getCircleByDid, getCircleById, getCirclesByDids } from "@/lib/data/circle";
 import { saveFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
-import { listChatRoomsForUser } from "@/lib/data/chat";
 
 const normalizeMediaUrl = (url?: string): string | undefined => {
     if (!url) return url;
@@ -99,7 +99,28 @@ export const listChatRoomsAction = async (): Promise<{ success: boolean; rooms?:
     }
 
     try {
-        const rooms = await listChatRoomsForUser(userDid);
+        // Why this broke: delegating through listChatRoomsForUser depends on provider env branching.
+        // In prod, provider mismatch can fall back to Matrix memberships and hide Mongo DMs.
+        const memberRows = await Members.find({ userDid }).toArray();
+        const circleIds = memberRows.map((membership: any) => membership.circleId).filter(Boolean) as string[];
+        const circleObjectIds = circleIds
+            .map((id) => {
+                try {
+                    return new ObjectId(id);
+                } catch {
+                    return null;
+                }
+            })
+            .filter(Boolean) as ObjectId[];
+        const circles = await Circles.find(
+            { _id: { $in: circleObjectIds } },
+            { projection: { _id: 1, did: 1, circleType: 1 } },
+        ).toArray();
+        const allowedCircleIds = circles
+            .filter((circle: any) => circle.circleType !== "user" || circle.did === userDid)
+            .map((circle: any) => circle._id.toString());
+
+        const rooms = await listConversationsForUser(userDid, allowedCircleIds);
         const groupRoomIds = rooms
             .filter((room) => !room.isDirect && typeof room._id === "string" && room._id.length > 0)
             .map((room) => room._id as string);
