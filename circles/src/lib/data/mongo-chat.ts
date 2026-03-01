@@ -226,7 +226,7 @@ const mapConversationsToChatRoomDisplays = async (
             circleId: conversation.circleId,
             createdAt: conversation.createdAt,
             userGroups: [],
-            picture: circle?.picture || otherCircle?.picture,
+            picture: conversation.picture || circle?.picture || otherCircle?.picture,
             isDirect,
             dmParticipants,
             circle,

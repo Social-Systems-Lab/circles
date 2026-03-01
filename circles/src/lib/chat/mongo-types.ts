@@ -23,7 +23,8 @@ export type ChatConversation = {
     description?: string;
     handle?: string;
     circleId?: string;
-    participants: string[];
+    picture?: { url: string };
+    participants: string[]
     createdAt: Date;
     updatedAt?: Date;
     archived?: boolean;
