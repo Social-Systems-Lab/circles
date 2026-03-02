@@ -277,11 +277,23 @@ export const listConversationsForUser = async (userDid: string, circleIds: strin
     const groupConversationIds = normalized
         .filter((conversation) => conversation.type === "group" && conversation?._id)
         .map((conversation) => conversation._id.toString());
+    const groupConversationById = new Map(
+        normalized
+            .filter((conversation) => conversation.type === "group" && conversation?._id)
+            .map((conversation) => [conversation._id.toString(), conversation]),
+    );
     const groupConversationObjectIds = groupConversationIds
         .filter((id) => ObjectId.isValid(id))
         .map((id) => new ObjectId(id));
 
     const activeGroupConversationIds = new Set<string>();
+    const participantGroupConversationIds = new Set<string>();
+    for (const [conversationId, conversation] of groupConversationById.entries()) {
+        if ((conversation.participants || []).includes(userDid)) {
+            participantGroupConversationIds.add(conversationId);
+        }
+    }
+
     if (groupConversationIds.length > 0) {
         const membershipQuery: any = {
             userDid,
@@ -307,9 +319,76 @@ export const listConversationsForUser = async (userDid: string, circleIds: strin
         }
     }
 
+    const fallbackGroupConversationIds = Array.from(participantGroupConversationIds).filter(
+        (conversationId) => !activeGroupConversationIds.has(conversationId),
+    );
+    if (fallbackGroupConversationIds.length > 0) {
+        // Why this broke: some group creation paths don't write memberships OR userDid source differs.
+        // Keep groups visible from participants and lazily backfill memberships only when none exist.
+        const fallbackGroupConversationObjectIds = fallbackGroupConversationIds
+            .filter((id) => ObjectId.isValid(id))
+            .map((id) => new ObjectId(id));
+        const fallbackMembershipQuery: any = { $or: [{ chatRoomId: { $in: fallbackGroupConversationIds } }] };
+        if (fallbackGroupConversationObjectIds.length > 0) {
+            fallbackMembershipQuery.$or.push({ chatRoomId: { $in: fallbackGroupConversationObjectIds } });
+        }
+
+        const fallbackMemberships = await ChatRoomMembers.find(fallbackMembershipQuery, {
+            projection: { chatRoomId: 1, userDid: 1 },
+        }).toArray();
+        const fallbackMembershipIds = new Set(
+            fallbackMemberships
+                .map((membership) => {
+                    const rawChatRoomId = (membership as { chatRoomId?: unknown }).chatRoomId;
+                    return rawChatRoomId ? String(rawChatRoomId) : null;
+                })
+                .filter(Boolean) as string[],
+        );
+
+        for (const conversationId of fallbackGroupConversationIds) {
+            const conversation = groupConversationById.get(conversationId);
+            if (!conversation) {
+                continue;
+            }
+
+            if (!fallbackMembershipIds.has(conversationId)) {
+                const participants = Array.from(
+                    new Set((conversation.participants || []).filter((participantDid) => !!participantDid)),
+                );
+                if (participants.length > 0) {
+                    const conversationJoinedAt = conversation.createdAt || new Date();
+                    await ChatRoomMembers.bulkWrite(
+                        participants.map((participantDid) => ({
+                            updateOne: {
+                                filter: { userDid: participantDid, chatRoomId: conversationId },
+                                update: {
+                                    $setOnInsert: {
+                                        userDid: participantDid,
+                                        chatRoomId: conversationId,
+                                        circleId: conversation.circleId,
+                                        joinedAt: conversationJoinedAt,
+                                        role: "member",
+                                        status: "active",
+                                        active: true,
+                                        isActive: true,
+                                    } as any,
+                                },
+                                upsert: true,
+                            },
+                        })),
+                        { ordered: false },
+                    );
+                }
+            }
+
+            activeGroupConversationIds.add(conversationId);
+        }
+    }
+
     const visibleConversations = normalized.filter((conversation) => {
         if (conversation.type === "dm") return true;
-        return activeGroupConversationIds.has(conversation._id.toString());
+        const conversationId = conversation._id.toString();
+        return activeGroupConversationIds.has(conversationId) || participantGroupConversationIds.has(conversationId);
     });
 
     // Why this broke: Mongo does not guarantee document order.
