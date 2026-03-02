@@ -13,7 +13,16 @@ RUN bun install --frozen-lockfile
 # Build the app
 FROM deps AS builder
 WORKDIR /app
+
+ARG GIT_SHA=unknown
+ARG BUILD_TIME
+
 COPY . .
+
+RUN VERSION="$(node -p "require('./package.json').version")" && \
+    GIT_SHA_VALUE="${GIT_SHA:-unknown}" && \
+    BUILD_TIME_VALUE="${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" && \
+    printf 'version=%s\ngitSha=%s\nbuildTime=%s\n' "$VERSION" "$GIT_SHA_VALUE" "$BUILD_TIME_VALUE" > /app/VERSION
 
 ENV IS_BUILD=true
 
@@ -23,7 +32,13 @@ RUN NODE_OPTIONS=--max-old-space-size=3072 bun run build
 FROM node:18-slim AS runner
 WORKDIR /app
 
+ARG GIT_SHA=unknown
+ARG BUILD_TIME
+
 ENV NODE_ENV production
+ENV GIT_SHA=${GIT_SHA}
+ENV BUILD_TIME=${BUILD_TIME}
+
 # Uncomment the following line in case you want to disable telemetry during runtime.
 COPY package.json bun.lock ./
 
@@ -44,7 +59,7 @@ COPY --from=builder  /app/.next/standalone ./
 COPY --from=builder  /app/.next/static ./.next/static
 COPY --from=builder  /app/public ./public
 COPY --from=builder  /app/next.config.mjs ./
-
+COPY --from=builder  /app/VERSION ./VERSION
 
 EXPOSE 3001
 

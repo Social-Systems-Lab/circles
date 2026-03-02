@@ -1,34 +1,24 @@
 "use server";
 
 import crypto from "crypto";
-import { z } from "zod";
-import { Circles, Tasks } from "../data/db";
-import { getAuthenticatedUserDid } from "./auth";
-import { getUserById, getUserPrivate } from "../data/user";
+import fs from "fs/promises";
+import path from "path";
 import { ObjectId } from "mongodb";
 import { revalidatePath } from "next/cache";
-import fs from "fs/promises"; // Use promises for async file operations
-import path from "path";
+import { z } from "zod";
+import { passwordSchema } from "@/models/models";
+import { getAuthenticatedUserDid } from "./auth";
 import {
-    APP_DIR,
     ENCRYPTION_ALGORITHM,
     ENCRYPTED_PRIVATE_KEY_FILENAME,
     IV_FILENAME,
+    PRIVATE_KEY_FILENAME,
     PUBLIC_KEY_FILENAME,
     SALT_FILENAME,
     USERS_DIR,
-} from "./auth"; // Import constants and getDid
-import {
-    Members,
-    Posts,
-    Comments,
-    Reactions,
-    MembershipRequests,
-    ChatRoomMembers,
-    Proposals,
-    Issues,
-} from "../data/db"; // Import necessary collections
-import { passwordSchema, emailSchema } from "@/models/models"; // Import schemas
+} from "./auth";
+import { Circles } from "../data/db";
+import { getUserPrivate } from "../data/user";
 
 // Schema for the initiatePasswordReset action input
 const initiateResetSchema = z.object({
@@ -127,8 +117,8 @@ type ResetPasswordResult = { success: true } | { success: false; error: string }
 
 /**
  * Server Action for Users to reset their password using a valid token.
- * Verifies the token, generates a new identity (DID, keys), updates filesystem,
- * updates the user record, and updates all references to the old DID in the DB.
+ * Verifies the token and rotates password-derived credential material.
+ * DID MUST NOT CHANGE (Option A).
  * @param token - The unhashed password reset token from the URL.
  * @param newPassword - The new password provided by the user.
  */
@@ -165,139 +155,97 @@ export async function resetPassword(token: string, newPassword: string): Promise
             return { success: false, error: "Reset token has expired." };
         }
 
-        // --- Token is valid, proceed with identity change ---
-        // Email is now user.email
-
-        const oldDid = user.did;
-        if (!oldDid) {
+        // DID MUST NOT CHANGE (Option A): password reset cannot mutate user.did.
+        const existingDid = user.did;
+        if (!existingDid) {
             // Should not happen if user exists, but good to check
             return { success: false, error: "User identity information is missing." };
         }
 
-        // 5. Generate New Identity
-        const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", {
-            modulusLength: 2048,
-        });
+        const accountPath = path.join(USERS_DIR, existingDid);
+        const accountPathExists = await fs
+            .access(accountPath)
+            .then(() => true)
+            .catch(() => false);
 
-        const newDid = crypto
-            .createHash("sha256")
-            .update(publicKey.export({ type: "pkcs1", format: "pem" }) as string)
-            .digest("hex");
+        let publicKeyForUserRecord = user.publicKey;
 
-        // 6. Secure New Private Key
-        const newSalt = crypto.randomBytes(16); // newSalt is Buffer
-        const newIv = crypto.randomBytes(16); // newIv is Buffer
-        // IMPORTANT: Use the *new* password and *new* salt here
-        // encryptionKey will be inferred as Buffer
-        const newEncryptionKey = crypto.pbkdf2Sync(newPassword, newSalt, 100000, 32, "sha512"); // Use newPassword
-        // Pass Buffers directly
-        const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, newEncryptionKey, newIv);
-        let newEncryptedPrivateKey = cipher.update(
-            privateKey.export({ type: "pkcs1", format: "pem" }) as string,
-            "utf8",
-            "hex",
-        );
-        newEncryptedPrivateKey += cipher.final("hex");
+        if (accountPathExists) {
+            try {
+                const plaintextPrivateKeyPath = path.join(accountPath, PRIVATE_KEY_FILENAME);
+                const plaintextPrivateKeyExists = await fs
+                    .access(plaintextPrivateKeyPath)
+                    .then(() => true)
+                    .catch(() => false);
 
-        // 7. Update Filesystem
-        const oldAccountPath = path.join(USERS_DIR, oldDid);
-        const newAccountPath = path.join(USERS_DIR, newDid);
+                let privateKeyPem: string;
+                if (plaintextPrivateKeyExists) {
+                    privateKeyPem = await fs.readFile(plaintextPrivateKeyPath, "utf8");
+                } else {
+                    // Legacy recovery path: without the previous password we cannot decrypt the existing
+                    // private key, so rotate key material in-place while keeping the same DID directory.
+                    const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", {
+                        modulusLength: 2048,
+                    });
+                    privateKeyPem = privateKey.export({ type: "pkcs1", format: "pem" }) as string;
+                    publicKeyForUserRecord = publicKey.export({ type: "pkcs1", format: "pem" }) as string;
+                }
 
-        try {
-            // Check if old path exists before attempting removal
-            const oldPathExists = await fs
-                .access(oldAccountPath)
-                .then(() => true)
-                .catch(() => false);
-            if (oldPathExists) {
-                await fs.rm(oldAccountPath, { recursive: true, force: true });
-            } else {
-                console.warn(`Old user directory not found, skipping deletion: ${oldAccountPath}`);
-                // Decide if this is an error or just a warning. If the DB update succeeds later,
-                // it might be okay. If the user record *requires* the filesystem keys, this is an error.
-                // For now, proceed with caution.
+                const newSalt = crypto.randomBytes(16);
+                const newIv = crypto.randomBytes(16);
+                const newEncryptionKey = crypto.pbkdf2Sync(newPassword, newSalt, 100000, 32, "sha512");
+                const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, newEncryptionKey, newIv);
+                let newEncryptedPrivateKey = cipher.update(privateKeyPem, "utf8", "hex");
+                newEncryptedPrivateKey += cipher.final("hex");
+
+                await fs.writeFile(path.join(accountPath, SALT_FILENAME), newSalt);
+                await fs.writeFile(path.join(accountPath, IV_FILENAME), newIv);
+                await fs.writeFile(path.join(accountPath, ENCRYPTED_PRIVATE_KEY_FILENAME), newEncryptedPrivateKey);
+
+                if (publicKeyForUserRecord) {
+                    await fs.writeFile(path.join(accountPath, PUBLIC_KEY_FILENAME), publicKeyForUserRecord);
+                }
+            } catch (fsError) {
+                console.error("Filesystem error during password reset:", fsError);
+                return { success: false, error: "Failed to update user credentials." };
             }
-
-            await fs.mkdir(newAccountPath, { recursive: true });
-            // Pass Buffers and strings directly to writeFile
-            await fs.writeFile(path.join(newAccountPath, SALT_FILENAME), newSalt);
-            await fs.writeFile(path.join(newAccountPath, IV_FILENAME), newIv);
-            await fs.writeFile(
-                path.join(newAccountPath, PUBLIC_KEY_FILENAME),
-                publicKey.export({ type: "pkcs1", format: "pem" }),
-            );
-            await fs.writeFile(path.join(newAccountPath, ENCRYPTED_PRIVATE_KEY_FILENAME), newEncryptedPrivateKey);
-        } catch (fsError) {
-            console.error("Filesystem error during password reset:", fsError);
-            // Attempt to rollback or log critical failure?
-            return { success: false, error: "Failed to update user identity files." };
+        } else {
+            // If key files are missing, do not invent a new DID or move directories.
+            console.warn(`Credential directory missing for DID ${existingDid}. Token state will still be cleared.`);
         }
 
-        let publicKeyPem = publicKey.export({ type: "pkcs1", format: "pem" });
-        // 8. Update User Database Record (Primary)
+        const resetUpdateSet: {
+            passwordResetToken: null;
+            passwordResetTokenExpiry: null;
+            publicKey?: string;
+            did?: string;
+        } = {
+            passwordResetToken: null,
+            passwordResetTokenExpiry: null,
+        };
+
+        if (publicKeyForUserRecord && publicKeyForUserRecord !== user.publicKey) {
+            resetUpdateSet.publicKey = publicKeyForUserRecord;
+        }
+
+        // Guardrail: DID must stay immutable in password reset/account recovery.
+        if (resetUpdateSet.did) {
+            console.error("Refusing to modify DID during password reset.");
+            return { success: false, error: "Password reset failed due to invalid identity mutation." };
+        }
+
+        // 5. Update User Database Record (DID remains unchanged)
         const userUpdateResult = await Circles.updateOne(
             { _id: user._id },
             {
-                $set: {
-                    did: newDid,
-                    publicKey: publicKeyPem as string,
-                    passwordResetToken: null, // Clear the token
-                    passwordResetTokenExpiry: null,
-                },
+                $set: resetUpdateSet,
             },
         );
 
-        if (userUpdateResult.modifiedCount !== 1) {
-            console.error(`Failed to update primary user record for old DID ${oldDid} to new DID ${newDid}`);
-            // Critical error - filesystem might be updated but DB is not. Needs manual intervention or rollback.
+        if (userUpdateResult.matchedCount !== 1) {
+            console.error(`Failed to update primary user record for DID ${existingDid}`);
             return { success: false, error: "Failed to update user record. Please contact support." };
         }
-
-        // 9. Update DID References Across Database (CRITICAL STEP)
-        // Perform these updates concurrently for efficiency
-        const updatePromises = [
-            Members.updateMany({ userDid: oldDid }, { $set: { userDid: newDid } }),
-            Posts.updateMany({ createdBy: oldDid }, { $set: { createdBy: newDid } }),
-            Comments.updateMany({ createdBy: oldDid }, { $set: { createdBy: newDid } }),
-            Reactions.updateMany({ userDid: oldDid }, { $set: { userDid: newDid } }),
-            MembershipRequests.updateMany({ userDid: oldDid }, { $set: { userDid: newDid } }),
-            ChatRoomMembers.updateMany({ userDid: oldDid }, { $set: { userDid: newDid } }),
-            Proposals.updateMany({ createdBy: oldDid }, { $set: { createdBy: newDid } }),
-            // Issues have two fields
-            Issues.updateMany({ createdBy: oldDid }, { $set: { createdBy: newDid } }),
-            Issues.updateMany({ assignedTo: oldDid }, { $set: { assignedTo: newDid } }),
-            // Tasks have two fields
-            Tasks.updateMany({ createdBy: oldDid }, { $set: { createdBy: newDid } }),
-            Tasks.updateMany({ assignedTo: oldDid }, { $set: { assignedTo: newDid } }),
-            // Update 'createdBy' in Circles if users can create circles/projects
-            Circles.updateMany({ createdBy: oldDid }, { $set: { createdBy: newDid } }),
-            // Add any other collections/fields that reference user DIDs here
-        ];
-
-        try {
-            const updateResults = await Promise.all(updatePromises);
-            // Optional: Log the number of documents updated in each collection
-            console.log(
-                `DID Reference Update Results for ${oldDid} -> ${newDid}:`,
-                updateResults.map((r) => r.modifiedCount),
-            );
-        } catch (dbUpdateError) {
-            console.error(`Error updating DID references from ${oldDid} to ${newDid}:`, dbUpdateError);
-            // This is also critical. The primary user record is updated, but references are inconsistent.
-            // Needs logging and potentially manual correction.
-            return { success: false, error: "Failed to update all user data references. Please contact support." };
-        }
-
-        // 10. Update Matrix Integration (If needed - adapt based on actual implementation)
-        // try {
-        //     await registerOrLoginMatrixUser(await getUserById(newDid)); // Assuming getUserById works with new DID
-        // } catch (matrixError) {
-        //     console.error(`Matrix update failed for new DID ${newDid}:`, matrixError);
-        //     // Non-critical? Log and continue, or return specific error?
-        // }
-
-        // 11. Revalidate relevant paths (e.g., user profile page if it uses DID)
-        // revalidatePath(`/profile/${newDid}`); // Example
 
         return { success: true };
     } catch (error) {
