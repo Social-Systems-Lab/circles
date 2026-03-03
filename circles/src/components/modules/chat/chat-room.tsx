@@ -52,23 +52,27 @@ export const renderCircleSuggestion = (
     </div>
 );
 
+const CHAT_MENTION_MARKUP_REGEX = /\[([^\]]+)\]\(\/circles\/([0-9a-fA-F]{24})\)/g;
+
+const renderMentionsAsDisplayText = (content: string) => content.replace(CHAT_MENTION_MARKUP_REGEX, "$1");
+
 const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
     if (preview) {
         return (
             <span>
                 <b>{message.author.name}: </b>
-                {message?.content?.body as string}
+                {renderMentionsAsDisplayText((message?.content?.body as string) || "")}
             </span>
         );
     } else {
-        const body = (message?.content?.body as string) || "";
+        const body = renderMentionsAsDisplayText((message?.content?.body as string) || "");
         const replyTo = message.replyTo;
         const hasInlineReply = body.includes("\n\n") && body.startsWith("> ");
         const isReply = !!replyTo || hasInlineReply;
         const replyText = hasInlineReply ? body.substring(body.indexOf("\n\n") + 2) : body;
         const originalMessage = hasInlineReply
             ? body.substring(body.indexOf("> ") + 2, body.indexOf("\n\n"))
-            : (replyTo?.content?.body as string) || "";
+            : renderMentionsAsDisplayText((replyTo?.content?.body as string) || "");
         const originalAuthor = hasInlineReply
             ? originalMessage.substring(1, originalMessage.indexOf(">"))
             : replyTo?.author?.name || replyTo?.author?._id || "";
@@ -839,14 +843,9 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage }: ChatInputProps
                     onKeyDown={handleCommentKeyDown}
                     placeholder="Type message and click icon or return to send..."
                     className="flex-grow rounded-[20px] bg-gray-100"
-                    style={{
-                        ...defaultMentionsInputStyle,
-                        suggestions: {
-                            position: "absolute",
-                            bottom: "100%",
-                            marginBottom: "10px",
-                        },
-                    }}
+                    style={defaultMentionsInputStyle}
+                    allowSuggestionsAboveCursor={true}
+                    forceSuggestionsAboveCursor={true}
                 >
                     <Mention
                         trigger="@"
