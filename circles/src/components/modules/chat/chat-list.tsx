@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo } from "react";
 import { useAtom } from "jotai";
-import { ChatRoom, ChatRoomDisplay } from "@/models/models";
+import { ChatRoomDisplay } from "@/models/models";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import { latestMessagesAtom, unreadCountsAtom, chatSettingsModalAtom } from "@/lib/data/atoms";
 import { useRouter, useParams } from "next/navigation";
@@ -17,10 +17,12 @@ import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 interface ChatListProps {
     chats: ChatRoomDisplay[];
+    searchTerm?: string;
+    totalChatsCount?: number;
     onChatClick?: (chat: ChatRoomDisplay) => void | Promise<void>;
 }
 
-export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
+export const ChatList: React.FC<ChatListProps> = ({ chats, searchTerm, totalChatsCount = chats.length, onChatClick }) => {
     const [latestMessages] = useAtom(latestMessagesAtom);
     const [unreadCounts] = useAtom(unreadCountsAtom);
     const [, setChatSettingsModal] = useAtom(chatSettingsModalAtom);
@@ -106,7 +108,7 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
                                     </span>
                                 )}
                             </div>
-                            <div className="flex-1 min-w-0 overflow-hidden">
+                            <div className="min-w-0 flex-1 overflow-hidden">
                                 <p className="truncate text-sm font-medium">
                                     {chat.name}
                                     {groupMemberCount !== undefined && (
@@ -125,7 +127,7 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
                                         isOpen: true,
                                     });
                                 }}
-                                className="flex-shrink-0 opacity-0 group-hover:opacity-100 p-2 hover:bg-gray-200 rounded-full transition-opacity"
+                                className="flex-shrink-0 rounded-full p-2 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-gray-200"
                                 aria-label="Chat settings"
                             >
                                 <Settings className="h-4 w-4 text-gray-600" />
@@ -146,6 +148,8 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
                                 Discover
                             </Button>
                         </div>
+                    ) : searchTerm?.trim() && totalChatsCount > 0 ? (
+                        "No chats found"
                     ) : (
                         "No chat rooms joined"
                     )}

@@ -1,13 +1,12 @@
 // chat/layout.tsx - chat layout component, lists all chat rooms and shows selected chat room
 "use client";
 
-import { PropsWithChildren, useEffect, useState } from "react";
+import { PropsWithChildren, useEffect, useMemo, useState } from "react";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { ChatList } from "@/components/modules/chat/chat-list";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { ChatSearch } from "@/components/modules/chat/chat-search";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { CreateChatModal } from "@/components/modules/chat/create-chat-modal";
@@ -23,6 +22,7 @@ export default function ChatLayout({ children }: PropsWithChildren) {
     const isMobile = useIsMobile();
     const pathname = usePathname();
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [chatSearchTerm, setChatSearchTerm] = useState("");
     const [chatSettingsModal, setChatSettingsModal] = useAtom(chatSettingsModalAtom);
 
     const [chatRooms, setChatRooms] = useState<ChatRoomDisplay[]>([]);
@@ -45,13 +45,13 @@ export default function ChatLayout({ children }: PropsWithChildren) {
         };
 
         loadRooms();
-	
-	// poll so unreadCount updates (mongo chat)
-	const interval = setInterval(loadRooms, 3000);
-	  
-	return () => {
- 	  isMounted = false;
-  	  clearInterval(interval);
+
+        // poll so unreadCount updates (mongo chat)
+        const interval = setInterval(loadRooms, 3000);
+
+        return () => {
+            isMounted = false;
+            clearInterval(interval);
         };
     }, [user]);
 
@@ -60,6 +60,20 @@ export default function ChatLayout({ children }: PropsWithChildren) {
             console.log("useEffect.ChatLayout.1");
         }
     }, []);
+
+    const filteredChatRooms = useMemo(() => {
+        const term = chatSearchTerm.trim().toLowerCase();
+        if (!term) return chatRooms;
+
+        return chatRooms.filter((chat) => {
+            const nameMatch = chat.name?.toLowerCase().includes(term);
+            const handleMatch = chat.handle?.toLowerCase().includes(term);
+            const circleNameMatch = chat.circle?.name?.toLowerCase().includes(term);
+            const circleHandleMatch = chat.circle?.handle?.toLowerCase().includes(term);
+
+            return !!(nameMatch || handleMatch || circleNameMatch || circleHandleMatch);
+        });
+    }, [chatRooms, chatSearchTerm]);
 
     if (!user) {
         return <div className="p-4"></div>;
@@ -76,16 +90,15 @@ export default function ChatLayout({ children }: PropsWithChildren) {
         : undefined;
 
     // Determine if current user is admin of the selected chat
-    const isUserAdmin = selectedChat && user?.chatRoomMemberships
-        ? (() => {
-            const membership = user.chatRoomMemberships.find(
-                m => m.chatRoom._id === selectedChat._id
-            );
-            // Check role field, fallback to true for backward compatibility with old groups
-            // (groups created before role field was added)
-            return !!(membership?.role === "admin" || (membership && !membership.role));
-        })()
-        : false;
+    const isUserAdmin =
+        selectedChat && user?.chatRoomMemberships
+            ? (() => {
+                  const membership = user.chatRoomMemberships.find((m) => m.chatRoom._id === selectedChat._id);
+                  // Check role field, fallback to true for backward compatibility with old groups
+                  // (groups created before role field was added)
+                  return !!(membership?.role === "admin" || (membership && !membership.role));
+              })()
+            : false;
 
     return (
         <div>
@@ -95,28 +108,31 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                         isMobile ? "w-full" : "fixed left-0 top-0 h-screen w-80 border-r border-gray-200 md:left-[72px]"
                     } flex flex-col bg-white p-2`}
                 >
-                    <div className="flex items-center justify-between mb-4 mt-2 pl-2 pt-0">
+                    <div className="mb-4 mt-2 flex items-center justify-between pl-2 pt-0">
                         <h2 className="text-xl font-semibold">Chats</h2>
                         <Button variant="ghost" size="icon" onClick={() => setIsCreateModalOpen(true)}>
                             <SquarePen className="h-5 w-5" />
                         </Button>
                     </div>
-                    <ChatSearch />
+                    <ChatSearch value={chatSearchTerm} onChange={setChatSearchTerm} />
                     <div className="flex-grow overflow-y-auto">
                         <ChatList
-                            chats={chatRooms}
+                            chats={filteredChatRooms}
+                            searchTerm={chatSearchTerm}
+                            totalChatsCount={chatRooms.length}
                             onChatClick={async (chat) => {
-                              // Optimistic UI: clear immediately
-                              setChatRooms((prev) => prev.map((r) => (r._id === chat._id ? ({ ...r, unreadCount: 0 } as any) : r)));
+                                // Optimistic UI: clear immediately
+                                setChatRooms((prev) =>
+                                    prev.map((r) => (r._id === chat._id ? ({ ...r, unreadCount: 0 } as any) : r)),
+                                );
 
-                              // Persist: mark conversation as read on the server (mongo only)
-                              const convoId = String(chat._id || chat.handle || "");
-                              if (convoId) {
-                                await markConversationReadAction(convoId, null); // null = mark up to latest
-                            }
-                         }}
-                    />
-
+                                // Persist: mark conversation as read on the server (mongo only)
+                                const convoId = String(chat._id || chat.handle || "");
+                                if (convoId) {
+                                    await markConversationReadAction(convoId, null); // null = mark up to latest
+                                }
+                            }}
+                        />
                     </div>
                 </aside>
             )}
