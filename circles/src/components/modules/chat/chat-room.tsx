@@ -12,11 +12,11 @@ import { CirclePicture } from "../circles/circle-picture";
 import RichText from "../feeds/RichText";
 import { Mention, MentionsInput } from "react-mentions";
 import { defaultMentionsInputStyle, defaultMentionStyle } from "../feeds/post-list";
-import { searchCirclesAction } from "../feeds/actions";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import {
     deleteMongoMessageAction,
     editMessageAction,
+    getChatRoomMembersAction,
     sendAttachmentAction,
     sendMessageAction,
     toggleMongoReactionAction,
@@ -58,31 +58,11 @@ const CHAT_MENTION_MARKUP_TEST_REGEX = /\[[^\]]+\]\(\/circles\/[^)]+\)/;
 
 const renderMentionsAsDisplayText = (content: string) => content.replace(CHAT_MENTION_MARKUP_REGEX, "$1");
 
-const handleChatMentionQuery = async (
-    query: string,
-    callback: (data: { id: string; display: string; picture?: string }[]) => void,
-) => {
-    const response = await searchCirclesAction(encodeURIComponent(query));
-    if (!response?.success) {
-        return;
-    }
-
-    const suggestions =
-        response.circles
-            ?.map((circle) => {
-                const idValue = circle.handle || circle.did || circle._id;
-                if (!idValue || !circle.name) {
-                    return null;
-                }
-                return {
-                    id: String(idValue),
-                    display: circle.name,
-                    ...(circle.picture?.url ? { picture: circle.picture.url } : {}),
-                };
-            })
-            .filter((item): item is { id: string; display: string; picture?: string } => item !== null) ?? [];
-
-    callback(suggestions);
+type MentionSuggestion = {
+    id: string;
+    display: string;
+    picture?: string;
+    handle?: string;
 };
 
 const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
@@ -571,15 +551,69 @@ type ChatInputProps = {
     roomId: string | null;
     editingMessage: ChatMessage | null;
     setEditingMessage: (message: ChatMessage | null) => void;
+    mentionCandidates: Circle[];
     chatProvider?: "matrix" | "mongo";
 };
 
-const ChatInput = ({ roomId, editingMessage, setEditingMessage }: ChatInputProps) => {
+const ChatInput = ({ roomId, editingMessage, setEditingMessage, mentionCandidates }: ChatInputProps) => {
     const [user] = useAtom(userAtom);
     const [newMessage, setNewMessage] = useState("");
     const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
     const [, setRoomMessages] = useAtom(roomMessagesAtom);
     const isMobile = useIsMobile();
+
+    const mentionSuggestions = useMemo<MentionSuggestion[]>(() => {
+        const seen = new Set<string>();
+        const suggestions: MentionSuggestion[] = [];
+
+        for (const candidate of mentionCandidates || []) {
+            const idValue = candidate?.handle || candidate?.did || candidate?._id;
+            const display = candidate?.name;
+            if (!idValue || !display) {
+                continue;
+            }
+
+            const dedupeKey = String(candidate?.did || candidate?._id || candidate?.handle || idValue);
+            if (seen.has(dedupeKey)) {
+                continue;
+            }
+            seen.add(dedupeKey);
+
+            suggestions.push({
+                id: String(idValue),
+                display: String(display),
+                ...(candidate?.picture?.url ? { picture: candidate.picture.url } : {}),
+                ...(candidate?.handle ? { handle: candidate.handle } : {}),
+            });
+        }
+
+        return suggestions;
+    }, [mentionCandidates]);
+
+    const handleChatMentionQuery = useCallback(
+        (query: string, callback: (data: MentionSuggestion[]) => void) => {
+            if (!mentionSuggestions.length) {
+                callback([]);
+                return;
+            }
+
+            const term = query.trim().toLowerCase();
+            if (!term) {
+                callback(mentionSuggestions);
+                return;
+            }
+
+            callback(
+                mentionSuggestions.filter((suggestion) => {
+                    const displayMatch = suggestion.display.toLowerCase().includes(term);
+                    const handleMatch = suggestion.handle?.toLowerCase().includes(term);
+                    const idMatch = suggestion.id.toLowerCase().includes(term);
+                    return displayMatch || !!handleMatch || idMatch;
+                }),
+            );
+        },
+        [mentionSuggestions],
+    );
     // Populate input when editing
     useEffect(() => {
         if (editingMessage) {
@@ -929,10 +963,12 @@ export const ChatRoomComponent: React.FC<{
     const [isLoadingMessages, startLoadingMessagesTransition] = useTransition();
     const inputRef = useRef<HTMLDivElement>(null);
     const [mapOpen] = useAtom(mapOpenAtom);
+    const [user] = useAtom(userAtom);
     const [roomMessages, setRoomMessages] = useAtom(roomMessagesAtom);
     const [unreadCounts, setUnreadCounts] = useAtom(unreadCountsAtom);
     const [lastReadTimestamps, setLastReadTimestamps] = useAtom(lastReadTimestampsAtom);
     const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
+    const [mentionCandidates, setMentionCandidates] = useState<Circle[]>([]);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
     const router = useRouter();
     const params = useParams<{ handle?: string | string[] }>();
@@ -941,6 +977,74 @@ export const ChatRoomComponent: React.FC<{
     const provider: "mongo" = "mongo";
 
     const roomId = routeHandle || (chatRoom as any)?._id || (chatRoom as any)?.id || (chatRoom as any)?.handle || null;
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const fromPayload = Array.isArray((chatRoom as any)?.participantCircles)
+            ? ((chatRoom as any).participantCircles as Circle[])
+            : [];
+        const fallbackCandidates = user ? [user] : [];
+
+        const dedupeParticipants = (participants: Circle[]): Circle[] => {
+            const seen = new Set<string>();
+            const deduped: Circle[] = [];
+            for (const participant of participants) {
+                const key = participant?.did || participant?._id || participant?.handle;
+                if (!key || seen.has(String(key))) {
+                    continue;
+                }
+                seen.add(String(key));
+                deduped.push(participant);
+            }
+            return deduped;
+        };
+
+        const payloadCandidates = dedupeParticipants(fromPayload);
+        if (payloadCandidates.length > 0) {
+            setMentionCandidates(payloadCandidates);
+            return () => {
+                cancelled = true;
+            };
+        }
+
+        if ((chatRoom as any)?.isDirect || !roomId) {
+            setMentionCandidates(fallbackCandidates);
+            return () => {
+                cancelled = true;
+            };
+        }
+
+        const loadGroupParticipants = async () => {
+            try {
+                const result = await getChatRoomMembersAction(roomId);
+                if (cancelled) {
+                    return;
+                }
+
+                if (result.success && Array.isArray(result.members)) {
+                    const memberUsers = result.members
+                        .map((member: any) => member?.user)
+                        .filter((memberUser: Circle | null): memberUser is Circle => !!memberUser);
+                    const scopedParticipants = dedupeParticipants(memberUsers);
+                    setMentionCandidates(scopedParticipants.length > 0 ? scopedParticipants : fallbackCandidates);
+                    return;
+                }
+            } catch (error) {
+                console.error("Failed to load chat participants for mentions:", error);
+            }
+
+            if (!cancelled) {
+                setMentionCandidates(fallbackCandidates);
+            }
+        };
+
+        void loadGroupParticipants();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [chatRoom, roomId, user]);
 
     useEffect(() => {
         if (process.env.NODE_ENV === "production") return;
@@ -1206,6 +1310,7 @@ export const ChatRoomComponent: React.FC<{
                                 roomId={roomId}
                                 editingMessage={editingMessage}
                                 setEditingMessage={setEditingMessage}
+                                mentionCandidates={mentionCandidates}
                                 chatProvider={provider}
                             />
                         </div>
