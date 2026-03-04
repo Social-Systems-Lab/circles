@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo } from "react";
 import { useAtom } from "jotai";
-import { ChatRoom, ChatRoomDisplay } from "@/models/models";
+import { ChatRoomDisplay } from "@/models/models";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import { latestMessagesAtom, unreadCountsAtom, chatSettingsModalAtom } from "@/lib/data/atoms";
 import { useRouter, useParams } from "next/navigation";
@@ -17,10 +17,19 @@ import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 interface ChatListProps {
     chats: ChatRoomDisplay[];
+    isLoading?: boolean;
+    searchTerm?: string;
+    totalChatsCount?: number;
     onChatClick?: (chat: ChatRoomDisplay) => void | Promise<void>;
 }
 
-export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
+export const ChatList: React.FC<ChatListProps> = ({
+    chats,
+    isLoading = false,
+    searchTerm,
+    totalChatsCount = chats.length,
+    onChatClick,
+}) => {
     const [latestMessages] = useAtom(latestMessagesAtom);
     const [unreadCounts] = useAtom(unreadCountsAtom);
     const [, setChatSettingsModal] = useAtom(chatSettingsModalAtom);
@@ -29,6 +38,7 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
     const params = useParams();
     const activeChatHandle = params.handle as string;
     const getConversationId = (chat: ChatRoomDisplay) => String(chat._id || chat.matrixRoomId || chat.handle || "");
+    const isLoadingRooms = isLoading && chats.length === 0;
 
     const sortedChats = useMemo(() => {
         const chatsCopy = [...chats];
@@ -59,6 +69,14 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
             console.log("useEffect.ChatList.1");
         }
     }, []);
+
+    const LoadingEllipsis = () => (
+        <span className="inline-flex" aria-hidden="true">
+            <span className="loading-dot">.</span>
+            <span className="loading-dot">.</span>
+            <span className="loading-dot">.</span>
+        </span>
+    );
 
     return (
         <div>
@@ -135,7 +153,12 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
                 })
             ) : (
                 <div className="flex h-full items-center justify-center pt-4 text-sm text-gray-500">
-                    {isMobile ? (
+                    {isLoadingRooms ? (
+                        <p className="flex items-center">
+                            <span>Loading messages</span>
+                            <LoadingEllipsis />
+                        </p>
+                    ) : isMobile ? (
                         <div className="flex flex-col items-center justify-center gap-4 p-4">
                             <Image src={emptyFeed} alt="No chats yet" width={230} />
                             <h4 className="text-lg font-semibold">No Chat Rooms</h4>
@@ -146,11 +169,42 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, onChatClick }) => {
                                 Discover
                             </Button>
                         </div>
+                    ) : searchTerm?.trim() && totalChatsCount > 0 ? (
+                        "No chats found"
                     ) : (
                         "No chat rooms joined"
                     )}
                 </div>
             )}
+            <style jsx>{`
+                .loading-dot {
+                    animation: loadingDot 1.2s infinite;
+                    margin-left: 1px;
+                }
+
+                .loading-dot:nth-child(1) {
+                    animation-delay: 0s;
+                }
+
+                .loading-dot:nth-child(2) {
+                    animation-delay: 0.2s;
+                }
+
+                .loading-dot:nth-child(3) {
+                    animation-delay: 0.4s;
+                }
+
+                @keyframes loadingDot {
+                    0%,
+                    80%,
+                    100% {
+                        opacity: 0.2;
+                    }
+                    40% {
+                        opacity: 1;
+                    }
+                }
+            `}</style>
         </div>
     );
 };
