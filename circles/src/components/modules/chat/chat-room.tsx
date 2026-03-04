@@ -55,8 +55,10 @@ export const renderCircleSuggestion = (
 
 const CHAT_MENTION_MARKUP_REGEX = /\[([^\]]+)\]\(\/circles\/([^)]+)\)/g;
 const CHAT_MENTION_MARKUP_TEST_REGEX = /\[[^\]]+\]\(\/circles\/[^)]+\)/;
+const CHAT_MENTION_LINK_HREF_REGEX = /^\/circles\/[^/\s?#]+(?:[?#].*)?$/i;
 
 const renderMentionsAsDisplayText = (content: string) => content.replace(CHAT_MENTION_MARKUP_REGEX, "$1");
+const isChatMentionLinkHref = (href?: string) => !!href && CHAT_MENTION_LINK_HREF_REGEX.test(href);
 
 type MentionSuggestion = {
     id: string;
@@ -105,7 +107,23 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
                     </div>
                 )}
                 {isMarkdown || hasMentionMarkup ? (
-                    <MemoizedReactMarkdown>{replyText}</MemoizedReactMarkdown>
+                    <MemoizedReactMarkdown
+                        components={{
+                            a: ({ href, className, ...props }) => (
+                                <a
+                                    href={href}
+                                    className={
+                                        isChatMentionLinkHref(href)
+                                            ? `inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 font-semibold text-blue-700 no-underline hover:underline ${className ?? ""}`.trim()
+                                            : className
+                                    }
+                                    {...props}
+                                />
+                            ),
+                        }}
+                    >
+                        {replyText}
+                    </MemoizedReactMarkdown>
                 ) : (
                     <RichText content={replyText} />
                 )}
