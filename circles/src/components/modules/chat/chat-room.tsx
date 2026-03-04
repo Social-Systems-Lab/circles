@@ -11,7 +11,8 @@ import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { CirclePicture } from "../circles/circle-picture";
 import RichText from "../feeds/RichText";
 import { Mention, MentionsInput } from "react-mentions";
-import { defaultMentionsInputStyle, defaultMentionStyle, handleMentionQuery } from "../feeds/post-list";
+import { defaultMentionsInputStyle, defaultMentionStyle } from "../feeds/post-list";
+import { searchCirclesAction } from "../feeds/actions";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import {
     deleteMongoMessageAction,
@@ -52,9 +53,37 @@ export const renderCircleSuggestion = (
     </div>
 );
 
-const CHAT_MENTION_MARKUP_REGEX = /\[([^\]]+)\]\(\/circles\/([0-9a-fA-F]{24})\)/g;
+const CHAT_MENTION_MARKUP_REGEX = /\[([^\]]+)\]\(\/circles\/([^)]+)\)/g;
+const CHAT_MENTION_MARKUP_TEST_REGEX = /\[[^\]]+\]\(\/circles\/[^)]+\)/;
 
 const renderMentionsAsDisplayText = (content: string) => content.replace(CHAT_MENTION_MARKUP_REGEX, "$1");
+
+const handleChatMentionQuery = async (
+    query: string,
+    callback: (data: { id: string; display: string; picture?: string }[]) => void,
+) => {
+    const response = await searchCirclesAction(encodeURIComponent(query));
+    if (!response?.success) {
+        return;
+    }
+
+    const suggestions =
+        response.circles
+            ?.map((circle) => {
+                const idValue = circle.handle || circle.did || circle._id;
+                if (!idValue || !circle.name) {
+                    return null;
+                }
+                return {
+                    id: String(idValue),
+                    display: circle.name,
+                    ...(circle.picture?.url ? { picture: circle.picture.url } : {}),
+                };
+            })
+            .filter((item): item is { id: string; display: string; picture?: string } => item !== null) ?? [];
+
+    callback(suggestions);
+};
 
 const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
     if (preview) {
@@ -65,19 +94,20 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
             </span>
         );
     } else {
-        const body = renderMentionsAsDisplayText((message?.content?.body as string) || "");
+        const body = (message?.content?.body as string) || "";
         const replyTo = message.replyTo;
         const hasInlineReply = body.includes("\n\n") && body.startsWith("> ");
         const isReply = !!replyTo || hasInlineReply;
         const replyText = hasInlineReply ? body.substring(body.indexOf("\n\n") + 2) : body;
         const originalMessage = hasInlineReply
-            ? body.substring(body.indexOf("> ") + 2, body.indexOf("\n\n"))
+            ? renderMentionsAsDisplayText(body.substring(body.indexOf("> ") + 2, body.indexOf("\n\n")))
             : renderMentionsAsDisplayText((replyTo?.content?.body as string) || "");
         const originalAuthor = hasInlineReply
             ? originalMessage.substring(1, originalMessage.indexOf(">"))
             : replyTo?.author?.name || replyTo?.author?._id || "";
         const originalAuthorColor = generateColorFromString(originalAuthor);
         const isMarkdown = (message as any)?.format === "markdown";
+        const hasMentionMarkup = CHAT_MENTION_MARKUP_TEST_REGEX.test(replyText);
 
         return (
             <div className="max-w-full overflow-hidden">
@@ -94,7 +124,11 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
                         </p>
                     </div>
                 )}
-                {isMarkdown ? <MemoizedReactMarkdown>{replyText}</MemoizedReactMarkdown> : <RichText content={replyText} />}
+                {isMarkdown || hasMentionMarkup ? (
+                    <MemoizedReactMarkdown>{replyText}</MemoizedReactMarkdown>
+                ) : (
+                    <RichText content={replyText} />
+                )}
             </div>
         );
     }
@@ -849,7 +883,7 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage }: ChatInputProps
                 >
                     <Mention
                         trigger="@"
-                        data={handleMentionQuery}
+                        data={handleChatMentionQuery}
                         style={defaultMentionStyle}
                         displayTransform={(id, display) => `${display}`}
                         renderSuggestion={renderCircleSuggestion}
