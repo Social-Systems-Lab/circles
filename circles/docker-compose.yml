@@ -6,8 +6,8 @@ services:
             context: .
             dockerfile: Dockerfile
             args:
-              GIT_SHA: ${GIT_SHA}
-              BUILD_TIME: ${BUILD_TIME}
+              GIT_SHA: ${GIT_SHA:-unknown}
+              BUILD_TIME: ${BUILD_TIME:-unknown}
         ports:
             - "${CIRCLES_PORT}:${CIRCLES_PORT}"
         env_file:
