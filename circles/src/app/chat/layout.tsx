@@ -26,12 +26,18 @@ export default function ChatLayout({ children }: PropsWithChildren) {
     const [chatSettingsModal, setChatSettingsModal] = useAtom(chatSettingsModalAtom);
 
     const [chatRooms, setChatRooms] = useState<ChatRoomDisplay[]>([]);
+    const [isChatRoomsLoading, setIsChatRoomsLoading] = useState(true);
 
     useEffect(() => {
         let isMounted = true;
+        if (isMounted) setIsChatRoomsLoading(true);
+
         const loadRooms = async () => {
             if (!user) {
-                if (isMounted) setChatRooms([]);
+                if (isMounted) {
+                    setChatRooms([]);
+                    setIsChatRoomsLoading(false);
+                }
                 return;
             }
             try {
@@ -41,6 +47,8 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                 }
             } catch (error) {
                 console.error("Failed to load chat rooms:", error);
+            } finally {
+                if (isMounted) setIsChatRoomsLoading(false);
             }
         };
 
@@ -118,6 +126,7 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                     <div className="flex-grow overflow-y-auto">
                         <ChatList
                             chats={filteredChatRooms}
+                            isLoading={isChatRoomsLoading}
                             searchTerm={chatSearchTerm}
                             totalChatsCount={chatRooms.length}
                             onChatClick={async (chat) => {
