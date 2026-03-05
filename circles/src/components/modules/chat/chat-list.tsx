@@ -23,7 +23,7 @@ interface ChatListProps {
     onChatClick?: (chat: ChatRoomDisplay) => void | Promise<void>;
 }
 
-export const ChatList: React.FC<ChatListProps> = ({ chats, searchTerm, totalChatsCount = chats.length, onChatClick }) => {
+export const ChatList: React.FC<ChatListProps> = ({ chats, isLoading = false, searchTerm, totalChatsCount = chats.length, onChatClick }) => {
     const [latestMessages] = useAtom(latestMessagesAtom);
     const [unreadCounts] = useAtom(unreadCountsAtom);
     const [, setChatSettingsModal] = useAtom(chatSettingsModalAtom);
