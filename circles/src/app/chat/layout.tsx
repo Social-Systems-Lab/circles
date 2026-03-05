@@ -116,7 +116,7 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                         isMobile ? "w-full" : "fixed left-0 top-0 h-screen w-80 border-r border-gray-200 md:left-[72px]"
                     } flex flex-col bg-white p-2`}
                 >
-                    <div className="flex items-center justify-between mb-4 mt-2 pl-2 pt-0">
+                    <div className="mb-4 mt-2 flex items-center justify-between pl-2 pt-0">
                         <h2 className="text-xl font-semibold">Chats</h2>
                         <Button variant="ghost" size="icon" onClick={() => setIsCreateModalOpen(true)}>
                             <SquarePen className="h-5 w-5" />

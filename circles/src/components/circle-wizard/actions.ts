@@ -6,6 +6,7 @@ import {
     getCircleById,
     ensureModuleIsEnabledOnCircle,
     getCircleByHandle,
+    getCirclePath,
 } from "@/lib/data/circle";
 import { Circle, CircleType, Media, FileInfo } from "@/models/models";
 import { ImageItem } from "@/components/forms/controls/multi-image-uploader";
@@ -255,6 +256,11 @@ export async function saveProfileAction(
         }
 
         const updatedCircle = await getCircleById(circleId); // Fetch potentially updated circle
+        if (updatedCircle?.handle) {
+            const circlePath = await getCirclePath(updatedCircle);
+            revalidatePath(circlePath);
+            revalidatePath("/circles");
+        }
         return { success: true, message: "Profile updated successfully", data: { circle: updatedCircle } };
     } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to save profile.";

@@ -206,6 +206,10 @@ const mapConversationsToChatRoomDisplays = async (
     return conversations.map((conversation) => {
         const isDirect = conversation.type === "dm";
         const circle = conversation.circleId ? circleById.get(conversation.circleId) : undefined;
+        const participantDids = Array.from(new Set((conversation.participants || []).filter(Boolean)));
+        const participantCircles = participantDids
+            .map((did) => circleByDid.get(did))
+            .filter((participant): participant is Circle => !!participant);
         const otherDid = isDirect
             ? conversation.participants.find((participant) => participant !== userDid)
             : undefined;
@@ -229,6 +233,9 @@ const mapConversationsToChatRoomDisplays = async (
             picture: conversation.picture || circle?.picture || otherCircle?.picture,
             isDirect,
             dmParticipants,
+            dmParticipantDids: isDirect ? participantDids : undefined,
+            participantDids,
+            participantCircles,
             circle,
         } as ChatRoomDisplay;
     });

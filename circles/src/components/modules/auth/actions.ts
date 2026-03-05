@@ -20,10 +20,16 @@ export async function getVerificationStatus() {
 
 const requestVerificationSchema = z.object({});
 
+type RequestVerificationState = {
+    message: string;
+    success?: boolean;
+    emailSent?: boolean;
+};
+
 export async function requestVerification(
-    prevState: { message: string },
+    prevState: RequestVerificationState,
     formData: FormData,
-): Promise<{ message: string }> {
+): Promise<RequestVerificationState> {
     try {
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) {
@@ -65,19 +71,34 @@ export async function requestVerification(
             await sendVerificationRequestNotification(user, adminUserPrivates);
         }
 
-        // Send email
-        await sendEmail({
-            to: "hello@socialsystems.io",
-            templateAlias: "user-verification-request",
-            templateModel: {
-                subject: "New Account Verification Request",
-                header: "New Account Verification Request",
-                body: `User ${user.name} (@${user.handle}) has requested account verification.`,
-                action_url: "https://circles.socialsystems.io/admin?tab=users",
-            },
-        });
+        let emailSent = false;
+        const shouldSkipEmailInLocalDev = !process.env.POSTMARK_API_TOKEN && process.env.NODE_ENV === "development";
 
-        return { message: "Verification request submitted successfully." };
+        if (shouldSkipEmailInLocalDev) {
+            console.log("Skipping verification request email in development mode (POSTMARK_API_TOKEN not set).");
+        } else {
+            try {
+                await sendEmail({
+                    to: "hello@socialsystems.io",
+                    templateAlias: "user-verification-request",
+                    templateModel: {
+                        subject: "New Account Verification Request",
+                        header: "New Account Verification Request",
+                        body: `User ${user.name} (@${user.handle}) has requested account verification.`,
+                        action_url: "https://circles.socialsystems.io/admin?tab=users",
+                    },
+                });
+                emailSent = true;
+            } catch (emailError) {
+                console.error("Failed to send verification request email. Request remains successful.", emailError);
+            }
+        }
+
+        return {
+            success: true,
+            emailSent,
+            message: "Verification request submitted successfully.",
+        };
     } catch (error) {
         console.error("Error in requestVerification:", error);
         return { message: "An unexpected error occurred. Please try again later." };
