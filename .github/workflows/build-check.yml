@@ -23,5 +23,8 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Typecheck (fast)
+        run: bunx tsc -p tsconfig.json --noEmit
+
       - name: Build project
         run: bun run build
