@@ -108,6 +108,7 @@ services:
 
     postgres:
         image: postgres:14
+        profiles: ["matrix"]
         restart: always
         env_file:
             - .env
@@ -123,6 +124,7 @@ services:
 
     synapse:
         image: matrixdotorg/synapse:latest
+        profiles: ["matrix"]
         env_file:
             - .env
         restart: always
