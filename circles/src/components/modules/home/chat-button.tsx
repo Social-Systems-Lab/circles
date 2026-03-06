@@ -22,7 +22,7 @@ const ChatButton: React.FC<ChatButtonProps> = ({ circle, renderCompact }) => {
         e.preventDefault();
         e.stopPropagation();
 
-        const provider = process.env.NEXT_PUBLIC_CHAT_PROVIDER || "matrix";
+        const provider = "mongo";
 
         // Mongo: ensure a conversation exists for this circle, then route by _id
         if (provider === "mongo") {

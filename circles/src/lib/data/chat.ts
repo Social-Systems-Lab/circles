@@ -7,7 +7,7 @@ import { getCircleById, updateCircle } from "./circle";
 import { getPrivateUserByDid } from "./user";
 import { listConversationsForUser } from "./mongo-chat";
 
-const getChatProvider = () => process.env.CHAT_PROVIDER || "matrix";
+const getChatProvider = () => "mongo";
 
 // Chat Room Functions
 
