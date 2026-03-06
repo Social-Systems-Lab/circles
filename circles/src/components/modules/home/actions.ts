@@ -11,7 +11,7 @@ import { features } from "@/lib/data/constants";
 import { saveFile } from "@/lib/data/storage";
 import { revalidatePath } from "next/cache";
 import { getUser, getUserById, getUserPrivate, addBookmark, removeBookmark, pinCircle, unpinCircle } from "@/lib/data/user";
-import { notifyNewMember, sendNotifications } from "@/lib/data/matrix";
+import { notifyNewMember, sendNotifications } from "@/lib/data/notifications";
 import { findOrCreateDMRoom as findOrCreateDMRoomData } from "@/lib/data/chat";
 
 type CircleActionResponse = {

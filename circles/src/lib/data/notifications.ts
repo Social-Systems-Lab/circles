@@ -17,7 +17,32 @@ import {
     GoalStage,
     Event,
 } from "@/models/models";
-import { sendNotifications } from "./matrix";
+
+// Temporary Mongo-safe dispatcher replacing Matrix notifications
+export async function sendNotifications(type: string, recipients: any[], payload: any) {
+    console.log("🔔 [NOTIFY:FALLBACK]", type, recipients?.length || 0)
+}
+
+
+export async function notifyNewMember(userDid: string, circle: Circle, followRequest: boolean = false): Promise<void> {
+    try {
+        const recipient = await getUserPrivate(userDid);
+        if (!recipient) return;
+
+        await sendNotifications(
+            followRequest ? "new_following" : "new_member",
+            [recipient],
+            sanitizeObjectForJSON({
+                circle,
+                userDid,
+                followRequest,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyNewMember:", error);
+    }
+}
+
 import { getUser, getUserPrivate } from "./user";
 import { getFeed, getPost } from "./feed";
 import { getCircleById, findProjectByShadowPostId, getCirclesByDids } from "./circle";

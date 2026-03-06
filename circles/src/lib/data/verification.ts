@@ -1,5 +1,5 @@
 import { Circle, UserPrivate } from "@/models/models";
-import { sendNotifications } from "./matrix";
+import { sendNotifications } from "./notifications";
 import { getUserPrivate } from "./user";
 import { getCirclesByDids } from "./circle";
 

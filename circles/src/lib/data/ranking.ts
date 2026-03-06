@@ -10,7 +10,7 @@ import { getActiveGoalsByCircleId } from "./goal";
 import { getActiveIssuesByCircleId } from "./issue";
 import { getActiveProposalsByCircleId } from "./proposal";
 // Removed incorrect logger import, will use console.*
-import { sendNotifications } from "./matrix"; // Import the actual sending function
+import { sendNotifications } from "./notifications"; // Import the actual sending function
 import { getUserPrivate } from "./user"; // To fetch recipient details
 
 // --- Constants ---

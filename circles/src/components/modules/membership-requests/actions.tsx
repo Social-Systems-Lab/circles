@@ -3,7 +3,7 @@
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getCirclePath } from "@/lib/data/circle";
 import { features } from "@/lib/data/constants";
-import { notifyNewMember } from "@/lib/data/matrix";
+import { notifyNewMember } from "@/lib/data/notifications";
 import { addMember } from "@/lib/data/member";
 import {
     getAllMembershipRequests,

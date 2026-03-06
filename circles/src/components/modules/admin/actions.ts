@@ -7,7 +7,7 @@ import { Circle, UserPrivate } from "@/models/models";
 import { ObjectId } from "mongodb";
 import { getAuthenticatedUserDid, getServerPublicKey } from "@/lib/auth/auth";
 import { getUserPrivate } from "@/lib/data/user";
-import { sendNotifications } from "@/lib/data/matrix";
+import { sendNotifications } from "@/lib/data/notifications";
 import { sendUserVerificationRejectedNotification, sendUserVerifiedNotification } from "@/lib/data/notifications";
 import { sendEmail } from "@/lib/data/email";
 import { GlobalServerSettingsFormData, globalServerSettingsValidationSchema } from "./global-server-settings-schema";
