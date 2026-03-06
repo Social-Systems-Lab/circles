@@ -32,7 +32,7 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, isLoading = false, se
     const params = useParams();
     const activeChatHandle = params.handle as string;
     const getConversationId = (chat: ChatRoomDisplay) => String(chat._id || chat.matrixRoomId || chat.handle || "");
-    const isLoadingRooms = isLoading && chats.length === 0;
+    const isLoadingRooms = isLoading && totalChatsCount === 0;
 
     const sortedChats = useMemo(() => {
         const chatsCopy = [...chats];
@@ -148,8 +148,8 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, isLoading = false, se
             ) : (
                 <div className="flex h-full items-center justify-center pt-4 text-sm text-gray-500">
                     {isLoadingRooms ? (
-                        <p className="flex items-center">
-                            <span>Loading messages</span>
+                        <p className="flex items-center animate-pulse" aria-live="polite">
+                            <span>Messages loading</span>
                             <LoadingEllipsis />
                         </p>
                     ) : isMobile ? (
