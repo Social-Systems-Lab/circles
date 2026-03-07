@@ -556,7 +556,7 @@ export const LatestMessage: React.FC<LatestMessageProps> = ({ roomId, latestMess
     }, [latestMessages, roomId]);
 
     if (!latestMessage) {
-        return <span>No messages yet</span>;
+        return <span>Messages loading...</span>;
     }
 
     return <span>{latestMessage?.content?.body as string}</span>;

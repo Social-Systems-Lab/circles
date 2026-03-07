@@ -166,7 +166,7 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, isLoading = false, se
                     ) : searchTerm?.trim() && totalChatsCount > 0 ? (
                         "No chats found"
                     ) : (
-                        "No messages yet"
+                        "Messages loading..."
                     )}
                 </div>
             )}
