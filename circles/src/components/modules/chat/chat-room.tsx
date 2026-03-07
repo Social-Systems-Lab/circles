@@ -223,7 +223,6 @@ type ChatMessagesProps = {
     onMessagesRendered?: () => void;
     handleDelete: (message: ChatMessage) => Promise<void>;
     handleEdit: (message: ChatMessage) => void;
-    chatProvider?: "matrix" | "mongo";
 };
 
 const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
@@ -570,7 +569,6 @@ type ChatInputProps = {
     editingMessage: ChatMessage | null;
     setEditingMessage: (message: ChatMessage | null) => void;
     mentionCandidates: Circle[];
-    chatProvider?: "matrix" | "mongo";
 };
 
 const ChatInput = ({ roomId, editingMessage, setEditingMessage, mentionCandidates }: ChatInputProps) => {
@@ -967,8 +965,7 @@ export const ChatRoomComponent: React.FC<{
     setSelectedChat?: Dispatch<SetStateAction<ChatRoomDisplay | undefined>>;
     circle?: Circle;
     inToolbox?: boolean;
-    chatProvider?: "matrix" | "mongo";
-}> = ({ chatRoom, setSelectedChat, circle, inToolbox, chatProvider }) => {
+}> = ({ chatRoom, setSelectedChat, circle, inToolbox }) => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -1280,7 +1277,6 @@ export const ChatRoomComponent: React.FC<{
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
                                     handleEdit={handleEdit}
-                                    chatProvider={provider}
                                 />
                             )}
                         </div>
@@ -1298,7 +1294,6 @@ export const ChatRoomComponent: React.FC<{
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
                                     handleEdit={handleEdit}
-                                    chatProvider={provider}
                                 />
                             )}
                         </div>
@@ -1329,7 +1324,6 @@ export const ChatRoomComponent: React.FC<{
                                 editingMessage={editingMessage}
                                 setEditingMessage={setEditingMessage}
                                 mentionCandidates={mentionCandidates}
-                                chatProvider={provider}
                             />
                         </div>
                     </div>

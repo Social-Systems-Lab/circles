@@ -38,7 +38,7 @@ export default async function ChatRoomPage(props: ChatRoomPageProps) {
             redirect("/unauthorized");
         }
 
-        return <ChatRoomComponent chatRoom={chatRoom} circle={chatRoom.circle} chatProvider="mongo" />;
+        return <ChatRoomComponent chatRoom={chatRoom} circle={chatRoom.circle} />;
     }
 
     // 2) Otherwise treat slug as handle and redirect to canonical /chat/<conversationId>.

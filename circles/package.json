@@ -69,7 +69,6 @@
         "lodash": "^4.17.21",
         "lucide-react": "^0.484.0",
         "mapbox-gl": "^3.11.1",
-        "matrix-js-sdk": "33.1.0",
         "minio": "^8.0.5",
         "mongodb": "^6.16.0",
         "next": "15.5.9",

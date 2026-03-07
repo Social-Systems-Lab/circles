@@ -329,14 +329,14 @@ export type MatrixMessageContent =
     | Record<string, unknown>; // Catch-all for other message types.
 
 export interface ChatMessage {
-    id: string; // Matrix event_id
-    roomId: string; // Matrix room_id
-    createdBy: string; // Matrix sender
-    createdAt: Date; // Timestamp (Matrix origin_server_ts)
-    content: MatrixMessageContent; // Matrix event content
-    type: string; // Matrix event type
+    id: string; // Message/event ID
+    roomId: string; // Conversation ID
+    createdBy: string; // Sender DID
+    createdAt: Date; // Message timestamp
+    content: MatrixMessageContent; // Message content payload
+    type: string; // Message type
     stateKey?: string; // Optional for state events
-    unsigned?: Record<string, unknown>; // Unsigned fields from Matrix
+    unsigned?: Record<string, unknown>; // Optional extra event metadata
     author: Circle; // User data from your database
     replyTo?: Partial<ChatMessage>; // The message this is a reply to
     reactions?: Record<string, ReactionAggregation[]>; // { [emoji]: [{sender, eventId}, ...] }

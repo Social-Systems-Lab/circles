@@ -99,8 +99,8 @@ export const listChatRoomsAction = async (): Promise<{ success: boolean; rooms?:
     }
 
     try {
-        // Why this broke: delegating through listChatRoomsForUser depends on provider env branching.
-        // In prod, provider mismatch can fall back to Matrix memberships and hide Mongo DMs.
+        // Why this broke: delegating through listChatRoomsForUser used provider branching.
+        // A provider mismatch could hide Mongo DMs in production.
         const memberRows = await Members.find({ userDid }).toArray();
         const circleIds = memberRows.map((membership: any) => membership.circleId).filter(Boolean) as string[];
         const circleObjectIds = circleIds

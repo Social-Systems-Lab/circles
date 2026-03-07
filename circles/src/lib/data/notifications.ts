@@ -18,7 +18,7 @@ import {
     Event,
 } from "@/models/models";
 
-// Temporary Mongo-safe dispatcher replacing Matrix notifications
+// Temporary dispatcher while notification delivery is simplified.
 export async function sendNotifications(type: string, recipients: any[], payload: any) {
     console.log("🔔 [NOTIFY:FALLBACK]", type, recipients?.length || 0)
 }
