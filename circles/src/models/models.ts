@@ -924,10 +924,6 @@ export type AuthInfo = {
     authStatus: "loading" | "authenticated" | "unauthenticated" | "createAccount";
 };
 
-export type MatrixUserCache = {
-    [username: string]: Circle;
-};
-
 export type TabOptions = "following" | "discover";
 
 export type UserSettings = {
