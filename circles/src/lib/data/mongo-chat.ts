@@ -331,7 +331,7 @@ export const listConversationsForUser = async (userDid: string, circleIds: strin
     );
     if (fallbackGroupConversationIds.length > 0) {
         // Why this broke: some group creation paths don't write memberships OR userDid source differs.
-        // Keep groups visible from participants and lazily backfill memberships only when none exist.
+        // Lazily backfill memberships only when none exist for a conversation.
         const fallbackGroupConversationObjectIds = fallbackGroupConversationIds
             .filter((id) => ObjectId.isValid(id))
             .map((id) => new ObjectId(id));
@@ -386,16 +386,17 @@ export const listConversationsForUser = async (userDid: string, circleIds: strin
                         { ordered: false },
                     );
                 }
+                if ((conversation.participants || []).includes(userDid)) {
+                    activeGroupConversationIds.add(conversationId);
+                }
             }
-
-            activeGroupConversationIds.add(conversationId);
         }
     }
 
     const visibleConversations = normalized.filter((conversation) => {
         if (conversation.type === "dm") return true;
         const conversationId = conversation._id.toString();
-        return activeGroupConversationIds.has(conversationId) || participantGroupConversationIds.has(conversationId);
+        return activeGroupConversationIds.has(conversationId);
     });
 
     // Why this broke: Mongo does not guarantee document order.
