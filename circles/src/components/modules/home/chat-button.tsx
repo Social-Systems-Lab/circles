@@ -22,19 +22,10 @@ const ChatButton: React.FC<ChatButtonProps> = ({ circle, renderCompact }) => {
         e.preventDefault();
         e.stopPropagation();
 
-        const provider = "mongo";
-
-        // Mongo: ensure a conversation exists for this circle, then route by _id
-        if (provider === "mongo") {
-            const res = await ensureCircleConversationAction(String(circle._id));
-            if (res.success && res.roomId) {
-                router.push("/chat/" + res.roomId);
-            }
-            return;
+        const res = await ensureCircleConversationAction(String(circle._id));
+        if (res.success && res.roomId) {
+            router.push("/chat/" + res.roomId);
         }
-
-        // Matrix (legacy): keep handle routing
-        router.push("/chat/" + circle.handle);
     };
 
     return (

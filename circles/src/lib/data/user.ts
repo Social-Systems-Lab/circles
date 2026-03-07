@@ -95,12 +95,6 @@ export const getPrivateUserByDid = async (did: string): Promise<UserPrivate> => 
     if (user?._id) {
         user._id = user._id.toString();
     }
-    
-    // append matrix username details
-    user.matrixUrl = process.env.NEXT_PUBLIC_MATRIX_URL;
-    if (user.matrixUsername) {
-        user.fullMatrixName = `@${user.matrixUsername}:${process.env.MATRIX_DOMAIN}`;
-    }
 
     return user;
 };
@@ -325,7 +319,6 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
                     circleId: "$chatRoom.circleId",
                     createdAt: "$chatRoom.createdAt",
                     userGroups: "$chatRoom.userGroups",
-                    matrixRoomId: "$chatRoom.matrixRoomId",
                     picture: { $ifNull: ["$circle.picture", "$chatRoom.picture"] },
                     isDirect: "$chatRoom.isDirect",
                     dmParticipants: "$chatRoom.dmParticipants",
@@ -353,12 +346,6 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
     ]).toArray();
 
     user.chatRoomMemberships = chatRoomMemberships as ChatRoomMembership[];
-
-    // append matrix username details
-    user.matrixUrl = process.env.NEXT_PUBLIC_MATRIX_URL;
-    if (user.matrixUsername) {
-        user.fullMatrixName = `@${user.matrixUsername}:${process.env.MATRIX_DOMAIN}`;
-    }
 
     user.accessRules = getDefaultAccessRules();
 
@@ -542,4 +529,3 @@ export const unpinCircle = async (userDid: string, circleId: string): Promise<vo
         },
     );
 };
-

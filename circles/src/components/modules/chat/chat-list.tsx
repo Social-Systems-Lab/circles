@@ -31,7 +31,7 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, isLoading = false, se
     const router = useRouter();
     const params = useParams();
     const activeChatHandle = params.handle as string;
-    const getConversationId = (chat: ChatRoomDisplay) => String(chat._id || chat.matrixRoomId || chat.handle || "");
+    const getConversationId = (chat: ChatRoomDisplay) => String(chat._id || "");
     const isLoadingRooms = isLoading && totalChatsCount === 0;
 
     const sortedChats = useMemo(() => {
