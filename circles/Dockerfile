@@ -19,25 +19,20 @@ ARG BUILD_TIME
 
 COPY . .
 
+ENV IS_BUILD=true
+
+RUN NODE_OPTIONS=--max-old-space-size=3072 bun run build
+
 RUN VERSION="$(node -p "require('./package.json').version")" && \
     GIT_SHA_VALUE="${GIT_SHA:-unknown}" && \
     BUILD_TIME_VALUE="${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" && \
     printf 'version=%s\ngitSha=%s\nbuildTime=%s\n' "$VERSION" "$GIT_SHA_VALUE" "$BUILD_TIME_VALUE" > /app/VERSION
 
-ENV IS_BUILD=true
-
-RUN NODE_OPTIONS=--max-old-space-size=3072 bun run build
-
 # Production image, copy all the files and run next
 FROM node:18-slim AS runner
 WORKDIR /app
 
-ARG GIT_SHA=unknown
-ARG BUILD_TIME
-
 ENV NODE_ENV production
-ENV GIT_SHA=${GIT_SHA}
-ENV BUILD_TIME=${BUILD_TIME}
 
 # Uncomment the following line in case you want to disable telemetry during runtime.
 COPY package.json bun.lock ./
@@ -54,6 +49,11 @@ RUN apt-get update \
 
 # Install sharp into runtime node_modules (do not rely on Next standalone tracing)
 RUN npm install --omit=dev --no-audit --no-fund --legacy-peer-deps sharp@0.33.5
+
+ARG GIT_SHA=unknown
+ARG BUILD_TIME
+ENV GIT_SHA=${GIT_SHA}
+ENV BUILD_TIME=${BUILD_TIME}
 
 COPY --from=builder  /app/.next/standalone ./
 COPY --from=builder  /app/.next/static ./.next/static
