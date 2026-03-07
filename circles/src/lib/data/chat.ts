@@ -153,6 +153,31 @@ export const addChatRoomMember = async (
 ): Promise<ChatRoomMember> => {
     const existingMember = await ChatRoomMembers.findOne({ userDid: userDid, chatRoomId: chatRoomId });
     if (existingMember) {
+        const memberStatus = typeof (existingMember as any).status === "string"
+            ? (existingMember as any).status.toLowerCase()
+            : undefined;
+        const isInactiveMembership =
+            memberStatus === "left" ||
+            memberStatus === "inactive" ||
+            (existingMember as any).active === false ||
+    	    (existingMember as any).isActive === false;        
+
+        if (isInactiveMembership) {
+            await ChatRoomMembers.updateOne(
+                { userDid: userDid, chatRoomId: chatRoomId },
+                {
+                    $set: {
+                        status: "active",
+                        active: true,
+                        isActive: true,
+                    } as any,
+                },
+            );
+            const reactivatedMember = await ChatRoomMembers.findOne({ userDid: userDid, chatRoomId: chatRoomId });
+            if (reactivatedMember) {
+                return reactivatedMember;
+            }
+        }
         return existingMember;
     }
 
@@ -173,7 +198,16 @@ export const addChatRoomMember = async (
 };
 
 export const removeChatRoomMember = async (userDid: string, chatRoomId: string): Promise<void> => {
-    await ChatRoomMembers.deleteOne({ userDid: userDid, chatRoomId: chatRoomId });
+    await ChatRoomMembers.updateOne(
+        { userDid: userDid, chatRoomId: chatRoomId },
+        {
+            $set: {
+                status: "left",
+                active: false,
+                isActive: false,
+            } as any,
+        },
+    );
 };
 
 export const getChatRoomMembers = async (chatRoomId: string): Promise<ChatRoomMember[]> => {

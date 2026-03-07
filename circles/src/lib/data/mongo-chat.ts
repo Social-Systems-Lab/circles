@@ -386,9 +386,6 @@ export const listConversationsForUser = async (userDid: string, circleIds: strin
                         { ordered: false },
                     );
                 }
-                if ((conversation.participants || []).includes(userDid)) {
-                    activeGroupConversationIds.add(conversationId);
-                }
             }
         }
     }
