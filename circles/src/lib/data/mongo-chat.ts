@@ -6,7 +6,9 @@ import { getCircleByHandle, getCircleById, getCirclesByDids } from "./circle";
 
 // High-value indexes for chat list/message paths.
 ChatConversations?.createIndex({ participants: 1, type: 1, archived: 1, updatedAt: -1 });
+ChatConversations?.createIndex({ circleId: 1, type: 1, archived: 1 });
 ChatRoomMembers?.createIndex({ userDid: 1, chatRoomId: 1 });
+ChatRoomMembers?.createIndex({ chatRoomId: 1 });
 ChatMessageDocs?.createIndex({ conversationId: 1, _id: 1 });
 ChatReadStates?.createIndex({ userDid: 1, conversationId: 1 });
 
