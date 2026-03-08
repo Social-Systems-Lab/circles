@@ -299,6 +299,7 @@ export const chatRoomSchema = z.object({
     isDirect: z.boolean().optional(),
     dmParticipants: z.array(z.string()).optional(),
     archived: z.boolean().optional(),
+    metadata: z.record(z.string(), z.any()).optional(),
 });
 
 export type ChatRoom = z.infer<typeof chatRoomSchema>;

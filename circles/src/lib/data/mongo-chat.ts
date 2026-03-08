@@ -3,6 +3,7 @@ import { ChatRoomDisplay, Circle } from "@/models/models";
 import { ChatConversation, ChatMessageDoc, ChatReaction } from "@/lib/chat/mongo-types";
 import { ChatConversations, ChatMessageDocs, ChatReadStates, ChatRoomMembers } from "./db";
 import { getCircleByHandle, getCircleById, getCirclesByDids } from "./circle";
+import { WelcomeMessageConfig, WELCOME_MESSAGE } from "@/config/welcome-message";
 
 // High-value indexes for chat list/message paths.
 ChatConversations?.createIndex({ participants: 1, type: 1, archived: 1, updatedAt: -1 });
@@ -65,25 +66,17 @@ const normalizeMediaUrl = (url?: string): string | undefined => {
     return url;
 };
 
-const SYSTEM_WELCOME_SOURCE = "system_welcome";
-const SYSTEM_WELCOME_VERSION = "v1";
 const WELCOME_CONVERSATION_HANDLE_PREFIX = "welcome";
-const WELCOME_CONVERSATION_NAME = "Welcome to Kamooni";
-const OPTIONAL_WELCOME_MEMBER_NOTE = (process.env.KAMOONI_WELCOME_MEMBER_NOTE || "").trim();
+const buildWelcomeSystemDid = (config: WelcomeMessageConfig): string => `system:${config.senderHandle}`;
 
-const buildWelcomeMessageBody = (userName?: string): string => {
-    const safeName = typeof userName === "string" ? userName.trim() : "";
-    const greeting = safeName ? `Welcome to Kamooni, ${safeName}.` : "Welcome to Kamooni.";
-
-    const parts = [
-        greeting,
-        "Kamooni is a community-owned platform where people and circles organize conversations, projects, and collaboration.",
-        "How to get started:\n1. Complete your profile.\n2. Join or discover circles aligned with your mission.\n3. Start one message, post, or task to begin contributing.",
-        OPTIONAL_WELCOME_MEMBER_NOTE || undefined,
-    ].filter(Boolean);
-
-    return parts.join("\n\n");
-};
+const buildWelcomeConversationMetadata = (config: WelcomeMessageConfig) => ({
+    source: config.source,
+    version: config.version,
+    repliesDisabled: config.repliesDisabled,
+    senderHandle: config.senderHandle,
+    senderName: config.displayName,
+    senderAvatarUrl: config.avatarUrl,
+});
 
 type ConversationMediaKind = "image" | "video" | "file";
 
@@ -199,12 +192,14 @@ export const findOrCreateDmConversation = async (userA: Circle, userB: Circle): 
 
 export const ensureWelcomeMessageForNewUser = async (
     userDid: string,
-    userName?: string,
+    config: WelcomeMessageConfig = WELCOME_MESSAGE,
 ): Promise<{ conversationId: string; messageCreated: boolean }> => {
     if (!userDid) {
         throw new Error("Missing user DID for welcome message");
     }
 
+    const systemSenderDid = buildWelcomeSystemDid(config);
+    const welcomeMetadata = buildWelcomeConversationMetadata(config);
     const welcomeHandle = `${WELCOME_CONVERSATION_HANDLE_PREFIX}-${userDid}`;
     const existingConversation = (await ChatConversations.findOne({
         type: "dm",
@@ -217,32 +212,63 @@ export const ensureWelcomeMessageForNewUser = async (
         existingConversation ||
         (await createConversation({
             type: "dm",
-            name: WELCOME_CONVERSATION_NAME,
+            name: config.threadName,
             handle: welcomeHandle,
             participants: [userDid],
             createdAt: new Date(),
             updatedAt: new Date(),
+            picture: { url: config.avatarUrl },
+            metadata: welcomeMetadata,
         }));
 
     const conversationId = String(conversation._id);
+    const conversationObjectId = toObjectId(conversationId);
+    if (conversationObjectId) {
+        await ChatConversations.updateOne(
+            { _id: conversationObjectId },
+            {
+                $set: {
+                    name: config.threadName,
+                    picture: { url: config.avatarUrl },
+                    metadata: welcomeMetadata,
+                    updatedAt: new Date(),
+                },
+            },
+        );
+    }
+
     const existingWelcomeMessage = await ChatMessageDocs.findOne({
         conversationId,
-        source: SYSTEM_WELCOME_SOURCE,
-        version: SYSTEM_WELCOME_VERSION,
-    });
+        source: config.source,
+    }, { sort: { createdAt: 1 } });
 
     if (existingWelcomeMessage) {
+        const messageObjectId = toObjectId(String(existingWelcomeMessage._id));
+        if (messageObjectId) {
+            await ChatMessageDocs.updateOne(
+                { _id: messageObjectId },
+                {
+                    $set: {
+                        senderDid: systemSenderDid,
+                        body: config.markdown,
+                        format: "markdown",
+                        source: config.source,
+                        version: config.version,
+                    },
+                },
+            );
+        }
         return { conversationId, messageCreated: false };
     }
 
     await createMessage({
         conversationId,
-        senderDid: userDid,
-        body: buildWelcomeMessageBody(userName),
+        senderDid: systemSenderDid,
+        body: config.markdown,
         createdAt: new Date(),
         format: "markdown",
-        source: SYSTEM_WELCOME_SOURCE,
-        version: SYSTEM_WELCOME_VERSION,
+        source: config.source,
+        version: config.version,
     });
 
     return { conversationId, messageCreated: true };
@@ -316,6 +342,7 @@ const mapConversationsToChatRoomDisplays = async (
             participantDids,
             participantCircles,
             circle,
+            metadata: conversation.metadata,
         } as ChatRoomDisplay;
     });
 };

@@ -1,5 +1,14 @@
 export type ChatConversationType = "dm" | "group" | "announcement";
 
+export type ChatConversationMetadata = {
+    source?: string;
+    version?: string;
+    repliesDisabled?: boolean;
+    senderHandle?: string;
+    senderName?: string;
+    senderAvatarUrl?: string;
+};
+
 export type ChatAttachment = {
     url: string;
     name: string;
@@ -24,11 +33,12 @@ export type ChatConversation = {
     handle?: string;
     circleId?: string;
     picture?: { url: string };
-    participants: string[]
+    participants: string[];
     createdAt: Date;
     updatedAt?: Date;
     archived?: boolean;
     lastMessageAt?: Date;
+    metadata?: ChatConversationMetadata;
 };
 
 export type ChatMessageDoc = {
