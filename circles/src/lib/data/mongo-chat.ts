@@ -193,12 +193,13 @@ export const findOrCreateDmConversation = async (userA: Circle, userB: Circle): 
 export const ensureWelcomeMessageForNewUser = async (
     userDid: string,
     config: WelcomeMessageConfig = WELCOME_MESSAGE,
+    senderDid?: string,
 ): Promise<{ conversationId: string; messageCreated: boolean }> => {
     if (!userDid) {
         throw new Error("Missing user DID for welcome message");
     }
 
-    const systemSenderDid = buildWelcomeSystemDid(config);
+    const systemSenderDid = senderDid || buildWelcomeSystemDid(config);
     const welcomeMetadata = buildWelcomeConversationMetadata(config);
     const welcomeHandle = `${WELCOME_CONVERSATION_HANDLE_PREFIX}-${userDid}`;
     const existingConversation = (await ChatConversations.findOne({

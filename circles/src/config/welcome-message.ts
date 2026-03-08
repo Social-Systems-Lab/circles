@@ -9,6 +9,10 @@ export type WelcomeMessageConfig = {
     markdown: string;
 };
 
+export const SYSTEM_MESSAGE_SOURCE_PREFIX = "system_";
+export const isSystemMessageSource = (source?: string | null): boolean =>
+    typeof source === "string" && source.startsWith(SYSTEM_MESSAGE_SOURCE_PREFIX);
+
 export const WELCOME_MESSAGE: WelcomeMessageConfig = {
     senderHandle: "kamooni",
     displayName: "Kamooni",

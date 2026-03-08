@@ -20,7 +20,7 @@ import { ChatConversations, ChatMessageDocs, ChatRoomMembers, ChatRooms, Circles
 import { getCircleByDid, getCircleById, getCirclesByDids } from "@/lib/data/circle";
 import { saveFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
-import { WELCOME_MESSAGE } from "@/config/welcome-message";
+import { WELCOME_MESSAGE, isSystemMessageSource } from "@/config/welcome-message";
 
 const normalizeMediaUrl = (url?: string): string | undefined => {
     if (!url) return url;
@@ -53,13 +53,27 @@ const isActiveGroupMembership = (membership: any): boolean => {
     return true;
 };
 
-const getWelcomeSystemAuthor = (): Circle =>
+const getSystemTemplateAuthor = (conversationMetadata?: Record<string, unknown>): Circle =>
     ({
-        _id: `system:${WELCOME_MESSAGE.senderHandle}`,
-        did: `system:${WELCOME_MESSAGE.senderHandle}`,
-        handle: WELCOME_MESSAGE.senderHandle,
-        name: WELCOME_MESSAGE.displayName,
-        picture: { url: WELCOME_MESSAGE.avatarUrl },
+        _id: `system:${
+            (typeof conversationMetadata?.senderHandle === "string" && conversationMetadata.senderHandle) ||
+            WELCOME_MESSAGE.senderHandle
+        }`,
+        did: `system:${
+            (typeof conversationMetadata?.senderHandle === "string" && conversationMetadata.senderHandle) ||
+            WELCOME_MESSAGE.senderHandle
+        }`,
+        handle:
+            (typeof conversationMetadata?.senderHandle === "string" && conversationMetadata.senderHandle) ||
+            WELCOME_MESSAGE.senderHandle,
+        name:
+            (typeof conversationMetadata?.senderName === "string" && conversationMetadata.senderName) ||
+            WELCOME_MESSAGE.displayName,
+        picture: {
+            url:
+                (typeof conversationMetadata?.senderAvatarUrl === "string" && conversationMetadata.senderAvatarUrl) ||
+                WELCOME_MESSAGE.avatarUrl,
+        },
         circleType: "user",
     } as Circle);
 
@@ -200,6 +214,8 @@ export const fetchMongoMessagesAction = async (
         if (!docs.length) {
             return { success: true, messages: [], nextSinceId: sinceId };
         }
+        const conversationMetadata = (access.conversation as any)?.metadata as Record<string, unknown> | undefined;
+        const fallbackSystemAuthor = getSystemTemplateAuthor(conversationMetadata);
 
         const senderDids = Array.from(new Set(docs.map((doc) => doc.senderDid)));
         const senders = senderDids.length ? await getCirclesByDids(senderDids) : [];
@@ -215,26 +231,27 @@ export const fetchMongoMessagesAction = async (
         );
 
         const messages = docs.map((doc) => {
-            const isWelcomeSystemMessage = doc.source === WELCOME_MESSAGE.source;
-            const author = isWelcomeSystemMessage
-                ? getWelcomeSystemAuthor()
-                : senderByDid.get(doc.senderDid) ||
-                  ({
-                      _id: doc.senderDid,
-                      name: doc.senderDid,
-                      picture: { url: "/placeholder.svg" },
-                  } as Circle);
+            const isTemplateSystemMessage = isSystemMessageSource(doc.source);
+            const author =
+                senderByDid.get(doc.senderDid) ||
+                (isTemplateSystemMessage
+                    ? fallbackSystemAuthor
+                    : ({
+                          _id: doc.senderDid,
+                          name: doc.senderDid,
+                          picture: { url: "/placeholder.svg" },
+                      } as Circle));
 
             const replyDoc = doc.replyToMessageId ? replyById.get(doc.replyToMessageId) : undefined;
             const replyAuthor = replyDoc
-                ? replyDoc.source === WELCOME_MESSAGE.source
-                    ? getWelcomeSystemAuthor()
-                    : senderByDid.get(replyDoc.senderDid) ||
-                      ({
-                          _id: replyDoc.senderDid,
-                          name: replyDoc.senderDid,
-                          picture: { url: "/placeholder.svg" },
-                      } as Circle)
+                ? senderByDid.get(replyDoc.senderDid) ||
+                  (isSystemMessageSource(replyDoc.source)
+                      ? fallbackSystemAuthor
+                      : ({
+                            _id: replyDoc.senderDid,
+                            name: replyDoc.senderDid,
+                            picture: { url: "/placeholder.svg" },
+                        } as Circle))
                 : undefined;
 
             const reactions = (doc.reactions || []).reduce((acc: Record<string, any[]>, reaction) => {
@@ -281,6 +298,8 @@ export const fetchMongoMessagesAction = async (
             (message as any).attachments = normalizedAttachments;
             (message as any).editedAt = doc.editedAt;
             (message as any).format = doc.format;
+            (message as any).source = doc.source;
+            (message as any).version = doc.version;
 
             return message;
         });

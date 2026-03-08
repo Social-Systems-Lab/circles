@@ -34,7 +34,7 @@ import LazyEmojiPicker from "./LazyEmojiPicker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MemoizedReactMarkdown } from "@/components/utils/memoized-markdown";
 import { useMongoChat } from "./useMongoChat";
-import { WELCOME_MESSAGE } from "@/config/welcome-message";
+import { isSystemMessageSource } from "@/config/welcome-message";
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -60,6 +60,10 @@ const CHAT_MENTION_LINK_HREF_REGEX = /^\/circles\/[^/\s?#]+(?:[?#].*)?$/i;
 
 const renderMentionsAsDisplayText = (content: string) => content.replace(CHAT_MENTION_MARKUP_REGEX, "$1");
 const isChatMentionLinkHref = (href?: string) => !!href && CHAT_MENTION_LINK_HREF_REGEX.test(href);
+const getMessageSource = (message: ChatMessage): string | undefined => {
+    const source = (message as any)?.source;
+    return typeof source === "string" ? source : undefined;
+};
 
 type MentionSuggestion = {
     id: string;
@@ -69,6 +73,9 @@ type MentionSuggestion = {
 };
 
 const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
+    const source = getMessageSource(message);
+    const isSystemTemplateMessage = isSystemMessageSource(source);
+
     if (preview) {
         return (
             <span>
@@ -91,6 +98,68 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
         const originalAuthorColor = generateColorFromString(originalAuthor);
         const isMarkdown = (message as any)?.format === "markdown";
         const hasMentionMarkup = CHAT_MENTION_MARKUP_TEST_REGEX.test(replyText);
+        const markdownComponents = {
+            a: ({ href, className, ...props }: any) => {
+                if (!isSystemTemplateMessage && isChatMentionLinkHref(href)) {
+                    return (
+                        <a
+                            href={href}
+                            className={`inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 font-semibold text-blue-700 no-underline hover:underline ${className ?? ""}`.trim()}
+                            {...props}
+                        />
+                    );
+                }
+
+                return (
+                    <a
+                        href={href}
+                        className={
+                            isSystemTemplateMessage
+                                ? `font-medium text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-800 ${className ?? ""}`.trim()
+                                : className
+                        }
+                        {...props}
+                    />
+                );
+            },
+            ...(isSystemTemplateMessage
+                ? {
+                      h1: ({ className, ...props }: any) => (
+                          <h1
+                              className={`mb-2 mt-1 text-base font-semibold leading-6 text-slate-900 ${className ?? ""}`.trim()}
+                              {...props}
+                          />
+                      ),
+                      h2: ({ className, ...props }: any) => (
+                          <h2
+                              className={`mb-2 mt-1 text-sm font-semibold leading-6 text-slate-900 ${className ?? ""}`.trim()}
+                              {...props}
+                          />
+                      ),
+                      h3: ({ className, ...props }: any) => (
+                          <h3
+                              className={`mb-2 mt-1 text-sm font-medium leading-6 text-slate-800 ${className ?? ""}`.trim()}
+                              {...props}
+                          />
+                      ),
+                      p: ({ className, ...props }: any) => (
+                          <p
+                              className={`mb-3 text-[0.95rem] leading-relaxed text-slate-800 last:mb-0 ${className ?? ""}`.trim()}
+                              {...props}
+                          />
+                      ),
+                      ul: ({ className, ...props }: any) => (
+                          <ul className={`mb-3 list-disc space-y-1 pl-6 last:mb-0 ${className ?? ""}`.trim()} {...props} />
+                      ),
+                      ol: ({ className, ...props }: any) => (
+                          <ol className={`mb-3 list-decimal space-y-1 pl-6 last:mb-0 ${className ?? ""}`.trim()} {...props} />
+                      ),
+                      li: ({ className, ...props }: any) => (
+                          <li className={`text-[0.95rem] leading-relaxed text-slate-800 ${className ?? ""}`.trim()} {...props} />
+                      ),
+                  }
+                : {}),
+        };
 
         return (
             <div className="max-w-full overflow-hidden">
@@ -108,21 +177,7 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
                     </div>
                 )}
                 {isMarkdown || hasMentionMarkup ? (
-                    <MemoizedReactMarkdown
-                        components={{
-                            a: ({ href, className, ...props }) => (
-                                <a
-                                    href={href}
-                                    className={
-                                        isChatMentionLinkHref(href)
-                                            ? `inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 font-semibold text-blue-700 no-underline hover:underline ${className ?? ""}`.trim()
-                                            : className
-                                    }
-                                    {...props}
-                                />
-                            ),
-                        }}
-                    >
+                    <MemoizedReactMarkdown components={markdownComponents}>
                         {replyText}
                     </MemoizedReactMarkdown>
                 ) : (
@@ -361,6 +416,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
         <div>
             {orderedMessages.reduce<React.ReactNode[]>((acc, message, index) => {
                 const isSystemMessage = message.type !== "m.room.message";
+                const isTemplateSystemMessage =
+                    message.type === "m.room.message" && isSystemMessageSource(getMessageSource(message));
                 const isNewDate =
                     index === 0 ||
                     !isSameDay(new Date(message.createdAt), new Date(orderedMessages[index - 1].createdAt));
@@ -424,11 +481,23 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                             )}
 
                             <div className="relative flex min-w-[100px] max-w-full flex-col overflow-hidden">
-                                <div className={`bg-white p-2 pr-4 shadow-md ${borderRadiusClass} ${bubbleStatusClasses}`}>
+                                <div
+                                    className={`${
+                                        isTemplateSystemMessage
+                                            ? "border border-slate-200 bg-slate-50 p-3 pr-4 shadow-sm"
+                                            : "bg-white p-2 pr-4 shadow-md"
+                                    } ${borderRadiusClass} ${bubbleStatusClasses}`}
+                                >
                                     {isFirstInChain && (
                                         <div
-                                            className="text-xs font-semibold"
-                                            style={{ color: generateColorFromString(message.author.name || "") }}
+                                            className={`text-xs font-semibold ${
+                                                isTemplateSystemMessage ? "mb-1 text-slate-700" : ""
+                                            }`}
+                                            style={
+                                                isTemplateSystemMessage
+                                                    ? undefined
+                                                    : { color: generateColorFromString(message.author.name || "") }
+                                            }
                                         >
                                             {message.author.name}
                                         </div>
@@ -994,12 +1063,9 @@ export const ChatRoomComponent: React.FC<{
 
     const roomId = routeHandle || (chatRoom as any)?._id || (chatRoom as any)?.id || (chatRoom as any)?.handle || null;
     const conversationMetadata = (chatRoom as any)?.metadata as Record<string, unknown> | undefined;
-    const showComposer =
-        !conversationMetadata ||
-        !(
-            conversationMetadata.source === WELCOME_MESSAGE.source ||
-            conversationMetadata.repliesDisabled === true
-        );
+    const conversationSource =
+        typeof conversationMetadata?.source === "string" ? conversationMetadata.source : undefined;
+    const showComposer = !(conversationMetadata?.repliesDisabled === true || isSystemMessageSource(conversationSource));
 
     useEffect(() => {
         let cancelled = false;

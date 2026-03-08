@@ -17,6 +17,7 @@ import { upsertVdbCollections } from "@/lib/data/vdb"; // Import the re-indexing
 import { db } from "@/lib/data/db";
 import { getCircleById } from "@/lib/data/circle";
 import { getUserByDid } from "@/lib/data/user";
+import { getWelcomeTemplateDraft, saveWelcomeTemplate } from "@/lib/data/system-message-templates";
 
 // Get all circles of a specific type
 export async function getEntitiesByType(type: "circle" | "user" | "project") {
@@ -320,6 +321,109 @@ export async function getPlatformStats() {
     } catch (error) {
         console.error("Error fetching platform stats:", error);
         throw new Error("Failed to fetch platform statistics");
+    }
+}
+
+export async function getWelcomeSystemMessageTemplateAction() {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "Unauthorized: You must be logged in." };
+    }
+    const user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        return { success: false, message: "Unauthorized: You do not have permission." };
+    }
+
+    try {
+        const draft = await getWelcomeTemplateDraft();
+        return {
+            success: true,
+            templateSource: draft.templateSource,
+            template: draft.template
+                ? {
+                      ...draft.template,
+                      updatedAt: draft.template.updatedAt?.toISOString?.() || null,
+                  }
+                : null,
+            draft: {
+                title: draft.title,
+                bodyMarkdown: draft.bodyMarkdown,
+                repliesDisabled: draft.repliesDisabled,
+                senderCircleHandle: draft.senderCircleHandle,
+                isActive: draft.isActive,
+                version: draft.version,
+                updatedAt: draft.updatedAt?.toISOString?.() || null,
+                senderDid: draft.senderDid,
+            },
+            senderCircle: draft.senderCircle
+                ? {
+                      _id: draft.senderCircle._id,
+                      did: draft.senderCircle.did,
+                      handle: draft.senderCircle.handle,
+                      name: draft.senderCircle.name,
+                      picture: draft.senderCircle.picture,
+                  }
+                : null,
+        };
+    } catch (error) {
+        console.error("Error fetching welcome system message template:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to load template",
+        };
+    }
+}
+
+export async function saveWelcomeSystemMessageTemplateAction(input: {
+    title: string;
+    bodyMarkdown: string;
+    repliesDisabled: boolean;
+    isActive?: boolean;
+}) {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "Unauthorized: You must be logged in." };
+    }
+    const user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        return { success: false, message: "Unauthorized: You do not have permission." };
+    }
+
+    const title = input.title?.trim();
+    const bodyMarkdown = input.bodyMarkdown?.trim();
+
+    if (!title) {
+        return { success: false, message: "Title is required." };
+    }
+    if (!bodyMarkdown) {
+        return { success: false, message: "Message body is required." };
+    }
+
+    try {
+        const savedTemplate = await saveWelcomeTemplate({
+            title,
+            bodyMarkdown,
+            repliesDisabled: !!input.repliesDisabled,
+            isActive: input.isActive ?? true,
+            updatedBy: userDid,
+        });
+
+        revalidatePath("/admin");
+
+        return {
+            success: true,
+            message: "Welcome system message template saved.",
+            template: {
+                ...savedTemplate,
+                updatedAt: savedTemplate.updatedAt?.toISOString?.() || null,
+            },
+        };
+    } catch (error) {
+        console.error("Error saving welcome system message template:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to save template",
+        };
     }
 }
 

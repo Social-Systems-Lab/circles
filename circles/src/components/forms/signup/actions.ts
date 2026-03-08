@@ -4,7 +4,7 @@ import { FormSubmitResponse, UserPrivate } from "../../../models/models";
 import { AuthenticationError, createUserSession, createUserAccount } from "@/lib/auth/auth";
 import { getUserPrivate, registerUser, updateUser } from "@/lib/data/user";
 import { ensureWelcomeMessageForNewUser } from "@/lib/data/mongo-chat";
-import { WELCOME_MESSAGE } from "@/config/welcome-message";
+import { getResolvedWelcomeTemplate } from "@/lib/data/system-message-templates";
 
 export const submitSignupFormAction = async (values: Record<string, any>): Promise<FormSubmitResponse> => {
     try {
@@ -12,7 +12,8 @@ export const submitSignupFormAction = async (values: Record<string, any>): Promi
         let user = await createUserAccount(values.name, values.handle, values.type, values._email, values._password);
         await createUserSession(user as UserPrivate, user.did!);
         try {
-            await ensureWelcomeMessageForNewUser(user.did!, WELCOME_MESSAGE);
+            const resolvedWelcome = await getResolvedWelcomeTemplate();
+            await ensureWelcomeMessageForNewUser(user.did!, resolvedWelcome.config, resolvedWelcome.senderDid);
         } catch (error) {
             console.error("Failed to create signup welcome message:", error);
         }

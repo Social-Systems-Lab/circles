@@ -16,6 +16,7 @@ import CirclesTab from "./tabs/circles-tab";
 import UsersTab from "./tabs/users-tab";
 import SuperAdminsTab from "./tabs/super-admins-tab";
 import VerificationRequestsTab from "./tabs/verification-requests-tab";
+import SystemMessagesTab from "./tabs/system-messages-tab";
 import { toast } from "sonner"; // Import toast for feedback
 
 interface AdminDashboardProps {
@@ -136,6 +137,7 @@ export default function AdminDashboard({ serverSettings, circles }: AdminDashboa
                 <TabsTrigger value="users">Users</TabsTrigger>
                 <TabsTrigger value="verification-requests">Verification Requests</TabsTrigger>
                 <TabsTrigger value="super-admins">Super Admins</TabsTrigger>
+                <TabsTrigger value="system-messages">System Messages</TabsTrigger>
             </TabsList>
 
             <TabsContent value="server-settings" className="space-y-4">
@@ -172,6 +174,13 @@ export default function AdminDashboard({ serverSettings, circles }: AdminDashboa
                 <div className="mb-8">
                     <h2 className="mb-2 text-xl font-semibold">Manage Super Admins</h2>
                     <SuperAdminsTab />
+                </div>
+            </TabsContent>
+
+            <TabsContent value="system-messages" className="space-y-4">
+                <div className="mb-8">
+                    <h2 className="mb-2 text-xl font-semibold">System Messages</h2>
+                    <SystemMessagesTab />
                 </div>
             </TabsContent>
 
