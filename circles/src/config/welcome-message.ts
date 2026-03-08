@@ -17,15 +17,27 @@ export const WELCOME_MESSAGE: WelcomeMessageConfig = {
     source: "system_welcome",
     version: "v2",
     repliesDisabled: true,
-    markdown: `# Welcome to Kamooni
+    markdown: `Welcome to Kamooni
 
 Kamooni is a community-owned platform for people and circles who want to build trust-based collaboration.
 
-## How to get started
-1. Complete your profile so people understand your focus.
-2. Explore circles and join the ones that match your mission.
-3. Start with one post, message, task, or goal to begin participating.
+**Start here**
+[Follow the Kamooni circle](https://kamooni.org/circles/kamooni)
 
-You can open this thread again anytime for a quick restart guide.`,
+Once you follow it, updates from the team will appear in your feed.
+
+**Help us improve Kamooni**
+If you run into bugs or glitches, please report them here:
+[Report an issue](https://kamooni.org/circles/kamooni/issues)
+
+If you have ideas for how Kamooni could improve, please add them here:
+[Submit a proposal](https://kamooni.org/circles/kamooni/proposals)
+
+**About the project**
+Kamooni is being developed by Social Systems Lab.
+[Learn more about Social Systems Lab](https://www.socialsystems.io/)
+
+Thanks for being here early.
+
+— The Kamooni Team`,
 };
-
