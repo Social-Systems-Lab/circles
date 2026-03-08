@@ -19,6 +19,7 @@ import { getCircleByDid, getCircleById, getCirclesByDids } from "@/lib/data/circ
 import { saveFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { listChatRoomsForUser } from "@/lib/data/chat";
+import { WELCOME_MESSAGE } from "@/config/welcome-message";
 
 const normalizeMediaUrl = (url?: string): string | undefined => {
     if (!url) return url;
@@ -50,6 +51,16 @@ const isActiveGroupMembership = (membership: any): boolean => {
 
     return true;
 };
+
+const getWelcomeSystemAuthor = (): Circle =>
+    ({
+        _id: `system:${WELCOME_MESSAGE.senderHandle}`,
+        did: `system:${WELCOME_MESSAGE.senderHandle}`,
+        handle: WELCOME_MESSAGE.senderHandle,
+        name: WELCOME_MESSAGE.displayName,
+        picture: { url: WELCOME_MESSAGE.avatarUrl },
+        circleType: "user",
+    } as Circle);
 
 export const resolveMongoConversationAccess = async (conversationId: string, userDid: string) => {
     let conversation = await findConversationById(conversationId);
@@ -182,22 +193,26 @@ export const fetchMongoMessagesAction = async (
         );
 
         const messages = docs.map((doc) => {
-            const author =
-                senderByDid.get(doc.senderDid) ||
-                ({
-                    _id: doc.senderDid,
-                    name: doc.senderDid,
-                    picture: { url: "/placeholder.svg" },
-                } as Circle);
+            const isWelcomeSystemMessage = doc.source === WELCOME_MESSAGE.source;
+            const author = isWelcomeSystemMessage
+                ? getWelcomeSystemAuthor()
+                : senderByDid.get(doc.senderDid) ||
+                  ({
+                      _id: doc.senderDid,
+                      name: doc.senderDid,
+                      picture: { url: "/placeholder.svg" },
+                  } as Circle);
 
             const replyDoc = doc.replyToMessageId ? replyById.get(doc.replyToMessageId) : undefined;
             const replyAuthor = replyDoc
-                ? senderByDid.get(replyDoc.senderDid) ||
-                  ({
-                      _id: replyDoc.senderDid,
-                      name: replyDoc.senderDid,
-                      picture: { url: "/placeholder.svg" },
-                  } as Circle)
+                ? replyDoc.source === WELCOME_MESSAGE.source
+                    ? getWelcomeSystemAuthor()
+                    : senderByDid.get(replyDoc.senderDid) ||
+                      ({
+                          _id: replyDoc.senderDid,
+                          name: replyDoc.senderDid,
+                          picture: { url: "/placeholder.svg" },
+                      } as Circle)
                 : undefined;
 
             const reactions = (doc.reactions || []).reduce((acc: Record<string, any[]>, reaction) => {

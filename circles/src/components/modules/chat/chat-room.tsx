@@ -33,6 +33,7 @@ import LazyEmojiPicker from "./LazyEmojiPicker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MemoizedReactMarkdown } from "@/components/utils/memoized-markdown";
 import { useMongoChat } from "./useMongoChat";
+import { WELCOME_MESSAGE } from "@/config/welcome-message";
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -908,6 +909,13 @@ export const ChatRoomComponent: React.FC<{
     const provider: "mongo" = "mongo";
 
     const roomId = routeHandle || (chatRoom as any)?._id || (chatRoom as any)?.id || (chatRoom as any)?.handle || null;
+    const conversationMetadata = (chatRoom as any)?.metadata as Record<string, unknown> | undefined;
+    const showComposer =
+        !conversationMetadata ||
+        !(
+            conversationMetadata.source === WELCOME_MESSAGE.source ||
+            conversationMetadata.repliesDisabled === true
+        );
 
     useEffect(() => {
         if (process.env.NODE_ENV === "production") return;
@@ -1133,7 +1141,7 @@ export const ChatRoomComponent: React.FC<{
                         <div
                             ref={scrollContainerRef}
                             onScroll={handleScroll}
-                            className="flex-grow overflow-y-auto p-4 pb-[144px]"
+                            className={`flex-grow overflow-y-auto p-4 ${showComposer ? "pb-[144px]" : "pb-4"}`}
                         >
                             {(isLoadingMessages || isLoadingMongo) && <div className="text-center text-gray-500">Loading messages...</div>}
                             {!isLoadingMessages && (
@@ -1160,23 +1168,25 @@ export const ChatRoomComponent: React.FC<{
                         </Button>
                     )}
 
-                    <div
-                        className="fixed h-[50px]"
-                        style={{
-                            width: `${inputWidth}px`,
-                            bottom: isMobile ? "72px" : "0px",
-                            opacity: hideInput ? 0 : 1,
-                        }}
-                    >
-                        <div className="flex h-[50px] items-end bg-[#fbfbfb] pb-1 pl-2 pr-2">
-                            <ChatInput 
-                                roomId={roomId}
-                                editingMessage={editingMessage}
-                                setEditingMessage={setEditingMessage}
-                                chatProvider={provider}
-                            />
+                    {showComposer && (
+                        <div
+                            className="fixed h-[50px]"
+                            style={{
+                                width: `${inputWidth}px`,
+                                bottom: isMobile ? "72px" : "0px",
+                                opacity: hideInput ? 0 : 1,
+                            }}
+                        >
+                            <div className="flex h-[50px] items-end bg-[#fbfbfb] pb-1 pl-2 pr-2">
+                                <ChatInput
+                                    roomId={roomId}
+                                    editingMessage={editingMessage}
+                                    setEditingMessage={setEditingMessage}
+                                    chatProvider={provider}
+                                />
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             </div>
             {isMobile && !inToolbox && (
