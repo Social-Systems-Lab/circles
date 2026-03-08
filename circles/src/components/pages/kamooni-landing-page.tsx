@@ -8,6 +8,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { ChevronRight } from "lucide-react";
 import { Montserrat, Noto_Serif } from "next/font/google";
 import { cn } from "@/lib/utils";
+import { DEFAULT_WELCOME_BANNER_TEXT } from "@/config/platform-banner";
+import type { PlatformBannerType } from "@/config/platform-banner";
 
 const montserrat = Montserrat({
     subsets: ["latin"],
@@ -24,14 +26,33 @@ export type KamooniLandingVariant = "welcome" | "holding";
 interface KamooniLandingPageProps {
     variant?: KamooniLandingVariant;
     maintenanceMessage?: string;
+    banner?: {
+        type: PlatformBannerType;
+        text: string;
+        ctaLabel?: string;
+        ctaUrl?: string;
+    } | null;
 }
 
 export default function KamooniLandingPage({
     variant = "welcome",
-    maintenanceMessage = "Kamooni is currently in active development during our Test Pilot phase. You may encounter occasional bugs while we improve the platform together.",
+    maintenanceMessage = DEFAULT_WELCOME_BANNER_TEXT,
+    banner = null,
 }: KamooniLandingPageProps) {
     const [showAllFaqs, setShowAllFaqs] = useState(false);
     const isHoldingPage = variant === "holding";
+    const resolvedBanner = banner?.text?.trim()
+        ? banner
+        : {
+              type: "alert" as const,
+              text: maintenanceMessage,
+              ctaLabel: "",
+              ctaUrl: "",
+          };
+    const normalizedBannerCtaUrl = resolvedBanner.ctaUrl?.trim() || "";
+    const hasBannerCta =
+        resolvedBanner.type === "cta" && !!resolvedBanner.ctaLabel?.trim() && !!normalizedBannerCtaUrl;
+    const isExternalBannerCta = /^https?:\/\//i.test(normalizedBannerCtaUrl);
 
     const faqItems = [
         {
@@ -231,12 +252,35 @@ export default function KamooniLandingPage({
                     <p className="mb-8 text-xl text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)] sm:text-2xl">
                         No Ads. No Big Tech. Ethical and Open-Source
                     </p>
-                    <Button
-                        onClick={(event) => event.preventDefault()}
-                        className="mb-6 cursor-default bg-[#c84521] px-8 py-3 text-lg font-semibold text-white shadow-md shadow-black/10 transition-colors hover:bg-[#a83218]"
+                    <div
+                        className={cn(
+                            "mx-auto mb-6 w-full max-w-3xl rounded-md border px-4 py-3 text-left text-sm font-semibold leading-relaxed shadow-md shadow-black/10 sm:px-6 sm:text-base",
+                            resolvedBanner.type === "alert" &&
+                                "border-[#9f2f14] bg-[#c84521] text-white backdrop-blur-[1px]",
+                            resolvedBanner.type === "announcement" &&
+                                "border-kam-yellow/80 bg-kam-yellow/20 text-kam-gray-dark",
+                            resolvedBanner.type === "cta" && "border-kam-button-red-orange bg-white/95 text-kam-gray-dark",
+                        )}
                     >
-                        {maintenanceMessage}
-                    </Button>
+                        <p className="whitespace-normal break-words">{resolvedBanner.text}</p>
+                        {hasBannerCta && (
+                            <div className="mt-3">
+                                <Link
+                                    href={normalizedBannerCtaUrl}
+                                    target={isExternalBannerCta ? "_blank" : undefined}
+                                    rel={isExternalBannerCta ? "noopener noreferrer" : undefined}
+                                >
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="border-kam-button-red-orange text-kam-button-red-orange hover:bg-kam-button-red-orange hover:text-white"
+                                    >
+                                        {resolvedBanner.ctaLabel}
+                                    </Button>
+                                </Link>
+                            </div>
+                        )}
+                    </div>
                     {isHoldingPage ? (
                         <p className="text-lg font-medium text-white">
                             We&apos;re making some improvements right now. Thanks for your patience while we deploy the

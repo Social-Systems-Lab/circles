@@ -6,11 +6,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
     getWelcomeSystemMessageTemplateAction,
+    getWelcomeBannerAction,
+    saveWelcomeBannerAction,
     saveWelcomeSystemMessageTemplateAction,
 } from "@/components/modules/admin/actions";
+import type { PlatformBannerType } from "@/config/platform-banner";
 
 export default function SystemMessagesTab() {
     const [isLoading, setIsLoading] = useState(true);
@@ -22,36 +26,58 @@ export default function SystemMessagesTab() {
     const [senderCircleHandle, setSenderCircleHandle] = useState("kamooni");
     const [isSaving, startSaving] = useTransition();
     const [isPreviewing, startPreviewing] = useTransition();
+    const [bannerType, setBannerType] = useState<PlatformBannerType>("alert");
+    const [bannerText, setBannerText] = useState("");
+    const [bannerCtaLabel, setBannerCtaLabel] = useState("");
+    const [bannerCtaUrl, setBannerCtaUrl] = useState("");
+    const [bannerIsActive, setBannerIsActive] = useState(true);
+    const [bannerSource, setBannerSource] = useState<"db" | "fallback">("fallback");
+    const [bannerUpdatedAt, setBannerUpdatedAt] = useState<string | null>(null);
+    const [isSavingBanner, startSavingBanner] = useTransition();
 
-    const loadTemplate = async () => {
+    const loadData = async () => {
         setIsLoading(true);
         try {
-            const result = await getWelcomeSystemMessageTemplateAction();
-            if (!result.success) {
-                toast.error(result.message || "Failed to load welcome template.");
-                return;
-            }
+            const [templateResult, bannerResult] = await Promise.all([
+                getWelcomeSystemMessageTemplateAction(),
+                getWelcomeBannerAction(),
+            ]);
 
-            if (!result.draft) {
+            if (!templateResult.success) {
+                toast.error(templateResult.message || "Failed to load welcome template.");
+            } else if (templateResult.draft) {
+                setTitle(templateResult.draft.title || "");
+                setBodyMarkdown(templateResult.draft.bodyMarkdown || "");
+                setRepliesDisabled(templateResult.draft.repliesDisabled ?? true);
+                setVersion(templateResult.draft.version || "");
+                setTemplateSource(templateResult.templateSource || "fallback");
+                setSenderCircleHandle(templateResult.draft.senderCircleHandle || "kamooni");
+            } else {
                 toast.error("Template payload is missing.");
-                return;
             }
 
-            setTitle(result.draft.title || "");
-            setBodyMarkdown(result.draft.bodyMarkdown || "");
-            setRepliesDisabled(result.draft.repliesDisabled ?? true);
-            setVersion(result.draft.version || "");
-            setTemplateSource(result.templateSource || "fallback");
-            setSenderCircleHandle(result.draft.senderCircleHandle || "kamooni");
+            if (!bannerResult.success) {
+                toast.error(bannerResult.message || "Failed to load welcome banner.");
+            } else if (bannerResult.draft) {
+                setBannerType(bannerResult.draft.type || "alert");
+                setBannerText(bannerResult.draft.text || "");
+                setBannerCtaLabel(bannerResult.draft.ctaLabel || "");
+                setBannerCtaUrl(bannerResult.draft.ctaUrl || "");
+                setBannerIsActive(bannerResult.draft.isActive ?? true);
+                setBannerSource(bannerResult.bannerSource || "fallback");
+                setBannerUpdatedAt(bannerResult.draft.updatedAt || null);
+            } else {
+                toast.error("Banner payload is missing.");
+            }
         } catch (error) {
-            toast.error("Failed to load welcome template.");
+            toast.error("Failed to load system message settings.");
         } finally {
             setIsLoading(false);
         }
     };
 
     useEffect(() => {
-        void loadTemplate();
+        void loadData();
     }, []);
 
     const handleSave = () => {
@@ -103,49 +129,158 @@ export default function SystemMessagesTab() {
         });
     };
 
+    const handleBannerSave = () => {
+        const trimmedText = bannerText.trim();
+        if (!trimmedText) {
+            toast.error("Banner text is required.");
+            return;
+        }
+
+        startSavingBanner(async () => {
+            const result = await saveWelcomeBannerAction({
+                type: bannerType,
+                text: trimmedText,
+                ctaLabel: bannerCtaLabel.trim(),
+                ctaUrl: bannerCtaUrl.trim(),
+                isActive: bannerIsActive,
+            });
+
+            if (!result.success) {
+                toast.error(result.message || "Failed to save banner.");
+                return;
+            }
+
+            setBannerSource("db");
+            setBannerUpdatedAt(result.banner?.updatedAt || null);
+            toast.success("Welcome banner saved.");
+        });
+    };
+
     if (isLoading) {
-        return <div className="text-sm text-muted-foreground">Loading welcome template...</div>;
+        return <div className="text-sm text-muted-foreground">Loading system messages...</div>;
     }
 
     return (
-        <div className="max-w-3xl space-y-4">
-            <p className="text-sm text-muted-foreground">
-                Edit the signup welcome message template. Sender uses circle handle <b>{senderCircleHandle}</b>.
-            </p>
-            {templateSource === "fallback" && (
-                <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                    No DB template is saved yet. You are editing fallback defaults. Saving will create the DB template.
+        <div className="max-w-3xl space-y-8">
+            <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                    Edit the signup welcome message template. Sender uses circle handle <b>{senderCircleHandle}</b>.
                 </p>
-            )}
-            <div className="space-y-2">
-                <Label htmlFor="welcome-title">Thread Title</Label>
-                <Input id="welcome-title" value={title} onChange={(event) => setTitle(event.target.value)} />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="welcome-body">Body (Markdown)</Label>
-                <Textarea
-                    id="welcome-body"
-                    rows={18}
-                    value={bodyMarkdown}
-                    onChange={(event) => setBodyMarkdown(event.target.value)}
-                    className="font-mono text-sm"
-                />
-            </div>
-            <div className="flex items-center justify-between rounded-md border p-3">
-                <div className="space-y-1">
-                    <Label htmlFor="welcome-replies">Disable Replies</Label>
-                    <p className="text-sm text-muted-foreground">Keep this thread read-only for recipients.</p>
+                {templateSource === "fallback" && (
+                    <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                        No DB template is saved yet. You are editing fallback defaults. Saving will create the DB
+                        template.
+                    </p>
+                )}
+                <div className="space-y-2">
+                    <Label htmlFor="welcome-title">Thread Title</Label>
+                    <Input id="welcome-title" value={title} onChange={(event) => setTitle(event.target.value)} />
                 </div>
-                <Switch id="welcome-replies" checked={repliesDisabled} onCheckedChange={setRepliesDisabled} />
+                <div className="space-y-2">
+                    <Label htmlFor="welcome-body">Body (Markdown)</Label>
+                    <Textarea
+                        id="welcome-body"
+                        rows={18}
+                        value={bodyMarkdown}
+                        onChange={(event) => setBodyMarkdown(event.target.value)}
+                        className="font-mono text-sm"
+                    />
+                </div>
+                <div className="flex items-center justify-between rounded-md border p-3">
+                    <div className="space-y-1">
+                        <Label htmlFor="welcome-replies">Disable Replies</Label>
+                        <p className="text-sm text-muted-foreground">Keep this thread read-only for recipients.</p>
+                    </div>
+                    <Switch id="welcome-replies" checked={repliesDisabled} onCheckedChange={setRepliesDisabled} />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <Button onClick={handleSave} disabled={isSaving}>
+                        {isSaving ? "Saving..." : "Save Welcome Template"}
+                    </Button>
+                    <Button variant="outline" onClick={handlePreview} disabled={isPreviewing}>
+                        {isPreviewing ? "Sending..." : "Preview to Self"}
+                    </Button>
+                    <span className="text-xs text-muted-foreground">Version: {version || "n/a"}</span>
+                </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-                <Button onClick={handleSave} disabled={isSaving}>
-                    {isSaving ? "Saving..." : "Save Welcome Template"}
-                </Button>
-                <Button variant="outline" onClick={handlePreview} disabled={isPreviewing}>
-                    {isPreviewing ? "Sending..." : "Preview to Self"}
-                </Button>
-                <span className="text-xs text-muted-foreground">Version: {version || "n/a"}</span>
+
+            <div className="space-y-4 border-t pt-6">
+                <h3 className="text-lg font-semibold">Landing Welcome Banner</h3>
+                <p className="text-sm text-muted-foreground">
+                    Configure the banner shown on the welcome landing page. If inactive, the hardcoded fallback copy is
+                    shown.
+                </p>
+                {bannerSource === "fallback" && (
+                    <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                        No DB banner is saved yet. Saving here will create it.
+                    </p>
+                )}
+                <div className="space-y-2">
+                    <Label htmlFor="banner-type">Banner Type</Label>
+                    <Select value={bannerType} onValueChange={(value) => setBannerType(value as PlatformBannerType)}>
+                        <SelectTrigger id="banner-type">
+                            <SelectValue placeholder="Select banner type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="alert">Alert</SelectItem>
+                            <SelectItem value="announcement">Announcement</SelectItem>
+                            <SelectItem value="cta">CTA</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="banner-text">Banner Text</Label>
+                    <Textarea
+                        id="banner-text"
+                        rows={4}
+                        value={bannerText}
+                        onChange={(event) => setBannerText(event.target.value)}
+                    />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                        <Label htmlFor="banner-cta-label">CTA Label (optional)</Label>
+                        <Input
+                            id="banner-cta-label"
+                            value={bannerCtaLabel}
+                            onChange={(event) => setBannerCtaLabel(event.target.value)}
+                            placeholder="Join now"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="banner-cta-url">CTA URL (optional)</Label>
+                        <Input
+                            id="banner-cta-url"
+                            value={bannerCtaUrl}
+                            onChange={(event) => setBannerCtaUrl(event.target.value)}
+                            placeholder="/signup or https://example.com"
+                        />
+                    </div>
+                </div>
+                <div className="flex items-center justify-between rounded-md border p-3">
+                    <div className="space-y-1">
+                        <Label htmlFor="banner-active">Banner Active</Label>
+                        <p className="text-sm text-muted-foreground">When off, fallback copy is shown on welcome.</p>
+                    </div>
+                    <Switch id="banner-active" checked={bannerIsActive} onCheckedChange={setBannerIsActive} />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <Button onClick={handleBannerSave} disabled={isSavingBanner}>
+                        {isSavingBanner ? "Saving..." : "Save Banner"}
+                    </Button>
+                    <span className="text-xs text-muted-foreground">
+                        Updated: {bannerUpdatedAt ? new Date(bannerUpdatedAt).toLocaleString() : "n/a"}
+                    </span>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Preview</p>
+                    <p className="text-sm">{bannerText || "Banner text preview"}</p>
+                    {bannerType === "cta" && bannerCtaLabel.trim() && bannerCtaUrl.trim() && (
+                        <Button variant="outline" size="sm" className="mt-3">
+                            {bannerCtaLabel.trim()}
+                        </Button>
+                    )}
+                </div>
             </div>
         </div>
     );

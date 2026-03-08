@@ -18,6 +18,9 @@ import { db } from "@/lib/data/db";
 import { getCircleById } from "@/lib/data/circle";
 import { getUserByDid } from "@/lib/data/user";
 import { getWelcomeTemplateDraft, saveWelcomeTemplate } from "@/lib/data/system-message-templates";
+import { PLATFORM_BANNER_TYPES } from "@/config/platform-banner";
+import type { PlatformBannerType } from "@/config/platform-banner";
+import { getWelcomeBannerDraft, saveWelcomeBanner } from "@/lib/data/system-banners";
 
 // Get all circles of a specific type
 export async function getEntitiesByType(type: "circle" | "user" | "project") {
@@ -423,6 +426,119 @@ export async function saveWelcomeSystemMessageTemplateAction(input: {
         return {
             success: false,
             message: error instanceof Error ? error.message : "Failed to save template",
+        };
+    }
+}
+
+const isValidBannerCtaUrl = (value: string): boolean => {
+    if (!value) return true;
+    if (value.startsWith("/")) return true;
+    try {
+        new URL(value);
+        return true;
+    } catch {
+        return false;
+    }
+};
+
+export async function getWelcomeBannerAction() {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "Unauthorized: You must be logged in." };
+    }
+    const user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        return { success: false, message: "Unauthorized: You do not have permission." };
+    }
+
+    try {
+        const draft = await getWelcomeBannerDraft();
+        return {
+            success: true,
+            bannerSource: draft.bannerSource,
+            banner: draft.banner
+                ? {
+                      ...draft.banner,
+                      updatedAt: draft.banner.updatedAt?.toISOString?.() || null,
+                  }
+                : null,
+            draft: {
+                type: draft.type,
+                text: draft.text,
+                ctaLabel: draft.ctaLabel,
+                ctaUrl: draft.ctaUrl,
+                isActive: draft.isActive,
+                updatedAt: draft.updatedAt?.toISOString?.() || null,
+            },
+        };
+    } catch (error) {
+        console.error("Error fetching welcome banner:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to load banner",
+        };
+    }
+}
+
+export async function saveWelcomeBannerAction(input: {
+    type: PlatformBannerType;
+    text: string;
+    ctaLabel?: string;
+    ctaUrl?: string;
+    isActive: boolean;
+}) {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "Unauthorized: You must be logged in." };
+    }
+    const user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        return { success: false, message: "Unauthorized: You do not have permission." };
+    }
+
+    const type = input.type;
+    if (!PLATFORM_BANNER_TYPES.includes(type)) {
+        return { success: false, message: "Invalid banner type." };
+    }
+
+    const text = input.text?.trim();
+    const ctaLabel = input.ctaLabel?.trim() || "";
+    const ctaUrl = input.ctaUrl?.trim() || "";
+
+    if (!text) {
+        return { success: false, message: "Banner text is required." };
+    }
+    if (!isValidBannerCtaUrl(ctaUrl)) {
+        return { success: false, message: "CTA URL must be an absolute URL or start with '/'." };
+    }
+
+    try {
+        const savedBanner = await saveWelcomeBanner({
+            type,
+            text,
+            ctaLabel,
+            ctaUrl,
+            isActive: !!input.isActive,
+            updatedBy: userDid,
+        });
+
+        revalidatePath("/admin");
+        revalidatePath("/welcome");
+        revalidatePath("/holding");
+
+        return {
+            success: true,
+            message: "Welcome banner saved.",
+            banner: {
+                ...savedBanner,
+                updatedAt: savedBanner.updatedAt?.toISOString?.() || null,
+            },
+        };
+    } catch (error) {
+        console.error("Error saving welcome banner:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to save banner",
         };
     }
 }
