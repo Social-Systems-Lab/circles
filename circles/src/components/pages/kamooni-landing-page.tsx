@@ -28,7 +28,7 @@ interface KamooniLandingPageProps {
 
 export default function KamooniLandingPage({
     variant = "welcome",
-    maintenanceMessage = "Kamooni is currently in active development during our Test Pilot phase. Expect a few bugs while we improve the platform together.",
+    maintenanceMessage = "Kamooni is currently in active development during our Test Pilot phase. You may encounter occasional bugs while we improve the platform together.",
 }: KamooniLandingPageProps) {
     const [showAllFaqs, setShowAllFaqs] = useState(false);
     const isHoldingPage = variant === "holding";
