@@ -3,12 +3,18 @@
 import { FormSubmitResponse, UserPrivate } from "../../../models/models";
 import { AuthenticationError, createUserSession, createUserAccount } from "@/lib/auth/auth";
 import { getUserPrivate, registerUser, updateUser } from "@/lib/data/user";
+import { ensureWelcomeMessageForNewUser } from "@/lib/data/mongo-chat";
 
 export const submitSignupFormAction = async (values: Record<string, any>): Promise<FormSubmitResponse> => {
     try {
         //console.log("Signing up user with values", values);
         let user = await createUserAccount(values.name, values.handle, values.type, values._email, values._password);
         await createUserSession(user as UserPrivate, user.did!);
+        try {
+            await ensureWelcomeMessageForNewUser(user.did!, user.name);
+        } catch (error) {
+            console.error("Failed to create signup welcome message:", error);
+        }
 
         // register user in the circles registry
         //let currentServerSettings = await getServerSettings();

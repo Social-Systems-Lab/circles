@@ -57,6 +57,26 @@ const normalizeMediaUrl = (url?: string): string | undefined => {
     return url;
 };
 
+const SYSTEM_WELCOME_SOURCE = "system_welcome";
+const SYSTEM_WELCOME_VERSION = "v1";
+const WELCOME_CONVERSATION_HANDLE_PREFIX = "welcome";
+const WELCOME_CONVERSATION_NAME = "Welcome to Kamooni";
+const OPTIONAL_WELCOME_MEMBER_NOTE = (process.env.KAMOONI_WELCOME_MEMBER_NOTE || "").trim();
+
+const buildWelcomeMessageBody = (userName?: string): string => {
+    const safeName = typeof userName === "string" ? userName.trim() : "";
+    const greeting = safeName ? `Welcome to Kamooni, ${safeName}.` : "Welcome to Kamooni.";
+
+    const parts = [
+        greeting,
+        "Kamooni is a community-owned platform where people and circles organize conversations, projects, and collaboration.",
+        "How to get started:\n1. Complete your profile.\n2. Join or discover circles aligned with your mission.\n3. Start one message, post, or task to begin contributing.",
+        OPTIONAL_WELCOME_MEMBER_NOTE || undefined,
+    ].filter(Boolean);
+
+    return parts.join("\n\n");
+};
+
 type ConversationMediaKind = "image" | "video" | "file";
 
 type ConversationMediaItem = {
@@ -167,6 +187,57 @@ export const findOrCreateDmConversation = async (userA: Circle, userB: Circle): 
         createdAt: new Date(),
         updatedAt: new Date(),
     });
+};
+
+export const ensureWelcomeMessageForNewUser = async (
+    userDid: string,
+    userName?: string,
+): Promise<{ conversationId: string; messageCreated: boolean }> => {
+    if (!userDid) {
+        throw new Error("Missing user DID for welcome message");
+    }
+
+    const welcomeHandle = `${WELCOME_CONVERSATION_HANDLE_PREFIX}-${userDid}`;
+    const existingConversation = (await ChatConversations.findOne({
+        type: "dm",
+        handle: welcomeHandle,
+        participants: userDid,
+        archived: { $ne: true },
+    })) as ChatConversation | null;
+
+    const conversation =
+        existingConversation ||
+        (await createConversation({
+            type: "dm",
+            name: WELCOME_CONVERSATION_NAME,
+            handle: welcomeHandle,
+            participants: [userDid],
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        }));
+
+    const conversationId = String(conversation._id);
+    const existingWelcomeMessage = await ChatMessageDocs.findOne({
+        conversationId,
+        source: SYSTEM_WELCOME_SOURCE,
+        version: SYSTEM_WELCOME_VERSION,
+    });
+
+    if (existingWelcomeMessage) {
+        return { conversationId, messageCreated: false };
+    }
+
+    await createMessage({
+        conversationId,
+        senderDid: userDid,
+        body: buildWelcomeMessageBody(userName),
+        createdAt: new Date(),
+        format: "markdown",
+        source: SYSTEM_WELCOME_SOURCE,
+        version: SYSTEM_WELCOME_VERSION,
+    });
+
+    return { conversationId, messageCreated: true };
 };
 
 export const ensureConversationForCircle = async (circleId: string): Promise<ChatConversation> => {

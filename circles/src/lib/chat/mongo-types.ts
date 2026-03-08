@@ -41,6 +41,8 @@ export type ChatMessageDoc = {
     attachments?: ChatAttachment[];
     reactions?: ChatReaction[];
     format?: "markdown";
+    source?: string;
+    version?: string;
 };
 
 export type ChatReadState = {
