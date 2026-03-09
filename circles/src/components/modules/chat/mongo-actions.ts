@@ -21,6 +21,7 @@ import { getCircleByDid, getCircleById, getCirclesByDids } from "@/lib/data/circ
 import { saveFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { WELCOME_MESSAGE, isSystemMessageSource } from "@/config/welcome-message";
+import { normalizeSystemMessageMetadata } from "@/lib/chat/system-messages";
 
 const normalizeMediaUrl = (url?: string): string | undefined => {
     if (!url) return url;
@@ -216,6 +217,7 @@ export const fetchMongoMessagesAction = async (
         }
         const conversationMetadata = (access.conversation as any)?.metadata as Record<string, unknown> | undefined;
         const fallbackSystemAuthor = getSystemTemplateAuthor(conversationMetadata);
+        const conversationRepliesDisabled = conversationMetadata?.repliesDisabled === true;
 
         const senderDids = Array.from(new Set(docs.map((doc) => doc.senderDid)));
         const senders = senderDids.length ? await getCirclesByDids(senderDids) : [];
@@ -231,7 +233,13 @@ export const fetchMongoMessagesAction = async (
         );
 
         const messages = docs.map((doc) => {
-            const isTemplateSystemMessage = isSystemMessageSource(doc.source);
+            const systemMetadata = normalizeSystemMessageMetadata({
+                source: doc.source,
+                version: doc.version,
+                system: (doc as any).system,
+                repliesDisabled: conversationRepliesDisabled,
+            });
+            const isTemplateSystemMessage = systemMetadata.messageType === "system";
             const author =
                 senderByDid.get(doc.senderDid) ||
                 (isTemplateSystemMessage
@@ -300,6 +308,7 @@ export const fetchMongoMessagesAction = async (
             (message as any).format = doc.format;
             (message as any).source = doc.source;
             (message as any).version = doc.version;
+            (message as any).system = systemMetadata;
 
             return message;
         });

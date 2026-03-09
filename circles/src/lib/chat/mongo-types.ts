@@ -1,3 +1,5 @@
+import type { SystemMessageMetadata } from "@/lib/chat/system-messages";
+
 export type ChatConversationType = "dm" | "group" | "announcement";
 
 export type ChatConversationMetadata = {
@@ -54,6 +56,7 @@ export type ChatMessageDoc = {
     format?: "markdown";
     source?: string;
     version?: string;
+    system?: SystemMessageMetadata;
 };
 
 export type ChatReadState = {

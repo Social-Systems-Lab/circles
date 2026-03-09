@@ -35,6 +35,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { MemoizedReactMarkdown } from "@/components/utils/memoized-markdown";
 import { useMongoChat } from "./useMongoChat";
 import { isSystemMessageSource } from "@/config/welcome-message";
+import { normalizeSystemMessageMetadata } from "@/lib/chat/system-messages";
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -65,6 +66,16 @@ const getMessageSource = (message: ChatMessage): string | undefined => {
     return typeof source === "string" ? source : undefined;
 };
 
+const getMessageSystemMetadata = (message: ChatMessage) =>
+    normalizeSystemMessageMetadata({
+        source: getMessageSource(message),
+        version: typeof (message as any)?.version === "string" ? (message as any).version : undefined,
+        system: (message as any)?.system,
+    });
+
+const isMembershipSystemType = (systemType?: string): boolean =>
+    systemType === "member_joined_circle" || systemType === "member_left_circle";
+
 type MentionSuggestion = {
     id: string;
     display: string;
@@ -73,8 +84,9 @@ type MentionSuggestion = {
 };
 
 const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
-    const source = getMessageSource(message);
-    const isSystemTemplateMessage = isSystemMessageSource(source);
+    const systemMetadata = getMessageSystemMetadata(message);
+    const isSystemTemplateMessage =
+        systemMetadata.messageType === "system" && !isMembershipSystemType(systemMetadata.systemType);
 
     if (preview) {
         return (
@@ -415,9 +427,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
     return (
         <div>
             {orderedMessages.reduce<React.ReactNode[]>((acc, message, index) => {
-                const isSystemMessage = message.type !== "m.room.message";
-                const isTemplateSystemMessage =
-                    message.type === "m.room.message" && isSystemMessageSource(getMessageSource(message));
                 const isNewDate =
                     index === 0 ||
                     !isSameDay(new Date(message.createdAt), new Date(orderedMessages[index - 1].createdAt));
@@ -444,6 +453,16 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                 const isOwnMessage = message.createdBy === selfIdentifier;
                 const canEditMessage = isOwnMessage && !message.status;
                 const canDeleteMessage = isOwnMessage && message.status !== "pending";
+                const systemMetadata = getMessageSystemMetadata(message);
+                const isSystemMessage = message.type !== "m.room.message";
+                const isMembershipSystemMessage =
+                    message.type === "m.room.message" &&
+                    systemMetadata.messageType === "system" &&
+                    isMembershipSystemType(systemMetadata.systemType);
+                const isTemplateSystemMessage =
+                    message.type === "m.room.message" &&
+                    systemMetadata.messageType === "system" &&
+                    !isMembershipSystemMessage;
                 const bubbleStatusClasses =
                     message.status === "pending"
                         ? "opacity-70"
@@ -457,6 +476,20 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                             <span className="rounded-full bg-gray-200 px-2 py-1 shadow-md">
                                 <MessageRenderer message={message} />
                             </span>
+                        </div>,
+                    );
+                } else if (isMembershipSystemMessage) {
+                    const activityBody =
+                        renderMentionsAsDisplayText((message?.content?.body as string) || "") ||
+                        (systemMetadata.systemType === "member_joined_circle"
+                            ? "A member joined this circle."
+                            : "A member left this circle.");
+
+                    acc.push(
+                        <div key={message.id} className="my-2 mt-4 flex justify-center">
+                            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-700">
+                                {activityBody}
+                            </div>
                         </div>,
                     );
                 } else {

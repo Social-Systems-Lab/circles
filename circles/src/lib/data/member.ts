@@ -6,6 +6,7 @@ import { filterLocations } from "../utils";
 import { getMetrics } from "../utils/metrics";
 import { SAFE_CIRCLE_PROJECTION } from "./circle";
 import { addChatRoomMember, getChatRoomByHandle, removeChatRoomMember } from "./chat";
+import { emitCircleMembershipSystemEvent } from "./system-message-events";
 
 export const getMember = async (userDid: string, circleId: string): Promise<Member | null> => {
     return await Members.findOne({ userDid: userDid, circleId: circleId });
@@ -105,6 +106,19 @@ export const addMember = async (
     // increase member count in circle
     await Circles.updateOne({ _id: new ObjectId(circleId) }, { $inc: { members: 1 } });
 
+    const circle = await Circles.findOne({ _id: new ObjectId(circleId) }, { projection: { circleType: 1 } });
+    if (circle?.circleType !== "user") {
+        try {
+            await emitCircleMembershipSystemEvent({
+                circleId,
+                actorDid: userDid,
+                eventType: "member_joined_circle",
+            });
+        } catch (error) {
+            console.error("Failed to emit member_joined_circle system message:", error);
+        }
+    }
+
     return member;
 };
 
@@ -131,6 +145,18 @@ export const removeMember = async (userDid: string, circleId: string): Promise<b
 
     // remove member from members chat
     await autoRemoveFromMemberChats(userDid, circleId);
+
+    if (circle.circleType !== "user") {
+        try {
+            await emitCircleMembershipSystemEvent({
+                circleId,
+                actorDid: userDid,
+                eventType: "member_left_circle",
+            });
+        } catch (error) {
+            console.error("Failed to emit member_left_circle system message:", error);
+        }
+    }
 
     return true;
 };

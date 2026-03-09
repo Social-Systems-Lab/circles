@@ -4,6 +4,7 @@ import { ChatConversation, ChatMessageDoc, ChatReaction } from "@/lib/chat/mongo
 import { ChatConversations, ChatMessageDocs, ChatReadStates, ChatRoomMembers } from "./db";
 import { getCircleByHandle, getCircleById, getCirclesByDids } from "./circle";
 import { WelcomeMessageConfig, WELCOME_MESSAGE } from "@/config/welcome-message";
+import { buildSystemMessageMetadata } from "@/lib/chat/system-messages";
 
 // High-value indexes for chat list/message paths.
 ChatConversations?.createIndex({ participants: 1, type: 1, archived: 1, updatedAt: -1 });
@@ -77,6 +78,16 @@ const buildWelcomeConversationMetadata = (config: WelcomeMessageConfig) => ({
     senderName: config.displayName,
     senderAvatarUrl: config.avatarUrl,
 });
+
+const buildWelcomeSystemMetadata = (config: WelcomeMessageConfig, userDid: string) =>
+    buildSystemMessageMetadata({
+        systemType: "welcome",
+        source: "signup",
+        targetDid: userDid,
+        repliesDisabled: config.repliesDisabled,
+        templateKey: "welcome",
+        version: config.version,
+    });
 
 type ConversationMediaKind = "image" | "video" | "file";
 
@@ -201,6 +212,7 @@ export const ensureWelcomeMessageForNewUser = async (
 
     const systemSenderDid = senderDid || buildWelcomeSystemDid(config);
     const welcomeMetadata = buildWelcomeConversationMetadata(config);
+    const welcomeSystemMetadata = buildWelcomeSystemMetadata(config, userDid);
     const welcomeHandle = `${WELCOME_CONVERSATION_HANDLE_PREFIX}-${userDid}`;
     const existingConversation = (await ChatConversations.findOne({
         type: "dm",
@@ -255,6 +267,7 @@ export const ensureWelcomeMessageForNewUser = async (
                         format: "markdown",
                         source: config.source,
                         version: config.version,
+                        system: welcomeSystemMetadata,
                     },
                 },
             );
@@ -270,6 +283,7 @@ export const ensureWelcomeMessageForNewUser = async (
         format: "markdown",
         source: config.source,
         version: config.version,
+        system: welcomeSystemMetadata,
     });
 
     return { conversationId, messageCreated: true };

@@ -1,4 +1,5 @@
 import { Toast } from "@/components/ui/use-toast";
+import type { SystemMessageMetadata } from "@/lib/chat/system-messages";
 import { CoreMessage } from "ai";
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { ReadonlyURLSearchParams } from "next/navigation";
@@ -344,6 +345,7 @@ export interface ChatMessage {
     isRedacted?: boolean;
     status?: "pending" | "sent" | "failed";
     errorMessage?: string;
+    system?: SystemMessageMetadata;
 
 }
 
