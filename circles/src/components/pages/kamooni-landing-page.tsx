@@ -29,6 +29,7 @@ interface KamooniLandingPageProps {
     banner?: {
         type: PlatformBannerType;
         text: string;
+        ctaEnabled?: boolean;
         ctaLabel?: string;
         ctaUrl?: string;
     } | null;
@@ -46,12 +47,12 @@ export default function KamooniLandingPage({
         : {
               type: "alert" as const,
               text: maintenanceMessage,
+              ctaEnabled: false,
               ctaLabel: "",
               ctaUrl: "",
           };
     const normalizedBannerCtaUrl = resolvedBanner.ctaUrl?.trim() || "";
-    const hasBannerCta =
-        resolvedBanner.type === "cta" && !!resolvedBanner.ctaLabel?.trim() && !!normalizedBannerCtaUrl;
+    const hasBannerCta = !!resolvedBanner.ctaEnabled && !!resolvedBanner.ctaLabel?.trim() && !!normalizedBannerCtaUrl;
     const isExternalBannerCta = /^https?:\/\//i.test(normalizedBannerCtaUrl);
 
     const faqItems = [
@@ -258,13 +259,13 @@ export default function KamooniLandingPage({
                             resolvedBanner.type === "alert" &&
                                 "border-[#9f2f14] bg-[#c84521] text-white backdrop-blur-[1px]",
                             resolvedBanner.type === "announcement" &&
-                                "border-kam-yellow/80 bg-kam-yellow/20 text-kam-gray-dark",
+                                "border-[#b28900] bg-[#d4a106] text-white",
                             resolvedBanner.type === "cta" && "border-kam-button-red-orange bg-white/95 text-kam-gray-dark",
                         )}
                     >
                         <p className="whitespace-normal break-words">{resolvedBanner.text}</p>
                         {hasBannerCta && (
-                            <div className="mt-3">
+                            <div className="mt-3 flex justify-center">
                                 <Link
                                     href={normalizedBannerCtaUrl}
                                     target={isExternalBannerCta ? "_blank" : undefined}
@@ -273,7 +274,7 @@ export default function KamooniLandingPage({
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        className="border-kam-button-red-orange text-kam-button-red-orange hover:bg-kam-button-red-orange hover:text-white"
+                                        className="border-white bg-white text-kam-button-red-orange hover:bg-white/90"
                                     >
                                         {resolvedBanner.ctaLabel}
                                     </Button>

@@ -20,6 +20,7 @@ export default async function WelcomePage() {
                     ? {
                           type: activeBanner.type,
                           text: activeBanner.text,
+                          ctaEnabled: activeBanner.ctaEnabled,
                           ctaLabel: activeBanner.ctaLabel,
                           ctaUrl: activeBanner.ctaUrl,
                       }

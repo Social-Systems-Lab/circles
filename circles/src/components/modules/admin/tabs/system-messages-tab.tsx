@@ -28,6 +28,7 @@ export default function SystemMessagesTab() {
     const [isPreviewing, startPreviewing] = useTransition();
     const [bannerType, setBannerType] = useState<PlatformBannerType>("alert");
     const [bannerText, setBannerText] = useState("");
+    const [bannerCtaEnabled, setBannerCtaEnabled] = useState(false);
     const [bannerCtaLabel, setBannerCtaLabel] = useState("");
     const [bannerCtaUrl, setBannerCtaUrl] = useState("");
     const [bannerIsActive, setBannerIsActive] = useState(true);
@@ -61,6 +62,7 @@ export default function SystemMessagesTab() {
             } else if (bannerResult.draft) {
                 setBannerType(bannerResult.draft.type || "alert");
                 setBannerText(bannerResult.draft.text || "");
+                setBannerCtaEnabled(bannerResult.draft.ctaEnabled ?? false);
                 setBannerCtaLabel(bannerResult.draft.ctaLabel || "");
                 setBannerCtaUrl(bannerResult.draft.ctaUrl || "");
                 setBannerIsActive(bannerResult.draft.isActive ?? true);
@@ -140,6 +142,7 @@ export default function SystemMessagesTab() {
             const result = await saveWelcomeBannerAction({
                 type: bannerType,
                 text: trimmedText,
+                ctaEnabled: bannerCtaEnabled,
                 ctaLabel: bannerCtaLabel.trim(),
                 ctaUrl: bannerCtaUrl.trim(),
                 isActive: bannerIsActive,
@@ -227,6 +230,11 @@ export default function SystemMessagesTab() {
                             <SelectItem value="cta">CTA</SelectItem>
                         </SelectContent>
                     </Select>
+                    <div className="space-y-1 text-xs text-muted-foreground">
+                        <p>CTA: White background, will display a button</p>
+                        <p>Alert: Red background, white text</p>
+                        <p>Announcement: Yellow background, white text</p>
+                    </div>
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="banner-text">Banner Text</Label>
@@ -236,6 +244,15 @@ export default function SystemMessagesTab() {
                         value={bannerText}
                         onChange={(event) => setBannerText(event.target.value)}
                     />
+                </div>
+                <div className="flex items-center justify-between rounded-md border p-3">
+                    <div className="space-y-1">
+                        <Label htmlFor="banner-cta-enabled">Enable CTA Button</Label>
+                        <p className="text-sm text-muted-foreground">
+                            Shows a centered button when label and URL are also provided.
+                        </p>
+                    </div>
+                    <Switch id="banner-cta-enabled" checked={bannerCtaEnabled} onCheckedChange={setBannerCtaEnabled} />
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
@@ -275,10 +292,12 @@ export default function SystemMessagesTab() {
                 <div className="rounded-md border bg-muted/30 p-3">
                     <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Preview</p>
                     <p className="text-sm">{bannerText || "Banner text preview"}</p>
-                    {bannerType === "cta" && bannerCtaLabel.trim() && bannerCtaUrl.trim() && (
-                        <Button variant="outline" size="sm" className="mt-3">
-                            {bannerCtaLabel.trim()}
-                        </Button>
+                    {bannerCtaEnabled && bannerCtaLabel.trim() && bannerCtaUrl.trim() && (
+                        <div className="mt-3 flex justify-center">
+                            <Button variant="outline" size="sm">
+                                {bannerCtaLabel.trim()}
+                            </Button>
+                        </div>
                     )}
                 </div>
             </div>

@@ -465,6 +465,7 @@ export async function getWelcomeBannerAction() {
             draft: {
                 type: draft.type,
                 text: draft.text,
+                ctaEnabled: draft.ctaEnabled,
                 ctaLabel: draft.ctaLabel,
                 ctaUrl: draft.ctaUrl,
                 isActive: draft.isActive,
@@ -483,6 +484,7 @@ export async function getWelcomeBannerAction() {
 export async function saveWelcomeBannerAction(input: {
     type: PlatformBannerType;
     text: string;
+    ctaEnabled?: boolean;
     ctaLabel?: string;
     ctaUrl?: string;
     isActive: boolean;
@@ -516,6 +518,7 @@ export async function saveWelcomeBannerAction(input: {
         const savedBanner = await saveWelcomeBanner({
             type,
             text,
+            ctaEnabled: !!input.ctaEnabled,
             ctaLabel,
             ctaUrl,
             isActive: !!input.isActive,

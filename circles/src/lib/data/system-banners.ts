@@ -10,6 +10,7 @@ export type PlatformBannerDoc = {
     key: string;
     type: PlatformBannerType;
     text: string;
+    ctaEnabled?: boolean;
     ctaLabel?: string;
     ctaUrl?: string;
     isActive: boolean;
@@ -22,6 +23,7 @@ export type PlatformBannerDraft = {
     bannerSource: "db" | "fallback";
     type: PlatformBannerType;
     text: string;
+    ctaEnabled: boolean;
     ctaLabel: string;
     ctaUrl: string;
     isActive: boolean;
@@ -45,7 +47,10 @@ export const getActiveBanner = async (): Promise<PlatformBannerDoc | null> => {
         return null;
     }
 
-    return banner;
+    return {
+        ...banner,
+        ctaEnabled: banner.ctaEnabled ?? (banner.type === "cta" && !!banner.ctaLabel?.trim() && !!banner.ctaUrl?.trim()),
+    };
 };
 
 export const getWelcomeBannerDraft = async (): Promise<PlatformBannerDraft> => {
@@ -56,6 +61,9 @@ export const getWelcomeBannerDraft = async (): Promise<PlatformBannerDraft> => {
         bannerSource: storedBanner ? "db" : "fallback",
         type: storedBanner?.type || "alert",
         text: storedBanner?.text || DEFAULT_WELCOME_BANNER_TEXT,
+        ctaEnabled:
+            storedBanner?.ctaEnabled ??
+            (storedBanner?.type === "cta" && !!storedBanner?.ctaLabel?.trim() && !!storedBanner?.ctaUrl?.trim()),
         ctaLabel: storedBanner?.ctaLabel || "",
         ctaUrl: storedBanner?.ctaUrl || "",
         isActive: storedBanner?.isActive ?? true,
@@ -66,6 +74,7 @@ export const getWelcomeBannerDraft = async (): Promise<PlatformBannerDraft> => {
 export const saveWelcomeBanner = async (input: {
     type: PlatformBannerType;
     text: string;
+    ctaEnabled?: boolean;
     ctaLabel?: string;
     ctaUrl?: string;
     isActive: boolean;
@@ -80,6 +89,7 @@ export const saveWelcomeBanner = async (input: {
         key: WELCOME_BANNER_KEY,
         type: input.type,
         text: input.text,
+        ctaEnabled: !!input.ctaEnabled,
         ctaLabel: input.ctaLabel || "",
         ctaUrl: input.ctaUrl || "",
         isActive: input.isActive,
