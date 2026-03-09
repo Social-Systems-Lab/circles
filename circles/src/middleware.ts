@@ -1,4 +1,5 @@
 import { verifyUserToken } from "@/lib/auth/jwt";
+import { getAuthCookieNamesForClearing, readAuthToken } from "@/lib/auth/cookie";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
@@ -18,16 +19,20 @@ export async function middleware(request: NextRequest) {
 
     let userDid = undefined;
 
-    // determine host and port based on environment
-    const host = process.env.NODE_ENV === "production" ? process.env.CIRCLES_HOST : "localhost";
+    // Use current request origin in dev to avoid localhost port drift (3000/3001/3002...).
+    const host = process.env.CIRCLES_HOST;
     const port = process.env.CIRCLES_PORT || 3000;
+    const accessApiUrl =
+        process.env.NODE_ENV === "production"
+            ? `http://${host}:${port}/api/access`
+            : new URL("/api/access", request.url).toString();
 
     if (process.env.NODE_ENV === "development") {
         console.log("Requesting access to", request.url);
     }
 
     try {
-        const token = request.cookies.get("token")?.value;
+        const token = readAuthToken(request.cookies);
         if (token) {
             let payload = await verifyUserToken(token);
             userDid = payload.userDid;
@@ -38,7 +43,9 @@ export async function middleware(request: NextRequest) {
         // If a user has an old/invalid cookie (e.g. after a deploy or secret change),
         // clear it automatically and reload the same URL once.
         const res = NextResponse.redirect(request.nextUrl);
-        res.cookies.set("token", "", { maxAge: 0, path: "/" });
+        for (const cookieName of getAuthCookieNamesForClearing()) {
+            res.cookies.set(cookieName, "", { maxAge: 0, path: "/" });
+        }
         return res;
     }
 
@@ -82,7 +89,7 @@ export async function middleware(request: NextRequest) {
 
     // fetch access rules for specified circle and module
     try {
-        const response = await fetch(`http://${host}:${port}/api/access`, {
+        const response = await fetch(accessApiUrl, {
             method: "POST",
             body: JSON.stringify({ userDid, circleHandle, moduleHandle }),
             headers: {

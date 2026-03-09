@@ -34,12 +34,6 @@ export const Authenticator = () => {
     }, [isInitialized]);
 
     const checkAuthentication = useCallback(async () => {
-        // if already authenticated, do nothing
-        if (authInfo.authStatus === "authenticated") {
-            console.log("checkAuthentication: already authenticated");
-            return;
-        }
-
         console.log("checkAuthentication: checkAuth");
         const response = await checkAuth();
         if (response.authenticated) {
@@ -49,15 +43,17 @@ export const Authenticator = () => {
         } else {
             console.log("checkAuthentication: checkAuth responded unauthenticated");
             setAuthInfo({ authStatus: "unauthenticated" });
+            setUser(undefined);
         }
-    }, [authInfo.authStatus, setAuthInfo, setUser]);
+    }, [setAuthInfo, setUser]);
 
     useEffect(() => {
         // Run checkAuthentication with a slight delay to ensure components have initialized
-        setTimeout(() => {
+        const timeoutId = setTimeout(() => {
             checkAuthentication();
         }, 50);
-    }, [authInfo.authStatus, checkAuthentication, setAuthInfo, setUser]);
+        return () => clearTimeout(timeoutId);
+    }, [checkAuthentication]);
 
     switch (authInfo.authStatus) {
         default:

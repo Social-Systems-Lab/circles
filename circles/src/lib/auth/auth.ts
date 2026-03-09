@@ -9,6 +9,7 @@ import { ObjectId } from "mongodb";
 import { features, maxAccessLevel } from "../data/constants";
 import { cookies } from "next/headers";
 import { createSession, generateUserToken, verifyUserToken } from "./jwt";
+import { readAuthToken } from "./cookie";
 import { createNewUser, getUserById, getUserPrivate } from "../data/user";
 import { addMember, getMembers } from "../data/member";
 import { getCircleById, getCirclesByDids, getCirclesByIds, getDefaultCircle } from "../data/circle";
@@ -308,7 +309,7 @@ export const hasHigherAccess = async (
 
 // gets authenticated user DID or throws an error if user is not authenticated
 export const getAuthenticatedUserDid = async (): Promise<string | undefined> => {
-    const token = (await cookies()).get("token")?.value;
+    const token = readAuthToken(await cookies());
     if (!token) {
         return undefined;
     }

@@ -1,17 +1,25 @@
 // jwt.ts
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 import { cookies } from "next/headers";
+import { AUTH_COOKIE_NAME } from "./cookie";
 
-export const JWT_SECRET = process.env.CIRCLES_JWT_SECRET;
+export const JWT_SECRET = process.env.CIRCLES_JWT_SECRET || process.env.JWT_SECRET;
+
+const getJwtSecretBytes = (): Uint8Array => {
+    if (!JWT_SECRET) {
+        throw new Error("Missing JWT secret: set CIRCLES_JWT_SECRET (or JWT_SECRET for local development).");
+    }
+    return new TextEncoder().encode(JWT_SECRET);
+};
 
 export const verifyUserToken = async (token: string): Promise<JWTPayload> => {
-    const { payload } = await jwtVerify(token, new TextEncoder().encode(JWT_SECRET));
+    const { payload } = await jwtVerify(token, getJwtSecretBytes());
     return payload;
 };
 
 export const createSession = async (token: string) => {
     // create a cookie-based session
-    (await cookies()).set("token", token, {
+    (await cookies()).set(AUTH_COOKIE_NAME, token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
@@ -29,5 +37,5 @@ export const generateUserToken = async (did: string): Promise<string> => {
         .setExpirationTime(exp)
         .setIssuedAt(iat)
         .setNotBefore(iat)
-        .sign(new TextEncoder().encode(JWT_SECRET));
+        .sign(getJwtSecretBytes());
 };
