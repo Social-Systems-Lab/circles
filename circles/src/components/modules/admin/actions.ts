@@ -21,6 +21,7 @@ import { getWelcomeTemplateDraft, saveWelcomeTemplate } from "@/lib/data/system-
 import { PLATFORM_BANNER_TYPES } from "@/config/platform-banner";
 import type { PlatformBannerType } from "@/config/platform-banner";
 import { getWelcomeBannerDraft, saveWelcomeBanner } from "@/lib/data/system-banners";
+import { getPlatformBroadcastMessage, savePlatformBroadcastMessage } from "@/lib/data/platform-broadcasts";
 
 // Get all circles of a specific type
 export async function getEntitiesByType(type: "circle" | "user" | "project") {
@@ -426,6 +427,81 @@ export async function saveWelcomeSystemMessageTemplateAction(input: {
         return {
             success: false,
             message: error instanceof Error ? error.message : "Failed to save template",
+        };
+    }
+}
+
+export async function getPlatformBroadcastMessageAction() {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "Unauthorized: You must be logged in." };
+    }
+    const user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        return { success: false, message: "Unauthorized: You do not have permission." };
+    }
+
+    try {
+        const draft = await getPlatformBroadcastMessage();
+        return {
+            success: true,
+            draft: draft
+                ? {
+                      body: draft.body,
+                      active: draft.active,
+                      createdAt: draft.createdAt?.toISOString?.() || null,
+                      updatedAt: draft.updatedAt?.toISOString?.() || null,
+                  }
+                : null,
+        };
+    } catch (error) {
+        console.error("Error fetching platform broadcast message:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to load platform broadcast message",
+        };
+    }
+}
+
+export async function savePlatformBroadcastMessageAction(input: {
+    body: string;
+    active: boolean;
+}) {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "Unauthorized: You must be logged in." };
+    }
+    const user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        return { success: false, message: "Unauthorized: You do not have permission." };
+    }
+
+    const body = input.body?.trim();
+    if (!body) {
+        return { success: false, message: "Message body is required." };
+    }
+
+    try {
+        const saved = await savePlatformBroadcastMessage({
+            body,
+            active: input.active === true,
+        });
+        revalidatePath("/admin");
+        return {
+            success: true,
+            message: "Platform broadcast message saved.",
+            draft: {
+                body: saved.body,
+                active: saved.active,
+                createdAt: saved.createdAt?.toISOString?.() || null,
+                updatedAt: saved.updatedAt?.toISOString?.() || null,
+            },
+        };
+    } catch (error) {
+        console.error("Error saving platform broadcast message:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to save platform broadcast message",
         };
     }
 }

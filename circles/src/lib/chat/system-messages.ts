@@ -9,7 +9,7 @@ export type SystemMessageType =
     | "group_chat_member_removed"
     | "group_chat_admin_promoted"
     | "announcement";
-export type SystemMessageSource = "signup" | "group_chat_membership" | "admin";
+export type SystemMessageSource = "signup" | "group_chat_membership" | "admin" | "platform_admin";
 
 export type SystemMessageMetadata = {
     messageType: MessageType;
@@ -70,7 +70,7 @@ const normalizeSystemType = (value: unknown): SystemMessageType | undefined => {
 };
 
 const normalizeSystemSource = (value: unknown): SystemMessageSource | undefined => {
-    if (value === "signup" || value === "group_chat_membership" || value === "admin") {
+    if (value === "signup" || value === "group_chat_membership" || value === "admin" || value === "platform_admin") {
         return value;
     }
     if (value === "circle_membership") {

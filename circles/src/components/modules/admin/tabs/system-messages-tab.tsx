@@ -9,7 +9,9 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
+    getPlatformBroadcastMessageAction,
     getWelcomeSystemMessageTemplateAction,
+    savePlatformBroadcastMessageAction,
     getWelcomeBannerAction,
     saveWelcomeBannerAction,
     saveWelcomeSystemMessageTemplateAction,
@@ -26,6 +28,10 @@ export default function SystemMessagesTab() {
     const [senderCircleHandle, setSenderCircleHandle] = useState("kamooni");
     const [isSaving, startSaving] = useTransition();
     const [isPreviewing, startPreviewing] = useTransition();
+    const [broadcastBody, setBroadcastBody] = useState("");
+    const [broadcastIsActive, setBroadcastIsActive] = useState(false);
+    const [broadcastUpdatedAt, setBroadcastUpdatedAt] = useState<string | null>(null);
+    const [isSavingBroadcast, startSavingBroadcast] = useTransition();
     const [bannerType, setBannerType] = useState<PlatformBannerType>("alert");
     const [bannerText, setBannerText] = useState("");
     const [bannerCtaEnabled, setBannerCtaEnabled] = useState(false);
@@ -39,8 +45,9 @@ export default function SystemMessagesTab() {
     const loadData = async () => {
         setIsLoading(true);
         try {
-            const [templateResult, bannerResult] = await Promise.all([
+            const [templateResult, broadcastResult, bannerResult] = await Promise.all([
                 getWelcomeSystemMessageTemplateAction(),
+                getPlatformBroadcastMessageAction(),
                 getWelcomeBannerAction(),
             ]);
 
@@ -55,6 +62,18 @@ export default function SystemMessagesTab() {
                 setSenderCircleHandle(templateResult.draft.senderCircleHandle || "kamooni");
             } else {
                 toast.error("Template payload is missing.");
+            }
+
+            if (!broadcastResult.success) {
+                toast.error(broadcastResult.message || "Failed to load platform broadcast message.");
+            } else if (broadcastResult.draft) {
+                setBroadcastBody(broadcastResult.draft.body || "");
+                setBroadcastIsActive(broadcastResult.draft.active === true);
+                setBroadcastUpdatedAt(broadcastResult.draft.updatedAt || null);
+            } else {
+                setBroadcastBody("");
+                setBroadcastIsActive(false);
+                setBroadcastUpdatedAt(null);
             }
 
             if (!bannerResult.success) {
@@ -131,6 +150,33 @@ export default function SystemMessagesTab() {
         });
     };
 
+    const handleBroadcastSave = () => {
+        const trimmedBody = broadcastBody.trim();
+        if (!trimmedBody) {
+            toast.error("Platform broadcast message body is required.");
+            return;
+        }
+
+        startSavingBroadcast(async () => {
+            const result = await savePlatformBroadcastMessageAction({
+                body: trimmedBody,
+                active: broadcastIsActive,
+            });
+
+            if (!result.success) {
+                toast.error(result.message || "Failed to save platform broadcast message.");
+                return;
+            }
+
+            if (result.draft) {
+                setBroadcastBody(result.draft.body || "");
+                setBroadcastIsActive(result.draft.active === true);
+                setBroadcastUpdatedAt(result.draft.updatedAt || null);
+            }
+            toast.success("Platform broadcast message saved.");
+        });
+    };
+
     const handleBannerSave = () => {
         const trimmedText = bannerText.trim();
         if (!trimmedText) {
@@ -204,6 +250,45 @@ export default function SystemMessagesTab() {
                         {isPreviewing ? "Sending..." : "Preview to Self"}
                     </Button>
                     <span className="text-xs text-muted-foreground">Version: {version || "n/a"}</span>
+                </div>
+            </div>
+
+            <div className="space-y-4 border-t pt-6">
+                <h3 className="text-lg font-semibold">Platform Broadcast (Chat)</h3>
+                <p className="text-sm text-muted-foreground">
+                    Sends one platform-wide read-only announcement in chat for all users.
+                </p>
+                <div className="space-y-2">
+                    <Label htmlFor="platform-broadcast-body">Message (Markdown)</Label>
+                    <Textarea
+                        id="platform-broadcast-body"
+                        rows={5}
+                        value={broadcastBody}
+                        onChange={(event) => setBroadcastBody(event.target.value)}
+                    />
+                </div>
+                <div className="flex items-center justify-between rounded-md border p-3">
+                    <div className="space-y-1">
+                        <Label htmlFor="platform-broadcast-active">Active</Label>
+                        <p className="text-sm text-muted-foreground">
+                            When active, this message is synced into user chat threads.
+                        </p>
+                    </div>
+                    <Switch
+                        id="platform-broadcast-active"
+                        checked={broadcastIsActive}
+                        onCheckedChange={setBroadcastIsActive}
+                    />
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button onClick={handleBroadcastSave} disabled={isSavingBroadcast}>
+                        {isSavingBroadcast ? "Saving..." : "Save Platform Broadcast"}
+                    </Button>
+                    {broadcastUpdatedAt && (
+                        <span className="text-xs text-muted-foreground">
+                            Updated: {new Date(broadcastUpdatedAt).toLocaleString()}
+                        </span>
+                    )}
                 </div>
             </div>
 

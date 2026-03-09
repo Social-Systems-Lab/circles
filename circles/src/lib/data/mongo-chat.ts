@@ -5,6 +5,7 @@ import { ChatConversations, ChatMessageDocs, ChatReadStates, ChatRoomMembers } f
 import { getCircleByHandle, getCircleById, getCirclesByDids } from "./circle";
 import { WelcomeMessageConfig, WELCOME_MESSAGE } from "@/config/welcome-message";
 import { buildSystemMessageMetadata } from "@/lib/chat/system-messages";
+import { syncPlatformBroadcastForUser } from "@/lib/data/platform-broadcasts";
 
 // High-value indexes for chat list/message paths.
 ChatConversations?.createIndex({ participants: 1, type: 1, archived: 1, updatedAt: -1 });
@@ -372,6 +373,12 @@ export const mapConversationToChatRoomDisplay = async (
 };
 
 export const listConversationsForUser = async (userDid: string, circleIds: string[]): Promise<ChatRoomDisplay[]> => {
+    try {
+        await syncPlatformBroadcastForUser(userDid);
+    } catch (error) {
+        console.error("Failed to sync platform broadcast for user:", error);
+    }
+
     const circleConversationIds: string[] = [];
     for (const circleId of circleIds) {
         const conversation = await ensureConversationForCircle(circleId);

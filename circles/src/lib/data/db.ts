@@ -29,6 +29,7 @@ import {
 } from "@/models/models";
 import { AggregateRank } from "./ranking";
 import { ChatConversation, ChatMessageDoc, ChatReadState } from "@/lib/chat/mongo-types";
+import type { PlatformBroadcastMessage } from "./platform-broadcasts";
 
 const MONGODB_URI =
     process.env.MONGODB_URI ||
@@ -72,6 +73,7 @@ let Notifications: Collection<Notification>;
 let ChatConversations: Collection<ChatConversation>;
 let ChatMessageDocs: Collection<ChatMessageDoc>;
 let ChatReadStates: Collection<ChatReadState>;
+let PlatformBroadcastMessages: Collection<PlatformBroadcastMessage>;
 
 // Only initialize the database connection if not in build mode
 if (process.env.IS_BUILD !== "true") {
@@ -113,6 +115,7 @@ if (process.env.IS_BUILD !== "true") {
     ChatConversations = db.collection<ChatConversation>("chatConversations");
     ChatMessageDocs = db.collection<ChatMessageDoc>("chatMessageDocs");
     ChatReadStates = db.collection<ChatReadState>("chatReadStates");
+    PlatformBroadcastMessages = db.collection<PlatformBroadcastMessage>("platformBroadcastMessages");
 }
 export async function getDb() {
   if (!client) throw new Error("Mongo client not initialised (IS_BUILD=true?)");
@@ -154,4 +157,5 @@ export {
     ChatConversations,
     ChatMessageDocs,
     ChatReadStates,
+    PlatformBroadcastMessages,
 };
