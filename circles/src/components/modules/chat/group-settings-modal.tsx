@@ -805,6 +805,43 @@ function MediaTab({ chatRoom, isActive }: { chatRoom: ChatRoomDisplay; isActive:
 function SettingsTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin: boolean }) {
     const [isLeaving, setIsLeaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [announcementBody, setAnnouncementBody] = useState("");
+    const [isSendingAnnouncement, setIsSendingAnnouncement] = useState(false);
+    const [announcementNotice, setAnnouncementNotice] = useState<string | null>(null);
+    const [announcementError, setAnnouncementError] = useState<string | null>(null);
+
+    const handleSendAnnouncement = async () => {
+        if (!isAdmin || chatRoom.isDirect) {
+            return;
+        }
+
+        const trimmedBody = announcementBody.trim();
+        if (!trimmedBody) {
+            setAnnouncementError("Announcement message cannot be empty");
+            setAnnouncementNotice(null);
+            return;
+        }
+
+        setIsSendingAnnouncement(true);
+        setAnnouncementError(null);
+        setAnnouncementNotice(null);
+        try {
+            const { sendGroupAnnouncementAction } = await import("./actions");
+            const result = await sendGroupAnnouncementAction(chatRoom._id as string, trimmedBody);
+            if (result.success) {
+                setAnnouncementBody("");
+                setAnnouncementNotice("Announcement sent to this group chat.");
+                return;
+            }
+
+            setAnnouncementError(result.message || "Failed to send announcement");
+        } catch (error) {
+            console.error("Error sending announcement:", error);
+            setAnnouncementError("Failed to send announcement");
+        } finally {
+            setIsSendingAnnouncement(false);
+        }
+    };
 
     const handleLeaveGroup = async () => {
         if (!confirm(`Are you sure you want to leave this ${chatRoom.isDirect ? "chat" : "group"}?`)) {
@@ -856,6 +893,34 @@ function SettingsTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin
 
     return (
         <div className="space-y-4">
+            {isAdmin && !chatRoom.isDirect && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <p className="font-medium text-slate-900">Send Announcement</p>
+                    <p className="mt-1 text-sm text-slate-600">
+                        Sends a system announcement to this existing group chat. Replies are disabled by default.
+                    </p>
+                    <textarea
+                        value={announcementBody}
+                        onChange={(event) => setAnnouncementBody(event.target.value)}
+                        rows={4}
+                        placeholder="Write announcement (Markdown supported)"
+                        className="mt-3 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <div className="mt-3 flex items-center justify-between gap-2">
+                        <p className="text-xs text-slate-500">System sender uses existing Kamooni conventions.</p>
+                        <button
+                            onClick={handleSendAnnouncement}
+                            disabled={isSendingAnnouncement || !announcementBody.trim()}
+                            className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {isSendingAnnouncement ? "Sending..." : "Send announcement"}
+                        </button>
+                    </div>
+                    {announcementNotice && <p className="mt-2 text-sm text-green-700">{announcementNotice}</p>}
+                    {announcementError && <p className="mt-2 text-sm text-red-600">{announcementError}</p>}
+                </div>
+            )}
+
             {/* Mute Notifications */}
             <div className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50">
                 <div>

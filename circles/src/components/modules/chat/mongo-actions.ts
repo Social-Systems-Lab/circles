@@ -116,7 +116,44 @@ export const resolveMongoConversationAccess = async (conversationId: string, use
     return { ok: true, conversation };
 };
 
+const validateReplyTargetForConversation = async (
+    conversationId: string,
+    replyToMessageId?: string,
+): Promise<{ ok: boolean; message?: string }> => {
+    if (!replyToMessageId) {
+        return { ok: true };
+    }
 
+    if (!ObjectId.isValid(replyToMessageId)) {
+        return { ok: true };
+    }
+
+    const replyTargetDoc = await ChatMessageDocs.findOne(
+        {
+            _id: new ObjectId(replyToMessageId),
+            conversationId,
+        },
+        {
+            projection: { source: 1, version: 1, system: 1 },
+        },
+    );
+
+    if (!replyTargetDoc) {
+        return { ok: false, message: "Reply target not found" };
+    }
+
+    const replyTargetSystemMetadata = normalizeSystemMessageMetadata({
+        source: replyTargetDoc.source,
+        version: replyTargetDoc.version,
+        system: (replyTargetDoc as any).system,
+    });
+
+    if (replyTargetSystemMetadata.messageType === "system" && replyTargetSystemMetadata.repliesDisabled === true) {
+        return { ok: false, message: "Replies are disabled for this announcement" };
+    }
+
+    return { ok: true };
+};
 
 export const listChatRoomsAction = async (): Promise<{ success: boolean; rooms?: ChatRoomDisplay[]; message?: string }> => {
     const userDid = await getAuthenticatedUserDid();
@@ -336,6 +373,11 @@ export const sendMongoMessageAction = async (
         return { success: false, message: access.message };
     }
 
+    const replyValidation = await validateReplyTargetForConversation(conversationId, replyToMessageId);
+    if (!replyValidation.ok) {
+        return { success: false, message: replyValidation.message };
+    }
+
     try {
         const doc = await createMessage({
             conversationId,
@@ -378,6 +420,11 @@ export const sendMongoAttachmentAction = async (
     const access = await resolveMongoConversationAccess(conversationId, userDid);
     if (!access.ok) {
         return { success: false, message: access.message };
+    }
+
+    const replyValidation = await validateReplyTargetForConversation(conversationId, replyToMessageId);
+    if (!replyValidation.ok) {
+        return { success: false, message: replyValidation.message };
     }
 
     try {

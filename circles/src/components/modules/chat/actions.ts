@@ -15,7 +15,7 @@ import { ChatConversations, ChatRoomMembers, Circles, Members } from "@/lib/data
 import { features } from "@/lib/data/constants";
 import { getCirclesByDids } from "@/lib/data/circle";
 import { ensureConversationForCircle, listConversationMedia } from "@/lib/data/mongo-chat";
-import { emitGroupChatMembershipSystemEvent } from "@/lib/data/system-message-events";
+import { emitGroupChatMembershipSystemEvent, sendSystemMessage } from "@/lib/data/system-message-events";
 import {
     listChatRoomsAction as listMongoChatRoomsAction,
     fetchMongoMessagesAction as fetchMongoMessagesActionInternal,
@@ -563,6 +563,54 @@ export const updateGroupInfoAction = async (
     } catch (error) {
         console.error("❌ Error updating group info:", error);
         return { success: false, message: error instanceof Error ? error.message : "Failed to update group info" };
+    }
+};
+
+export const sendGroupAnnouncementAction = async (
+    chatRoomId: string,
+    body: string,
+): Promise<{ success: boolean; message?: string; messageId?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to send announcements" };
+    }
+
+    const trimmedBody = body.trim();
+    if (!trimmedBody) {
+        return { success: false, message: "Announcement message cannot be empty" };
+    }
+
+    try {
+        const conversation = await getMongoConversation(chatRoomId);
+        if (!conversation) {
+            return { success: false, message: "Chat room not found" };
+        }
+        if (conversation.type !== "group") {
+            return { success: false, message: "Announcements are only supported for group chats" };
+        }
+
+        const canSendAnnouncement = await canUserEditGroupInfo(chatRoomId, userDid);
+        if (!canSendAnnouncement) {
+            return { success: false, message: "Only group admins can send announcements" };
+        }
+
+        const result = await sendSystemMessage({
+            conversationId: chatRoomId,
+            body: trimmedBody,
+            systemType: "announcement",
+            source: "admin",
+            actorDid: userDid,
+            chatRoomId,
+            repliesDisabled: true,
+            templateKey: "announcement",
+            version: "v1",
+            format: "markdown",
+        });
+
+        return { success: true, messageId: result.messageId };
+    } catch (error) {
+        console.error("❌ Error sending announcement:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to send announcement" };
     }
 };
 

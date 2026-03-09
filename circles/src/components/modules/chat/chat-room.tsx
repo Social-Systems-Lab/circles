@@ -80,6 +80,12 @@ const isGroupChatMembershipSystemType = (systemType?: string): boolean =>
     systemType === "group_chat_member_removed" ||
     systemType === "group_chat_admin_promoted";
 
+const isReplyDisabledSystemMessage = (message: ChatMessage): boolean => {
+    if (message.type !== "m.room.message") return false;
+    const systemMetadata = getMessageSystemMetadata(message);
+    return systemMetadata.messageType === "system" && systemMetadata.repliesDisabled === true;
+};
+
 type MentionSuggestion = {
     id: string;
     display: string;
@@ -311,6 +317,9 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
     const [, setRoomMessages] = useAtom(roomMessagesAtom);
     const isMobile = useIsMobile();
     const handleReply = (message: ChatMessage) => {
+        if (isReplyDisabledSystemMessage(message)) {
+            return;
+        }
         setReplyToMessage(message);
     };
 
@@ -458,6 +467,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                 const canEditMessage = isOwnMessage && !message.status;
                 const canDeleteMessage = isOwnMessage && message.status !== "pending";
                 const systemMetadata = getMessageSystemMetadata(message);
+                const repliesDisabledForMessage = isReplyDisabledSystemMessage(message);
                 const isSystemMessage = message.type !== "m.room.message";
                 const isMembershipSystemMessage =
                     message.type === "m.room.message" &&
@@ -611,14 +621,16 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                                 )}
                                             </>
                                         )}
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6"
-                                            onClick={() => handleReply(message)}
-                                        >
-                                            <MdReply className="h-4 w-4" />
-                                        </Button>
+                                        {!repliesDisabledForMessage && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6"
+                                                onClick={() => handleReply(message)}
+                                            >
+                                                <MdReply className="h-4 w-4" />
+                                            </Button>
+                                        )}
                                         <Popover
                                             open={pickerOpenForMessage === message.id}
                                             onOpenChange={(isOpen) =>
