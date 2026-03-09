@@ -829,24 +829,33 @@ export const removeMemberAction = async (
         if (memberDid === userDid) {
             return { success: false, message: "Use the leave option to remove yourself" };
         }
-        const wasActiveMember = members.some((member) => member.userDid === memberDid);
+        const targetMemberships = members.filter((member) => member.userDid === memberDid);
+        if (targetMemberships.length === 0) {
+            return { success: false, message: "Member not found" };
+        }
+        const targetMembershipIds = targetMemberships.map((member) => member._id).filter(Boolean);
 
-        await ChatRoomMembers.updateMany(
-            { userDid: memberDid, ...buildMongoMembershipQuery(chatRoomId) },
-            { $set: { status: "removed", active: false, isActive: false } as any },
-        );
+        if (targetMembershipIds.length > 0) {
+            await ChatRoomMembers.updateMany(
+                { _id: { $in: targetMembershipIds } },
+                { $set: { status: "removed", active: false, isActive: false } as any },
+            );
+        } else {
+            await ChatRoomMembers.updateMany(
+                { userDid: memberDid, ...buildMongoMembershipQuery(chatRoomId) },
+                { $set: { status: "removed", active: false, isActive: false } as any },
+            );
+        }
         await ChatConversations.updateOne(
             { _id: new ObjectId(chatRoomId) },
             { $set: { updatedAt: new Date() } },
         );
-        if (wasActiveMember) {
-            await emitGroupChatMembershipSystemEvent({
-                conversationId: chatRoomId,
-                eventType: "group_chat_member_removed",
-                actorDid: userDid,
-                targetDid: memberDid,
-            });
-        }
+        await emitGroupChatMembershipSystemEvent({
+            conversationId: chatRoomId,
+            eventType: "group_chat_member_removed",
+            actorDid: userDid,
+            targetDid: memberDid,
+        });
 
         return { success: true };
     } catch (error) {
@@ -877,14 +886,37 @@ export const promoteMemberAction = async (
         if (!isRequesterAdmin(userDid, members)) {
             return { success: false, message: "Only admins can promote members" };
         }
-
-        const result = await ChatRoomMembers.updateOne(
-            { userDid: targetUserDid, ...buildMongoMembershipQuery(chatRoomId) },
-            { $set: { role: "admin", status: "active", active: true, isActive: true } as any },
-        );
-        if (result.matchedCount === 0) {
+        const targetMemberships = members.filter((member) => member.userDid === targetUserDid);
+        if (targetMemberships.length === 0) {
             return { success: false, message: "Member not found" };
         }
+        const alreadyAdmin = targetMemberships.some((member) => member.role === "admin");
+        if (alreadyAdmin) {
+            return { success: true };
+        }
+        const targetMembershipIds = targetMemberships.map((member) => member._id).filter(Boolean);
+
+        if (targetMembershipIds.length > 0) {
+            await ChatRoomMembers.updateMany(
+                { _id: { $in: targetMembershipIds } },
+                { $set: { role: "admin" } },
+            );
+        } else {
+            await ChatRoomMembers.updateOne(
+                { userDid: targetUserDid, ...buildMongoMembershipQuery(chatRoomId) },
+                { $set: { role: "admin" } },
+            );
+        }
+        await ChatConversations.updateOne(
+            { _id: new ObjectId(chatRoomId) },
+            { $set: { updatedAt: new Date() } },
+        );
+        await emitGroupChatMembershipSystemEvent({
+            conversationId: chatRoomId,
+            eventType: "group_chat_admin_promoted",
+            actorDid: userDid,
+            targetDid: targetUserDid,
+        });
 
         return { success: true };
     } catch (error) {

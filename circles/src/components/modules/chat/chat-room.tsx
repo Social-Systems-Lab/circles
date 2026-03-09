@@ -77,7 +77,8 @@ const isGroupChatMembershipSystemType = (systemType?: string): boolean =>
     systemType === "group_chat_joined" ||
     systemType === "group_chat_left" ||
     systemType === "group_chat_member_added" ||
-    systemType === "group_chat_member_removed";
+    systemType === "group_chat_member_removed" ||
+    systemType === "group_chat_admin_promoted";
 
 type MentionSuggestion = {
     id: string;
@@ -490,6 +491,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                             ? "A member left the group chat."
                             : systemMetadata.systemType === "group_chat_member_added"
                             ? "A member was added to the group chat."
+                            : systemMetadata.systemType === "group_chat_admin_promoted"
+                            ? "A member was promoted to group admin."
                             : "A member was removed from the group chat.");
 
                     acc.push(

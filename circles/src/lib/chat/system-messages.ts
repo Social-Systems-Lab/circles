@@ -7,6 +7,7 @@ export type SystemMessageType =
     | "group_chat_left"
     | "group_chat_member_added"
     | "group_chat_member_removed"
+    | "group_chat_admin_promoted"
     | "announcement";
 export type SystemMessageSource = "signup" | "group_chat_membership" | "admin";
 
@@ -29,6 +30,7 @@ export const SYSTEM_TYPE_TO_LEGACY_SOURCE: Record<SystemMessageType, string> = {
     group_chat_left: "system_group_chat_left",
     group_chat_member_added: "system_group_chat_member_added",
     group_chat_member_removed: "system_group_chat_member_removed",
+    group_chat_admin_promoted: "system_group_chat_admin_promoted",
     announcement: "system_announcement",
 };
 
@@ -55,6 +57,7 @@ const normalizeSystemType = (value: unknown): SystemMessageType | undefined => {
         value === "group_chat_left" ||
         value === "group_chat_member_added" ||
         value === "group_chat_member_removed" ||
+        value === "group_chat_admin_promoted" ||
         value === "announcement"
     ) {
         return value;
@@ -83,7 +86,8 @@ const inferSourceFromSystemType = (systemType?: SystemMessageType): SystemMessag
         systemType === "group_chat_joined" ||
         systemType === "group_chat_left" ||
         systemType === "group_chat_member_added" ||
-        systemType === "group_chat_member_removed"
+        systemType === "group_chat_member_removed" ||
+        systemType === "group_chat_admin_promoted"
     ) {
         return "group_chat_membership";
     }

@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Users, Image as ImageIcon, Settings as SettingsIcon, Info, Search, Check, X } from "lucide-react";
+import { useAtomValue } from "jotai";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { userAtom } from "@/lib/data/atoms";
 import { ChatRoomDisplay } from "@/models/models";
 import { CirclePicture } from "../circles/circle-picture";
 
@@ -316,6 +318,7 @@ function InfoTab({ chatRoom, canEditInfo }: { chatRoom: ChatRoomDisplay; canEdit
 
 // Members Tab Component
 function MembersTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin: boolean }) {
+    const user = useAtomValue(userAtom);
     const [members, setMembers] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -617,12 +620,14 @@ function MembersTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin:
                                                 Make admin
                                             </button>
                                         )}
-                                        <button 
-                                            onClick={() => handleRemove(member.userDid)}
-                                            className="text-sm text-red-600 hover:underline"
-                                        >
-                                            Remove
-                                        </button>
+                                        {member.userDid !== user?.did && (
+                                            <button
+                                                onClick={() => handleRemove(member.userDid)}
+                                                className="text-sm text-red-600 hover:underline"
+                                            >
+                                                Remove from group
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                             </div>

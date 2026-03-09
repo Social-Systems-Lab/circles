@@ -99,7 +99,11 @@ export const sendSystemMessage = async (input: {
 
 type GroupChatMembershipEventType = Extract<
     SystemMessageType,
-    "group_chat_joined" | "group_chat_left" | "group_chat_member_added" | "group_chat_member_removed"
+    | "group_chat_joined"
+    | "group_chat_left"
+    | "group_chat_member_added"
+    | "group_chat_member_removed"
+    | "group_chat_admin_promoted"
 >;
 
 const getDisplayName = (circle?: { name?: string; handle?: string } | null): string =>
@@ -123,6 +127,10 @@ const buildGroupChatEventBody = (input: {
             return input.actorName
                 ? `${input.actorName} removed ${input.targetName} from the group chat.`
                 : `${input.targetName} was removed from the group chat.`;
+        case "group_chat_admin_promoted":
+            return input.actorName
+                ? `${input.actorName} made ${input.targetName} a group admin.`
+                : `${input.targetName} is now a group admin.`;
         default:
             return `${input.targetName} was updated in the group chat.`;
     }
