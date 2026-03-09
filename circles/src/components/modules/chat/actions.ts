@@ -15,6 +15,7 @@ import { ChatConversations, ChatRoomMembers, Circles, Members } from "@/lib/data
 import { features } from "@/lib/data/constants";
 import { getCirclesByDids } from "@/lib/data/circle";
 import { ensureConversationForCircle, listConversationMedia } from "@/lib/data/mongo-chat";
+import { emitGroupChatMembershipSystemEvent } from "@/lib/data/system-message-events";
 import {
     listChatRoomsAction as listMongoChatRoomsAction,
     fetchMongoMessagesAction as fetchMongoMessagesActionInternal,
@@ -128,7 +129,20 @@ export async function joinChatRoomAction(
             return { success: false, message: "You are not authorized to join this chat room" };
         }
 
+        const existingMembership = await getChatRoomMember(userDid, chatRoomId);
+        const wasAlreadyActive = isActiveChatRoomMembership(existingMembership);
         const chatRoomMember = await addChatRoomMember(userDid, chatRoomId);
+        if (!wasAlreadyActive) {
+            const conversation = await getMongoConversation(chatRoomId);
+            if (conversation?.type === "group") {
+                await emitGroupChatMembershipSystemEvent({
+                    conversationId: chatRoomId,
+                    eventType: "group_chat_joined",
+                    actorDid: userDid,
+                    targetDid: userDid,
+                });
+            }
+        }
 
         return { success: true, message: "Joined chat room successfully", chatRoomMember };
     } catch (error) {
@@ -154,9 +168,21 @@ export async function leaveChatRoomAction(chatRoomId: string): Promise<{ success
         if (!chatRoomMember) {
             return { success: false, message: "You are not a member of this chat room" };
         }
+        const wasActiveMember = isActiveChatRoomMembership(chatRoomMember);
 
         // Remove the user from the chat room
         await removeChatRoomMember(userDid, chatRoomId);
+        if (wasActiveMember) {
+            const conversation = await getMongoConversation(chatRoomId);
+            if (conversation?.type === "group") {
+                await emitGroupChatMembershipSystemEvent({
+                    conversationId: chatRoomId,
+                    eventType: "group_chat_left",
+                    actorDid: userDid,
+                    targetDid: userDid,
+                });
+            }
+        }
 
         return { success: true, message: "Left chat room successfully" };
     } catch (error) {
@@ -474,6 +500,9 @@ export const leaveGroupChatAction = async (
             return { success: false, message: "Cannot leave a direct message" };
         }
 
+        const membershipBeforeLeave = await ChatRoomMembers.findOne({ userDid, ...buildMongoMembershipQuery(chatRoomId) });
+        const wasActiveMember = isActiveChatRoomMembership(membershipBeforeLeave);
+
         await ChatRoomMembers.updateMany(
             { userDid, ...buildMongoMembershipQuery(chatRoomId) },
             { $set: { status: "left", active: false, isActive: false } as any },
@@ -482,6 +511,14 @@ export const leaveGroupChatAction = async (
             { _id: new ObjectId(chatRoomId) },
             { $set: { updatedAt: new Date() } },
         );
+        if (wasActiveMember) {
+            await emitGroupChatMembershipSystemEvent({
+                conversationId: chatRoomId,
+                eventType: "group_chat_left",
+                actorDid: userDid,
+                targetDid: userDid,
+            });
+        }
         return { success: true };
     } catch (error) {
         console.error("❌ Error leaving group chat:", error);
@@ -726,6 +763,10 @@ export const addMembersAction = async (
         }
 
         const uniqueMemberDids = Array.from(new Set(memberDids.filter(Boolean)));
+        const existingActiveMemberDids = new Set(
+            members.map((member) => (typeof member?.userDid === "string" ? member.userDid : "")),
+        );
+        const memberDidsNewlyActivated = uniqueMemberDids.filter((did) => !existingActiveMemberDids.has(did));
         const now = new Date();
         for (const newMemberDid of uniqueMemberDids) {
             await ChatRoomMembers.updateOne(
@@ -747,6 +788,14 @@ export const addMembersAction = async (
             { _id: new ObjectId(chatRoomId) },
             { $addToSet: { participants: { $each: uniqueMemberDids } }, $set: { updatedAt: now } },
         );
+        for (const targetDid of memberDidsNewlyActivated) {
+            await emitGroupChatMembershipSystemEvent({
+                conversationId: chatRoomId,
+                eventType: "group_chat_member_added",
+                actorDid: userDid,
+                targetDid,
+            });
+        }
 
         return { success: true };
     } catch (error) {
@@ -780,6 +829,7 @@ export const removeMemberAction = async (
         if (memberDid === userDid) {
             return { success: false, message: "Use the leave option to remove yourself" };
         }
+        const wasActiveMember = members.some((member) => member.userDid === memberDid);
 
         await ChatRoomMembers.updateMany(
             { userDid: memberDid, ...buildMongoMembershipQuery(chatRoomId) },
@@ -789,6 +839,14 @@ export const removeMemberAction = async (
             { _id: new ObjectId(chatRoomId) },
             { $set: { updatedAt: new Date() } },
         );
+        if (wasActiveMember) {
+            await emitGroupChatMembershipSystemEvent({
+                conversationId: chatRoomId,
+                eventType: "group_chat_member_removed",
+                actorDid: userDid,
+                targetDid: memberDid,
+            });
+        }
 
         return { success: true };
     } catch (error) {

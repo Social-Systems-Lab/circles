@@ -1,8 +1,14 @@
 import { isSystemMessageSource } from "@/config/welcome-message";
 
 export type MessageType = "user" | "system";
-export type SystemMessageType = "welcome" | "member_joined_circle" | "member_left_circle" | "announcement";
-export type SystemMessageSource = "signup" | "circle_membership" | "admin";
+export type SystemMessageType =
+    | "welcome"
+    | "group_chat_joined"
+    | "group_chat_left"
+    | "group_chat_member_added"
+    | "group_chat_member_removed"
+    | "announcement";
+export type SystemMessageSource = "signup" | "group_chat_membership" | "admin";
 
 export type SystemMessageMetadata = {
     messageType: MessageType;
@@ -11,6 +17,7 @@ export type SystemMessageMetadata = {
     actorDid?: string;
     targetDid?: string;
     circleId?: string;
+    chatRoomId?: string;
     repliesDisabled?: boolean;
     templateKey?: string;
     version?: string;
@@ -18,39 +25,68 @@ export type SystemMessageMetadata = {
 
 export const SYSTEM_TYPE_TO_LEGACY_SOURCE: Record<SystemMessageType, string> = {
     welcome: "system_welcome",
-    member_joined_circle: "system_member_joined_circle",
-    member_left_circle: "system_member_left_circle",
+    group_chat_joined: "system_group_chat_joined",
+    group_chat_left: "system_group_chat_left",
+    group_chat_member_added: "system_group_chat_member_added",
+    group_chat_member_removed: "system_group_chat_member_removed",
     announcement: "system_announcement",
 };
 
-const LEGACY_SOURCE_TO_SYSTEM_TYPE: Record<string, SystemMessageType> = Object.entries(SYSTEM_TYPE_TO_LEGACY_SOURCE).reduce(
-    (acc, [systemType, source]) => {
-        acc[source] = systemType as SystemMessageType;
-        return acc;
-    },
-    {} as Record<string, SystemMessageType>,
-);
+const LEGACY_SOURCE_TO_SYSTEM_TYPE: Record<string, SystemMessageType> = {
+    ...Object.entries(SYSTEM_TYPE_TO_LEGACY_SOURCE).reduce(
+        (acc, [systemType, source]) => {
+            acc[source] = systemType as SystemMessageType;
+            return acc;
+        },
+        {} as Record<string, SystemMessageType>,
+    ),
+    // Legacy compatibility from early v1 trials.
+    system_member_joined_circle: "group_chat_joined",
+    system_member_left_circle: "group_chat_left",
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     !!value && typeof value === "object" && !Array.isArray(value);
 
 const normalizeSystemType = (value: unknown): SystemMessageType | undefined => {
-    return value === "welcome" ||
-        value === "member_joined_circle" ||
-        value === "member_left_circle" ||
+    if (
+        value === "welcome" ||
+        value === "group_chat_joined" ||
+        value === "group_chat_left" ||
+        value === "group_chat_member_added" ||
+        value === "group_chat_member_removed" ||
         value === "announcement"
-        ? value
-        : undefined;
+    ) {
+        return value;
+    }
+
+    // Legacy compatibility from early v1 trials.
+    if (value === "member_joined_circle") return "group_chat_joined";
+    if (value === "member_left_circle") return "group_chat_left";
+    return undefined;
 };
 
 const normalizeSystemSource = (value: unknown): SystemMessageSource | undefined => {
-    return value === "signup" || value === "circle_membership" || value === "admin" ? value : undefined;
+    if (value === "signup" || value === "group_chat_membership" || value === "admin") {
+        return value;
+    }
+    if (value === "circle_membership") {
+        return "group_chat_membership";
+    }
+    return undefined;
 };
 
 const inferSourceFromSystemType = (systemType?: SystemMessageType): SystemMessageSource | undefined => {
     if (!systemType) return undefined;
     if (systemType === "welcome") return "signup";
-    if (systemType === "member_joined_circle" || systemType === "member_left_circle") return "circle_membership";
+    if (
+        systemType === "group_chat_joined" ||
+        systemType === "group_chat_left" ||
+        systemType === "group_chat_member_added" ||
+        systemType === "group_chat_member_removed"
+    ) {
+        return "group_chat_membership";
+    }
     return "admin";
 };
 
@@ -68,6 +104,7 @@ export const buildSystemMessageMetadata = (input: {
     actorDid?: string;
     targetDid?: string;
     circleId?: string;
+    chatRoomId?: string;
     repliesDisabled?: boolean;
     templateKey?: string;
     version?: string;
@@ -78,6 +115,7 @@ export const buildSystemMessageMetadata = (input: {
     actorDid: input.actorDid,
     targetDid: input.targetDid,
     circleId: input.circleId,
+    chatRoomId: input.chatRoomId,
     repliesDisabled: input.repliesDisabled,
     templateKey: input.templateKey,
     version: input.version,
@@ -106,6 +144,7 @@ export const normalizeSystemMessageMetadata = (input: {
                 actorDid: normalizeOptionalString(input.system.actorDid),
                 targetDid: normalizeOptionalString(input.system.targetDid),
                 circleId: normalizeOptionalString(input.system.circleId),
+                chatRoomId: normalizeOptionalString(input.system.chatRoomId),
                 repliesDisabled:
                     typeof input.system.repliesDisabled === "boolean" ? input.system.repliesDisabled : input.repliesDisabled,
                 templateKey: normalizeOptionalString(input.system.templateKey),

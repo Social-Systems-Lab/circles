@@ -73,8 +73,11 @@ const getMessageSystemMetadata = (message: ChatMessage) =>
         system: (message as any)?.system,
     });
 
-const isMembershipSystemType = (systemType?: string): boolean =>
-    systemType === "member_joined_circle" || systemType === "member_left_circle";
+const isGroupChatMembershipSystemType = (systemType?: string): boolean =>
+    systemType === "group_chat_joined" ||
+    systemType === "group_chat_left" ||
+    systemType === "group_chat_member_added" ||
+    systemType === "group_chat_member_removed";
 
 type MentionSuggestion = {
     id: string;
@@ -86,7 +89,7 @@ type MentionSuggestion = {
 const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
     const systemMetadata = getMessageSystemMetadata(message);
     const isSystemTemplateMessage =
-        systemMetadata.messageType === "system" && !isMembershipSystemType(systemMetadata.systemType);
+        systemMetadata.messageType === "system" && !isGroupChatMembershipSystemType(systemMetadata.systemType);
 
     if (preview) {
         return (
@@ -458,7 +461,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                 const isMembershipSystemMessage =
                     message.type === "m.room.message" &&
                     systemMetadata.messageType === "system" &&
-                    isMembershipSystemType(systemMetadata.systemType);
+                    isGroupChatMembershipSystemType(systemMetadata.systemType);
                 const isTemplateSystemMessage =
                     message.type === "m.room.message" &&
                     systemMetadata.messageType === "system" &&
@@ -481,9 +484,13 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                 } else if (isMembershipSystemMessage) {
                     const activityBody =
                         renderMentionsAsDisplayText((message?.content?.body as string) || "") ||
-                        (systemMetadata.systemType === "member_joined_circle"
-                            ? "A member joined this circle."
-                            : "A member left this circle.");
+                        (systemMetadata.systemType === "group_chat_joined"
+                            ? "A member joined the group chat."
+                            : systemMetadata.systemType === "group_chat_left"
+                            ? "A member left the group chat."
+                            : systemMetadata.systemType === "group_chat_member_added"
+                            ? "A member was added to the group chat."
+                            : "A member was removed from the group chat.");
 
                     acc.push(
                         <div key={message.id} className="my-2 mt-4 flex justify-center">
