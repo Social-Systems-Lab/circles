@@ -37,8 +37,8 @@ const buildConversationMetadata = (): ChatConversationMetadata => ({
     source: PLATFORM_BROADCAST_SOURCE,
     version: PLATFORM_BROADCAST_VERSION,
     repliesDisabled: true,
-    senderHandle: PLATFORM_BROADCAST_SOURCE,
-    senderName: "Platform Admin",
+    senderHandle: "kamooni",
+    senderName: "@kamooni",
     senderAvatarUrl: "/icon.svg",
 });
 
