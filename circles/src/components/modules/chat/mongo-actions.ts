@@ -17,7 +17,7 @@ import {
     updateMessage,
 } from "@/lib/data/mongo-chat";
 import { ChatConversations, ChatMessageDocs, ChatRoomMembers, ChatRooms, Circles, Members } from "@/lib/data/db";
-import { getCircleByDid, getCircleById, getCirclesByDids } from "@/lib/data/circle";
+import { getCircleByDid, getCircleByHandle, getCircleById, getCirclesByDids } from "@/lib/data/circle";
 import { saveFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { WELCOME_MESSAGE, isSystemMessageSource } from "@/config/welcome-message";
@@ -259,6 +259,12 @@ export const fetchMongoMessagesAction = async (
         const senderDids = Array.from(new Set(docs.map((doc) => doc.senderDid)));
         const senders = senderDids.length ? await getCirclesByDids(senderDids) : [];
         const senderByDid = new Map(senders.map((circle) => [circle.did, circle]));
+        for (const senderDid of senderDids) {
+            if (!senderByDid.has(senderDid)) {
+                const byHandle = await getCircleByHandle(senderDid);
+                if (byHandle?.did) senderByDid.set(senderDid, byHandle);
+            }
+        }
 
         const replyIds = Array.from(new Set(docs.map((doc) => doc.replyToMessageId).filter(Boolean) as string[]));
         const replyObjectIds = replyIds.map((id) => new ObjectId(id));
