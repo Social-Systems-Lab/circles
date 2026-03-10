@@ -14,7 +14,7 @@ export type PlatformBroadcastMessage = {
 export const PLATFORM_BROADCAST_SOURCE = "platform_admin" as const;
 export const PLATFORM_BROADCAST_SYSTEM_TYPE = "announcement" as const;
 export const PLATFORM_BROADCAST_VERSION = "v1" as const;
-export const PLATFORM_BROADCAST_SENDER_DID = "system:platform_admin";
+export const PLATFORM_BROADCAST_SENDER_DID = "kamooni";
 
 const PLATFORM_BROADCAST_HANDLE = "platform-announcements";
 const PLATFORM_BROADCAST_THREAD_NAME = "Platform Announcements";
