@@ -180,7 +180,7 @@ export default function AdminDashboard({ serverSettings, circles }: AdminDashboa
             <TabsContent value="system-messages" className="space-y-4">
                 <div className="mb-8">
                     <h2 className="mb-2 text-xl font-semibold">System Messages</h2>
-                    <SystemMessagesTab />
+                    <SystemMessagesTab initialBroadcasts={[]} />
                 </div>
             </TabsContent>
 

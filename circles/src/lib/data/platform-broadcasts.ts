@@ -1,7 +1,6 @@
 import { ObjectId } from "mongodb";
-import { buildSystemMessageMetadata } from "@/lib/chat/system-messages";
-import type { ChatConversation, ChatConversationMetadata } from "@/lib/chat/mongo-types";
-import { ChatConversations, ChatMessageDocs, PlatformBroadcastMessages } from "./db";
+import { ChatConversation } from "@/lib/chat/mongo-types";
+import { ChatConversations, ChatMessageDocs, Circles, PlatformBroadcastMessages } from "./db";
 
 export type PlatformBroadcastMessage = {
     _id?: any;
@@ -11,237 +10,267 @@ export type PlatformBroadcastMessage = {
     updatedAt: Date;
 };
 
-export const PLATFORM_BROADCAST_SOURCE = "platform_admin" as const;
-export const PLATFORM_BROADCAST_SYSTEM_TYPE = "announcement" as const;
-export const PLATFORM_BROADCAST_VERSION = "v1" as const;
-export const PLATFORM_BROADCAST_SENDER_DID = "kamooni";
+export type PlatformBroadcastMessageDisplay = Omit<PlatformBroadcastMessage, "_id"> & {
+    id: string;
+};
 
-const PLATFORM_BROADCAST_HANDLE = "platform-announcements";
-const PLATFORM_BROADCAST_THREAD_NAME = "Platform Announcements";
-const PLATFORM_BROADCAST_TEMPLATE_KEY = "platform_broadcast";
+export const PLATFORM_ANNOUNCEMENT_HANDLE = "kamooni-announcements";
+export const PLATFORM_ANNOUNCEMENT_TITLE = "Kamooni Announcements";
+export const PLATFORM_ANNOUNCEMENT_SYSTEM_TYPE = "announcement" as const;
+export const PLATFORM_ANNOUNCEMENT_SOURCE = "platform_admin" as const;
+export const PLATFORM_ANNOUNCEMENT_SENDER_DID = "system:platform_admin";
 
-const toObjectId = (value?: string | null): ObjectId | null => {
-    if (!value || !ObjectId.isValid(value)) return null;
+const toObjectId = (value: string): ObjectId | null => {
+    if (!ObjectId.isValid(value)) return null;
     return new ObjectId(value);
 };
 
-const normalizeBroadcast = (doc: PlatformBroadcastMessage): PlatformBroadcastMessage => ({
-    _id: doc._id,
-    body: typeof doc.body === "string" ? doc.body : "",
-    active: doc.active === true,
-    createdAt: doc.createdAt || new Date(),
-    updatedAt: doc.updatedAt || new Date(),
-});
-
-const buildConversationMetadata = (): ChatConversationMetadata => ({
-    source: PLATFORM_BROADCAST_SOURCE,
-    version: PLATFORM_BROADCAST_VERSION,
-    repliesDisabled: true,
-    senderHandle: "kamooni",
-    senderName: "@kamooni",
-    senderAvatarUrl: "/icon.svg",
-});
-
-export const getPlatformBroadcastMessage = async (): Promise<PlatformBroadcastMessage | null> => {
-    const doc = (await PlatformBroadcastMessages.findOne(
-        {},
-        { sort: { updatedAt: -1, createdAt: -1 } },
-    )) as PlatformBroadcastMessage | null;
-    return doc ? normalizeBroadcast(doc) : null;
+const normalizeBroadcast = (broadcast: PlatformBroadcastMessage): PlatformBroadcastMessageDisplay => {
+    const id = broadcast?._id ? String(broadcast._id) : "";
+    return {
+        id,
+        body: broadcast.body || "",
+        active: broadcast.active === true,
+        createdAt: broadcast.createdAt || new Date(),
+        updatedAt: broadcast.updatedAt || new Date(),
+    };
 };
 
-export const savePlatformBroadcastMessage = async (input: {
-    body: string;
-    active: boolean;
-}): Promise<PlatformBroadcastMessage> => {
-    const body = input.body.trim();
-    const active = input.active === true;
-    const now = new Date();
-
-    const latest = await getPlatformBroadcastMessage();
-    if (latest?._id) {
-        const latestId = toObjectId(String(latest._id));
-        if (latestId) {
-            await PlatformBroadcastMessages.updateOne(
-                { _id: latestId },
-                {
-                    $set: {
-                        body,
-                        active,
-                        updatedAt: now,
-                    },
-                },
-            );
-
-            await PlatformBroadcastMessages.deleteMany({ _id: { $ne: latestId } });
-            const updated = (await PlatformBroadcastMessages.findOne({ _id: latestId })) as PlatformBroadcastMessage | null;
-            if (updated) return normalizeBroadcast(updated);
-        }
+const normalizeConversation = (conversation: ChatConversation): ChatConversation => {
+    if (conversation?._id) {
+        conversation._id = String(conversation._id);
     }
+    return conversation;
+};
 
-    const doc: PlatformBroadcastMessage = {
+const isPlatformAnnouncementMessage = (doc: any, body: string) => {
+    return (
+        doc?.body === body &&
+        doc?.format === "markdown" &&
+        doc?.repliesDisabled === true &&
+        doc?.source === PLATFORM_ANNOUNCEMENT_SOURCE &&
+        doc?.systemType === PLATFORM_ANNOUNCEMENT_SYSTEM_TYPE
+    );
+};
+
+const insertPlatformAnnouncementMessage = async (
+    conversationId: string,
+    body: string,
+    options?: { broadcastId?: string; createdAt?: Date },
+) => {
+    await ChatMessageDocs.insertOne({
+        conversationId,
+        senderDid: PLATFORM_ANNOUNCEMENT_SENDER_DID,
         body,
+        createdAt: options?.createdAt || new Date(),
+        format: "markdown",
+        source: PLATFORM_ANNOUNCEMENT_SOURCE,
+        ...(options?.broadcastId ? { broadcastId: options.broadcastId } : {}),
+        system: {
+            messageType: "system",
+            systemType: PLATFORM_ANNOUNCEMENT_SYSTEM_TYPE,
+            source: PLATFORM_ANNOUNCEMENT_SOURCE,
+            repliesDisabled: true,
+            templateKey: "platform_broadcast",
+            version: "v1",
+        },
+    });
+};
+
+export const listPlatformBroadcastMessages = async (
+    options?: { activeOnly?: boolean },
+): Promise<PlatformBroadcastMessageDisplay[]> => {
+    const query = options?.activeOnly ? { active: true } : {};
+    const docs = (await PlatformBroadcastMessages.find(query).sort({ updatedAt: -1, createdAt: -1 }).toArray()) as
+        | PlatformBroadcastMessage[]
+        | [];
+    return docs.map(normalizeBroadcast);
+};
+
+export const createPlatformBroadcastMessage = async (
+    body: string,
+    active: boolean,
+): Promise<PlatformBroadcastMessageDisplay> => {
+    const now = new Date();
+    const doc: PlatformBroadcastMessage = {
+        body: body.trim(),
         active,
         createdAt: now,
         updatedAt: now,
     };
     const result = await PlatformBroadcastMessages.insertOne(doc);
-    await PlatformBroadcastMessages.deleteMany({ _id: { $ne: result.insertedId } });
     return normalizeBroadcast({ ...doc, _id: result.insertedId });
 };
 
-const getActivePlatformBroadcastMessage = async (): Promise<PlatformBroadcastMessage | null> => {
-    const message = await getPlatformBroadcastMessage();
-    if (!message || message.active !== true) return null;
-    if (!message.body.trim()) return null;
-    return message;
+export const updatePlatformBroadcastMessage = async (
+    id: string,
+    updates: { body?: string; active?: boolean },
+): Promise<PlatformBroadcastMessageDisplay | null> => {
+    const objectId = toObjectId(id);
+    if (!objectId) return null;
+
+    const setUpdates: Partial<PlatformBroadcastMessage> = { updatedAt: new Date() };
+    if (typeof updates.body === "string") {
+        setUpdates.body = updates.body.trim();
+    }
+    if (typeof updates.active === "boolean") {
+        setUpdates.active = updates.active;
+    }
+
+    await PlatformBroadcastMessages.updateOne({ _id: objectId }, { $set: setUpdates });
+    const updated = (await PlatformBroadcastMessages.findOne({ _id: objectId })) as PlatformBroadcastMessage | null;
+    return updated ? normalizeBroadcast(updated) : null;
 };
 
-const ensurePlatformBroadcastConversationForUser = async (userDid: string): Promise<ChatConversation | null> => {
+export const deletePlatformBroadcastMessage = async (id: string): Promise<boolean> => {
+    const objectId = toObjectId(id);
+    if (!objectId) return false;
+    const result = await PlatformBroadcastMessages.deleteOne({ _id: objectId });
+    return result.deletedCount > 0;
+};
+
+export const ensureAnnouncementConversationForUser = async (userDid: string): Promise<ChatConversation | null> => {
+    const user = await Circles.findOne(
+        { did: userDid, circleType: "user" },
+        { projection: { _id: 1, did: 1 } },
+    );
+    if (!user) {
+        return null;
+    }
+
     const existing = (await ChatConversations.findOne({
-        type: "dm",
-        handle: PLATFORM_BROADCAST_HANDLE,
+        type: "announcement",
+        handle: PLATFORM_ANNOUNCEMENT_HANDLE,
         participants: userDid,
         archived: { $ne: true },
     })) as ChatConversation | null;
 
-    const metadata = buildConversationMetadata();
-
     if (existing) {
-        const conversationId = toObjectId(String(existing._id));
-        const shouldAddParticipant = !(existing.participants || []).includes(userDid);
-        if (conversationId) {
+        const conversationId = String(existing._id);
+        const needsParticipant = !(existing.participants || []).includes(userDid);
+        if (
+            existing.name !== PLATFORM_ANNOUNCEMENT_TITLE ||
+            existing.handle !== PLATFORM_ANNOUNCEMENT_HANDLE ||
+            (existing as any).metadata?.repliesDisabled !== true ||
+            needsParticipant
+        ) {
             await ChatConversations.updateOne(
-                { _id: conversationId },
+                { _id: new ObjectId(conversationId) },
                 {
                     $set: {
-                        name: PLATFORM_BROADCAST_THREAD_NAME,
-                        handle: PLATFORM_BROADCAST_HANDLE,
-                        picture: { url: "/icon.svg" },
-                        metadata,
+                        name: PLATFORM_ANNOUNCEMENT_TITLE,
+                        handle: PLATFORM_ANNOUNCEMENT_HANDLE,
+                        repliesDisabled: true,
                     },
-                    ...(shouldAddParticipant ? { $addToSet: { participants: userDid } } : {}),
+                    ...(needsParticipant ? { $addToSet: { participants: userDid } } : {}),
                 },
             );
+            const refreshed = (await ChatConversations.findOne({
+                _id: new ObjectId(conversationId),
+            })) as ChatConversation | null;
+            if (refreshed) {
+                return normalizeConversation(refreshed);
+            }
         }
-        return existing;
+        return normalizeConversation(existing);
     }
 
     const now = new Date();
-    const doc: ChatConversation = {
-        type: "dm",
-        name: PLATFORM_BROADCAST_THREAD_NAME,
-        handle: PLATFORM_BROADCAST_HANDLE,
+    const created: ChatConversation = {
+        type: "announcement",
+        name: PLATFORM_ANNOUNCEMENT_TITLE,
+        handle: PLATFORM_ANNOUNCEMENT_HANDLE,
         participants: [userDid],
-        picture: { url: "/icon.svg" },
-        metadata,
+        metadata: {
+            repliesDisabled: true,
+        } as any,
         createdAt: now,
         updatedAt: now,
     };
-    const created = await ChatConversations.insertOne(doc);
-    return {
-        ...doc,
-        _id: created.insertedId,
-    };
+    const result = await ChatConversations.insertOne(created);
+    return normalizeConversation({ ...created, _id: result.insertedId });
 };
 
-export const syncPlatformBroadcastForUser = async (
+export const previewPlatformBroadcastForUser = async (
     userDid: string,
-): Promise<{ conversationId?: string; inserted: number; updated: number }> => {
-    const activeBroadcast = await getActivePlatformBroadcastMessage();
-    if (!activeBroadcast?._id) {
-        return { inserted: 0, updated: 0 };
+    body: string,
+): Promise<{ conversationId?: string; inserted: boolean }> => {
+    const trimmed = body.trim();
+    if (!trimmed) {
+        return { inserted: false };
     }
 
-    const conversation = await ensurePlatformBroadcastConversationForUser(userDid);
+    const conversation = await ensureAnnouncementConversationForUser(userDid);
+    if (!conversation?._id) {
+        return { inserted: false };
+    }
+
+    const conversationId = String(conversation._id);
+    await insertPlatformAnnouncementMessage(conversationId, trimmed, {
+        broadcastId: `preview:${new ObjectId().toString()}`,
+    });
+    await ChatConversations.updateOne({ _id: new ObjectId(conversationId) }, { $set: { updatedAt: new Date() } });
+
+    return { conversationId, inserted: true };
+};
+
+export const syncPlatformBroadcastsForUser = async (
+    userDid: string,
+): Promise<{ conversationId?: string; inserted: number; updated: number }> => {
+    const conversation = await ensureAnnouncementConversationForUser(userDid);
     if (!conversation?._id) {
         return { inserted: 0, updated: 0 };
     }
 
     const conversationId = String(conversation._id);
-    const broadcastId = String(activeBroadcast._id);
-    const existingMessages = await ChatMessageDocs.find({
+    const broadcasts = await listPlatformBroadcastMessages({ activeOnly: true });
+    if (broadcasts.length === 0) {
+        return { conversationId, inserted: 0, updated: 0 };
+    }
+
+    const broadcastIds = broadcasts.map((broadcast) => broadcast.id);
+    const existingDocs = await ChatMessageDocs.find({
         conversationId,
-        broadcastId,
-    })
-        .sort({ createdAt: 1, _id: 1 })
-        .toArray();
+        broadcastId: { $in: broadcastIds },
+    }).toArray();
 
-    if (existingMessages.length > 1) {
-        const duplicateIds = existingMessages
-            .slice(1)
-            .map((doc) => toObjectId(String((doc as any)._id)))
-            .filter(Boolean) as ObjectId[];
-        if (duplicateIds.length > 0) {
-            await ChatMessageDocs.deleteMany({ _id: { $in: duplicateIds } });
+    const messagesByBroadcastId = new Map<string, any[]>();
+    const duplicateIds: ObjectId[] = [];
+    for (const doc of existingDocs) {
+        const key = typeof (doc as any).broadcastId === "string" ? ((doc as any).broadcastId as string) : undefined;
+        if (!key) continue;
+        const docs = messagesByBroadcastId.get(key) || [];
+        const isDuplicate = docs.some((existingDoc) => isPlatformAnnouncementMessage(existingDoc, String(doc?.body || "")));
+        if (isDuplicate && (doc as any)?._id && ObjectId.isValid(String((doc as any)._id))) {
+            duplicateIds.push(new ObjectId(String((doc as any)._id)));
+            continue;
         }
+        docs.push(doc);
+        messagesByBroadcastId.set(key, docs);
+    }
+    if (duplicateIds.length > 0) {
+        await ChatMessageDocs.deleteMany({ _id: { $in: duplicateIds } });
     }
 
-    const now = new Date();
-    const systemMetadata = buildSystemMessageMetadata({
-        systemType: PLATFORM_BROADCAST_SYSTEM_TYPE,
-        source: PLATFORM_BROADCAST_SOURCE,
-        targetDid: userDid,
-        repliesDisabled: true,
-        templateKey: PLATFORM_BROADCAST_TEMPLATE_KEY,
-        version: PLATFORM_BROADCAST_VERSION,
-    });
-    const primary = existingMessages[0];
+    let inserted = 0;
+    for (const broadcast of broadcasts) {
+        const existing = messagesByBroadcastId.get(broadcast.id) || [];
+        const alreadyInserted = existing.some((doc) => isPlatformAnnouncementMessage(doc, broadcast.body));
+        if (alreadyInserted) continue;
 
-    if (!primary) {
-        await ChatMessageDocs.insertOne({
-            conversationId,
-            senderDid: PLATFORM_BROADCAST_SENDER_DID,
-            body: activeBroadcast.body,
-            createdAt: activeBroadcast.createdAt || now,
-            format: "markdown",
-            source: PLATFORM_BROADCAST_SOURCE,
-            version: PLATFORM_BROADCAST_VERSION,
-            system: systemMetadata,
-            broadcastId,
-        } as any);
-        const conversationObjectId = toObjectId(conversationId);
-        if (conversationObjectId) {
-            await ChatConversations.updateOne(
-                { _id: conversationObjectId },
-                { $set: { updatedAt: now } },
-            );
-        }
-        return { conversationId, inserted: 1, updated: 0 };
+        await insertPlatformAnnouncementMessage(conversationId, broadcast.body, {
+            broadcastId: broadcast.id,
+            createdAt: broadcast.updatedAt || broadcast.createdAt,
+        });
+        inserted += 1;
     }
 
-    const primaryId = toObjectId(String((primary as any)?._id));
-    const needsUpdate =
-        (primary as any)?.body !== activeBroadcast.body ||
-        (primary as any)?.source !== PLATFORM_BROADCAST_SOURCE ||
-        (primary as any)?.version !== PLATFORM_BROADCAST_VERSION ||
-        ((primary as any)?.system?.systemType as string | undefined) !== PLATFORM_BROADCAST_SYSTEM_TYPE ||
-        ((primary as any)?.system?.source as string | undefined) !== PLATFORM_BROADCAST_SOURCE ||
-        ((primary as any)?.system?.repliesDisabled as boolean | undefined) !== true;
-
-    if (primaryId && needsUpdate) {
-        await ChatMessageDocs.updateOne(
-            { _id: primaryId },
-            {
-                $set: {
-                    body: activeBroadcast.body,
-                    format: "markdown",
-                    source: PLATFORM_BROADCAST_SOURCE,
-                    version: PLATFORM_BROADCAST_VERSION,
-                    system: systemMetadata,
-                    editedAt: now,
-                },
-            },
+    if (inserted > 0) {
+        await ChatConversations.updateOne(
+            { _id: new ObjectId(conversationId) },
+            { $set: { updatedAt: new Date() } },
         );
-        const conversationObjectId = toObjectId(conversationId);
-        if (conversationObjectId) {
-            await ChatConversations.updateOne(
-                { _id: conversationObjectId },
-                { $set: { updatedAt: now } },
-            );
-        }
-        return { conversationId, inserted: 0, updated: 1 };
     }
 
-    return { conversationId, inserted: 0, updated: 0 };
+    return { conversationId, inserted, updated: 0 };
 };
