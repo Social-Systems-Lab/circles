@@ -67,6 +67,18 @@ type MentionSuggestion = {
     handle?: string;
 };
 
+const isPlatformAnnouncementMessage = (message: ChatMessage): boolean =>
+    message.system?.messageType === "system" &&
+    message.system?.systemType === "announcement" &&
+    (message.system?.source === "platform_admin" ||
+        (typeof (message as any)?.broadcastId === "string" && ((message as any).broadcastId as string).length > 0));
+
+const isNonPreviewSystemSenderMessage = (message: ChatMessage): boolean => {
+    if (message.system?.messageType !== "system") return false;
+    if (message.system?.systemType === "welcome") return true;
+    return isPlatformAnnouncementMessage(message);
+};
+
 const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
     if (preview) {
         return (
@@ -90,6 +102,7 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
         const originalAuthorColor = generateColorFromString(originalAuthor);
         const isMarkdown = (message as any)?.format === "markdown";
         const hasMentionMarkup = CHAT_MENTION_MARKUP_TEST_REGEX.test(replyText);
+        const shouldEmphasizeLinks = isNonPreviewSystemSenderMessage(message);
 
         return (
             <div className="max-w-full overflow-hidden">
@@ -115,7 +128,7 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
                                     className={
                                         isChatMentionLinkHref(href)
                                             ? `inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 font-semibold text-blue-700 no-underline hover:underline ${className ?? ""}`.trim()
-                                            : className
+                                            : `${shouldEmphasizeLinks ? "text-blue-700 underline underline-offset-2 hover:text-blue-800" : ""} ${className ?? ""}`.trim()
                                     }
                                     {...props}
                                 />
@@ -204,6 +217,7 @@ export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean
         case "m.room.notice": {
             const body = (message?.content?.body as string) || "";
             const isMarkdown = (message as any)?.format === "markdown";
+            const shouldEmphasizeLinks = isNonPreviewSystemSenderMessage(message);
             if (isMarkdown) {
                 return (
                     <MemoizedReactMarkdown
@@ -214,7 +228,7 @@ export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean
                                     className={
                                         isChatMentionLinkHref(href)
                                             ? `inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 font-semibold text-blue-700 no-underline hover:underline ${className ?? ""}`.trim()
-                                            : className
+                                            : `${shouldEmphasizeLinks ? "text-blue-700 underline underline-offset-2 hover:text-blue-800" : ""} ${className ?? ""}`.trim()
                                     }
                                     {...props}
                                 />
@@ -423,8 +437,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                         : message.status === "failed"
                         ? "border border-red-200"
                         : "";
-                const isPlatformBroadcast =
-                    typeof (message as any)?.broadcastId === "string" && ((message as any)?.broadcastId as string).length > 0;
+                const isPlatformBroadcast = isPlatformAnnouncementMessage(message);
+                const isNonPreviewSender = isNonPreviewSystemSenderMessage(message);
                 const senderLabel = isPlatformBroadcast ? "@kamooni" : message.author.name;
 
                 if (isSystemMessage) {
@@ -450,7 +464,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                     circle={message.author!}
                                     size="40px"
                                     className="pt-2"
-                                    openPreview={!isPlatformBroadcast}
+                                    openPreview={!isNonPreviewSender}
                                 />
                             ) : (
                                 <div className="h-10 w-10 flex-shrink-0"></div>

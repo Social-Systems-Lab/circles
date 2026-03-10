@@ -283,8 +283,14 @@ export const fetchMongoMessagesAction = async (
                 repliesDisabled: conversationRepliesDisabled,
             });
             const isTemplateSystemMessage = systemMetadata.messageType === "system";
+            const isWelcomeSystemMessage = systemMetadata.systemType === "welcome";
+            const isPlatformAnnouncementMessage =
+                systemMetadata.systemType === "announcement" &&
+                (systemMetadata.source === "platform_admin" ||
+                    (typeof (doc as any)?.broadcastId === "string" && ((doc as any).broadcastId as string).length > 0));
+            const shouldUseSystemTemplateAuthor = isWelcomeSystemMessage || isPlatformAnnouncementMessage;
             const author =
-                senderByDid.get(doc.senderDid) ||
+                (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : senderByDid.get(doc.senderDid)) ||
                 (isTemplateSystemMessage
                     ? fallbackSystemAuthor
                     : ({
@@ -352,6 +358,7 @@ export const fetchMongoMessagesAction = async (
             (message as any).source = doc.source;
             (message as any).version = doc.version;
             (message as any).system = systemMetadata;
+            (message as any).broadcastId = (doc as any).broadcastId;
 
             return message;
         });
