@@ -34,8 +34,6 @@ import LazyEmojiPicker from "./LazyEmojiPicker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MemoizedReactMarkdown } from "@/components/utils/memoized-markdown";
 import { useMongoChat } from "./useMongoChat";
-import { isSystemMessageSource } from "@/config/welcome-message";
-import { normalizeSystemMessageMetadata } from "@/lib/chat/system-messages";
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -61,30 +59,6 @@ const CHAT_MENTION_LINK_HREF_REGEX = /^\/circles\/[^/\s?#]+(?:[?#].*)?$/i;
 
 const renderMentionsAsDisplayText = (content: string) => content.replace(CHAT_MENTION_MARKUP_REGEX, "$1");
 const isChatMentionLinkHref = (href?: string) => !!href && CHAT_MENTION_LINK_HREF_REGEX.test(href);
-const getMessageSource = (message: ChatMessage): string | undefined => {
-    const source = (message as any)?.source;
-    return typeof source === "string" ? source : undefined;
-};
-
-const getMessageSystemMetadata = (message: ChatMessage) =>
-    normalizeSystemMessageMetadata({
-        source: getMessageSource(message),
-        version: typeof (message as any)?.version === "string" ? (message as any).version : undefined,
-        system: (message as any)?.system,
-    });
-
-const isGroupChatMembershipSystemType = (systemType?: string): boolean =>
-    systemType === "group_chat_joined" ||
-    systemType === "group_chat_left" ||
-    systemType === "group_chat_member_added" ||
-    systemType === "group_chat_member_removed" ||
-    systemType === "group_chat_admin_promoted";
-
-const isReplyDisabledSystemMessage = (message: ChatMessage): boolean => {
-    if (message.type !== "m.room.message") return false;
-    const systemMetadata = getMessageSystemMetadata(message);
-    return systemMetadata.messageType === "system" && systemMetadata.repliesDisabled === true;
-};
 
 type MentionSuggestion = {
     id: string;
@@ -94,10 +68,6 @@ type MentionSuggestion = {
 };
 
 const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
-    const systemMetadata = getMessageSystemMetadata(message);
-    const isSystemTemplateMessage =
-        systemMetadata.messageType === "system" && !isGroupChatMembershipSystemType(systemMetadata.systemType);
-
     if (preview) {
         return (
             <span>
@@ -120,68 +90,6 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
         const originalAuthorColor = generateColorFromString(originalAuthor);
         const isMarkdown = (message as any)?.format === "markdown";
         const hasMentionMarkup = CHAT_MENTION_MARKUP_TEST_REGEX.test(replyText);
-        const markdownComponents = {
-            a: ({ href, className, ...props }: any) => {
-                if (!isSystemTemplateMessage && isChatMentionLinkHref(href)) {
-                    return (
-                        <a
-                            href={href}
-                            className={`inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 font-semibold text-blue-700 no-underline hover:underline ${className ?? ""}`.trim()}
-                            {...props}
-                        />
-                    );
-                }
-
-                return (
-                    <a
-                        href={href}
-                        className={
-                            isSystemTemplateMessage
-                                ? `font-medium text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-800 ${className ?? ""}`.trim()
-                                : className
-                        }
-                        {...props}
-                    />
-                );
-            },
-            ...(isSystemTemplateMessage
-                ? {
-                      h1: ({ className, ...props }: any) => (
-                          <h1
-                              className={`mb-2 mt-1 text-base font-semibold leading-6 text-slate-900 ${className ?? ""}`.trim()}
-                              {...props}
-                          />
-                      ),
-                      h2: ({ className, ...props }: any) => (
-                          <h2
-                              className={`mb-2 mt-1 text-sm font-semibold leading-6 text-slate-900 ${className ?? ""}`.trim()}
-                              {...props}
-                          />
-                      ),
-                      h3: ({ className, ...props }: any) => (
-                          <h3
-                              className={`mb-2 mt-1 text-sm font-medium leading-6 text-slate-800 ${className ?? ""}`.trim()}
-                              {...props}
-                          />
-                      ),
-                      p: ({ className, ...props }: any) => (
-                          <p
-                              className={`mb-3 text-[0.95rem] leading-relaxed text-slate-800 last:mb-0 ${className ?? ""}`.trim()}
-                              {...props}
-                          />
-                      ),
-                      ul: ({ className, ...props }: any) => (
-                          <ul className={`mb-3 list-disc space-y-1 pl-6 last:mb-0 ${className ?? ""}`.trim()} {...props} />
-                      ),
-                      ol: ({ className, ...props }: any) => (
-                          <ol className={`mb-3 list-decimal space-y-1 pl-6 last:mb-0 ${className ?? ""}`.trim()} {...props} />
-                      ),
-                      li: ({ className, ...props }: any) => (
-                          <li className={`text-[0.95rem] leading-relaxed text-slate-800 ${className ?? ""}`.trim()} {...props} />
-                      ),
-                  }
-                : {}),
-        };
 
         return (
             <div className="max-w-full overflow-hidden">
@@ -199,7 +107,21 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
                     </div>
                 )}
                 {isMarkdown || hasMentionMarkup ? (
-                    <MemoizedReactMarkdown components={markdownComponents}>
+                    <MemoizedReactMarkdown
+                        components={{
+                            a: ({ href, className, ...props }) => (
+                                <a
+                                    href={href}
+                                    className={
+                                        isChatMentionLinkHref(href)
+                                            ? `inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 font-semibold text-blue-700 no-underline hover:underline ${className ?? ""}`.trim()
+                                            : className
+                                    }
+                                    {...props}
+                                />
+                            ),
+                        }}
+                    >
                         {replyText}
                     </MemoizedReactMarkdown>
                 ) : (
@@ -279,6 +201,33 @@ export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean
             return renderSystemMessage(`${displayName} ${action} the room.`);
         }
 
+        case "m.room.notice": {
+            const body = (message?.content?.body as string) || "";
+            const isMarkdown = (message as any)?.format === "markdown";
+            if (isMarkdown) {
+                return (
+                    <MemoizedReactMarkdown
+                        components={{
+                            a: ({ href, className, ...props }) => (
+                                <a
+                                    href={href}
+                                    className={
+                                        isChatMentionLinkHref(href)
+                                            ? `inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 font-semibold text-blue-700 no-underline hover:underline ${className ?? ""}`.trim()
+                                            : className
+                                    }
+                                    {...props}
+                                />
+                            ),
+                        }}
+                    >
+                        {body}
+                    </MemoizedReactMarkdown>
+                );
+            }
+            return renderSystemMessage(renderMentionsAsDisplayText(body));
+        }
+
         case "m.room.name":
         case "m.room.topic":
         case "m.room.history_visibility":
@@ -301,6 +250,7 @@ type ChatMessagesProps = {
     onMessagesRendered?: () => void;
     handleDelete: (message: ChatMessage) => Promise<void>;
     handleEdit: (message: ChatMessage) => void;
+    chatProvider?: "matrix" | "mongo";
 };
 
 const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
@@ -317,9 +267,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
     const [, setRoomMessages] = useAtom(roomMessagesAtom);
     const isMobile = useIsMobile();
     const handleReply = (message: ChatMessage) => {
-        if (isReplyDisabledSystemMessage(message)) {
-            return;
-        }
         setReplyToMessage(message);
     };
 
@@ -434,12 +381,16 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
     };
 
     const orderedMessages = [...messages]
-        .filter((message) => message.type === "m.room.message" || message.type === "m.room.member")
+        .filter(
+            (message) =>
+                message.type === "m.room.message" || message.type === "m.room.member" || message.type === "m.room.notice",
+        )
         .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
     return (
         <div>
             {orderedMessages.reduce<React.ReactNode[]>((acc, message, index) => {
+                const isSystemMessage = message.type !== "m.room.message";
                 const isNewDate =
                     index === 0 ||
                     !isSameDay(new Date(message.createdAt), new Date(orderedMessages[index - 1].createdAt));
@@ -466,23 +417,15 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                 const isOwnMessage = message.createdBy === selfIdentifier;
                 const canEditMessage = isOwnMessage && !message.status;
                 const canDeleteMessage = isOwnMessage && message.status !== "pending";
-                const systemMetadata = getMessageSystemMetadata(message);
-                const repliesDisabledForMessage = isReplyDisabledSystemMessage(message);
-                const isSystemMessage = message.type !== "m.room.message";
-                const isMembershipSystemMessage =
-                    message.type === "m.room.message" &&
-                    systemMetadata.messageType === "system" &&
-                    isGroupChatMembershipSystemType(systemMetadata.systemType);
-                const isTemplateSystemMessage =
-                    message.type === "m.room.message" &&
-                    systemMetadata.messageType === "system" &&
-                    !isMembershipSystemMessage;
                 const bubbleStatusClasses =
                     message.status === "pending"
                         ? "opacity-70"
                         : message.status === "failed"
                         ? "border border-red-200"
                         : "";
+                const isPlatformBroadcast =
+                    typeof (message as any)?.broadcastId === "string" && ((message as any)?.broadcastId as string).length > 0;
+                const senderLabel = isPlatformBroadcast ? "@kamooni" : message.author.name;
 
                 if (isSystemMessage) {
                     acc.push(
@@ -490,26 +433,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                             <span className="rounded-full bg-gray-200 px-2 py-1 shadow-md">
                                 <MessageRenderer message={message} />
                             </span>
-                        </div>,
-                    );
-                } else if (isMembershipSystemMessage) {
-                    const activityBody =
-                        renderMentionsAsDisplayText((message?.content?.body as string) || "") ||
-                        (systemMetadata.systemType === "group_chat_joined"
-                            ? "A member joined the group chat."
-                            : systemMetadata.systemType === "group_chat_left"
-                            ? "A member left the group chat."
-                            : systemMetadata.systemType === "group_chat_member_added"
-                            ? "A member was added to the group chat."
-                            : systemMetadata.systemType === "group_chat_admin_promoted"
-                            ? "A member was promoted to group admin."
-                            : "A member was removed from the group chat.");
-
-                    acc.push(
-                        <div key={message.id} className="my-2 mt-4 flex justify-center">
-                            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-700">
-                                {activityBody}
-                            </div>
                         </div>,
                     );
                 } else {
@@ -527,32 +450,20 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                     circle={message.author!}
                                     size="40px"
                                     className="pt-2"
-                                    openPreview={true}
+                                    openPreview={!isPlatformBroadcast}
                                 />
                             ) : (
                                 <div className="h-10 w-10 flex-shrink-0"></div>
                             )}
 
                             <div className="relative flex min-w-[100px] max-w-full flex-col overflow-hidden">
-                                <div
-                                    className={`${
-                                        isTemplateSystemMessage
-                                            ? "border border-slate-200 bg-slate-50 p-3 pr-4 shadow-sm"
-                                            : "bg-white p-2 pr-4 shadow-md"
-                                    } ${borderRadiusClass} ${bubbleStatusClasses}`}
-                                >
+                                <div className={`bg-white p-2 pr-4 shadow-md ${borderRadiusClass} ${bubbleStatusClasses}`}>
                                     {isFirstInChain && (
                                         <div
-                                            className={`text-xs font-semibold ${
-                                                isTemplateSystemMessage ? "mb-1 text-slate-700" : ""
-                                            }`}
-                                            style={
-                                                isTemplateSystemMessage
-                                                    ? undefined
-                                                    : { color: generateColorFromString(message.author.name || "") }
-                                            }
+                                            className="text-xs font-semibold"
+                                            style={{ color: generateColorFromString(senderLabel || "") }}
                                         >
-                                            {message.author.name}
+                                            {senderLabel}
                                         </div>
                                         )}
                                     <MessageRenderer message={message} />
@@ -621,16 +532,14 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                                 )}
                                             </>
                                         )}
-                                        {!repliesDisabledForMessage && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-6 w-6"
-                                                onClick={() => handleReply(message)}
-                                            >
-                                                <MdReply className="h-4 w-4" />
-                                            </Button>
-                                        )}
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6"
+                                            onClick={() => handleReply(message)}
+                                        >
+                                            <MdReply className="h-4 w-4" />
+                                        </Button>
                                         <Popover
                                             open={pickerOpenForMessage === message.id}
                                             onOpenChange={(isOpen) =>
@@ -681,7 +590,7 @@ export const LatestMessage: React.FC<LatestMessageProps> = ({ roomId, latestMess
     }, [latestMessages, roomId]);
 
     if (!latestMessage) {
-        return <span>Messages loading...</span>;
+        return <span>No messages yet</span>;
     }
 
     return <span>{latestMessage?.content?.body as string}</span>;
@@ -694,6 +603,7 @@ type ChatInputProps = {
     editingMessage: ChatMessage | null;
     setEditingMessage: (message: ChatMessage | null) => void;
     mentionCandidates: Circle[];
+    chatProvider?: "matrix" | "mongo";
 };
 
 const ChatInput = ({ roomId, editingMessage, setEditingMessage, mentionCandidates }: ChatInputProps) => {
@@ -1090,7 +1000,8 @@ export const ChatRoomComponent: React.FC<{
     setSelectedChat?: Dispatch<SetStateAction<ChatRoomDisplay | undefined>>;
     circle?: Circle;
     inToolbox?: boolean;
-}> = ({ chatRoom, setSelectedChat, circle, inToolbox }) => {
+    chatProvider?: "matrix" | "mongo";
+}> = ({ chatRoom, setSelectedChat, circle, inToolbox, chatProvider }) => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -1117,10 +1028,8 @@ export const ChatRoomComponent: React.FC<{
     const provider: "mongo" = "mongo";
 
     const roomId = routeHandle || (chatRoom as any)?._id || (chatRoom as any)?.id || (chatRoom as any)?.handle || null;
-    const conversationMetadata = (chatRoom as any)?.metadata as Record<string, unknown> | undefined;
-    const conversationSource =
-        typeof conversationMetadata?.source === "string" ? conversationMetadata.source : undefined;
-    const showComposer = !(conversationMetadata?.repliesDisabled === true || isSystemMessageSource(conversationSource));
+    const isAnnouncementConversation =
+        (chatRoom as any)?.conversationType === "announcement" || (chatRoom as any)?.repliesDisabled === true;
 
     useEffect(() => {
         let cancelled = false;
@@ -1152,7 +1061,7 @@ export const ChatRoomComponent: React.FC<{
             };
         }
 
-        if ((chatRoom as any)?.isDirect || !roomId) {
+        if ((chatRoom as any)?.isDirect || isAnnouncementConversation || !roomId) {
             setMentionCandidates(fallbackCandidates);
             return () => {
                 cancelled = true;
@@ -1188,7 +1097,7 @@ export const ChatRoomComponent: React.FC<{
         return () => {
             cancelled = true;
         };
-    }, [chatRoom, roomId, user]);
+    }, [chatRoom, roomId, user, isAnnouncementConversation]);
 
     useEffect(() => {
         if (process.env.NODE_ENV === "production") return;
@@ -1406,6 +1315,7 @@ export const ChatRoomComponent: React.FC<{
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
                                     handleEdit={handleEdit}
+                                    chatProvider={provider}
                                 />
                             )}
                         </div>
@@ -1413,7 +1323,7 @@ export const ChatRoomComponent: React.FC<{
                         <div
                             ref={scrollContainerRef}
                             onScroll={handleScroll}
-                            className={`flex-grow overflow-y-auto p-4 ${showComposer ? "pb-[144px]" : "pb-4"}`}
+                            className="flex-grow overflow-y-auto p-4 pb-[144px]"
                         >
                             {(isLoadingMessages || isLoadingMongo) && <div className="text-center text-gray-500">Loading messages...</div>}
                             {!isLoadingMessages && (
@@ -1423,6 +1333,7 @@ export const ChatRoomComponent: React.FC<{
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
                                     handleEdit={handleEdit}
+                                    chatProvider={provider}
                                 />
                             )}
                         </div>
@@ -1439,25 +1350,30 @@ export const ChatRoomComponent: React.FC<{
                         </Button>
                     )}
 
-                    {showComposer && (
-                        <div
-                            className="fixed h-[50px]"
-                            style={{
-                                width: `${inputWidth}px`,
-                                bottom: isMobile ? "72px" : "0px",
-                                opacity: hideInput ? 0 : 1,
-                            }}
-                        >
-                            <div className="flex h-[50px] items-end bg-[#fbfbfb] pb-1 pl-2 pr-2">
+                    <div
+                        className="fixed h-[50px]"
+                        style={{
+                            width: `${inputWidth}px`,
+                            bottom: isMobile ? "72px" : "0px",
+                            opacity: hideInput ? 0 : 1,
+                        }}
+                    >
+                        <div className="flex h-[50px] items-end bg-[#fbfbfb] pb-1 pl-2 pr-2">
+                            {isAnnouncementConversation ? (
+                                <div className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                                    Replies are disabled for this system conversation.
+                                </div>
+                            ) : (
                                 <ChatInput
                                     roomId={roomId}
                                     editingMessage={editingMessage}
                                     setEditingMessage={setEditingMessage}
                                     mentionCandidates={mentionCandidates}
+                                    chatProvider={provider}
                                 />
-                            </div>
+                            )}
                         </div>
-                    )}
+                    </div>
                 </div>
             </div>
             {isMobile && !inToolbox && (
