@@ -28,6 +28,7 @@ import {
     listPlatformBroadcastMessages,
     previewPlatformBroadcastForUser,
     savePlatformBroadcastMessage,
+    syncPlatformBroadcastsForUser,
     updatePlatformBroadcastMessage,
 } from "@/lib/data/platform-broadcasts";
 
@@ -480,6 +481,73 @@ export async function savePlatformBroadcastMessageAction(input: {
         return {
             success: false,
             message: error instanceof Error ? error.message : "Failed to save platform broadcast message",
+        };
+    }
+}
+
+export async function broadcastPlatformBroadcastMessageAction(body: string) {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "Unauthorized: You must be logged in." };
+    }
+    const user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        return { success: false, message: "Unauthorized: You do not have permission." };
+    }
+
+    const trimmed = body?.trim();
+    if (!trimmed) {
+        return { success: false, message: "Message body is required." };
+    }
+
+    try {
+        const saved = await savePlatformBroadcastMessage({
+            body: trimmed,
+            active: true,
+        });
+
+        const allUsers = await Circles.find(
+            { circleType: "user" },
+            { projection: { did: 1 } },
+        ).toArray();
+
+        let syncedUsers = 0;
+        let insertedMessages = 0;
+        for (const account of allUsers) {
+            const targetDid = typeof account?.did === "string" ? account.did : "";
+            if (!targetDid) continue;
+
+            try {
+                const syncResult = await syncPlatformBroadcastsForUser(targetDid);
+                syncedUsers += 1;
+                insertedMessages += syncResult.inserted || 0;
+            } catch (error) {
+                console.error(`Error syncing platform broadcast for ${targetDid}:`, error);
+            }
+        }
+
+        revalidatePath("/admin");
+
+        return {
+            success: true,
+            message: "Platform broadcast sent.",
+            draft: {
+                body: saved.body,
+                active: saved.active,
+                createdAt: saved.createdAt?.toISOString?.() || null,
+                updatedAt: saved.updatedAt?.toISOString?.() || null,
+            },
+            stats: {
+                totalUsers: allUsers.length,
+                syncedUsers,
+                insertedMessages,
+            },
+        };
+    } catch (error) {
+        console.error("Error broadcasting platform message:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to broadcast platform message",
         };
     }
 }
