@@ -6,6 +6,7 @@ import { Circle } from "@/models/models";
 import { Badge } from "@/components/ui/badge";
 import RichText from "../feeds/RichText";
 import { useRouter } from "next/navigation";
+import { skillsV2 } from "@/lib/data/skills-v2";
 
 interface OffersCardProps {
     circle: Circle;
@@ -14,6 +15,7 @@ interface OffersCardProps {
 
 export default function OffersCard({ circle, isOwner }: OffersCardProps) {
     const router = useRouter();
+    const skillNameByHandle = new Map(skillsV2.map((skill) => [skill.handle, skill.name]));
 
     const handleSkillClick = (skill: string) => {
         router.push(`/explore?skills=${skill}`);
@@ -39,7 +41,7 @@ export default function OffersCard({ circle, isOwner }: OffersCardProps) {
                     <div className="mt-4 flex flex-wrap gap-2">
                         {circle.offers.skills?.map((skill) => (
                             <Badge key={skill} onClick={() => handleSkillClick(skill)} className="cursor-pointer">
-                                {skill}
+                                {skillNameByHandle.get(skill) || skill}
                             </Badge>
                         ))}
                     </div>
