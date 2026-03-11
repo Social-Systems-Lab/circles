@@ -33,8 +33,9 @@ export default function AboutPage({ circle }: AboutPageProps) {
     const [user] = useAtom(userAtom);
     const isOwner = user?.did === circle.did;
     const isUserProfile = circle.circleType === "user";
-    const visibleSkills = (circle.skills || []).slice(0, 4);
-    const remainingSkillsCount = Math.max((circle.skills || []).length - visibleSkills.length, 0);
+    const userOfferSkills = circle.offers?.skills || [];
+    const visibleSkills = userOfferSkills.slice(0, 4);
+    const remainingSkillsCount = Math.max(userOfferSkills.length - visibleSkills.length, 0);
 
     // Check if sidebar has any content
     const hasSidebarContent =
@@ -42,7 +43,7 @@ export default function AboutPage({ circle }: AboutPageProps) {
         !!(circle.location && (circle.location.city || circle.location.region || circle.location.country)) ||
         !!(!isUserProfile && circle.causes && circle.causes.length > 0) ||
         !!circle.websiteUrl ||
-        !!(isUserProfile && circle.skills && circle.skills.length > 0);
+        !!(isUserProfile && userOfferSkills.length > 0);
 
     const hasMainContent = !!circle.content || !!circle.description;
 
@@ -143,11 +144,10 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                     </div>
                                     <div className="flex flex-wrap gap-2">
                                         {visibleSkills.map((handle) => {
-                                            const skill = skillMap.get(handle);
-                                            if (!skill) return null;
+                                            const skillName = skillMap.get(handle)?.name || handle;
                                             return (
                                                 <Badge key={handle} variant="outline" className="text-sm font-medium">
-                                                    {skill.name}
+                                                    {skillName}
                                                 </Badge>
                                             );
                                         })}
