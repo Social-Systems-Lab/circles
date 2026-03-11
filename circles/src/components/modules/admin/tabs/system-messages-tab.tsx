@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,63 @@ export default function SystemMessagesTab() {
     const [bannerSource, setBannerSource] = useState<"db" | "fallback">("fallback");
     const [bannerUpdatedAt, setBannerUpdatedAt] = useState<string | null>(null);
     const [isSavingBanner, startSavingBanner] = useTransition();
+    const broadcastBodyRef = useRef<HTMLTextAreaElement>(null);
+
+    const insertBroadcastMarkdown = (
+        formatter: (selectedText: string) => {
+            insertText: string;
+            selectionStartOffset?: number;
+            selectionEndOffset?: number;
+        },
+    ) => {
+        const textarea = broadcastBodyRef.current;
+        if (!textarea) {
+            return;
+        }
+
+        const start = textarea.selectionStart ?? 0;
+        const end = textarea.selectionEnd ?? 0;
+        const selectedText = broadcastBody.slice(start, end);
+        const before = broadcastBody.slice(0, start);
+        const after = broadcastBody.slice(end);
+        const { insertText, selectionStartOffset, selectionEndOffset } = formatter(selectedText);
+        const nextValue = `${before}${insertText}${after}`;
+        const nextSelectionStart =
+            selectionStartOffset === undefined ? before.length + insertText.length : before.length + selectionStartOffset;
+        const nextSelectionEnd =
+            selectionEndOffset === undefined ? nextSelectionStart : before.length + selectionEndOffset;
+
+        setBroadcastBody(nextValue);
+
+        requestAnimationFrame(() => {
+            textarea.focus();
+            textarea.setSelectionRange(nextSelectionStart, nextSelectionEnd);
+        });
+    };
+
+    const wrapBroadcastSelection = (prefix: string, suffix: string, placeholder: string) => {
+        insertBroadcastMarkdown((selectedText) => {
+            const value = selectedText || placeholder;
+            return {
+                insertText: `${prefix}${value}${suffix}`,
+                selectionStartOffset: prefix.length,
+                selectionEndOffset: prefix.length + value.length,
+            };
+        });
+    };
+
+    const insertBroadcastBulletList = () => {
+        insertBroadcastMarkdown((selectedText) => {
+            if (!selectedText) {
+                const listText = "- item 1\n- item 2";
+                return { insertText: listText };
+            }
+
+            const lines = selectedText.split("\n");
+            const listText = lines.map((line) => (line.trim() ? `- ${line}` : "- ")).join("\n");
+            return { insertText: listText };
+        });
+    };
 
     const loadData = async () => {
         setIsLoading(true);
@@ -305,7 +362,37 @@ export default function SystemMessagesTab() {
                 </p>
                 <div className="space-y-2">
                     <Label htmlFor="platform-broadcast-body">Message (Markdown)</Label>
+                    <div className="flex flex-wrap gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => wrapBroadcastSelection("**", "**", "bold text")}
+                        >
+                            Bold
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => wrapBroadcastSelection("*", "*", "italic text")}
+                        >
+                            Italic
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => wrapBroadcastSelection("[", "](https://example.com)", "link text")}
+                        >
+                            Link
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={insertBroadcastBulletList}>
+                            Bullet List
+                        </Button>
+                    </div>
                     <Textarea
+                        ref={broadcastBodyRef}
                         id="platform-broadcast-body"
                         rows={5}
                         value={broadcastBody}
