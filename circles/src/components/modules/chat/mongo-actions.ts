@@ -93,8 +93,8 @@ export const resolveMongoConversationAccess = async (conversationId: string, use
 
     const unauthorized = { ok: false as const, message: "You are not authorized to access this chat" };
 
-    // DM: authorize strictly by participants list
-    if (conversation.type === "dm") {
+    // DM + announcement: authorize strictly by participants list
+    if (conversation.type === "dm" || conversation.type === "announcement") {
         if (!conversation.participants?.includes(userDid)) return unauthorized;
         return { ok: true, conversation };
     }

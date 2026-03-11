@@ -17,11 +17,17 @@ import { upsertVdbCollections } from "@/lib/data/vdb"; // Import the re-indexing
 import { db } from "@/lib/data/db";
 import { getCircleById } from "@/lib/data/circle";
 import { getUserByDid } from "@/lib/data/user";
+import { getWelcomeTemplateDraft, saveWelcomeTemplate } from "@/lib/data/system-message-templates";
+import { PLATFORM_BANNER_TYPES } from "@/config/platform-banner";
+import type { PlatformBannerType } from "@/config/platform-banner";
+import { getWelcomeBannerDraft, saveWelcomeBanner } from "@/lib/data/system-banners";
 import {
     createPlatformBroadcastMessage,
     deletePlatformBroadcastMessage,
+    getPlatformBroadcastMessage,
     listPlatformBroadcastMessages,
     previewPlatformBroadcastForUser,
+    savePlatformBroadcastMessage,
     updatePlatformBroadcastMessage,
 } from "@/lib/data/platform-broadcasts";
 
@@ -296,6 +302,300 @@ export async function saveGlobalServerSettings(data: GlobalServerSettingsFormDat
         return {
             success: false,
             message: error instanceof Error ? error.message : "Failed to update global server settings.",
+        };
+    }
+}
+
+export async function getWelcomeSystemMessageTemplateAction() {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "Unauthorized: You must be logged in." };
+    }
+    const user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        return { success: false, message: "Unauthorized: You do not have permission." };
+    }
+
+    try {
+        const draft = await getWelcomeTemplateDraft();
+        return {
+            success: true,
+            templateSource: draft.templateSource,
+            template: draft.template
+                ? {
+                      ...draft.template,
+                      updatedAt: draft.template.updatedAt?.toISOString?.() || null,
+                  }
+                : null,
+            draft: {
+                title: draft.title,
+                bodyMarkdown: draft.bodyMarkdown,
+                repliesDisabled: draft.repliesDisabled,
+                senderCircleHandle: draft.senderCircleHandle,
+                isActive: draft.isActive,
+                version: draft.version,
+                updatedAt: draft.updatedAt?.toISOString?.() || null,
+                senderDid: draft.senderDid,
+            },
+            senderCircle: draft.senderCircle
+                ? {
+                      _id: draft.senderCircle._id,
+                      did: draft.senderCircle.did,
+                      handle: draft.senderCircle.handle,
+                      name: draft.senderCircle.name,
+                      picture: draft.senderCircle.picture,
+                  }
+                : null,
+        };
+    } catch (error) {
+        console.error("Error fetching welcome system message template:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to load template",
+        };
+    }
+}
+
+export async function saveWelcomeSystemMessageTemplateAction(input: {
+    title: string;
+    bodyMarkdown: string;
+    repliesDisabled: boolean;
+    isActive?: boolean;
+}) {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "Unauthorized: You must be logged in." };
+    }
+    const user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        return { success: false, message: "Unauthorized: You do not have permission." };
+    }
+
+    const title = input.title?.trim();
+    const bodyMarkdown = input.bodyMarkdown?.trim();
+
+    if (!title) {
+        return { success: false, message: "Title is required." };
+    }
+    if (!bodyMarkdown) {
+        return { success: false, message: "Message body is required." };
+    }
+
+    try {
+        const savedTemplate = await saveWelcomeTemplate({
+            title,
+            bodyMarkdown,
+            repliesDisabled: !!input.repliesDisabled,
+            isActive: input.isActive ?? true,
+            updatedBy: userDid,
+        });
+
+        revalidatePath("/admin");
+
+        return {
+            success: true,
+            message: "Welcome system message template saved.",
+            template: {
+                ...savedTemplate,
+                updatedAt: savedTemplate.updatedAt?.toISOString?.() || null,
+            },
+        };
+    } catch (error) {
+        console.error("Error saving welcome system message template:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to save template",
+        };
+    }
+}
+
+export async function getPlatformBroadcastMessageAction() {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "Unauthorized: You must be logged in." };
+    }
+    const user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        return { success: false, message: "Unauthorized: You do not have permission." };
+    }
+
+    try {
+        const draft = await getPlatformBroadcastMessage();
+        return {
+            success: true,
+            draft: draft
+                ? {
+                      body: draft.body,
+                      active: draft.active,
+                      createdAt: draft.createdAt?.toISOString?.() || null,
+                      updatedAt: draft.updatedAt?.toISOString?.() || null,
+                  }
+                : null,
+        };
+    } catch (error) {
+        console.error("Error fetching platform broadcast message:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to load platform broadcast message",
+        };
+    }
+}
+
+export async function savePlatformBroadcastMessageAction(input: {
+    body: string;
+    active: boolean;
+}) {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "Unauthorized: You must be logged in." };
+    }
+    const user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        return { success: false, message: "Unauthorized: You do not have permission." };
+    }
+
+    const body = input.body?.trim();
+    if (!body) {
+        return { success: false, message: "Message body is required." };
+    }
+
+    try {
+        const saved = await savePlatformBroadcastMessage({
+            body,
+            active: input.active === true,
+        });
+        revalidatePath("/admin");
+        return {
+            success: true,
+            message: "Platform broadcast message saved.",
+            draft: {
+                body: saved.body,
+                active: saved.active,
+                createdAt: saved.createdAt?.toISOString?.() || null,
+                updatedAt: saved.updatedAt?.toISOString?.() || null,
+            },
+        };
+    } catch (error) {
+        console.error("Error saving platform broadcast message:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to save platform broadcast message",
+        };
+    }
+}
+
+const isValidBannerCtaUrl = (value: string): boolean => {
+    if (!value) return true;
+    if (value.startsWith("/")) return true;
+    try {
+        new URL(value);
+        return true;
+    } catch {
+        return false;
+    }
+};
+
+export async function getWelcomeBannerAction() {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "Unauthorized: You must be logged in." };
+    }
+    const user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        return { success: false, message: "Unauthorized: You do not have permission." };
+    }
+
+    try {
+        const draft = await getWelcomeBannerDraft();
+        return {
+            success: true,
+            bannerSource: draft.bannerSource,
+            banner: draft.banner
+                ? {
+                      ...draft.banner,
+                      updatedAt: draft.banner.updatedAt?.toISOString?.() || null,
+                  }
+                : null,
+            draft: {
+                type: draft.type,
+                text: draft.text,
+                ctaEnabled: draft.ctaEnabled,
+                ctaLabel: draft.ctaLabel,
+                ctaUrl: draft.ctaUrl,
+                isActive: draft.isActive,
+                updatedAt: draft.updatedAt?.toISOString?.() || null,
+            },
+        };
+    } catch (error) {
+        console.error("Error fetching welcome banner:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to load banner",
+        };
+    }
+}
+
+export async function saveWelcomeBannerAction(input: {
+    type: PlatformBannerType;
+    text: string;
+    ctaEnabled?: boolean;
+    ctaLabel?: string;
+    ctaUrl?: string;
+    isActive: boolean;
+}) {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "Unauthorized: You must be logged in." };
+    }
+    const user = await getUserPrivate(userDid);
+    if (!user.isAdmin) {
+        return { success: false, message: "Unauthorized: You do not have permission." };
+    }
+
+    const type = input.type;
+    if (!PLATFORM_BANNER_TYPES.includes(type)) {
+        return { success: false, message: "Invalid banner type." };
+    }
+
+    const text = input.text?.trim();
+    const ctaLabel = input.ctaLabel?.trim() || "";
+    const ctaUrl = input.ctaUrl?.trim() || "";
+
+    if (!text) {
+        return { success: false, message: "Banner text is required." };
+    }
+    if (!isValidBannerCtaUrl(ctaUrl)) {
+        return { success: false, message: "CTA URL must be an absolute URL or start with '/'." };
+    }
+
+    try {
+        const savedBanner = await saveWelcomeBanner({
+            type,
+            text,
+            ctaEnabled: !!input.ctaEnabled,
+            ctaLabel,
+            ctaUrl,
+            isActive: !!input.isActive,
+            updatedBy: userDid,
+        });
+
+        revalidatePath("/admin");
+        revalidatePath("/welcome");
+        revalidatePath("/holding");
+
+        return {
+            success: true,
+            message: "Welcome banner saved.",
+            banner: {
+                ...savedBanner,
+                updatedAt: savedBanner.updatedAt?.toISOString?.() || null,
+            },
+        };
+    } catch (error) {
+        console.error("Error saving welcome banner:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to save banner",
         };
     }
 }

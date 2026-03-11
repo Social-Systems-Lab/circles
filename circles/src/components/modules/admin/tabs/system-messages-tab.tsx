@@ -1,247 +1,413 @@
 "use client";
 
-import { useState } from "react";
-import {
-    createPlatformBroadcastMessageAction,
-    deletePlatformBroadcastMessageAction,
-    getPlatformBroadcastMessagesAction,
-    previewPlatformBroadcastMessageToSelfAction,
-    updatePlatformBroadcastMessageAction,
-} from "../actions";
-import type { PlatformBroadcastMessageDisplay } from "@/lib/data/platform-broadcasts";
-import { Button } from "@/components/ui/button";
+import { useEffect, useState, useTransition } from "react";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { RefreshCw, Trash2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import {
+    getPlatformBroadcastMessageAction,
+    getWelcomeSystemMessageTemplateAction,
+    savePlatformBroadcastMessageAction,
+    getWelcomeBannerAction,
+    saveWelcomeBannerAction,
+    saveWelcomeSystemMessageTemplateAction,
+    previewPlatformBroadcastMessageToSelfAction,
+} from "@/components/modules/admin/actions";
+import type { PlatformBannerType } from "@/config/platform-banner";
 
-type SystemMessagesTabProps = {
-    initialBroadcasts: PlatformBroadcastMessageDisplay[];
-};
+export default function SystemMessagesTab() {
+    const [isLoading, setIsLoading] = useState(true);
+    const [title, setTitle] = useState("");
+    const [bodyMarkdown, setBodyMarkdown] = useState("");
+    const [repliesDisabled, setRepliesDisabled] = useState(true);
+    const [version, setVersion] = useState("");
+    const [templateSource, setTemplateSource] = useState<"db" | "fallback">("fallback");
+    const [senderCircleHandle, setSenderCircleHandle] = useState("kamooni");
+    const [isSaving, startSaving] = useTransition();
+    const [isPreviewing, startPreviewing] = useTransition();
+    const [broadcastBody, setBroadcastBody] = useState("");
+    const [broadcastIsActive, setBroadcastIsActive] = useState(false);
+    const [broadcastUpdatedAt, setBroadcastUpdatedAt] = useState<string | null>(null);
+    const [isSavingBroadcast, startSavingBroadcast] = useTransition();
+    const [isPreviewingBroadcast, startPreviewingBroadcast] = useTransition();
+    const [bannerType, setBannerType] = useState<PlatformBannerType>("alert");
+    const [bannerText, setBannerText] = useState("");
+    const [bannerCtaEnabled, setBannerCtaEnabled] = useState(false);
+    const [bannerCtaLabel, setBannerCtaLabel] = useState("");
+    const [bannerCtaUrl, setBannerCtaUrl] = useState("");
+    const [bannerIsActive, setBannerIsActive] = useState(true);
+    const [bannerSource, setBannerSource] = useState<"db" | "fallback">("fallback");
+    const [bannerUpdatedAt, setBannerUpdatedAt] = useState<string | null>(null);
+    const [isSavingBanner, startSavingBanner] = useTransition();
 
-export default function SystemMessagesTab({ initialBroadcasts }: SystemMessagesTabProps) {
-    const [broadcasts, setBroadcasts] = useState<PlatformBroadcastMessageDisplay[]>(initialBroadcasts);
-    const [newBody, setNewBody] = useState("");
-    const [newActive, setNewActive] = useState(true);
-    const [isRefreshing, setIsRefreshing] = useState(false);
-    const [isCreating, setIsCreating] = useState(false);
-    const [isPreviewing, setIsPreviewing] = useState(false);
-    const [isSavingById, setIsSavingById] = useState<Record<string, boolean>>({});
-    const [draftBodyById, setDraftBodyById] = useState<Record<string, string>>(
-        Object.fromEntries(initialBroadcasts.map((broadcast) => [broadcast.id, broadcast.body])),
-    );
-    const [draftActiveById, setDraftActiveById] = useState<Record<string, boolean>>(
-        Object.fromEntries(initialBroadcasts.map((broadcast) => [broadcast.id, broadcast.active])),
-    );
-
-    const refreshBroadcasts = async () => {
-        setIsRefreshing(true);
+    const loadData = async () => {
+        setIsLoading(true);
         try {
-            const data = await getPlatformBroadcastMessagesAction();
-            setBroadcasts(data);
-            setDraftBodyById(Object.fromEntries(data.map((broadcast) => [broadcast.id, broadcast.body])));
-            setDraftActiveById(Object.fromEntries(data.map((broadcast) => [broadcast.id, broadcast.active])));
+            const [templateResult, broadcastResult, bannerResult] = await Promise.all([
+                getWelcomeSystemMessageTemplateAction(),
+                getPlatformBroadcastMessageAction(),
+                getWelcomeBannerAction(),
+            ]);
+
+            if (!templateResult.success) {
+                toast.error(templateResult.message || "Failed to load welcome template.");
+            } else if (templateResult.draft) {
+                setTitle(templateResult.draft.title || "");
+                setBodyMarkdown(templateResult.draft.bodyMarkdown || "");
+                setRepliesDisabled(templateResult.draft.repliesDisabled ?? true);
+                setVersion(templateResult.draft.version || "");
+                setTemplateSource(templateResult.templateSource || "fallback");
+                setSenderCircleHandle(templateResult.draft.senderCircleHandle || "kamooni");
+            } else {
+                toast.error("Template payload is missing.");
+            }
+
+            if (!broadcastResult.success) {
+                toast.error(broadcastResult.message || "Failed to load platform broadcast message.");
+            } else if (broadcastResult.draft) {
+                setBroadcastBody(broadcastResult.draft.body || "");
+                setBroadcastIsActive(broadcastResult.draft.active === true);
+                setBroadcastUpdatedAt(broadcastResult.draft.updatedAt || null);
+            } else {
+                setBroadcastBody("");
+                setBroadcastIsActive(false);
+                setBroadcastUpdatedAt(null);
+            }
+
+            if (!bannerResult.success) {
+                toast.error(bannerResult.message || "Failed to load welcome banner.");
+            } else if (bannerResult.draft) {
+                setBannerType(bannerResult.draft.type || "alert");
+                setBannerText(bannerResult.draft.text || "");
+                setBannerCtaEnabled(bannerResult.draft.ctaEnabled ?? false);
+                setBannerCtaLabel(bannerResult.draft.ctaLabel || "");
+                setBannerCtaUrl(bannerResult.draft.ctaUrl || "");
+                setBannerIsActive(bannerResult.draft.isActive ?? true);
+                setBannerSource(bannerResult.bannerSource || "fallback");
+                setBannerUpdatedAt(bannerResult.draft.updatedAt || null);
+            } else {
+                toast.error("Banner payload is missing.");
+            }
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : "Failed to refresh system messages.");
+            toast.error("Failed to load system message settings.");
         } finally {
-            setIsRefreshing(false);
+            setIsLoading(false);
         }
     };
 
-    const handleCreate = async () => {
-        const trimmed = newBody.trim();
-        if (!trimmed) {
+    useEffect(() => {
+        void loadData();
+    }, []);
+
+    const handleSave = () => {
+        const trimmedTitle = title.trim();
+        const trimmedBody = bodyMarkdown.trim();
+        if (!trimmedTitle) {
+            toast.error("Title is required.");
+            return;
+        }
+        if (!trimmedBody) {
             toast.error("Message body is required.");
             return;
         }
 
-        setIsCreating(true);
-        try {
-            const result = await createPlatformBroadcastMessageAction(trimmed, newActive);
+        startSaving(async () => {
+            const result = await saveWelcomeSystemMessageTemplateAction({
+                title: trimmedTitle,
+                bodyMarkdown: trimmedBody,
+                repliesDisabled,
+                isActive: true,
+            });
+
             if (!result.success) {
-                toast.error(result.message || "Failed to create broadcast message.");
+                toast.error(result.message || "Failed to save template.");
                 return;
             }
 
-            if (result.broadcast) {
-                const nextBroadcasts = [result.broadcast, ...broadcasts];
-                setBroadcasts(nextBroadcasts);
-                setDraftBodyById((prev) => ({ ...prev, [result.broadcast!.id]: result.broadcast!.body }));
-                setDraftActiveById((prev) => ({ ...prev, [result.broadcast!.id]: result.broadcast!.active }));
-            }
-            setNewBody("");
-            setNewActive(true);
-            toast.success("Platform broadcast message created.");
-        } catch (error) {
-            toast.error(error instanceof Error ? error.message : "Failed to create platform broadcast message.");
-        } finally {
-            setIsCreating(false);
-        }
+            setVersion(result.template?.version || version);
+            setTemplateSource("db");
+            toast.success("Welcome message saved.");
+        });
     };
 
-    const handlePreviewToSelf = async () => {
-        const trimmed = newBody.trim();
-        if (!trimmed) {
-            toast.error("Message body is required.");
+    const handlePreview = () => {
+        startPreviewing(async () => {
+            try {
+                const response = await fetch("/api/system/welcome-preview", { method: "POST" });
+                const data = await response.json().catch(() => ({}));
+
+                if (!response.ok || !data?.success) {
+                    toast.error(data?.error || "Failed to send preview.");
+                    return;
+                }
+
+                toast.success("Preview sent to your chat inbox.");
+            } catch (error) {
+                toast.error("Failed to send preview.");
+            }
+        });
+    };
+
+    const handleBroadcastSave = () => {
+        const trimmedBody = broadcastBody.trim();
+        if (!trimmedBody) {
+            toast.error("Platform broadcast message body is required.");
             return;
         }
 
-        setIsPreviewing(true);
-        try {
-            const result = await previewPlatformBroadcastMessageToSelfAction(trimmed);
+        startSavingBroadcast(async () => {
+            const result = await savePlatformBroadcastMessageAction({
+                body: trimmedBody,
+                active: broadcastIsActive,
+            });
+
             if (!result.success) {
-                toast.error(result.message || "Failed to preview broadcast message.");
+                toast.error(result.message || "Failed to save platform broadcast message.");
+                return;
+            }
+
+            if (result.draft) {
+                setBroadcastBody(result.draft.body || "");
+                setBroadcastIsActive(result.draft.active === true);
+                setBroadcastUpdatedAt(result.draft.updatedAt || null);
+            }
+            toast.success("Platform broadcast message saved.");
+        });
+    };
+
+    const handleBroadcastPreviewToSelf = () => {
+        const trimmedBody = broadcastBody.trim();
+        if (!trimmedBody) {
+            toast.error("Platform broadcast message body is required.");
+            return;
+        }
+
+        startPreviewingBroadcast(async () => {
+            const result = await previewPlatformBroadcastMessageToSelfAction(trimmedBody);
+            if (!result.success) {
+                toast.error(result.message || "Failed to preview platform broadcast message.");
                 return;
             }
 
             toast.success("Preview sent to your Platform Announcements chat.");
-        } catch (error) {
-            toast.error(error instanceof Error ? error.message : "Failed to preview platform broadcast message.");
-        } finally {
-            setIsPreviewing(false);
-        }
+        });
     };
 
-    const handleSave = async (id: string) => {
-        const body = (draftBodyById[id] || "").trim();
-        if (!body) {
-            toast.error("Message body is required.");
+    const handleBannerSave = () => {
+        const trimmedText = bannerText.trim();
+        if (!trimmedText) {
+            toast.error("Banner text is required.");
             return;
         }
 
-        setIsSavingById((prev) => ({ ...prev, [id]: true }));
-        try {
-            const result = await updatePlatformBroadcastMessageAction(id, body, draftActiveById[id] === true);
-            if (!result.success || !result.broadcast) {
-                toast.error(result.message || "Failed to update broadcast message.");
-                return;
-            }
+        startSavingBanner(async () => {
+            const result = await saveWelcomeBannerAction({
+                type: bannerType,
+                text: trimmedText,
+                ctaEnabled: bannerCtaEnabled,
+                ctaLabel: bannerCtaLabel.trim(),
+                ctaUrl: bannerCtaUrl.trim(),
+                isActive: bannerIsActive,
+            });
 
-            setBroadcasts((prev) =>
-                prev.map((broadcast) => (broadcast.id === id ? result.broadcast! : broadcast)),
-            );
-            setDraftBodyById((prev) => ({ ...prev, [id]: result.broadcast.body }));
-            setDraftActiveById((prev) => ({ ...prev, [id]: result.broadcast.active }));
-            toast.success("Platform broadcast message updated.");
-        } catch (error) {
-            toast.error(error instanceof Error ? error.message : "Failed to update platform broadcast message.");
-        } finally {
-            setIsSavingById((prev) => ({ ...prev, [id]: false }));
-        }
-    };
-
-    const handleDelete = async (id: string) => {
-        if (!window.confirm("Delete this platform broadcast message?")) {
-            return;
-        }
-
-        setIsSavingById((prev) => ({ ...prev, [id]: true }));
-        try {
-            const result = await deletePlatformBroadcastMessageAction(id);
             if (!result.success) {
-                toast.error(result.message || "Failed to delete broadcast message.");
+                toast.error(result.message || "Failed to save banner.");
                 return;
             }
 
-            setBroadcasts((prev) => prev.filter((broadcast) => broadcast.id !== id));
-            setDraftBodyById((prev) => {
-                const next = { ...prev };
-                delete next[id];
-                return next;
-            });
-            setDraftActiveById((prev) => {
-                const next = { ...prev };
-                delete next[id];
-                return next;
-            });
-            toast.success("Platform broadcast message deleted.");
-        } catch (error) {
-            toast.error(error instanceof Error ? error.message : "Failed to delete platform broadcast message.");
-        } finally {
-            setIsSavingById((prev) => ({ ...prev, [id]: false }));
-        }
+            setBannerSource("db");
+            setBannerUpdatedAt(result.banner?.updatedAt || null);
+            toast.success("Welcome banner saved.");
+        });
+    };
+
+    if (isLoading) {
+        return <div className="text-sm text-muted-foreground">Loading system messages...</div>;
     };
 
     return (
-        <div className="space-y-6">
-            <div className="rounded-md border p-4">
-                <h3 className="mb-3 text-lg font-semibold">New Platform Broadcast</h3>
-                <Textarea
-                    placeholder="Write an announcement for all users..."
-                    value={newBody}
-                    onChange={(e) => setNewBody(e.target.value)}
-                    rows={4}
-                />
-                <div className="mt-3 flex items-center gap-2">
-                    <Switch id="new-broadcast-active" checked={newActive} onCheckedChange={setNewActive} />
-                    <Label htmlFor="new-broadcast-active">Active</Label>
+        <div className="max-w-3xl space-y-8">
+            <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                    Edit the signup welcome message template. Sender uses circle handle <b>{senderCircleHandle}</b>.
+                </p>
+                {templateSource === "fallback" && (
+                    <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                        No DB template is saved yet. You are editing fallback defaults. Saving will create the DB
+                        template.
+                    </p>
+                )}
+                <div className="space-y-2">
+                    <Label htmlFor="welcome-title">Thread Title</Label>
+                    <Input id="welcome-title" value={title} onChange={(event) => setTitle(event.target.value)} />
                 </div>
-                <div className="mt-4 flex items-center gap-2">
-                    <Button onClick={handleCreate} disabled={isCreating}>
-                        {isCreating ? "Creating..." : "Create Broadcast"}
+                <div className="space-y-2">
+                    <Label htmlFor="welcome-body">Body (Markdown)</Label>
+                    <Textarea
+                        id="welcome-body"
+                        rows={18}
+                        value={bodyMarkdown}
+                        onChange={(event) => setBodyMarkdown(event.target.value)}
+                        className="font-mono text-sm"
+                    />
+                </div>
+                <div className="flex items-center justify-between rounded-md border p-3">
+                    <div className="space-y-1">
+                        <Label htmlFor="welcome-replies">Disable Replies</Label>
+                        <p className="text-sm text-muted-foreground">Keep this thread read-only for recipients.</p>
+                    </div>
+                    <Switch id="welcome-replies" checked={repliesDisabled} onCheckedChange={setRepliesDisabled} />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <Button onClick={handleSave} disabled={isSaving}>
+                        {isSaving ? "Saving..." : "Save Welcome Template"}
                     </Button>
-                    <Button variant="outline" onClick={handlePreviewToSelf} disabled={isPreviewing}>
-                        {isPreviewing ? "Sending Preview..." : "Preview to Self"}
+                    <Button variant="outline" onClick={handlePreview} disabled={isPreviewing}>
+                        {isPreviewing ? "Sending..." : "Preview to Self"}
                     </Button>
-                    <Button variant="outline" onClick={refreshBroadcasts} disabled={isRefreshing}>
-                        {isRefreshing ? (
-                            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                            <RefreshCw className="mr-2 h-4 w-4" />
-                        )}
-                        Refresh
-                    </Button>
+                    <span className="text-xs text-muted-foreground">Version: {version || "n/a"}</span>
                 </div>
             </div>
 
-            <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Existing Platform Broadcasts</h3>
-                {broadcasts.length === 0 ? (
-                    <div className="rounded-md border p-4 text-sm text-muted-foreground">No platform broadcasts yet.</div>
-                ) : (
-                    broadcasts.map((broadcast) => {
-                        const isSaving = !!isSavingById[broadcast.id];
-                        return (
-                            <div key={broadcast.id} className="rounded-md border p-4">
-                                <div className="mb-2 text-xs text-muted-foreground">
-                                    Created {new Date(broadcast.createdAt).toLocaleString()} · Updated{" "}
-                                    {new Date(broadcast.updatedAt).toLocaleString()}
-                                </div>
-                                <Textarea
-                                    value={draftBodyById[broadcast.id] ?? broadcast.body}
-                                    onChange={(e) =>
-                                        setDraftBodyById((prev) => ({ ...prev, [broadcast.id]: e.target.value }))
-                                    }
-                                    rows={4}
-                                />
-                                <div className="mt-3 flex items-center gap-2">
-                                    <Switch
-                                        id={`broadcast-active-${broadcast.id}`}
-                                        checked={draftActiveById[broadcast.id] ?? broadcast.active}
-                                        onCheckedChange={(checked) =>
-                                            setDraftActiveById((prev) => ({ ...prev, [broadcast.id]: checked }))
-                                        }
-                                    />
-                                    <Label htmlFor={`broadcast-active-${broadcast.id}`}>Active</Label>
-                                </div>
-                                <div className="mt-4 flex items-center gap-2">
-                                    <Button onClick={() => handleSave(broadcast.id)} disabled={isSaving}>
-                                        {isSaving ? "Saving..." : "Save"}
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => handleDelete(broadcast.id)}
-                                        disabled={isSaving}
-                                    >
-                                        <Trash2 className="mr-2 h-4 w-4 text-red-500" />
-                                        Delete
-                                    </Button>
-                                </div>
-                            </div>
-                        );
-                    })
+            <div className="space-y-4 border-t pt-6">
+                <h3 className="text-lg font-semibold">Platform Broadcast (Chat)</h3>
+                <p className="text-sm text-muted-foreground">
+                    Sends one platform-wide read-only announcement in chat for all users.
+                </p>
+                <div className="space-y-2">
+                    <Label htmlFor="platform-broadcast-body">Message (Markdown)</Label>
+                    <Textarea
+                        id="platform-broadcast-body"
+                        rows={5}
+                        value={broadcastBody}
+                        onChange={(event) => setBroadcastBody(event.target.value)}
+                    />
+                </div>
+                <div className="flex items-center justify-between rounded-md border p-3">
+                    <div className="space-y-1">
+                        <Label htmlFor="platform-broadcast-active">Active</Label>
+                        <p className="text-sm text-muted-foreground">
+                            When active, this message is synced into user chat threads.
+                        </p>
+                    </div>
+                    <Switch
+                        id="platform-broadcast-active"
+                        checked={broadcastIsActive}
+                        onCheckedChange={setBroadcastIsActive}
+                    />
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button onClick={handleBroadcastSave} disabled={isSavingBroadcast}>
+                        {isSavingBroadcast ? "Saving..." : "Save Platform Broadcast"}
+                    </Button>
+                    <Button variant="outline" onClick={handleBroadcastPreviewToSelf} disabled={isPreviewingBroadcast}>
+                        {isPreviewingBroadcast ? "Sending..." : "Preview to Self"}
+                    </Button>
+                    {broadcastUpdatedAt && (
+                        <span className="text-xs text-muted-foreground">
+                            Updated: {new Date(broadcastUpdatedAt).toLocaleString()}
+                        </span>
+                    )}
+                </div>
+            </div>
+
+            <div className="space-y-4 border-t pt-6">
+                <h3 className="text-lg font-semibold">Landing Welcome Banner</h3>
+                <p className="text-sm text-muted-foreground">
+                    Configure the banner shown on the welcome landing page. If inactive, the hardcoded fallback copy is
+                    shown.
+                </p>
+                {bannerSource === "fallback" && (
+                    <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                        No DB banner is saved yet. Saving here will create it.
+                    </p>
                 )}
+                <div className="space-y-2">
+                    <Label htmlFor="banner-type">Banner Type</Label>
+                    <Select value={bannerType} onValueChange={(value) => setBannerType(value as PlatformBannerType)}>
+                        <SelectTrigger id="banner-type">
+                            <SelectValue placeholder="Select banner type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="alert">Alert</SelectItem>
+                            <SelectItem value="announcement">Announcement</SelectItem>
+                            <SelectItem value="cta">CTA</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <div className="space-y-1 text-xs text-muted-foreground">
+                        <p>CTA: White background, will display a button</p>
+                        <p>Alert: Red background, white text</p>
+                        <p>Announcement: Yellow background, white text</p>
+                    </div>
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="banner-text">Banner Text</Label>
+                    <Textarea
+                        id="banner-text"
+                        rows={4}
+                        value={bannerText}
+                        onChange={(event) => setBannerText(event.target.value)}
+                    />
+                </div>
+                <div className="flex items-center justify-between rounded-md border p-3">
+                    <div className="space-y-1">
+                        <Label htmlFor="banner-cta-enabled">Enable CTA Button</Label>
+                        <p className="text-sm text-muted-foreground">
+                            Shows a centered button when label and URL are also provided.
+                        </p>
+                    </div>
+                    <Switch id="banner-cta-enabled" checked={bannerCtaEnabled} onCheckedChange={setBannerCtaEnabled} />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                        <Label htmlFor="banner-cta-label">CTA Label (optional)</Label>
+                        <Input
+                            id="banner-cta-label"
+                            value={bannerCtaLabel}
+                            onChange={(event) => setBannerCtaLabel(event.target.value)}
+                            placeholder="Join now"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="banner-cta-url">CTA URL (optional)</Label>
+                        <Input
+                            id="banner-cta-url"
+                            value={bannerCtaUrl}
+                            onChange={(event) => setBannerCtaUrl(event.target.value)}
+                            placeholder="/signup or https://example.com"
+                        />
+                    </div>
+                </div>
+                <div className="flex items-center justify-between rounded-md border p-3">
+                    <div className="space-y-1">
+                        <Label htmlFor="banner-active">Banner Active</Label>
+                        <p className="text-sm text-muted-foreground">When off, fallback copy is shown on welcome.</p>
+                    </div>
+                    <Switch id="banner-active" checked={bannerIsActive} onCheckedChange={setBannerIsActive} />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <Button onClick={handleBannerSave} disabled={isSavingBanner}>
+                        {isSavingBanner ? "Saving..." : "Save Banner"}
+                    </Button>
+                    <span className="text-xs text-muted-foreground">
+                        Updated: {bannerUpdatedAt ? new Date(bannerUpdatedAt).toLocaleString() : "n/a"}
+                    </span>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Preview</p>
+                    <p className="text-sm">{bannerText || "Banner text preview"}</p>
+                    {bannerCtaEnabled && bannerCtaLabel.trim() && bannerCtaUrl.trim() && (
+                        <div className="mt-3 flex justify-center">
+                            <Button variant="outline" size="sm">
+                                {bannerCtaLabel.trim()}
+                            </Button>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

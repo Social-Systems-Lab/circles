@@ -44,12 +44,13 @@ const normalizeConversation = (conversation: ChatConversation): ChatConversation
 };
 
 const isPlatformAnnouncementMessage = (doc: any, body: string) => {
+    const system = (doc?.system || {}) as Record<string, unknown>;
     return (
         doc?.body === body &&
         doc?.format === "markdown" &&
-        doc?.repliesDisabled === true &&
-        doc?.source === PLATFORM_ANNOUNCEMENT_SOURCE &&
-        doc?.systemType === PLATFORM_ANNOUNCEMENT_SYSTEM_TYPE
+        (system.repliesDisabled === true || doc?.repliesDisabled === true) &&
+        (doc?.source === PLATFORM_ANNOUNCEMENT_SOURCE || system.source === PLATFORM_ANNOUNCEMENT_SOURCE) &&
+        (system.systemType === PLATFORM_ANNOUNCEMENT_SYSTEM_TYPE || doc?.systemType === PLATFORM_ANNOUNCEMENT_SYSTEM_TYPE)
     );
 };
 
@@ -85,6 +86,42 @@ export const listPlatformBroadcastMessages = async (
         | PlatformBroadcastMessage[]
         | [];
     return docs.map(normalizeBroadcast);
+};
+
+const toLegacyBroadcast = (broadcast: PlatformBroadcastMessageDisplay): PlatformBroadcastMessage => ({
+    _id: broadcast.id,
+    body: broadcast.body,
+    active: broadcast.active,
+    createdAt: broadcast.createdAt,
+    updatedAt: broadcast.updatedAt,
+});
+
+export const getPlatformBroadcastMessage = async (): Promise<PlatformBroadcastMessage | null> => {
+    const broadcasts = await listPlatformBroadcastMessages();
+    const latest = broadcasts[0];
+    return latest ? toLegacyBroadcast(latest) : null;
+};
+
+export const savePlatformBroadcastMessage = async (input: {
+    body: string;
+    active: boolean;
+}): Promise<PlatformBroadcastMessage> => {
+    const body = input.body.trim();
+    const active = input.active === true;
+
+    const latest = await getPlatformBroadcastMessage();
+    if (latest?._id) {
+        const updated = await updatePlatformBroadcastMessage(String(latest._id), {
+            body,
+            active,
+        });
+        if (updated) {
+            return toLegacyBroadcast(updated);
+        }
+    }
+
+    const created = await createPlatformBroadcastMessage(body, active);
+    return toLegacyBroadcast(created);
 };
 
 export const createPlatformBroadcastMessage = async (

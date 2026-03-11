@@ -519,7 +519,7 @@ export const listConversationsForUser = async (userDid: string, circleIds: strin
     }
 
     const visibleConversations = normalized.filter((conversation) => {
-        if (conversation.type === "dm") return true;
+        if (conversation.type === "dm" || conversation.type === "announcement") return true;
         const conversationId = conversation._id.toString();
         return activeGroupConversationIds.has(conversationId);
     });
