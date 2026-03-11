@@ -32,14 +32,17 @@ export default function AboutPage({ circle }: AboutPageProps) {
     const isCompact = useIsCompact();
     const [user] = useAtom(userAtom);
     const isOwner = user?.did === circle.did;
+    const isUserProfile = circle.circleType === "user";
+    const visibleSkills = (circle.skills || []).slice(0, 4);
+    const remainingSkillsCount = Math.max((circle.skills || []).length - visibleSkills.length, 0);
 
     // Check if sidebar has any content
     const hasSidebarContent =
         !!circle.mission ||
         !!(circle.location && (circle.location.city || circle.location.region || circle.location.country)) ||
-        !!(circle.causes && circle.causes.length > 0) ||
+        !!(!isUserProfile && circle.causes && circle.causes.length > 0) ||
         !!circle.websiteUrl ||
-        !!(circle.skills && circle.skills.length > 0);
+        !!(isUserProfile && circle.skills && circle.skills.length > 0);
 
     const hasMainContent = !!circle.content || !!circle.description;
 
@@ -125,10 +128,35 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                 )}
 
                             {/* SDGs */}
-                            {circle.causes && circle.causes.length > 0 && (
+                            {!isUserProfile && circle.causes && circle.causes.length > 0 && (
                                 <div className="mb-6 w-full">
                                     <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">SDGs</div>
                                     <SdgList sdgHandles={circle.causes} className="grid-cols-4" />
+                                </div>
+                            )}
+
+                            {/* Top Skills & Offers */}
+                            {isUserProfile && visibleSkills.length > 0 && (
+                                <div className="mb-6 w-full">
+                                    <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                                        Top Skills & Offers
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {visibleSkills.map((handle) => {
+                                            const skill = skillMap.get(handle);
+                                            if (!skill) return null;
+                                            return (
+                                                <Badge key={handle} variant="outline" className="text-sm font-medium">
+                                                    {skill.name}
+                                                </Badge>
+                                            );
+                                        })}
+                                        {remainingSkillsCount > 0 && (
+                                            <Badge variant="outline" className="text-sm font-medium">
+                                                +{remainingSkillsCount} more
+                                            </Badge>
+                                        )}
+                                    </div>
                                 </div>
                             )}
 
