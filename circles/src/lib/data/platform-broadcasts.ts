@@ -1,5 +1,6 @@
 import { ObjectId } from "mongodb";
 import { ChatConversation } from "@/lib/chat/mongo-types";
+import { getKamooniSystemSender } from "@/config/system-sender";
 import { ChatConversations, ChatMessageDocs, Circles, PlatformBroadcastMessages } from "./db";
 
 export type PlatformBroadcastMessage = {
@@ -18,7 +19,8 @@ export const PLATFORM_ANNOUNCEMENT_HANDLE = "kamooni-announcements";
 export const PLATFORM_ANNOUNCEMENT_TITLE = "Kamooni Announcements";
 export const PLATFORM_ANNOUNCEMENT_SYSTEM_TYPE = "announcement" as const;
 export const PLATFORM_ANNOUNCEMENT_SOURCE = "platform_admin" as const;
-export const PLATFORM_ANNOUNCEMENT_SENDER_DID = "system:platform_admin";
+const PLATFORM_ANNOUNCEMENT_SENDER = getKamooniSystemSender();
+export const PLATFORM_ANNOUNCEMENT_SENDER_DID = PLATFORM_ANNOUNCEMENT_SENDER.did;
 
 const toObjectId = (value: string): ObjectId | null => {
     if (!ObjectId.isValid(value)) return null;
@@ -43,6 +45,15 @@ const normalizeConversation = (conversation: ChatConversation): ChatConversation
     return conversation;
 };
 
+const buildAnnouncementConversationMetadata = () => ({
+    source: PLATFORM_ANNOUNCEMENT_SOURCE,
+    version: "v1",
+    repliesDisabled: true,
+    senderHandle: PLATFORM_ANNOUNCEMENT_SENDER.handle,
+    senderName: PLATFORM_ANNOUNCEMENT_SENDER.displayName,
+    senderAvatarUrl: PLATFORM_ANNOUNCEMENT_SENDER.avatarUrl,
+});
+
 const isPlatformAnnouncementMessage = (doc: any, body: string) => {
     const system = (doc?.system || {}) as Record<string, unknown>;
     return (
@@ -61,7 +72,7 @@ const insertPlatformAnnouncementMessage = async (
 ) => {
     await ChatMessageDocs.insertOne({
         conversationId,
-        senderDid: PLATFORM_ANNOUNCEMENT_SENDER_DID,
+        senderDid: PLATFORM_ANNOUNCEMENT_SENDER.did,
         body,
         createdAt: options?.createdAt || new Date(),
         format: "markdown",
@@ -185,10 +196,21 @@ export const ensureAnnouncementConversationForUser = async (userDid: string): Pr
     if (existing) {
         const conversationId = String(existing._id);
         const needsParticipant = !(existing.participants || []).includes(userDid);
+        const nextMetadata = buildAnnouncementConversationMetadata();
+        const existingMetadata = ((existing as any).metadata || {}) as Record<string, unknown>;
+        const needsMetadataUpdate =
+            existingMetadata.repliesDisabled !== true ||
+            existingMetadata.source !== nextMetadata.source ||
+            existingMetadata.version !== nextMetadata.version ||
+            existingMetadata.senderHandle !== nextMetadata.senderHandle ||
+            existingMetadata.senderName !== nextMetadata.senderName ||
+            existingMetadata.senderAvatarUrl !== nextMetadata.senderAvatarUrl;
+        const needsPictureUpdate = existing.picture?.url !== nextMetadata.senderAvatarUrl;
         if (
             existing.name !== PLATFORM_ANNOUNCEMENT_TITLE ||
             existing.handle !== PLATFORM_ANNOUNCEMENT_HANDLE ||
-            (existing as any).metadata?.repliesDisabled !== true ||
+            needsMetadataUpdate ||
+            needsPictureUpdate ||
             needsParticipant
         ) {
             await ChatConversations.updateOne(
@@ -197,6 +219,8 @@ export const ensureAnnouncementConversationForUser = async (userDid: string): Pr
                     $set: {
                         name: PLATFORM_ANNOUNCEMENT_TITLE,
                         handle: PLATFORM_ANNOUNCEMENT_HANDLE,
+                        picture: { url: nextMetadata.senderAvatarUrl },
+                        metadata: nextMetadata,
                         repliesDisabled: true,
                     },
                     ...(needsParticipant ? { $addToSet: { participants: userDid } } : {}),
@@ -218,9 +242,8 @@ export const ensureAnnouncementConversationForUser = async (userDid: string): Pr
         name: PLATFORM_ANNOUNCEMENT_TITLE,
         handle: PLATFORM_ANNOUNCEMENT_HANDLE,
         participants: [userDid],
-        metadata: {
-            repliesDisabled: true,
-        } as any,
+        picture: { url: PLATFORM_ANNOUNCEMENT_SENDER.avatarUrl },
+        metadata: buildAnnouncementConversationMetadata() as any,
         createdAt: now,
         updatedAt: now,
     };

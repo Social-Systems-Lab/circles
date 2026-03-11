@@ -446,9 +446,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                         : message.status === "failed"
                         ? "border border-red-200"
                         : "";
-                const isPlatformBroadcast = isPlatformAnnouncementMessage(message);
                 const isNonPreviewSender = isNonPreviewSystemSenderMessage(message);
-                const senderLabel = isPlatformBroadcast ? "@kamooni" : message.author.name;
+                const senderLabel = message.author.name;
 
                 if (isSystemMessage) {
                     acc.push(

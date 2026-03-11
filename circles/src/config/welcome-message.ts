@@ -1,3 +1,5 @@
+import { getKamooniSystemSender } from "@/config/system-sender";
+
 export type WelcomeMessageConfig = {
     senderHandle: string;
     displayName: string;
@@ -13,10 +15,12 @@ export const SYSTEM_MESSAGE_SOURCE_PREFIX = "system_";
 export const isSystemMessageSource = (source?: string | null): boolean =>
     typeof source === "string" && source.startsWith(SYSTEM_MESSAGE_SOURCE_PREFIX);
 
+const KAMOONI_SYSTEM_SENDER = getKamooniSystemSender();
+
 export const WELCOME_MESSAGE: WelcomeMessageConfig = {
-    senderHandle: "kamooni",
-    displayName: "Kamooni",
-    avatarUrl: "/icon.svg",
+    senderHandle: KAMOONI_SYSTEM_SENDER.handle,
+    displayName: KAMOONI_SYSTEM_SENDER.displayName,
+    avatarUrl: KAMOONI_SYSTEM_SENDER.avatarUrl,
     threadName: "Welcome to Kamooni",
     source: "system_welcome",
     version: "v2",

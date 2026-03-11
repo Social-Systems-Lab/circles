@@ -3,6 +3,7 @@ import { ChatRoomDisplay, Circle } from "@/models/models";
 import { ChatConversation, ChatMessageDoc, ChatReaction } from "@/lib/chat/mongo-types";
 import { ChatConversations, ChatMessageDocs, ChatReadStates, ChatRoomMembers } from "./db";
 import { getCircleByHandle, getCircleById, getCirclesByDids } from "./circle";
+import { getKamooniSystemSender, SystemSenderIdentity } from "@/config/system-sender";
 import { WelcomeMessageConfig, WELCOME_MESSAGE } from "@/config/welcome-message";
 import { buildSystemMessageMetadata } from "@/lib/chat/system-messages";
 import { syncPlatformBroadcastsForUser } from "@/lib/data/platform-broadcasts";
@@ -69,15 +70,13 @@ const normalizeMediaUrl = (url?: string): string | undefined => {
 };
 
 const WELCOME_CONVERSATION_HANDLE_PREFIX = "welcome";
-const buildWelcomeSystemDid = (config: WelcomeMessageConfig): string => `system:${config.senderHandle}`;
-
-const buildWelcomeConversationMetadata = (config: WelcomeMessageConfig) => ({
+const buildWelcomeConversationMetadata = (config: WelcomeMessageConfig, sender: SystemSenderIdentity) => ({
     source: config.source,
     version: config.version,
     repliesDisabled: config.repliesDisabled,
-    senderHandle: config.senderHandle,
-    senderName: config.displayName,
-    senderAvatarUrl: config.avatarUrl,
+    senderHandle: sender.handle,
+    senderName: sender.displayName,
+    senderAvatarUrl: sender.avatarUrl,
 });
 
 const buildWelcomeSystemMetadata = (config: WelcomeMessageConfig, userDid: string) =>
@@ -211,8 +210,9 @@ export const ensureWelcomeMessageForNewUser = async (
         throw new Error("Missing user DID for welcome message");
     }
 
-    const systemSenderDid = senderDid || buildWelcomeSystemDid(config);
-    const welcomeMetadata = buildWelcomeConversationMetadata(config);
+    const canonicalSender = getKamooniSystemSender();
+    const systemSenderDid = senderDid || canonicalSender.did;
+    const welcomeMetadata = buildWelcomeConversationMetadata(config, canonicalSender);
     const welcomeSystemMetadata = buildWelcomeSystemMetadata(config, userDid);
     const welcomeHandle = `${WELCOME_CONVERSATION_HANDLE_PREFIX}-${userDid}`;
     const existingConversation = (await ChatConversations.findOne({
@@ -231,7 +231,7 @@ export const ensureWelcomeMessageForNewUser = async (
             participants: [userDid],
             createdAt: new Date(),
             updatedAt: new Date(),
-            picture: { url: config.avatarUrl },
+            picture: { url: canonicalSender.avatarUrl },
             metadata: welcomeMetadata,
         }));
 
@@ -243,7 +243,7 @@ export const ensureWelcomeMessageForNewUser = async (
             {
                 $set: {
                     name: config.threadName,
-                    picture: { url: config.avatarUrl },
+                    picture: { url: canonicalSender.avatarUrl },
                     metadata: welcomeMetadata,
                     updatedAt: new Date(),
                 },

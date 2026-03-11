@@ -1,6 +1,7 @@
 import { db } from "@/lib/data/db";
 import { Circle } from "@/models/models";
 import { getCircleByHandle } from "@/lib/data/circle";
+import { getKamooniSystemSender } from "@/config/system-sender";
 import { WELCOME_MESSAGE, WelcomeMessageConfig } from "@/config/welcome-message";
 
 export const WELCOME_SYSTEM_TEMPLATE_KEY = "welcome" as const;
@@ -65,22 +66,14 @@ const bumpTemplateVersion = (currentVersion: string): string => {
     return `v${Number(match[1]) + 1}`;
 };
 
-const resolveSender = async (preferredHandle: string): Promise<ResolvedSender> => {
-    const fallbackHandle = WELCOME_MESSAGE.senderHandle;
-    const attemptedHandle = preferredHandle || fallbackHandle;
-
-    const preferredCircle = await getCircleByHandle(attemptedHandle);
-    const senderCircle =
-        preferredCircle || (attemptedHandle !== fallbackHandle ? await getCircleByHandle(fallbackHandle) : null);
-
-    const senderHandle = senderCircle?.handle || attemptedHandle || fallbackHandle;
-    const senderDid = senderCircle?.did || `system:${senderHandle}`;
-
+const resolveSender = async (): Promise<ResolvedSender> => {
+    const canonicalSender = getKamooniSystemSender();
+    const senderCircle = await getCircleByHandle(canonicalSender.handle);
     return {
-        senderDid,
-        senderHandle,
-        senderName: senderCircle?.name || WELCOME_MESSAGE.displayName,
-        senderAvatarUrl: senderCircle?.picture?.url || WELCOME_MESSAGE.avatarUrl,
+        senderDid: canonicalSender.did,
+        senderHandle: canonicalSender.handle,
+        senderName: canonicalSender.displayName,
+        senderAvatarUrl: canonicalSender.avatarUrl,
         senderCircle: senderCircle || null,
     };
 };
@@ -107,7 +100,7 @@ export const getResolvedWelcomeTemplate = async (): Promise<ResolvedWelcomeTempl
             isActive: true,
         })) || null,
     );
-    const sender = await resolveSender(activeTemplate?.senderCircleHandle || WELCOME_MESSAGE.senderHandle);
+    const sender = await resolveSender();
 
     return {
         config: buildWelcomeConfig(activeTemplate, sender),
@@ -122,8 +115,7 @@ export const getWelcomeTemplateDraft = async (): Promise<WelcomeTemplateDraft> =
     const storedTemplate = normalizeTemplate(
         (await SystemMessageTemplates?.findOne({ key: WELCOME_SYSTEM_TEMPLATE_KEY })) || null,
     );
-    const senderHandle = storedTemplate?.senderCircleHandle || WELCOME_MESSAGE.senderHandle;
-    const sender = await resolveSender(senderHandle);
+    const sender = await resolveSender();
 
     return {
         template: storedTemplate,
@@ -131,7 +123,7 @@ export const getWelcomeTemplateDraft = async (): Promise<WelcomeTemplateDraft> =
         title: storedTemplate?.title || WELCOME_MESSAGE.threadName,
         bodyMarkdown: storedTemplate?.bodyMarkdown || WELCOME_MESSAGE.markdown,
         repliesDisabled: storedTemplate?.repliesDisabled ?? WELCOME_MESSAGE.repliesDisabled,
-        senderCircleHandle: senderHandle,
+        senderCircleHandle: sender.senderHandle,
         isActive: storedTemplate?.isActive ?? true,
         version: storedTemplate?.version || WELCOME_MESSAGE.version,
         updatedAt: storedTemplate?.updatedAt,
@@ -164,7 +156,7 @@ export const saveWelcomeTemplate = async (input: {
         key: WELCOME_SYSTEM_TEMPLATE_KEY,
         title: input.title,
         bodyMarkdown: input.bodyMarkdown,
-        senderCircleHandle: existingTemplate?.senderCircleHandle || WELCOME_MESSAGE.senderHandle,
+        senderCircleHandle: getKamooniSystemSender().handle,
         repliesDisabled: input.repliesDisabled,
         isActive: input.isActive ?? existingTemplate?.isActive ?? true,
         version: nextVersion,
