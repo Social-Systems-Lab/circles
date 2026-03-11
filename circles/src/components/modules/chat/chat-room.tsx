@@ -264,6 +264,7 @@ type ChatMessagesProps = {
     onMessagesRendered?: () => void;
     handleDelete: (message: ChatMessage) => Promise<void>;
     handleEdit: (message: ChatMessage) => void;
+    canReply?: boolean;
     chatProvider?: "matrix" | "mongo";
 };
 
@@ -273,7 +274,14 @@ const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
     return message1.author._id === message2.author._id;
 };
 
-const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, onMessagesRendered, handleDelete, handleEdit }) => {
+const ChatMessages: React.FC<ChatMessagesProps> = ({
+    messages,
+    messagesEndRef,
+    onMessagesRendered,
+    handleDelete,
+    handleEdit,
+    canReply = true,
+}) => {
     const [user] = useAtom(userAtom);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
     const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
@@ -281,6 +289,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
     const [, setRoomMessages] = useAtom(roomMessagesAtom);
     const isMobile = useIsMobile();
     const handleReply = (message: ChatMessage) => {
+        if (!canReply) return;
         setReplyToMessage(message);
     };
 
@@ -546,14 +555,16 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                                                 )}
                                             </>
                                         )}
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6"
-                                            onClick={() => handleReply(message)}
-                                        >
-                                            <MdReply className="h-4 w-4" />
-                                        </Button>
+                                        {canReply && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6"
+                                                onClick={() => handleReply(message)}
+                                            >
+                                                <MdReply className="h-4 w-4" />
+                                            </Button>
+                                        )}
                                         <Popover
                                             open={pickerOpenForMessage === message.id}
                                             onOpenChange={(isOpen) =>
@@ -1046,6 +1057,11 @@ export const ChatRoomComponent: React.FC<{
         (chatRoom as any)?.conversationType === "announcement" || (chatRoom as any)?.repliesDisabled === true;
 
     useEffect(() => {
+        if (!isAnnouncementConversation) return;
+        setReplyToMessage(null);
+    }, [isAnnouncementConversation, setReplyToMessage]);
+
+    useEffect(() => {
         let cancelled = false;
 
         const fromPayload = Array.isArray((chatRoom as any)?.participantCircles)
@@ -1329,6 +1345,7 @@ export const ChatRoomComponent: React.FC<{
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
                                     handleEdit={handleEdit}
+                                    canReply={!isAnnouncementConversation}
                                     chatProvider={provider}
                                 />
                             )}
@@ -1347,6 +1364,7 @@ export const ChatRoomComponent: React.FC<{
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
                                     handleEdit={handleEdit}
+                                    canReply={!isAnnouncementConversation}
                                     chatProvider={provider}
                                 />
                             )}
