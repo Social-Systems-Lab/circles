@@ -1045,7 +1045,7 @@ export const ChatRoomComponent: React.FC<{
     const [lastReadTimestamps, setLastReadTimestamps] = useAtom(lastReadTimestampsAtom);
     const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
     const [mentionCandidates, setMentionCandidates] = useState<Circle[]>([]);
-    const [, setReplyToMessage] = useAtom(replyToMessageAtom);
+    const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
     const router = useRouter();
     const params = useParams<{ handle?: string | string[] }>();
     const routeHandleParam = params?.handle;
@@ -1053,13 +1053,21 @@ export const ChatRoomComponent: React.FC<{
     const provider: "mongo" = "mongo";
 
     const roomId = routeHandle || (chatRoom as any)?._id || (chatRoom as any)?.id || (chatRoom as any)?.handle || null;
-    const isAnnouncementConversation =
-        (chatRoom as any)?.conversationType === "announcement" || (chatRoom as any)?.repliesDisabled === true;
+    const conversationType = (chatRoom as any)?.conversationType || (chatRoom as any)?.metadata?.conversationType;
+    const repliesDisabled =
+        (chatRoom as any)?.repliesDisabled === true || (chatRoom as any)?.metadata?.repliesDisabled === true;
+    const isAnnouncementConversation = conversationType === "announcement" || repliesDisabled;
 
     useEffect(() => {
-        if (!isAnnouncementConversation) return;
-        setReplyToMessage(null);
-    }, [isAnnouncementConversation, setReplyToMessage]);
+        if (!replyToMessage) return;
+        if (isAnnouncementConversation) {
+            setReplyToMessage(null);
+            return;
+        }
+        if (roomId && replyToMessage.roomId !== roomId) {
+            setReplyToMessage(null);
+        }
+    }, [isAnnouncementConversation, replyToMessage, roomId, setReplyToMessage]);
 
     useEffect(() => {
         let cancelled = false;

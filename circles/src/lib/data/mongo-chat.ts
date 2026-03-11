@@ -341,6 +341,9 @@ const mapConversationsToChatRoomDisplays = async (
                   .filter(Boolean)
                   .map((id) => id as string)
             : undefined;
+        const conversationType = conversation.type;
+        const metadataRepliesDisabled = conversation.metadata?.repliesDisabled === true;
+        const repliesDisabled = conversationType === "announcement" || metadataRepliesDisabled;
 
         return {
             _id: conversation._id.toString(),
@@ -358,6 +361,8 @@ const mapConversationsToChatRoomDisplays = async (
             participantDids,
             participantCircles,
             circle,
+            conversationType,
+            repliesDisabled,
             metadata: conversation.metadata,
         } as ChatRoomDisplay;
     });
