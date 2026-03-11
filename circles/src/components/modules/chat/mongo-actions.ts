@@ -385,6 +385,9 @@ export const sendMongoMessageAction = async (
     if (!access.ok) {
         return { success: false, message: access.message };
     }
+    if (access.conversation?.type === "announcement") {
+        return { success: false, message: "Replies are disabled for this conversation." };
+    }
 
     const replyValidation = await validateReplyTargetForConversation(conversationId, replyToMessageId);
     if (!replyValidation.ok) {
@@ -433,6 +436,9 @@ export const sendMongoAttachmentAction = async (
     const access = await resolveMongoConversationAccess(conversationId, userDid);
     if (!access.ok) {
         return { success: false, message: access.message };
+    }
+    if (access.conversation?.type === "announcement") {
+        return { success: false, message: "Replies are disabled for this conversation." };
     }
 
     const replyValidation = await validateReplyTargetForConversation(conversationId, replyToMessageId);
