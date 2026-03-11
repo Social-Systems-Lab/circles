@@ -16,6 +16,7 @@ interface OffersCardProps {
 export default function OffersCard({ circle, isOwner }: OffersCardProps) {
     const router = useRouter();
     const skillNameByHandle = new Map(skillsV2.map((skill) => [skill.handle, skill.name]));
+    const showSkillBadges = circle.circleType !== "user";
 
     const handleSkillClick = (skill: string) => {
         router.push(`/explore?skills=${skill}`);
@@ -38,13 +39,15 @@ export default function OffersCard({ circle, isOwner }: OffersCardProps) {
             {circle.offers?.text ? (
                 <div>
                     <RichText content={circle.offers.text} />
-                    <div className="mt-4 flex flex-wrap gap-2">
-                        {circle.offers.skills?.map((skill) => (
-                            <Badge key={skill} onClick={() => handleSkillClick(skill)} className="cursor-pointer">
-                                {skillNameByHandle.get(skill) || skill}
-                            </Badge>
-                        ))}
-                    </div>
+                    {showSkillBadges && circle.offers.skills && circle.offers.skills.length > 0 && (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                            {circle.offers.skills.map((skill) => (
+                                <Badge key={skill} onClick={() => handleSkillClick(skill)} className="cursor-pointer">
+                                    {skillNameByHandle.get(skill) || skill}
+                                </Badge>
+                            ))}
+                        </div>
+                    )}
                 </div>
             ) : (
                 <div className="text-center text-muted-foreground">

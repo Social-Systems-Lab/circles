@@ -31,11 +31,13 @@ interface AboutPageProps {
 export default function AboutPage({ circle }: AboutPageProps) {
     const isCompact = useIsCompact();
     const [user] = useAtom(userAtom);
+    const [isSkillsExpanded, setIsSkillsExpanded] = React.useState(false);
     const isOwner = user?.did === circle.did;
     const isUserProfile = circle.circleType === "user";
     const userOfferSkills = circle.offers?.skills || [];
-    const visibleSkills = userOfferSkills.slice(0, 4);
-    const remainingSkillsCount = Math.max(userOfferSkills.length - visibleSkills.length, 0);
+    const hasMoreSkills = userOfferSkills.length > 4;
+    const visibleSkills = isSkillsExpanded ? userOfferSkills : userOfferSkills.slice(0, 4);
+    const remainingSkillsCount = Math.max(userOfferSkills.length - 4, 0);
 
     // Check if sidebar has any content
     const hasSidebarContent =
@@ -151,9 +153,27 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                                 </Badge>
                                             );
                                         })}
-                                        {remainingSkillsCount > 0 && (
-                                            <Badge variant="outline" className="text-sm font-medium">
-                                                +{remainingSkillsCount} more
+                                        {hasMoreSkills && (
+                                            <Badge
+                                                variant="outline"
+                                                className="cursor-pointer text-sm font-medium"
+                                                role="button"
+                                                tabIndex={0}
+                                                aria-expanded={isSkillsExpanded}
+                                                aria-label={
+                                                    isSkillsExpanded
+                                                        ? "Show fewer skills"
+                                                        : `Show ${remainingSkillsCount} more skills`
+                                                }
+                                                onClick={() => setIsSkillsExpanded((prev) => !prev)}
+                                                onKeyDown={(event) => {
+                                                    if (event.key === "Enter" || event.key === " ") {
+                                                        event.preventDefault();
+                                                        setIsSkillsExpanded((prev) => !prev);
+                                                    }
+                                                }}
+                                            >
+                                                {isSkillsExpanded ? "Show less" : `+${remainingSkillsCount} more`}
                                             </Badge>
                                         )}
                                     </div>
