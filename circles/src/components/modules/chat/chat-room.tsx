@@ -846,20 +846,44 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage, mentionCandidate
             console.log("✏️ [Edit] Aborted - missing message or content");
             return;
         }
+        const trimmedContent = newMessage.trim();
         
         try {
             console.log("✏️ [Edit] Importing editMessageAction...");
             console.log("✏️ [Edit] Calling editMessageAction with:", {
                 roomId,
                 eventId: editingMessage.id,
-                content: newMessage.trim()
+                content: trimmedContent
             });
 
-            const result = await editMessageAction(roomId!, editingMessage.id, newMessage.trim());
+            const result = await editMessageAction(roomId!, editingMessage.id, trimmedContent);
             
             console.log("✏️ [Edit] Server response:", result);
             
             if (result.success) {
+                const roomKey = editingMessage.roomId || roomId;
+                const editedAt = new Date();
+                if (roomKey) {
+                    setRoomMessages((prev) => {
+                        const current = prev[roomKey] || [];
+                        const next = current.map((msg) => {
+                            if (msg.id !== editingMessage.id) return msg;
+                            const updated = {
+                                ...msg,
+                                content: {
+                                    ...(msg.content as Record<string, unknown>),
+                                    body: trimmedContent,
+                                } as ChatMessage["content"],
+                            } as ChatMessage;
+                            (updated as any).editedAt = editedAt;
+                            return updated;
+                        });
+                        return {
+                            ...prev,
+                            [roomKey]: next,
+                        };
+                    });
+                }
                 console.log("✏️ [Edit] Success! Clearing state...");
                 setNewMessage("");
                 setEditingMessage(null);
