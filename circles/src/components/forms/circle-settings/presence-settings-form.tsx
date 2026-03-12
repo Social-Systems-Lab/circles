@@ -178,6 +178,7 @@ export function PresenceSettingsForm({ circle }: PresenceSettingsFormProps): Rea
     const [, setUser] = useAtom(userAtom);
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const isUser = circle.circleType === "user";
     const useStructuredNeedsSelector = circle.circleType !== "user";
 
     const form = useForm({
@@ -222,9 +223,7 @@ export function PresenceSettingsForm({ circle }: PresenceSettingsFormProps): Rea
             <form onSubmit={form.handleSubmit(onSubmit)} className="formatted space-y-6">
                 <Card>
                     <CardHeader>
-                        <CardTitle>
-                            {circle.circleType === "user" ? "My offers & skills" : "Our offers & skills"}
-                        </CardTitle>
+                        <CardTitle>{isUser ? "My offers & skills" : "Opportunities"}</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <Controller
@@ -235,7 +234,7 @@ export function PresenceSettingsForm({ circle }: PresenceSettingsFormProps): Rea
                                     field={{
                                         name: "offers.text",
                                         type: "textarea",
-                                        label: "What I can offer right now",
+                                        label: isUser ? "What I can offer right now" : "Why get involved",
                                         maxLength: 600,
                                     }}
                                     formField={field}
@@ -243,67 +242,69 @@ export function PresenceSettingsForm({ circle }: PresenceSettingsFormProps): Rea
                                 />
                             )}
                         />
-                        <Controller
-                            name="offers.skills"
-                            control={form.control as unknown as Control}
-                            render={({ field }) => (
-                                <div className="space-y-2">
-                                    <p className="text-sm font-medium">Skills</p>
-                                    <StructuredSkillSelector
-                                        value={field.value as string[] | undefined}
-                                        onChange={field.onChange}
+                        {isUser && (
+                            <Controller
+                                name="offers.skills"
+                                control={form.control as unknown as Control}
+                                render={({ field }) => (
+                                    <div className="space-y-2">
+                                        <p className="text-sm font-medium">Skills</p>
+                                        <StructuredSkillSelector
+                                            value={field.value as string[] | undefined}
+                                            onChange={field.onChange}
+                                        />
+                                    </div>
+                                )}
+                            />
+                        )}
+                    </CardContent>
+                </Card>
+
+                {isUser && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>What I want to engage in</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <Controller
+                                name="engagements.text"
+                                control={form.control as unknown as Control}
+                                render={({ field }) => (
+                                    <DynamicTextareaField
+                                        field={{
+                                            name: "engagements.text",
+                                            type: "textarea",
+                                            label: "Types of projects or roles I'm seeking",
+                                            maxLength: 600,
+                                        }}
+                                        formField={field}
+                                        control={form.control as unknown as Control}
                                     />
-                                </div>
-                            )}
-                        />
-                    </CardContent>
-                </Card>
+                                )}
+                            />
+                            <Controller
+                                name="engagements.interests"
+                                control={form.control as unknown as Control}
+                                render={({ field }) => (
+                                    <DynamicTagsField
+                                        field={{
+                                            name: "engagements.interests",
+                                            type: "tags",
+                                            label: "Interests",
+                                        }}
+                                        formField={field}
+                                        control={form.control as unknown as Control}
+                                    />
+                                )}
+                            />
+                        </CardContent>
+                    </Card>
+                )}
 
                 <Card>
                     <CardHeader>
                         <CardTitle>
-                            {circle.circleType === "user" ? "What I want to engage in" : "What we want to engage in"}
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <Controller
-                            name="engagements.text"
-                            control={form.control as unknown as Control}
-                            render={({ field }) => (
-                                <DynamicTextareaField
-                                    field={{
-                                        name: "engagements.text",
-                                        type: "textarea",
-                                        label: "Types of projects or roles I'm seeking",
-                                        maxLength: 600,
-                                    }}
-                                    formField={field}
-                                    control={form.control as unknown as Control}
-                                />
-                            )}
-                        />
-                        <Controller
-                            name="engagements.interests"
-                            control={form.control as unknown as Control}
-                            render={({ field }) => (
-                                <DynamicTagsField
-                                    field={{
-                                        name: "engagements.interests",
-                                        type: "tags",
-                                        label: "Interests",
-                                    }}
-                                    formField={field}
-                                    control={form.control as unknown as Control}
-                                />
-                            )}
-                        />
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle>
-                            {circle.circleType === "user" ? "What I need help with" : "What we need help with"}
+                            {isUser ? "What I need help with" : "What we need help with"}
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
