@@ -6,6 +6,7 @@ import HomeContent from "@/components/modules/home/home-content";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { CircleTabs } from "@/components/layout/circle-tabs";
+import { getMembers } from "@/lib/data/member";
 
 type Props = { params: Promise<{ handle: string }>; children: React.ReactNode };
 
@@ -28,12 +29,21 @@ export default async function RootLayout(props: Props) {
     let userDid = await getAuthenticatedUserDid();
     authorizedToEdit = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_about);
     const parentCircle = circle.parentCircleId ? await getCircleById(circle.parentCircleId) : undefined;
+    const adminLeaders =
+        circle.circleType !== "user" && circle._id
+            ? (await getMembers(circle._id)).filter((member) => member.userGroups?.includes("admins")).slice(0, 6)
+            : [];
 
     return (
         <>
             <>
                 <HomeCover circle={circle} />
-                <HomeContent circle={circle} authorizedToEdit={authorizedToEdit} parentCircle={parentCircle} />
+                <HomeContent
+                    circle={circle}
+                    authorizedToEdit={authorizedToEdit}
+                    parentCircle={parentCircle}
+                    adminLeaders={adminLeaders}
+                />
             </>
             <CircleTabs circle={circle} />
 

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo } from "react";
 import Image from "next/image";
-import { Circle } from "@/models/models";
+import { Circle, ContentPreviewData, MemberDisplay } from "@/models/models";
 import { FaUsers } from "react-icons/fa";
 import EditableImage from "./editable-image";
 import EditableField from "./editable-field";
@@ -14,7 +14,7 @@ import GalleryTrigger from "./gallery-trigger";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { MessageButton } from "./message-button";
-import { userAtom } from "@/lib/data/atoms";
+import { contentPreviewAtom, sidePanelContentVisibleAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { NotificationSettingsDialog } from "@/components/notifications/NotificationSettingsDialog"; // Changed Popover to Dialog
 import {
@@ -28,20 +28,59 @@ import { MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import { VerifyAccountButton } from "../auth/verify-account-button";
 import SocialLinks from "./social-links";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { UserPicture } from "../members/user-picture";
+import { useIsMobile } from "@/components/utils/use-is-mobile";
+import { useRouter } from "next/navigation";
 
-type HomeContentProps = { circle: Circle; authorizedToEdit: boolean; parentCircle?: Circle };
+type HomeContentProps = {
+    circle: Circle;
+    authorizedToEdit: boolean;
+    parentCircle?: Circle;
+    adminLeaders?: MemberDisplay[];
+};
 
-export default function HomeContent({ circle, authorizedToEdit, parentCircle }: HomeContentProps) {
+export default function HomeContent({ circle, authorizedToEdit, parentCircle, adminLeaders = [] }: HomeContentProps) {
     const isUser = circle?.circleType === "user";
     const memberCount = circle?.members ? (isUser ? circle.members - 1 : circle.members) : 0;
     const isCompact = useIsCompact();
+    const isMobile = useIsMobile();
+    const router = useRouter();
     const [user] = useAtom(userAtom);
+    const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+    const [, setContentPreview] = useAtom(contentPreviewAtom);
 
     const isMember = useMemo(() => {
         if (!user) return false;
         const membership = user.memberships?.find((m) => m.circleId === circle._id);
         return membership ? true : false;
     }, [circle._id, user]);
+
+    const getLeaderRole = (leader: MemberDisplay) => {
+        if (leader.userGroups?.includes("admins")) return "Admin";
+        if (leader.userGroups?.includes("moderators")) return "Moderator";
+        return "Member";
+    };
+
+    const openLeaderPreview = (leader: MemberDisplay) => {
+        if (isMobile) {
+            if (leader.handle) {
+                router.push(`/circles/${leader.handle}`);
+            }
+            return;
+        }
+
+        const contentPreviewData: ContentPreviewData = {
+            type: "member",
+            content: leader,
+        };
+
+        setContentPreview((current) => {
+            const isSameLeader =
+                current?.type === "member" && (current.content as MemberDisplay | undefined)?.userDid === leader.userDid;
+            return isSameLeader && sidePanelContentVisible === "content" ? undefined : contentPreviewData;
+        });
+    };
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -185,6 +224,50 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle }: 
                                 ) : (
                                     (circle.description ?? circle.mission)
                                 )}
+                            </div>
+                        )}
+                        {!isUser && adminLeaders.length > 0 && (
+                            <div
+                                className={`flex flex-row items-center gap-2 pb-1 ${
+                                    isCompact ? "justify-center" : "justify-start"
+                                }`}
+                            >
+                                <span className="text-xs font-medium uppercase tracking-wide text-gray-500">Led by</span>
+                                <TooltipProvider>
+                                    <div className="flex flex-row items-center">
+                                        {adminLeaders.map((leader, index) => {
+                                            const role = getLeaderRole(leader);
+                                            return (
+                                                <Tooltip key={leader.userDid}>
+                                                    <TooltipTrigger asChild>
+                                                        <button
+                                                            type="button"
+                                                            className={`rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                                                                index > 0 ? "-ml-2" : ""
+                                                            }`}
+                                                            onClick={() => openLeaderPreview(leader)}
+                                                            aria-label={`Open ${leader.name}'s profile`}
+                                                        >
+                                                            <div className="rounded-full border-2 border-white bg-white">
+                                                                <UserPicture
+                                                                    name={leader.name}
+                                                                    picture={leader.picture?.url}
+                                                                    size="30px"
+                                                                />
+                                                            </div>
+                                                        </button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="bottom" className="text-xs">
+                                                        <div className="flex flex-col">
+                                                            <span className="font-semibold">{leader.name}</span>
+                                                            <span className="text-muted-foreground">{role}</span>
+                                                        </div>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            );
+                                        })}
+                                    </div>
+                                </TooltipProvider>
                             </div>
                         )}
                         {memberCount > 0 && (
