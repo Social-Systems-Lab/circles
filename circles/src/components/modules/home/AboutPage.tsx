@@ -35,14 +35,19 @@ export default function AboutPage({ circle }: AboutPageProps) {
     const isOwner = user?.did === circle.did;
     const isUserProfile = circle.circleType === "user";
     const userOfferSkills = circle.offers?.skills || [];
+    const circleNeeds = !isUserProfile ? circle.needs?.tags || [] : [];
     const hasMoreSkills = userOfferSkills.length > 4;
+    const hasMoreNeeds = circleNeeds.length > 4;
     const visibleSkills = isSkillsExpanded ? userOfferSkills : userOfferSkills.slice(0, 4);
+    const visibleNeeds = circleNeeds.slice(0, 4);
     const remainingSkillsCount = Math.max(userOfferSkills.length - 4, 0);
+    const remainingNeedsCount = Math.max(circleNeeds.length - 4, 0);
 
     // Check if sidebar has any content
     const hasSidebarContent =
         !!circle.mission ||
         !!(circle.location && (circle.location.city || circle.location.region || circle.location.country)) ||
+        !!(!isUserProfile && circleNeeds.length > 0) ||
         !!(!isUserProfile && circle.causes && circle.causes.length > 0) ||
         !!circle.websiteUrl ||
         !!(isUserProfile && userOfferSkills.length > 0);
@@ -81,7 +86,7 @@ export default function AboutPage({ circle }: AboutPageProps) {
                         </div>
                         <OffersCard circle={circle} isOwner={isOwner} />
                         <EngagementCard circle={circle} isOwner={isOwner} />
-                        <NeedsCard circle={circle} isOwner={isOwner} />
+                        {isUserProfile && <NeedsCard circle={circle} isOwner={isOwner} />}
                     </div>
                 </div>
                 {/* --- Sidebar Column (Conditionally Rendered) --- */}
@@ -129,6 +134,30 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                         </div>
                                     </div>
                                 )}
+
+                            {/* Needs */}
+                            {!isUserProfile && visibleNeeds.length > 0 && (
+                                <div className="mb-6 w-full">
+                                    <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                                        Needs
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {visibleNeeds.map((handle, index) => {
+                                            const skillName = skillMap.get(handle)?.name || handle;
+                                            return (
+                                                <Badge key={`${handle}-${index}`} variant="outline" className="text-sm font-medium">
+                                                    {skillName}
+                                                </Badge>
+                                            );
+                                        })}
+                                        {hasMoreNeeds && (
+                                            <Badge variant="outline" className="text-sm font-medium">
+                                                +{remainingNeedsCount} more
+                                            </Badge>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* SDGs */}
                             {!isUserProfile && circle.causes && circle.causes.length > 0 && (
