@@ -9,6 +9,7 @@ export type ChatConversationMetadata = {
     senderHandle?: string;
     senderName?: string;
     senderAvatarUrl?: string;
+    contactType?: "offer_help" | "ask_question";
 };
 
 export type ChatAttachment = {
