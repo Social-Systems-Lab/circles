@@ -49,6 +49,7 @@ export default function AboutPage({ circle }: AboutPageProps) {
     const [isSkillsExpanded, setIsSkillsExpanded] = React.useState(false);
     const [isNeedsExpanded, setIsNeedsExpanded] = React.useState(false);
     const [isContactDialogOpen, setIsContactDialogOpen] = React.useState(false);
+    const [contactType, setContactType] = React.useState<"offer_help" | "ask_question">("offer_help");
     const [contactMessage, setContactMessage] = React.useState("");
     const [contactError, setContactError] = React.useState("");
     const [isSendingContactMessage, setIsSendingContactMessage] = React.useState(false);
@@ -120,8 +121,10 @@ export default function AboutPage({ circle }: AboutPageProps) {
     const hasMainContent = !!circle.content || !!circle.description;
     const canContactCircle = hasMatchingOfferNeeds && !isOwner;
 
-    const openContactDialog = () => {
+    const openContactDialog = (nextContactType: "offer_help" | "ask_question" = "offer_help") => {
+        setContactType(nextContactType);
         setContactError("");
+        setContactMessage("");
         setIsContactDialogOpen(true);
     };
 
@@ -142,7 +145,12 @@ export default function AboutPage({ circle }: AboutPageProps) {
         setIsSendingContactMessage(true);
         setContactError("");
         try {
-            const result = await contactCircleAdminsAction(String(circle._id || ""), trimmed, matchingOfferNeedHandles);
+            const result = await contactCircleAdminsAction(
+                String(circle._id || ""),
+                trimmed,
+                matchingOfferNeedHandles,
+                contactType,
+            );
             if (!result.success || !result.roomId) {
                 setContactError(result.message || "Could not start the conversation.");
                 return;
@@ -293,10 +301,22 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                         })}
                                     </div>
                                     {canContactCircle && (
-                                        <div className="mt-3 flex justify-center">
-                                            <Button type="button" size="sm" className="rounded-full" onClick={openContactDialog}>
+                                        <div className="mt-3 flex flex-col items-center">
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                className="rounded-full"
+                                                onClick={() => openContactDialog("offer_help")}
+                                            >
                                                 Offer Help
                                             </Button>
+                                            <button
+                                                type="button"
+                                                className="mt-2 text-xs text-emerald-800/90 underline-offset-2 hover:underline"
+                                                onClick={() => openContactDialog("ask_question")}
+                                            >
+                                                Not sure yet? Ask a question first.
+                                            </button>
                                         </div>
                                     )}
                                 </div>
@@ -404,9 +424,15 @@ export default function AboutPage({ circle }: AboutPageProps) {
             <Dialog open={isContactDialogOpen} onOpenChange={closeContactDialog}>
                 <DialogContent className="sm:max-w-[520px]">
                     <DialogHeader>
-                        <DialogTitle>Offer Help to {circle.name}</DialogTitle>
+                        <DialogTitle>
+                            {contactType === "ask_question"
+                                ? "Ask the admins a question"
+                                : `Offer Help to ${circle.name}`}
+                        </DialogTitle>
                         <DialogDescription>
-                            Your message will create a shared thread with this circle&apos;s admins.
+                            {contactType === "ask_question"
+                                ? "Your question will create a shared thread with this circle&apos;s admins."
+                                : "Your message will create a shared thread with this circle&apos;s admins."}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-2">
@@ -419,7 +445,11 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                 }
                             }}
                             rows={5}
-                            placeholder="Write a short message about how you can help..."
+                            placeholder={
+                                contactType === "ask_question"
+                                    ? "What would you like to know about helping with this circle?"
+                                    : "Write a short message about how you can help..."
+                            }
                         />
                         {contactError && <p className="text-sm text-destructive">{contactError}</p>}
                     </div>
@@ -437,7 +467,11 @@ export default function AboutPage({ circle }: AboutPageProps) {
                             onClick={sendContactMessage}
                             disabled={isSendingContactMessage || !contactMessage.trim()}
                         >
-                            {isSendingContactMessage ? "Sending..." : "Send Message"}
+                            {isSendingContactMessage
+                                ? "Sending..."
+                                : contactType === "ask_question"
+                                  ? "Send Question"
+                                  : "Send Message"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

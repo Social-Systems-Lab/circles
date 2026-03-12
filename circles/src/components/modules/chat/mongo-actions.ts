@@ -47,6 +47,7 @@ const normalizeMediaUrl = (url?: string): string | undefined => {
 const CIRCLE_CONTACT_SOURCE = "circle_contact";
 const CIRCLE_CONTACT_VERSION = "v1";
 const skillNameByHandle = new Map(skillsV2.map((skill) => [skill.handle, skill.name]));
+type CircleContactType = "offer_help" | "ask_question";
 
 const sanitizeHandleSegment = (value: string): string =>
     value
@@ -694,6 +695,7 @@ export const contactCircleAdminsAction = async (
     circleId: string,
     message: string,
     offeredSkillHandles: string[] = [],
+    contactType: CircleContactType = "offer_help",
 ): Promise<{ success: boolean; roomId?: string; message?: string; created?: boolean }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -734,7 +736,10 @@ export const contactCircleAdminsAction = async (
 
     const adminDidSet = new Set(adminDids);
     const baseParticipants = Array.from(new Set([userDid, ...adminDids]));
-    const threadName = `Offer Help: ${circle.name || "Circle"}`;
+    const threadName =
+        contactType === "ask_question"
+            ? `Question about helping: ${circle.name || "Circle"}`
+            : `Offer Help: ${circle.name || "Circle"}`;
     const threadHandle = buildCircleContactHandle(circleId, userDid);
     const requester = await getCircleByDid(userDid);
     const requesterName = requester?.name?.trim() || "A member";
@@ -746,9 +751,15 @@ export const contactCircleAdminsAction = async (
         ),
     );
     const offeredSkillsContext =
-        offeredSkillNames.length > 0
-            ? `${requesterName} offered to help with:\n${offeredSkillNames.map((skill) => `• ${skill}`).join("\n")}`
-            : "";
+        contactType === "ask_question"
+            ? offeredSkillNames.length > 0
+                ? `${requesterName} asked a question about helping with:\n${offeredSkillNames
+                      .map((skill) => `• ${skill}`)
+                      .join("\n")}`
+                : `${requesterName} asked a question about helping with this circle.`
+            : offeredSkillNames.length > 0
+              ? `${requesterName} offered to help with:\n${offeredSkillNames.map((skill) => `• ${skill}`).join("\n")}`
+              : "";
 
     try {
         const existingConversation = await ChatConversations.findOne({
@@ -778,6 +789,7 @@ export const contactCircleAdminsAction = async (
                                 ...(existingConversation.metadata || {}),
                                 source: CIRCLE_CONTACT_SOURCE,
                                 version: CIRCLE_CONTACT_VERSION,
+                                contactType,
                             },
                             updatedAt: new Date(),
                         },
@@ -796,6 +808,7 @@ export const contactCircleAdminsAction = async (
                 metadata: {
                     source: CIRCLE_CONTACT_SOURCE,
                     version: CIRCLE_CONTACT_VERSION,
+                    contactType,
                 },
             });
 
