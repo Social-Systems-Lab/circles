@@ -178,6 +178,7 @@ export function PresenceSettingsForm({ circle }: PresenceSettingsFormProps): Rea
     const [, setUser] = useAtom(userAtom);
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const useStructuredNeedsSelector = circle.circleType !== "user";
 
     const form = useForm({
         defaultValues: {
@@ -326,15 +327,25 @@ export function PresenceSettingsForm({ circle }: PresenceSettingsFormProps): Rea
                             name="needs.tags"
                             control={form.control as unknown as Control}
                             render={({ field }) => (
-                                <DynamicTagsField
-                                    field={{
-                                        name: "needs.tags",
-                                        type: "tags",
-                                        label: "Needs",
-                                    }}
-                                    formField={field}
-                                    control={form.control as unknown as Control}
-                                />
+                                useStructuredNeedsSelector ? (
+                                    <div className="space-y-2">
+                                        <p className="text-sm font-medium">Needs</p>
+                                        <StructuredSkillSelector
+                                            value={field.value as string[] | undefined}
+                                            onChange={field.onChange}
+                                        />
+                                    </div>
+                                ) : (
+                                    <DynamicTagsField
+                                        field={{
+                                            name: "needs.tags",
+                                            type: "tags",
+                                            label: "Needs",
+                                        }}
+                                        formField={field}
+                                        control={form.control as unknown as Control}
+                                    />
+                                )
                             )}
                         />
                     </CardContent>

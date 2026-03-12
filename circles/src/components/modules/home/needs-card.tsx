@@ -10,11 +10,14 @@ import { findOrCreateDMRoom } from "./actions";
 import { DmChatModal } from "../chat/dm-chat-modal";
 import { trackEvent } from "@/app/api/analytics/actions";
 import { Badge } from "@/components/ui/badge";
+import { skillsV2 } from "@/lib/data/skills-v2";
 
 interface NeedsCardProps {
     circle: Circle;
     isOwner: boolean;
 }
+
+const skillNameByHandle = new Map(skillsV2.map((skill) => [skill.handle, skill.name]));
 
 export default function NeedsCard({ circle, isOwner }: NeedsCardProps) {
     const router = useRouter();
@@ -52,8 +55,8 @@ export default function NeedsCard({ circle, isOwner }: NeedsCardProps) {
                     {circle.needs?.tags && circle.needs.tags.length > 0 && (
                         <div className="mt-4 flex flex-wrap gap-2">
                             {circle.needs.tags.map((tag, idx) => (
-                                <Badge key={idx} onClick={() => handleNeedsClick(tag)} className="cursor-pointer">
-                                    {tag}
+                                <Badge key={`${tag}-${idx}`} onClick={() => handleNeedsClick(tag)} className="cursor-pointer">
+                                    {skillNameByHandle.get(tag) || tag}
                                 </Badge>
                             ))}
                         </div>
