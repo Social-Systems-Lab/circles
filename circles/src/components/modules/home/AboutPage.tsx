@@ -43,6 +43,44 @@ export default function AboutPage({ circle }: AboutPageProps) {
     const remainingSkillsCount = Math.max(userOfferSkills.length - 4, 0);
     const remainingNeedsCount = Math.max(circleNeeds.length - 4, 0);
 
+    const renderSkillPopoverBadge = (handle: string, key: string) => {
+        const skill = skillMap.get(handle);
+        const skillName = skill?.name || handle;
+        const categoryLabel = skill?.category ? skillCategoryLabels[skill.category] : null;
+
+        return (
+            <Popover key={key}>
+                <PopoverTrigger asChild>
+                    <button
+                        type="button"
+                        className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        aria-label={`View details for ${skillName}`}
+                    >
+                        <Badge
+                            variant="outline"
+                            className="cursor-pointer text-sm font-medium transition-colors hover:bg-muted/60"
+                        >
+                            {skillName}
+                        </Badge>
+                    </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-64 p-3">
+                    <div className="space-y-1.5">
+                        <p className="text-sm font-semibold">{skillName}</p>
+                        {categoryLabel && (
+                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                                {categoryLabel}
+                            </p>
+                        )}
+                        <p className="text-xs leading-relaxed text-muted-foreground">
+                            {skill?.description || "Description not available for this skill yet."}
+                        </p>
+                    </div>
+                </PopoverContent>
+            </Popover>
+        );
+    };
+
     // Check if sidebar has any content
     const hasSidebarContent =
         !!circle.mission ||
@@ -143,12 +181,7 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                     </div>
                                     <div className="flex flex-wrap gap-2">
                                         {visibleNeeds.map((handle, index) => {
-                                            const skillName = skillMap.get(handle)?.name || handle;
-                                            return (
-                                                <Badge key={`${handle}-${index}`} variant="outline" className="text-sm font-medium">
-                                                    {skillName}
-                                                </Badge>
-                                            );
+                                            return renderSkillPopoverBadge(handle, `${handle}-${index}`);
                                         })}
                                         {hasMoreNeeds && (
                                             <Badge variant="outline" className="text-sm font-medium">
@@ -175,43 +208,7 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                     </div>
                                     <div className="flex flex-wrap gap-2">
                                         {visibleSkills.map((handle) => {
-                                            const skill = skillMap.get(handle);
-                                            const skillName = skill?.name || handle;
-                                            const categoryLabel = skill?.category
-                                                ? skillCategoryLabels[skill.category]
-                                                : null;
-                                            return (
-                                                <Popover key={handle}>
-                                                    <PopoverTrigger asChild>
-                                                        <button
-                                                            type="button"
-                                                            className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                                            aria-label={`View details for ${skillName}`}
-                                                        >
-                                                            <Badge
-                                                                variant="outline"
-                                                                className="cursor-pointer text-sm font-medium transition-colors hover:bg-muted/60"
-                                                            >
-                                                                {skillName}
-                                                            </Badge>
-                                                        </button>
-                                                    </PopoverTrigger>
-                                                    <PopoverContent align="start" className="w-64 p-3">
-                                                        <div className="space-y-1.5">
-                                                            <p className="text-sm font-semibold">{skillName}</p>
-                                                            {categoryLabel && (
-                                                                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                                                                    {categoryLabel}
-                                                                </p>
-                                                            )}
-                                                            <p className="text-xs leading-relaxed text-muted-foreground">
-                                                                {skill?.description ||
-                                                                    "Description not available for this skill yet."}
-                                                            </p>
-                                                        </div>
-                                                    </PopoverContent>
-                                                </Popover>
-                                            );
+                                            return renderSkillPopoverBadge(handle, handle);
                                         })}
                                         {hasMoreSkills && (
                                             <Badge
