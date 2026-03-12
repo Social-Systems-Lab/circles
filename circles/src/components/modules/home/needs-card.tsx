@@ -23,6 +23,7 @@ export default function NeedsCard({ circle, isOwner }: NeedsCardProps) {
     const router = useRouter();
     const [showDM, setShowDM] = useState(false);
     const [initialMessage, setInitialMessage] = useState("");
+    const isUserProfile = circle.circleType === "user";
 
     const onEdit = () => {
         router.push(`/circles/${circle.handle}/settings/presence`);
@@ -41,18 +42,18 @@ export default function NeedsCard({ circle, isOwner }: NeedsCardProps) {
         }
     };
 
-    if (!isOwner && (!circle.needs || !circle.needs.text)) {
+    if (!isOwner && !circle.needs?.text) {
         return null;
     }
 
-    const title = circle.circleType === "user" ? "What I need help with" : "What we need help with";
+    const title = isUserProfile ? "What I need help with" : "What we need help with";
 
     return (
         <PresenceCard title={title} isOwner={isOwner} onEdit={onEdit}>
-            {circle.needs?.text || (circle.needs?.tags && circle.needs.tags.length > 0) ? (
+            {circle.needs?.text || (isUserProfile && circle.needs?.tags && circle.needs.tags.length > 0) ? (
                 <div>
                     {circle.needs?.text && <RichText content={circle.needs.text} />}
-                    {circle.needs?.tags && circle.needs.tags.length > 0 && (
+                    {isUserProfile && circle.needs?.tags && circle.needs.tags.length > 0 && (
                         <div className="mt-4 flex flex-wrap gap-2">
                             {circle.needs.tags.map((tag, idx) => (
                                 <Badge key={`${tag}-${idx}`} onClick={() => handleNeedsClick(tag)} className="cursor-pointer">
@@ -61,7 +62,7 @@ export default function NeedsCard({ circle, isOwner }: NeedsCardProps) {
                             ))}
                         </div>
                     )}
-                    {!isOwner && circle.needs?.offerHelpEnabled && (
+                    {isUserProfile && !isOwner && circle.needs?.offerHelpEnabled && (
                         <div className="mt-4">
                             <Button onClick={onOfferHelp}>Offer to help</Button>
                         </div>

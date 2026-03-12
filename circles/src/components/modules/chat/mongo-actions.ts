@@ -22,6 +22,7 @@ import { saveFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { WELCOME_MESSAGE, isSystemMessageSource } from "@/config/welcome-message";
 import { normalizeSystemMessageMetadata } from "@/lib/chat/system-messages";
+import { skillsV2 } from "@/lib/data/skills-v2";
 
 const normalizeMediaUrl = (url?: string): string | undefined => {
     if (!url) return url;
@@ -45,6 +46,7 @@ const normalizeMediaUrl = (url?: string): string | undefined => {
 
 const CIRCLE_CONTACT_SOURCE = "circle_contact";
 const CIRCLE_CONTACT_VERSION = "v1";
+const skillNameByHandle = new Map(skillsV2.map((skill) => [skill.handle, skill.name]));
 
 const sanitizeHandleSegment = (value: string): string =>
     value
@@ -691,6 +693,7 @@ export const createMongoGroupChatAction = async (
 export const contactCircleAdminsAction = async (
     circleId: string,
     message: string,
+    offeredSkillHandles: string[] = [],
 ): Promise<{ success: boolean; roomId?: string; message?: string; created?: boolean }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -733,6 +736,19 @@ export const contactCircleAdminsAction = async (
     const baseParticipants = Array.from(new Set([userDid, ...adminDids]));
     const threadName = `Offer Help: ${circle.name || "Circle"}`;
     const threadHandle = buildCircleContactHandle(circleId, userDid);
+    const requester = await getCircleByDid(userDid);
+    const requesterName = requester?.name?.trim() || "A member";
+    const offeredSkillNames = Array.from(
+        new Set(
+            (offeredSkillHandles || [])
+                .filter((handle): handle is string => typeof handle === "string" && !!handle.trim())
+                .map((handle) => skillNameByHandle.get(handle) || handle),
+        ),
+    );
+    const offeredSkillsContext =
+        offeredSkillNames.length > 0
+            ? `${requesterName} offered to help with:\n${offeredSkillNames.map((skill) => `• ${skill}`).join("\n")}`
+            : "";
 
     try {
         const existingConversation = await ChatConversations.findOne({
@@ -808,6 +824,15 @@ export const contactCircleAdminsAction = async (
                 },
                 { upsert: true },
             );
+        }
+
+        if (offeredSkillsContext) {
+            await createMessage({
+                conversationId,
+                senderDid: userDid,
+                body: offeredSkillsContext,
+                createdAt: new Date(),
+            });
         }
 
         await createMessage({

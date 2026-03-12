@@ -24,7 +24,7 @@ export default function OffersCard({ circle, isOwner }: OffersCardProps) {
 
     return (
         <PresenceCard
-            title={circle.circleType === "user" ? "My offers & skills" : "Our offers & skills"}
+            title={circle.circleType === "user" ? "My offers & skills" : "Why get involved"}
             isOwner={isOwner}
             onEdit={onEdit}
         >

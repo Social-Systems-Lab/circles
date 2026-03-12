@@ -142,7 +142,7 @@ export default function AboutPage({ circle }: AboutPageProps) {
         setIsSendingContactMessage(true);
         setContactError("");
         try {
-            const result = await contactCircleAdminsAction(String(circle._id || ""), trimmed);
+            const result = await contactCircleAdminsAction(String(circle._id || ""), trimmed, matchingOfferNeedHandles);
             if (!result.success || !result.roomId) {
                 setContactError(result.message || "Could not start the conversation.");
                 return;
@@ -195,8 +195,8 @@ export default function AboutPage({ circle }: AboutPageProps) {
                             )}
                         </div>
                         <OffersCard circle={circle} isOwner={isOwner} />
-                        <EngagementCard circle={circle} isOwner={isOwner} />
-                        {isUserProfile && <NeedsCard circle={circle} isOwner={isOwner} />}
+                        {isUserProfile && <EngagementCard circle={circle} isOwner={isOwner} />}
+                        <NeedsCard circle={circle} isOwner={isOwner} />
                     </div>
                 </div>
                 {/* --- Sidebar Column (Conditionally Rendered) --- */}
@@ -293,14 +293,11 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                         })}
                                     </div>
                                     {canContactCircle && (
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            className="mt-3 rounded-full"
-                                            onClick={openContactDialog}
-                                        >
-                                            Offer Help
-                                        </Button>
+                                        <div className="mt-3 flex justify-center">
+                                            <Button type="button" size="sm" className="rounded-full" onClick={openContactDialog}>
+                                                Offer Help
+                                            </Button>
+                                        </div>
                                     )}
                                 </div>
                             )}
