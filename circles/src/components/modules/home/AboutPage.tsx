@@ -32,6 +32,7 @@ export default function AboutPage({ circle }: AboutPageProps) {
     const isCompact = useIsCompact();
     const [user] = useAtom(userAtom);
     const [isSkillsExpanded, setIsSkillsExpanded] = React.useState(false);
+    const [isNeedsExpanded, setIsNeedsExpanded] = React.useState(false);
     const isOwner = user?.did === circle.did;
     const isUserProfile = circle.circleType === "user";
     const userOfferSkills = circle.offers?.skills || [];
@@ -39,7 +40,7 @@ export default function AboutPage({ circle }: AboutPageProps) {
     const hasMoreSkills = userOfferSkills.length > 4;
     const hasMoreNeeds = circleNeeds.length > 4;
     const visibleSkills = isSkillsExpanded ? userOfferSkills : userOfferSkills.slice(0, 4);
-    const visibleNeeds = circleNeeds.slice(0, 4);
+    const visibleNeeds = isNeedsExpanded ? circleNeeds : circleNeeds.slice(0, 4);
     const remainingSkillsCount = Math.max(userOfferSkills.length - 4, 0);
     const remainingNeedsCount = Math.max(circleNeeds.length - 4, 0);
 
@@ -184,8 +185,26 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                             return renderSkillPopoverBadge(handle, `${handle}-${index}`);
                                         })}
                                         {hasMoreNeeds && (
-                                            <Badge variant="outline" className="text-sm font-medium">
-                                                +{remainingNeedsCount} more
+                                            <Badge
+                                                variant="outline"
+                                                className="cursor-pointer text-sm font-medium"
+                                                role="button"
+                                                tabIndex={0}
+                                                aria-expanded={isNeedsExpanded}
+                                                aria-label={
+                                                    isNeedsExpanded
+                                                        ? "Show fewer needs"
+                                                        : `Show ${remainingNeedsCount} more needs`
+                                                }
+                                                onClick={() => setIsNeedsExpanded((prev) => !prev)}
+                                                onKeyDown={(event) => {
+                                                    if (event.key === "Enter" || event.key === " ") {
+                                                        event.preventDefault();
+                                                        setIsNeedsExpanded((prev) => !prev);
+                                                    }
+                                                }}
+                                            >
+                                                {isNeedsExpanded ? "Show less" : `+${remainingNeedsCount} more`}
                                             </Badge>
                                         )}
                                     </div>
