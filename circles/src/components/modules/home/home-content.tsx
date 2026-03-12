@@ -24,7 +24,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, Settings } from "lucide-react";
 import Link from "next/link";
 import { VerifyAccountButton } from "../auth/verify-account-button";
 import SocialLinks from "./social-links";
@@ -182,6 +182,17 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle, ad
                                     circle.name
                                 )}
                             </h4>
+                            {!isUser && authorizedToEdit && circle.handle && (
+                                <Button asChild variant="ghost" size="icon" className="h-7 w-7 text-gray-500">
+                                    <Link
+                                        href={`/circles/${circle.handle}/settings/about`}
+                                        aria-label={`Open ${circle.name ?? "circle"} settings`}
+                                        title="Settings"
+                                    >
+                                        <Settings className="h-4 w-4" />
+                                    </Link>
+                                </Button>
+                            )}
                             {/* {!isCompact && <SocialLinks circle={circle} />} */}
                         </div>
 
