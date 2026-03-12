@@ -16,6 +16,19 @@ import RichText from "../feeds/RichText";
 import SdgList from "../sdgs/SdgList";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/use-toast";
+import { contactCircleAdminsAction } from "@/components/modules/chat/mongo-actions";
 import OffersCard from "./offers-card";
 import EngagementCard from "./engagement-card";
 import NeedsCard from "./needs-card";
@@ -30,9 +43,15 @@ interface AboutPageProps {
 
 export default function AboutPage({ circle }: AboutPageProps) {
     const isCompact = useIsCompact();
+    const router = useRouter();
+    const { toast } = useToast();
     const [user] = useAtom(userAtom);
     const [isSkillsExpanded, setIsSkillsExpanded] = React.useState(false);
     const [isNeedsExpanded, setIsNeedsExpanded] = React.useState(false);
+    const [isContactDialogOpen, setIsContactDialogOpen] = React.useState(false);
+    const [contactMessage, setContactMessage] = React.useState("");
+    const [contactError, setContactError] = React.useState("");
+    const [isSendingContactMessage, setIsSendingContactMessage] = React.useState(false);
     const isOwner = user?.did === circle.did;
     const isUserProfile = circle.circleType === "user";
     const profileOfferSkills = circle.offers?.skills || [];
@@ -99,6 +118,51 @@ export default function AboutPage({ circle }: AboutPageProps) {
         !!(isUserProfile && profileOfferSkills.length > 0);
 
     const hasMainContent = !!circle.content || !!circle.description;
+    const canContactCircle = hasMatchingOfferNeeds && !isOwner;
+
+    const openContactDialog = () => {
+        setContactError("");
+        setIsContactDialogOpen(true);
+    };
+
+    const closeContactDialog = (open: boolean) => {
+        setIsContactDialogOpen(open);
+        if (!open) {
+            setContactError("");
+        }
+    };
+
+    const sendContactMessage = async () => {
+        const trimmed = contactMessage.trim();
+        if (!trimmed) {
+            setContactError("Please add a message before sending.");
+            return;
+        }
+
+        setIsSendingContactMessage(true);
+        setContactError("");
+        try {
+            const result = await contactCircleAdminsAction(String(circle._id || ""), trimmed);
+            if (!result.success || !result.roomId) {
+                setContactError(result.message || "Could not start the conversation.");
+                return;
+            }
+
+            setContactMessage("");
+            setIsContactDialogOpen(false);
+            router.push(`/chat/${result.roomId}`);
+        } catch (error) {
+            console.error("Failed to contact circle admins:", error);
+            toast({
+                title: "Could not send message",
+                description: "Please try again.",
+                variant: "destructive",
+                icon: "error",
+            });
+        } finally {
+            setIsSendingContactMessage(false);
+        }
+    };
 
     return (
         <div className="formatted mx-auto max-w-[1100px] px-0 py-0 md:px-4 md:py-6">
@@ -228,6 +292,16 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                             return renderSkillPopoverBadge(handle, `match-${handle}-${index}`);
                                         })}
                                     </div>
+                                    {canContactCircle && (
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            className="mt-3 rounded-full"
+                                            onClick={openContactDialog}
+                                        >
+                                            Offer Help
+                                        </Button>
+                                    )}
                                 </div>
                             )}
 
@@ -330,6 +404,47 @@ export default function AboutPage({ circle }: AboutPageProps) {
                 )}{" "}
                 {/* <-- Added missing closing parenthesis */}
             </div>
+            <Dialog open={isContactDialogOpen} onOpenChange={closeContactDialog}>
+                <DialogContent className="sm:max-w-[520px]">
+                    <DialogHeader>
+                        <DialogTitle>Offer Help to {circle.name}</DialogTitle>
+                        <DialogDescription>
+                            Your message will create a shared thread with this circle&apos;s admins.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-2">
+                        <Textarea
+                            value={contactMessage}
+                            onChange={(event) => {
+                                setContactMessage(event.target.value);
+                                if (contactError) {
+                                    setContactError("");
+                                }
+                            }}
+                            rows={5}
+                            placeholder="Write a short message about how you can help..."
+                        />
+                        {contactError && <p className="text-sm text-destructive">{contactError}</p>}
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => closeContactDialog(false)}
+                            disabled={isSendingContactMessage}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            onClick={sendContactMessage}
+                            disabled={isSendingContactMessage || !contactMessage.trim()}
+                        >
+                            {isSendingContactMessage ? "Sending..." : "Send Message"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

@@ -43,6 +43,20 @@ const normalizeMediaUrl = (url?: string): string | undefined => {
     return url;
 };
 
+const CIRCLE_CONTACT_SOURCE = "circle_contact";
+const CIRCLE_CONTACT_VERSION = "v1";
+
+const sanitizeHandleSegment = (value: string): string =>
+    value
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "");
+
+const buildCircleContactHandle = (circleId: string, requesterDid: string): string => {
+    const safeRequester = sanitizeHandleSegment(requesterDid) || "member";
+    return `contact-circle-${circleId}-${safeRequester}`;
+};
+
 const isActiveGroupMembership = (membership: any): boolean => {
     if (!membership) return false;
 
@@ -52,6 +66,17 @@ const isActiveGroupMembership = (membership: any): boolean => {
     if ((membership as any).active === false || (membership as any).isActive === false) return false;
 
     return true;
+};
+
+const buildChatRoomMembershipFilter = (userDid: string, conversationId: string): any => {
+    if (ObjectId.isValid(conversationId)) {
+        return {
+            userDid,
+            $or: [{ chatRoomId: conversationId }, { chatRoomId: new ObjectId(conversationId) }],
+        };
+    }
+
+    return { userDid, chatRoomId: conversationId };
 };
 
 const getSystemTemplateAuthor = (conversationMetadata?: Record<string, unknown>): Circle =>
@@ -660,6 +685,142 @@ export const createMongoGroupChatAction = async (
     } catch (error) {
         console.error("❌ Error creating mongo group chat:", error);
         return { success: false, message: error instanceof Error ? error.message : "Failed to create group chat" };
+    }
+};
+
+export const contactCircleAdminsAction = async (
+    circleId: string,
+    message: string,
+): Promise<{ success: boolean; roomId?: string; message?: string; created?: boolean }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to contact this circle" };
+    }
+
+    const trimmedMessage = message?.trim();
+    if (!circleId) {
+        return { success: false, message: "Missing circle id" };
+    }
+    if (!trimmedMessage) {
+        return { success: false, message: "Message is required" };
+    }
+
+    const circle = await getCircleById(circleId);
+    if (!circle?._id) {
+        return { success: false, message: "Circle not found" };
+    }
+    if (circle.circleType === "user") {
+        return { success: false, message: "This contact flow is available for circles and projects only" };
+    }
+
+    const adminRows = await Members.find(
+        { circleId, userGroups: "admins" },
+        { projection: { userDid: 1 } },
+    ).toArray();
+    const adminDids = Array.from(
+        new Set(
+            adminRows
+                .map((row: any) => (typeof row?.userDid === "string" ? row.userDid : undefined))
+                .filter((did): did is string => !!did),
+        ),
+    );
+
+    if (adminDids.length === 0) {
+        return { success: false, message: "No circle admins available for contact yet" };
+    }
+
+    const adminDidSet = new Set(adminDids);
+    const baseParticipants = Array.from(new Set([userDid, ...adminDids]));
+    const threadName = `Offer Help: ${circle.name || "Circle"}`;
+    const threadHandle = buildCircleContactHandle(circleId, userDid);
+
+    try {
+        const existingConversation = await ChatConversations.findOne({
+            type: "group",
+            circleId,
+            handle: threadHandle,
+            archived: { $ne: true },
+        });
+
+        let conversationId = "";
+        let created = false;
+        let participants = baseParticipants;
+
+        if (existingConversation) {
+            conversationId = existingConversation._id.toString();
+            participants = Array.from(new Set([...(existingConversation.participants || []), ...baseParticipants]));
+
+            if (ObjectId.isValid(conversationId)) {
+                await ChatConversations.updateOne(
+                    { _id: new ObjectId(conversationId) },
+                    {
+                        $set: {
+                            participants,
+                            circleId,
+                            name: threadName,
+                            metadata: {
+                                ...(existingConversation.metadata || {}),
+                                source: CIRCLE_CONTACT_SOURCE,
+                                version: CIRCLE_CONTACT_VERSION,
+                            },
+                            updatedAt: new Date(),
+                        },
+                    },
+                );
+            }
+        } else {
+            const conversation = await createConversation({
+                type: "group",
+                circleId,
+                name: threadName,
+                handle: threadHandle,
+                participants,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                metadata: {
+                    source: CIRCLE_CONTACT_SOURCE,
+                    version: CIRCLE_CONTACT_VERSION,
+                },
+            });
+
+            conversationId = String(conversation._id);
+            created = true;
+        }
+
+        const now = new Date();
+        for (const participantDid of participants) {
+            const role = adminDidSet.has(participantDid) ? "admin" : "member";
+            await ChatRoomMembers.updateOne(
+                buildChatRoomMembershipFilter(participantDid, conversationId),
+                {
+                    $setOnInsert: {
+                        userDid: participantDid,
+                        chatRoomId: conversationId,
+                        joinedAt: now,
+                    },
+                    $set: {
+                        circleId,
+                        role,
+                        status: "active",
+                        active: true,
+                        isActive: true,
+                    } as any,
+                },
+                { upsert: true },
+            );
+        }
+
+        await createMessage({
+            conversationId,
+            senderDid: userDid,
+            body: trimmedMessage,
+            createdAt: new Date(),
+        });
+
+        return { success: true, roomId: conversationId, created };
+    } catch (error) {
+        console.error("❌ Error creating circle contact thread:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to contact circle admins" };
     }
 };
 
