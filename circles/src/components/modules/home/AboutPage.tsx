@@ -35,13 +35,19 @@ export default function AboutPage({ circle }: AboutPageProps) {
     const [isNeedsExpanded, setIsNeedsExpanded] = React.useState(false);
     const isOwner = user?.did === circle.did;
     const isUserProfile = circle.circleType === "user";
-    const userOfferSkills = circle.offers?.skills || [];
+    const profileOfferSkills = circle.offers?.skills || [];
+    const currentUserOfferSkills = !isUserProfile ? user?.offers?.skills || [] : [];
+    const currentUserOfferSkillSet = new Set(currentUserOfferSkills);
     const circleNeeds = !isUserProfile ? circle.needs?.tags || [] : [];
-    const hasMoreSkills = userOfferSkills.length > 4;
+    const matchingOfferNeedHandles = !isUserProfile
+        ? Array.from(new Set(circleNeeds.filter((handle) => currentUserOfferSkillSet.has(handle))))
+        : [];
+    const hasMatchingOfferNeeds = !isUserProfile && !!user && matchingOfferNeedHandles.length > 0;
+    const hasMoreSkills = profileOfferSkills.length > 4;
     const hasMoreNeeds = circleNeeds.length > 4;
-    const visibleSkills = isSkillsExpanded ? userOfferSkills : userOfferSkills.slice(0, 4);
+    const visibleSkills = isSkillsExpanded ? profileOfferSkills : profileOfferSkills.slice(0, 4);
     const visibleNeeds = isNeedsExpanded ? circleNeeds : circleNeeds.slice(0, 4);
-    const remainingSkillsCount = Math.max(userOfferSkills.length - 4, 0);
+    const remainingSkillsCount = Math.max(profileOfferSkills.length - 4, 0);
     const remainingNeedsCount = Math.max(circleNeeds.length - 4, 0);
 
     const renderSkillPopoverBadge = (handle: string, key: string) => {
@@ -87,9 +93,10 @@ export default function AboutPage({ circle }: AboutPageProps) {
         !!circle.mission ||
         !!(circle.location && (circle.location.city || circle.location.region || circle.location.country)) ||
         !!(!isUserProfile && circleNeeds.length > 0) ||
+        !!hasMatchingOfferNeeds ||
         !!(!isUserProfile && circle.causes && circle.causes.length > 0) ||
         !!circle.websiteUrl ||
-        !!(isUserProfile && userOfferSkills.length > 0);
+        !!(isUserProfile && profileOfferSkills.length > 0);
 
     const hasMainContent = !!circle.content || !!circle.description;
 
@@ -207,6 +214,19 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                                 {isNeedsExpanded ? "Show less" : `+${remainingNeedsCount} more`}
                                             </Badge>
                                         )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {hasMatchingOfferNeeds && (
+                                <div className="mb-6 w-full rounded-xl border border-emerald-200/60 bg-emerald-50/70 p-3">
+                                    <div className="mb-2 text-xs font-medium uppercase tracking-wide text-emerald-800">
+                                        You can help here
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {matchingOfferNeedHandles.map((handle, index) => {
+                                            return renderSkillPopoverBadge(handle, `match-${handle}-${index}`);
+                                        })}
                                     </div>
                                 </div>
                             )}
