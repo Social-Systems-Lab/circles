@@ -14,6 +14,7 @@ import { createNewUser, getUserById, getUserPrivate } from "../data/user";
 import { addMember, getMembers } from "../data/member";
 import { getCircleById, getCirclesByDids, getCirclesByIds, getDefaultCircle } from "../data/circle";
 import { generateSecureToken, hashToken, sendEmail } from "../data/email"; // Added sendEmail for now, will be sendVerificationEmail
+import { isVerifiedUser } from "./verification";
 
 export const SALT_FILENAME = "salt.bin";
 export const IV_FILENAME = "iv.bin";
@@ -337,7 +338,7 @@ export const isAuthorized = async (
         const user = await Circles.findOne({ did: userDid });
         if (
             featureInput.needsToBeVerified &&
-            !user?.isVerified &&
+            !isVerifiedUser(user) &&
             user?._id.toString() !== circleId &&
             user?.did !== circle.createdBy
         ) {

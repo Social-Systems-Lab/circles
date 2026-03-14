@@ -1,5 +1,6 @@
 import { Circle, Feature, MemberDisplay, UserPrivate } from "@/models/models";
 import { features, maxAccessLevel } from "../data/constants";
+import { isVerifiedUser } from "./verification";
 
 export const getMemberAccessLevel = (user: UserPrivate | MemberDisplay | undefined, circle: Circle): number => {
     if (!user) return maxAccessLevel;
@@ -44,7 +45,7 @@ export const hasHigherAccess = (
  * @returns True if the user is authorized, false otherwise
  */
 export const isAuthorized = (user: UserPrivate | undefined, circle: Circle, feature: Feature): boolean => {
-    if (feature.needsToBeVerified && !user?.isVerified && user?._id !== circle._id) {
+    if (feature.needsToBeVerified && !isVerifiedUser(user) && user?._id !== circle._id) {
         return false;
     }
 

@@ -63,6 +63,7 @@ import {
     notifyCommentMentions,
 } from "@/lib/data/notifications";
 import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
+import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
 
 // Global posts: posts from all public feeds
 export async function getGlobalPostsAction(
@@ -375,6 +376,10 @@ export async function createPostAction(
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to create a post" };
+    }
+    const currentUser = await getUserPrivate(userDid);
+    if (!canPerformRestrictedAction(currentUser)) {
+        return { success: false, message: getRestrictedActionMessage("create posts") };
     }
 
     try {

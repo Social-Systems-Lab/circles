@@ -31,6 +31,7 @@ import {
     syncPlatformBroadcastsForUser,
     updatePlatformBroadcastMessage,
 } from "@/lib/data/platform-broadcasts";
+import { buildUnverifiedUserUpdate, buildVerifiedUserSet } from "@/lib/auth/verification";
 
 // Get all circles of a specific type
 export async function getEntitiesByType(type: "circle" | "user" | "project") {
@@ -177,7 +178,12 @@ export async function toggleUserVerification(userId: string, isVerified: boolean
     }
 
     try {
-        await Circles.updateOne({ _id: new ObjectId(userId) }, { $set: { isVerified } });
+        await Circles.updateOne(
+            { _id: new ObjectId(userId) },
+            isVerified
+                ? { $set: buildVerifiedUserSet(adminUser.did!) }
+                : buildUnverifiedUserUpdate(),
+        );
 
         if (isVerified) {
             const userToNotify = (await Circles.findOne({
@@ -882,7 +888,7 @@ export async function approveVerificationRequest(id: string) {
         throw new Error("Request not found");
     }
 
-    await Circles.updateOne({ did: request.userDid }, { $set: { isVerified: true } });
+    await Circles.updateOne({ did: request.userDid }, { $set: buildVerifiedUserSet(user.did!) });
     await verificationCollection.updateOne(
         { _id: new ObjectId(id) },
         { $set: { status: "approved", reviewedAt: new Date(), reviewedBy: user.did } },

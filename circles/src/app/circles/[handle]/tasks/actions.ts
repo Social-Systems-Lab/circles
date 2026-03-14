@@ -47,6 +47,7 @@ import {
     notifyTaskStatusChanged,
 } from "@/lib/data/notifications";
 import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
+import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
 
 type GetTasksActionResult = {
     tasks: TaskDisplay[]; // Tasks with aggregated and user ranks
@@ -305,6 +306,9 @@ export async function createTaskAction( // Renamed function
         const user = await getUserByDid(userDid);
         if (!user) {
             return { success: false, message: "User data not found" };
+        }
+        if (!canPerformRestrictedAction(user)) {
+            return { success: false, message: getRestrictedActionMessage("create tasks") };
         }
 
         // Get the circle

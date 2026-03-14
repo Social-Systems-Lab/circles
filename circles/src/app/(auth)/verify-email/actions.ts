@@ -3,6 +3,7 @@
 import { Circles } from "@/lib/data/db";
 import { hashToken } from "@/lib/data/email";
 import { revalidatePath } from "next/cache";
+import { buildVerifiedUserSet, isVerifiedUser } from "@/lib/auth/verification";
 
 interface VerifyEmailResponse {
     success: boolean;
@@ -25,8 +26,17 @@ export async function verifyEmailAction(token: string): Promise<VerifyEmailRespo
             return { success: false, message: "Invalid or expired verification token." };
         }
 
-        if (user.isEmailVerified) {
-            return { success: true, message: "Email already verified. You can log in." };
+        if (user.isEmailVerified || isVerifiedUser(user)) {
+            await Circles.updateOne(
+                { _id: user._id },
+                {
+                    $set: {
+                        emailVerificationToken: null,
+                        emailVerificationTokenExpiry: null,
+                    },
+                },
+            );
+            return { success: false, message: "This verification link has already been used. You can log in." };
         }
 
         if (user.emailVerificationTokenExpiry && new Date() > user.emailVerificationTokenExpiry) {
@@ -44,6 +54,9 @@ export async function verifyEmailAction(token: string): Promise<VerifyEmailRespo
             );
             return { success: false, message: "Verification token has expired. Please request a new one." };
         }
+        if (!user.did) {
+            return { success: false, message: "Could not verify this account. Please contact support." };
+        }
 
         // Token is valid and not expired, verify the email
         const updateResult = await Circles.updateOne(
@@ -51,6 +64,9 @@ export async function verifyEmailAction(token: string): Promise<VerifyEmailRespo
             {
                 $set: {
                     isEmailVerified: true,
+                    emailVerificationToken: null,
+                    emailVerificationTokenExpiry: null,
+                    ...buildVerifiedUserSet(user.did),
                 },
             },
         );
@@ -65,7 +81,11 @@ export async function verifyEmailAction(token: string): Promise<VerifyEmailRespo
 
         // Revalidate user-specific paths if necessary, e.g., profile page
         if (user.handle) {
-            revalidatePath(`/circles/${user.handle}`);
+            try {
+                revalidatePath(`/circles/${user.handle}`);
+            } catch (revalidationError) {
+                console.warn("Failed to revalidate user path after email verification:", revalidationError);
+            }
         }
 
         return { success: true, message: "Email verified successfully! You can now log in." };

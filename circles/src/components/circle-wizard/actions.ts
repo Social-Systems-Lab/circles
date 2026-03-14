@@ -17,6 +17,7 @@ import { isFile, saveFile, deleteFile } from "@/lib/data/storage";
 import { addMember } from "@/lib/data/member";
 import { revalidatePath } from "next/cache";
 import { CircleData } from "./circle-wizard";
+import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
 
 // This action handles both creating a new circle (when circleId is null)
 // and updating the basic info of an existing one.
@@ -47,6 +48,10 @@ export async function saveBasicInfoAction(
             return { success: true, message: "Basic info updated successfully", data: { circle: updatedCircle } };
         } else {
             // --- CREATE NEW CIRCLE ---
+            const currentUser = await getUserPrivate(userDid);
+            if (!canPerformRestrictedAction(currentUser)) {
+                return { success: false, message: getRestrictedActionMessage("create circles") };
+            }
             const createFeature = circleType === "project" ? features.projects.create : features.communities.create;
             const authorized = await isAuthorized(userDid, parentCircleId ?? "", createFeature);
             if (!authorized) {
@@ -98,6 +103,10 @@ export async function saveBasicInfoAction(
 
 export async function createCircleAction(circleData: CircleData, userDid: string) {
     try {
+        const currentUser = await getUserPrivate(userDid);
+        if (!canPerformRestrictedAction(currentUser)) {
+            return { success: false, message: getRestrictedActionMessage("create circles") };
+        }
         const createFeature =
             circleData.circleType === "project" ? features.projects.create : features.communities.create;
         const authorized = await isAuthorized(userDid, circleData.parentCircleId ?? "", createFeature);

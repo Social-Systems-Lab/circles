@@ -23,6 +23,7 @@ import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { WELCOME_MESSAGE, isSystemMessageSource } from "@/config/welcome-message";
 import { normalizeSystemMessageMetadata } from "@/lib/chat/system-messages";
 import { skillsV2 } from "@/lib/data/skills-v2";
+import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
 
 const normalizeMediaUrl = (url?: string): string | undefined => {
     if (!url) return url;
@@ -42,6 +43,23 @@ const normalizeMediaUrl = (url?: string): string | undefined => {
     }
 
     return url;
+};
+
+const ensureVerifiedMessagingUser = async (userDid: string, action: string): Promise<string | null> => {
+    const user = await Circles.findOne(
+        { did: userDid },
+        {
+            projection: {
+                isAdmin: 1,
+                isVerified: 1,
+                verificationStatus: 1,
+            },
+        },
+    );
+    if (!canPerformRestrictedAction(user)) {
+        return getRestrictedActionMessage(action);
+    }
+    return null;
 };
 
 const CIRCLE_CONTACT_SOURCE = "circle_contact";
@@ -408,6 +426,10 @@ export const sendMongoMessageAction = async (
     if (!userDid) {
         return { success: false, message: "You need to be logged in to send messages" };
     }
+    const verificationMessage = await ensureVerifiedMessagingUser(userDid, "send messages");
+    if (verificationMessage) {
+        return { success: false, message: verificationMessage };
+    }
 
     const access = await resolveMongoConversationAccess(conversationId, userDid);
     if (!access.ok) {
@@ -444,6 +466,10 @@ export const sendMongoAttachmentAction = async (
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to send attachments" };
+    }
+    const verificationMessage = await ensureVerifiedMessagingUser(userDid, "send attachments");
+    if (verificationMessage) {
+        return { success: false, message: verificationMessage };
     }
 
     const conversationId = formData.get("roomId") as string;
@@ -585,6 +611,10 @@ export const findOrCreateDMConversationAction = async (
     if (!userDid) {
         return { success: false, message: "You need to be logged in to send PM" };
     }
+    const verificationMessage = await ensureVerifiedMessagingUser(userDid, "start direct messages");
+    if (verificationMessage) {
+        return { success: false, message: verificationMessage };
+    }
 
     const recipient = inRecipient?.did ? await getCircleByDid(inRecipient.did) : undefined;
     if (!recipient) {
@@ -630,6 +660,10 @@ export const createMongoGroupChatAction = async (
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to create a group chat" };
+    }
+    const verificationMessage = await ensureVerifiedMessagingUser(userDid, "create group chats");
+    if (verificationMessage) {
+        return { success: false, message: verificationMessage };
     }
 
     const name = formData.get("name") as string;
@@ -700,6 +734,10 @@ export const contactCircleAdminsAction = async (
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to contact this circle" };
+    }
+    const verificationMessage = await ensureVerifiedMessagingUser(userDid, "contact circle admins");
+    if (verificationMessage) {
+        return { success: false, message: verificationMessage };
     }
 
     const trimmedMessage = message?.trim();

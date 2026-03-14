@@ -2,13 +2,18 @@
 
 import { z } from "zod";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
-import { db } from "@/lib/data/db";
+import { Circles, db } from "@/lib/data/db";
 import { Circle, UserPrivate, VerificationRequest } from "@/models/models";
 import { ObjectId } from "mongodb";
 import { sendEmail } from "@/lib/data/email";
 import { getUserPrivate } from "@/lib/data/user";
 import { sendVerificationRequestNotification } from "@/lib/data/notifications";
 import { getVerificationStatus as getStatus } from "@/lib/data/user";
+import {
+    buildVerifiedUserSet,
+    getRestrictedActionMessage,
+    isVerifiedUser,
+} from "@/lib/auth/verification";
 
 export async function getVerificationStatus() {
     const userDid = await getAuthenticatedUserDid();
@@ -39,6 +44,9 @@ export async function requestVerification(
         const user = await getUserPrivate(userDid);
         if (!user) {
             return { message: "User not found." };
+        }
+        if (isVerifiedUser(user)) {
+            return { success: true, message: "Your account is already verified." };
         }
 
         const verificationCollection = db.collection<VerificationRequest>("verifications");
@@ -102,5 +110,57 @@ export async function requestVerification(
     } catch (error) {
         console.error("Error in requestVerification:", error);
         return { message: "An unexpected error occurred. Please try again later." };
+    }
+}
+
+const verifyUserByInviteSchema = z.object({
+    targetIdentifier: z.string().min(1, "Target user identifier is required."),
+});
+
+export async function verifyUserByInviteAction(
+    targetIdentifier: string,
+): Promise<{ success: boolean; message: string }> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "User not authenticated." };
+        }
+
+        const verifier = await getUserPrivate(userDid);
+        if (!verifier) {
+            return { success: false, message: "Verifier not found." };
+        }
+        if (!isVerifiedUser(verifier)) {
+            return { success: false, message: getRestrictedActionMessage("verify another user") };
+        }
+
+        const parsed = verifyUserByInviteSchema.safeParse({ targetIdentifier });
+        if (!parsed.success) {
+            return { success: false, message: parsed.error.errors[0]?.message || "Invalid target user." };
+        }
+
+        const normalizedIdentifier = parsed.data.targetIdentifier.trim();
+        const targetUser =
+            (ObjectId.isValid(normalizedIdentifier)
+                ? await Circles.findOne({ _id: new ObjectId(normalizedIdentifier), circleType: "user" })
+                : null) ||
+            (await Circles.findOne({ did: normalizedIdentifier, circleType: "user" }));
+
+        if (!targetUser) {
+            return { success: false, message: "User not found." };
+        }
+        if (targetUser.did === verifier.did) {
+            return { success: false, message: "You cannot verify your own account through invite verification." };
+        }
+        if (isVerifiedUser(targetUser)) {
+            return { success: false, message: "User is already verified." };
+        }
+
+        await Circles.updateOne({ _id: targetUser._id }, { $set: buildVerifiedUserSet(verifier.did!) });
+
+        return { success: true, message: "User verified successfully." };
+    } catch (error) {
+        console.error("Error in verifyUserByInviteAction:", error);
+        return { success: false, message: "An unexpected error occurred. Please try again later." };
     }
 }

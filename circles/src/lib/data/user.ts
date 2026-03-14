@@ -18,10 +18,11 @@ import { getEnabledModules } from "../auth/client-auth";
 import { getGroupedUserNotificationSettings } from "@/lib/actions/notificationSettings";
 import { VerificationRequest } from "@/models/models";
 import { db } from "./db";
+import { isVerifiedUser } from "@/lib/auth/verification";
 
 export const getVerificationStatus = async (userDid: string): Promise<"verified" | "pending" | "unverified"> => {
     const user = await getUserByDid(userDid);
-    if (user.isVerified) {
+    if (isVerifiedUser(user)) {
         return "verified";
     }
 
