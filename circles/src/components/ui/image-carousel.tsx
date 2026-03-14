@@ -10,6 +10,8 @@ import { Media } from "@/models/models";
 import { useAtom } from "jotai";
 import { imageGalleryAtom } from "@/lib/data/atoms";
 
+const FALLBACK_IMAGE_URL = "/images/default-cover.png";
+
 type PropType = {
     images: Media[];
     options?: any; // Remove explicit EmblaOptionsType, let TS infer or use any
@@ -96,9 +98,14 @@ const ImageCarousel: React.FC<PropType> = ({
                 onClick={() => handleImageClick(0)}
             >
                 <img
-                    src={media.fileInfo.url}
+                    src={media.fileInfo.url || FALLBACK_IMAGE_URL}
                     alt={media.name || "Image"}
                     className={cn("h-full w-full object-cover", imageClassName)}
+                    onError={(e) => {
+                        const target = e.currentTarget;
+                        if (target.src.endsWith(FALLBACK_IMAGE_URL)) return;
+                        target.src = FALLBACK_IMAGE_URL;
+                    }}
                 />
             </div>
         );
@@ -121,10 +128,15 @@ const ImageCarousel: React.FC<PropType> = ({
                         key={media.fileInfo.url || index}
                     >
                         <img
-                            src={media.fileInfo.url}
+                            src={media.fileInfo.url || FALLBACK_IMAGE_URL}
                             alt={media.name || `Image ${index + 1}`}
                             className={cn("h-full w-full cursor-pointer object-cover", imageClassName)} // Fill height/width, object-cover
                             onClick={() => handleImageClick(index)} // Add click handler
+                            onError={(e) => {
+                                const target = e.currentTarget;
+                                if (target.src.endsWith(FALLBACK_IMAGE_URL)) return;
+                                target.src = FALLBACK_IMAGE_URL;
+                            }}
                         />
                     </div>
                 ))}

@@ -121,7 +121,7 @@ export function LoginForm(): React.ReactElement {
 
                 <div className="text-right text-sm">
                     <Link href="/forgot-password" className="text-muted-foreground underline hover:text-primary">
-                        Forgot Password?
+                        Reset password
                     </Link>
                 </div>
 
