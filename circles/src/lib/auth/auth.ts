@@ -236,7 +236,7 @@ export const getUserPrivateKey = (did: string, password: string): string => {
     const accountPath = path.join(USERS_DIR, did);
     if (!fs.existsSync(accountPath)) {
         console.error("Login failed: auth credential directory missing", { did, accountPath });
-        throw new AuthenticationError("Account credentials are missing. Please reset your password.");
+        throw new AuthenticationError("Your account credentials need to be rebuilt. Please use Forgot Password to reset your password and restore access.");
     }
 
     const salt: Buffer = fs.readFileSync(path.join(accountPath, SALT_FILENAME));
