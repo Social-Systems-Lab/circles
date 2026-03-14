@@ -2,15 +2,56 @@
 
 import { FormSubmitResponse, UserPrivate } from "../../../models/models";
 import { AuthenticationError, createUserSession, createUserAccount } from "@/lib/auth/auth";
-import { getUserPrivate, registerUser, updateUser } from "@/lib/data/user";
+import { updateCircle } from "@/lib/data/circle";
+import { getUserPrivate } from "@/lib/data/user";
 import { ensureWelcomeMessageForNewUser } from "@/lib/data/mongo-chat";
 import { getResolvedWelcomeTemplate } from "@/lib/data/system-message-templates";
 
 export const submitSignupFormAction = async (values: Record<string, any>): Promise<FormSubmitResponse> => {
     try {
-        //console.log("Signing up user with values", values);
-        let user = await createUserAccount(values.name, values.handle, values.type, values._email, values._password);
+        const normalizedHandle = String(values.handle || "")
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, "-")
+            .replace(/_/g, "-");
+        const normalizedEmail = String(values._email || "").trim().toLowerCase();
+        const derivedName =
+            String(values.name || "").trim() ||
+            normalizedHandle
+                .split("-")
+                .filter(Boolean)
+                .join(" ") ||
+            normalizedEmail.split("@")[0];
+
+        const signupType = values.type === "organization" ? "organization" : "user";
+        const requestedSkills = Array.isArray(values.skills)
+            ? values.skills.filter((skill): skill is string => typeof skill === "string" && skill.trim().length > 0)
+            : undefined;
+        const requestedMetadata =
+            values.metadata && typeof values.metadata === "object" && !Array.isArray(values.metadata)
+                ? values.metadata
+                : undefined;
+
+        let user = await createUserAccount(
+            derivedName,
+            normalizedHandle,
+            signupType,
+            normalizedEmail,
+            values._password,
+        );
         await createUserSession(user as UserPrivate, user.did!);
+
+        if (requestedSkills?.length || requestedMetadata) {
+            await updateCircle(
+                {
+                    _id: user._id!,
+                    skills: requestedSkills,
+                    metadata: requestedMetadata ? { ...(user.metadata ?? {}), ...requestedMetadata } : user.metadata,
+                },
+                user.did!,
+            );
+        }
+
         try {
             const resolvedWelcome = await getResolvedWelcomeTemplate();
             await ensureWelcomeMessageForNewUser(user.did!, resolvedWelcome.config, resolvedWelcome.senderDid);

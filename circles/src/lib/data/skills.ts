@@ -2,6 +2,60 @@ import { Skill } from "@/models/models";
 
 export const skills: Skill[] = [
     {
+        handle: "design",
+        name: "Design",
+        picture: { url: "/images/skills/graphic-design.png" },
+        description: "Shaping visual systems, interfaces, and experiences that help people connect and collaborate.",
+    },
+    {
+        handle: "development",
+        name: "Development",
+        picture: { url: "/images/skills/web-development.png" },
+        description: "Building software, tools, and technical systems that move projects forward.",
+    },
+    {
+        handle: "writing",
+        name: "Writing",
+        picture: { url: "/images/skills/journalism.png" },
+        description: "Crafting clear language for storytelling, documentation, publishing, and outreach.",
+    },
+    {
+        handle: "research",
+        name: "Research",
+        picture: { url: "/images/skills/data-analysis-research.png" },
+        description: "Investigating problems, gathering evidence, and turning insight into useful direction.",
+    },
+    {
+        handle: "project-coordination",
+        name: "Project coordination",
+        picture: { url: "/images/skills/project-management.png" },
+        description: "Keeping moving parts aligned so teams can deliver reliably together.",
+    },
+    {
+        handle: "teaching",
+        name: "Teaching",
+        picture: { url: "/images/skills/education-training.png" },
+        description: "Sharing knowledge, guiding learning, and helping others build capacity.",
+    },
+    {
+        handle: "operations",
+        name: "Operations",
+        picture: { url: "/images/skills/leadership.png" },
+        description: "Supporting the systems, logistics, and day-to-day structure that keep work running.",
+    },
+    {
+        handle: "media-storytelling",
+        name: "Media / storytelling",
+        picture: { url: "/images/skills/media-relations.png" },
+        description: "Using narrative, media, and documentation to amplify people, projects, and momentum.",
+    },
+    {
+        handle: "product-strategy",
+        name: "Product / strategy",
+        picture: { url: "/images/skills/strategic-planning.png" },
+        description: "Clarifying direction, priorities, and roadmap decisions for meaningful work.",
+    },
+    {
         handle: "leadership",
         name: "Leadership",
         picture: { url: "/images/skills/leadership.png" },
