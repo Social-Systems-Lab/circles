@@ -115,6 +115,64 @@ const resetPasswordSchema = z.object({
 // Type for the return value of resetPassword
 type ResetPasswordResult = { success: true } | { success: false; error: string };
 
+async function pathExists(targetPath: string): Promise<boolean> {
+    return fs
+        .access(targetPath)
+        .then(() => true)
+        .catch(() => false);
+}
+
+async function rebuildPasswordCredentials(params: {
+    accountPath: string;
+    did: string;
+    newPassword: string;
+    existingPublicKey?: string;
+}): Promise<{ publicKeyForUserRecord?: string }> {
+    const { accountPath, did, newPassword, existingPublicKey } = params;
+    const plaintextPrivateKeyPath = path.join(accountPath, PRIVATE_KEY_FILENAME);
+    const publicKeyPath = path.join(accountPath, PUBLIC_KEY_FILENAME);
+
+    await fs.mkdir(USERS_DIR, { recursive: true });
+    await fs.mkdir(accountPath, { recursive: true });
+
+    let privateKeyPem: string | undefined;
+    let publicKeyForUserRecord = existingPublicKey;
+
+    if (await pathExists(plaintextPrivateKeyPath)) {
+        privateKeyPem = await fs.readFile(plaintextPrivateKeyPath, "utf8");
+    }
+
+    if (!publicKeyForUserRecord && (await pathExists(publicKeyPath))) {
+        publicKeyForUserRecord = await fs.readFile(publicKeyPath, "utf8");
+    }
+
+    if (!privateKeyPem) {
+        // The original private key cannot be recovered without the old password once the
+        // filesystem credential material is gone, so generate a fresh local keypair in-place.
+        const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
+        privateKeyPem = privateKey.export({ type: "pkcs1", format: "pem" }) as string;
+        publicKeyForUserRecord = publicKey.export({ type: "pkcs1", format: "pem" }) as string;
+        console.warn(`Password reset regenerated filesystem key material for DID ${did} after credential loss.`);
+    }
+
+    const newSalt = crypto.randomBytes(16);
+    const newIv = crypto.randomBytes(16);
+    const newEncryptionKey = crypto.pbkdf2Sync(newPassword, newSalt, 100000, 32, "sha512");
+    const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, newEncryptionKey, newIv);
+    let newEncryptedPrivateKey = cipher.update(privateKeyPem, "utf8", "hex");
+    newEncryptedPrivateKey += cipher.final("hex");
+
+    await fs.writeFile(path.join(accountPath, SALT_FILENAME), newSalt);
+    await fs.writeFile(path.join(accountPath, IV_FILENAME), newIv);
+    await fs.writeFile(path.join(accountPath, ENCRYPTED_PRIVATE_KEY_FILENAME), newEncryptedPrivateKey);
+
+    if (publicKeyForUserRecord) {
+        await fs.writeFile(publicKeyPath, publicKeyForUserRecord);
+    }
+
+    return { publicKeyForUserRecord };
+}
+
 /**
  * Server Action for Users to reset their password using a valid token.
  * Verifies the token and rotates password-derived credential material.
@@ -163,62 +221,25 @@ export async function resetPassword(token: string, newPassword: string): Promise
         }
 
         const accountPath = path.join(USERS_DIR, existingDid);
-        const accountPathExists = await fs
-            .access(accountPath)
-            .then(() => true)
-            .catch(() => false);
-
         let publicKeyForUserRecord = user.publicKey;
 
-        if (accountPathExists) {
-            try {
-                const plaintextPrivateKeyPath = path.join(accountPath, PRIVATE_KEY_FILENAME);
-                const plaintextPrivateKeyExists = await fs
-                    .access(plaintextPrivateKeyPath)
-                    .then(() => true)
-                    .catch(() => false);
-
-                let privateKeyPem: string;
-                if (plaintextPrivateKeyExists) {
-                    privateKeyPem = await fs.readFile(plaintextPrivateKeyPath, "utf8");
-                } else {
-                    // Legacy recovery path: without the previous password we cannot decrypt the existing
-                    // private key, so rotate key material in-place while keeping the same DID directory.
-                    const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", {
-                        modulusLength: 2048,
-                    });
-                    privateKeyPem = privateKey.export({ type: "pkcs1", format: "pem" }) as string;
-                    publicKeyForUserRecord = publicKey.export({ type: "pkcs1", format: "pem" }) as string;
-                }
-
-                const newSalt = crypto.randomBytes(16);
-                const newIv = crypto.randomBytes(16);
-                const newEncryptionKey = crypto.pbkdf2Sync(newPassword, newSalt, 100000, 32, "sha512");
-                const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, newEncryptionKey, newIv);
-                let newEncryptedPrivateKey = cipher.update(privateKeyPem, "utf8", "hex");
-                newEncryptedPrivateKey += cipher.final("hex");
-
-                await fs.writeFile(path.join(accountPath, SALT_FILENAME), newSalt);
-                await fs.writeFile(path.join(accountPath, IV_FILENAME), newIv);
-                await fs.writeFile(path.join(accountPath, ENCRYPTED_PRIVATE_KEY_FILENAME), newEncryptedPrivateKey);
-
-                if (publicKeyForUserRecord) {
-                    await fs.writeFile(path.join(accountPath, PUBLIC_KEY_FILENAME), publicKeyForUserRecord);
-                }
-            } catch (fsError) {
-                console.error("Filesystem error during password reset:", fsError);
-                return { success: false, error: "Failed to update user credentials." };
-            }
-        } else {
-            // If key files are missing, do not invent a new DID or move directories.
-            console.warn(`Credential directory missing for DID ${existingDid}. Token state will still be cleared.`);
+        try {
+            const rebuildResult = await rebuildPasswordCredentials({
+                accountPath,
+                did: existingDid,
+                newPassword,
+                existingPublicKey: user.publicKey,
+            });
+            publicKeyForUserRecord = rebuildResult.publicKeyForUserRecord;
+        } catch (fsError) {
+            console.error("Filesystem error during password reset:", fsError);
+            return { success: false, error: "Failed to update user credentials." };
         }
 
         const resetUpdateSet: {
             passwordResetToken: null;
             passwordResetTokenExpiry: null;
             publicKey?: string;
-            did?: string;
         } = {
             passwordResetToken: null,
             passwordResetTokenExpiry: null,
@@ -226,12 +247,6 @@ export async function resetPassword(token: string, newPassword: string): Promise
 
         if (publicKeyForUserRecord && publicKeyForUserRecord !== user.publicKey) {
             resetUpdateSet.publicKey = publicKeyForUserRecord;
-        }
-
-        // Guardrail: DID must stay immutable in password reset/account recovery.
-        if (resetUpdateSet.did) {
-            console.error("Refusing to modify DID during password reset.");
-            return { success: false, error: "Password reset failed due to invalid identity mutation." };
         }
 
         // 5. Update User Database Record (DID remains unchanged)
