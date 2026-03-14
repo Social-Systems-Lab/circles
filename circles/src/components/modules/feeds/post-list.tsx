@@ -63,7 +63,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
-const TextareaAutosize = require("react-textarea-autosize");
+import TextareaAutosize from "react-textarea-autosize";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
     createCommentAction,
@@ -1521,6 +1521,7 @@ const CommentItem = ({
 
     const isAuthor = user && comment.createdBy === user?.did;
     const canModerate = isAuthorized(user, circle, features.feed.moderate);
+    const canReply = isAuthorized(user, circle, features.feed.comment);
     const formattedDate = getPublishTime(comment.createdAt);
 
     const replies = useMemo<CommentDisplay[]>(
@@ -1588,11 +1589,12 @@ const CommentItem = ({
     };
 
     const handleReplyClick = () => {
+        if (!canReply || !user) return;
         setShowReplyInput(!showReplyInput);
     };
 
     const handleAddReply = () => {
-        if (!newReplyContent.trim()) return;
+        if (!canReply || !user || !newReplyContent.trim() || isPending) return;
 
         const tempComment: CommentDisplay = {
             _id: "temp-reply", // Temporary ID to distinguish it
@@ -1627,6 +1629,13 @@ const CommentItem = ({
             }
         });
     };
+
+    useEffect(() => {
+        if (!canReply && showReplyInput) {
+            setShowReplyInput(false);
+            setNewReplyContent("");
+        }
+    }, [canReply, showReplyInput]);
 
     const handleReplyKeyDown = (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         if (e.key === "Enter" && !e.shiftKey) {
@@ -1794,9 +1803,11 @@ const CommentItem = ({
                                         Like
                                     </div>
                                 )}
-                                <div onClick={handleReplyClick} className="cursor-pointer">
-                                    Reply
-                                </div>
+                                {canReply && user && (
+                                    <div onClick={handleReplyClick} className="cursor-pointer">
+                                        Reply
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -1836,7 +1847,7 @@ const CommentItem = ({
                         </div>
                     )}
 
-                    {showReplyInput && (
+                    {showReplyInput && canReply && user && (
                         <div className="mt-2 flex flex-col">
                             <div className="mb-1 text-xs text-gray-500">Replying to {comment.author.name}</div>
                             <TextareaAutosize
