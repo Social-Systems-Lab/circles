@@ -124,6 +124,7 @@ export const createUserAccount = async (
         hashedVerificationToken, // emailVerificationToken
         verificationTokenExpiry, // emailVerificationTokenExpiry
     );
+    user.verificationStatus = "unverified";
     let res = await Circles.insertOne(user);
     user._id = res.insertedId.toString();
 
