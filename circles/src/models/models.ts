@@ -14,6 +14,7 @@ export const handleSchema = z
 
 export const accountTypeSchema = z.enum(["user", "organization"]);
 export const circleTypeSchema = z.enum(["user", "circle", "project"]);
+export const verificationStatusSchema = z.enum(["unverified", "pending", "verified"]);
 export const emailSchema = z.string().email({ message: "Enter valid email" });
 
 const DEFAULT_MAX_IMAGE_FILE_SIZE = 5000000; // 5MB
@@ -497,6 +498,9 @@ export const circleSchema = z.object({
     // Platform-level verification
     isVerified: z.boolean().optional(),
     isMember: z.boolean().optional(),
+    verificationStatus: verificationStatusSchema.optional(),
+    verifiedAt: z.date().optional(),
+    verifiedBy: didSchema.optional(),
     // Subscription fields
     subscription: z
         .object({
@@ -516,6 +520,7 @@ export const circleSchema = z.object({
 });
 
 export type Circle = z.infer<typeof circleSchema>;
+export type VerificationStatus = z.infer<typeof verificationStatusSchema>;
 
 export const verificationRequestSchema = z.object({
     _id: z.any().optional(),
