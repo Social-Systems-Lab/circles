@@ -22,7 +22,7 @@ import { saveFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { WELCOME_MESSAGE, isSystemMessageSource } from "@/config/welcome-message";
 import { normalizeSystemMessageMetadata } from "@/lib/chat/system-messages";
-import { skillsV2 } from "@/lib/data/skills-v2";
+import { getSkillLabelByHandle } from "@/lib/data/skills";
 import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
 
 const normalizeMediaUrl = (url?: string): string | undefined => {
@@ -64,7 +64,6 @@ const ensureVerifiedMessagingUser = async (userDid: string, action: string): Pro
 
 const CIRCLE_CONTACT_SOURCE = "circle_contact";
 const CIRCLE_CONTACT_VERSION = "v1";
-const skillNameByHandle = new Map(skillsV2.map((skill) => [skill.handle, skill.name]));
 type CircleContactType = "offer_help" | "ask_question";
 
 const sanitizeHandleSegment = (value: string): string =>
@@ -785,7 +784,7 @@ export const contactCircleAdminsAction = async (
         new Set(
             (offeredSkillHandles || [])
                 .filter((handle): handle is string => typeof handle === "string" && !!handle.trim())
-                .map((handle) => skillNameByHandle.get(handle) || handle),
+                .map((handle) => getSkillLabelByHandle(handle) || handle),
         ),
     );
     const offeredSkillsContext =

@@ -184,8 +184,12 @@ export function PresenceSettingsForm({ circle }: PresenceSettingsFormProps): Rea
     const form = useForm({
         defaultValues: {
             _id: circle._id,
+            handle: circle.handle,
             offers: circle.offers || {},
-            engagements: circle.engagements || {},
+            engagements: {
+                ...(circle.engagements || {}),
+                interests: circle.interests?.length ? circle.interests : circle.engagements?.interests || [],
+            },
             needs: circle.needs || {},
         },
     });

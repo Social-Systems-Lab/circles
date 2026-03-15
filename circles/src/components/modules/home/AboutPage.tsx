@@ -10,7 +10,7 @@ import { MapPin, Quote, ExternalLink } from "lucide-react";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import CircleTags from "@/components/modules/circles/circle-tags";
 import { sdgs } from "@/lib/data/sdgs";
-import { skillCategoryLabels, skillsV2 } from "@/lib/data/skills-v2";
+import { getSkillDefinitionByHandle, skillCategoryLabels } from "@/lib/data/skills";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import RichText from "../feeds/RichText";
 import SdgList from "../sdgs/SdgList";
@@ -35,7 +35,6 @@ import NeedsCard from "./needs-card";
 
 // Helper mappings for quick lookup
 const sdgMap = new Map(sdgs.map((s) => [s.handle, s]));
-const skillMap = new Map(skillsV2.map((s) => [s.handle, s]));
 const interestLabelMap = new Map([
     ["climate", "Climate"],
     ["community-building", "Community building"],
@@ -83,7 +82,11 @@ export default function AboutPage({ circle }: AboutPageProps) {
             : user?.skills || []
         : [];
     const currentUserOfferSkillSet = new Set(currentUserOfferSkills);
-    const profileInterests = isUserProfile ? circle.interests || [] : [];
+    const profileInterests = isUserProfile
+        ? circle.interests?.length
+            ? circle.interests
+            : circle.engagements?.interests || []
+        : [];
     const circleNeeds = !isUserProfile ? circle.needs?.tags || [] : [];
     const matchingOfferNeedHandles = !isUserProfile
         ? Array.from(new Set(circleNeeds.filter((handle) => currentUserOfferSkillSet.has(handle))))
@@ -100,7 +103,7 @@ export default function AboutPage({ circle }: AboutPageProps) {
     const remainingNeedsCount = Math.max(circleNeeds.length - 4, 0);
 
     const renderSkillPopoverBadge = (handle: string, key: string) => {
-        const skill = skillMap.get(handle);
+        const skill = getSkillDefinitionByHandle(handle);
         const skillName = skill?.name || handle;
         const categoryLabel = skill?.category ? skillCategoryLabels[skill.category] : null;
 

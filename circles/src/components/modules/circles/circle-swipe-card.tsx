@@ -18,14 +18,13 @@ import CircleTypeIndicator from "@/components/utils/circle-type-indicator";
 import Indicators from "@/components/utils/indicators";
 import ImageCarousel from "@/components/ui/image-carousel";
 import { sdgs } from "@/lib/data/sdgs";
-import { skills } from "@/lib/data/skills";
+import { getSkillByHandle } from "@/lib/data/skills";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge"; // Import Badge for pills
 import SdgList from "../sdgs/SdgList";
 
 // Helper mappings for quick lookup
 const sdgMap = new Map(sdgs.map((s) => [s.handle, s]));
-const skillMap = new Map(skills.map((s) => [s.handle, s]));
 
 interface CircleSwipeCardProps {
     circle: WithMetric<Circle>;
@@ -297,7 +296,7 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                                 </h3>
                                 <div className="flex flex-wrap items-center gap-2">
                                     {circle.skills!.slice(0, 8).map((handle) => {
-                                        const skill = skillMap.get(handle);
+                                        const skill = getSkillByHandle(handle);
                                         if (!skill) return null;
                                         return (
                                             <Badge

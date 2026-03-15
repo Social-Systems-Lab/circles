@@ -20,6 +20,7 @@ export default function EngagementCard({ circle, isOwner }: EngagementCardProps)
     const router = useRouter();
     const [showDM, setShowDM] = useState(false);
     const [initialMessage, setInitialMessage] = useState("");
+    const engagementInterests = circle.interests?.length ? circle.interests : circle.engagements?.interests || [];
 
     const handleInterestClick = (interest: string) => {
         router.push(`/explore?interests=${interest}`);
@@ -52,7 +53,7 @@ export default function EngagementCard({ circle, isOwner }: EngagementCardProps)
                 <div>
                     <RichText content={circle.engagements.text} />
                     <div className="mt-4 flex flex-wrap gap-2">
-                        {circle.engagements.interests?.map((interest) => (
+                        {engagementInterests.map((interest) => (
                             <Badge
                                 key={interest}
                                 onClick={() => handleInterestClick(interest)}

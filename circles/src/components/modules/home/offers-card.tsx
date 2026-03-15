@@ -3,8 +3,10 @@
 import React from "react";
 import PresenceCard from "./presence-card";
 import { Circle } from "@/models/models";
+import { Badge } from "@/components/ui/badge";
 import RichText from "../feeds/RichText";
 import { useRouter } from "next/navigation";
+import { getSkillLabelByHandle } from "@/lib/data/skills";
 
 interface OffersCardProps {
     circle: Circle;
@@ -13,6 +15,10 @@ interface OffersCardProps {
 
 export default function OffersCard({ circle, isOwner }: OffersCardProps) {
     const router = useRouter();
+
+    const handleSkillClick = (skill: string) => {
+        router.push(`/explore?skills=${skill}`);
+    };
 
     const onEdit = () => {
         router.push(`/circles/${circle.handle}/settings/presence`);
@@ -24,13 +30,20 @@ export default function OffersCard({ circle, isOwner }: OffersCardProps) {
 
     return (
         <PresenceCard
-            title={circle.circleType === "user" ? "My offers & skills" : "Why get involved"}
+            title={circle.circleType === "user" ? "My offers & skills" : "Our offers & skills"}
             isOwner={isOwner}
             onEdit={onEdit}
         >
             {circle.offers?.text ? (
                 <div>
                     <RichText content={circle.offers.text} />
+                    <div className="mt-4 flex flex-wrap gap-2">
+                        {circle.offers.skills?.map((skill) => (
+                            <Badge key={skill} onClick={() => handleSkillClick(skill)} className="cursor-pointer">
+                                {getSkillLabelByHandle(skill)}
+                            </Badge>
+                        ))}
+                    </div>
                 </div>
             ) : (
                 <div className="text-center text-muted-foreground">

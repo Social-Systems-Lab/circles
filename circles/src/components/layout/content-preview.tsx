@@ -244,7 +244,10 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                                     <p className="text-sm text-gray-700">{circle.engagements.text}</p>
                                 )}
                                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                                    {circle.engagements.interests?.map((interest) => (
+                                    {(circle.interests?.length
+                                        ? circle.interests
+                                        : circle.engagements?.interests || []
+                                    ).map((interest) => (
                                         <Badge key={interest} variant="outline">
                                             {interest}
                                         </Badge>

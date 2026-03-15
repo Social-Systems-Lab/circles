@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
+import { featuredSkills } from "@/lib/data/skills";
 import { cn } from "@/lib/utils";
 
 const montserrat = Montserrat({
@@ -39,40 +40,13 @@ const ONBOARDING_FLOW = "v2-signup";
 const INITIAL_VISIBLE_OPTIONS = 12;
 const MIN_SELECTION_COUNT = 2;
 const SHORT_BIO_MAX_LENGTH = 200;
-const SKILLS_PROMPT_TEXT =
-  "Choose a few skill areas you could help others with";
-const SKILLS_HELPER_TEXT =
-  "Choose at least 2. You can change or add more later.";
+const SKILLS_PROMPT_TEXT = "Choose a few skill areas you could help others with";
+const SKILLS_HELPER_TEXT = "Choose at least 2. You can change or add more later.";
 const INTERESTS_PROMPT_TEXT =
-  "Pick a few topics you care about so Kamooni can connect you with relevant projects, events, and communities.";
-const INTERESTS_HELPER_TEXT =
-  "Choose at least 2. You can change or add more later.";
-const stepTitles = ["Welcome", "Account", "Skills", "Interests", "Profile"] as const;
+    "Pick a few topics you care about so Kamooni can connect you with relevant projects, events, and communities.";
+const INTERESTS_HELPER_TEXT = "Choose at least 2. You can change or add more later.";
 
-const skillOptions = [
-    { label: "Design", value: "design" },
-    { label: "Development", value: "development" },
-    { label: "Writing", value: "writing" },
-    { label: "Community organizing", value: "community-organizing" },
-    { label: "Research", value: "research" },
-    { label: "Fundraising", value: "fundraising" },
-    { label: "Marketing", value: "marketing" },
-    { label: "Translation", value: "translation" },
-    { label: "Project coordination", value: "project-coordination" },
-    { label: "Teaching", value: "teaching" },
-    { label: "Facilitation", value: "facilitation" },
-    { label: "Operations", value: "operations" },
-    { label: "Media / storytelling", value: "media-storytelling" },
-    { label: "Product / strategy", value: "product-strategy" },
-    { label: "Partnerships", value: "partnerships" },
-    { label: "Event organizing", value: "event-organizing" },
-    { label: "Mentoring", value: "mentoring" },
-    { label: "Coaching", value: "coaching" },
-    { label: "Data / analysis", value: "data-analysis" },
-    { label: "Audio / video", value: "audio-video" },
-    { label: "Legal / compliance", value: "legal-compliance" },
-    { label: "Finance / budgeting", value: "finance-budgeting" },
-] as const;
+const stepTitles = ["Welcome", "Account", "Skills", "Interests", "Profile"] as const;
 
 const interestOptions = [
     { label: "Climate", value: "climate" },
@@ -231,7 +205,7 @@ export function OnboardingSignupFlow() {
     const [isInterestsExpanded, setIsInterestsExpanded] = useState(false);
     const [completionRedirectUrl, setCompletionRedirectUrl] = useState<string | null>(null);
 
-    const visibleSkillOptions = isSkillsExpanded ? skillOptions : skillOptions.slice(0, INITIAL_VISIBLE_OPTIONS);
+    const visibleSkillOptions = isSkillsExpanded ? featuredSkills : featuredSkills.slice(0, INITIAL_VISIBLE_OPTIONS);
     const visibleInterestOptions = isInterestsExpanded
         ? interestOptions
         : interestOptions.slice(0, INITIAL_VISIBLE_OPTIONS);
@@ -765,12 +739,12 @@ export function OnboardingSignupFlow() {
 
                                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                         {visibleSkillOptions.map((skill) => {
-                                            const selected = state.skills.includes(skill.value);
+                                            const selected = state.skills.includes(skill.handle);
                                             return (
                                                 <button
-                                                    key={skill.value}
+                                                    key={skill.handle}
                                                     type="button"
-                                                    onClick={() => toggleSelection("skills", skill.value)}
+                                                    onClick={() => toggleSelection("skills", skill.handle)}
                                                     className={cn(
                                                         "min-h-[72px] rounded-[20px] border px-4 py-3 text-left text-sm font-medium transition-colors",
                                                         selected
@@ -784,7 +758,7 @@ export function OnboardingSignupFlow() {
                                         })}
                                     </div>
 
-                                    {skillOptions.length > INITIAL_VISIBLE_OPTIONS && (
+                                    {featuredSkills.length > INITIAL_VISIBLE_OPTIONS && (
                                         <Button
                                             type="button"
                                             variant="ghost"

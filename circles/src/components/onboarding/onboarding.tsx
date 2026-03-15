@@ -6,7 +6,6 @@ import { Progress } from "@/components/ui/progress";
 import { Card, CardContent } from "@/components/ui/card";
 import { authInfoAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
-import { usePathname } from "next/navigation";
 import WelcomeStep from "./welcome-step";
 import TermsStep from "./terms-step";
 import MemberStep from "./member-step";
@@ -19,7 +18,7 @@ import ProfileSummary from "./profile-summary";
 import { Cause, Circle, ONBOARDING_STEPS, OnboardingStep, Skill } from "@/models/models";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { sdgs } from "@/lib/data/sdgs";
-import { skills } from "@/lib/data/skills";
+import { getSkillsByHandles } from "@/lib/data/skills";
 
 export type Quest = {
     id: number;
@@ -49,14 +48,12 @@ export type OnboardingStepProps = {
 };
 
 export default function Onboarding() {
-    const pathname = usePathname();
     const [isOpen, setIsOpen] = useState(false);
-    const [user] = useAtom(userAtom);
+    const [user, setUser] = useAtom(userAtom);
     const [currentStepIndex, setCurrentStepIndex] = useState(0);
     const [authInfo] = useAtom(authInfoAtom);
     const [hasClosedOnboarding, setHasClosedOnboarding] = useState(false);
     const [forceShowOnboarding, setForceShowOnboarding] = useState(false);
-    const isNewSignupFlow = user?.metadata?.onboardingFlow === "v2-signup";
 
     const [userData, setUserData] = useState<OnboardingUserData | undefined>(undefined);
 
@@ -74,10 +71,6 @@ export default function Onboarding() {
             // skills: SkillsStep,
             final: FinalStep,
         };
-
-        if (pathname === "/signup" || isNewSignupFlow) {
-            return [];
-        }
 
         if (forceShowOnboarding || !user || !user.completedOnboardingSteps) {
             // First time or forced - show all steps
@@ -124,7 +117,7 @@ export default function Onboarding() {
             component: stepComponents[stepId],
             title: getStepTitle(stepId),
         }));
-    }, [forceShowOnboarding, isNewSignupFlow, pathname, user, user?.completedOnboardingSteps, user?.did]); // Update when user changes or when forcing show
+    }, [user?.did, forceShowOnboarding]); // Update when user changes or when forcing show
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -133,14 +126,14 @@ export default function Onboarding() {
     }, []);
 
     useEffect(() => {
-        if (!user || pathname === "/signup") return;
+        if (!user) return;
         if (authInfo.authStatus !== "authenticated") return;
 
         // Check if there are any steps to show
         if (steps.length > 0 && !hasClosedOnboarding) {
             setIsOpen(true);
         }
-    }, [authInfo, hasClosedOnboarding, pathname, steps, user]);
+    }, [user, authInfo, hasClosedOnboarding, steps]);
 
     // Effect to initialize and keep user data in sync
     useEffect(() => {
@@ -152,7 +145,7 @@ export default function Onboarding() {
                 name: user.name || "",
                 mission: user.mission || "",
                 selectedSdgs: user.causes?.map((x) => sdgs.find((y) => y.handle === x)).filter(Boolean) as Cause[],
-                selectedSkills: user.skills?.map((x) => skills.find((y) => y.handle === x) as Skill) ?? [],
+                selectedSkills: getSkillsByHandles(user.skills) as Skill[],
                 selectedQuests: prev?.selectedQuests ?? [],
                 picture: user.picture?.url || "/images/default-user-picture.png",
             };
@@ -160,7 +153,7 @@ export default function Onboarding() {
             // If userData doesn't exist yet or if values have changed, return the new object
             return newData;
         });
-    }, [isOpen, user, user?._id, user?.picture?.url]); // Only depend on significant user properties
+    }, [isOpen, user?._id, user?.picture?.url]); // Only depend on significant user properties
 
     // Separate effect to reset step index only when onboarding opens or steps array changes
     useEffect(() => {
@@ -217,10 +210,6 @@ export default function Onboarding() {
     };
 
     const CurrentStepComponent = steps[currentStepIndex]?.component;
-
-        if (pathname === "/signup") {
-            return null;
-        }
 
         if (!isOpen || !userData) {
           return (
