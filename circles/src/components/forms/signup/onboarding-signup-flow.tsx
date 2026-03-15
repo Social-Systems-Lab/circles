@@ -205,7 +205,7 @@ function BrandHeader({ compact }: { compact: boolean }) {
                             compact ? "text-sm" : "text-base sm:text-lg",
                         )}
                     >
-                        Find the others.
+                        Find the others
                     </div>
                 </div>
             </div>
