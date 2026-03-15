@@ -166,6 +166,48 @@ export const saveSkillsAction = async (
     }
 };
 
+export const saveInterestsAction = async (
+    interests: string[] | undefined,
+    circleId: string,
+): Promise<SaveSdgsActionResponse> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to edit circle settings" };
+    }
+
+    try {
+        let circle: Partial<Circle> = {
+            _id: circleId,
+            interests,
+        };
+
+        let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_causes_and_skills);
+        if (!authorized) {
+            return { success: false, message: "You are not authorized to edit circle settings" };
+        }
+
+        let user = await getUserByDid(userDid);
+        circle.completedOnboardingSteps = user.completedOnboardingSteps ?? [];
+        if (!circle.completedOnboardingSteps.includes("interests")) {
+            circle.completedOnboardingSteps.push("interests");
+        }
+
+        await updateCircle(circle, userDid);
+
+        let circlePath = await getCirclePath(circle);
+        revalidatePath(circlePath);
+
+        return { success: true, message: "Circle settings saved successfully" };
+    } catch (error) {
+        console.log("error", error);
+        if (error instanceof Error) {
+            return { success: false, message: error.message };
+        } else {
+            return { success: false, message: "Failed to save circle settings. " + error };
+        }
+    }
+};
+
 type FetchSdgsResponse = {
     success: boolean;
     sdgs: WithMetric<SDG>[];

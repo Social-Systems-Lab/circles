@@ -1,12 +1,18 @@
 "use client";
 
 import React from "react";
-import { Button } from "@/components/ui/button";
+import { usePathname } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MdOutlineContactSupport } from "react-icons/md";
 import Image from "next/image";
 
 export const SupportButton = () => {
+    const pathname = usePathname();
+
+    if (pathname === "/signup") {
+        return null;
+    }
+
     return (
         <div className="fixed bottom-[170px] right-1 z-40 md:bottom-[90px] md:right-6">
             <Popover>

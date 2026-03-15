@@ -36,6 +36,26 @@ import NeedsCard from "./needs-card";
 // Helper mappings for quick lookup
 const sdgMap = new Map(sdgs.map((s) => [s.handle, s]));
 const skillMap = new Map(skillsV2.map((s) => [s.handle, s]));
+const interestLabelMap = new Map([
+    ["climate", "Climate"],
+    ["community-building", "Community building"],
+    ["democracy", "Democracy"],
+    ["education", "Education"],
+    ["health", "Health"],
+    ["local-economy", "Local economy"],
+    ["open-source", "Open source"],
+    ["mutual-aid", "Mutual aid"],
+    ["housing", "Housing"],
+    ["food-systems", "Food systems"],
+    ["governance", "Governance"],
+    ["arts-culture", "Arts / culture"],
+    ["regenerative-living", "Regenerative living"],
+    ["civic-tech", "Civic tech"],
+    ["youth", "Youth"],
+    ["elder-care", "Elder care"],
+    ["cooperative-business", "Cooperative business"],
+    ["social-innovation", "Social innovation"],
+]);
 
 interface AboutPageProps {
     circle: Circle;
@@ -47,6 +67,7 @@ export default function AboutPage({ circle }: AboutPageProps) {
     const { toast } = useToast();
     const [user] = useAtom(userAtom);
     const [isSkillsExpanded, setIsSkillsExpanded] = React.useState(false);
+    const [isInterestsExpanded, setIsInterestsExpanded] = React.useState(false);
     const [isNeedsExpanded, setIsNeedsExpanded] = React.useState(false);
     const [isContactDialogOpen, setIsContactDialogOpen] = React.useState(false);
     const [contactType, setContactType] = React.useState<"offer_help" | "ask_question">("offer_help");
@@ -55,19 +76,27 @@ export default function AboutPage({ circle }: AboutPageProps) {
     const [isSendingContactMessage, setIsSendingContactMessage] = React.useState(false);
     const isOwner = user?.did === circle.did;
     const isUserProfile = circle.circleType === "user";
-    const profileOfferSkills = circle.offers?.skills || [];
-    const currentUserOfferSkills = !isUserProfile ? user?.offers?.skills || [] : [];
+    const profileOfferSkills = circle.offers?.skills?.length ? circle.offers.skills : circle.skills || [];
+    const currentUserOfferSkills = !isUserProfile
+        ? user?.offers?.skills?.length
+            ? user.offers.skills
+            : user?.skills || []
+        : [];
     const currentUserOfferSkillSet = new Set(currentUserOfferSkills);
+    const profileInterests = isUserProfile ? circle.interests || [] : [];
     const circleNeeds = !isUserProfile ? circle.needs?.tags || [] : [];
     const matchingOfferNeedHandles = !isUserProfile
         ? Array.from(new Set(circleNeeds.filter((handle) => currentUserOfferSkillSet.has(handle))))
         : [];
     const hasMatchingOfferNeeds = !isUserProfile && !!user && matchingOfferNeedHandles.length > 0;
     const hasMoreSkills = profileOfferSkills.length > 4;
+    const hasMoreInterests = profileInterests.length > 6;
     const hasMoreNeeds = circleNeeds.length > 4;
     const visibleSkills = isSkillsExpanded ? profileOfferSkills : profileOfferSkills.slice(0, 4);
+    const visibleInterests = isInterestsExpanded ? profileInterests : profileInterests.slice(0, 6);
     const visibleNeeds = isNeedsExpanded ? circleNeeds : circleNeeds.slice(0, 4);
     const remainingSkillsCount = Math.max(profileOfferSkills.length - 4, 0);
+    const remainingInterestsCount = Math.max(profileInterests.length - 6, 0);
     const remainingNeedsCount = Math.max(circleNeeds.length - 4, 0);
 
     const renderSkillPopoverBadge = (handle: string, key: string) => {
@@ -108,6 +137,13 @@ export default function AboutPage({ circle }: AboutPageProps) {
         );
     };
 
+    const getInterestLabel = (handle: string) =>
+        interestLabelMap.get(handle) ||
+        handle
+            .split("-")
+            .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(" ");
+
     // Check if sidebar has any content
     const hasSidebarContent =
         !!circle.mission ||
@@ -116,9 +152,9 @@ export default function AboutPage({ circle }: AboutPageProps) {
         !!hasMatchingOfferNeeds ||
         !!(!isUserProfile && circle.causes && circle.causes.length > 0) ||
         !!circle.websiteUrl ||
-        !!(isUserProfile && profileOfferSkills.length > 0);
+        !!(isUserProfile && (profileOfferSkills.length > 0 || profileInterests.length > 0));
 
-    const hasMainContent = !!circle.content || !!circle.description;
+    const hasMainContent = isUserProfile ? !!circle.content : !!circle.content || !!circle.description;
     const canContactCircle = hasMatchingOfferNeeds && !isOwner;
 
     const openContactDialog = (nextContactType: "offer_help" | "ask_question" = "offer_help") => {
@@ -188,6 +224,10 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                     <h1 className="my-4">About</h1>
                                     {circle.content ? (
                                         <RichText content={circle.content} />
+                                    ) : isUserProfile ? (
+                                        <p className="mb-6 text-base text-muted-foreground">
+                                            This profile hasn&apos;t added an About section yet.
+                                        </p>
                                     ) : (
                                         <p className="mb-6 text-base">{circle.description}</p>
                                     )}
@@ -197,14 +237,16 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                 <>
                                     <h1 className="my-4">About</h1>
                                     <p className="mb-6 text-base text-muted-foreground">
-                                        This circle hasn&apos;t added a description yet.
+                                        {isUserProfile
+                                            ? "This profile hasn't added an About section yet."
+                                            : "This circle hasn&apos;t added a description yet."}
                                     </p>
                                 </>
                             )}
                         </div>
                         <OffersCard circle={circle} isOwner={isOwner} />
                         {isUserProfile && <EngagementCard circle={circle} isOwner={isOwner} />}
-                        <NeedsCard circle={circle} isOwner={isOwner} />
+                        {!isUserProfile && <NeedsCard circle={circle} isOwner={isOwner} />}
                     </div>
                 </div>
                 {/* --- Sidebar Column (Conditionally Rendered) --- */}
@@ -361,6 +403,46 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                                 }}
                                             >
                                                 {isSkillsExpanded ? "Show less" : `+${remainingSkillsCount} more`}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {isUserProfile && visibleInterests.length > 0 && (
+                                <div className="mb-6 w-full">
+                                    <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                                        Interests
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {visibleInterests.map((handle) => (
+                                            <Badge
+                                                key={handle}
+                                                className="border-[#6f7a34] bg-[#6f7a34] px-3 py-1 text-sm font-medium text-white"
+                                            >
+                                                {getInterestLabel(handle)}
+                                            </Badge>
+                                        ))}
+                                        {hasMoreInterests && (
+                                            <Badge
+                                                className="cursor-pointer border-[#6f7a34]/25 bg-[#edf1dd] px-3 py-1 text-sm font-medium text-[#556421]"
+                                                role="button"
+                                                tabIndex={0}
+                                                aria-expanded={isInterestsExpanded}
+                                                aria-label={
+                                                    isInterestsExpanded
+                                                        ? "Show fewer interests"
+                                                        : `Show ${remainingInterestsCount} more interests`
+                                                }
+                                                onClick={() => setIsInterestsExpanded((prev) => !prev)}
+                                                onKeyDown={(event) => {
+                                                    if (event.key === "Enter" || event.key === " ") {
+                                                        event.preventDefault();
+                                                        setIsInterestsExpanded((prev) => !prev);
+                                                    }
+                                                }}
+                                            >
+                                                {isInterestsExpanded ? "Show less" : `+${remainingInterestsCount} more`}
                                             </Badge>
                                         )}
                                     </div>

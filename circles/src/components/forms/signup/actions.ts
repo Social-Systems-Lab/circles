@@ -27,6 +27,11 @@ export const submitSignupFormAction = async (values: Record<string, any>): Promi
         const requestedSkills = Array.isArray(values.skills)
             ? values.skills.filter((skill): skill is string => typeof skill === "string" && skill.trim().length > 0)
             : undefined;
+        const requestedInterests = Array.isArray(values.interests)
+            ? values.interests.filter(
+                  (interest): interest is string => typeof interest === "string" && interest.trim().length > 0,
+              )
+            : undefined;
         const requestedMetadata =
             values.metadata && typeof values.metadata === "object" && !Array.isArray(values.metadata)
                 ? values.metadata
@@ -41,11 +46,19 @@ export const submitSignupFormAction = async (values: Record<string, any>): Promi
         );
         await createUserSession(user as UserPrivate, user.did!);
 
-        if (requestedSkills?.length || requestedMetadata) {
+        if (requestedSkills?.length || requestedInterests?.length || requestedMetadata) {
             await updateCircle(
                 {
                     _id: user._id!,
                     skills: requestedSkills,
+                    interests: requestedInterests,
+                    offers: requestedSkills?.length
+                        ? {
+                              ...(user.offers ?? {}),
+                              skills: requestedSkills,
+                              visibility: user.offers?.visibility ?? "public",
+                          }
+                        : user.offers,
                     metadata: requestedMetadata ? { ...(user.metadata ?? {}), ...requestedMetadata } : user.metadata,
                 },
                 user.did!,
