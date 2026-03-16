@@ -26,6 +26,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { interestOptions } from "@/lib/data/interests";
 import { featuredSkills } from "@/lib/data/skills";
 import { cn } from "@/lib/utils";
+import OnboardingCompleteAnimation from "@/components/onboarding/onboarding-complete-animation";
 
 const montserrat = Montserrat({
     subsets: ["latin"],
@@ -227,7 +228,7 @@ export function OnboardingSignupFlow() {
 
         const timeoutId = window.setTimeout(() => {
             router.push(completionRedirectUrl);
-        }, 1400);
+        }, 2800);
 
         return () => {
             window.clearTimeout(timeoutId);
@@ -1009,22 +1010,7 @@ export function OnboardingSignupFlow() {
                                         transition={{ duration: 0.35, ease: "easeOut" }}
                                         className="w-full max-w-md rounded-[28px] border border-white/80 bg-[#fff4d5] p-8 text-center shadow-[0_18px_48px_rgba(123,81,24,0.14)]"
                                     >
-                                        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-white/80 bg-[#fff8e7] shadow-sm">
-                                            <div className="relative h-12 w-12">
-                                                <Image
-                                                    src="/images/kamooni_logo.png"
-                                                    alt="Kamooni logo"
-                                                    fill
-                                                    className="object-contain"
-                                                />
-                                            </div>
-                                        </div>
-                                        <p className="mt-6 font-[family-name:var(--font-noto-serif)] text-3xl text-kam-gray-dark">
-                                            You&apos;re in 🎉
-                                        </p>
-                                        <p className="mt-3 text-sm leading-6 text-kam-gray-dark/72 sm:text-base">
-                                            Setting up your Kamooni profile now.
-                                        </p>
+                                        <OnboardingCompleteAnimation />
                                     </motion.div>
                                 </motion.div>
                             )}
