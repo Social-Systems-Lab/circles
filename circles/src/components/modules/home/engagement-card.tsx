@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { findOrCreateDMRoom } from "./actions";
 import { DmChatModal } from "../chat/dm-chat-modal";
 import { trackEvent } from "@/app/api/analytics/actions";
+import { getInterestLabel } from "@/lib/data/interests";
 
 interface EngagementCardProps {
     circle: Circle;
@@ -59,7 +60,7 @@ export default function EngagementCard({ circle, isOwner }: EngagementCardProps)
                                 onClick={() => handleInterestClick(interest)}
                                 className="cursor-pointer"
                             >
-                                {interest}
+                                {getInterestLabel(interest)}
                             </Badge>
                         ))}
                     </div>

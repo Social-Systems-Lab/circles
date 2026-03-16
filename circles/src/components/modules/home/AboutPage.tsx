@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { MapPin, Quote, ExternalLink } from "lucide-react";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import CircleTags from "@/components/modules/circles/circle-tags";
+import { getInterestLabel } from "@/lib/data/interests";
 import { sdgs } from "@/lib/data/sdgs";
 import { getSkillDefinitionByHandle, skillCategoryLabels } from "@/lib/data/skills";
 import { useIsCompact } from "@/components/utils/use-is-compact";
@@ -35,26 +36,6 @@ import NeedsCard from "./needs-card";
 
 // Helper mappings for quick lookup
 const sdgMap = new Map(sdgs.map((s) => [s.handle, s]));
-const interestLabelMap = new Map([
-    ["climate", "Climate"],
-    ["community-building", "Community building"],
-    ["democracy", "Democracy"],
-    ["education", "Education"],
-    ["health", "Health"],
-    ["local-economy", "Local economy"],
-    ["open-source", "Open source"],
-    ["mutual-aid", "Mutual aid"],
-    ["housing", "Housing"],
-    ["food-systems", "Food systems"],
-    ["governance", "Governance"],
-    ["arts-culture", "Arts / culture"],
-    ["regenerative-living", "Regenerative living"],
-    ["civic-tech", "Civic tech"],
-    ["youth", "Youth"],
-    ["elder-care", "Elder care"],
-    ["cooperative-business", "Cooperative business"],
-    ["social-innovation", "Social innovation"],
-]);
 
 interface AboutPageProps {
     circle: Circle;
@@ -139,13 +120,6 @@ export default function AboutPage({ circle }: AboutPageProps) {
             </Popover>
         );
     };
-
-    const getInterestLabel = (handle: string) =>
-        interestLabelMap.get(handle) ||
-        handle
-            .split("-")
-            .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-            .join(" ");
 
     // Check if sidebar has any content
     const hasSidebarContent =

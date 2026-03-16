@@ -10,12 +10,11 @@ import { useForm, Controller, Control } from "react-hook-form";
 import { savePresence } from "@/app/circles/[handle]/settings/presence/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DynamicTextareaField, DynamicTagsField } from "@/components/forms/dynamic-field";
-import { useAtom } from "jotai";
-import { userAtom } from "@/lib/data/atoms";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Check, Search, X } from "lucide-react";
+import { getInterestLabel, interestOptions } from "@/lib/data/interests";
 import { skillsV2, skillCategoryLabels, SkillCategory } from "@/lib/data/skills-v2";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +28,11 @@ const skillCategoryOrder = Object.keys(skillCategoryLabels) as SkillCategory[];
 interface StructuredSkillSelectorProps {
     value: string[] | undefined;
     onChange: (handles: string[]) => void;
+}
+
+interface InterestSelectorProps {
+    value: string[] | undefined;
+    onChange: (interests: string[]) => void;
 }
 
 function StructuredSkillSelector({ value, onChange }: StructuredSkillSelectorProps): React.ReactElement {
@@ -173,9 +177,91 @@ function StructuredSkillSelector({ value, onChange }: StructuredSkillSelectorPro
     );
 }
 
+function InterestSelector({ value, onChange }: InterestSelectorProps): React.ReactElement {
+    const selectedInterests = useMemo<string[]>(() => {
+        if (!Array.isArray(value)) return [];
+
+        const selectedSet = new Set<string>(
+            value
+                .filter((interest): interest is string => typeof interest === "string")
+                .map((interest) => interest.trim())
+                .filter(Boolean),
+        );
+
+        return interestOptions
+            .map((option) => option.value)
+            .filter((interest) => selectedSet.has(interest));
+    }, [value]);
+
+    const toggleInterest = (interest: string) => {
+        if (selectedInterests.includes(interest)) {
+            onChange(selectedInterests.filter((existingInterest) => existingInterest !== interest));
+            return;
+        }
+
+        onChange([...selectedInterests, interest]);
+    };
+
+    return (
+        <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium">Topics / interests</p>
+                <p className="text-sm text-muted-foreground">{selectedInterests.length} selected</p>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {interestOptions.map((interest) => {
+                    const isSelected = selectedInterests.includes(interest.value);
+
+                    return (
+                        <button
+                            key={interest.value}
+                            type="button"
+                            onClick={() => toggleInterest(interest.value)}
+                            className={cn(
+                                "rounded-md border px-3 py-2 text-left text-sm transition-colors",
+                                isSelected
+                                    ? "border-[#6f7a34] bg-[#6f7a34] text-white"
+                                    : "hover:bg-muted/40",
+                            )}
+                        >
+                            <span className="flex items-center justify-between gap-2">
+                                <span>{interest.label}</span>
+                                {isSelected && <Check className="h-4 w-4" />}
+                            </span>
+                        </button>
+                    );
+                })}
+            </div>
+
+            <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">Selected interests</p>
+                <div className="flex flex-wrap gap-2">
+                    {selectedInterests.length > 0 ? (
+                        selectedInterests.map((interest) => (
+                            <Badge key={interest} variant="secondary" className="flex items-center gap-1">
+                                <span>{getInterestLabel(interest)}</span>
+                                <button
+                                    type="button"
+                                    aria-label={`Remove ${getInterestLabel(interest)}`}
+                                    onClick={() => toggleInterest(interest)}
+                                    className="inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-black/10"
+                                >
+                                    <X className="h-3 w-3" />
+                                </button>
+                            </Badge>
+                        ))
+                    ) : (
+                        <p className="text-sm text-muted-foreground">No interests selected yet.</p>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export function PresenceSettingsForm({ circle }: PresenceSettingsFormProps): React.ReactElement {
     const { toast } = useToast();
-    const [, setUser] = useAtom(userAtom);
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const isUser = circle.circleType === "user";
@@ -201,13 +287,15 @@ export function PresenceSettingsForm({ circle }: PresenceSettingsFormProps): Rea
             if (result.success) {
                 toast({
                     title: "Success",
-                    description: "Presence settings updated successfully",
+                    description: isUser
+                        ? "Skills & interests updated successfully"
+                        : "Offers and needs updated successfully",
                 });
                 router.refresh();
             } else {
                 toast({
                     title: "Error",
-                    description: result.message || "Failed to update presence settings",
+                    description: result.message || "Failed to update settings",
                     variant: "destructive",
                 });
             }
@@ -290,14 +378,9 @@ export function PresenceSettingsForm({ circle }: PresenceSettingsFormProps): Rea
                                 name="engagements.interests"
                                 control={form.control as unknown as Control}
                                 render={({ field }) => (
-                                    <DynamicTagsField
-                                        field={{
-                                            name: "engagements.interests",
-                                            type: "tags",
-                                            label: "Interests",
-                                        }}
-                                        formField={field}
-                                        control={form.control as unknown as Control}
+                                    <InterestSelector
+                                        value={field.value as string[] | undefined}
+                                        onChange={field.onChange}
                                     />
                                 )}
                             />
@@ -305,56 +388,56 @@ export function PresenceSettingsForm({ circle }: PresenceSettingsFormProps): Rea
                     </Card>
                 )}
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle>
-                            {isUser ? "What I need help with" : "What we need help with"}
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <Controller
-                            name="needs.text"
-                            control={form.control as unknown as Control}
-                            render={({ field }) => (
-                                <DynamicTextareaField
-                                    field={{
-                                        name: "needs.text",
-                                        type: "textarea",
-                                        label: "Current needs",
-                                        maxLength: 600,
-                                    }}
-                                    formField={field}
-                                    control={form.control as unknown as Control}
-                                />
-                            )}
-                        />
-                        <Controller
-                            name="needs.tags"
-                            control={form.control as unknown as Control}
-                            render={({ field }) => (
-                                useStructuredNeedsSelector ? (
-                                    <div className="space-y-2">
-                                        <p className="text-sm font-medium">Needs</p>
-                                        <StructuredSkillSelector
-                                            value={field.value as string[] | undefined}
-                                            onChange={field.onChange}
-                                        />
-                                    </div>
-                                ) : (
-                                    <DynamicTagsField
+                {!isUser && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>What we need help with</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <Controller
+                                name="needs.text"
+                                control={form.control as unknown as Control}
+                                render={({ field }) => (
+                                    <DynamicTextareaField
                                         field={{
-                                            name: "needs.tags",
-                                            type: "tags",
-                                            label: "Needs",
+                                            name: "needs.text",
+                                            type: "textarea",
+                                            label: "Current needs",
+                                            maxLength: 600,
                                         }}
                                         formField={field}
                                         control={form.control as unknown as Control}
                                     />
-                                )
-                            )}
-                        />
-                    </CardContent>
-                </Card>
+                                )}
+                            />
+                            <Controller
+                                name="needs.tags"
+                                control={form.control as unknown as Control}
+                                render={({ field }) => (
+                                    useStructuredNeedsSelector ? (
+                                        <div className="space-y-2">
+                                            <p className="text-sm font-medium">Needs</p>
+                                            <StructuredSkillSelector
+                                                value={field.value as string[] | undefined}
+                                                onChange={field.onChange}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <DynamicTagsField
+                                            field={{
+                                                name: "needs.tags",
+                                                type: "tags",
+                                                label: "Needs",
+                                            }}
+                                            formField={field}
+                                            control={form.control as unknown as Control}
+                                        />
+                                    )
+                                )}
+                            />
+                        </CardContent>
+                    </Card>
+                )}
 
                 <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting ? "Saving..." : "Save Changes"}

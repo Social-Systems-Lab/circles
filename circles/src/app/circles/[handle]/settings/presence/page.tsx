@@ -19,10 +19,10 @@ export default async function PresenceSettingsPage(props: PageProps) {
 
     return (
         <div className="container py-6">
-            <h1 className="mb-6 text-2xl font-bold">{isUser ? "Presence Settings" : "Offers and needs"}</h1>
+            <h1 className="mb-6 text-2xl font-bold">{isUser ? "Skills & Interests" : "Offers and needs"}</h1>
             <p className="mb-6 text-muted-foreground">
                 {isUser
-                    ? "Manage your presence cards to let others know what you have to offer, what you need, and what you want to engage in."
+                    ? "Manage what you can offer and the topics or roles you want to engage in."
                     : "Describe your opportunities and what support your circle or project needs."}
             </p>
             <PresenceSettingsForm circle={circle} />

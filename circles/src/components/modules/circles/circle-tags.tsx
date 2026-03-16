@@ -1,4 +1,5 @@
 import React from "react";
+import { getInterestLabel } from "@/lib/data/interests";
 
 interface CircleTagsProps {
     tags?: string[];
@@ -25,7 +26,7 @@ export const CircleTags: React.FC<CircleTagsProps> = ({ tags, showAll = false, i
                     className={`cursor-pointer rounded-full  text-white ${isCompact ? "px-[7px] py-[3px] text-xs" : "px-2 py-1 text-sm font-semibold"} bg-[#89a0dd] hover:bg-blue-400`}
                     onClick={() => handleTagClick(tag)}
                 >
-                    {tag}
+                    {getInterestLabel(tag)}
                 </span>
             ))}
         </div>
