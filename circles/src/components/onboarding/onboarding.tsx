@@ -128,6 +128,7 @@ export default function Onboarding() {
     useEffect(() => {
         if (!user) return;
         if (authInfo.authStatus !== "authenticated") return;
+        if (user.metadata?.onboardingFlow === "v2-signup") return;
 
         // Check if there are any steps to show
         if (steps.length > 0 && !hasClosedOnboarding) {
