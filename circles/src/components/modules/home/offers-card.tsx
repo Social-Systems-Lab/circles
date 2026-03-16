@@ -37,13 +37,6 @@ export default function OffersCard({ circle, isOwner }: OffersCardProps) {
             {circle.offers?.text ? (
                 <div>
                     <RichText content={circle.offers.text} />
-                    <div className="mt-4 flex flex-wrap gap-2">
-                        {circle.offers.skills?.map((skill) => (
-                            <Badge key={skill} onClick={() => handleSkillClick(skill)} className="cursor-pointer">
-                                {getSkillLabelByHandle(skill)}
-                            </Badge>
-                        ))}
-                    </div>
                 </div>
             ) : (
                 <div className="text-center text-muted-foreground">

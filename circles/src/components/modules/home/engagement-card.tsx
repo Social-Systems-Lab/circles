@@ -53,17 +53,6 @@ export default function EngagementCard({ circle, isOwner }: EngagementCardProps)
             {circle.engagements?.text ? (
                 <div>
                     <RichText content={circle.engagements.text} />
-                    <div className="mt-4 flex flex-wrap gap-2">
-                        {engagementInterests.map((interest) => (
-                            <Badge
-                                key={interest}
-                                onClick={() => handleInterestClick(interest)}
-                                className="cursor-pointer"
-                            >
-                                {getInterestLabel(interest)}
-                            </Badge>
-                        ))}
-                    </div>
                     {!isOwner && circle.engagements.inviteEnabled && (
                         <div className="mt-4">
                             <Button onClick={onInvite}>Invite to project</Button>

@@ -83,7 +83,11 @@ export default function AboutPage({ circle }: AboutPageProps) {
     const remainingInterestsCount = Math.max(profileInterests.length - 6, 0);
     const remainingNeedsCount = Math.max(circleNeeds.length - 4, 0);
 
-    const renderSkillPopoverBadge = (handle: string, key: string) => {
+    const renderSkillPopoverBadge = (
+        handle: string,
+        key: string,
+        variant: "skill" | "need" = "skill",
+    ) => {
         const skill = getSkillDefinitionByHandle(handle);
         const skillName = skill?.name || handle;
         const categoryLabel = skill?.category ? skillCategoryLabels[skill.category] : null;
@@ -97,8 +101,8 @@ export default function AboutPage({ circle }: AboutPageProps) {
                         aria-label={`View details for ${skillName}`}
                     >
                         <Badge
-                            variant="outline"
-                            className="cursor-pointer text-sm font-medium transition-colors hover:bg-muted/60"
+                            variant={variant}
+                            className="cursor-pointer text-sm font-medium"
                         >
                             {skillName}
                         </Badge>
@@ -280,12 +284,12 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                     </div>
                                     <div className="flex flex-wrap gap-2">
                                         {visibleNeeds.map((handle, index) => {
-                                            return renderSkillPopoverBadge(handle, `${handle}-${index}`);
+                                            return renderSkillPopoverBadge(handle, `${handle}-${index}`, "need");
                                         })}
                                         {hasMoreNeeds && (
                                             <Badge
                                                 variant="outline"
-                                                className="cursor-pointer text-sm font-medium"
+                                                className="cursor-pointer border-gray-300 bg-gray-100 text-sm font-medium text-gray-700 hover:bg-gray-200"
                                                 role="button"
                                                 tabIndex={0}
                                                 aria-expanded={isNeedsExpanded}
@@ -310,8 +314,8 @@ export default function AboutPage({ circle }: AboutPageProps) {
                             )}
 
                             {hasMatchingOfferNeeds && (
-                                <div className="mb-6 w-full rounded-xl border border-emerald-200/60 bg-emerald-50/70 p-3">
-                                    <div className="mb-2 text-xs font-medium uppercase tracking-wide text-emerald-800">
+                                <div className="mb-6 w-full rounded-xl border border-[#e7d8c7] bg-[#f6efe6] p-3">
+                                    <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[#8f5a2a]">
                                         You can help here
                                     </div>
                                     <div className="flex flex-wrap gap-2">
@@ -324,14 +328,14 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                             <Button
                                                 type="button"
                                                 size="sm"
-                                                className="rounded-full"
+                                                className="rounded-full border border-[#c8793a] bg-transparent text-[#c8793a] hover:bg-[#f3e4d6] hover:text-[#b86c31]"
                                                 onClick={() => openContactDialog("offer_help")}
                                             >
                                                 Offer Help
                                             </Button>
                                             <button
                                                 type="button"
-                                                className="mt-2 text-xs text-emerald-800/90 underline-offset-2 hover:underline"
+                                                className="mt-2 text-xs text-[#8f5a2a] underline-offset-2 hover:underline"
                                                 onClick={() => openContactDialog("ask_question")}
                                             >
                                                 Not sure yet? Ask a question first.
@@ -362,7 +366,7 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                         {hasMoreSkills && (
                                             <Badge
                                                 variant="outline"
-                                                className="cursor-pointer text-sm font-medium"
+                                                className="cursor-pointer border-gray-300 bg-gray-100 text-sm font-medium text-gray-700 hover:bg-gray-200"
                                                 role="button"
                                                 tabIndex={0}
                                                 aria-expanded={isSkillsExpanded}
@@ -395,14 +399,16 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                         {visibleInterests.map((handle) => (
                                             <Badge
                                                 key={handle}
-                                                className="border-[#6f7a34] bg-[#6f7a34] px-3 py-1 text-sm font-medium text-white"
+                                                variant="interest"
+                                                className="px-3 py-1 text-sm font-medium"
                                             >
                                                 {getInterestLabel(handle)}
                                             </Badge>
                                         ))}
                                         {hasMoreInterests && (
                                             <Badge
-                                                className="cursor-pointer border-[#6f7a34]/25 bg-[#edf1dd] px-3 py-1 text-sm font-medium text-[#556421]"
+                                                variant="outline"
+                                                className="cursor-pointer border-gray-300 bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-200"
                                                 role="button"
                                                 tabIndex={0}
                                                 aria-expanded={isInterestsExpanded}
