@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GlobalServerSettingsForm } from "./global-server-settings-form"; // Import the new form
 import { Circle, ServerSettings } from "@/models/models";
@@ -17,14 +18,24 @@ import UsersTab from "./tabs/users-tab";
 import SuperAdminsTab from "./tabs/super-admins-tab";
 import VerificationRequestsTab from "./tabs/verification-requests-tab";
 import SystemMessagesTab from "./tabs/system-messages-tab";
+import type { OnboardingMcpAmountBucket, OnboardingMcpStats } from "@/lib/data/user";
 import { toast } from "sonner"; // Import toast for feedback
+
+const currencyFormatter = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 2,
+});
+
+const amountBucketOrder: OnboardingMcpAmountBucket[] = ["5", "10", "25", "50", "100+", "custom"];
 
 interface AdminDashboardProps {
     serverSettings: ServerSettings;
     circles: Circle[];
+    onboardingMcpStats: OnboardingMcpStats;
 }
 
-export default function AdminDashboard({ serverSettings, circles }: AdminDashboardProps) {
+export default function AdminDashboard({ serverSettings, circles, onboardingMcpStats }: AdminDashboardProps) {
     const [activeTab, setActiveTab] = useState("server-settings");
     const [isReindexing, setIsReindexing] = useState(false);
     const [reindexStatusMessage, setReindexStatusMessage] = useState<string | null>(null);
@@ -146,6 +157,68 @@ export default function AdminDashboard({ serverSettings, circles }: AdminDashboa
                     <div className="pt-4">
                         <GlobalServerSettingsForm serverSettings={serverSettings} maxWidth="600px" />
                     </div>
+                </div>
+
+                <div className="mb-8">
+                    <h2 className="mb-2 text-xl font-semibold">Onboarding MCP Summary</h2>
+                    <Card className="max-w-3xl">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-lg">Monthly contribution potential</CardTitle>
+                            <CardDescription>
+                                Snapshot from saved onboarding donation intent responses.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Users with donation intent</p>
+                                    <p className="text-2xl font-semibold">
+                                        {onboardingMcpStats.totalUsersWithDonationIntent}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Users with amount</p>
+                                    <p className="text-2xl font-semibold">{onboardingMcpStats.usersWithAmount}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Volunteering</p>
+                                    <p className="text-2xl font-semibold">{onboardingMcpStats.volunteeringCount}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Skipped</p>
+                                    <p className="text-2xl font-semibold">{onboardingMcpStats.skippedCount}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Total monthly potential</p>
+                                    <p className="text-2xl font-semibold">
+                                        {currencyFormatter.format(onboardingMcpStats.totalMonthlyContributionPotential)}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Average monthly potential</p>
+                                    <p className="text-2xl font-semibold">
+                                        {currencyFormatter.format(
+                                            onboardingMcpStats.averageMonthlyContributionPotential,
+                                        )}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="border-t pt-4">
+                                <h3 className="mb-2 text-sm font-medium">Amount buckets</h3>
+                                <ul className="space-y-1 text-sm">
+                                    {amountBucketOrder.map((bucket) => (
+                                        <li key={bucket} className="flex items-center justify-between gap-4">
+                                            <span className="text-muted-foreground">
+                                                {bucket === "custom" ? "Custom" : `$${bucket}`}
+                                            </span>
+                                            <span className="font-medium">{onboardingMcpStats.amountBuckets[bucket]}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
             </TabsContent>
 

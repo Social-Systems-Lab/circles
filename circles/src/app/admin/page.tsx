@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { getServerSettings } from "@/lib/data/server-settings";
 import AdminDashboard from "@/components/modules/admin/admin-dashboard";
-import { getUserPrivate } from "@/lib/data/user";
+import { getOnboardingMcpStats, getUserPrivate } from "@/lib/data/user";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { redirect } from "next/navigation";
 import { getCircles } from "@/lib/data/circle";
@@ -20,14 +20,18 @@ export default async function AdminPage() {
         redirect("/unauthorized");
     }
 
-    const circles = await getCircles();
+    const [circles, onboardingMcpStats] = await Promise.all([getCircles(), getOnboardingMcpStats()]);
 
     return (
         <div className="container mx-auto p-4">
             <h1 className="mb-4 text-2xl font-bold">Admin Dashboard</h1>
 
             <Suspense fallback={<div>Loading admin dashboard...</div>}>
-                <AdminDashboard serverSettings={serverSettings} circles={circles} />
+                <AdminDashboard
+                    serverSettings={serverSettings}
+                    circles={circles}
+                    onboardingMcpStats={onboardingMcpStats}
+                />
             </Suspense>
         </div>
     );
