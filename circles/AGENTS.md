@@ -1,232 +1,310 @@
-# AGENTS.md — AI Agent Instructions for Kamooni / Circles
+# AGENTS.md — Kamooni / Circles AI Development System (v2)
 
-This repository is developed using AI‑assisted workflows (Codex + ChatGPT).
-The human operator is **not an experienced developer** and can reliably **only copy and paste commands**.
-
-Agents must therefore operate with **extreme clarity, minimal manual editing, and safe production practices**.
+Last updated: March 2026
 
 ---
 
-# Core Principle
+# PURPOSE
 
-Prefer **Codex investigation and patches** over asking the human to edit files manually.
+This file defines how AI agents (Codex, ChatGPT) must operate when working on the Circles / Kamooni codebase.
 
-Priority order:
+Goals:
+- Safe changes
+- Fast iteration
+- Minimal breakage
+- Reproducible workflow
 
-1. Codex investigation
-2. Codex patch
-3. Automated edit (sed / perl / script)
-4. Manual edit by human (last resort)
-
-Manual editing by the human should be minimized.
-
----
-
-# Interaction Rules
-
-When giving instructions:
-
-• Provide **exact commands only**  
-• Commands must be **copy‑paste safe**  
-• Specify **where the command must run**
-
-Examples:
-
-- Local Mac terminal
-- Genesis2 production server
-- Docker container
-- VS Code terminal
-- Browser
-
-Never assume the human can infer missing steps.
+This is a **production system**. All changes must be careful and verifiable.
 
 ---
 
-# One Step Rule
+# CORE PRINCIPLES
 
-Only provide **one action at a time**.
-
-Workflow:
-
-1. Human runs command
-2. Human pastes output
-3. Agent analyzes output
-4. Agent provides next step
-
-Do not give multi‑step blocks unless explicitly requested.
-
----
-
-# Production Environment
-
-Server:
-
-Circles‑Genesis2
-
-Application directory:
-
-/root/circles/circles
-
----
-
-# Deployment
-
-Preferred deployment command on Genesis2:
-
-deploykamooni
-
-Which expands to:
-
-cd /root/circles/circles
-./deploy-genesis2.sh main
-
-Avoid ad‑hoc docker build commands unless troubleshooting.
-
----
-
-# Deployment Verification
-
-Always verify deployment with:
-
-curl -sS https://kamooni.org/api/version && echo
-
-The returned **gitSha must match the deployed commit**.
-
-Optional runtime verification:
-
-docker compose exec -T circles cat /app/VERSION || docker compose exec -T circles cat /VERSION
-
----
-
-# Development Workflow
-
-Preferred workflow:
-
-1. Investigate using Codex
-2. Implement change using Codex
-3. Test locally or in staging
-4. Merge to main
-5. Deploy on Genesis2
-6. Verify deployment
-
-Follow the Dev → Main checklist when promoting changes.
-
-Golden rules:
-
-• Never edit directly on main  
-• Fast‑forward merges are preferred  
-• Conflicts on main are a hard stop
-
----
-
-# Chat Architecture
-
-MongoDB is the authoritative chat backend.
-
-Collections:
-
-chatConversations
-chatRoomMembers
-chatMessageDocs
-chatReadStates
-
-Critical rule:
-
-chatConversations.updatedAt must update whenever a message is inserted.
-
-This controls sidebar ordering.
-
-Earlier Matrix behavior included a fallback that attempted to force‑join a user to a room when send errors indicated they were not a member.
-
----
-
-# Identity Invariant
-
-User **DID must never change** during password reset.
-
-Changing DID breaks:
-
-• chat membership
-• DM visibility
-• identity references across collections
-
----
-
-# Toolbox / Clipboard System
-
-The **User Toolbox (clipboard)** is a client‑side dashboard aggregating personal workflow items such as:
-
-• events
-• tasks
-• goals
-• issues
-
-The UI lives in:
-
-src/components/layout/user-toolbox.tsx
-
-It fetches events, tasks, goals, and issues via server actions and merges them into a single chronological milestone timeline.
-
----
-
-# Image Storage Architecture
-
-Images are stored in **MinIO**.
-
-Absolute URLs are written into MongoDB **at upload time** using the `CIRCLES_URL` environment variable.
-
-Example:
-
-https://kamooni.org/storage/<owner-id>/<filename>
-
-If `CIRCLES_URL` is incorrect (for example `http://127.0.0.1`), broken URLs are permanently written to MongoDB and require database repair.
-
-Images are delivered via:
-
-Browser → nginx → /storage → MinIO
-Next.js → /_next/image → Sharp optimizer
-
-Sharp must exist inside the runtime container for thumbnails to work.
-
----
-
-# Debugging Philosophy
-
-Before modifying code, verify:
-
-• logs
-• MongoDB records
-• environment variables
-• deployment version
-• container state
-
-Prefer **inspection before mutation**.
-
----
-
-# Coding Philosophy
-
-Prefer:
-
-• small patches
-• minimal surface changes
-• explicit code
-• predictable behavior
-
-Avoid:
-
-• large refactors
-• unnecessary abstractions
-• renaming files unless necessary
+## 1. Smallest Safe Change
 
 Always ask:
 
-“What is the smallest safe fix?”
+> What is the smallest possible fix?
+
+Avoid:
+- large refactors
+- renaming files unnecessarily
+- changing unrelated code
+
+Prefer:
+- 1–10 line patches
+- surgical edits
+- minimal surface area
 
 ---
 
-# Final Rule
+## 2. Codex First
 
-When uncertain:
+Preferred workflow:
 
-Choose the safest change requiring the **least manual work from the human** and the **lowest risk to production**.
+1. Investigate (read code first)
+2. Implement using Codex
+3. Test locally
+4. Then commit
+
+Avoid manual editing unless absolutely necessary.
+
+---
+
+## 3. One Step at a Time
+
+Human operator:
+- copy-pastes commands
+- runs them
+- returns output
+
+Therefore:
+- NEVER give multiple steps at once
+- ALWAYS wait for output
+
+---
+
+## 4. Boring > Clever
+
+Prefer:
+- explicit code
+- predictable logic
+- simple patterns
+
+Avoid:
+- abstractions
+- overengineering
+- premature optimization
+
+---
+
+# REPOSITORY RULES
+
+## Source of Truth
+
+ALL code must end up in:
+
+~/circles/circles
+
+Never leave changes inside:
+.codex/worktrees/
+
+Before finishing ANY task:
+
+```bash
+git status --short
+
+Must be clean and correct.
+
+Feature Branch Workflow
+
+Always use:
+
+git checkout -b feature/<name>
+
+Flow:
+
+Create branch
+
+Make changes
+
+Test locally
+
+Commit
+
+Push
+
+Merge into main ONLY after validation
+
+Local Testing (MANDATORY)
+
+Before pushing:
+
+run build
+
+test in browser (localhost)
+
+verify feature works
+
+verify nothing broke
+
+DEPLOYMENT RULES (GENESIS2)
+
+Deployment server:
+Circles-Genesis2
+
+Production path:
+/root/circles/circles
+
+Deployment Command
+
+Always use:
+
+deploykamooni
+
+Which runs:
+
+cd /root/circles/circles
+./deploy-genesis2.sh main
+Screen Session (REQUIRED)
+
+Long builds must run inside screen:
+
+screen -S rebuild
+deploykamooni
+Deployment Verification (MANDATORY)
+
+After deploy:
+
+curl -sS https://kamooni.org/api/version && echo
+
+Expected:
+
+gitSha must match latest commit
+
+Optional:
+
+docker compose exec -T circles cat /app/VERSION || docker compose exec -T circles cat /VERSION
+PRODUCTION SAFETY RULES
+
+NEVER:
+
+hot-edit production without Git
+
+deploy without verification
+
+mutate identity model (DID)
+
+bypass CI
+
+ALWAYS:
+
+deploy from origin/main
+
+verify /api/version
+
+sync fixes back to GitHub
+
+DATABASE RULES (CRITICAL)
+Mongo is the source of truth
+
+Key collections:
+
+chatConversations
+
+chatRoomMembers
+
+chatMessageDocs
+
+chatReadStates
+
+CRITICAL RULE
+
+chatConversations.updatedAt MUST be updated on every message
+
+This controls:
+
+chat ordering
+
+UI correctness
+
+IMAGE STORAGE RULES
+
+Images stored in:
+MinIO
+
+URLs written at upload time using:
+CIRCLES_URL
+
+Example:
+
+https://kamooni.org/storage/
+<owner>/<filename>
+
+WARNING:
+If CIRCLES_URL is wrong → broken URLs are permanently stored in Mongo
+
+DEBUGGING RULES
+
+Always verify before changing:
+
+logs
+
+runtime state
+
+database records
+
+environment variables
+
+deployed version
+
+Never guess.
+
+AI EXECUTION CHECKLIST
+
+Before making changes:
+
+Read relevant files
+
+Identify exact problem
+
+Confirm assumptions
+
+During changes:
+
+Keep patch minimal
+
+Avoid unrelated edits
+
+After changes:
+
+Test locally
+
+Verify UI behavior
+
+Check database impact
+
+Before finishing:
+
+Ensure files are in ~/circles/circles
+
+Run:
+
+git status --short
+PHILOSOPHY
+
+This system is built with AI-assisted development.
+
+Human focuses on:
+
+architecture
+
+product decisions
+
+testing
+
+AI focuses on:
+
+code edits
+
+debugging
+
+patch generation
+
+Goal:
+
+More thinking
+Less typing
+Safer systems
+Faster iteration
+
+FINAL RULE
+
+If there is any ambiguity:
+
+Choose the option that:
+
+requires the least manual work
+
+has the lowest risk to production
+
