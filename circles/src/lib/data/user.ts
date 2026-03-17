@@ -4,6 +4,7 @@ import {
     Challenge,
     ChatRoomMembership,
     Circle,
+    DonationIntent,
     Membership,
     RegistryInfo,
     UserPrivate,
@@ -406,6 +407,21 @@ export const updateUser = async (user: Partial<UserPrivate>, authenticatedUserDi
     // Note: updateUser doesn't handle embedding updates like updateCircle does.
     // This might be intentional if user profile updates don't need embedding updates,
     // or it might be an oversight. Keeping it as is for now.
+};
+
+export const updateDonationIntent = async (userDid: string, donationIntent: DonationIntent): Promise<void> => {
+    const result = await Circles.updateOne(
+        { did: userDid, circleType: "user" },
+        {
+            $set: {
+                donationIntent,
+            },
+        },
+    );
+
+    if (result.matchedCount === 0) {
+        throw new Error("User not found");
+    }
 };
 
 // registers a user in the circles registry

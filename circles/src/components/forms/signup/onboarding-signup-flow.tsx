@@ -11,6 +11,7 @@ import { useAtom } from "jotai";
 import { authInfoAtom, userAtom } from "@/lib/data/atoms";
 import { submitSignupFormAction } from "@/components/forms/signup/actions";
 import {
+    saveDonationIntentAction,
     saveInterestsAction,
     saveMissionAction,
     saveProfileAction,
@@ -521,12 +522,49 @@ export function OnboardingSignupFlow() {
         }
     };
 
-    const continueFromDonationIntent = () => {
+    const continueFromDonationIntent = async () => {
         if (!createdUserHandle) {
             return;
         }
 
-        setCompletionRedirectUrl(`/circles/${createdUserHandle}/home`);
+        setIsSubmitting(true);
+
+        try {
+            const donationIntentResult = await saveDonationIntentAction({
+                amount: donationIntent.amount,
+                customAmount: donationIntent.customAmount,
+                volunteering: donationIntent.volunteering,
+                skipped: donationIntent.later,
+            });
+
+            if (!donationIntentResult.success) {
+                toast({
+                    title: "Could not save your support preference",
+                    description: donationIntentResult.message,
+                    variant: "destructive",
+                });
+                return;
+            }
+
+            setUser((prev) =>
+                prev
+                    ? {
+                          ...prev,
+                          donationIntent: donationIntentResult.donationIntent,
+                      }
+                    : prev,
+            );
+
+            setCompletionRedirectUrl(`/circles/${createdUserHandle}/home`);
+        } catch (error) {
+            toast({
+                title: "Error",
+                description: error instanceof Error ? error.message : "An unexpected error occurred.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
     };
     return (
         <div

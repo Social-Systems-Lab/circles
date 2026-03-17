@@ -49,6 +49,7 @@ export const SAFE_CIRCLE_PROJECTION = {
     metadata: 1, // Include metadata for shadow post IDs
     socialLinks: 1,
     websiteUrl: 1,
+    donationIntent: 1,
     bookmarkedCircles: 1,
     pinnedCircles: 1,
     hiddenCancelledEventIds: 1,

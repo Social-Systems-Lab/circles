@@ -501,6 +501,14 @@ export const circleSchema = z.object({
     verificationStatus: verificationStatusSchema.optional(),
     verifiedAt: z.date().optional(),
     verifiedBy: didSchema.optional(),
+    donationIntent: z
+        .object({
+            amount: z.number().nullable(),
+            volunteering: z.boolean(),
+            skipped: z.boolean(),
+            updatedAt: z.date(),
+        })
+        .optional(),
     // Subscription fields
     subscription: z
         .object({
@@ -521,6 +529,7 @@ export const circleSchema = z.object({
 
 export type Circle = z.infer<typeof circleSchema>;
 export type VerificationStatus = z.infer<typeof verificationStatusSchema>;
+export type DonationIntent = NonNullable<Circle["donationIntent"]>;
 
 export const verificationRequestSchema = z.object({
     _id: z.any().optional(),
