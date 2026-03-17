@@ -27,6 +27,7 @@ import { interestOptions } from "@/lib/data/interests";
 import { featuredSkills } from "@/lib/data/skills";
 import { cn } from "@/lib/utils";
 import OnboardingCompleteAnimation from "@/components/onboarding/onboarding-complete-animation";
+import DonationIntentCard from "@/components/onboarding/donation-intent-card";
 
 const montserrat = Montserrat({
     subsets: ["latin"],
@@ -48,7 +49,7 @@ const INTERESTS_PROMPT_TEXT =
     "Pick a few topics you care about so Kamooni can connect you with relevant projects, events, and communities.";
 const INTERESTS_HELPER_TEXT = "Choose at least 2. You can change or add more later.";
 
-const stepTitles = ["Welcome", "Account", "Skills", "Interests", "Profile"] as const;
+const stepTitles = ["Welcome", "Account", "Skills", "Interests", "Profile", "Support"] as const;
 
 type SignupState = {
     name: string;
@@ -64,6 +65,13 @@ type SignupState = {
 
 type SignupErrors = Partial<Record<keyof SignupState, string>>;
 
+type DonationIntentValue = {
+    amount: string | null;
+    customAmount: string;
+    volunteering: boolean;
+    later: boolean;
+};
+
 const initialState: SignupState = {
     name: "",
     email: "",
@@ -74,6 +82,13 @@ const initialState: SignupState = {
     interests: [],
     about: "",
     mission: "",
+};
+
+const initialDonationIntent: DonationIntentValue = {
+    amount: null,
+    customAmount: "",
+    volunteering: false,
+    later: false,
 };
 
 function sanitizeHandle(value: string) {
@@ -185,6 +200,7 @@ export function OnboardingSignupFlow() {
     const [isSkillsExpanded, setIsSkillsExpanded] = useState(false);
     const [isInterestsExpanded, setIsInterestsExpanded] = useState(false);
     const [completionRedirectUrl, setCompletionRedirectUrl] = useState<string | null>(null);
+    const [donationIntent, setDonationIntent] = useState<DonationIntentValue>(initialDonationIntent);
 
     const visibleSkillOptions = isSkillsExpanded ? featuredSkills : featuredSkills.slice(0, INITIAL_VISIBLE_OPTIONS);
     const visibleInterestOptions = isInterestsExpanded
@@ -214,7 +230,7 @@ export function OnboardingSignupFlow() {
     };
 
     useEffect(() => {
-        return () => {
+    return () => {
             if (profilePicturePreview.startsWith("blob:")) {
                 URL.revokeObjectURL(profilePicturePreview);
             }
@@ -229,8 +245,7 @@ export function OnboardingSignupFlow() {
         const timeoutId = window.setTimeout(() => {
             router.push(completionRedirectUrl);
         }, 2800);
-
-        return () => {
+    return () => {
             window.clearTimeout(timeoutId);
         };
     }, [completionRedirectUrl, router]);
@@ -494,7 +509,7 @@ export function OnboardingSignupFlow() {
                     : prev,
             );
 
-            setCompletionRedirectUrl(`/circles/${createdUserHandle}/home`);
+            setStepIndex(5);
         } catch (error) {
             toast({
                 title: "Error",
@@ -506,6 +521,13 @@ export function OnboardingSignupFlow() {
         }
     };
 
+    const continueFromDonationIntent = () => {
+        if (!createdUserHandle) {
+            return;
+        }
+
+        setCompletionRedirectUrl(`/circles/${createdUserHandle}/home`);
+    };
     return (
         <div
             className={cn(
@@ -562,6 +584,7 @@ export function OnboardingSignupFlow() {
                                         {stepIndex === 2 && "How you can contribute"}
                                         {stepIndex === 3 && "What you care about"}
                                         {stepIndex === 4 && "Set up your profile"}
+                                        {stepIndex === 5 && "Support projects through Kamooni"}
                                     </h1>
                                     <p className="mt-3 max-w-2xl text-sm leading-6 text-kam-gray-dark/72 sm:text-base">
                                         {stepIndex === 0 &&
@@ -572,6 +595,8 @@ export function OnboardingSignupFlow() {
                                         {stepIndex === 3 && INTERESTS_PROMPT_TEXT}
                                         {stepIndex === 4 &&
                                             "Add a face, a cover image, a short introduction, and optionally a mission so your profile feels alive when you arrive."}
+                                        {stepIndex === 5 &&
+                                            "Let us know what you might consider contributing to projects through Kamooni in the future. This is optional and there is no commitment."}
                                     </p>
                                 </div>
                             </div>
@@ -721,7 +746,7 @@ export function OnboardingSignupFlow() {
                                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                         {visibleSkillOptions.map((skill) => {
                                             const selected = state.skills.includes(skill.handle);
-                                            return (
+    return (
                                                 <button
                                                     key={skill.handle}
                                                     type="button"
@@ -793,7 +818,7 @@ export function OnboardingSignupFlow() {
                                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                         {visibleInterestOptions.map((interest) => {
                                             const selected = state.interests.includes(interest.value);
-                                            return (
+    return (
                                                 <button
                                                     key={interest.value}
                                                     type="button"
@@ -983,7 +1008,7 @@ export function OnboardingSignupFlow() {
                                                     Finishing...
                                                 </>
                                             ) : (
-                                                "Go to my profile"
+                                                "Continue"
                                             )}
                                         </Button>
                                     </div>
@@ -994,6 +1019,16 @@ export function OnboardingSignupFlow() {
                                     )}
                                 </div>
                             )}
+
+                            {stepIndex === 5 && (
+                                <DonationIntentCard
+                                    value={donationIntent}
+                                    onChange={setDonationIntent}
+                                    onContinue={continueFromDonationIntent}
+                                    onBack={goToPreviousStep}
+                                    isSubmitting={isSubmitting}
+                                />
+                            )}
                         </div>
                         <AnimatePresence>
                             {completionRedirectUrl && (
@@ -1001,7 +1036,7 @@ export function OnboardingSignupFlow() {
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
                                     exit={{ opacity: 0 }}
-                                    className="absolute inset-0 flex items-center justify-center bg-[#fffaf2]/96 px-6"
+                                    className="fixed inset-0 z-50 flex items-center justify-center bg-[#fffaf2] px-6"
                                 >
                                     <motion.div
                                         initial={{ opacity: 0, y: 12, scale: 0.98 }}
@@ -1011,6 +1046,14 @@ export function OnboardingSignupFlow() {
                                         className="w-full max-w-md rounded-[28px] border border-white/80 bg-[#fff4d5] p-8 text-center shadow-[0_18px_48px_rgba(123,81,24,0.14)]"
                                     >
                                         <OnboardingCompleteAnimation />
+                                        {(donationIntent.amount || donationIntent.customAmount || donationIntent.volunteering) && (
+                                            <p className="mt-3 text-sm text-kam-gray-dark/70">
+                                                Thank you for participating.
+                                            </p>
+                                        )}
+                                        <p className="mt-2 text-xs text-kam-gray-dark/55">
+                                            Taking you to your profile…
+                                        </p>
                                     </motion.div>
                                 </motion.div>
                             )}
