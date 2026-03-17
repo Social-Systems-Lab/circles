@@ -21,9 +21,7 @@ import SystemMessagesTab from "./tabs/system-messages-tab";
 import type { OnboardingMcpAmountBucket, OnboardingMcpStats } from "@/lib/data/user";
 import { toast } from "sonner"; // Import toast for feedback
 
-const currencyFormatter = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
+const monthlyAmountFormatter = new Intl.NumberFormat(undefined, {
     maximumFractionDigits: 2,
 });
 
@@ -139,6 +137,8 @@ export default function AdminDashboard({ serverSettings, circles, onboardingMcpS
         }
     };
 
+    const formatMonthlyAmount = (amount: number) => `${monthlyAmountFormatter.format(amount)} / month`;
+
     return (
         <Tabs defaultValue="server-settings" className="w-full" onValueChange={setActiveTab}>
             <TabsList className="mb-6">
@@ -191,15 +191,13 @@ export default function AdminDashboard({ serverSettings, circles, onboardingMcpS
                                 <div>
                                     <p className="text-sm text-muted-foreground">Total monthly potential</p>
                                     <p className="text-2xl font-semibold">
-                                        {currencyFormatter.format(onboardingMcpStats.totalMonthlyContributionPotential)}
+                                        {formatMonthlyAmount(onboardingMcpStats.totalMonthlyContributionPotential)}
                                     </p>
                                 </div>
                                 <div>
                                     <p className="text-sm text-muted-foreground">Average monthly potential</p>
                                     <p className="text-2xl font-semibold">
-                                        {currencyFormatter.format(
-                                            onboardingMcpStats.averageMonthlyContributionPotential,
-                                        )}
+                                        {formatMonthlyAmount(onboardingMcpStats.averageMonthlyContributionPotential)}
                                     </p>
                                 </div>
                             </div>
@@ -210,7 +208,7 @@ export default function AdminDashboard({ serverSettings, circles, onboardingMcpS
                                     {amountBucketOrder.map((bucket) => (
                                         <li key={bucket} className="flex items-center justify-between gap-4">
                                             <span className="text-muted-foreground">
-                                                {bucket === "custom" ? "Custom" : `$${bucket}`}
+                                                {bucket === "custom" ? "Custom" : `${bucket} / month`}
                                             </span>
                                             <span className="font-medium">{onboardingMcpStats.amountBuckets[bucket]}</span>
                                         </li>
