@@ -424,6 +424,87 @@ export const updateDonationIntent = async (userDid: string, donationIntent: Dona
     }
 };
 
+export type OnboardingMcpAmountBucket = "5" | "10" | "25" | "50" | "100+" | "custom";
+
+export type OnboardingMcpStats = {
+    totalUsersWithDonationIntent: number;
+    usersWithAmount: number;
+    totalMonthlyContributionPotential: number;
+    averageMonthlyContributionPotential: number;
+    volunteeringCount: number;
+    skippedCount: number;
+    amountBuckets: Record<OnboardingMcpAmountBucket, number>;
+};
+
+const getOnboardingMcpAmountBucket = (amount: number): OnboardingMcpAmountBucket => {
+    if (amount === 5) return "5";
+    if (amount === 10) return "10";
+    if (amount === 25) return "25";
+    if (amount === 50) return "50";
+    if (amount >= 100) return "100+";
+    return "custom";
+};
+
+export const getOnboardingMcpStats = async (): Promise<OnboardingMcpStats> => {
+    const users = await Circles.find(
+        {
+            circleType: "user",
+            "donationIntent.updatedAt": { $exists: true },
+        },
+        {
+            projection: {
+                donationIntent: 1,
+            },
+        },
+    ).toArray();
+
+    const amountBuckets: Record<OnboardingMcpAmountBucket, number> = {
+        "5": 0,
+        "10": 0,
+        "25": 0,
+        "50": 0,
+        "100+": 0,
+        custom: 0,
+    };
+
+    let usersWithAmount = 0;
+    let totalMonthlyContributionPotential = 0;
+    let volunteeringCount = 0;
+    let skippedCount = 0;
+
+    for (const user of users) {
+        const donationIntent = user.donationIntent;
+        if (!donationIntent) {
+            continue;
+        }
+
+        if (donationIntent.volunteering) {
+            volunteeringCount += 1;
+        }
+
+        if (donationIntent.skipped) {
+            skippedCount += 1;
+        }
+
+        const amount = donationIntent.amount;
+        if (typeof amount === "number" && Number.isFinite(amount) && amount > 0) {
+            usersWithAmount += 1;
+            totalMonthlyContributionPotential += amount;
+            amountBuckets[getOnboardingMcpAmountBucket(amount)] += 1;
+        }
+    }
+
+    return {
+        totalUsersWithDonationIntent: users.length,
+        usersWithAmount,
+        totalMonthlyContributionPotential,
+        averageMonthlyContributionPotential: usersWithAmount > 0 ? totalMonthlyContributionPotential / usersWithAmount : 0,
+        volunteeringCount,
+        skippedCount,
+        amountBuckets,
+    };
+};
+
 // registers a user in the circles registry
 export const registerUser = async (
     did: string,
