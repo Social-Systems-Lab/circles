@@ -289,3 +289,68 @@ A user is considered activated when they complete at least one of:
 - follow a circle
 - offer a skill
 - post an introduction
+
+
+---
+
+# 8. Contribution Signal Layer (MCP)
+
+Kamooni captures early-stage economic intent during onboarding via a donation/volunteering prompt.
+
+This data is stored on the user document as `donationIntent` and aggregated into **MCP (Monthly Contribution Potential)**.
+
+MCP represents the total potential monthly contributions users indicate they would make if contribution mechanisms were available.
+
+## Current Implementation
+
+### Storage (User Document)
+
+```ts
+donationIntent: {
+  amount?: number,
+  volunteering?: boolean,
+  skipped?: boolean,
+  updatedAt: Date
+}
+```
+
+### Aggregation
+
+- Function: `getOnboardingMcpStats()`
+- Location: `src/lib/data/user.ts`
+
+Calculates:
+- totalUsersWithDonationIntent
+- usersWithAmount
+- totalMonthlyContributionPotential
+- averageMonthlyContributionPotential
+- volunteeringCount
+- skippedCount
+- amountBuckets
+
+## Access
+
+- Admin dashboard (internal only)
+  - `/admin` → Server Settings → Onboarding MCP Summary
+
+- CLI:
+  - `npx tsx scripts/report-onboarding-mcp.ts`
+
+## Purpose
+
+- Measure latent economic potential before payment systems exist
+- Validate contribution-driven model
+- Support fundraising and strategy
+- Establish baseline for contribution economy
+
+## Strategic Role
+
+Intent → Measurement → Activation → Transactions
+
+## Future Evolution
+
+- Contribution segmentation
+- Activation flows
+- Altruistic Wallet integration
+- Trust and reputation layer
+- Contribution-based personalization
