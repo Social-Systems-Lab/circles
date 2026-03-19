@@ -14,6 +14,7 @@ import {
     getRestrictedActionMessage,
     isVerifiedUser,
 } from "@/lib/auth/verification";
+import { isCommunityGuidelinesCompleted } from "@/lib/community-guidelines";
 
 export async function getVerificationStatus() {
     const userDid = await getAuthenticatedUserDid();
@@ -29,6 +30,7 @@ type RequestVerificationState = {
     message: string;
     success?: boolean;
     emailSent?: boolean;
+    requiresCommunityGuidelines?: boolean;
 };
 
 export async function requestVerification(
@@ -47,6 +49,13 @@ export async function requestVerification(
         }
         if (isVerifiedUser(user)) {
             return { success: true, message: "Your account is already verified." };
+        }
+        if (!isCommunityGuidelinesCompleted(user.communityGuidelinesAcceptance)) {
+            return {
+                success: false,
+                requiresCommunityGuidelines: true,
+                message: "Please agree to Kamooni's core community rules before requesting verification.",
+            };
         }
 
         const verificationCollection = db.collection<VerificationRequest>("verifications");

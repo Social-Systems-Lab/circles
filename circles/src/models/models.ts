@@ -1,5 +1,6 @@
 import { Toast } from "@/components/ui/use-toast";
 import type { SystemMessageMetadata } from "@/lib/chat/system-messages";
+import { COMMUNITY_GUIDELINE_RULE_IDS } from "@/lib/community-guidelines";
 import { CoreMessage } from "ai";
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { ReadonlyURLSearchParams } from "next/navigation";
@@ -442,6 +443,21 @@ export const socialLinkSchema = z.object({
     url: z.string().url(),
 });
 
+export const communityGuidelineRuleIdSchema = z.enum(COMMUNITY_GUIDELINE_RULE_IDS);
+
+export const communityGuidelineAgreementSchema = z.object({
+    accepted: z.boolean(),
+    acceptedAt: z.date().nullable(),
+});
+
+export const communityGuidelineAgreementStateSchema = z.object({
+    truth: communityGuidelineAgreementSchema,
+    constructive: communityGuidelineAgreementSchema,
+    respect: communityGuidelineAgreementSchema,
+    privacy: communityGuidelineAgreementSchema,
+    responsibility: communityGuidelineAgreementSchema,
+});
+
 export const circleSchema = z.object({
     _id: z.any().optional(),
     did: didSchema.optional(),
@@ -487,6 +503,8 @@ export const circleSchema = z.object({
     hiddenCancelledEventIds: z.array(z.string()).optional(),
     agreedToTos: z.boolean().optional(),
     agreedToEmailUpdates: z.boolean().optional(),
+    communityGuidelinesAcceptance: communityGuidelineAgreementStateSchema.optional(),
+    communityGuidelinesAcceptedAt: z.date().optional(),
     metadata: z.record(z.string(), z.any()).optional(), // For storing additional data like commentPostId
     // Password Reset Fields
     passwordResetToken: z.string().nullable().optional(),
