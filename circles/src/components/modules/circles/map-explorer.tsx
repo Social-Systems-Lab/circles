@@ -1175,9 +1175,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                 animate={{ opacity: 1 }}
                                 className="ml-2 flex max-w-[400px] flex-col items-center gap-4 rounded-xl border bg-white p-8 shadow-lg"
                             >
-                                <div className="text-xl font-semibold">No communities to show!</div>
+                                <div className="text-xl font-semibold">No circles to show!</div>
                                 <p className="text-center text-gray-600">
-                                    You might have seen, followed, or ignored all available communities.
+                                    You might have seen, followed, or ignored all available circles.
                                 </p>
                                 <div className="flex flex-row gap-2">
                                     <Button onClick={handleExplore} className="mt-4 gap-2">
@@ -1343,7 +1343,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                     <p className="py-4 text-center text-sm text-gray-500">
                                         {hasSearched
                                             ? `No results found for "${searchQuery}".`
-                                            : "No communities found."}
+                                            : "No circles found."}
                                     </p>
                                 )}
                                 {!isSearching && drawerListData.length > 0 && (
