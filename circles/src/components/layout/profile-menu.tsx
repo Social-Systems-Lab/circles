@@ -118,7 +118,7 @@ const ProfileMenuBar = () => {
                                 variant="ghost"
                                 size="icon"
                                 className="relative h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
-                                onClick={() => openUserToolbox("chat")}
+                                onClick={() => router.push("/chat")}
                             >
                                 <LuMail className="h-5 w-5" />
                                 {totalUnreadMessages > 0 && (

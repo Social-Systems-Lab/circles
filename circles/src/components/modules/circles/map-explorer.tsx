@@ -938,7 +938,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                             {/* Filters */}
                             {!isMobile && (
                                 <CategoryFilterCarousel
-                                    categories={["communities", "projects", "users", "events"]}
+                                    categories={["communities", "users", "events"]}
                                     categoryCounts={categoryCounts}
                                     selectedCategory={selectedCategory}
                                     onSelectionChange={setSelectedCategory}
