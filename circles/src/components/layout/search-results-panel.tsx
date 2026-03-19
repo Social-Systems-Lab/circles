@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { useAtom } from "jotai";
-import { sidePanelSearchStateAtom, contentPreviewAtom, zoomContentAtom, mapSearchCommandAtom } from "@/lib/data/atoms";
-import { Button } from "@/components/ui/button";
-import { X, Search, Calendar as CalendarIcon } from "lucide-react";
+import { sidePanelSearchStateAtom, contentPreviewAtom, zoomContentAtom } from "@/lib/data/atoms";
+import { Calendar as CalendarIcon } from "lucide-react";
 import Indicators from "@/components/utils/indicators";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import { Content, ContentPreviewData, EventDisplay } from "@/models/models";
@@ -20,32 +19,24 @@ export default function SearchResultsPanel() {
     const [searchState] = useAtom(sidePanelSearchStateAtom);
     const [, setContentPreview] = useAtom(contentPreviewAtom);
     const [, setZoomContent] = useAtom(zoomContentAtom);
-    const [, setMapSearchCommand] = useAtom(mapSearchCommandAtom);
-
-    const [query, setQuery] = useState(searchState.query || "");
-    useEffect(() => {
-        setQuery(searchState.query || "");
-    }, [searchState.query]);
 
     const items = searchState.items || [];
-    const activeFilters = useMemo(() => {
-        const chips: string[] = [];
+    const filterSummary = useMemo(() => {
+        const parts: string[] = [];
 
         if (searchState.selectedCategory && searchState.selectedCategory !== "events") {
-            chips.push(
-                `Type: ${SEARCH_CATEGORY_LABELS[searchState.selectedCategory] ?? searchState.selectedCategory}`,
-            );
+            parts.push(SEARCH_CATEGORY_LABELS[searchState.selectedCategory] ?? searchState.selectedCategory);
         }
 
-        (searchState.selectedSdgHandles || []).forEach((handle) => {
-            chips.push(`SDG: ${handle}`);
-        });
+        if ((searchState.selectedSdgHandles || []).length > 0) {
+            parts.push(`${(searchState.selectedSdgHandles || []).length} SDG`);
+        }
 
         if (searchState.selectedDateLabel) {
-            chips.push(`Date: ${searchState.selectedDateLabel}`);
+            parts.push(searchState.selectedDateLabel);
         }
 
-        return chips;
+        return parts.join(" · ");
     }, [searchState.selectedCategory, searchState.selectedSdgHandles, searchState.selectedDateLabel]);
 
     const emptyState = useMemo(() => {
@@ -119,43 +110,9 @@ export default function SearchResultsPanel() {
 
     return (
         <div className="flex h-full w-full flex-col bg-white">
-            {/* Header with search input moved into panel */}
             <div className="sticky top-0 z-10 border-b bg-white px-3 py-2">
                 <div className="mb-2 text-sm font-semibold">Search results</div>
-                <div className="flex items-center gap-2">
-                    <input
-                        type="text"
-                        placeholder="Search..."
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                                setMapSearchCommand({ query, timestamp: Date.now() });
-                            }
-                        }}
-                        className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-gray-300"
-                    />
-                    {query && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="px-2"
-                            onClick={() => setMapSearchCommand({ query: "", timestamp: Date.now() })}
-                            aria-label="Clear search"
-                        >
-                            <X className="h-4 w-4" />
-                        </Button>
-                    )}
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={!query.trim()}
-                        onClick={() => setMapSearchCommand({ query, timestamp: Date.now() })}
-                        aria-label="Search"
-                    >
-                        <Search className="h-4 w-4" />
-                    </Button>
-                </div>
+                {searchState.query && <div className="text-sm text-gray-700">Query: “{searchState.query}”</div>}
                 <div className="mt-1 text-xs text-gray-500">
                     {searchState.isSearching
                         ? "Searching…"
@@ -165,18 +122,7 @@ export default function SearchResultsPanel() {
                               searchState.counts?.projects ?? 0
                           } projects`}
                 </div>
-                {activeFilters.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                        {activeFilters.map((filter) => (
-                            <span
-                                key={filter}
-                                className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-700"
-                            >
-                                {filter}
-                            </span>
-                        ))}
-                    </div>
-                )}
+                {filterSummary && <div className="mt-1 text-xs text-gray-500">Filters: {filterSummary}</div>}
             </div>
             <div className="flex-1 overflow-y-auto scrollbar-hover stable-scrollbar">
                 {searchState.isSearching && <div className="p-4 text-sm text-gray-600">Loading…</div>}

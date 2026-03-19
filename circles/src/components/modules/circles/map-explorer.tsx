@@ -9,11 +9,10 @@ import { motion } from "framer-motion";
 import CircleSwipeCard from "./circle-swipe-card";
 import { MapDisplay } from "@/components/map/map";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-    RefreshCw,
     Hand,
     Home,
     Search,
@@ -22,10 +21,6 @@ import {
     ArrowLeft,
     ChevronRight,
     ChevronLeft,
-    Globe,
-    CalendarIcon,
-    AudioLines,
-    ChevronDown,
 } from "lucide-react"; // Added ArrowLeft
 import { format } from "date-fns";
 import type { DateRange } from "react-day-picker";
@@ -42,18 +37,15 @@ import {
     sidePanelSearchStateAtom,
     mapSearchCommandAtom,
     drawerContentAtom,
-    feedPanelDockedAtom,
 } from "@/lib/data/atoms";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CirclePicture } from "./circle-picture";
 import { completeSwipeOnboardingAction } from "./swipe-actions";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { searchContentAction } from "../search/actions";
 import CategoryFilter, { CategoryFilterProps } from "../search/category-filter";
 import SdgFilter from "../search/sdg-filter";
-import { SdgPanel } from "../search/SdgPanel";
 import Indicators from "@/components/utils/indicators";
 import ResizingDrawer from "@/components/ui/resizing-drawer"; // Correct import name
 import ContentPreview from "@/components/layout/content-preview";
@@ -177,7 +169,6 @@ interface MapExplorerProps {
 }
 
 type ViewMode = "cards" | "explore";
-type DrawerContent = "explore" | "noticeboard" | "preview" | "events";
 
 // Define snap point indices for clarity
 const SNAP_INDEX_CLOSED = -1; // Not used by resizing drawer, but conceptually useful
@@ -272,7 +263,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const [displayedContent, setDisplayedContent] = useAtom(displayedContentAtom);
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom); // Get value and setter
     const isMobile = useIsMobile();
-    const { windowWidth, windowHeight } = useWindowDimensions();
+    const { windowHeight } = useWindowDimensions();
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
@@ -306,10 +297,6 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         }
         return list;
     }, [eventsForMap, selectedSdgs, hasSearched, searchQuery]);
-    // Resonance filter state (min similarity threshold) and current dataset range
-    const [simPercent, setSimPercent] = useState<number>(0);
-    const [simRange, setSimRange] = useState<{ min: number; max: number }>({ min: 0, max: 1 });
-
     // Date range filter
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
     const dateLabel = useMemo(() => {
@@ -341,46 +328,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const [triggerSnapIndex, setTriggerSnapIndex] = useState<number>(-1);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [panelMode, setSidePanelMode] = useAtom(sidePanelModeAtom);
-    const [feedPanelDocked] = useAtom(feedPanelDockedAtom);
     const [, setSearchPanelState] = useAtom(sidePanelSearchStateAtom);
     const [mapSearchCommand] = useAtom(mapSearchCommandAtom);
     const [lastSearchCmdTs, setLastSearchCmdTs] = useState<number>(-1);
-    const showTopSearchInput = isMobile || panelMode !== "search";
-
-    const sliderLeft = useMemo(() => {
-        if (isMobile) {
-            return "50%";
-        }
-        if (!windowWidth) {
-            return "50%";
-        }
-
-        const NAV_WIDTH_DESKTOP = 72;
-        const DESKTOP_PANEL_WIDTH = 420;
-        const OVERLAY_PANEL_WIDTH = DESKTOP_PANEL_WIDTH; // Events overlay uses the same footprint
-
-        const isEventsOverlay =
-            !isMobile && pathname === "/explore" && panelMode === "events";
-        const isActivityOverlay =
-            !isMobile && pathname === "/explore" && panelMode === "activity" && !feedPanelDocked;
-
-        const isOverlayPanel = isEventsOverlay || isActivityOverlay;
-        const panelWidth = !isMobile && panelMode !== "none" && !isOverlayPanel ? DESKTOP_PANEL_WIDTH : 0;
-        const navWidth = isMobile ? 0 : NAV_WIDTH_DESKTOP;
-        const mapWidth = windowWidth - navWidth - panelWidth;
-
-        if (mapWidth <= 0) {
-            return "50%";
-        }
-
-        let center = navWidth + panelWidth + mapWidth / 2;
-
-        if (isEventsOverlay) {
-            center += OVERLAY_PANEL_WIDTH / 2;
-        }
-
-        return `${center}px`;
-    }, [isMobile, panelMode, pathname, windowWidth, feedPanelDocked]);
 
     // --- Memos ---
     const snapPoints = useMemo(() => [100, windowHeight * 0.4, windowHeight * 0.8, windowHeight], [windowHeight]);
@@ -421,37 +371,6 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
 
         return results;
     }, [allSearchResults, selectedCategory, selectedSdgs]);
-
-    const activeFilterChips = useMemo(() => {
-        const chips: { key: string; label: string; onRemove: () => void }[] = [];
-
-        if (selectedCategory && selectedCategory !== "events") {
-            chips.push({
-                key: `type:${selectedCategory}`,
-                label: getSearchCategoryLabel(selectedCategory),
-                onRemove: () => setSelectedCategory(null),
-            });
-        }
-
-        selectedSdgs.forEach((sdg) => {
-            chips.push({
-                key: `sdg:${sdg.handle}`,
-                label: `SDG: ${sdg.name}`,
-                onRemove: () =>
-                    setSelectedSdgs((current) => current.filter((item) => item.handle !== sdg.handle)),
-            });
-        });
-
-        if (hasDateFilter) {
-            chips.push({
-                key: "date",
-                label: `Date: ${dateLabel}`,
-                onRemove: () => setDateRange(undefined),
-            });
-        }
-
-        return chips;
-    }, [selectedCategory, selectedSdgs, hasDateFilter, dateLabel]);
 
     const searchEmptyState = useMemo(
         () =>
@@ -503,6 +422,13 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         });
         return map;
     }, [hasSearched, allSearchResults, allDiscoverableCircles]);
+
+    const activeAdvancedFilterCount = useMemo(() => {
+        let count = 0;
+        if (selectedSdgs.length > 0) count += 1;
+        if (hasDateFilter) count += 1;
+        return count;
+    }, [selectedSdgs.length, hasDateFilter]);
 
     useEffect(() => {
         if (!hasSearched) {
@@ -562,33 +488,13 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         filterCirclesByCategory,
     ]);
 
-    // Compute current similarity range from dataset
-    const simStats = useMemo(() => {
-        const sims = baseCircles.map((c) => c.metrics?.similarity).filter((s): s is number => s !== undefined);
-        if (sims.length === 0) return { min: 0, max: 1 };
-        return { min: Math.min(...sims), max: Math.max(...sims) };
-    }, [baseCircles]);
-
-    // Keep state in sync with dataset range
-    useEffect(() => {
-        setSimRange(simStats);
-    }, [simStats]);
-
-    const simThreshold = useMemo(() => {
-        const min = simRange.min ?? 0;
-        const max = simRange.max ?? 1;
-        const span = Math.max(0, max - min);
-        return span === 0 ? min : min + (simPercent / 100) * span;
-    }, [simRange.min, simRange.max, simPercent]);
-
     const drawerListData = useMemo(() => {
         let list = baseCircles;
-        list = list.filter((c) => c.metrics?.similarity === undefined || c.metrics!.similarity >= simThreshold);
         if (dateRange?.from || dateRange?.to) {
             list = list.filter((c) => withinDateRange((c as any).createdAt));
         }
         return list;
-    }, [baseCircles, simThreshold, dateRange, withinDateRange]);
+    }, [baseCircles, dateRange, withinDateRange]);
 
     // --- Callbacks ---
     const handleSwiped = useCallback((circle: Circle, direction: "left" | "right") => {
@@ -742,6 +648,8 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         setHasSearched(false);
         setSelectedCategory(null);
         setSelectedSdgs([]);
+        setDateRange(undefined);
+        setShowAdvancedFilters(false);
         const resetMapData = filterCirclesByCategory(allDiscoverableCircles, null)
             .map((circle) => mapItemToContent(circle))
             .filter((c): c is Content => c !== null);
@@ -771,6 +679,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         filteredEventsForMap.length,
         setSearchPanelState,
         setSidePanelMode,
+        setDateRange,
     ]);
 
     const handleTriggerConsumed = useCallback(() => {
@@ -963,9 +872,6 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 return;
             }
             let circles = baseCircles;
-            circles = circles.filter(
-                (c) => c.metrics?.similarity === undefined || c.metrics!.similarity >= simThreshold,
-            );
             if (dateRange?.from || dateRange?.to) {
                 circles = circles.filter((c) => withinDateRange((c as any).createdAt));
             }
@@ -980,7 +886,6 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     }, [
         viewMode,
         baseCircles,
-        simThreshold,
         dateRange,
         withinDateRange,
         setDisplayedContent,
@@ -1043,6 +948,107 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
 
     if (!isMounted) return null;
 
+    const advancedFiltersContent = (
+        <div className="space-y-4">
+            <div className="flex items-start justify-between gap-3">
+                <div>
+                    <div className="text-sm font-semibold text-gray-900">Advanced search</div>
+                    <p className="mt-1 text-xs text-gray-500">Narrow results with SDGs and date.</p>
+                </div>
+                {activeAdvancedFilterCount > 0 && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs text-gray-600"
+                        onClick={() => {
+                            setSelectedSdgs([]);
+                            setDateRange(undefined);
+                        }}
+                    >
+                        Clear all
+                    </Button>
+                )}
+            </div>
+
+            <div className="rounded-2xl bg-gray-50 p-3">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                    <div>
+                        <div className="text-sm font-medium text-gray-900">Date</div>
+                        <div className="text-xs text-gray-500">
+                            {hasDateFilter ? dateLabel : "Any time"}
+                        </div>
+                    </div>
+                    {hasDateFilter && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs text-gray-600"
+                            onClick={() => setDateRange(undefined)}
+                        >
+                            Clear
+                        </Button>
+                    )}
+                </div>
+                <div className="mb-3 flex flex-wrap gap-1.5">
+                    <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setQuickDateRange("today")}>
+                        Today
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setQuickDateRange("7d")}>
+                        7d
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setQuickDateRange("30d")}>
+                        30d
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setQuickDateRange("all")}>
+                        Any time
+                    </Button>
+                </div>
+                <Calendar
+                    mode="range"
+                    selected={dateRange}
+                    onSelect={setDateRange as any}
+                    numberOfMonths={isMobile ? 1 : 2}
+                    defaultMonth={dateRange?.from}
+                />
+            </div>
+
+            <div className="rounded-2xl bg-gray-50 p-3">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                    <div>
+                        <div className="text-sm font-medium text-gray-900">SDGs</div>
+                        <div className="text-xs text-gray-500">
+                            {selectedSdgs.length > 0
+                                ? `${selectedSdgs.length} selected`
+                                : "Use SDGs to narrow explore results"}
+                        </div>
+                    </div>
+                    {selectedSdgs.length > 0 && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs text-gray-600"
+                            onClick={() => setSelectedSdgs([])}
+                        >
+                            Clear
+                        </Button>
+                    )}
+                </div>
+                <SdgFilter
+                    selectedSdgs={selectedSdgs}
+                    onSelectionChange={setSelectedSdgs}
+                    displayAs="inline"
+                    gridCols={isMobile ? "grid-cols-2" : "grid-cols-3"}
+                    sdgCounts={sdgCounts}
+                    trigger={
+                        <span className="text-sm font-medium text-gray-900">
+                            {selectedSdgs.length > 0 ? `Selected (${selectedSdgs.length})` : "Choose SDGs"}
+                        </span>
+                    }
+                />
+            </div>
+        </div>
+    );
+
     // --- Render ---
     return (
         <div className="relative flex w-full flex-row overflow-hidden md:h-full">
@@ -1068,49 +1074,76 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 {viewMode === "explore" && !(sidePanelContentVisible === "toolbox" && isMobile) && (
                     <div className="flex min-w-0 flex-1 flex-col gap-2">
                         <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap md:gap-3">
-                            {/* Search Input (hidden on desktop when panel is open) */}
-                            {showTopSearchInput && (
-                                <div className="flex flex-shrink-0 items-center rounded-full bg-white p-1 px-4 shadow-md">
-                                    <input
-                                        type="text"
-                                        placeholder="Search..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        onKeyDown={(e) => e.key === "Enter" && handleSearchTrigger()}
-                                        className="w-36 border-none bg-transparent pl-1 outline-none focus:ring-0 sm:w-60"
-                                    />
-                                    {searchQuery && (
-                                        <Button
-                                            onClick={handleClearSearch}
-                                            size="sm"
-                                            variant="ghost"
-                                            className="ml-1 p-1"
-                                            aria-label="Clear search"
-                                        >
-                                            <X className="h-4 w-4" />
-                                        </Button>
-                                    )}
+                            <div className="flex w-full max-w-xl flex-shrink-0 items-center rounded-full bg-white/95 p-1 pl-4 shadow-md ring-1 ring-black/5 backdrop-blur-sm">
+                                <input
+                                    type="text"
+                                    placeholder="Search people, circles, and projects"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    onKeyDown={(e) => e.key === "Enter" && handleSearchTrigger()}
+                                    className="min-w-0 flex-1 border-none bg-transparent pl-1 text-sm outline-none focus:ring-0 sm:text-base"
+                                />
+                                {isMobile ? (
                                     <Button
-                                        onClick={handleSearchTrigger}
+                                        type="button"
                                         size="sm"
                                         variant="ghost"
-                                        disabled={isSearching || !searchQuery.trim()}
-                                        aria-label="Search"
+                                        className="relative ml-1 h-9 w-9 rounded-full p-0"
+                                        onClick={() => setShowAdvancedFilters(true)}
+                                        aria-label="Open advanced search"
                                     >
-                                        {isSearching ? "..." : <Search className="h-4 w-4" />}
+                                        <SlidersHorizontal className="h-4 w-4" />
+                                        {activeAdvancedFilterCount > 0 && (
+                                            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" />
+                                        )}
                                     </Button>
-                                </div>
-                            )}
-                            <Button
-                                type="button"
-                                variant="outline"
-                                className="h-10 rounded-full border-white/70 bg-white/90 px-4 shadow-md backdrop-blur-sm"
-                                onClick={() => setShowAdvancedFilters((current) => !current)}
-                                aria-expanded={showAdvancedFilters}
-                            >
-                                <SlidersHorizontal className="mr-2 h-4 w-4" />
-                                Advanced filters
-                            </Button>
+                                ) : (
+                                    <Popover open={showAdvancedFilters} onOpenChange={setShowAdvancedFilters}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="ghost"
+                                                className="relative ml-1 h-9 w-9 rounded-full p-0"
+                                                aria-label="Open advanced search"
+                                            >
+                                                <SlidersHorizontal className="h-4 w-4" />
+                                                {activeAdvancedFilterCount > 0 && (
+                                                    <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" />
+                                                )}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent
+                                            align="start"
+                                            sideOffset={10}
+                                            className="w-[min(32rem,calc(100vw-2rem))] rounded-3xl border border-gray-200/80 p-4 shadow-2xl"
+                                        >
+                                            {advancedFiltersContent}
+                                        </PopoverContent>
+                                    </Popover>
+                                )}
+                                {searchQuery || activeAdvancedFilterCount > 0 ? (
+                                    <Button
+                                        onClick={handleClearSearch}
+                                        size="sm"
+                                        variant="ghost"
+                                        className="ml-1 h-9 w-9 rounded-full p-0"
+                                        aria-label="Clear search"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                ) : null}
+                                <Button
+                                    onClick={handleSearchTrigger}
+                                    size="sm"
+                                    variant="ghost"
+                                    className="ml-1 h-9 w-9 rounded-full p-0"
+                                    disabled={isSearching || (!searchQuery.trim() && selectedSdgs.length === 0)}
+                                    aria-label="Search"
+                                >
+                                    {isSearching ? "..." : <Search className="h-4 w-4" />}
+                                </Button>
+                            </div>
                         </div>
 
                         <CategoryFilterCarousel
@@ -1126,194 +1159,22 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                             hasSearched={true}
                             displayLabelMap={{ all: "all", users: "people", communities: "circles" }}
                         />
-
-                        {activeFilterChips.length > 0 && (
-                            <div className="flex flex-wrap items-center gap-2">
-                                {activeFilterChips.map((chip) => (
-                                    <button
-                                        key={chip.key}
-                                        type="button"
-                                        onClick={chip.onRemove}
-                                        className="inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm ring-1 ring-black/5 backdrop-blur-sm"
-                                    >
-                                        <span>{chip.label}</span>
-                                        <X className="h-3 w-3" />
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-
-                        {showAdvancedFilters && (
-                            <div className="max-w-3xl rounded-3xl bg-white/95 p-4 shadow-md ring-1 ring-black/5 backdrop-blur-sm">
-                                <div className="flex flex-wrap items-start justify-between gap-2">
-                                    <div>
-                                        <div className="text-sm font-semibold text-gray-900">Advanced filters</div>
-                                        <p className="mt-1 text-xs text-gray-600">
-                                            Small shell only for now. SDGs and date stay live below, and the next
-                                            structured filters can plug in here without changing search logic.
-                                        </p>
-                                    </div>
-                                    <div className="text-xs font-medium uppercase tracking-[0.12em] text-gray-400">
-                                        Ready next
-                                    </div>
-                                </div>
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                    {["Location", "Offers / skills", "Interests", "Needs tags"].map((label) => (
-                                        <span
-                                            key={label}
-                                            className="rounded-full border border-dashed border-gray-300 px-3 py-1.5 text-xs text-gray-600"
-                                        >
-                                            {label}
-                                        </span>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Resonance slider + Date & SDG filters */}
-                        <div
-                            className={cn(
-                                "fixed z-40 flex items-center justify-center gap-2 rounded-full bg-white/90 px-3 py-2 shadow-md backdrop-blur-sm sm:px-4",
-                                "flex-nowrap",
-                                isMobile
-                                    ? "bottom-24 w-auto max-w-[calc(100%-3rem)] -translate-x-1/2"
-                                    : "bottom-6 max-w-[680px] -translate-x-1/2",
-                            )}
-                            style={{ left: sliderLeft }}
-                        >
-                            <TooltipProvider delayDuration={200}>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <span className="flex items-center gap-1 text-xs font-medium text-gray-700">
-                                            <AudioLines className="h-4 w-4 text-indigo-500" />
-                                        </span>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="right">
-                                        <p>Minimum similarity threshold. Higher = closer match.</p>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-
-                            <div className="w-[140px] shrink-0 sm:w-[220px] md:w-[260px]">
-                                <Slider
-                                    min={0}
-                                    max={100}
-                                    step={1}
-                                    value={[simPercent]}
-                                    onValueChange={(v) => setSimPercent(v[0])}
-                                />
-                            </div>
-
-                            <span className="shrink-0 rounded-full bg-gray-100/80 px-2.5 py-1 text-[11px] font-medium text-gray-700 ring-1 ring-black/5">
-                                {Math.round(simPercent)}%
-                            </span>
-
-                            <div className="mx-2 hidden h-4 w-px bg-gray-200/80 sm:block" />
-
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <button className="flex shrink-0 items-center gap-1 rounded-full border border-gray-200/70 bg-white/70 px-2 py-0.5 text-[11px] text-gray-700 shadow-sm hover:bg-white">
-                                        <CalendarIcon className="h-3.5 w-3.5 text-gray-600" />
-                                        <span className="max-w-[160px] truncate">{dateLabel}</span>
-                                        <ChevronDown className="h-3 w-3 text-gray-500" />
-                                    </button>
-                                </PopoverTrigger>
-                                <PopoverContent
-                                    className="w-auto rounded-xl border border-gray-100 p-3 shadow-xl"
-                                    align="start"
-                                >
-                                    <div className="mb-2 flex gap-1">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-7 px-2 text-xs"
-                                            onClick={() => setQuickDateRange("today")}
-                                        >
-                                            Today
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-7 px-2 text-xs"
-                                            onClick={() => setQuickDateRange("7d")}
-                                        >
-                                            7d
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-7 px-2 text-xs"
-                                            onClick={() => setQuickDateRange("30d")}
-                                        >
-                                            30d
-                                        </Button>
-                                    </div>
-                                    <Calendar
-                                        mode="range"
-                                        selected={dateRange}
-                                        onSelect={setDateRange as any}
-                                        numberOfMonths={2}
-                                        defaultMonth={dateRange?.from}
-                                    />
-                                    <div className="mt-3 flex justify-end">
-                                        <Button variant="ghost" size="sm" onClick={() => setDateRange(undefined)}>
-                                            Clear
-                                        </Button>
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
-
-                            <div className="mx-2 hidden h-4 w-px bg-gray-200/80 sm:block" />
-
-                            <SdgFilter
-                                selectedSdgs={selectedSdgs}
-                                onSelectionChange={setSelectedSdgs}
-                                displayAs="popover"
-                                gridCols="grid-cols-3"
-                                sdgCounts={sdgCounts}
-                                trigger={
-                                    <Button
-                                        variant="ghost"
-                                        className="flex h-auto shrink-0 items-center gap-1.5 rounded-full border border-transparent bg-white/40 px-2 py-0.5 text-[11px] text-gray-700 shadow-sm backdrop-blur data-[selected=true]:border-primary data-[selected=true]:bg-white"
-                                        data-selected={selectedSdgs.length > 0}
-                                    >
-                                        {selectedSdgs.length === 0 ? (
-                                            <Image
-                                                src="/images/sdgs/SDG_Wheel_WEB.png"
-                                                alt="SDG Wheel"
-                                                width={16}
-                                                height={16}
-                                                className="h-4 w-4"
-                                            />
-                                        ) : (
-                                            <div
-                                                className="flex flex-row -space-x-2"
-                                                style={{
-                                                    width: `calc(16px + ${12 * Math.min(selectedSdgs.length - 1, 2)}px)`,
-                                                }}
-                                            >
-                                                {selectedSdgs.slice(0, 3).map((sdg) => (
-                                                    <Image
-                                                        key={sdg.handle}
-                                                        src={sdg.picture?.url ?? "/images/default-picture.png"}
-                                                        alt={sdg.name}
-                                                        width={16}
-                                                        height={16}
-                                                        className="h-4 w-4 rounded-full border-2 border-white object-cover"
-                                                    />
-                                                ))}
-                                            </div>
-                                        )}
-                                        <span className="hidden sm:inline">
-                                            SDGs {selectedSdgs.length > 0 && `(${selectedSdgs.length})`}
-                                        </span>
-                                    </Button>
-                                }
-                            />
-                        </div>
                     </div>
                 )}
             </div>
+
+            {isMobile && (
+                <Dialog open={showAdvancedFilters} onOpenChange={setShowAdvancedFilters}>
+                    <DialogContent className="top-auto left-0 right-0 bottom-0 max-h-[85vh] max-w-none translate-x-0 translate-y-0 rounded-t-[28px] rounded-b-none border-0 p-0 sm:rounded-t-[28px]">
+                        <DialogHeader className="sr-only">
+                            <DialogTitle>Advanced search</DialogTitle>
+                        </DialogHeader>
+                        <div className="max-h-[calc(85vh-5rem)] overflow-y-auto px-5 pb-6 pt-4">
+                            {advancedFiltersContent}
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            )}
 
             {/* Cards View */}
             {viewMode === "cards" && (
