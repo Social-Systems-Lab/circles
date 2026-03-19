@@ -198,7 +198,7 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle, ad
 
                         {parentCircle && parentCircle.circleType !== "user" && (
                             <div className="mt-2 text-sm text-gray-500">
-                                {circle.circleType === "project" ? "Project by " : "Subcommunity of "}
+                                {circle.circleType === "project" ? "Project by " : "Subcircle of "}
                                 <Link
                                     href={`/circles/${parentCircle.handle}`}
                                     className="text-blue-500 hover:underline"

@@ -115,7 +115,7 @@ export const features = {
             module: "communities",
         } as Feature,
         create: {
-            name: "Create Community",
+            name: "Create Circle",
             handle: "create",
             description: "Create a new circle",
             defaultUserGroups: ["admins", "moderators", "members"],
