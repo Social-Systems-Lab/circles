@@ -32,16 +32,16 @@ const PinPicker: React.FC<PinPickerProps> = ({ open, onOpenChange, onSelect, cla
   useEffect(() => {
     if (!open) return;
     let active = true;
-    const handler = setTimeout(async () => {
+        const handler = setTimeout(async () => {
       try {
         setLoading(true);
         const url =
           query.trim().length > 0
-            ? `/api/circles/search?q=${encodeURIComponent(query.trim())}&limit=20`
+            ? `/api/circles/search?q=${encodeURIComponent(query.trim())}&limit=20&type=circle`
             : `/api/circles/search?q=${encodeURIComponent("")}&limit=0`; // return []
         const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) throw new Error("Failed to search");
-        const circles = (await res.json()) as Circle[];
+        const { circles } = (await res.json()) as { circles: Circle[] };
         if (active) setResults(circles);
       } catch (e) {
         if (active) setResults([]);
@@ -65,7 +65,7 @@ const PinPicker: React.FC<PinPickerProps> = ({ open, onOpenChange, onSelect, cla
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={cn("sm:max-w-lg", className)}>
         <DialogHeader>
-          <DialogTitle>Pin a circle</DialogTitle>
+          <DialogTitle>Pin a community</DialogTitle>
           <DialogDescription>
             Search and select a community to pin. Pinned communities appear first and are limited to 5 slots.
           </DialogDescription>
@@ -77,7 +77,7 @@ const PinPicker: React.FC<PinPickerProps> = ({ open, onOpenChange, onSelect, cla
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search circles..."
+              placeholder="Search communities..."
               className="pl-8"
             />
           </div>
@@ -92,7 +92,7 @@ const PinPicker: React.FC<PinPickerProps> = ({ open, onOpenChange, onSelect, cla
           )}
           {emptyState && (
             <div className="p-6 text-center text-sm text-gray-500">
-              Start typing to search circles to pin.
+              Start typing to search communities to pin.
             </div>
           )}
           {!loading && results.length > 0 && (
