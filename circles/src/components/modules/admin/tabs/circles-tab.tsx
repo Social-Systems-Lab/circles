@@ -106,7 +106,7 @@ export default function CirclesTab() {
                 <div className="relative w-full max-w-sm">
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
-                        placeholder="Search communities..."
+                        placeholder="Search circles..."
                         className="pl-8"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
@@ -140,8 +140,8 @@ export default function CirclesTab() {
                                 <TableRow>
                                     <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                                         {searchTerm
-                                            ? "No communities found matching your search"
-                                            : "No communities found"}
+                                            ? "No circles found matching your search"
+                                            : "No circles found"}
                                     </TableCell>
                                 </TableRow>
                             ) : (

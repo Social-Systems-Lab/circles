@@ -65,7 +65,7 @@ const PinPicker: React.FC<PinPickerProps> = ({ open, onOpenChange, onSelect, cla
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={cn("sm:max-w-lg", className)}>
         <DialogHeader>
-          <DialogTitle>Pin a community</DialogTitle>
+          <DialogTitle>Pin a circle</DialogTitle>
           <DialogDescription>
             Search and select a community to pin. Pinned communities appear first and are limited to 5 slots.
           </DialogDescription>
@@ -77,7 +77,7 @@ const PinPicker: React.FC<PinPickerProps> = ({ open, onOpenChange, onSelect, cla
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search communities..."
+              placeholder="Search circles..."
               className="pl-8"
             />
           </div>
@@ -92,7 +92,7 @@ const PinPicker: React.FC<PinPickerProps> = ({ open, onOpenChange, onSelect, cla
           )}
           {emptyState && (
             <div className="p-6 text-center text-sm text-gray-500">
-              Start typing to search communities to pin.
+              Start typing to search circles to pin.
             </div>
           )}
           {!loading && results.length > 0 && (
