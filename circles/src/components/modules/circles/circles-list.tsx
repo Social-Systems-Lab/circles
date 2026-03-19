@@ -161,7 +161,7 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
                     style={{ paddingRight: isCompact && !isMobile ? "16px" : "0" }}
                 >
                     <Input
-                        placeholder={`Search ${isProjectsList ? "projects" : inUser ? "users" : "communities"}...`}
+                        placeholder={`Search ${isProjectsList ? "projects" : inUser ? "users" : "circles"}...`}
                         value={searchQuery}
                         onChange={(event) => setSearchQuery(event.target.value)}
                         className="flex-1"

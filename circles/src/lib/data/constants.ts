@@ -625,7 +625,7 @@ export const modules: ModuleInfo[] = [
             "Shows everyone who follows or is part of the circle. Admins can see, manage, and engage with supporters, making it easier to track growth and involvement.",
     },
     {
-        name: "Communities",
+        name: "Circles",
         handle: "communities",
         description:
             "Displays all communities connected to this community. Helps members navigate related communities, deepen partnerships, and organize nested initiatives.",
