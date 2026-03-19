@@ -57,7 +57,7 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
                     aria-label={`Filter by ${displayLabelMap?.[category] ?? category}`}
                 >
                     <span className="text-gray-600">{iconMap[category]}</span>
-                    <span>{displayLabelMap?.[category] ?? category}</span>
+                    <span>{displayLabelMap?.[category] ?? (category === "communities" ? "circles" : category)}</span>
                     {hasSearched && (
                         <Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-[2px] text-[10px]">
                             {categoryCounts[category] ?? 0}

@@ -70,7 +70,7 @@ export const CreateCommunityDialog: React.FC<CreateCommunityDialogProps> = ({
             >
                 <div className="hidden">
                     <DialogHeader>
-                        <DialogTitle>Create New Community</DialogTitle>
+                        <DialogTitle>Create New Circle</DialogTitle>
                         {/* Optional: Add DialogDescription if needed for accessibility, though often title is enough for hidden ones */}
                     </DialogHeader>
                 </div>

@@ -33,7 +33,7 @@ export default function BasicInfoStep({
     // selectedParentCircle state is managed by CircleSelector's onCircleSelected callback
     // const [selectedParentCircle, setSelectedParentCircle] = useState<Circle | null>(null);
     const [user] = useAtom(userAtom);
-    const entityLabel = circleData.circleType === "project" ? "Project" : "Community";
+    const entityLabel = circleData.circleType === "project" ? "Project" : "Circle";
     const entityLabelLower = entityLabel.toLowerCase();
     const handlePlaceholder = circleData.circleType === "project" ? "project-handle" : "community-handle";
 
