@@ -54,8 +54,8 @@ export const creatableItemsList: CreatableItemDetail[] = [
     // Added export
     {
         key: "community",
-        title: "Community",
-        description: "Start a new community or group.",
+        title: "Circle",
+        description: "Start a new circle or group.",
         icon: Users,
         moduleHandle: "communities",
         createFeatureHandle: "create",
