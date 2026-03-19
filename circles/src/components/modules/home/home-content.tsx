@@ -243,7 +243,7 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle, ad
                                     isCompact ? "justify-center" : "justify-start"
                                 }`}
                             >
-                                <span className="text-xs font-medium uppercase tracking-wide text-gray-500">Led by</span>
+                                <span className="text-xs font-medium uppercase tracking-wide text-gray-500">Admins</span>
                                 <TooltipProvider>
                                     <div className="flex flex-row items-center">
                                         {adminLeaders.map((leader, index) => {
