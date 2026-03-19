@@ -17,6 +17,7 @@ import {
     Hand,
     Home,
     Search,
+    SlidersHorizontal,
     X,
     ArrowLeft,
     ChevronRight,
@@ -185,6 +186,84 @@ const SNAP_INDEX_HALF = 1; // Medium height (e.g., 40%)
 const SNAP_INDEX_OPEN = 2; // Large height (e.g., 80%)
 const SNAP_INDEX_FULL = 3; // Full height (e.g., 100%)
 
+const RESULT_TYPE_OPTIONS = [
+    { value: null, label: "All" },
+    { value: "users", label: "People" },
+    { value: "communities", label: "Circles" },
+    { value: "projects", label: "Projects" },
+] as const;
+
+const SEARCH_CATEGORY_LABELS: Record<string, string> = {
+    users: "people",
+    communities: "circles",
+    projects: "projects",
+    events: "events",
+};
+
+const getCircleTypeForSearchCategory = (category: string | null) => {
+    if (category === "communities") return "circle";
+    if (category === "projects") return "project";
+    if (category === "users") return "user";
+    return null;
+};
+
+const getSearchCategoryLabel = (category: string | null) => {
+    if (!category) return "results";
+    return SEARCH_CATEGORY_LABELS[category] ?? category;
+};
+
+const buildSearchEmptyState = ({
+    hasSearched,
+    query,
+    selectedCategory,
+    selectedSdgs,
+    dateLabel,
+    hasDateFilter,
+}: {
+    hasSearched: boolean;
+    query: string;
+    selectedCategory: string | null;
+    selectedSdgs: SDG[];
+    dateLabel: string;
+    hasDateFilter: boolean;
+}) => {
+    if (!hasSearched) {
+        return {
+            title: "No circles in this view yet",
+            description: "Try a different result type or loosen the active filters.",
+        };
+    }
+
+    const trimmedQuery = query.trim();
+    const context: string[] = [];
+
+    if (trimmedQuery) {
+        context.push(`for "${trimmedQuery}"`);
+    }
+
+    if (selectedCategory) {
+        context.push(`in ${getSearchCategoryLabel(selectedCategory)}`);
+    }
+
+    if (selectedSdgs.length > 0) {
+        context.push(
+            `with ${selectedSdgs.length} SDG filter${selectedSdgs.length === 1 ? "" : "s"}`,
+        );
+    }
+
+    if (hasDateFilter) {
+        context.push(`inside ${dateLabel}`);
+    }
+
+    return {
+        title: `No ${selectedCategory ? getSearchCategoryLabel(selectedCategory) : "results"} found`,
+        description:
+            context.length > 0
+                ? `Nothing matched ${context.join(" ")}. Try widening a filter or switching result types.`
+                : "Try a broader query or remove a filter.",
+    };
+};
+
 export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles, mapboxKey }) => {
     // --- State ---
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -204,6 +283,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const [allSearchResults, setAllSearchResults] = useState<WithMetric<Circle>[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
+    const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [drawerContent, setDrawerContent] = useAtom(drawerContentAtom);
     // Events dataset for map
     const [eventsForMap, setEventsForMap] = useState<EventDisplay[]>([]);
@@ -240,6 +320,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         }
         return format(new Date(), "MMM d, yyyy");
     }, [dateRange]);
+    const hasDateFilter = Boolean(dateRange?.from || dateRange?.to);
 
     const withinDateRange = useCallback(
         (d?: Date | string) => {
@@ -328,10 +409,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const filteredSearchResults = useMemo(() => {
         let results = allSearchResults;
 
-        if (selectedCategory) {
-            const typeToFilter =
-                selectedCategory === "communities" ? "circle" : selectedCategory === "projects" ? "project" : "user";
-            results = results.filter((result) => result.circleType === typeToFilter);
+        const selectedCircleType = getCircleTypeForSearchCategory(selectedCategory);
+        if (selectedCircleType) {
+            results = results.filter((result) => result.circleType === selectedCircleType);
         }
 
         if (selectedSdgs.length > 0) {
@@ -341,6 +421,50 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
 
         return results;
     }, [allSearchResults, selectedCategory, selectedSdgs]);
+
+    const activeFilterChips = useMemo(() => {
+        const chips: { key: string; label: string; onRemove: () => void }[] = [];
+
+        if (selectedCategory && selectedCategory !== "events") {
+            chips.push({
+                key: `type:${selectedCategory}`,
+                label: getSearchCategoryLabel(selectedCategory),
+                onRemove: () => setSelectedCategory(null),
+            });
+        }
+
+        selectedSdgs.forEach((sdg) => {
+            chips.push({
+                key: `sdg:${sdg.handle}`,
+                label: `SDG: ${sdg.name}`,
+                onRemove: () =>
+                    setSelectedSdgs((current) => current.filter((item) => item.handle !== sdg.handle)),
+            });
+        });
+
+        if (hasDateFilter) {
+            chips.push({
+                key: "date",
+                label: `Date: ${dateLabel}`,
+                onRemove: () => setDateRange(undefined),
+            });
+        }
+
+        return chips;
+    }, [selectedCategory, selectedSdgs, hasDateFilter, dateLabel]);
+
+    const searchEmptyState = useMemo(
+        () =>
+            buildSearchEmptyState({
+                hasSearched,
+                query: searchQuery,
+                selectedCategory,
+                selectedSdgs,
+                dateLabel,
+                hasDateFilter,
+            }),
+        [hasSearched, searchQuery, selectedCategory, selectedSdgs, dateLabel, hasDateFilter],
+    );
 
     const countsDatasetCircles = useMemo(() => {
         // Use all results (no category filter); apply SDG filter to reflect current SDG context
@@ -379,6 +503,40 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         });
         return map;
     }, [hasSearched, allSearchResults, allDiscoverableCircles]);
+
+    useEffect(() => {
+        if (!hasSearched) {
+            return;
+        }
+
+        setSearchPanelState({
+            query: searchQuery,
+            isSearching,
+            hasSearched,
+            selectedCategory: selectedCategory ?? null,
+            selectedSdgHandles: selectedSdgs.map((sdg) => sdg.handle),
+            selectedDateLabel: hasDateFilter ? dateLabel : null,
+            items: filteredSearchResults as any,
+            counts: {
+                communities: categoryCounts.communities,
+                projects: categoryCounts.projects,
+                users: categoryCounts.users,
+                events: filteredEventsForMap.length,
+            },
+        });
+    }, [
+        hasSearched,
+        searchQuery,
+        isSearching,
+        selectedCategory,
+        selectedSdgs,
+        hasDateFilter,
+        dateLabel,
+        filteredSearchResults,
+        categoryCounts,
+        filteredEventsForMap.length,
+        setSearchPanelState,
+    ]);
 
     // Determine data source for the drawer list
     // Base circles used for map/list before mapping to Content
@@ -456,7 +614,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     );
 
     const handleSearchTrigger = useCallback(async () => {
-        const searchCategoriesForBackend = ["circles", "users"];
+        const searchCategoriesForBackend = ["circles", "users", "projects"];
         const sdgHandles = selectedSdgs.map((sdg) => sdg.handle);
         if (!searchQuery.trim() && sdgHandles.length === 0) {
             // If clearing search via empty query, reset state
@@ -478,6 +636,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 hasSearched: false,
                 selectedCategory: null,
                 selectedSdgHandles: [],
+                selectedDateLabel: null,
                 items: [],
                 counts: { communities: 0, projects: 0, users: 0, events: filteredEventsForMap.length },
             });
@@ -492,6 +651,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             hasSearched: false,
             selectedCategory: selectedCategory ?? null,
             selectedSdgHandles: sdgHandles,
+            selectedDateLabel: hasDateFilter ? dateLabel : null,
             items: [],
             counts: { communities: 0, projects: 0, users: 0, events: filteredEventsForMap.length },
         });
@@ -510,22 +670,16 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             setAllSearchResults(results);
 
             // Compute filtered list and counts for left panel now
-            let filtered = results;
-            if (selectedCategory) {
-                const typeToFilter =
-                    selectedCategory === "communities"
-                        ? "circle"
-                        : selectedCategory === "projects"
-                          ? "project"
-                          : "user";
-                filtered = filtered.filter((r) => r.circleType === typeToFilter);
-            }
-            if (selectedSdgs.length > 0) {
-                const sdgHandlesLocal = selectedSdgs.map((s) => s.handle);
-                filtered = filtered.filter((c) => c.causes?.some((cause) => sdgHandlesLocal.includes(cause)));
-            }
+            const selectedCircleType = getCircleTypeForSearchCategory(selectedCategory);
+            const filteredForCounts =
+                selectedSdgs.length > 0
+                    ? results.filter((c) => c.causes?.some((cause) => sdgHandles.includes(cause)))
+                    : results;
+            const filtered = selectedCircleType
+                ? filteredForCounts.filter((r) => r.circleType === selectedCircleType)
+                : filteredForCounts;
             const counts = { communities: 0, projects: 0, users: 0, events: filteredEventsForMap.length };
-            filtered.forEach((r: any) => {
+            filteredForCounts.forEach((r: any) => {
                 if (r.circleType === "circle") counts.communities++;
                 else if (r.circleType === "project") counts.projects++;
                 else if (r.circleType === "user") counts.users++;
@@ -537,8 +691,8 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 hasSearched: true,
                 selectedCategory: selectedCategory ?? null,
                 selectedSdgHandles: sdgHandles,
-                // Include events in search results panel (events first for clarity)
-                items: [...filteredEventsForMap, ...filtered] as any,
+                selectedDateLabel: hasDateFilter ? dateLabel : null,
+                items: filtered as any,
                 counts,
             });
             setSidePanelMode("search");
@@ -556,6 +710,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 hasSearched: true,
                 selectedCategory: selectedCategory ?? null,
                 selectedSdgHandles: sdgHandles,
+                selectedDateLabel: hasDateFilter ? dateLabel : null,
                 items: [],
                 counts: { communities: 0, projects: 0, users: 0, events: filteredEventsForMap.length },
             });
@@ -572,6 +727,13 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         selectedCategory,
         filterCirclesByCategory,
         setContentPreview,
+        hasDateFilter,
+        dateLabel,
+        filteredEventsForMap.length,
+        isMobile,
+        router,
+        setSearchPanelState,
+        setSidePanelMode,
     ]);
 
     const handleClearSearch = useCallback(() => {
@@ -595,6 +757,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             hasSearched: false,
             selectedCategory: null,
             selectedSdgHandles: [],
+            selectedDateLabel: null,
             items: [],
             counts: { communities: 0, projects: 0, users: 0, events: filteredEventsForMap.length },
         });
@@ -605,6 +768,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         allDiscoverableCircles,
         filterCirclesByCategory,
         setContentPreview, // Add dependency
+        filteredEventsForMap.length,
+        setSearchPanelState,
+        setSidePanelMode,
     ]);
 
     const handleTriggerConsumed = useCallback(() => {
@@ -838,7 +1004,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             }
         }
         // Add dependencies that should trigger this logic
-    }, [contentPreview, isMobile, viewMode, hasSearched, drawerContent]);
+    }, [contentPreview, isMobile, viewMode, hasSearched, drawerContent, setDrawerContent]);
 
     // Reset drawer and preview when switching view modes or leaving mobile explore
     useEffect(() => {
@@ -900,7 +1066,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
 
                 {/* Search Bar & Filters (Only in Explore Mode) */}
                 {viewMode === "explore" && !(sidePanelContentVisible === "toolbox" && isMobile) && (
-                    <div className="flex flex-1 flex-col gap-2 min-w-0">
+                    <div className="flex min-w-0 flex-1 flex-col gap-2">
                         <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap md:gap-3">
                             {/* Search Input (hidden on desktop when panel is open) */}
                             {showTopSearchInput && (
@@ -935,18 +1101,74 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                     </Button>
                                 </div>
                             )}
-                            {/* Filters */}
-                            {!isMobile && (
-                                <CategoryFilterCarousel
-                                    categories={["communities", "users", "events"]}
-                                    categoryCounts={categoryCounts}
-                                    selectedCategory={selectedCategory}
-                                    onSelectionChange={setSelectedCategory}
-                                    hasSearched={true}
-                                    displayLabelMap={{ users: "people" }}
-                                />
-                            )}
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="h-10 rounded-full border-white/70 bg-white/90 px-4 shadow-md backdrop-blur-sm"
+                                onClick={() => setShowAdvancedFilters((current) => !current)}
+                                aria-expanded={showAdvancedFilters}
+                            >
+                                <SlidersHorizontal className="mr-2 h-4 w-4" />
+                                Advanced filters
+                            </Button>
                         </div>
+
+                        <CategoryFilterCarousel
+                            categories={RESULT_TYPE_OPTIONS.map((option) => option.value ?? "all")}
+                            categoryCounts={{
+                                all: countsDatasetCircles.length,
+                                communities: categoryCounts.communities,
+                                projects: categoryCounts.projects,
+                                users: categoryCounts.users,
+                            }}
+                            selectedCategory={selectedCategory}
+                            onSelectionChange={setSelectedCategory}
+                            hasSearched={true}
+                            displayLabelMap={{ all: "all", users: "people", communities: "circles" }}
+                        />
+
+                        {activeFilterChips.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-2">
+                                {activeFilterChips.map((chip) => (
+                                    <button
+                                        key={chip.key}
+                                        type="button"
+                                        onClick={chip.onRemove}
+                                        className="inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm ring-1 ring-black/5 backdrop-blur-sm"
+                                    >
+                                        <span>{chip.label}</span>
+                                        <X className="h-3 w-3" />
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {showAdvancedFilters && (
+                            <div className="max-w-3xl rounded-3xl bg-white/95 p-4 shadow-md ring-1 ring-black/5 backdrop-blur-sm">
+                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                    <div>
+                                        <div className="text-sm font-semibold text-gray-900">Advanced filters</div>
+                                        <p className="mt-1 text-xs text-gray-600">
+                                            Small shell only for now. SDGs and date stay live below, and the next
+                                            structured filters can plug in here without changing search logic.
+                                        </p>
+                                    </div>
+                                    <div className="text-xs font-medium uppercase tracking-[0.12em] text-gray-400">
+                                        Ready next
+                                    </div>
+                                </div>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    {["Location", "Offers / skills", "Interests", "Needs tags"].map((label) => (
+                                        <span
+                                            key={label}
+                                            className="rounded-full border border-dashed border-gray-300 px-3 py-1.5 text-xs text-gray-600"
+                                        >
+                                            {label}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Resonance slider + Date & SDG filters */}
                         <div
@@ -1340,11 +1562,12 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                             <div className="mx-0 px-4 pb-4">
                                 {isSearching && <p className="py-4 text-center">Loading...</p>}
                                 {!isSearching && drawerListData.length === 0 && (
-                                    <p className="py-4 text-center text-sm text-gray-500">
-                                        {hasSearched
-                                            ? `No results found for "${searchQuery}".`
-                                            : "No circles found."}
-                                    </p>
+                                    <div className="py-6 text-center">
+                                        <p className="text-sm font-medium text-gray-900">{searchEmptyState.title}</p>
+                                        <p className="mx-auto mt-2 max-w-sm text-sm text-gray-500">
+                                            {searchEmptyState.description}
+                                        </p>
+                                    </div>
                                 )}
                                 {!isSearching && drawerListData.length > 0 && (
                                     <ul className="space-y-2">
