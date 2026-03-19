@@ -16,7 +16,7 @@ export function CreateCircleDialog({ parentCircleId }: { parentCircleId?: string
     const router = useRouter();
     const pathname = usePathname();
     const isProjectsPage = pathname?.includes("/projects");
-    const entityLabel = isProjectsPage ? "Project" : "Community";
+    const entityLabel = isProjectsPage ? "Project" : "Circle";
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
