@@ -12,7 +12,7 @@ import { format } from "date-fns";
 const SEARCH_CATEGORY_LABELS: Record<string, string> = {
     users: "people",
     communities: "circles",
-    projects: "projects",
+    events: "events",
 };
 
 export default function SearchResultsPanel() {
@@ -24,7 +24,7 @@ export default function SearchResultsPanel() {
     const filterSummary = useMemo(() => {
         const parts: string[] = [];
 
-        if (searchState.selectedCategory && searchState.selectedCategory !== "events") {
+        if (searchState.selectedCategory) {
             parts.push(SEARCH_CATEGORY_LABELS[searchState.selectedCategory] ?? searchState.selectedCategory);
         }
 
@@ -47,7 +47,7 @@ export default function SearchResultsPanel() {
             context.push(`for "${trimmedQuery}"`);
         }
 
-        if (searchState.selectedCategory && searchState.selectedCategory !== "events") {
+        if (searchState.selectedCategory) {
             context.push(
                 `in ${SEARCH_CATEGORY_LABELS[searchState.selectedCategory] ?? searchState.selectedCategory}`,
             );
@@ -67,7 +67,7 @@ export default function SearchResultsPanel() {
 
         return {
             title: `No ${
-                searchState.selectedCategory && searchState.selectedCategory !== "events"
+                searchState.selectedCategory
                     ? SEARCH_CATEGORY_LABELS[searchState.selectedCategory] ?? searchState.selectedCategory
                     : "results"
             } found`,
@@ -116,11 +116,7 @@ export default function SearchResultsPanel() {
                 <div className="mt-1 text-xs text-gray-500">
                     {searchState.isSearching
                         ? "Searching…"
-                        : `${items.length} result${items.length === 1 ? "" : "s"} · ${
-                              searchState.counts?.users ?? 0
-                          } people · ${searchState.counts?.communities ?? 0} circles · ${
-                              searchState.counts?.projects ?? 0
-                          } projects`}
+                        : `${items.length} result${items.length === 1 ? "" : "s"}`}
                 </div>
                 {filterSummary && <div className="mt-1 text-xs text-gray-500">Filters: {filterSummary}</div>}
             </div>

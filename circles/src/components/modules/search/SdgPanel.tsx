@@ -13,37 +13,41 @@ interface SdgPanelProps {
     visibleSdgs: SDG[];
     selectedSdgs: SDG[];
     onToggle: (sdg: SDG) => void;
-    search: string;
-    setSearch: (value: string) => void;
+    search?: string;
+    setSearch?: (value: string) => void;
     className?: string;
     gridCols?: string;
     onClear?: () => void;
     causeCounts?: Record<string, number>;
+    showSearch?: boolean;
 }
 
 export const SdgPanel: React.FC<SdgPanelProps> = ({
     visibleSdgs,
     selectedSdgs,
     onToggle,
-    search,
+    search = "",
     setSearch,
     className,
     gridCols,
     onClear,
     causeCounts,
+    showSearch = true,
 }) => {
     return (
         <div className={cn("p-1", className)}>
-            <div className="relative mb-2">
-                <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
-                <Input
-                    type="text"
-                    placeholder="Search SDGs..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-8 text-xs"
-                />
-            </div>
+            {showSearch && setSearch && (
+                <div className="relative mb-2">
+                    <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
+                    <Input
+                        type="text"
+                        placeholder="Search SDGs..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="pl-8 text-xs"
+                    />
+                </div>
+            )}
             <SdgList
                 sdgs={visibleSdgs}
                 selectedSdgs={selectedSdgs}

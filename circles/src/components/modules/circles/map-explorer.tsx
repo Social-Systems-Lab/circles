@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import {
     Hand,
     Home,
@@ -46,6 +47,7 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { searchContentAction } from "../search/actions";
 import CategoryFilter, { CategoryFilterProps } from "../search/category-filter";
 import SdgFilter from "../search/sdg-filter";
+import { SdgPanel } from "../search/SdgPanel";
 import Indicators from "@/components/utils/indicators";
 import ResizingDrawer from "@/components/ui/resizing-drawer"; // Correct import name
 import ContentPreview from "@/components/layout/content-preview";
@@ -53,6 +55,7 @@ import { getOpenEventsForMapAction } from "./map-explorer-actions";
 import { EventDisplay } from "@/models/models";
 import ActivityPanel from "@/components/layout/activity-panel";
 import MobileEventsPanel from "@/components/modules/events/mobile-events-panel";
+import { sdgs } from "@/lib/data/sdgs";
 
 // mapItemToContent helper remains the same
 const mapItemToContent = (item: WithMetric<Content> | Circle | undefined): Content | null => {
@@ -130,10 +133,10 @@ const CategoryFilterCarousel: React.FC<CategoryFilterProps & { className?: strin
     }, [evaluateScrollability]);
 
     return (
-        <div className={cn("relative flex min-w-0 flex-1 items-center", className)}>
+        <div className={cn("relative inline-flex min-w-0 items-center", className)}>
             <div
                 ref={scrollAreaRef}
-                className="no-scrollbar flex w-full items-center gap-2 overflow-x-auto overflow-y-hidden mx-[22px] px-1 scroll-smooth"
+                className="no-scrollbar flex max-w-full items-center gap-2 overflow-x-auto overflow-y-hidden mx-[22px] px-1 scroll-smooth"
             >
                 <CategoryFilter {...props} />
             </div>
@@ -178,22 +181,19 @@ const SNAP_INDEX_OPEN = 2; // Large height (e.g., 80%)
 const SNAP_INDEX_FULL = 3; // Full height (e.g., 100%)
 
 const RESULT_TYPE_OPTIONS = [
-    { value: null, label: "All" },
     { value: "users", label: "People" },
     { value: "communities", label: "Circles" },
-    { value: "projects", label: "Projects" },
+    { value: "events", label: "Events" },
 ] as const;
 
 const SEARCH_CATEGORY_LABELS: Record<string, string> = {
     users: "people",
     communities: "circles",
-    projects: "projects",
     events: "events",
 };
 
 const getCircleTypeForSearchCategory = (category: string | null) => {
     if (category === "communities") return "circle";
-    if (category === "projects") return "project";
     if (category === "users") return "user";
     return null;
 };
@@ -275,6 +275,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const [isSearching, setIsSearching] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+    const [openAdvancedSection, setOpenAdvancedSection] = useState<string>("calendar");
     const [drawerContent, setDrawerContent] = useAtom(drawerContentAtom);
     // Events dataset for map
     const [eventsForMap, setEventsForMap] = useState<EventDisplay[]>([]);
@@ -338,7 +339,8 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const filterCirclesByCategory = useCallback((circles: WithMetric<Circle>[], category: string | null) => {
         // ... (no changes) ...
         if (!category) return circles;
-        const typeToFilter = category === "communities" ? "circle" : category === "projects" ? "project" : "user";
+        if (category === "events") return circles;
+        const typeToFilter = category === "communities" ? "circle" : "user";
         return circles.filter((c) => c.circleType === typeToFilter);
     }, []);
 
@@ -430,6 +432,23 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         return count;
     }, [selectedSdgs.length, hasDateFilter]);
 
+    const handleAdvancedSdgToggle = useCallback(
+        (sdg: SDG) => {
+            const isSelected = selectedSdgs.some((selected) => selected.handle === sdg.handle);
+            if (isSelected) {
+                setSelectedSdgs(selectedSdgs.filter((selected) => selected.handle !== sdg.handle));
+                return;
+            }
+            setSelectedSdgs([...selectedSdgs, sdg]);
+        },
+        [selectedSdgs],
+    );
+
+    const handleClearAdvancedFilters = useCallback(() => {
+        setSelectedSdgs([]);
+        setDateRange(undefined);
+    }, []);
+
     useEffect(() => {
         if (!hasSearched) {
             return;
@@ -442,7 +461,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             selectedCategory: selectedCategory ?? null,
             selectedSdgHandles: selectedSdgs.map((sdg) => sdg.handle),
             selectedDateLabel: hasDateFilter ? dateLabel : null,
-            items: filteredSearchResults as any,
+            items: (selectedCategory === "events" ? filteredEventsForMap : filteredSearchResults) as any,
             counts: {
                 communities: categoryCounts.communities,
                 projects: categoryCounts.projects,
@@ -459,8 +478,8 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         hasDateFilter,
         dateLabel,
         filteredSearchResults,
+        filteredEventsForMap,
         categoryCounts,
-        filteredEventsForMap.length,
         setSearchPanelState,
     ]);
 
@@ -598,7 +617,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 selectedCategory: selectedCategory ?? null,
                 selectedSdgHandles: sdgHandles,
                 selectedDateLabel: hasDateFilter ? dateLabel : null,
-                items: filtered as any,
+                items: (selectedCategory === "events" ? filteredEventsForMap : filtered) as any,
                 counts,
             });
             setSidePanelMode("search");
@@ -635,7 +654,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         setContentPreview,
         hasDateFilter,
         dateLabel,
-        filteredEventsForMap.length,
+        filteredEventsForMap,
         isMobile,
         router,
         setSearchPanelState,
@@ -650,6 +669,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         setSelectedSdgs([]);
         setDateRange(undefined);
         setShowAdvancedFilters(false);
+        setOpenAdvancedSection("calendar");
         const resetMapData = filterCirclesByCategory(allDiscoverableCircles, null)
             .map((circle) => mapItemToContent(circle))
             .filter((c): c is Content => c !== null);
@@ -686,29 +706,6 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         console.log("Drawer consumed trigger, resetting triggerSnapIndex to -1");
         setTriggerSnapIndex(-1);
     }, []);
-
-    // Quick date range presets for the date filter
-    const setQuickDateRange = useCallback(
-        (preset: "today" | "7d" | "30d" | "all") => {
-            const now = new Date();
-            const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-
-            if (preset === "all") {
-                setDateRange(undefined);
-                return;
-            }
-            if (preset === "today") {
-                setDateRange({ from: startOfDay(now), to: undefined });
-                return;
-            }
-
-            const days = preset === "7d" ? 7 : 30;
-            const from = new Date(now);
-            from.setDate(now.getDate() - (days - 1));
-            setDateRange({ from: startOfDay(from), to: undefined });
-        },
-        [setDateRange],
-    );
 
     const handleExplore = () => {
         setViewMode("explore");
@@ -949,103 +946,87 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     if (!isMounted) return null;
 
     const advancedFiltersContent = (
-        <div className="space-y-4">
-            <div className="flex items-start justify-between gap-3">
-                <div>
-                    <div className="text-sm font-semibold text-gray-900">Advanced search</div>
-                    <p className="mt-1 text-xs text-gray-500">Narrow results with SDGs and date.</p>
-                </div>
-                {activeAdvancedFilterCount > 0 && (
+        <div className="space-y-3">
+            {activeAdvancedFilterCount > 0 && (
+                <div className="flex justify-end">
                     <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 px-2 text-xs text-gray-600"
-                        onClick={() => {
-                            setSelectedSdgs([]);
-                            setDateRange(undefined);
-                        }}
+                        className="h-8 rounded-full px-3 text-xs text-gray-600"
+                        onClick={handleClearAdvancedFilters}
                     >
                         Clear all
                     </Button>
-                )}
-            </div>
+                </div>
+            )}
 
-            <div className="rounded-2xl bg-gray-50 p-3">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                    <div>
-                        <div className="text-sm font-medium text-gray-900">Date</div>
-                        <div className="text-xs text-gray-500">
-                            {hasDateFilter ? dateLabel : "Any time"}
+            <Accordion
+                type="single"
+                collapsible
+                value={openAdvancedSection}
+                onValueChange={(value) => setOpenAdvancedSection(value)}
+                className="space-y-3"
+            >
+                <AccordionItem className="overflow-hidden rounded-[24px] border border-gray-200 bg-white px-0 shadow-sm" value="calendar">
+                    <AccordionTrigger className="px-4 py-4 text-left hover:no-underline">
+                        <div className="space-y-1">
+                            <div className="text-sm font-semibold text-gray-900">Calendar</div>
+                            <div className="text-xs text-gray-500">{hasDateFilter ? dateLabel : "Select dates"}</div>
                         </div>
-                    </div>
-                    {hasDateFilter && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 px-2 text-xs text-gray-600"
-                            onClick={() => setDateRange(undefined)}
-                        >
-                            Clear
-                        </Button>
-                    )}
-                </div>
-                <div className="mb-3 flex flex-wrap gap-1.5">
-                    <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setQuickDateRange("today")}>
-                        Today
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setQuickDateRange("7d")}>
-                        7d
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setQuickDateRange("30d")}>
-                        30d
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setQuickDateRange("all")}>
-                        Any time
-                    </Button>
-                </div>
-                <Calendar
-                    mode="range"
-                    selected={dateRange}
-                    onSelect={setDateRange as any}
-                    numberOfMonths={isMobile ? 1 : 2}
-                    defaultMonth={dateRange?.from}
-                />
-            </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-4 pb-4">
+                        <div className="space-y-4">
+                            <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                                <Calendar
+                                    mode="range"
+                                    selected={dateRange}
+                                    onSelect={setDateRange as any}
+                                    numberOfMonths={1}
+                                    defaultMonth={dateRange?.from ?? new Date()}
+                                    className="mx-auto"
+                                />
+                            </div>
+                            {hasDateFilter && (
+                                <div className="flex justify-end">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 rounded-full px-3 text-xs text-gray-600"
+                                        onClick={() => setDateRange(undefined)}
+                                    >
+                                        Clear date
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                    </AccordionContent>
+                </AccordionItem>
 
-            <div className="rounded-2xl bg-gray-50 p-3">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                    <div>
-                        <div className="text-sm font-medium text-gray-900">SDGs</div>
-                        <div className="text-xs text-gray-500">
-                            {selectedSdgs.length > 0
-                                ? `${selectedSdgs.length} selected`
-                                : "Use SDGs to narrow explore results"}
+                <AccordionItem className="overflow-hidden rounded-[24px] border border-gray-200 bg-white px-0 shadow-sm" value="sdgs">
+                    <AccordionTrigger className="px-4 py-4 text-left hover:no-underline">
+                        <div className="space-y-1">
+                            <div className="text-sm font-semibold text-gray-900">SDGs</div>
+                            <div className="text-xs text-gray-500">
+                                {selectedSdgs.length > 0 ? `${selectedSdgs.length} selected` : "Any SDG"}
+                            </div>
                         </div>
-                    </div>
-                    {selectedSdgs.length > 0 && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 px-2 text-xs text-gray-600"
-                            onClick={() => setSelectedSdgs([])}
-                        >
-                            Clear
-                        </Button>
-                    )}
-                </div>
-                <SdgFilter
-                    selectedSdgs={selectedSdgs}
-                    onSelectionChange={setSelectedSdgs}
-                    displayAs="inline"
-                    gridCols={isMobile ? "grid-cols-2" : "grid-cols-3"}
-                    sdgCounts={sdgCounts}
-                    trigger={
-                        <span className="text-sm font-medium text-gray-900">
-                            {selectedSdgs.length > 0 ? `Selected (${selectedSdgs.length})` : "Choose SDGs"}
-                        </span>
-                    }
-                />
-            </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-4 pb-4">
+                        <div className="space-y-3">
+                            <div className="max-h-[19rem] overflow-y-auto overscroll-contain pr-1">
+                                <SdgPanel
+                                    visibleSdgs={sdgs}
+                                    selectedSdgs={selectedSdgs}
+                                    onToggle={handleAdvancedSdgToggle}
+                                    gridCols={isMobile ? "grid-cols-2" : "grid-cols-4"}
+                                    onClear={() => setSelectedSdgs([])}
+                                    showSearch={false}
+                                />
+                            </div>
+                        </div>
+                    </AccordionContent>
+                </AccordionItem>
+            </Accordion>
         </div>
     );
 
@@ -1073,11 +1054,11 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 {/* Search Bar & Filters (Only in Explore Mode) */}
                 {viewMode === "explore" && !(sidePanelContentVisible === "toolbox" && isMobile) && (
                     <div className="flex min-w-0 flex-1 flex-col gap-2">
-                        <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap md:gap-3">
-                            <div className="flex w-full max-w-xl flex-shrink-0 items-center rounded-full bg-white/95 p-1 pl-4 shadow-md ring-1 ring-black/5 backdrop-blur-sm">
+                        <div className="flex w-full flex-col gap-2 md:flex-row md:items-center md:gap-4">
+                            <div className="flex w-full md:w-[23.5rem] md:max-w-[23.5rem] md:flex-none items-center rounded-full bg-white/95 p-1 pl-4 shadow-md ring-1 ring-black/5 backdrop-blur-sm">
                                 <input
                                     type="text"
-                                    placeholder="Search people, circles, and projects"
+                                    placeholder="Search people, circles, and events"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     onKeyDown={(e) => e.key === "Enter" && handleSearchTrigger()}
@@ -1116,7 +1097,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                         <PopoverContent
                                             align="start"
                                             sideOffset={10}
-                                            className="w-[min(32rem,calc(100vw-2rem))] rounded-3xl border border-gray-200/80 p-4 shadow-2xl"
+                                            className="w-[min(27rem,calc(100vw-2rem))] overflow-hidden rounded-[26px] border border-gray-200/80 bg-[#faf9f7] p-3 shadow-2xl"
                                         >
                                             {advancedFiltersContent}
                                         </PopoverContent>
@@ -1144,21 +1125,21 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                     {isSearching ? "..." : <Search className="h-4 w-4" />}
                                 </Button>
                             </div>
-                        </div>
 
-                        <CategoryFilterCarousel
-                            categories={RESULT_TYPE_OPTIONS.map((option) => option.value ?? "all")}
-                            categoryCounts={{
-                                all: countsDatasetCircles.length,
-                                communities: categoryCounts.communities,
-                                projects: categoryCounts.projects,
-                                users: categoryCounts.users,
-                            }}
-                            selectedCategory={selectedCategory}
-                            onSelectionChange={setSelectedCategory}
-                            hasSearched={true}
-                            displayLabelMap={{ all: "all", users: "people", communities: "circles" }}
-                        />
+                            <CategoryFilterCarousel
+                                className="min-w-0 md:w-auto md:max-w-[calc(100%-24.5rem)] md:flex-none"
+                                categories={RESULT_TYPE_OPTIONS.map((option) => option.value)}
+                                categoryCounts={{
+                                    communities: categoryCounts.communities,
+                                    events: categoryCounts.events,
+                                    users: categoryCounts.users,
+                                }}
+                                selectedCategory={selectedCategory}
+                                onSelectionChange={setSelectedCategory}
+                                hasSearched={true}
+                                displayLabelMap={{ users: "people", communities: "circles", events: "events" }}
+                            />
+                        </div>
                     </div>
                 )}
             </div>
@@ -1167,9 +1148,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 <Dialog open={showAdvancedFilters} onOpenChange={setShowAdvancedFilters}>
                     <DialogContent className="top-auto left-0 right-0 bottom-0 max-h-[85vh] max-w-none translate-x-0 translate-y-0 rounded-t-[28px] rounded-b-none border-0 p-0 sm:rounded-t-[28px]">
                         <DialogHeader className="sr-only">
-                            <DialogTitle>Advanced search</DialogTitle>
+                            <DialogTitle>Search filters</DialogTitle>
                         </DialogHeader>
-                        <div className="max-h-[calc(85vh-5rem)] overflow-y-auto px-5 pb-6 pt-4">
+                        <div className="max-h-[calc(85vh-5rem)] overflow-y-auto bg-[#faf9f7] px-5 pb-6 pt-4">
                             {advancedFiltersContent}
                         </div>
                     </DialogContent>
