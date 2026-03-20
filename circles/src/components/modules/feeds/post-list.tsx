@@ -166,9 +166,9 @@ export const handleMentionQuery = async (query: string, callback: (data: Suggest
     }
     let suggestions =
         response.circles?.map((circle) => ({
-            id: circle._id,
-            display: circle.name,
-            picture: circle.picture?.url,
+            id: String(circle._id ?? ""),
+            display: String(circle.name ?? ""),
+            picture: circle.picture?.url ? String(circle.picture.url) : undefined,
         })) ?? [];
     callback(suggestions);
 };
