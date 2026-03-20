@@ -23,7 +23,9 @@ export default async function FeedPage(props: PageProps) {
         await createDefaultFeed(circle._id);
     }
 
+    const plainCircle = JSON.parse(JSON.stringify(circle));
+
     // Pass circle and original props down to FeedsModule
     // FeedsModule likely fetches its own feed/posts using these props
-    return <FeedsModule {...props} circle={circle} />;
+    return <FeedsModule {...props} circle={plainCircle} />;
 }
