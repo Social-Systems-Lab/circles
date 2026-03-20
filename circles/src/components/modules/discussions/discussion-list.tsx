@@ -178,7 +178,7 @@ export const getMentionsPortalHost = () => {
 
     const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
     const dialogHost = activeElement?.closest('[role="dialog"]');
-    return dialogHost instanceof HTMLElement ? dialogHost : document.body;
+    return dialogHost instanceof HTMLElement ? document.body : undefined;
 };
 
 type LikeButtonProps = {
