@@ -147,7 +147,7 @@ const postMentionsInputStyle = {
         wordBreak: "break-word" as const,
     },
     suggestions: {
-        zIndex: 200,
+        zIndex: 12000,
         control: {
             backgroundColor: "transparent",
         },
@@ -702,6 +702,8 @@ export function DiscussionForm({
                                 autoFocus
                                 style={postMentionsInputStyle}
                                 suggestionsPortalHost={getMentionsPortalHost()}
+                                allowSuggestionsAboveCursor={true}
+                                forceSuggestionsAboveCursor={true}
                             >
                                 <Mention
                                     trigger="@"

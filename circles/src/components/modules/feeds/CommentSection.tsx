@@ -363,6 +363,8 @@ const CommentItem = ({
                                         style={defaultMentionsInputStyle}
                                         autoFocus
                                         suggestionsPortalHost={getMentionsPortalHost()}
+                                        allowSuggestionsAboveCursor={true}
+                                        forceSuggestionsAboveCursor={true}
                                     >
                                         <Mention
                                             trigger="@"
@@ -455,6 +457,8 @@ const CommentItem = ({
                                 style={defaultMentionsInputStyle}
                                 autoFocus
                                 suggestionsPortalHost={getMentionsPortalHost()}
+                                allowSuggestionsAboveCursor={true}
+                                forceSuggestionsAboveCursor={true}
                             >
                                 <Mention
                                     trigger="@"
@@ -706,6 +710,8 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ postId, circle, 
                                     style={defaultMentionsInputStyle}
                                     disabled={isSubmittingComment}
                                     suggestionsPortalHost={getMentionsPortalHost()}
+                                    allowSuggestionsAboveCursor={true}
+                                    forceSuggestionsAboveCursor={true}
                                 >
                                     <Mention
                                         trigger="@"

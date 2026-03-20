@@ -112,7 +112,7 @@ export const defaultMentionsInputStyle = {
         padding: "0.5rem 1rem", // Same as input
     },
     suggestions: {
-        zIndex: 200,
+        zIndex: 12000,
         control: {
             backgroundColor: "transparent",
         },
@@ -1457,6 +1457,8 @@ export const PostItem = ({
                             className="flex-grow rounded-[20px] bg-gray-100"
                             style={defaultMentionsInputStyle}
                             suggestionsPortalHost={getMentionsPortalHost()}
+                            allowSuggestionsAboveCursor={true}
+                            forceSuggestionsAboveCursor={true}
                         >
                             <Mention
                                 trigger="@"
@@ -1771,6 +1773,8 @@ const CommentItem = ({
                                             className="flex-grow rounded-[20px] bg-gray-200"
                                             style={defaultMentionsInputStyle}
                                             suggestionsPortalHost={getMentionsPortalHost()}
+                                            allowSuggestionsAboveCursor={true}
+                                            forceSuggestionsAboveCursor={true}
                                         >
                                             <Mention
                                                 trigger="@"

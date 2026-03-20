@@ -444,11 +444,11 @@ div.ReactTags__suggestions ul li.ReactTags__activeSuggestion {
 /* react-mentions */
 .flex-grow__suggestions {
     background-color: transparent !important;
-    z-index: 200 !important;
+    z-index: 12000 !important;
 }
 
 .flex-grow__suggestions__list {
-    z-index: 200 !important;
+    z-index: 12000 !important;
 }
 
 /* Pin effect */
