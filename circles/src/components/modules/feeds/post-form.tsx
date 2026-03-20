@@ -143,6 +143,7 @@ const postMentionsInputStyle = {
         wordBreak: "break-word" as const,
     },
     suggestions: {
+        zIndex: 200,
         control: {
             backgroundColor: "transparent",
         },

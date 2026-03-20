@@ -110,6 +110,7 @@ export const defaultMentionsInputStyle = {
         padding: "0.5rem 1rem", // Same as input
     },
     suggestions: {
+        zIndex: 200,
         control: {
             backgroundColor: "transparent",
         },
