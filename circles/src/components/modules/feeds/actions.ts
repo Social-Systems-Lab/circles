@@ -50,7 +50,7 @@ import {
     FileInfo, // Added FileInfo
 } from "@/models/models";
 import { revalidatePath } from "next/cache";
-import { getCircleById, getCirclePath, getCirclesBySearchQuery, getCircleByHandle } from "@/lib/data/circle"; // Added getCircleByHandle
+import { getCircleById, getCirclePath, getCircleByHandle } from "@/lib/data/circle"; // Added getCircleByHandle
 import { getLinkPreview } from "link-preview-js"; // Removed LinkPreview import
 import { getUserByDid, getUserById, getUserPrivate, getVerificationStatus } from "@/lib/data/user";
 import { redirect } from "next/navigation";
@@ -64,6 +64,7 @@ import {
 } from "@/lib/data/notifications";
 import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
 import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
+import { getMentionableUserIdsForUserDid, searchMentionableUsersForUserDid } from "@/lib/data/chat";
 
 // Global posts: posts from all public feeds
 export async function getGlobalPostsAction(
@@ -159,6 +160,23 @@ type ExpectedPreview = {
     mediaType?: string;
     contentType?: string;
     favicons?: string[];
+};
+
+const mentionPermissionErrorMessage = "You can only mention people you can message.";
+
+const validateMentionPermissions = async (
+    userDid: string,
+    mentions?: Array<{ id: string }>,
+): Promise<void> => {
+    if (!mentions?.length) {
+        return;
+    }
+
+    const mentionableUserIds = await getMentionableUserIdsForUserDid(userDid);
+    const hasBlockedMention = mentions.some((mention) => !mentionableUserIds.has(mention.id));
+    if (hasBlockedMention) {
+        throw new Error(mentionPermissionErrorMessage);
+    }
 };
 
 export async function getLinkPreviewAction(url: string): Promise<{
@@ -471,6 +489,7 @@ export async function createPostAction(
 
         // parse mentions in the comment content
         const mentions = extractMentions(post.content);
+        await validateMentionPermissions(userDid, mentions);
         post.mentions = mentions;
         let newPost = await createPost(post);
 
@@ -612,6 +631,7 @@ export async function updatePostAction(
 
         // console.log("Updating post", JSON.stringify(updatedPost.location)); // Reduced logging
         updatedPost.mentions = extractMentions(content);
+        await validateMentionPermissions(userDid, updatedPost.mentions);
         let existingMedia: Media[] = [];
         let mediaStr = formData.getAll("existingMedia") as string[];
         if (mediaStr) {
@@ -777,6 +797,7 @@ export async function createCommentAction(
 
         // parse mentions in the comment content
         const mentions = extractMentions(comment.content);
+        await validateMentionPermissions(userDid, mentions);
         comment.mentions = mentions;
 
         try {
@@ -903,6 +924,7 @@ export async function editCommentAction(
         }
 
         const updatedMentions = extractMentions(updatedContent);
+        await validateMentionPermissions(userDid, updatedMentions);
         await updateComment(commentId, updatedContent, updatedMentions);
 
         // Send notifications for new mentions
@@ -1093,7 +1115,12 @@ export async function searchCirclesAction(
     query: string,
 ): Promise<{ success: boolean; circles?: Circle[]; message?: string }> {
     try {
-        const circles = await getCirclesBySearchQuery(query, 10);
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: true, circles: [] };
+        }
+
+        const circles = await searchMentionableUsersForUserDid(userDid, decodeURIComponent(query), 10);
         return { success: true, circles };
     } catch (error) {
         return { success: false, message: error instanceof Error ? error.message : "Failed to search circles." };

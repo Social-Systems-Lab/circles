@@ -33,6 +33,7 @@ type Notification = {
     message: string;
     time: string;
     createdAt: Date;
+    isRead: boolean;
     notificationType: NotificationType;
     circle?: Circle;
     user?: Circle;
@@ -77,6 +78,8 @@ type GroupedNotification = {
     count: number;
     notificationType: NotificationType;
     latestNotification: Notification;
+    notificationIds: string[];
+    unreadNotificationIds: string[];
     relatedUsers: Circle[];
     postId?: string;
     commentId?: string;
@@ -140,11 +143,6 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
             const data = await response.json();
             setRecords(Array.isArray(data.notifications) ? data.notifications : []);
             setNotificationUnreadCount(typeof data.unreadCount === "number" ? data.unreadCount : 0);
-
-            if ((data.unreadCount || 0) > 0) {
-                await fetch("/api/notifications/mark-all-read", { method: "POST" });
-                setNotificationUnreadCount(0);
-            }
         } catch (error) {
             console.error("Failed to fetch notifications:", error);
         }
@@ -214,6 +212,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                     message: content.body || "New notification",
                     time: timeSince(createdAt, false),
                     createdAt,
+                    isRead: !!record.isRead,
                     notificationType,
                     circle: content.circle,
                     user: content.user,
@@ -266,6 +265,10 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                 // Update existing group
                 const group = groupMap.get(notification.key)!;
                 group.count++;
+                group.notificationIds.push(notification.id);
+                if (!notification.isRead) {
+                    group.unreadNotificationIds.push(notification.id);
+                }
 
                 // Use more recent notification if needed
                 if (notification.createdAt > group.latestNotification.createdAt) {
@@ -283,6 +286,8 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                     count: 1,
                     notificationType: notification.notificationType,
                     latestNotification: notification,
+                    notificationIds: [notification.id],
+                    unreadNotificationIds: notification.isRead ? [] : [notification.id],
                     relatedUsers: notification.user ? [notification.user] : [],
                     postId: notification.postId,
                     commentId: notification.commentId,
@@ -318,7 +323,45 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
         );
     }, [notifications]);
 
-    const handleNotificationClick = (groupedNotification: GroupedNotification) => {
+    const markNotificationGroupAsRead = useCallback(
+        async (groupedNotification: GroupedNotification) => {
+            if (!groupedNotification.unreadNotificationIds.length) {
+                return;
+            }
+
+            const unreadIds = groupedNotification.unreadNotificationIds;
+            setRecords((prevRecords) =>
+                prevRecords.map((record) =>
+                    unreadIds.includes(record._id)
+                        ? {
+                              ...record,
+                              isRead: true,
+                          }
+                        : record,
+                ),
+            );
+            setNotificationUnreadCount((count) => Math.max(0, count - unreadIds.length));
+
+            try {
+                await Promise.all(
+                    unreadIds.map((notificationId) =>
+                        fetch("/api/notifications/mark-as-read", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ notificationId }),
+                        }),
+                    ),
+                );
+            } catch (error) {
+                console.error("Failed to mark notification group as read:", error);
+                void fetchNotifications();
+            }
+        },
+        [fetchNotifications, setNotificationUnreadCount],
+    );
+
+    const handleNotificationClick = async (groupedNotification: GroupedNotification) => {
+        await markNotificationGroupAsRead(groupedNotification);
         if (onNavigate) {
             onNavigate();
         }
@@ -565,7 +608,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                     <div
                         key={groupedNotification.key}
                         className={`m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100`}
-                        onClick={() => handleNotificationClick(groupedNotification)}
+                        onClick={() => void handleNotificationClick(groupedNotification)}
                     >
                         <div className="relative h-[40px] w-[40px]">
                             {/* Different layouts based on notification type */}

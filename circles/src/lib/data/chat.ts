@@ -1,6 +1,6 @@
 // chat.ts - chat logic
 
-import { ChatRooms, ChatRoomMembers, Circles, Members } from "./db";
+import { ChatConversations, ChatRooms, ChatRoomMembers, Circles, Members } from "./db";
 import { ObjectId } from "mongodb";
 import { ChatRoom, ChatRoomMember, ChatRoomDisplay, Circle } from "@/models/models";
 import { getCircleById, updateCircle } from "./circle";
@@ -68,6 +68,122 @@ export const listChatRoomsForUser = async (userDid: string): Promise<ChatRoomDis
         .map((c: any) => c._id.toString());
 
     return await listConversationsForUser(userDid, allowedCircleIds);
+};
+
+export const getChatContactsForUserDid = async (userDid: string): Promise<Circle[]> => {
+    const contactDids = new Set<string>();
+    const currentUser = await Circles.findOne(
+        { did: userDid },
+        { projection: { _id: 1 } },
+    );
+    const currentUserCircleId = currentUser?._id ? String(currentUser._id) : undefined;
+
+    const outgoingMemberships = await Members.find({ userDid }, { projection: { circleId: 1 } }).toArray();
+    const followedUserCircleIds = Array.from(
+        new Set(
+            outgoingMemberships
+                .map((membership: any) => (typeof membership?.circleId === "string" ? membership.circleId : undefined))
+                .filter((circleId): circleId is string => !!circleId && ObjectId.isValid(circleId)),
+        ),
+    );
+
+    if (followedUserCircleIds.length > 0) {
+        const followedObjectIds = followedUserCircleIds.map((circleId) => new ObjectId(circleId));
+        const followedUsers = await Circles.find(
+            {
+                _id: { $in: followedObjectIds },
+                circleType: "user",
+                did: { $ne: userDid },
+            },
+            { projection: { did: 1 } },
+        ).toArray();
+
+        for (const followedUser of followedUsers) {
+            if (followedUser?.did) {
+                contactDids.add(String(followedUser.did));
+            }
+        }
+    }
+
+    if (currentUserCircleId) {
+        const incomingMemberships = await Members.find(
+            { circleId: currentUserCircleId, userDid: { $ne: userDid } },
+            { projection: { userDid: 1 } },
+        ).toArray();
+
+        for (const follower of incomingMemberships) {
+            if (follower?.userDid) {
+                contactDids.add(String(follower.userDid));
+            }
+        }
+    }
+
+    const dmConversations = await ChatConversations.find(
+        {
+            type: "dm",
+            participants: userDid,
+            archived: { $ne: true },
+        },
+        { projection: { participants: 1 } },
+    ).toArray();
+
+    for (const conversation of dmConversations) {
+        for (const participantDid of (conversation as any)?.participants || []) {
+            if (participantDid && participantDid !== userDid) {
+                contactDids.add(String(participantDid));
+            }
+        }
+    }
+
+    if (contactDids.size === 0) {
+        return [];
+    }
+
+    return await Circles.find(
+        {
+            did: { $in: Array.from(contactDids) },
+            circleType: "user",
+        },
+        {
+            projection: {
+                _id: 1,
+                did: 1,
+                handle: 1,
+                name: 1,
+                picture: 1,
+                circleType: 1,
+            },
+        },
+    )
+        .sort({ name: 1 })
+        .toArray();
+};
+
+export const searchMentionableUsersForUserDid = async (
+    userDid: string,
+    query: string,
+    limit: number = 10,
+): Promise<Circle[]> => {
+    const contacts = await getChatContactsForUserDid(userDid);
+    const normalizedQuery = query.trim().toLowerCase();
+
+    const filtered = contacts.filter((contact) => {
+        if (!normalizedQuery) return true;
+        const nameMatch = contact.name?.toLowerCase().includes(normalizedQuery);
+        const handleMatch = contact.handle?.toLowerCase().includes(normalizedQuery);
+        return !!(nameMatch || handleMatch);
+    });
+
+    return filtered.slice(0, limit);
+};
+
+export const getMentionableUserIdsForUserDid = async (userDid: string): Promise<Set<string>> => {
+    const contacts = await getChatContactsForUserDid(userDid);
+    return new Set(
+        contacts
+            .map((contact) => (contact?._id ? String(contact._id) : undefined))
+            .filter((contactId): contactId is string => !!contactId),
+    );
 };
 
 export const getDefaultChatRoomByCircleHandle = async (circleHandle: string): Promise<ChatRoomDisplay | null> => {

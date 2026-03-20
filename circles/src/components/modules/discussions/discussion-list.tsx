@@ -114,11 +114,14 @@ export const defaultMentionsInputStyle = {
             backgroundColor: "transparent",
         },
         list: {
-            backgroundColor: "transparent",
-            border: "0px solid rgba(0,0,0,0.15)",
+            backgroundColor: "white",
+            border: "1px solid rgba(0,0,0,0.08)",
             borderRadius: "15px",
             fontSize: 14,
-            overflow: "hidden",
+            boxShadow: "0 12px 32px rgba(15, 23, 42, 0.18)",
+            maxHeight: "240px",
+            overflowY: "auto" as const,
+            zIndex: 80,
         },
         item: {
             backgroundColor: "white",
@@ -166,6 +169,8 @@ export const handleMentionQuery = async (query: string, callback: (data: Suggest
         })) ?? [];
     callback(suggestions);
 };
+
+export const getMentionsPortalHost = () => (typeof document !== "undefined" ? document.body : undefined);
 
 type LikeButtonProps = {
     isLiked: boolean;
@@ -1219,6 +1224,7 @@ export const DiscussionItem = ({
                             placeholder="Write a comment..."
                             className="flex-grow rounded-[20px] bg-gray-100"
                             style={defaultMentionsInputStyle}
+                            suggestionsPortalHost={getMentionsPortalHost()}
                         >
                             <Mention
                                 trigger="@"
@@ -1523,6 +1529,7 @@ const CommentItem = ({
                                             placeholder="Write a comment..."
                                             className="flex-grow rounded-[20px] bg-gray-200"
                                             style={defaultMentionsInputStyle}
+                                            suggestionsPortalHost={getMentionsPortalHost()}
                                         >
                                             <Mention
                                                 trigger="@"

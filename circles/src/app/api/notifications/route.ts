@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getUnreadNotificationCountForUser, listNotificationsForUser } from "@/lib/data/notifications";
 
+const bellExcludedTypes = ["pm_received"];
+
 export async function GET(req: Request) {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -14,8 +16,8 @@ export async function GET(req: Request) {
 
     try {
         const [notifications, unreadCount] = await Promise.all([
-            listNotificationsForUser(userDid, limit),
-            getUnreadNotificationCountForUser(userDid),
+            listNotificationsForUser(userDid, limit, { excludeTypes: bellExcludedTypes }),
+            getUnreadNotificationCountForUser(userDid, { excludeTypes: bellExcludedTypes }),
         ]);
 
         return NextResponse.json({

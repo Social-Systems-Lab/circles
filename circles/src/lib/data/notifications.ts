@@ -240,12 +240,31 @@ export async function sendNotifications(type: string, recipients: any[], payload
     await Notifications.insertMany(docs as any[]);
 }
 
-export async function listNotificationsForUser(userDid: string, limit: number = 50) {
-    return await Notifications.find({ userId: userDid }).sort({ createdAt: -1, _id: -1 }).limit(limit).toArray();
+type NotificationQueryOptions = {
+    excludeTypes?: string[];
+};
+
+const buildNotificationQuery = (userDid: string, options?: NotificationQueryOptions) => {
+    const query: Record<string, any> = { userId: userDid };
+    if (options?.excludeTypes?.length) {
+        query.type = { $nin: options.excludeTypes };
+    }
+    return query;
+};
+
+export async function listNotificationsForUser(
+    userDid: string,
+    limit: number = 50,
+    options?: NotificationQueryOptions,
+) {
+    return await Notifications.find(buildNotificationQuery(userDid, options))
+        .sort({ createdAt: -1, _id: -1 })
+        .limit(limit)
+        .toArray();
 }
 
-export async function getUnreadNotificationCountForUser(userDid: string) {
-    return await Notifications.countDocuments({ userId: userDid, isRead: false });
+export async function getUnreadNotificationCountForUser(userDid: string, options?: NotificationQueryOptions) {
+    return await Notifications.countDocuments({ ...buildNotificationQuery(userDid, options), isRead: false });
 }
 
 export async function markAllNotificationsReadForUser(userDid: string) {

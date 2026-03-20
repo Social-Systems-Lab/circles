@@ -57,6 +57,12 @@ type RichTextProps = {
     mentions?: MentionDisplay[];
 };
 
+const getTextContent = (children: React.ReactNode): string =>
+    React.Children.toArray(children)
+        .map((child) => (typeof child === "string" ? child : ""))
+        .join("")
+        .trim();
+
 const RichText = memo(({ content, mentions }: RichTextProps) => {
     // remarkGfm handles autolinking, so we don't need needsMarkdown check anymore for basic links
     const hasMentions = mentions && mentions.length > 0;
@@ -104,9 +110,19 @@ const RichText = memo(({ content, mentions }: RichTextProps) => {
                 const postRegex = /^\/circles\/[a-zA-Z0-9\-]+\/post\/[a-zA-Z0-9]+$/;
                 const proposalRegex = /^\/circles\/[a-zA-Z0-9\-]+\/proposals\/[a-zA-Z0-9]+$/;
                 const issueRegex = /^\/circles\/[a-zA-Z0-9\-]+\/issues\/[a-zA-Z0-9]+$/;
+                const circlePathRegex = /^\/circles\/[a-zA-Z0-9\-]+$/;
                 // Match base circle URL, but avoid matching mentions again if possible
                 // (Mentions are handled above, this is for direct links to circle pages)
                 const circleRegex = /^\/circles\/[a-zA-Z0-9\-]+(?:\/(?!post|proposals|issues).*)?$/;
+                const linkText = getTextContent(children);
+
+                if (circlePathRegex.test(href) && linkText && linkText !== href) {
+                    return (
+                        <Link href={href} className="font-semibold text-blue-600 hover:underline">
+                            {children}
+                        </Link>
+                    );
+                }
 
                 if (
                     postRegex.test(href) ||

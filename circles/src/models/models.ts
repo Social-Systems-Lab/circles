@@ -309,6 +309,7 @@ export type ChatRoom = z.infer<typeof chatRoomSchema>;
 
 export type ChatRoomDisplay = ChatRoom & {
     circle?: Circle;
+    unreadCount?: number;
 };
 
 export type MatrixMessageContent =

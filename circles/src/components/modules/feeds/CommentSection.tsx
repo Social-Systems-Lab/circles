@@ -56,6 +56,7 @@ import { useRouter } from "next/navigation";
 import {
     defaultMentionsInputStyle,
     defaultMentionStyle,
+    getMentionsPortalHost,
     handleMentionQuery,
     renderCircleSuggestion,
     LikeButton, // Import LikeButton if used within CommentItem
@@ -361,6 +362,7 @@ const CommentItem = ({
                                         className="flex-grow rounded-[20px] bg-gray-200" // Slightly different bg for editing
                                         style={defaultMentionsInputStyle}
                                         autoFocus
+                                        suggestionsPortalHost={getMentionsPortalHost()}
                                     >
                                         <Mention
                                             trigger="@"
@@ -452,6 +454,7 @@ const CommentItem = ({
                                 className="flex-grow rounded-[20px] bg-gray-100" // Consistent style
                                 style={defaultMentionsInputStyle}
                                 autoFocus
+                                suggestionsPortalHost={getMentionsPortalHost()}
                             >
                                 <Mention
                                     trigger="@"
@@ -702,6 +705,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ postId, circle, 
                                     className="flex-grow rounded-[20px] bg-gray-100" // Use flex-grow here
                                     style={defaultMentionsInputStyle}
                                     disabled={isSubmittingComment}
+                                    suggestionsPortalHost={getMentionsPortalHost()}
                                 >
                                     <Mention
                                         trigger="@"

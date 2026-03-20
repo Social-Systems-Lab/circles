@@ -14,6 +14,8 @@ import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { getUserByDid } from "@/lib/data/user";
 import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
+import { extractMentions } from "@/lib/data/feed";
+import { getMentionableUserIdsForUserDid } from "@/lib/data/chat";
 
 /**
  * Create a new discussion in a circle
@@ -73,7 +75,14 @@ export async function createDiscussionAction(handle: string, data: Partial<Post>
     }
 
     // Extract mentions from content
-    const mentions = payload.content ? (await import("@/lib/data/feed")).extractMentions(payload.content) : [];
+    const mentions = payload.content ? extractMentions(payload.content) : [];
+    if (mentions.length > 0) {
+        const mentionableUserIds = await getMentionableUserIdsForUserDid(userDid);
+        const hasBlockedMention = mentions.some((mention) => !mentionableUserIds.has(mention.id));
+        if (hasBlockedMention) {
+            throw new Error("You can only mention people you can message.");
+        }
+    }
 
     return createDiscussion({
         ...payload,

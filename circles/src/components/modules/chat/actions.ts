@@ -9,6 +9,7 @@ import {
     addChatRoomMember,
     getChatRoom,
     getChatRoomMember,
+    getChatContactsForUserDid,
     removeChatRoomMember,
 } from "@/lib/data/chat";
 import { ChatConversations, ChatRoomMembers, Circles, Members } from "@/lib/data/db";
@@ -211,78 +212,7 @@ export const getChatContactsAction = async (): Promise<Circle[]> => {
     }
 
     try {
-        const contactDids = new Set<string>();
-        const currentUser = await getUserByDid(userDid);
-        const currentUserCircleId = currentUser?._id ? String(currentUser._id) : undefined;
-
-        const outgoingMemberships = await Members.find(
-            { userDid },
-            { projection: { circleId: 1 } },
-        ).toArray();
-        const followedUserCircleIds = Array.from(
-            new Set(
-                outgoingMemberships
-                    .map((membership: any) => (typeof membership?.circleId === "string" ? membership.circleId : undefined))
-                    .filter((circleId): circleId is string => !!circleId && ObjectId.isValid(circleId)),
-            ),
-        );
-
-        if (followedUserCircleIds.length > 0) {
-            const followedObjectIds = followedUserCircleIds.map((circleId) => new ObjectId(circleId));
-            const followedUsers = await Circles.find(
-                {
-                    _id: { $in: followedObjectIds },
-                    circleType: "user",
-                    did: { $ne: userDid },
-                },
-                { projection: { did: 1 } },
-            ).toArray();
-
-            for (const followedUser of followedUsers) {
-                if (followedUser?.did) {
-                    contactDids.add(String(followedUser.did));
-                }
-            }
-        }
-
-        if (currentUserCircleId) {
-            const incomingMemberships = await Members.find(
-                { circleId: currentUserCircleId, userDid: { $ne: userDid } },
-                { projection: { userDid: 1 } },
-            ).toArray();
-
-            for (const follower of incomingMemberships) {
-                if (follower?.userDid) {
-                    contactDids.add(String(follower.userDid));
-                }
-            }
-        }
-
-        const dmConversations = await ChatConversations.find(
-            {
-                type: "dm",
-                participants: userDid,
-                archived: { $ne: true },
-            },
-            { projection: { participants: 1 } },
-        ).toArray();
-
-        for (const conversation of dmConversations) {
-            for (const participantDid of (conversation as any)?.participants || []) {
-                if (participantDid && participantDid !== userDid) {
-                    contactDids.add(String(participantDid));
-                }
-            }
-        }
-
-        if (contactDids.size === 0) {
-            return [];
-        }
-
-        const contacts = await getCirclesByDids(Array.from(contactDids));
-        return contacts
-            .filter((contact) => contact?.circleType === "user" && contact?.did && contact.did !== userDid)
-            .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+        return await getChatContactsForUserDid(userDid);
     } catch (error) {
         console.error("❌ Error fetching chat contacts:", error);
         return [];

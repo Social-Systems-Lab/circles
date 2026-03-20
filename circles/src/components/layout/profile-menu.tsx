@@ -1,7 +1,7 @@
 // profile-menu.tsx
 "use client";
 
-import React, { Suspense, useEffect, useMemo, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "../ui/button";
 import {
@@ -10,15 +10,14 @@ import {
     sidePanelContentVisibleAtom,
     authInfoAtom,
     notificationUnreadCountAtom,
-    unreadCountsAtom,
 } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { UserPicture } from "../modules/members/user-picture";
 import { Bell } from "lucide-react";
 import { UserToolboxTab } from "@/models/models";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
-import { VerifyAccountButton } from "../modules/auth/verify-account-button";
 import { LuClipboardCheck, LuMail } from "react-icons/lu";
+import { listChatRoomsAction } from "../modules/chat/actions";
 
 const ProfileMenuBar = () => {
     const router = useRouter();
@@ -28,29 +27,8 @@ const ProfileMenuBar = () => {
     const [userToolboxState, setUserToolboxState] = useAtom(userToolboxDataAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [notificationUnreadCount, setNotificationUnreadCount] = useAtom(notificationUnreadCountAtom);
-    const [unreadCounts] = useAtom(unreadCountsAtom);
+    const [messageUnreadCount, setMessageUnreadCount] = useState(0);
     const pathname = usePathname();
-
-    const totalUnreadMessages = useMemo(() => {
-        if (!user?.chatRoomMemberships) {
-            return 0;
-        }
-
-        // get sum of unread messages in all chat rooms
-        return user?.chatRoomMemberships
-            .map((room) => {
-                const conversationId = room.chatRoom._id || room.chatRoom.handle;
-                if (!conversationId) return 0;
-                const unread = Object.entries(unreadCounts).find(([key]) =>
-                    key.startsWith(conversationId),
-                )?.[1];
-                if (unread) {
-                    return unread;
-                }
-                return 0;
-            })
-            .reduce((acc, val) => acc + val, 0);
-    }, [unreadCounts, user?.chatRoomMemberships]);
 
     // Fixes hydration errors
     const [isMounted, setIsMounted] = useState(false);
@@ -61,10 +39,28 @@ const ProfileMenuBar = () => {
     useEffect(() => {
         if (!user?.did) {
             setNotificationUnreadCount(0);
+            setMessageUnreadCount(0);
             return;
         }
 
         let cancelled = false;
+        const loadMessageUnreadCount = async () => {
+            try {
+                const result = await listChatRoomsAction();
+                if (!cancelled) {
+                    const unreadTotal =
+                        result.success && result.rooms
+                            ? result.rooms.reduce((total, room) => total + (room.unreadCount || 0), 0)
+                            : 0;
+                    setMessageUnreadCount(unreadTotal);
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    console.error("Failed to fetch message unread count:", error);
+                }
+            }
+        };
+
         const loadNotificationUnreadCount = async () => {
             try {
                 const response = await fetch("/api/notifications/unread-count", { cache: "no-store" });
@@ -83,8 +79,10 @@ const ProfileMenuBar = () => {
             }
         };
 
+        void loadMessageUnreadCount();
         void loadNotificationUnreadCount();
         const intervalId = window.setInterval(() => {
+            void loadMessageUnreadCount();
             void loadNotificationUnreadCount();
         }, 15000);
 
@@ -152,9 +150,9 @@ const ProfileMenuBar = () => {
                                 onClick={() => router.push("/chat")}
                             >
                                 <LuMail className="h-5 w-5" />
-                                {totalUnreadMessages > 0 && (
+                                {messageUnreadCount > 0 && (
                                     <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">
-                                        {totalUnreadMessages}
+                                        {messageUnreadCount}
                                     </span>
                                 )}
                             </Button>
