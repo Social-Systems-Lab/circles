@@ -4,6 +4,8 @@ import {
     Comment,
     Post,
     NotificationType,
+    SummaryNotificationType,
+    summaryNotificationTypeDetails,
     Proposal,
     ProposalDisplay,
     ProposalStage,
@@ -17,13 +19,238 @@ import {
     GoalStage,
     Event,
 } from "@/models/models";
+import { DefaultNotificationSettings, Notifications, UserNotificationSettings } from "./db";
+import { sanitizeObjectForJSON } from "../utils/sanitize";
+import { getUser, getUserPrivate } from "./user";
+import { getFeed, getPost } from "./feed";
+import { getCircleById, findProjectByShadowPostId, getCirclesByDids } from "./circle";
+import { getMembers } from "./member";
+import { getProposalById, getProposalReactions } from "./proposal"; // Use getProposalReactions
+import { getIssueById } from "./issue"; // Import getIssueById
+import { getTaskById } from "./task"; // Import getTaskById
+import { getGoalById } from "./goal"; // Import getGoalById
+import { getEventById } from "./event";
+import { features } from "./constants";
+import { getAuthorizedMembers } from "../auth/auth"; // Import the function to get authorized members
 
-// Temporary dispatcher while notification delivery is simplified.
+Notifications?.createIndex({ userId: 1, isRead: 1, createdAt: -1 });
+Notifications?.createIndex({ userId: 1, type: 1, "content.roomId": 1, isRead: 1, createdAt: -1 });
+
+const getSummaryNotificationType = (type: string): SummaryNotificationType | null => {
+    const directMatch = Object.keys(summaryNotificationTypeDetails).find((summaryType) => summaryType === type);
+    if (directMatch) {
+        return directMatch as SummaryNotificationType;
+    }
+
+    const summaryMatch = Object.entries(summaryNotificationTypeDetails).find(([, detail]) =>
+        detail.mapsTo?.includes(type as NotificationType),
+    );
+    return summaryMatch ? (summaryMatch[0] as SummaryNotificationType) : null;
+};
+
+const getNotificationPreferenceContext = (
+    type: string,
+    payload: any,
+    recipientDid: string,
+): { entityType: "CIRCLE" | "USER"; entityId: string; summaryType: SummaryNotificationType } | null => {
+    const summaryType = getSummaryNotificationType(type);
+    if (!summaryType) {
+        return null;
+    }
+
+    if (summaryType === "ACCOUNT_ALL") {
+        return { entityType: "USER", entityId: recipientDid, summaryType };
+    }
+
+    const circleId =
+        payload?.circle?._id?.toString?.() ||
+        payload?.circle?._id ||
+        payload?.project?._id?.toString?.() ||
+        payload?.project?._id;
+
+    if (!circleId) {
+        return null;
+    }
+
+    return { entityType: "CIRCLE", entityId: String(circleId), summaryType };
+};
+
+const buildNotificationBody = (type: string, payload: any): string => {
+    const actorName = payload?.user?.name || payload?.author?.name || "Someone";
+    const circleName = payload?.circle?.name || payload?.project?.name || "a circle";
+    const proposalName = payload?.proposalName || payload?.proposal?.name || "a proposal";
+    const issueTitle = payload?.issueTitle || payload?.issue?.title || "an issue";
+    const taskTitle = payload?.taskTitle || payload?.task?.title || "a task";
+    const goalTitle = payload?.goalTitle || payload?.goal?.title || "a goal";
+    const eventName = payload?.eventName || payload?.eventTitle || "an event";
+
+    switch (type) {
+        case "follow_request":
+            return `${actorName} requested to follow ${circleName}`;
+        case "new_follower":
+            return `${actorName} is now following ${circleName}`;
+        case "follow_accepted":
+        case "new_following":
+        case "new_member":
+            return `Your access to ${circleName} was approved`;
+        case "post_comment":
+            return `${actorName} commented on your post`;
+        case "comment_reply":
+            return `${actorName} replied to your comment`;
+        case "post_like":
+            return `${actorName} liked your post`;
+        case "comment_like":
+            return `${actorName} liked your comment`;
+        case "post_mention":
+            return `${actorName} mentioned you in a post`;
+        case "comment_mention":
+            return `${actorName} mentioned you in a comment`;
+        case "proposal_submitted_for_review":
+            return `${actorName} submitted ${proposalName} for review`;
+        case "proposal_moved_to_voting":
+            return `${proposalName} moved to voting`;
+        case "proposal_approved_for_voting":
+            return `${proposalName} was approved for voting`;
+        case "proposal_resolved":
+        case "proposal_resolved_voter":
+            return `${proposalName} was resolved`;
+        case "proposal_vote":
+            return `${actorName} voted on your proposal`;
+        case "issue_submitted_for_review":
+            return `${actorName} submitted ${issueTitle} for review`;
+        case "issue_approved":
+            return `${issueTitle} was approved`;
+        case "issue_assigned":
+            return `${actorName} assigned you to ${issueTitle}`;
+        case "issue_status_changed":
+            return `${actorName} updated ${issueTitle}`;
+        case "task_submitted_for_review":
+            return `${actorName} submitted ${taskTitle} for review`;
+        case "task_approved":
+            return `${taskTitle} was approved`;
+        case "task_assigned":
+            return `${actorName} assigned you to ${taskTitle}`;
+        case "task_status_changed":
+            return `${actorName} updated ${taskTitle}`;
+        case "goal_submitted_for_review":
+            return `${actorName} submitted ${goalTitle} for review`;
+        case "goal_approved":
+            return `${goalTitle} was approved`;
+        case "goal_status_changed":
+            return `${actorName} updated ${goalTitle}`;
+        case "goal_completed":
+            return `${goalTitle} was completed`;
+        case "proposal_to_goal":
+            return `${proposalName} became a goal`;
+        case "event_submitted_for_review":
+            return `${actorName} submitted ${eventName} for review`;
+        case "event_approved":
+            return `${eventName} was approved`;
+        case "event_status_changed":
+            return `${actorName} updated ${eventName}`;
+        case "event_invitation":
+            return `${actorName} invited you to ${eventName}`;
+        case "ranking_stale_reminder":
+            return "Your ranking needs attention";
+        case "ranking_grace_period_ended":
+            return "Your ranking grace period ended";
+        case "user_verified":
+            return "Your account has been verified";
+        case "user_verification_request":
+            return payload?.messageBody || `${actorName} requested account verification`;
+        case "user_verification_rejected":
+            return "Your account verification request was rejected";
+        case "user_becomes_member":
+            return "You are now a founding member";
+        case "pm_received":
+            if (payload?.contactType === "ask_question") {
+                return `${actorName} asked for help in ${circleName}`;
+            }
+            if (payload?.contactType === "offer_help") {
+                return `${actorName} offered help in ${circleName}`;
+            }
+            return `${actorName} sent you a direct message`;
+        default:
+            return payload?.messageBody || "New notification";
+    }
+};
+
+const isNotificationEnabledForRecipient = async (type: string, recipientDid: string, payload: any): Promise<boolean> => {
+    const context = getNotificationPreferenceContext(type, payload, recipientDid);
+    if (!context) {
+        return true;
+    }
+
+    const userSetting = await UserNotificationSettings.findOne({
+        userId: recipientDid,
+        entityType: context.entityType,
+        entityId: context.entityId,
+        notificationType: context.summaryType,
+    });
+    if (typeof userSetting?.isEnabled === "boolean") {
+        return userSetting.isEnabled;
+    }
+
+    const defaultSetting = await DefaultNotificationSettings.findOne({
+        entityType: context.entityType,
+        notificationType: context.summaryType,
+    });
+
+    return typeof defaultSetting?.defaultIsEnabled === "boolean" ? defaultSetting.defaultIsEnabled : true;
+};
+
 export async function sendNotifications(type: string, recipients: any[], payload: any) {
-    console.log("🔔 [NOTIFY:FALLBACK]", type, recipients?.length || 0)
+    const uniqueRecipients = Array.from(
+        new Map(
+            (recipients || [])
+                .filter((recipient) => typeof recipient?.did === "string" && recipient.did.length > 0)
+                .map((recipient) => [recipient.did, recipient]),
+        ).values(),
+    );
+
+    if (uniqueRecipients.length === 0) {
+        return;
+    }
+
+    const createdAt = new Date();
+    const notificationContent = sanitizeObjectForJSON({
+        ...(payload || {}),
+        body: payload?.body || payload?.messageBody || buildNotificationBody(type, payload),
+    });
+
+    const docs = [];
+    for (const recipient of uniqueRecipients) {
+        if (!(await isNotificationEnabledForRecipient(type, recipient.did, payload))) {
+            continue;
+        }
+
+        docs.push({
+            userId: recipient.did,
+            type,
+            content: notificationContent,
+            isRead: false,
+            createdAt,
+        });
+    }
+
+    if (!docs.length) {
+        return;
+    }
+
+    await Notifications.insertMany(docs as any[]);
 }
 
+export async function listNotificationsForUser(userDid: string, limit: number = 50) {
+    return await Notifications.find({ userId: userDid }).sort({ createdAt: -1, _id: -1 }).limit(limit).toArray();
+}
 
+export async function getUnreadNotificationCountForUser(userDid: string) {
+    return await Notifications.countDocuments({ userId: userDid, isRead: false });
+}
+
+export async function markAllNotificationsReadForUser(userDid: string) {
+    return await Notifications.updateMany({ userId: userDid, isRead: false }, { $set: { isRead: true } });
+}
 export async function notifyNewMember(userDid: string, circle: Circle, followRequest: boolean = false): Promise<void> {
     try {
         const recipient = await getUserPrivate(userDid);
@@ -42,19 +269,6 @@ export async function notifyNewMember(userDid: string, circle: Circle, followReq
         console.error("🔔 [NOTIFY] Error in notifyNewMember:", error);
     }
 }
-
-import { getUser, getUserPrivate } from "./user";
-import { getFeed, getPost } from "./feed";
-import { getCircleById, findProjectByShadowPostId, getCirclesByDids } from "./circle";
-import { getMembers } from "./member";
-import { getProposalById, getProposalReactions } from "./proposal"; // Use getProposalReactions
-import { getIssueById } from "./issue"; // Import getIssueById
-import { getTaskById } from "./task"; // Import getTaskById
-import { getGoalById } from "./goal"; // Import getGoalById
-import { getEventById } from "./event";
-import { features } from "./constants";
-import { getAuthorizedMembers } from "../auth/auth"; // Import the function to get authorized members
-import { sanitizeObjectForJSON } from "../utils/sanitize";
 
 export async function sendVerificationRequestNotification(user: Circle, admins: UserPrivate[]): Promise<void> {
     try {

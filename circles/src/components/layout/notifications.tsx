@@ -1,8 +1,8 @@
 //notifications.tsx - Displays the user notifications
 "use client";
 
-import React, { useCallback, useEffect, useMemo } from "react";
-import { userAtom, roomMessagesAtom, unreadCountsAtom } from "@/lib/data/atoms";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { notificationUnreadCountAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { useRouter } from "next/navigation";
 import { timeSince } from "@/lib/utils";
@@ -104,10 +104,18 @@ type GroupedNotification = {
     eventName?: string;
 };
 
+type StoredNotificationRecord = {
+    _id: string;
+    type: string;
+    content: Record<string, any>;
+    isRead: boolean;
+    createdAt: string | Date;
+};
+
 export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
-    const [user, setUser] = useAtom(userAtom);
-    const [roomMessages] = useAtom(roomMessagesAtom);
-    const [unreadCounts, setUnreadCounts] = useAtom(unreadCountsAtom);
+    const [user] = useAtom(userAtom);
+    const [, setNotificationUnreadCount] = useAtom(notificationUnreadCountAtom);
+    const [records, setRecords] = useState<StoredNotificationRecord[]>([]);
     const router = useRouter();
 
     useEffect(() => {
@@ -116,31 +124,59 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
         }
     }, []);
 
-    // Get raw notifications and filter/map them in one go
+    const fetchNotifications = useCallback(async () => {
+        if (!user?.did) {
+            setRecords([]);
+            setNotificationUnreadCount(0);
+            return;
+        }
+
+        try {
+            const response = await fetch("/api/notifications?limit=50", { cache: "no-store" });
+            if (!response.ok) {
+                throw new Error(`Failed to fetch notifications (${response.status})`);
+            }
+
+            const data = await response.json();
+            setRecords(Array.isArray(data.notifications) ? data.notifications : []);
+            setNotificationUnreadCount(typeof data.unreadCount === "number" ? data.unreadCount : 0);
+
+            if ((data.unreadCount || 0) > 0) {
+                await fetch("/api/notifications/mark-all-read", { method: "POST" });
+                setNotificationUnreadCount(0);
+            }
+        } catch (error) {
+            console.error("Failed to fetch notifications:", error);
+        }
+    }, [setNotificationUnreadCount, user?.did]);
+
+    useEffect(() => {
+        void fetchNotifications();
+    }, [fetchNotifications]);
+
+    useEffect(() => {
+        if (!user?.did) return;
+
+        const intervalId = window.setInterval(() => {
+            void fetchNotifications();
+        }, 15000);
+
+        return () => window.clearInterval(intervalId);
+    }, [fetchNotifications, user?.did]);
+
     const notifications = useMemo(() => {
-        if (!user?.matrixNotificationsRoomId) return [];
-
-        const notificationMsgs = roomMessages[user.matrixNotificationsRoomId] || [];
-
-        return notificationMsgs
-            .reduce((acc: Notification[], msg) => {
-                // Type guard to ensure we have a valid notification message
-                if (
-                    msg.type !== "m.room.message" ||
-                    !msg.content ||
-                    typeof msg.content !== "object" ||
-                    !("notificationType" in msg.content) ||
-                    typeof (msg.content as any).notificationType !== "string"
-                ) {
+        return records
+            .reduce((acc: Notification[], record) => {
+                const content = record.content;
+                if (!content || typeof content !== "object") {
                     return acc;
                 }
 
-                const content = msg.content as any; // We've guarded, so we can cast
-                const createdAt = msg.createdAt instanceof Date ? msg.createdAt : new Date(msg.createdAt);
+                const notificationType = record.type as NotificationType;
+                const createdAt = record.createdAt instanceof Date ? record.createdAt : new Date(record.createdAt);
 
-                // Generate grouping key based on notification type
                 let groupKey = "";
-                switch (content.notificationType) {
+                switch (notificationType) {
                     case "post_like":
                         groupKey = `post_like_${content.postId}`;
                         break;
@@ -165,17 +201,20 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                     case "event_invitation":
                         groupKey = `event_invitation_${content.eventId}`;
                         break;
+                    case "pm_received":
+                        groupKey = `pm_received_${content.roomId || record._id}`;
+                        break;
                     default:
-                        groupKey = msg.id;
+                        groupKey = record._id;
                 }
 
                 const notification: Notification = {
-                    id: msg.id,
-                    type: msg.type,
+                    id: record._id,
+                    type: record.type,
                     message: content.body || "New notification",
                     time: timeSince(createdAt, false),
-                    createdAt: createdAt,
-                    notificationType: content.notificationType,
+                    createdAt,
+                    notificationType,
                     circle: content.circle,
                     user: content.user,
                     post: content.post,
@@ -183,7 +222,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                     postId: content.postId,
                     commentId: content.commentId,
                     reaction: content.reaction,
-                    roomId: msg.roomId,
+                    roomId: content.roomId,
                     project: content.project,
                     projectId: content.projectId,
                     proposalId: content.proposalId,
@@ -193,6 +232,16 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                     issueTitle: content.issueTitle,
                     previousStage: content.previousStage,
                     newStage: content.newStage,
+                    task: content.task,
+                    taskId: content.taskId,
+                    taskTitle: content.taskTitle,
+                    previousTaskStage: content.previousTaskStage,
+                    newTaskStage: content.newTaskStage,
+                    goal: content.goal,
+                    goalId: content.goalId,
+                    goalTitle: content.goalTitle,
+                    previousGoalStage: content.previousGoalStage,
+                    newGoalStage: content.newGoalStage,
                     eventId: content.eventId,
                     eventName: content.eventName,
                     key: groupKey,
@@ -202,7 +251,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                 return acc;
             }, [])
             .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    }, [user?.matrixNotificationsRoomId, roomMessages]);
+    }, [records]);
 
     // Group similar notifications
     const groupedNotifications = useMemo(() => {
@@ -269,34 +318,6 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
         );
     }, [notifications]);
 
-    const markLatestNotificationAsRead = useCallback(async () => {
-        if (!notifications.length) return;
-
-        const latestNotification = notifications[0];
-
-        try {
-            await fetch("/api/notifications/mark-as-read", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ notificationId: latestNotification.id }),
-            });
-        } catch (error) {
-            console.error("Error marking notification as read in DB:", error);
-        }
-
-        // Reset unread count for notification room locally when available
-        if (latestNotification.roomId) {
-            setUnreadCounts((counts) => ({
-                ...counts,
-                [latestNotification.roomId!]: 0,
-            }));
-        }
-    }, [notifications, setUnreadCounts]);
-
-    useEffect(() => {
-        markLatestNotificationAsRead();
-    }, [notifications, markLatestNotificationAsRead]);
-
     const handleNotificationClick = (groupedNotification: GroupedNotification) => {
         if (onNavigate) {
             onNavigate();
@@ -331,6 +352,11 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                 break;
             case "user_verified":
                 router.push(`/`);
+                break;
+            case "pm_received":
+                if (notification.roomId) {
+                    router.push(`/chat/${notification.roomId}`);
+                }
                 break;
 
             // Post/Comment related notifications - Check for parent item first
@@ -523,6 +549,10 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
             // For non-grouped or single proposal/issue notifications, use the original message
             case "event_invitation":
                 return `${userList} invited you to the event "${groupedNotification.latestNotification.eventName || "an event"}"`;
+            case "pm_received":
+                return count > 1
+                    ? `${userList} sent you ${count} messages`
+                    : groupedNotification.latestNotification.message;
             default:
                 return groupedNotification.latestNotification.message;
         }

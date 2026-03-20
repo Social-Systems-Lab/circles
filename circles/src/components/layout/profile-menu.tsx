@@ -9,6 +9,7 @@ import {
     userToolboxDataAtom,
     sidePanelContentVisibleAtom,
     authInfoAtom,
+    notificationUnreadCountAtom,
     unreadCountsAtom,
 } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
@@ -22,10 +23,11 @@ import { LuClipboardCheck, LuMail } from "react-icons/lu";
 const ProfileMenuBar = () => {
     const router = useRouter();
     const [authInfo] = useAtom(authInfoAtom);
-    const [user, setUser] = useAtom(userAtom);
+    const [user] = useAtom(userAtom);
     const searchParams = useSearchParams();
     const [userToolboxState, setUserToolboxState] = useAtom(userToolboxDataAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+    const [notificationUnreadCount, setNotificationUnreadCount] = useAtom(notificationUnreadCountAtom);
     const [unreadCounts] = useAtom(unreadCountsAtom);
     const pathname = usePathname();
 
@@ -50,18 +52,47 @@ const ProfileMenuBar = () => {
             .reduce((acc, val) => acc + val, 0);
     }, [unreadCounts, user?.chatRoomMemberships]);
 
-    const unreadNotifications = useMemo(() => {
-        if (!user?.matrixNotificationsRoomId) {
-            return 0;
-        }
-        return unreadCounts[user.matrixNotificationsRoomId] || 0;
-    }, [unreadCounts, user?.matrixNotificationsRoomId]);
-
     // Fixes hydration errors
     const [isMounted, setIsMounted] = useState(false);
     useEffect(() => {
         setIsMounted(true);
     }, []);
+
+    useEffect(() => {
+        if (!user?.did) {
+            setNotificationUnreadCount(0);
+            return;
+        }
+
+        let cancelled = false;
+        const loadNotificationUnreadCount = async () => {
+            try {
+                const response = await fetch("/api/notifications/unread-count", { cache: "no-store" });
+                if (!response.ok) {
+                    throw new Error(`Failed to load notification unread count (${response.status})`);
+                }
+
+                const data = await response.json();
+                if (!cancelled) {
+                    setNotificationUnreadCount(typeof data.unreadCount === "number" ? data.unreadCount : 0);
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    console.error("Failed to fetch notification unread count:", error);
+                }
+            }
+        };
+
+        void loadNotificationUnreadCount();
+        const intervalId = window.setInterval(() => {
+            void loadNotificationUnreadCount();
+        }, 15000);
+
+        return () => {
+            cancelled = true;
+            window.clearInterval(intervalId);
+        };
+    }, [setNotificationUnreadCount, user?.did]);
 
     const openUserToolbox = (tab: UserToolboxTab) => {
         if (
@@ -143,9 +174,9 @@ const ProfileMenuBar = () => {
                                 onClick={() => openUserToolbox("notifications")}
                             >
                                 <Bell className="h-5 w-5" />
-                                {unreadNotifications > 0 && (
+                                {notificationUnreadCount > 0 && (
                                     <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">
-                                        {unreadNotifications}
+                                        {notificationUnreadCount}
                                     </span>
                                 )}
                             </Button>

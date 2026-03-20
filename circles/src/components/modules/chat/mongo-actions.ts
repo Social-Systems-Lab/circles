@@ -18,6 +18,8 @@ import {
 } from "@/lib/data/mongo-chat";
 import { ChatConversations, ChatMessageDocs, ChatRoomMembers, ChatRooms, Circles, Members } from "@/lib/data/db";
 import { getCircleByDid, getCircleByHandle, getCircleById, getCirclesByDids } from "@/lib/data/circle";
+import { getUserPrivate } from "@/lib/data/user";
+import { sendNotifications } from "@/lib/data/notifications";
 import { saveFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { WELCOME_MESSAGE, isSystemMessageSource } from "@/config/welcome-message";
@@ -122,6 +124,58 @@ const getSystemTemplateAuthor = (conversationMetadata?: Record<string, unknown>)
         },
         circleType: "user",
     } as Circle);
+
+const sendConversationMessageNotifications = async ({
+    conversationId,
+    conversation,
+    senderDid,
+    messageBody,
+}: {
+    conversationId: string;
+    conversation: any;
+    senderDid: string;
+    messageBody: string;
+}) => {
+    const isDirectMessage = conversation?.type === "dm";
+    const isCircleContact = conversation?.metadata?.source === CIRCLE_CONTACT_SOURCE;
+    if (!isDirectMessage && !isCircleContact) {
+        return;
+    }
+
+    const sender = await getCircleByDid(senderDid);
+    if (!sender?.did) {
+        return;
+    }
+
+    const recipientDids: string[] = Array.from(
+        new Set(
+            (conversation?.participants || []).filter(
+                (participantDid: string) => typeof participantDid === "string" && participantDid !== senderDid,
+            ),
+        ),
+    );
+    if (!recipientDids.length) {
+        return;
+    }
+
+    const recipients = (
+        await Promise.all(recipientDids.map((recipientDid) => getUserPrivate(recipientDid)))
+    ).filter((recipient): recipient is any => !!recipient?.did);
+    if (!recipients.length) {
+        return;
+    }
+
+    const circle = isCircleContact && conversation?.circleId ? await getCircleById(conversation.circleId) : undefined;
+
+    await sendNotifications("pm_received", recipients, {
+        roomId: conversationId,
+        user: sender,
+        circle,
+        contactType: conversation?.metadata?.contactType,
+        conversationName: conversation?.name,
+        messagePreview: messageBody,
+    });
+};
 
 export const resolveMongoConversationAccess = async (conversationId: string, userDid: string) => {
     let conversation = await findConversationById(conversationId);
@@ -452,6 +506,12 @@ export const sendMongoMessageAction = async (
             replyToMessageId,
             format,
         });
+        await sendConversationMessageNotifications({
+            conversationId,
+            conversation: access.conversation,
+            senderDid: userDid,
+            messageBody: content,
+        });
         return { success: true, messageId: doc._id as string };
     } catch (error) {
         console.error("❌ Error sending mongo message:", error);
@@ -523,6 +583,12 @@ export const sendMongoAttachmentAction = async (
             createdAt: new Date(),
             replyToMessageId,
             attachments: [attachment],
+        });
+        await sendConversationMessageNotifications({
+            conversationId,
+            conversation: access.conversation,
+            senderDid: userDid,
+            messageBody: file.name,
         });
 
         return { success: true, messageId: doc._id as string };
@@ -890,6 +956,22 @@ export const contactCircleAdminsAction = async (
             senderDid: userDid,
             body: trimmedMessage,
             createdAt: new Date(),
+        });
+        await sendConversationMessageNotifications({
+            conversationId,
+            conversation: existingConversation || {
+                type: "group",
+                circleId,
+                name: threadName,
+                metadata: {
+                    source: CIRCLE_CONTACT_SOURCE,
+                    version: CIRCLE_CONTACT_VERSION,
+                    contactType,
+                },
+                participants,
+            },
+            senderDid: userDid,
+            messageBody: trimmedMessage,
         });
 
         return { success: true, roomId: conversationId, created };

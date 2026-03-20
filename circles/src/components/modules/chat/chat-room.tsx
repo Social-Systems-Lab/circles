@@ -1260,6 +1260,16 @@ export const ChatRoomComponent: React.FC<{
             });
             return newCounts;
         });
+
+        try {
+            await fetch("/api/notifications/mark-pms-as-read", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ roomId }),
+            });
+        } catch (error) {
+            console.error("Failed to mark PM notifications as read:", error);
+        }
     }, [messages, roomId, setUnreadCounts, setLastReadTimestamps]);
 
     const scrollToBottom = (behavior: "smooth" | "auto" = "auto") => {
