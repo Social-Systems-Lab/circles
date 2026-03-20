@@ -173,7 +173,15 @@ export const handleMentionQuery = async (query: string, callback: (data: Suggest
     callback(suggestions);
 };
 
-export const getMentionsPortalHost = () => (typeof document !== "undefined" ? document.body : undefined);
+export const getMentionsPortalHost = () => {
+    if (typeof document === "undefined") {
+        return undefined;
+    }
+
+    const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
+    const dialogHost = activeElement?.closest('[role="dialog"]');
+    return dialogHost instanceof HTMLElement ? dialogHost : document.body;
+};
 
 type LikeButtonProps = {
     isLiked: boolean;
