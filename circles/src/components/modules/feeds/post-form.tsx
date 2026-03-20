@@ -311,9 +311,10 @@ export function PostForm({
     const cancelInternalFetchRef = useRef<() => void>(() => {});
 
     const extractFirstUrl = (text: string): { url: string; isInternal: boolean } | null => {
+        const textWithoutMentions = text.replace(/\[[^\]]+\]\(\/circles\/[^)]+\)/g, "");
         const externalUrlRegex = /(https?:\/\/[^\s]+)/g;
         const internalUrlRegex = /(\/circles\/[a-zA-Z0-9\-\/]+)/g;
-        const internalMatches = text.match(internalUrlRegex);
+        const internalMatches = textWithoutMentions.match(internalUrlRegex);
         if (internalMatches) {
             const url = internalMatches[0];
             const postRegex = /^\/circles\/[a-zA-Z0-9\-]+\/post\/[a-zA-Z0-9]+$/;
@@ -324,7 +325,7 @@ export function PostForm({
                 return { url: url, isInternal: true };
             }
         }
-        const externalMatches = text.match(externalUrlRegex);
+        const externalMatches = textWithoutMentions.match(externalUrlRegex);
         if (externalMatches) {
             return { url: externalMatches[0], isInternal: false };
         }

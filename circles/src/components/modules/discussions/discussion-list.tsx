@@ -1628,15 +1628,26 @@ const CommentItem = ({
                     {showReplyInput && (
                         <div className="mt-2 flex flex-col">
                             <div className="mb-1 text-xs text-gray-500">Replying to {comment.author.name}</div>
-                            <TextareaAutosize
+                            <MentionsInput
                                 value={newReplyContent}
-                                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewReplyContent(e.target.value)}
+                                onChange={(e) => setNewReplyContent(e.target.value)}
                                 onKeyDown={handleReplyKeyDown}
                                 placeholder="Write a reply..."
-                                className="w-full resize-none rounded-[20px] bg-gray-100 p-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                minRows={1}
-                                maxRows={6}
-                            />
+                                className="flex-grow rounded-[20px] bg-gray-100"
+                                style={defaultMentionsInputStyle}
+                                suggestionsPortalHost={getMentionsPortalHost()}
+                                allowSuggestionsAboveCursor={true}
+                                forceSuggestionsAboveCursor={true}
+                            >
+                                <Mention
+                                    trigger="@"
+                                    data={handleMentionQuery}
+                                    style={defaultMentionStyle}
+                                    displayTransform={(id, display) => `${display}`}
+                                    renderSuggestion={renderCircleSuggestion}
+                                    markup="[__display__](/circles/__id__)"
+                                />
+                            </MentionsInput>
                             <div className="mt-1 flex items-center gap-2">
                                 {isMobile && (
                                     <button onClick={handleAddReply} className="self-end text-blue-500">
