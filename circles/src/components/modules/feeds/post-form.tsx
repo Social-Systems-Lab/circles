@@ -48,14 +48,6 @@ import LocationPicker from "@/components/forms/location-picker";
 import SdgFilter from "@/components/modules/search/sdg-filter";
 import { useAtom } from "jotai";
 import { imageGalleryAtom } from "@/lib/data/atoms";
-import { Mention, MentionsInput } from "react-mentions";
-import {
-    defaultMentionsInputStyle,
-    defaultMentionStyle,
-    getMentionsPortalHost,
-    handleMentionQuery,
-    renderCircleSuggestion,
-} from "./post-list";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { getFullLocationName } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -625,26 +617,14 @@ export function PostForm({
                                 </div>
                             </div>
                             <Label className="mb-1 block text-sm font-medium text-gray-600">Content</Label>
-                            <MentionsInput
+                            {/* TODO: Mentions intentionally disabled for launch. Rebuild later using the working chat mention path as the reference. */}
+                            <Textarea
                                 value={postContent}
                                 onChange={(e) => setPostContent(e.target.value)}
                                 placeholder="Write your post..."
-                                className="flex-grow"
+                                className="min-h-[200px] resize-none rounded-xl border-gray-200 px-3 py-3 text-[1.25rem] leading-[1.875rem] shadow-none focus-visible:ring-0"
                                 autoFocus
-                                style={postMentionsInputStyle}
-                                suggestionsPortalHost={getMentionsPortalHost()}
-                                allowSuggestionsAboveCursor={true}
-                                forceSuggestionsAboveCursor={true}
-                            >
-                                <Mention
-                                    trigger="@"
-                                    data={handleMentionQuery}
-                                    style={defaultMentionStyle}
-                                    displayTransform={(id, display) => `${display}`}
-                                    renderSuggestion={renderCircleSuggestion}
-                                    markup="[__display__](/circles/__id__)"
-                                />
-                            </MentionsInput>
+                            />
                             {isPreviewLoading && (
                                 <div className="mt-4 flex items-center justify-center rounded-lg border p-4">
                                     <Loader2 className="mr-2 h-5 w-5 animate-spin text-gray-500" />

@@ -84,7 +84,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { PostForm } from "./post-form";
 import { isAuthorized } from "@/lib/auth/client-auth";
 import { features, LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
-import { MentionsInput, Mention, MentionItem, SuggestionDataItem } from "react-mentions";
+import { SuggestionDataItem } from "react-mentions";
 import { over, set } from "lodash";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -1457,27 +1457,16 @@ export const PostItem = ({
                 {/* Comment input box */}
                 {user && canComment && !disableComments && (
                     <div className="mt-2 flex items-start gap-2">
-                        <MentionsInput
+                        {/* TODO: Mentions intentionally disabled for launch. Rebuild later using the working chat mention path as the reference. */}
+                        <TextareaAutosize
                             value={newCommentContent}
-                            onChange={(e) => setNewCommentContent(e.target.value)}
+                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewCommentContent(e.target.value)}
                             onKeyDown={handleCommentKeyDown}
                             placeholder="Write a comment..."
-                            className="flex-grow rounded-[20px] bg-gray-100"
-                            style={defaultMentionsInputStyle}
-                            suggestionsPortalHost={getMentionsPortalHost()}
-                            allowSuggestionsAboveCursor={true}
-                            forceSuggestionsAboveCursor={true}
-                        >
-                            <Mention
-                                trigger="@"
-                                data={handleMentionQuery}
-                                style={defaultMentionStyle}
-                                displayTransform={(id, display) => `${display}`}
-                                renderSuggestion={renderCircleSuggestion}
-                                markup="[__display__](/circles/__id__)"
-                                // regex={/\[([^\]]+)\]\(\/circles\/([^)]+)\)/} // TODO probably not necessary let's see
-                            />
-                        </MentionsInput>
+                            className="w-full resize-none rounded-[20px] bg-gray-100 p-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            minRows={1}
+                            maxRows={6}
+                        />
 
                         {isMobile && (
                             <button onClick={handleAddComment} className="mt-1 text-blue-500">
@@ -1773,27 +1762,17 @@ const CommentItem = ({
                                 </div>
                                 {isEditing ? (
                                     <>
-                                        <MentionsInput
+                                        <TextareaAutosize
                                             value={editContent}
-                                            onChange={(e) => setEditContent(e.target.value)}
+                                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                                                setEditContent(e.target.value)
+                                            }
                                             onKeyDown={handleEditKeyDown}
                                             placeholder="Write a comment..."
-                                            className="flex-grow rounded-[20px] bg-gray-200"
-                                            style={defaultMentionsInputStyle}
-                                            suggestionsPortalHost={getMentionsPortalHost()}
-                                            allowSuggestionsAboveCursor={true}
-                                            forceSuggestionsAboveCursor={true}
-                                        >
-                                            <Mention
-                                                trigger="@"
-                                                data={handleMentionQuery}
-                                                style={defaultMentionStyle}
-                                                displayTransform={(id, display) => `${display}`}
-                                                renderSuggestion={renderCircleSuggestion}
-                                                markup="[__display__](/circles/__id__)"
-                                                // regex={/\[([^\]]+)\]\(\/circles\/([^)]+)\)/} // TODO probably not necessary let's see
-                                            />
-                                        </MentionsInput>
+                                            className="w-full resize-none rounded-[20px] bg-gray-200 p-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            minRows={1}
+                                            maxRows={6}
+                                        />
                                     </>
                                 ) : (
                                     <MemoizedCommentContent
@@ -1870,26 +1849,15 @@ const CommentItem = ({
                     {showReplyInput && canReply && user && (
                         <div className="mt-2 flex flex-col">
                             <div className="mb-1 text-xs text-gray-500">Replying to {comment.author.name}</div>
-                            <MentionsInput
+                            <TextareaAutosize
                                 value={newReplyContent}
-                                onChange={(e) => setNewReplyContent(e.target.value)}
+                                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewReplyContent(e.target.value)}
                                 onKeyDown={handleReplyKeyDown}
                                 placeholder="Write a reply..."
-                                className="flex-grow rounded-[20px] bg-gray-100"
-                                style={defaultMentionsInputStyle}
-                                suggestionsPortalHost={getMentionsPortalHost()}
-                                allowSuggestionsAboveCursor={true}
-                                forceSuggestionsAboveCursor={true}
-                            >
-                                <Mention
-                                    trigger="@"
-                                    data={handleMentionQuery}
-                                    style={defaultMentionStyle}
-                                    displayTransform={(id, display) => `${display}`}
-                                    renderSuggestion={renderCircleSuggestion}
-                                    markup="[__display__](/circles/__id__)"
-                                />
-                            </MentionsInput>
+                                className="w-full resize-none rounded-[20px] bg-gray-100 p-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                minRows={1}
+                                maxRows={6}
+                            />
                             <div className="mt-1 flex items-center gap-2">
                                 {isMobile && (
                                     <button onClick={handleAddReply} className="self-end text-blue-500">
