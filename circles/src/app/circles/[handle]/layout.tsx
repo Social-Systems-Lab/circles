@@ -33,19 +33,22 @@ export default async function RootLayout(props: Props) {
         circle.circleType !== "user" && circle._id
             ? (await getMembers(circle._id)).filter((member) => member.userGroups?.includes("admins")).slice(0, 6)
             : [];
+    const plainCircle = JSON.parse(JSON.stringify(circle));
+    const plainParentCircle = parentCircle ? JSON.parse(JSON.stringify(parentCircle)) : undefined;
+    const plainAdminLeaders = JSON.parse(JSON.stringify(adminLeaders));
 
     return (
         <>
             <>
-                <HomeCover circle={circle} />
+                <HomeCover circle={plainCircle} />
                 <HomeContent
-                    circle={circle}
+                    circle={plainCircle}
                     authorizedToEdit={authorizedToEdit}
-                    parentCircle={parentCircle}
-                    adminLeaders={adminLeaders}
+                    parentCircle={plainParentCircle}
+                    adminLeaders={plainAdminLeaders}
                 />
             </>
-            <CircleTabs circle={circle} />
+            <CircleTabs circle={plainCircle} />
 
             {children}
         </>
