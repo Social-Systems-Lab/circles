@@ -6,7 +6,7 @@ High-level architecture overview for the Kamooni platform.
 
 # 1. Platform Overview
 
-Kamooni is a community collaboration platform designed to help people discover projects, contribute skills, and coordinate collective action.
+Kamooni is a community collaboration platform designed to help people discover projects, contribute skills, coordinate collective action, and respond to meaningful opportunities to help.
 
 The system combines:
 
@@ -14,6 +14,7 @@ The system combines:
 - volunteer coordination
 - project collaboration
 - real-time messaging
+- in-app notifications
 
 Core goals:
 
@@ -32,7 +33,7 @@ Next.js (App Router)
 
 Backend:
 
-Node.js server actions
+Node.js server actions and route handlers
 
 Database:
 
@@ -49,6 +50,10 @@ Qdrant (used for semantic search and future matching)
 Chat:
 
 Mongo-native chat engine
+
+Notifications:
+
+Mongo-backed in-app notification system
 
 Deployment:
 
@@ -108,7 +113,42 @@ Architecture details:
 
 See:
 
-CHAT_SYSTEM_ARCHITECTURE.md
+docs/CHAT_SYSTEM_ARCHITECTURE.md
+
+---
+
+## Notifications System
+
+Kamooni now uses a Mongo-backed in-app notification system.
+
+Current launch behavior:
+
+- **Mail icon** owns unread message activity
+  - direct messages
+  - group chat unread
+  - help/contact thread unread
+
+- **Bell icon** owns non-message activity
+  - mentions
+  - approvals
+  - requests
+  - other system notifications
+
+Notification delivery is intentionally conservative.
+Kamooni is not designed around attention capture or high-frequency engagement loops.
+
+Current implementation includes:
+
+- Mongo-backed notification persistence
+- unread bell count endpoint
+- notification list endpoint
+- mark-all-read endpoint
+- chat-triggered PM notifications routed into the notifications system
+
+Important launch note:
+
+- chat/message mentions remain enabled
+- non-chat mentions in posts/comments/discussions are intentionally disabled for launch and should be rebuilt later using the working chat mention path as the reference implementation
 
 ---
 
@@ -122,9 +162,7 @@ Examples:
 - platform announcements
 - admin broadcasts
 
-Details:
-
-SYSTEM_MESSAGES_ENGINE.md
+System messages reuse the Mongo chat infrastructure rather than a separate transport.
 
 ---
 
@@ -139,23 +177,20 @@ Matching is used in:
 
 - circle pages
 - explore page
-- future task system
+- future task/help system
 
 ---
 
-## Task System (planned)
+## Task / Help System
 
-Tasks allow circles to request specific help.
+Tasks and help requests are a major future engagement path.
 
-Example:
-
-"Translate website into Spanish"
-
-Tasks will eventually support:
+These will eventually support:
 
 - skill matching
 - contribution history
 - reputation tracking
+- high-signal notifications when someone is needed
 
 ---
 
@@ -181,6 +216,14 @@ Production code path:
 
 /root/circles/circles
 
+Deployment verification:
+
+curl -sS https://kamooni.org/api/version && echo
+
+Rollback point before the notifications polish release:
+
+pre-notifications-polish-20260321-1008
+
 ---
 
 # 5. Key Architectural Principles
@@ -190,32 +233,58 @@ Kamooni architecture prioritizes:
 - simplicity
 - transparency
 - extensibility
+- high-signal communication over notification overload
 
 Important rules:
 
 1. Mongo is the primary data store
 2. Chat uses the same DB as the platform
-3. Conversations normalize before UI use
-4. UI must rely on normalized flags
-5. System messages reuse chat infrastructure
+3. Notifications are Mongo-backed
+4. Mail and Bell are intentionally separated
+5. Conversations normalize before UI use
+6. UI must rely on normalized flags
+7. System messages reuse chat infrastructure
+8. Notifications should bring users back only when something meaningful happened
 
 ---
 
-# 6. Future Architecture Expansion
+# 6. Current Launch State
+
+Current launch-ready communication model:
+
+- Search is implemented
+- Mongo chat is active
+- Mail/Bell split is active
+- In-app notifications are active
+- Chat mentions work
+- Non-chat mentions are intentionally disabled for launch
+
+Deferred items:
+
+- notification settings expansion
+- web push notifications
+- email fallback notifications
+- rebuilt non-chat mentions for posts/comments/discussions
+
+---
+
+# 7. Future Architecture Expansion
 
 Upcoming major systems include:
 
-- tasks engine
+- notification settings MVP
+- web push notifications
+- task/help notification routing
 - contribution history
 - reputation signals
 - improved semantic search
-- notification system
+- rebuilt non-chat mentions outside chat
 
 These systems build on the same core identity and circle model.
 
 ---
 
-# 7. Developer Entry Points
+# 8. Developer Entry Points
 
 Start here when exploring the codebase:
 
@@ -226,131 +295,15 @@ Start here when exploring the codebase:
 
 Additional details:
 
-See:
+See related architecture docs below.
 
-REPO_STRUCTURE_MAP.md
+---
 
 # Related Architecture Documents
 
 For deeper technical details see:
 
-- REPO_STRUCTURE_MAP.md
-- CHAT_SYSTEM_ARCHITECTURE.md
-- SYSTEM_MESSAGES_ENGINE.md
-- DEPLOYMENT_ARCHITECTURE.md
-- DEBUG_PLAYBOOK.md
-## User Lifecycle
-
-User lifecycle stages:
-
-1. Signup
-2. Onboarding
-3. Activation
-4. Verification
-5. Contribution
-
-### Onboarding signals collected
-
-- skills
-- interests
-- location
-- builder status
-- project description
-
-### Profile completeness
-
-Profile completeness is used to guide users toward verification readiness.
-
-Suggested thresholds:
-
-- 0–30% → basic account
-- 30–70% → contributor
-- 70–100% → eligible to verify profile
-
-### Verification
-
-Verification is distinct from paid membership.
-
-Verification should unlock higher-trust interaction capabilities such as:
-
-- joining circles
-- messaging members
-- posting updates
-- collaborating on projects
-
-Recommended gate:
-
-- `profileCompleteness >= 70`
-
-### Activation metric
-
-A user is considered activated when they complete at least one of:
-
-- follow a circle
-- offer a skill
-- post an introduction
-
-
----
-
-# 8. Contribution Signal Layer (MCP)
-
-Kamooni captures early-stage economic intent during onboarding via a donation/volunteering prompt.
-
-This data is stored on the user document as `donationIntent` and aggregated into **MCP (Monthly Contribution Potential)**.
-
-MCP represents the total potential monthly contributions users indicate they would make if contribution mechanisms were available.
-
-## Current Implementation
-
-### Storage (User Document)
-
-```ts
-donationIntent: {
-  amount?: number,
-  volunteering?: boolean,
-  skipped?: boolean,
-  updatedAt: Date
-}
-```
-
-### Aggregation
-
-- Function: `getOnboardingMcpStats()`
-- Location: `src/lib/data/user.ts`
-
-Calculates:
-- totalUsersWithDonationIntent
-- usersWithAmount
-- totalMonthlyContributionPotential
-- averageMonthlyContributionPotential
-- volunteeringCount
-- skippedCount
-- amountBuckets
-
-## Access
-
-- Admin dashboard (internal only)
-  - `/admin` → Server Settings → Onboarding MCP Summary
-
-- CLI:
-  - `npx tsx scripts/report-onboarding-mcp.ts`
-
-## Purpose
-
-- Measure latent economic potential before payment systems exist
-- Validate contribution-driven model
-- Support fundraising and strategy
-- Establish baseline for contribution economy
-
-## Strategic Role
-
-Intent → Measurement → Activation → Transactions
-
-## Future Evolution
-
-- Contribution segmentation
-- Activation flows
-- Altruistic Wallet integration
-- Trust and reputation layer
-- Contribution-based personalization
+- docs/CHAT_SYSTEM_ARCHITECTURE.md
+- docs/chat.md
+- docs/CHAT_RUNTIME_NOTE.md
+- docs/CHAT_DEBUG_PLAYBOOK.md
