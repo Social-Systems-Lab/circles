@@ -336,10 +336,14 @@ Communication behavior at launch:
 - chat mentions work
 - non-chat mentions are disabled
 - notifications are in-app only for now
+- notification settings are currently per circle/profile entity, not global
+- notification settings currently control Bell-owned non-message activity only
+- task/goal/proposal/issue notifications are role-relevant, not broadcast to everyone in a circle
+- the notification settings MVP now reflects saved state immediately and no longer fabricates enabled defaults when settings are missing
 
 Deferred work:
 
-- notification settings expansion
+- simplify launch-facing notification categories
 - web push delivery
 - email fallback
 - rebuilt non-chat mentions outside chat
