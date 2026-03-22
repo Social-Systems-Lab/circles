@@ -14,6 +14,7 @@ import { revalidatePath } from "next/cache";
 import { getUser, getUserById, getUserPrivate, addBookmark, removeBookmark, pinCircle, unpinCircle } from "@/lib/data/user";
 import { notifyNewMember, sendNotifications } from "@/lib/data/notifications";
 import { findOrCreateDMRoom as findOrCreateDMRoomData } from "@/lib/data/chat";
+import { getDmEligibility, getProfileRelationshipState } from "@/lib/data/relationships";
 
 type CircleActionResponse = {
     success: boolean;
@@ -347,6 +348,15 @@ export async function findOrCreateDMRoom(recipient: Circle): Promise<ChatRoom | 
             throw new Error("User not found");
         }
 
+        if (!recipient?.did) {
+            throw new Error("Recipient not found");
+        }
+
+        const dmEligibility = await getDmEligibility(userDid, recipient.did);
+        if (!dmEligibility.isAllowed) {
+            return null;
+        }
+
         const room = await findOrCreateDMRoomData(user, recipient);
         return room;
     } catch (error) {
@@ -354,3 +364,12 @@ export async function findOrCreateDMRoom(recipient: Circle): Promise<ChatRoom | 
         return null;
     }
 }
+
+export const getProfileRelationshipStateAction = async (targetDid: string) => {
+    const viewerDid = await getAuthenticatedUserDid();
+    if (!viewerDid || !targetDid || viewerDid === targetDid) {
+        return null;
+    }
+
+    return await getProfileRelationshipState(viewerDid, targetDid);
+};

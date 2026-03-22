@@ -17,6 +17,7 @@ import { features } from "@/lib/data/constants";
 import { getCirclesByDids } from "@/lib/data/circle";
 import { ensureConversationForCircle, listConversationMedia } from "@/lib/data/mongo-chat";
 import { emitGroupChatMembershipSystemEvent, sendSystemMessage } from "@/lib/data/system-message-events";
+import { listDmEligibleContactsForUserDid } from "@/lib/data/relationships";
 import {
     listChatRoomsAction as listMongoChatRoomsAction,
     fetchMongoMessagesAction as fetchMongoMessagesActionInternal,
@@ -212,7 +213,7 @@ export const getChatContactsAction = async (): Promise<Circle[]> => {
     }
 
     try {
-        return await getChatContactsForUserDid(userDid);
+        return await listDmEligibleContactsForUserDid(userDid);
     } catch (error) {
         console.error("❌ Error fetching chat contacts:", error);
         return [];

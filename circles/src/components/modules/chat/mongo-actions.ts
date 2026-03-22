@@ -26,6 +26,7 @@ import { WELCOME_MESSAGE, isSystemMessageSource } from "@/config/welcome-message
 import { normalizeSystemMessageMetadata } from "@/lib/chat/system-messages";
 import { getSkillLabelByHandle } from "@/lib/data/skills";
 import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
+import { getDmEligibility } from "@/lib/data/relationships";
 
 const normalizeMediaUrl = (url?: string): string | undefined => {
     if (!url) return url;
@@ -689,6 +690,14 @@ export const findOrCreateDMConversationAction = async (
     const currentUser = await getCircleByDid(userDid);
     if (!currentUser || currentUser._id === recipient._id) {
         return { success: false, message: "You cannot send a message to yourself" };
+    }
+
+    const dmEligibility = await getDmEligibility(userDid, recipient.did!);
+    if (!dmEligibility.isAllowed) {
+        return {
+            success: false,
+            message: "Messaging is only available for existing conversations and contacts right now.",
+        };
     }
 
     await findOrCreateDmConversation(currentUser, recipient);

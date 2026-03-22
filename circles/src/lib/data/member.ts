@@ -6,6 +6,7 @@ import { filterLocations } from "../utils";
 import { getMetrics } from "../utils/metrics";
 import { SAFE_CIRCLE_PROJECTION } from "./circle";
 import { addChatRoomMember, getChatRoomByHandle, removeChatRoomMember } from "./chat";
+import { upsertFollowState } from "./relationships";
 
 export const getMember = async (userDid: string, circleId: string): Promise<Member | null> => {
     return await Members.findOne({ userDid: userDid, circleId: circleId });
@@ -79,6 +80,14 @@ export const addMember = async (
     userGroups: string[],
     answers?: Record<string, string>,
 ): Promise<Member> => {
+    const circle = await Circles.findOne(
+        { _id: new ObjectId(circleId) },
+        { projection: { did: 1, circleType: 1 } },
+    );
+    if (!circle) {
+        throw new Error("Circle not found");
+    }
+
     const existingMember = await Members.findOne({ userDid: userDid, circleId: circleId });
     if (existingMember) {
         throw new Error("User is already a member of this circle");
@@ -104,6 +113,10 @@ export const addMember = async (
 
     // increase member count in circle
     await Circles.updateOne({ _id: new ObjectId(circleId) }, { $inc: { members: 1 } });
+
+    if (circle.circleType === "user" && circle.did && circle.did !== userDid) {
+        await upsertFollowState(userDid, circle.did, true);
+    }
 
     return member;
 };
@@ -131,6 +144,10 @@ export const removeMember = async (userDid: string, circleId: string): Promise<b
 
     // remove member from members chat
     await autoRemoveFromMemberChats(userDid, circleId);
+
+    if (circle.circleType === "user" && circle.did && circle.did !== userDid) {
+        await upsertFollowState(userDid, circle.did, false);
+    }
 
     return true;
 };
