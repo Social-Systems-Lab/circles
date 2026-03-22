@@ -24,11 +24,8 @@ import {
 import {
     EntityType,
     NotificationType,
-    // notificationTypeValues, // No longer needed here as we use summaryNotificationTypes
-    UserPrivate, // Ensure UserPrivate is imported if used for setUserPrivateData
-    summaryNotificationTypes, // Import for iteration
-    summaryNotificationTypeDetails, // For labels
-    SummaryNotificationType, // Type for summary keys
+    UserPrivate,
+    SummaryNotificationType,
 } from "@/models/models";
 import { useToast } from "@/components/ui/use-toast";
 import { useAtom } from "jotai";
@@ -41,13 +38,19 @@ interface NotificationSettingsDialogProps {
 }
 
 type EntitySpecificSettings = Record<NotificationType, { isEnabled: boolean; isConfigurable: boolean }>;
-
-const getNotificationTypeLabel = (type: NotificationType): string => {
-    return type
-        .split("_")
-        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(" ");
+type LaunchFacingNotificationRow = {
+    label: string;
+    summaryTypes: SummaryNotificationType[];
 };
+
+const launchFacingNotificationRows: LaunchFacingNotificationRow[] = [
+    { label: "Tasks & Help", summaryTypes: ["TASKS_ALL"] },
+    {
+        label: "Project & Circle Activity",
+        summaryTypes: ["GOALS_ALL", "PROPOSALS_ALL", "ISSUES_ALL"],
+    },
+    { label: "Account & System", summaryTypes: ["ACCOUNT_ALL"] },
+];
 
 const getAllNotificationsOff = (settings: EntitySpecificSettings | null): boolean => {
     if (!settings) {
@@ -123,41 +126,48 @@ export const NotificationSettingsDialog: React.FC<NotificationSettingsDialogProp
         });
     };
 
-    const handleSettingChange = async (type: NotificationType, checked: boolean) => {
+    const handleLaunchFacingSettingChange = async (row: LaunchFacingNotificationRow, checked: boolean) => {
         if (!localSettings) return;
-        const previousLocalSettings = localSettings;
-        const originalSettingState = localSettings[type];
-        const nextLocalSettings = {
-            ...localSettings,
-            [type]: { ...localSettings[type], isEnabled: checked },
-        };
+
+        const mappedSummaryTypes = row.summaryTypes.filter((type) => localSettings[type]);
+        if (mappedSummaryTypes.length === 0) {
+            return;
+        }
+
+        const nextLocalSettings = { ...localSettings };
+        const updatePromises: Promise<any>[] = [];
+
+        mappedSummaryTypes.forEach((type) => {
+            nextLocalSettings[type] = { ...localSettings[type], isEnabled: checked };
+            updatePromises.push(
+                updateUserNotificationSetting({
+                    entityType,
+                    entityId,
+                    notificationType: type,
+                    isEnabled: checked,
+                }),
+            );
+        });
+
         setLocalSettings(nextLocalSettings);
         setAllNotificationsOff(getAllNotificationsOff(nextLocalSettings));
-
+        updateUserAtomSettings(nextLocalSettings);
         setIsLoading(true);
-        try {
-            const result = await updateUserNotificationSetting({
-                entityType,
-                entityId,
-                notificationType: type,
-                isEnabled: checked,
-            });
 
-            if ("error" in result) {
+        try {
+            const results = await Promise.all(updatePromises);
+            const errors = results.filter((result) => "error" in result);
+            if (errors.length > 0) {
                 toast({
                     title: "Error",
-                    description: `Failed to update setting: ${result.error}`,
+                    description: `Failed to update some settings: ${errors.map((result) => result.error).join(", ")}`,
                     variant: "destructive",
                 });
-                const revertedSettings = { ...previousLocalSettings, [type]: originalSettingState };
-                setLocalSettings(revertedSettings);
-                setAllNotificationsOff(getAllNotificationsOff(revertedSettings));
-            } else {
+            } else if (updatePromises.length > 0) {
                 toast({
                     title: "Success",
-                    description: `${getNotificationTypeLabel(type)} setting updated.`,
+                    description: `${row.label} setting updated.`,
                 });
-                updateUserAtomSettings(nextLocalSettings);
             }
         } catch (e) {
             toast({
@@ -165,17 +175,17 @@ export const NotificationSettingsDialog: React.FC<NotificationSettingsDialogProp
                 description: "An unexpected error occurred.",
                 variant: "destructive",
             });
-            const revertedSettings = { ...previousLocalSettings, [type]: originalSettingState };
-            setLocalSettings(revertedSettings);
-            setAllNotificationsOff(getAllNotificationsOff(revertedSettings));
         } finally {
             setIsLoading(false);
         }
     };
 
-    // Grouping logic removed as we'll have a flat list based on summaryNotificationTypes
-    // const configurableSettings = ...
-    // const groupedConfigurableSettings = ...
+    const visibleLaunchFacingRows =
+        localSettings == null
+            ? []
+            : launchFacingNotificationRows.filter((row) =>
+                  row.summaryTypes.some((type) => localSettings[type] !== undefined),
+              );
 
     const handleMasterToggleChange = async (checked: boolean) => {
         if (!localSettings) return;
@@ -266,27 +276,35 @@ export const NotificationSettingsDialog: React.FC<NotificationSettingsDialogProp
 
                     {!error && localSettings && (
                         <div className="grid gap-4">
-                            {summaryNotificationTypes.map((summaryNt) => {
-                                const setting = localSettings[summaryNt as NotificationType];
-                                const detail = summaryNotificationTypeDetails[summaryNt as SummaryNotificationType];
-                                if (!setting || !detail) return null; // Only render if setting exists for this summary type
+                            {visibleLaunchFacingRows.map((row) => {
+                                const mappedSettings = row.summaryTypes
+                                    .map((type) => localSettings[type])
+                                    .filter(
+                                        (setting): setting is EntitySpecificSettings[NotificationType] =>
+                                            setting !== undefined,
+                                    );
+                                if (mappedSettings.length === 0) return null;
+
+                                const isEnabled = mappedSettings.some((setting) => setting.isEnabled);
+                                const isConfigurable = mappedSettings.some((setting) => setting.isConfigurable);
+                                const rowId = `${entityId}-${row.summaryTypes.join("-")}-dialog`;
 
                                 return (
-                                    <div key={summaryNt} className="flex items-center justify-between">
+                                    <div key={row.label} className="flex items-center justify-between">
                                         <Label
-                                            htmlFor={`${entityId}-${summaryNt}-dialog`}
+                                            htmlFor={rowId}
                                             className={`pr-2 text-sm font-normal ${allNotificationsOff ? "text-muted-foreground" : ""}`}
                                         >
-                                            {detail.label}
+                                            {row.label}
                                         </Label>
                                         <Switch
-                                            id={`${entityId}-${summaryNt}-dialog`}
-                                            checked={setting.isEnabled}
+                                            id={rowId}
+                                            checked={isEnabled}
                                             onCheckedChange={(checked) =>
-                                                handleSettingChange(summaryNt as NotificationType, checked)
+                                                handleLaunchFacingSettingChange(row, checked)
                                             }
                                             disabled={
-                                                !setting.isConfigurable ||
+                                                !isConfigurable ||
                                                 isLoading ||
                                                 allNotificationsOff ||
                                                 isMasterToggleLoading
@@ -296,7 +314,7 @@ export const NotificationSettingsDialog: React.FC<NotificationSettingsDialogProp
                                     </div>
                                 );
                             })}
-                            {Object.keys(localSettings).length === 0 && (
+                            {visibleLaunchFacingRows.length === 0 && (
                                 <p className="text-sm text-muted-foreground">
                                     No configurable notifications for this item based on enabled modules.
                                 </p>
