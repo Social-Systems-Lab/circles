@@ -258,13 +258,18 @@ Current launch-ready communication model:
 - In-app notifications are active
 - Chat mentions work
 - Non-chat mentions are intentionally disabled for launch
+- Notification settings MVP is active
+- Notification settings are currently per circle/profile entity, not global
+- Notification settings currently control Bell-owned non-message activity only
+- Task/goal/proposal/issue notifications are role-relevant, not broadcast to everyone in a circle
+- Launch-facing notification settings UI is simplified to high-signal grouped categories
 
 Deferred items:
 
-- notification settings expansion
 - web push notifications
 - email fallback notifications
 - rebuilt non-chat mentions for posts/comments/discussions
+- broader notification taxonomy refinement
 
 ---
 
@@ -272,13 +277,13 @@ Deferred items:
 
 Upcoming major systems include:
 
-- notification settings MVP
 - web push notifications
-- task/help notification routing
+- task/help notification routing expansion
 - contribution history
 - reputation signals
 - improved semantic search
 - rebuilt non-chat mentions outside chat
+- broader notification settings evolution beyond the current MVP
 
 These systems build on the same core identity and circle model.
 
