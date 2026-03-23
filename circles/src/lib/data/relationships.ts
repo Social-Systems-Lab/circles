@@ -96,6 +96,15 @@ const buildDefaultRelationshipEdge = (fromDid: string, toDid: string, now: Date)
     updatedAt: now,
 });
 
+const buildRelationshipEdgeInsertFields = (fromDid: string, toDid: string, now: Date) => ({
+    fromDid,
+    toDid,
+    connectStatus: "none" as const,
+    dmPermission: "none" as const,
+    dmPermissionSource: "none" as const,
+    createdAt: now,
+});
+
 const isStrongerDmPermissionSource = (source: RelationshipDmPermissionSource): boolean =>
     source === "contact" || source === "recipient_setting";
 
@@ -204,7 +213,7 @@ export const upsertFollowState = async (fromDid: string, toDid: string, isFollow
                 isFollowing,
                 updatedAt: now,
             },
-            $setOnInsert: buildDefaultRelationshipEdge(fromDid, toDid, now),
+            $setOnInsert: buildRelationshipEdgeInsertFields(fromDid, toDid, now),
         },
         { upsert: true },
     );
