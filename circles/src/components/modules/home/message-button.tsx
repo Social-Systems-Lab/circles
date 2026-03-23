@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { userAtom } from "@/lib/data/atoms";
 import { Circle } from "@/models/models";
 import { useAtom } from "jotai";
-import { getProfileRelationshipStateAction } from "./actions";
+import { getProfileRelationshipStateAction, sendConnectRequestAction } from "./actions";
 import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { TbMessage } from "react-icons/tb";
@@ -36,6 +36,7 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
     const compact = isCompact || renderCompact;
     const [showDM, setShowDM] = useState(false);
     const [relationshipState, setRelationshipState] = useState<RelationshipState | null>(null);
+    const [isSendingConnect, setIsSendingConnect] = useState(false);
     const { toast } = useToast();
 
     useEffect(() => {
@@ -83,6 +84,51 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
         return null;
     }
 
+    const handleConnectRequest = async () => {
+        if (!circle?.did || isSendingConnect || relationshipState.connectLabel === "Requested") {
+            return;
+        }
+
+        setIsSendingConnect(true);
+        try {
+            const result = await sendConnectRequestAction(circle.did);
+
+            if (!result.success) {
+                toast({
+                    title: relationshipState.connectLabel || "Add Contact",
+                    description: result.message,
+                });
+                return;
+            }
+
+            const state = await getProfileRelationshipStateAction(circle.did);
+            setRelationshipState(
+                state
+                    ? {
+                          dmAllowed: state.dmAllowed,
+                          showConnect: state.showConnect,
+                          connectLabel: state.connectLabel,
+                          messageVisibilityReason: state.messageVisibilityReason,
+                          connectLabelReason: state.connectLabelReason,
+                      }
+                    : null,
+            );
+
+            toast({
+                title: "Contact request sent",
+                description: "This profile now shows as Requested.",
+            });
+        } catch (error) {
+            console.error("Failed to send connect request:", error);
+            toast({
+                title: relationshipState.connectLabel || "Add Contact",
+                description: "Failed to send contact request",
+            });
+        } finally {
+            setIsSendingConnect(false);
+        }
+    };
+
     if (!relationshipState.dmAllowed) {
         if (!relationshipState.showConnect) {
             return null;
@@ -94,14 +140,10 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
                 size={compact ? "sm" : "default"}
                 className={compact ? "rounded-full px-3" : "rounded-full text-muted-foreground"}
                 data-connect-reason={relationshipState.connectLabelReason}
-                onClick={() =>
-                    toast({
-                        title: relationshipState.connectLabel || "Add Contact",
-                        description: "Contact requests are not available in this sprint yet.",
-                    })
-                }
+                disabled={isSendingConnect || relationshipState.connectLabel === "Requested"}
+                onClick={handleConnectRequest}
             >
-                {relationshipState.connectLabel || "Add Contact"}
+                {isSendingConnect ? "Sending..." : relationshipState.connectLabel || "Add Contact"}
             </Button>
         );
     }
