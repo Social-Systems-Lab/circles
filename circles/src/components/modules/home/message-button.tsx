@@ -5,7 +5,12 @@ import { Button } from "@/components/ui/button";
 import { userAtom } from "@/lib/data/atoms";
 import { Circle } from "@/models/models";
 import { useAtom } from "jotai";
-import { getProfileRelationshipStateAction, sendConnectRequestAction } from "./actions";
+import {
+    acceptConnectRequestAction,
+    declineConnectRequestAction,
+    getProfileRelationshipStateAction,
+    sendConnectRequestAction,
+} from "./actions";
 import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { TbMessage } from "react-icons/tb";
@@ -42,6 +47,8 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
     const [showDM, setShowDM] = useState(false);
     const [relationshipState, setRelationshipState] = useState<RelationshipState | null>(null);
     const [isSendingConnect, setIsSendingConnect] = useState(false);
+    const [isAcceptingConnect, setIsAcceptingConnect] = useState(false);
+    const [isDecliningConnect, setIsDecliningConnect] = useState(false);
     const { toast } = useToast();
 
     useEffect(() => {
@@ -92,9 +99,31 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
     const isConnectPresentationOnly =
         relationshipState.connectLabelReason === "pending_sent" ||
         relationshipState.connectLabelReason === "pending_received";
+    const isRespondingToConnect = isAcceptingConnect || isDecliningConnect;
+
+    const mapRelationshipState = (state: Awaited<ReturnType<typeof getProfileRelationshipStateAction>>) =>
+        state
+            ? {
+                  dmAllowed: state.dmAllowed,
+                  showConnect: state.showConnect,
+                  connectLabel: state.connectLabel,
+                  messageVisibilityReason: state.messageVisibilityReason,
+                  connectLabelReason: state.connectLabelReason,
+              }
+            : null;
+
+    const reloadRelationshipState = async () => {
+        if (!circle?.did) {
+            setRelationshipState(null);
+            return;
+        }
+
+        const state = await getProfileRelationshipStateAction(circle.did);
+        setRelationshipState(mapRelationshipState(state));
+    };
 
     const handleConnectRequest = async () => {
-        if (!circle?.did || isSendingConnect || isConnectPresentationOnly) {
+        if (!circle?.did || isSendingConnect || isRespondingToConnect || isConnectPresentationOnly) {
             return;
         }
 
@@ -110,18 +139,7 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
                 return;
             }
 
-            const state = await getProfileRelationshipStateAction(circle.did);
-            setRelationshipState(
-                state
-                    ? {
-                          dmAllowed: state.dmAllowed,
-                          showConnect: state.showConnect,
-                          connectLabel: state.connectLabel,
-                          messageVisibilityReason: state.messageVisibilityReason,
-                          connectLabelReason: state.connectLabelReason,
-                      }
-                    : null,
-            );
+            await reloadRelationshipState();
 
             toast({
                 title: "Contact request sent",
@@ -138,9 +156,99 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
         }
     };
 
+    const handleAcceptRequest = async () => {
+        if (!circle?.did || isSendingConnect || isRespondingToConnect) {
+            return;
+        }
+
+        setIsAcceptingConnect(true);
+        try {
+            const result = await acceptConnectRequestAction(circle.did);
+            if (!result.success) {
+                toast({
+                    title: "Accept contact request",
+                    description: result.message,
+                });
+                return;
+            }
+
+            await reloadRelationshipState();
+
+            toast({
+                title: "Contact request accepted",
+                description: "Messaging is now available for this contact.",
+            });
+        } catch (error) {
+            console.error("Failed to accept connect request:", error);
+            toast({
+                title: "Accept contact request",
+                description: "Failed to accept contact request",
+            });
+        } finally {
+            setIsAcceptingConnect(false);
+        }
+    };
+
+    const handleDeclineRequest = async () => {
+        if (!circle?.did || isSendingConnect || isRespondingToConnect) {
+            return;
+        }
+
+        setIsDecliningConnect(true);
+        try {
+            const result = await declineConnectRequestAction(circle.did);
+            if (!result.success) {
+                toast({
+                    title: "Decline contact request",
+                    description: result.message,
+                });
+                return;
+            }
+
+            await reloadRelationshipState();
+
+            toast({
+                title: "Contact request declined",
+                description: "The request was cleared.",
+            });
+        } catch (error) {
+            console.error("Failed to decline connect request:", error);
+            toast({
+                title: "Decline contact request",
+                description: "Failed to decline contact request",
+            });
+        } finally {
+            setIsDecliningConnect(false);
+        }
+    };
+
     if (!relationshipState.dmAllowed) {
         if (!relationshipState.showConnect) {
             return null;
+        }
+
+        if (relationshipState.connectLabelReason === "pending_received") {
+            return (
+                <div className="flex flex-wrap items-center gap-2" data-connect-reason={relationshipState.connectLabelReason}>
+                    <Button
+                        size={compact ? "sm" : "default"}
+                        className="rounded-full"
+                        disabled={isSendingConnect || isRespondingToConnect}
+                        onClick={handleAcceptRequest}
+                    >
+                        {isAcceptingConnect ? "Accepting..." : "Accept"}
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size={compact ? "sm" : "default"}
+                        className={compact ? "rounded-full px-3 text-muted-foreground" : "rounded-full text-muted-foreground"}
+                        disabled={isSendingConnect || isRespondingToConnect}
+                        onClick={handleDeclineRequest}
+                    >
+                        {isDecliningConnect ? "Declining..." : "Decline"}
+                    </Button>
+                </div>
+            );
         }
 
         return (
@@ -149,7 +257,7 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
                 size={compact ? "sm" : "default"}
                 className={compact ? "rounded-full px-3" : "rounded-full text-muted-foreground"}
                 data-connect-reason={relationshipState.connectLabelReason}
-                disabled={isSendingConnect || isConnectPresentationOnly}
+                disabled={isSendingConnect || isRespondingToConnect || isConnectPresentationOnly}
                 onClick={handleConnectRequest}
             >
                 {isSendingConnect ? "Sending..." : relationshipState.connectLabel || "Add Contact"}

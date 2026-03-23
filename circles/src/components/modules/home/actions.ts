@@ -429,6 +429,10 @@ export const sendConnectRequestAction = async (
             return { success: true, message: "Contact request already sent" };
         }
 
+        if (relationshipState.connectStatus === "pending_received") {
+            return { success: false, message: "This user already requested to connect" };
+        }
+
         const now = new Date();
 
         await UserRelationships.updateOne(
@@ -473,5 +477,138 @@ export const sendConnectRequestAction = async (
     } catch (error) {
         console.error("Failed to send connect request", error);
         return { success: false, message: "Failed to send contact request" };
+    }
+};
+
+export const acceptConnectRequestAction = async (
+    targetDid: string,
+): Promise<{ success: boolean; message: string }> => {
+    const viewerDid = await getAuthenticatedUserDid();
+    if (!viewerDid) {
+        return { success: false, message: "You need to be logged in to accept a contact request" };
+    }
+
+    if (!targetDid || viewerDid === targetDid) {
+        return { success: false, message: "Invalid contact request" };
+    }
+
+    try {
+        const targetUser = await getCircleByDid(targetDid);
+        if (!targetUser || targetUser.circleType !== "user") {
+            return { success: false, message: "Requester not found" };
+        }
+
+        const relationshipState = await getProfileRelationshipState(viewerDid, targetDid);
+        if (relationshipState.connectStatus !== "pending_received") {
+            return { success: false, message: "No incoming contact request to accept" };
+        }
+
+        const now = new Date();
+        const [viewerEdge, targetEdge] = await Promise.all([
+            UserRelationships.findOne(
+                { fromDid: viewerDid, toDid: targetDid },
+                { projection: { dmPermissionSource: 1 } },
+            ),
+            UserRelationships.findOne(
+                { fromDid: targetDid, toDid: viewerDid },
+                { projection: { dmPermissionSource: 1 } },
+            ),
+        ]);
+
+        await UserRelationships.updateOne(
+            { fromDid: viewerDid, toDid: targetDid },
+            {
+                $set: {
+                    connectStatus: "accepted",
+                    dmPermission: "allowed",
+                    dmPermissionSource: viewerEdge?.dmPermissionSource === "recipient_setting" ? "recipient_setting" : "contact",
+                    updatedAt: now,
+                },
+                $setOnInsert: {
+                    fromDid: viewerDid,
+                    toDid: targetDid,
+                    isFollowing: false,
+                    createdAt: now,
+                },
+            },
+            { upsert: true },
+        );
+
+        await UserRelationships.updateOne(
+            { fromDid: targetDid, toDid: viewerDid },
+            {
+                $set: {
+                    connectStatus: "accepted",
+                    dmPermission: "allowed",
+                    dmPermissionSource: targetEdge?.dmPermissionSource === "recipient_setting" ? "recipient_setting" : "contact",
+                    updatedAt: now,
+                },
+                $setOnInsert: {
+                    fromDid: targetDid,
+                    toDid: viewerDid,
+                    isFollowing: false,
+                    createdAt: now,
+                },
+            },
+            { upsert: true },
+        );
+
+        return { success: true, message: "Contact request accepted" };
+    } catch (error) {
+        console.error("Failed to accept connect request", error);
+        return { success: false, message: "Failed to accept contact request" };
+    }
+};
+
+export const declineConnectRequestAction = async (
+    targetDid: string,
+): Promise<{ success: boolean; message: string }> => {
+    const viewerDid = await getAuthenticatedUserDid();
+    if (!viewerDid) {
+        return { success: false, message: "You need to be logged in to decline a contact request" };
+    }
+
+    if (!targetDid || viewerDid === targetDid) {
+        return { success: false, message: "Invalid contact request" };
+    }
+
+    try {
+        const targetUser = await getCircleByDid(targetDid);
+        if (!targetUser || targetUser.circleType !== "user") {
+            return { success: false, message: "Requester not found" };
+        }
+
+        const relationshipState = await getProfileRelationshipState(viewerDid, targetDid);
+        if (relationshipState.connectStatus !== "pending_received") {
+            return { success: false, message: "No incoming contact request to decline" };
+        }
+
+        const now = new Date();
+
+        await Promise.all([
+            UserRelationships.updateOne(
+                { fromDid: viewerDid, toDid: targetDid },
+                {
+                    $set: {
+                        connectStatus: "none",
+                        updatedAt: now,
+                    },
+                },
+            ),
+            UserRelationships.updateOne(
+                { fromDid: targetDid, toDid: viewerDid },
+                {
+                    $set: {
+                        connectStatus: "none",
+                        updatedAt: now,
+                    },
+                },
+            ),
+        ]);
+
+        return { success: true, message: "Contact request declined" };
+    } catch (error) {
+        console.error("Failed to decline connect request", error);
+        return { success: false, message: "Failed to decline contact request" };
     }
 };
