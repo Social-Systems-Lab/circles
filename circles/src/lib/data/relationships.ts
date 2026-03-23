@@ -47,7 +47,7 @@ export type ProfileRelationshipState = {
     hasExistingDm: boolean;
     showMessage: boolean;
     showConnect: boolean;
-    connectLabel: "Connect" | "Add Contact" | "Requested" | null;
+    connectLabel: "Connect" | "Add Contact" | "Requested" | "Requested You" | null;
     messageVisibilityReason:
         | "self"
         | "existing_dm_history"
@@ -55,7 +55,12 @@ export type ProfileRelationshipState = {
         | "dm_permission_legacy_dm"
         | "dm_permission_recipient_setting"
         | "dm_not_allowed";
-    connectLabelReason: "message_available" | "pending_sent" | "contact_not_established" | "contact_established";
+    connectLabelReason:
+        | "message_available"
+        | "pending_sent"
+        | "pending_received"
+        | "contact_not_established"
+        | "contact_established";
 };
 
 UserRelationships?.createIndex({ fromDid: 1, toDid: 1 }, { unique: true });
@@ -108,9 +113,14 @@ const buildRelationshipEdgeInsertFields = (fromDid: string, toDid: string, now: 
 const isStrongerDmPermissionSource = (source: RelationshipDmPermissionSource): boolean =>
     source === "contact" || source === "recipient_setting";
 
-const getConnectLabel = (connectStatus: RelationshipConnectStatus): "Connect" | "Add Contact" | "Requested" | null => {
+const getConnectLabel = (
+    connectStatus: RelationshipConnectStatus,
+): "Connect" | "Add Contact" | "Requested" | "Requested You" | null => {
     if (connectStatus === "pending_sent") {
         return "Requested";
+    }
+    if (connectStatus === "pending_received") {
+        return "Requested You";
     }
     if (connectStatus === "accepted") {
         return null;
@@ -358,6 +368,8 @@ export const getProfileRelationshipState = async (
             ? "message_available"
             : connectStatus === "pending_sent"
               ? "pending_sent"
+              : connectStatus === "pending_received"
+                ? "pending_received"
               : connectStatus === "accepted"
                 ? "contact_established"
                 : "contact_not_established",

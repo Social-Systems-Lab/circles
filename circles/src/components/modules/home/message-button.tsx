@@ -19,7 +19,7 @@ type MessageButtonProps = {
 type RelationshipState = {
     dmAllowed: boolean;
     showConnect: boolean;
-    connectLabel: "Connect" | "Add Contact" | "Requested" | null;
+    connectLabel: "Connect" | "Add Contact" | "Requested" | "Requested You" | null;
     messageVisibilityReason:
         | "self"
         | "existing_dm_history"
@@ -27,7 +27,12 @@ type RelationshipState = {
         | "dm_permission_legacy_dm"
         | "dm_permission_recipient_setting"
         | "dm_not_allowed";
-    connectLabelReason: "message_available" | "pending_sent" | "contact_not_established" | "contact_established";
+    connectLabelReason:
+        | "message_available"
+        | "pending_sent"
+        | "pending_received"
+        | "contact_not_established"
+        | "contact_established";
 };
 
 export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => {
@@ -84,8 +89,12 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
         return null;
     }
 
+    const isConnectPresentationOnly =
+        relationshipState.connectLabelReason === "pending_sent" ||
+        relationshipState.connectLabelReason === "pending_received";
+
     const handleConnectRequest = async () => {
-        if (!circle?.did || isSendingConnect || relationshipState.connectLabel === "Requested") {
+        if (!circle?.did || isSendingConnect || isConnectPresentationOnly) {
             return;
         }
 
@@ -140,7 +149,7 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
                 size={compact ? "sm" : "default"}
                 className={compact ? "rounded-full px-3" : "rounded-full text-muted-foreground"}
                 data-connect-reason={relationshipState.connectLabelReason}
-                disabled={isSendingConnect || relationshipState.connectLabel === "Requested"}
+                disabled={isSendingConnect || isConnectPresentationOnly}
                 onClick={handleConnectRequest}
             >
                 {isSendingConnect ? "Sending..." : relationshipState.connectLabel || "Add Contact"}
