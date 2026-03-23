@@ -53,6 +53,15 @@ export const followCircle = async (circle: Circle, answers?: Record<string, stri
             return { success: false, message: isUser ? "User not found" : "Circle not found" };
         }
 
+        const existingMember = await getMember(userDid, updatedCircle._id ?? "");
+        if (existingMember) {
+            return {
+                success: true,
+                message: isUser ? "You are already following user" : "You are already following circle",
+                pending: false,
+            };
+        }
+
         if (updatedCircle.isPublic) {
             await addMember(userDid, updatedCircle._id ?? "", ["members"], answers);
             await notifyNewMember(userDid, updatedCircle, true);

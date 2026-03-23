@@ -20,6 +20,14 @@ type RelationshipState = {
     dmAllowed: boolean;
     showConnect: boolean;
     connectLabel: "Connect" | "Add Contact" | "Requested" | null;
+    messageVisibilityReason:
+        | "self"
+        | "existing_dm_history"
+        | "dm_permission_contact"
+        | "dm_permission_legacy_dm"
+        | "dm_permission_recipient_setting"
+        | "dm_not_allowed";
+    connectLabelReason: "message_available" | "pending_sent" | "contact_not_established" | "contact_established";
 };
 
 export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => {
@@ -50,6 +58,8 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
                                   dmAllowed: state.dmAllowed,
                                   showConnect: state.showConnect,
                                   connectLabel: state.connectLabel,
+                                  messageVisibilityReason: state.messageVisibilityReason,
+                                  connectLabelReason: state.connectLabelReason,
                               }
                             : null,
                     );
@@ -83,6 +93,7 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
                 variant="ghost"
                 size={compact ? "sm" : "default"}
                 className={compact ? "rounded-full px-3" : "rounded-full text-muted-foreground"}
+                data-connect-reason={relationshipState.connectLabelReason}
                 onClick={() =>
                     toast({
                         title: relationshipState.connectLabel || "Add Contact",
@@ -97,7 +108,12 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
 
     return (
         <>
-            <Button variant="outline" className="gap-2 rounded-full" onClick={() => setShowDM(true)}>
+            <Button
+                variant="outline"
+                className="gap-2 rounded-full"
+                data-message-reason={relationshipState.messageVisibilityReason}
+                onClick={() => setShowDM(true)}
+            >
                 <TbMessage className="h-4 w-4" />
                 Message
             </Button>

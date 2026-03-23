@@ -27,6 +27,13 @@ export type DmEligibility = {
     hasExistingConversation: boolean;
     dmPermission: RelationshipDmPermission;
     dmPermissionSource: RelationshipDmPermissionSource;
+    reason:
+        | "self"
+        | "existing_dm_history"
+        | "dm_permission_contact"
+        | "dm_permission_legacy_dm"
+        | "dm_permission_recipient_setting"
+        | "dm_not_allowed";
     relationshipEdge: RelationshipEdge | null;
 };
 
@@ -41,6 +48,14 @@ export type ProfileRelationshipState = {
     showMessage: boolean;
     showConnect: boolean;
     connectLabel: "Connect" | "Add Contact" | "Requested" | null;
+    messageVisibilityReason:
+        | "self"
+        | "existing_dm_history"
+        | "dm_permission_contact"
+        | "dm_permission_legacy_dm"
+        | "dm_permission_recipient_setting"
+        | "dm_not_allowed";
+    connectLabelReason: "message_available" | "pending_sent" | "contact_not_established" | "contact_established";
 };
 
 UserRelationships?.createIndex({ fromDid: 1, toDid: 1 }, { unique: true });
@@ -84,17 +99,14 @@ const buildDefaultRelationshipEdge = (fromDid: string, toDid: string, now: Date)
 const isStrongerDmPermissionSource = (source: RelationshipDmPermissionSource): boolean =>
     source === "contact" || source === "recipient_setting";
 
-const getConnectLabel = (
-    connectStatus: RelationshipConnectStatus,
-    isFollowing: boolean,
-): "Connect" | "Add Contact" | "Requested" | null => {
+const getConnectLabel = (connectStatus: RelationshipConnectStatus): "Connect" | "Add Contact" | "Requested" | null => {
     if (connectStatus === "pending_sent") {
         return "Requested";
     }
     if (connectStatus === "accepted") {
         return null;
     }
-    return isFollowing ? "Add Contact" : "Connect";
+    return "Add Contact";
 };
 
 const findExistingDmConversationId = async (
@@ -253,6 +265,7 @@ export const getDmEligibility = async (viewerDid: string, targetDid: string): Pr
             hasExistingConversation: false,
             dmPermission: "none",
             dmPermissionSource: "none",
+            reason: "self",
             relationshipEdge: null,
         };
     }
@@ -273,16 +286,25 @@ export const getDmEligibility = async (viewerDid: string, targetDid: string): Pr
                 relationshipEdge?.dmPermissionSource && relationshipEdge.dmPermissionSource !== "none"
                     ? relationshipEdge.dmPermissionSource
                     : "legacy_dm",
+            reason: "existing_dm_history",
             relationshipEdge,
         };
     }
 
     if (relationshipEdge?.dmPermission === "allowed") {
+        const reasonBySource: Record<RelationshipDmPermissionSource, DmEligibility["reason"]> = {
+            none: "dm_not_allowed",
+            contact: "dm_permission_contact",
+            legacy_dm: "dm_permission_legacy_dm",
+            recipient_setting: "dm_permission_recipient_setting",
+        };
+
         return {
             isAllowed: true,
             hasExistingConversation: false,
             dmPermission: relationshipEdge.dmPermission,
             dmPermissionSource: relationshipEdge.dmPermissionSource,
+            reason: reasonBySource[relationshipEdge.dmPermissionSource] || "dm_not_allowed",
             relationshipEdge,
         };
     }
@@ -292,6 +314,7 @@ export const getDmEligibility = async (viewerDid: string, targetDid: string): Pr
         hasExistingConversation: false,
         dmPermission: relationshipEdge?.dmPermission || "none",
         dmPermissionSource: relationshipEdge?.dmPermissionSource || "none",
+        reason: "dm_not_allowed",
         relationshipEdge,
     };
 };
@@ -320,7 +343,15 @@ export const getProfileRelationshipState = async (
         hasExistingDm: dmEligibility.hasExistingConversation,
         showMessage: dmAllowed,
         showConnect: !dmAllowed && connectStatus !== "accepted",
-        connectLabel: dmAllowed ? null : getConnectLabel(connectStatus, isFollowing),
+        connectLabel: dmAllowed ? null : getConnectLabel(connectStatus),
+        messageVisibilityReason: dmEligibility.reason,
+        connectLabelReason: dmAllowed
+            ? "message_available"
+            : connectStatus === "pending_sent"
+              ? "pending_sent"
+              : connectStatus === "accepted"
+                ? "contact_established"
+                : "contact_not_established",
     };
 };
 
