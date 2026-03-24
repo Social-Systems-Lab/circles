@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { userAtom } from "@/lib/data/atoms";
 import { Circle } from "@/models/models";
@@ -15,6 +15,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { TbMessage } from "react-icons/tb";
 import { DmChatModal } from "../chat/dm-chat-modal";
+import { useRouter } from "next/navigation";
 
 type MessageButtonProps = {
     circle: Circle;
@@ -42,6 +43,7 @@ type RelationshipState = {
 
 export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => {
     const [user] = useAtom(userAtom);
+    const router = useRouter();
     const isCompact = useIsCompact();
     const compact = isCompact || renderCompact;
     const [showDM, setShowDM] = useState(false);
@@ -49,48 +51,87 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
     const [isSendingConnect, setIsSendingConnect] = useState(false);
     const [isAcceptingConnect, setIsAcceptingConnect] = useState(false);
     const [isDecliningConnect, setIsDecliningConnect] = useState(false);
+    const relationshipRequestRef = useRef(0);
     const { toast } = useToast();
 
-    useEffect(() => {
-        let cancelled = false;
+    const mapRelationshipState = useCallback(
+        (state: Awaited<ReturnType<typeof getProfileRelationshipStateAction>>) =>
+            state
+                ? {
+                      dmAllowed: state.dmAllowed,
+                      showConnect: state.showConnect,
+                      connectLabel: state.connectLabel,
+                      messageVisibilityReason: state.messageVisibilityReason,
+                      connectLabelReason: state.connectLabelReason,
+                  }
+                : null,
+        [],
+    );
 
-        const loadRelationshipState = async () => {
-            if (!user?.did || !circle?.did || circle._id === user._id || circle.circleType !== "user") {
-                if (!cancelled) {
-                    setRelationshipState(null);
-                }
+    const loadRelationshipState = useCallback(async (requestId: number, targetDid: string) => {
+        try {
+            const state = await getProfileRelationshipStateAction(targetDid);
+            if (relationshipRequestRef.current !== requestId) {
                 return;
             }
 
-            try {
-                const state = await getProfileRelationshipStateAction(circle.did);
-                if (!cancelled) {
-                    setRelationshipState(
-                        state
-                            ? {
-                                  dmAllowed: state.dmAllowed,
-                                  showConnect: state.showConnect,
-                                  connectLabel: state.connectLabel,
-                                  messageVisibilityReason: state.messageVisibilityReason,
-                                  connectLabelReason: state.connectLabelReason,
-                              }
-                            : null,
-                    );
-                }
-            } catch (error) {
-                if (!cancelled) {
-                    console.error("Failed to load relationship state:", error);
-                    setRelationshipState(null);
-                }
+            setRelationshipState(mapRelationshipState(state));
+        } catch (error) {
+            if (relationshipRequestRef.current !== requestId) {
+                return;
+            }
+
+            console.error("Failed to load relationship state:", error);
+            setRelationshipState(null);
+        }
+    }, [mapRelationshipState]);
+
+    const reloadRelationshipState = useCallback(async () => {
+        if (!user?.did || !circle?.did || circle._id === user._id || circle.circleType !== "user") {
+            relationshipRequestRef.current += 1;
+            setRelationshipState(null);
+            return;
+        }
+
+        const requestId = ++relationshipRequestRef.current;
+        await loadRelationshipState(requestId, circle.did);
+    }, [circle?._id, circle?.circleType, circle?.did, loadRelationshipState, user?._id, user?.did]);
+
+    useEffect(() => {
+        relationshipRequestRef.current += 1;
+        setRelationshipState(null);
+
+        if (!user?.did || !circle?.did || circle._id === user._id || circle.circleType !== "user") {
+            return;
+        }
+
+        const requestId = relationshipRequestRef.current;
+        void loadRelationshipState(requestId, circle.did);
+
+        return () => {
+            relationshipRequestRef.current += 1;
+        };
+    }, [circle?._id, circle?.did, circle?.circleType, loadRelationshipState, user?._id, user?.did]);
+
+    useEffect(() => {
+        const handleVisibilityRefresh = () => {
+            if (document.visibilityState === "visible") {
+                void reloadRelationshipState();
             }
         };
 
-        void loadRelationshipState();
+        const handleFocusRefresh = () => {
+            void reloadRelationshipState();
+        };
+
+        window.addEventListener("focus", handleFocusRefresh);
+        document.addEventListener("visibilitychange", handleVisibilityRefresh);
 
         return () => {
-            cancelled = true;
+            window.removeEventListener("focus", handleFocusRefresh);
+            document.removeEventListener("visibilitychange", handleVisibilityRefresh);
         };
-    }, [circle?._id, circle?.did, circle?.circleType, user?._id, user?.did]);
+    }, [reloadRelationshipState]);
 
     if (!circle || circle._id === user?._id || circle.circleType !== "user" || !relationshipState) {
         return null;
@@ -100,27 +141,6 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
         relationshipState.connectLabelReason === "pending_sent" ||
         relationshipState.connectLabelReason === "pending_received";
     const isRespondingToConnect = isAcceptingConnect || isDecliningConnect;
-
-    const mapRelationshipState = (state: Awaited<ReturnType<typeof getProfileRelationshipStateAction>>) =>
-        state
-            ? {
-                  dmAllowed: state.dmAllowed,
-                  showConnect: state.showConnect,
-                  connectLabel: state.connectLabel,
-                  messageVisibilityReason: state.messageVisibilityReason,
-                  connectLabelReason: state.connectLabelReason,
-              }
-            : null;
-
-    const reloadRelationshipState = async () => {
-        if (!circle?.did) {
-            setRelationshipState(null);
-            return;
-        }
-
-        const state = await getProfileRelationshipStateAction(circle.did);
-        setRelationshipState(mapRelationshipState(state));
-    };
 
     const handleConnectRequest = async () => {
         if (!circle?.did || isSendingConnect || isRespondingToConnect || isConnectPresentationOnly) {
@@ -140,6 +160,7 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
             }
 
             await reloadRelationshipState();
+            router.refresh();
 
             toast({
                 title: "Contact request sent",
@@ -173,6 +194,7 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
             }
 
             await reloadRelationshipState();
+            router.refresh();
 
             toast({
                 title: "Contact request accepted",
@@ -206,6 +228,7 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
             }
 
             await reloadRelationshipState();
+            router.refresh();
 
             toast({
                 title: "Contact request declined",
