@@ -40,6 +40,11 @@ const { flushSync } = require("react-dom");
 import { LoadingSpinner } from "../ui/loading-spinner";
 
 type Milestone = { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string };
+type ToolboxConnectionItem = {
+    circle: Circle;
+    connectStatus: "accepted" | "pending_sent" | "pending_received";
+    updatedAt: Date | string;
+};
 
 export const UserToolbox = () => {
     const [user, setUser] = useAtom(userAtom);
@@ -90,7 +95,15 @@ export const UserToolbox = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [milestones, setMilestones] = useState<Milestone[]>([]);
     const [chatRooms, setChatRooms] = useState<ChatRoomDisplay[]>([]);
-    const [connections, setConnections] = useState<Circle[]>([]);
+    const [connections, setConnections] = useState<{
+        accepted: ToolboxConnectionItem[];
+        pendingIncoming: ToolboxConnectionItem[];
+        pendingOutgoing: ToolboxConnectionItem[];
+    }>({
+        accepted: [],
+        pendingIncoming: [],
+        pendingOutgoing: [],
+    });
     const [isLoadingConnections, setIsLoadingConnections] = useState(true);
     const handleToolboxEventHidden = useCallback(
         (eventId: string) => {
@@ -218,7 +231,11 @@ export const UserToolbox = () => {
         const loadConnections = async () => {
             if (!user?.did) {
                 if (isMounted) {
-                    setConnections([]);
+                    setConnections({
+                        accepted: [],
+                        pendingIncoming: [],
+                        pendingOutgoing: [],
+                    });
                     setIsLoadingConnections(false);
                 }
                 return;
@@ -232,7 +249,11 @@ export const UserToolbox = () => {
             } catch (error) {
                 console.error("Failed to load toolbox connections:", error);
                 if (isMounted) {
-                    setConnections([]);
+                    setConnections({
+                        accepted: [],
+                        pendingIncoming: [],
+                        pendingOutgoing: [],
+                    });
                 }
             } finally {
                 if (isMounted) {
@@ -294,6 +315,40 @@ export const UserToolbox = () => {
         closeToolbox();
         router.push(`/circles/${userHandle}/settings/about`);
     }, [closeToolbox, router, userHandle]);
+
+    const openConnection = useCallback(
+        (connection: ToolboxConnectionItem) => {
+            closeToolbox();
+            router.push(`/circles/${connection.circle.handle}`);
+        },
+        [closeToolbox, router],
+    );
+
+    const renderConnectionRow = useCallback(
+        (connection: ToolboxConnectionItem, label?: string) => (
+            <div
+                key={`${connection.connectStatus}-${connection.circle.did}`}
+                className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
+                onClick={() => openConnection(connection)}
+            >
+                <CirclePicture circle={connection.circle} size="40px" />
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-medium">{connection.circle.name}</p>
+                        {label ? (
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                                {label}
+                            </span>
+                        ) : null}
+                    </div>
+                    <p className="truncate text-xs text-muted-foreground">
+                        {connection.circle.description ?? connection.circle.mission ?? `@${connection.circle.handle}`}
+                    </p>
+                </div>
+            </div>
+        ),
+        [openConnection],
+    );
 
     const handleTabChange = useCallback(
         (nextTab: string) => {
@@ -440,22 +495,41 @@ export const UserToolbox = () => {
                             <div className="flex flex-1 items-center justify-center">
                                 <LoadingSpinner />
                             </div>
-                        ) : connections.length > 0 ? (
-                            connections.map((connection) => (
-                                <div
-                                    key={connection._id}
-                                    className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
-                                    onClick={() => openCircle(connection)}
-                                >
-                                    <CirclePicture circle={connection} size="40px" />
-                                    <div className="flex-1">
-                                        <p className="text-sm font-medium">{connection.name}</p>
-                                        <p className="text-xs text-muted-foreground">
-                                            {connection.description ?? connection.mission}
+                        ) : connections.accepted.length > 0 ||
+                          connections.pendingIncoming.length > 0 ||
+                          connections.pendingOutgoing.length > 0 ? (
+                            <div className="pb-2">
+                                {connections.pendingIncoming.length > 0 ? (
+                                    <div className="px-3 pb-1 pt-2">
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                            Requests Received
                                         </p>
                                     </div>
-                                </div>
-                            ))
+                                ) : null}
+                                {connections.pendingIncoming.map((connection) =>
+                                    renderConnectionRow(connection, "Requested You"),
+                                )}
+
+                                {connections.pendingOutgoing.length > 0 ? (
+                                    <div className="px-3 pb-1 pt-3">
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                            Requests Sent
+                                        </p>
+                                    </div>
+                                ) : null}
+                                {connections.pendingOutgoing.map((connection) =>
+                                    renderConnectionRow(connection, "Requested"),
+                                )}
+
+                                {connections.accepted.length > 0 ? (
+                                    <div className="px-3 pb-1 pt-3">
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                            Connections
+                                        </p>
+                                    </div>
+                                ) : null}
+                                {connections.accepted.map((connection) => renderConnectionRow(connection))}
+                            </div>
                         ) : (
                             <div className="flex h-full items-center justify-center p-8 text-center text-muted-foreground">
                                 No connections yet

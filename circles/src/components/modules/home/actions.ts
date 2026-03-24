@@ -17,7 +17,8 @@ import { findOrCreateDMRoom as findOrCreateDMRoomData } from "@/lib/data/chat";
 import {
     getDmEligibility,
     getProfileRelationshipState,
-    listAcceptedToolboxConnectionsForUserDid,
+    listToolboxConnectionsForUserDid,
+    ToolboxConnectionsSummary,
 } from "@/lib/data/relationships";
 import { UserRelationships } from "@/lib/data/db";
 
@@ -388,13 +389,17 @@ export const getProfileRelationshipStateAction = async (targetDid: string) => {
     return await getProfileRelationshipState(viewerDid, targetDid);
 };
 
-export const listToolboxConnectionsAction = async (): Promise<Circle[]> => {
+export const listToolboxConnectionsAction = async (): Promise<ToolboxConnectionsSummary> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
-        return [];
+        return {
+            accepted: [],
+            pendingIncoming: [],
+            pendingOutgoing: [],
+        };
     }
 
-    return await listAcceptedToolboxConnectionsForUserDid(userDid);
+    return await listToolboxConnectionsForUserDid(userDid);
 };
 
 export const sendConnectRequestAction = async (

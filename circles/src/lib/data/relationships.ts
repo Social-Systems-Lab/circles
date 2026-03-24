@@ -63,6 +63,20 @@ export type ProfileRelationshipState = {
         | "contact_established";
 };
 
+export type ToolboxConnectionStatus = Extract<RelationshipConnectStatus, "accepted" | "pending_sent" | "pending_received">;
+
+export type ToolboxConnection = {
+    circle: Circle;
+    connectStatus: ToolboxConnectionStatus;
+    updatedAt: Date;
+};
+
+export type ToolboxConnectionsSummary = {
+    accepted: ToolboxConnection[];
+    pendingIncoming: ToolboxConnection[];
+    pendingOutgoing: ToolboxConnection[];
+};
+
 UserRelationships?.createIndex({ fromDid: 1, toDid: 1 }, { unique: true });
 UserRelationships?.createIndex({ fromDid: 1, updatedAt: -1 });
 UserRelationships?.createIndex({ toDid: 1, connectStatus: 1 });
@@ -499,6 +513,112 @@ export const listAcceptedToolboxConnectionsForUserDid = async (userDid: string):
         ...circle,
         _id: circle?._id ? String(circle._id) : circle?._id,
     }));
+};
+
+export const listToolboxConnectionsForUserDid = async (userDid: string): Promise<ToolboxConnectionsSummary> => {
+    if (!userDid) {
+        return {
+            accepted: [],
+            pendingIncoming: [],
+            pendingOutgoing: [],
+        };
+    }
+
+    const relationshipEdges = await UserRelationships.find(
+        {
+            fromDid: userDid,
+            connectStatus: { $in: ["accepted", "pending_sent", "pending_received"] },
+        },
+        {
+            projection: {
+                toDid: 1,
+                connectStatus: 1,
+                updatedAt: 1,
+            },
+        },
+    ).toArray();
+
+    if (relationshipEdges.length === 0) {
+        return {
+            accepted: [],
+            pendingIncoming: [],
+            pendingOutgoing: [],
+        };
+    }
+
+    const circles = await Circles.find(
+        {
+            did: {
+                $in: Array.from(
+                    new Set(
+                        relationshipEdges
+                            .map((edge) => (typeof edge?.toDid === "string" ? edge.toDid : ""))
+                            .filter((did): did is string => did.length > 0 && did !== userDid),
+                    ),
+                ),
+            },
+            circleType: "user",
+        },
+        {
+            projection: {
+                _id: 1,
+                did: 1,
+                handle: 1,
+                name: 1,
+                picture: 1,
+                description: 1,
+                mission: 1,
+                circleType: 1,
+            },
+        },
+    ).toArray();
+
+    const circleByDid = new Map(
+        circles.map((circle: any) => [
+            circle.did,
+            {
+                ...circle,
+                _id: circle?._id ? String(circle._id) : circle?._id,
+            } as Circle,
+        ]),
+    );
+
+    const summary: ToolboxConnectionsSummary = {
+        accepted: [],
+        pendingIncoming: [],
+        pendingOutgoing: [],
+    };
+
+    for (const edge of relationshipEdges) {
+        if (typeof edge?.toDid !== "string") {
+            continue;
+        }
+
+        const circle = circleByDid.get(edge.toDid);
+        if (!circle) {
+            continue;
+        }
+
+        const connection: ToolboxConnection = {
+            circle,
+            connectStatus: edge.connectStatus as ToolboxConnectionStatus,
+            updatedAt: edge?.updatedAt instanceof Date ? edge.updatedAt : new Date(edge?.updatedAt || Date.now()),
+        };
+
+        if (connection.connectStatus === "accepted") {
+            summary.accepted.push(connection);
+        } else if (connection.connectStatus === "pending_received") {
+            summary.pendingIncoming.push(connection);
+        } else {
+            summary.pendingOutgoing.push(connection);
+        }
+    }
+
+    summary.accepted.sort((a, b) => (a.circle.name || "").localeCompare(b.circle.name || ""));
+    summary.pendingIncoming.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+    summary.pendingOutgoing.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+
+    return summary;
 };
 
 export const migrateLegacyDmRelationships = async ({
