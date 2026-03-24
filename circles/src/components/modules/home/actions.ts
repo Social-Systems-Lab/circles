@@ -14,7 +14,11 @@ import { revalidatePath } from "next/cache";
 import { getUser, getUserById, getUserPrivate, addBookmark, removeBookmark, pinCircle, unpinCircle } from "@/lib/data/user";
 import { notifyNewMember, sendNotifications } from "@/lib/data/notifications";
 import { findOrCreateDMRoom as findOrCreateDMRoomData } from "@/lib/data/chat";
-import { getDmEligibility, getProfileRelationshipState } from "@/lib/data/relationships";
+import {
+    getDmEligibility,
+    getProfileRelationshipState,
+    listAcceptedToolboxConnectionsForUserDid,
+} from "@/lib/data/relationships";
 import { UserRelationships } from "@/lib/data/db";
 
 type CircleActionResponse = {
@@ -382,6 +386,15 @@ export const getProfileRelationshipStateAction = async (targetDid: string) => {
     }
 
     return await getProfileRelationshipState(viewerDid, targetDid);
+};
+
+export const listToolboxConnectionsAction = async (): Promise<Circle[]> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return [];
+    }
+
+    return await listAcceptedToolboxConnectionsForUserDid(userDid);
 };
 
 export const sendConnectRequestAction = async (

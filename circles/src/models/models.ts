@@ -903,7 +903,7 @@ export type UserToolboxTab =
     | "notifications"
     | "profile"
     | "circles"
-    | "projects"
+    | "connections"
     | "tasks"
     | "events"
     | "account"

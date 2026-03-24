@@ -447,6 +447,60 @@ export const listDmEligibleContactsForUserDid = async (userDid: string): Promise
     }));
 };
 
+export const listAcceptedToolboxConnectionsForUserDid = async (userDid: string): Promise<Circle[]> => {
+    if (!userDid) {
+        return [];
+    }
+
+    const acceptedConnectionDids = Array.from(
+        new Set(
+            (
+                await UserRelationships.find(
+                    {
+                        fromDid: userDid,
+                        connectStatus: "accepted",
+                    },
+                    {
+                        projection: { toDid: 1 },
+                    },
+                ).toArray()
+            )
+                .map((edge) => (typeof edge?.toDid === "string" ? edge.toDid : ""))
+                .filter((did): did is string => did.length > 0 && did !== userDid),
+        ),
+    );
+
+    if (acceptedConnectionDids.length === 0) {
+        return [];
+    }
+
+    const circles = await Circles.find(
+        {
+            did: { $in: acceptedConnectionDids },
+            circleType: "user",
+        },
+        {
+            projection: {
+                _id: 1,
+                did: 1,
+                handle: 1,
+                name: 1,
+                picture: 1,
+                description: 1,
+                mission: 1,
+                circleType: 1,
+            },
+        },
+    )
+        .sort({ name: 1 })
+        .toArray();
+
+    return circles.map((circle: any) => ({
+        ...circle,
+        _id: circle?._id ? String(circle._id) : circle?._id,
+    }));
+};
+
 export const migrateLegacyDmRelationships = async ({
     apply,
     limit,

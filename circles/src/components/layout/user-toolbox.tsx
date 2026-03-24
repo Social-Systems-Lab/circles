@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bell, Circle as CircleIcon, CheckSquare, Hammer } from "lucide-react";
+import { Bell, Circle as CircleIcon, CheckSquare, Users } from "lucide-react";
 import { MdOutlineLogout } from "react-icons/md";
 import { LuClipboardCheck, LuMail, LuSettings } from "react-icons/lu";
 import {
@@ -35,6 +35,7 @@ import { getTasksAction } from "@/app/circles/[handle]/tasks/actions";
 import { getIssuesAction } from "@/app/circles/[handle]/issues/actions";
 import { getCircleByIdAction } from "@/components/modules/circles/actions";
 import { listChatRoomsAction } from "@/components/modules/chat/actions";
+import { listToolboxConnectionsAction } from "@/components/modules/home/actions";
 const { flushSync } = require("react-dom");
 import { LoadingSpinner } from "../ui/loading-spinner";
 
@@ -85,14 +86,12 @@ export const UserToolbox = () => {
             ?.filter((m) => m.circle.circleType === "circle" && m.circle.handle !== "default")
             ?.map((membership) => membership.circle) || [];
 
-    const projects =
-        user?.memberships?.filter((m) => m.circle.circleType === "project")?.map((membership) => membership.circle) ||
-        [];
-
     const [events, setEvents] = useState<EventDisplay[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [milestones, setMilestones] = useState<Milestone[]>([]);
     const [chatRooms, setChatRooms] = useState<ChatRoomDisplay[]>([]);
+    const [connections, setConnections] = useState<Circle[]>([]);
+    const [isLoadingConnections, setIsLoadingConnections] = useState(true);
     const handleToolboxEventHidden = useCallback(
         (eventId: string) => {
             if (!eventId) return;
@@ -212,6 +211,43 @@ export const UserToolbox = () => {
             isMounted = false;
         };
     }, [user]);
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const loadConnections = async () => {
+            if (!user?.did) {
+                if (isMounted) {
+                    setConnections([]);
+                    setIsLoadingConnections(false);
+                }
+                return;
+            }
+
+            try {
+                const nextConnections = await listToolboxConnectionsAction();
+                if (isMounted) {
+                    setConnections(nextConnections);
+                }
+            } catch (error) {
+                console.error("Failed to load toolbox connections:", error);
+                if (isMounted) {
+                    setConnections([]);
+                }
+            } finally {
+                if (isMounted) {
+                    setIsLoadingConnections(false);
+                }
+            }
+        };
+
+        setIsLoadingConnections(true);
+        void loadConnections();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [user?.did]);
 
     const closeToolbox = useCallback(() => {
         setUserToolboxState(undefined);
@@ -342,10 +378,10 @@ export const UserToolbox = () => {
                             <CircleIcon className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger
-                            value="projects"
+                            value="connections"
                             className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
                         >
-                            <Hammer className="h-5 w-5" />
+                            <Users className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger
                             value="tasks"
@@ -399,26 +435,30 @@ export const UserToolbox = () => {
                             </div>
                         )}
                     </TabsContent>
-                    <TabsContent value="projects" className="m-0 flex-grow overflow-auto pt-1">
-                        {projects.length > 0 ? (
-                            projects.map((project) => (
+                    <TabsContent value="connections" className="m-0 flex-grow overflow-auto pt-1">
+                        {isLoadingConnections ? (
+                            <div className="flex flex-1 items-center justify-center">
+                                <LoadingSpinner />
+                            </div>
+                        ) : connections.length > 0 ? (
+                            connections.map((connection) => (
                                 <div
-                                    key={project._id}
+                                    key={connection._id}
                                     className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
-                                    onClick={() => openCircle(project)}
+                                    onClick={() => openCircle(connection)}
                                 >
-                                    <CirclePicture circle={project} size="40px" />
+                                    <CirclePicture circle={connection} size="40px" />
                                     <div className="flex-1">
-                                        <p className="text-sm font-medium">{project.name}</p>
+                                        <p className="text-sm font-medium">{connection.name}</p>
                                         <p className="text-xs text-muted-foreground">
-                                            {project.description ?? project.mission}
+                                            {connection.description ?? connection.mission}
                                         </p>
                                     </div>
                                 </div>
                             ))
                         ) : (
                             <div className="flex h-full items-center justify-center p-8 text-center text-muted-foreground">
-                                No projects yet
+                                No connections yet
                             </div>
                         )}
                     </TabsContent>
