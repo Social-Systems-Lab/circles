@@ -5,20 +5,24 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bell, Circle as CircleIcon, CheckSquare, Users } from "lucide-react";
+import { Bell, CheckSquare, ChevronDown, Circle as CircleIcon, Loader2, Users } from "lucide-react";
 import { MdOutlineLogout } from "react-icons/md";
 import { LuClipboardCheck, LuMail, LuSettings } from "react-icons/lu";
 import {
     authInfoAtom,
-    contentPreviewAtom,
-    sidePanelContentVisibleAtom,
     userAtom,
     userToolboxDataAtom,
 } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { useRouter, usePathname } from "next/navigation";
-import { Circle, MemberDisplay, UserToolboxTab, EventDisplay, TaskPermissions, ChatRoomDisplay } from "@/models/models";
+import { Circle, UserToolboxTab, EventDisplay, TaskPermissions, ChatRoomDisplay } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { logOut } from "../auth/actions";
 import { VerifyAccountButton } from "../modules/auth/verify-account-button";
@@ -33,13 +37,18 @@ import { getEventsAction } from "@/app/circles/[handle]/events/actions";
 import { getGoalsAction } from "@/app/circles/[handle]/goals/actions";
 import { getTasksAction } from "@/app/circles/[handle]/tasks/actions";
 import { getIssuesAction } from "@/app/circles/[handle]/issues/actions";
-import { getCircleByIdAction } from "@/components/modules/circles/actions";
 import { listChatRoomsAction } from "@/components/modules/chat/actions";
-import { listToolboxConnectionsAction } from "@/components/modules/home/actions";
+import {
+    acceptConnectRequestAction,
+    declineConnectRequestAction,
+    listToolboxConnectionsAction,
+} from "@/components/modules/home/actions";
 const { flushSync } = require("react-dom");
 import { LoadingSpinner } from "../ui/loading-spinner";
+import { useToast } from "../ui/use-toast";
 
 type Milestone = { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string };
+type ToolboxTab = UserToolboxTab | "connections";
 type ToolboxConnectionItem = {
     circle: Circle;
     connectStatus: "accepted" | "pending_sent" | "pending_received";
@@ -49,13 +58,14 @@ type ToolboxConnectionItem = {
 export const UserToolbox = () => {
     const [user, setUser] = useAtom(userAtom);
     const [userToolboxState, setUserToolboxState] = useAtom(userToolboxDataAtom);
-    const [tab, setTab] = useState<UserToolboxTab>("chat");
+    const [tab, setTab] = useState<ToolboxTab>("chat");
     const [authInfo, setAuthInfo] = useAtom(authInfoAtom);
     const pathname = usePathname();
     const [prevPath, setPrevPath] = useState(pathname);
     const isMobile = useIsMobile();
 
     const router = useRouter();
+    const { toast } = useToast();
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -105,6 +115,7 @@ export const UserToolbox = () => {
         pendingOutgoing: [],
     });
     const [isLoadingConnections, setIsLoadingConnections] = useState(true);
+    const [respondingConnectionDid, setRespondingConnectionDid] = useState<string | null>(null);
     const handleToolboxEventHidden = useCallback(
         (eventId: string) => {
             if (!eventId) return;
@@ -242,9 +253,9 @@ export const UserToolbox = () => {
             }
 
             try {
-                const nextConnections = await listToolboxConnectionsAction();
+                const result = await listToolboxConnectionsAction();
                 if (isMounted) {
-                    setConnections(nextConnections);
+                    setConnections(result);
                 }
             } catch (error) {
                 console.error("Failed to load toolbox connections:", error);
@@ -324,30 +335,129 @@ export const UserToolbox = () => {
         [closeToolbox, router],
     );
 
+    const handleConnectionResponse = useCallback(
+        async (connection: ToolboxConnectionItem, response: "accept" | "decline") => {
+            const targetDid = connection.circle.did;
+            if (!targetDid || respondingConnectionDid === targetDid) {
+                return;
+            }
+
+            setRespondingConnectionDid(targetDid);
+
+            try {
+                const result =
+                    response === "accept"
+                        ? await acceptConnectRequestAction(targetDid)
+                        : await declineConnectRequestAction(targetDid);
+
+                if (!result.success) {
+                    toast({
+                        title: "Unable to respond",
+                        description: result.message,
+                        variant: "destructive",
+                    });
+                    return;
+                }
+
+                setConnections((prev) => {
+                    const pendingIncoming = prev.pendingIncoming.filter((item) => item.circle.did !== targetDid);
+
+                    if (response === "decline") {
+                        return {
+                            ...prev,
+                            pendingIncoming,
+                        };
+                    }
+
+                    const accepted = [
+                        ...prev.accepted.filter((item) => item.circle.did !== targetDid),
+                        {
+                            ...connection,
+                            connectStatus: "accepted" as const,
+                            updatedAt: new Date(),
+                        },
+                    ].sort((a, b) => (a.circle.name || "").localeCompare(b.circle.name || ""));
+
+                    return {
+                        ...prev,
+                        accepted,
+                        pendingIncoming,
+                    };
+                });
+            } catch (error) {
+                console.error(`Failed to ${response} contact request`, error);
+                toast({
+                    title: "Unable to respond",
+                    description:
+                        response === "accept"
+                            ? "Failed to accept contact request"
+                            : "Failed to decline contact request",
+                    variant: "destructive",
+                });
+            } finally {
+                setRespondingConnectionDid(null);
+            }
+        },
+        [respondingConnectionDid, toast],
+    );
+
     const renderConnectionRow = useCallback(
-        (connection: ToolboxConnectionItem, label?: string) => (
-            <div
-                key={`${connection.connectStatus}-${connection.circle.did}`}
-                className="m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100"
-                onClick={() => openConnection(connection)}
-            >
-                <CirclePicture circle={connection.circle} size="40px" />
-                <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-medium">{connection.circle.name}</p>
-                        {label ? (
-                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                                {label}
-                            </span>
-                        ) : null}
+        (connection: ToolboxConnectionItem, label?: string) => {
+            const showRespondControl = connection.connectStatus === "pending_received";
+            const isResponding = respondingConnectionDid === connection.circle.did;
+
+            return (
+                <div
+                    key={`${connection.connectStatus}-${connection.circle.did}`}
+                    className="m-1 flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-gray-100"
+                    onClick={() => openConnection(connection)}
+                >
+                    <CirclePicture circle={connection.circle} size="40px" />
+                    <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-medium">{connection.circle.name}</p>
+                            {label ? (
+                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                                    {label}
+                                </span>
+                            ) : null}
+                        </div>
+                        <p className="truncate text-xs text-muted-foreground">
+                            {connection.circle.description ?? connection.circle.mission ?? `@${connection.circle.handle}`}
+                        </p>
                     </div>
-                    <p className="truncate text-xs text-muted-foreground">
-                        {connection.circle.description ?? connection.circle.mission ?? `@${connection.circle.handle}`}
-                    </p>
+                    {showRespondControl ? (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 shrink-0 px-2 text-xs"
+                                    disabled={isResponding}
+                                    onClick={(event) => event.stopPropagation()}
+                                >
+                                    {isResponding ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
+                                    Respond
+                                    <ChevronDown className="ml-1 h-3.5 w-3.5" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
+                                <DropdownMenuItem onSelect={() => void handleConnectionResponse(connection, "accept")}>
+                                    Accept
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    className="text-red-600 focus:text-red-600"
+                                    onSelect={() => void handleConnectionResponse(connection, "decline")}
+                                >
+                                    Decline
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    ) : null}
                 </div>
-            </div>
-        ),
-        [openConnection],
+            );
+        },
+        [handleConnectionResponse, openConnection, respondingConnectionDid],
     );
 
     const handleTabChange = useCallback(
@@ -356,7 +466,7 @@ export const UserToolbox = () => {
                 handleOpenSettings();
                 return;
             }
-            setTab(nextTab as UserToolboxTab | undefined);
+            setTab(nextTab as ToolboxTab);
         },
         [handleOpenSettings, setTab],
     );
@@ -499,35 +609,33 @@ export const UserToolbox = () => {
                           connections.pendingIncoming.length > 0 ||
                           connections.pendingOutgoing.length > 0 ? (
                             <div className="pb-2">
-                                {connections.pendingIncoming.length > 0 ? (
+                                {connections.pendingIncoming.length > 0 && (
                                     <div className="px-3 pb-1 pt-2">
                                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                            Requests Received
+                                            Requests for you
                                         </p>
                                     </div>
-                                ) : null}
+                                )}
                                 {connections.pendingIncoming.map((connection) =>
                                     renderConnectionRow(connection, "Requested You"),
                                 )}
-
-                                {connections.pendingOutgoing.length > 0 ? (
+                                {connections.pendingOutgoing.length > 0 && (
                                     <div className="px-3 pb-1 pt-3">
                                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                            Requests Sent
+                                            Requested
                                         </p>
                                     </div>
-                                ) : null}
+                                )}
                                 {connections.pendingOutgoing.map((connection) =>
                                     renderConnectionRow(connection, "Requested"),
                                 )}
-
-                                {connections.accepted.length > 0 ? (
+                                {connections.accepted.length > 0 && (
                                     <div className="px-3 pb-1 pt-3">
                                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                             Connections
                                         </p>
                                     </div>
-                                ) : null}
+                                )}
                                 {connections.accepted.map((connection) => renderConnectionRow(connection))}
                             </div>
                         ) : (
