@@ -401,6 +401,11 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                     router.push(`/chat/${notification.roomId}`);
                 }
                 break;
+            case "contact_request_received":
+                if (notification.user?.handle) {
+                    router.push(`/circles/${notification.user.handle}`);
+                }
+                break;
 
             // Post/Comment related notifications - Check for parent item first
             case "post_comment":

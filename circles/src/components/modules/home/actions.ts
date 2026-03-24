@@ -473,6 +473,17 @@ export const sendConnectRequestAction = async (
             { upsert: true },
         );
 
+        try {
+            const requester = await getCircleByDid(viewerDid);
+            if (requester?.circleType === "user") {
+                await sendNotifications("contact_request_received", [targetUser], {
+                    user: requester,
+                });
+            }
+        } catch (notificationError) {
+            console.error("Failed to create contact request notification", notificationError);
+        }
+
         return { success: true, message: "Contact request sent" };
     } catch (error) {
         console.error("Failed to send connect request", error);

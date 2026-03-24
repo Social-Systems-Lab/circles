@@ -170,6 +170,8 @@ const buildNotificationBody = (type: string, payload: any): string => {
                 return `${actorName} offered help in ${circleName}`;
             }
             return `${actorName} sent you a direct message`;
+        case "contact_request_received":
+            return `${actorName} sent you a contact request`;
         default:
             return payload?.messageBody || "New notification";
     }
