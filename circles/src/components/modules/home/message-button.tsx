@@ -2,6 +2,12 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { userAtom } from "@/lib/data/atoms";
 import { Circle } from "@/models/models";
 import { useAtom } from "jotai";
@@ -13,6 +19,7 @@ import {
 } from "./actions";
 import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "@/components/utils/use-is-compact";
+import { ChevronDown, Loader2 } from "lucide-react";
 import { TbMessage } from "react-icons/tb";
 import { DmChatModal } from "../chat/dm-chat-modal";
 import { useRouter } from "next/navigation";
@@ -253,23 +260,31 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
         if (relationshipState.connectLabelReason === "pending_received") {
             return (
                 <div className="flex flex-wrap items-center gap-2" data-connect-reason={relationshipState.connectLabelReason}>
-                    <Button
-                        size={compact ? "sm" : "default"}
-                        className="rounded-full"
-                        disabled={isSendingConnect || isRespondingToConnect}
-                        onClick={handleAcceptRequest}
-                    >
-                        {isAcceptingConnect ? "Accepting..." : "Accept"}
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size={compact ? "sm" : "default"}
-                        className={compact ? "rounded-full px-3 text-muted-foreground" : "rounded-full text-muted-foreground"}
-                        disabled={isSendingConnect || isRespondingToConnect}
-                        onClick={handleDeclineRequest}
-                    >
-                        {isDecliningConnect ? "Declining..." : "Decline"}
-                    </Button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 rounded-full px-2 text-xs"
+                                disabled={isSendingConnect || isRespondingToConnect}
+                            >
+                                {isRespondingToConnect ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
+                                Respond
+                                <ChevronDown className="ml-1 h-3.5 w-3.5" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onSelect={() => void handleAcceptRequest()}>
+                                Accept
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                className="text-red-600 focus:text-red-600"
+                                onSelect={() => void handleDeclineRequest()}
+                            >
+                                Decline
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             );
         }
