@@ -264,8 +264,7 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
                         <DropdownMenuTrigger asChild>
                             <Button
                                 variant="outline"
-                                size="sm"
-                                className="h-8 rounded-full px-2 text-xs"
+                                className="rounded-full"
                                 disabled={isSendingConnect || isRespondingToConnect}
                             >
                                 {isRespondingToConnect ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
