@@ -298,7 +298,7 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle, ad
 
                     <div className="flex-1"></div>
                     {!isCompact && (
-                        <div className={`flex flex-row gap-1 pt-2`}>
+                        <div className={`flex flex-row items-center gap-1 pt-2`}>
                             <div className="pr-4 pt-2">
                                 <SocialLinks circle={circle} />
                             </div>
