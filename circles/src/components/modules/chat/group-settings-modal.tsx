@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Users, Image as ImageIcon, Settings as SettingsIcon, Info, Search, Check, X } from "lucide-react";
-import { useAtomValue } from "jotai";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { userAtom } from "@/lib/data/atoms";
-import { ChatRoomDisplay } from "@/models/models";
+import { contentPreviewAtom, sidePanelContentVisibleAtom, userAtom } from "@/lib/data/atoms";
+import { ChatRoomDisplay, Circle, ContentPreviewData } from "@/models/models";
 import { CirclePicture } from "../circles/circle-picture";
+import { useAtom, useAtomValue } from "jotai";
+import { useRouter } from "next/navigation";
+import { useIsCompact } from "@/components/utils/use-is-compact";
 
 interface GroupSettingsModalProps {
     open: boolean;
@@ -114,6 +116,16 @@ function InfoTab({ chatRoom, canEditInfo }: { chatRoom: ChatRoomDisplay; canEdit
         typeof (chatRoom as any).memberCount === "number" ? ((chatRoom as any).memberCount as number) : 0,
     );
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [user] = useAtom(userAtom);
+    const [, setContentPreview] = useAtom(contentPreviewAtom);
+    const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+    const isCompact = useIsCompact();
+    const router = useRouter();
+    const dmContact = chatRoom.isDirect
+        ? (((chatRoom as any).participantCircles as Circle[] | undefined) || []).find(
+              (participant) => participant?.did && participant.did !== user?.did,
+          )
+        : undefined;
 
     useEffect(() => {
         let cancelled = false;
@@ -206,6 +218,30 @@ function InfoTab({ chatRoom, canEditInfo }: { chatRoom: ChatRoomDisplay; canEdit
         setIsEditing(false);
     };
 
+    const handleContactNameClick = () => {
+        if (!dmContact?.handle) {
+            return;
+        }
+
+        if (isCompact) {
+            router.push(`/circles/${dmContact.handle}`);
+            return;
+        }
+
+        const contentPreviewData: ContentPreviewData = {
+            type: "user",
+            content: dmContact,
+        };
+
+        setContentPreview((current) => {
+            const isCurrentlyPreviewing =
+                current?.type === "user" &&
+                current?.content?._id === dmContact._id &&
+                sidePanelContentVisible === "content";
+            return isCurrentlyPreviewing ? undefined : contentPreviewData;
+        });
+    };
+
     return (
         <div className="space-y-6">
             {/* Group Avatar */}
@@ -240,7 +276,7 @@ function InfoTab({ chatRoom, canEditInfo }: { chatRoom: ChatRoomDisplay; canEdit
 
             {/* Group Name */}
             <div>
-                <label className="text-sm font-medium text-gray-500">Group Name</label>
+                <label className="text-sm font-medium text-gray-500">{chatRoom.isDirect ? "Contact name" : "Group Name"}</label>
                 <div className="mt-1">
                     {canEditInfo && isEditing ? (
                         <input
@@ -248,8 +284,16 @@ function InfoTab({ chatRoom, canEditInfo }: { chatRoom: ChatRoomDisplay; canEdit
                             value={editedName}
                             onChange={(e) => setEditedName(e.target.value)}
                             className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="Group name"
+                            placeholder={chatRoom.isDirect ? "Contact name" : "Group name"}
                         />
+                    ) : chatRoom.isDirect && dmContact ? (
+                        <button
+                            type="button"
+                            onClick={handleContactNameClick}
+                            className="text-left text-lg font-medium text-gray-900 transition-colors hover:text-blue-600 hover:underline underline-offset-2"
+                        >
+                            {chatRoom.name}
+                        </button>
                     ) : (
                         <p className="text-lg font-medium">{chatRoom.name}</p>
                     )}
