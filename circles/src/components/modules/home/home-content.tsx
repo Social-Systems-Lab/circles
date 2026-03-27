@@ -153,7 +153,7 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle, ad
 
                             <div className={`absolute right-0 top-0 flex flex-row items-center gap-1 pt-2`}>
                                 {user && circle.circleType === "circle" && isMember && <ChatButton circle={circle} />}
-                                <InviteButton circle={circle} />
+                                {!isUser && <InviteButton circle={circle} />}
                                 {user && <FollowButton circle={circle} />}
                                 {user && <BookmarkButton circle={circle} iconOnly />}
                                 {/* Consistent Bell Icon for Mobile View */}
@@ -206,7 +206,7 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle, ad
                                         <MessageButton circle={circle} renderCompact={false} />
                                     )}
                                     {user && circle.circleType === "circle" && isMember && <ChatButton circle={circle} />}
-                                    <InviteButton circle={circle} />
+                                    {!isUser && <InviteButton circle={circle} />}
                                     {user && <FollowButton circle={circle} />}
                                     {user && <BookmarkButton circle={circle} iconOnly />}
                                     {circle._id &&
