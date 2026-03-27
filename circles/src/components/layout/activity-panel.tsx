@@ -34,7 +34,7 @@ export default function ActivityPanel({ mode = "panel" }: ActivityPanelProps) {
         return tab || "following";
     }, [searchParams, userDid]);
 
-    const sorting = useMemo(() => (searchParams.get("sort") as SortingOptions) || undefined, [searchParams]);
+    const sorting = useMemo(() => (searchParams.get("sort") as SortingOptions) || "new", [searchParams]);
     const selectedSdgs = useMemo(() => {
         const sdgsParam = searchParams.get("sdgs");
         return sdgsParam ? sdgsParam.split(",") : [];
@@ -79,6 +79,7 @@ export default function ActivityPanel({ mode = "panel" }: ActivityPanelProps) {
                     posts={posts}
                     userFeed={userFeed}
                     activeTab={activeTab}
+                    defaultSort={sorting}
                     showCreateNew={isFullScreen}
                     compact={!isFullScreen}
                     fullWidth={isFullScreen}

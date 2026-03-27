@@ -2,7 +2,7 @@
 "use client";
 
 import { useIsCompact } from "@/components/utils/use-is-compact";
-import { Circle, Feed, PostDisplay, Cause as SDG } from "@/models/models"; // Removed DynamicForm and Page imports
+import { Circle, Feed, PostDisplay, Cause as SDG, SortingOptions } from "@/models/models"; // Removed DynamicForm and Page imports
 import { CreateNewPost } from "./create-new-post";
 import PostList from "./post-list";
 import { PostGrid } from "./post-grid";
@@ -27,6 +27,7 @@ export type FeedComponentProps = {
     circle: Circle;
     posts: PostDisplay[];
     feed: Feed;
+    defaultSort?: SortingOptions;
     onFilterChange?: (filter: string) => void;
     onSdgChange?: (sdgs: SDG[]) => void;
     selectedSdgsExternal?: SDG[];
@@ -38,6 +39,7 @@ export const FeedComponent = ({
     circle,
     posts,
     feed,
+    defaultSort = "new",
     onFilterChange,
     onSdgChange,
     selectedSdgsExternal,
@@ -101,6 +103,7 @@ export const FeedComponent = ({
                 <div className="flex w-full justify-center">
                     <div className="w-full max-w-[700px]">
                         <ListFilter
+                            defaultValue={defaultSort}
                             onFilterChange={onFilterChange ?? handleFilterChange}
                             onSdgChange={onSdgChange ?? handleSdgSelectionChange}
                             selectedSdgs={selectedSdgsExternal ?? selectedSdgs}
@@ -122,6 +125,7 @@ export type AggregateFeedComponentProps = {
     posts: PostDisplay[];
     userFeed: Feed | null;
     activeTab: string;
+    defaultSort?: SortingOptions;
     showCreateNew?: boolean; // when false, hide "create post" in aggregate view (e.g., side panel)
     compact?: boolean; // when true, render list in compact/mobile style (e.g., side panel)
     fullWidth?: boolean; // when true, allow the feed to span the available viewport width
@@ -132,6 +136,7 @@ export const AggregateFeedComponent = ({
     posts,
     userFeed,
     activeTab,
+    defaultSort = "new",
     showCreateNew = true,
     compact = false,
     fullWidth = false,
@@ -249,6 +254,7 @@ export const AggregateFeedComponent = ({
                 <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                         <ListFilter
+                            defaultValue={defaultSort}
                             onFilterChange={handleFilterChange}
                             onSdgChange={handleSdgSelectionChange}
                             selectedSdgs={selectedSdgs}

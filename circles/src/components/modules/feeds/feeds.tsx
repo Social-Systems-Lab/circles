@@ -18,7 +18,7 @@ export default function FeedsModule(props: PageProps) {
     const { circle, searchParams: searchParamsProp } = props;
     const [feed, setFeed] = useState<any>(null);
     const [posts, setPosts] = useState<PostDisplay[]>([]);
-    const [sorting, setSorting] = useState<SortingOptions>("top");
+    const [sorting, setSorting] = useState<SortingOptions>("new");
     const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>([]);
     const [isPending, startTransition] = useTransition();
     const [isLoading, setIsLoading] = useState(true);
@@ -45,7 +45,7 @@ export default function FeedsModule(props: PageProps) {
             if (defaultFeed) {
                 setFeed(defaultFeed);
                 const searchParams = await searchParamsProp;
-                const initialSort = (searchParams?.sort as SortingOptions) || "top";
+                const initialSort = (searchParams?.sort as SortingOptions) || "new";
                 setSorting(initialSort);
                 setIsLoading(true);
             }
@@ -80,6 +80,7 @@ export default function FeedsModule(props: PageProps) {
                     posts={posts}
                     feed={feed}
                     circle={circle}
+                    defaultSort={sorting}
                     onFilterChange={handleFilterChange}
                     onSdgChange={handleSdgChange}
                     selectedSdgsExternal={selectedSdgs}
