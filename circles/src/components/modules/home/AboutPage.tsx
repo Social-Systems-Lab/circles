@@ -30,6 +30,8 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { contactCircleAdminsAction } from "@/components/modules/chat/mongo-actions";
+import { isAuthorized } from "@/lib/auth/client-auth";
+import { features } from "@/lib/data/constants";
 import OffersCard from "./offers-card";
 import EngagementCard from "./engagement-card";
 import NeedsCard from "./needs-card";
@@ -55,6 +57,7 @@ export default function AboutPage({ circle }: AboutPageProps) {
     const [contactError, setContactError] = React.useState("");
     const [isSendingContactMessage, setIsSendingContactMessage] = React.useState(false);
     const isOwner = user?.did === circle.did;
+    const canEditAbout = isAuthorized(user, circle, features.settings.edit_about);
     const isUserProfile = circle.circleType === "user";
     const profileOfferSkills = circle.offers?.skills?.length ? circle.offers.skills : circle.skills || [];
     const currentUserOfferSkills = !isUserProfile
@@ -202,7 +205,17 @@ export default function AboutPage({ circle }: AboutPageProps) {
                             {/* Main Content */}
                             {hasMainContent ? (
                                 <>
-                                    <h1 className="my-4">About</h1>
+                                    <div className="flex flex-row items-center justify-between gap-4">
+                                        <h1 className="my-4">About</h1>
+                                        {canEditAbout && (
+                                            <Button
+                                                variant="outline"
+                                                onClick={() => router.push(`/circles/${circle.handle}/settings/about`)}
+                                            >
+                                                Edit
+                                            </Button>
+                                        )}
+                                    </div>
                                     {circle.content ? (
                                         <RichText content={circle.content} />
                                     ) : isUserProfile ? (
@@ -216,7 +229,17 @@ export default function AboutPage({ circle }: AboutPageProps) {
                             ) : (
                                 // Default text if no content or description
                                 <>
-                                    <h1 className="my-4">About</h1>
+                                    <div className="flex flex-row items-center justify-between gap-4">
+                                        <h1 className="my-4">About</h1>
+                                        {canEditAbout && (
+                                            <Button
+                                                variant="outline"
+                                                onClick={() => router.push(`/circles/${circle.handle}/settings/about`)}
+                                            >
+                                                Edit
+                                            </Button>
+                                        )}
+                                    </div>
                                     <p className="mb-6 text-base text-muted-foreground">
                                         {isUserProfile
                                             ? "This profile hasn't added an About section yet."
