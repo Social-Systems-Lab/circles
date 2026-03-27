@@ -84,7 +84,7 @@ export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: Gr
 
                     <div className="flex-1 overflow-y-auto mt-4">
                         <TabsContent value="info" className="mt-0">
-                            <InfoTab chatRoom={chatRoom} canEditInfo={canEditInfo} />
+                            <InfoTab chatRoom={chatRoom} canEditInfo={canEditInfo} onOpenChange={onOpenChange} />
                         </TabsContent>
 
                         <TabsContent value="members" className="mt-0">
@@ -106,7 +106,15 @@ export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: Gr
 }
 
 // Info Tab Component
-function InfoTab({ chatRoom, canEditInfo }: { chatRoom: ChatRoomDisplay; canEditInfo: boolean }) {
+function InfoTab({
+    chatRoom,
+    canEditInfo,
+    onOpenChange,
+}: {
+    chatRoom: ChatRoomDisplay;
+    canEditInfo: boolean;
+    onOpenChange: (open: boolean) => void;
+}) {
     const initialDescription = typeof chatRoom.description === "string" ? chatRoom.description : "";
     const [isEditing, setIsEditing] = useState(false);
     const [editedName, setEditedName] = useState(chatRoom.name);
@@ -224,6 +232,7 @@ function InfoTab({ chatRoom, canEditInfo }: { chatRoom: ChatRoomDisplay; canEdit
         }
 
         if (isCompact) {
+            onOpenChange(false);
             router.push(`/circles/${dmContact.handle}`);
             return;
         }
@@ -240,6 +249,7 @@ function InfoTab({ chatRoom, canEditInfo }: { chatRoom: ChatRoomDisplay; canEdit
                 sidePanelContentVisible === "content";
             return isCurrentlyPreviewing ? undefined : contentPreviewData;
         });
+        onOpenChange(false);
     };
 
     return (
