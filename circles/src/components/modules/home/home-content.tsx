@@ -171,29 +171,54 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle, ad
                     {/* Center the text in compact mode. */}
                     <div
                         className={`flex flex-col justify-start p-4 pl-6 ${
-                            isCompact ? "items-center text-center" : "items-start"
+                            isCompact ? "items-center text-center" : "min-w-0 flex-1 items-start"
                         }`}
                     >
-                        <div className="flex flex-row items-center gap-4">
-                            <h4 className="m-0 p-0 text-4xl font-bold text-gray-800">
-                                {authorizedToEdit ? (
-                                    <EditableField id="name" value={circle.name ?? ""} circleId={circle._id!} />
-                                ) : (
-                                    circle.name
+                        <div className={`flex w-full ${isCompact ? "justify-center" : "items-start justify-between gap-4"}`}>
+                            <div className="flex flex-row items-center gap-4">
+                                <h4 className="m-0 p-0 text-4xl font-bold text-gray-800">
+                                    {authorizedToEdit ? (
+                                        <EditableField id="name" value={circle.name ?? ""} circleId={circle._id!} />
+                                    ) : (
+                                        circle.name
+                                    )}
+                                </h4>
+                                {!isUser && authorizedToEdit && circle.handle && (
+                                    <Button asChild variant="ghost" size="icon" className="h-7 w-7 text-gray-500">
+                                        <Link
+                                            href={`/circles/${circle.handle}/settings/about`}
+                                            aria-label={`Open ${circle.name ?? "circle"} settings`}
+                                            title="Settings"
+                                        >
+                                            <Settings className="h-4 w-4" />
+                                        </Link>
+                                    </Button>
                                 )}
-                            </h4>
-                            {!isUser && authorizedToEdit && circle.handle && (
-                                <Button asChild variant="ghost" size="icon" className="h-7 w-7 text-gray-500">
-                                    <Link
-                                        href={`/circles/${circle.handle}/settings/about`}
-                                        aria-label={`Open ${circle.name ?? "circle"} settings`}
-                                        title="Settings"
-                                    >
-                                        <Settings className="h-4 w-4" />
-                                    </Link>
-                                </Button>
+                                {/* {!isCompact && <SocialLinks circle={circle} />} */}
+                            </div>
+
+                            {!isCompact && (
+                                <div className="flex shrink-0 flex-row items-center gap-1">
+                                    <div className="pr-4 pt-2">
+                                        <SocialLinks circle={circle} />
+                                    </div>
+                                    {user && isUser && circle._id !== user?._id && (
+                                        <MessageButton circle={circle} renderCompact={false} />
+                                    )}
+                                    {user && circle.circleType === "circle" && isMember && <ChatButton circle={circle} />}
+                                    <InviteButton circle={circle} />
+                                    {user && <FollowButton circle={circle} />}
+                                    {user && <BookmarkButton circle={circle} iconOnly />}
+                                    {circle._id &&
+                                        user && (
+                                            <NotificationSettingsDialog
+                                                entityType="CIRCLE"
+                                                entityId={circle._id.toString()}
+                                                className="ml-1"
+                                            />
+                                        )}
+                                </div>
                             )}
-                            {/* {!isCompact && <SocialLinks circle={circle} />} */}
                         </div>
 
                         {parentCircle && parentCircle.circleType !== "user" && (
@@ -296,30 +321,6 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle, ad
                         )}
                     </div>
 
-                    <div className="flex-1"></div>
-                    {!isCompact && (
-                        <div className={`flex flex-row items-center gap-1 -mt-14`}>
-                            <div className="pr-4 pt-2">
-                                <SocialLinks circle={circle} />
-                            </div>
-                            {user && isUser && circle._id !== user?._id && (
-                                <MessageButton circle={circle} renderCompact={false} />
-                            )}
-                            {user && circle.circleType === "circle" && isMember && <ChatButton circle={circle} />}
-                            <InviteButton circle={circle} />
-                            {user && <FollowButton circle={circle} />}
-                            {user && <BookmarkButton circle={circle} iconOnly />}
-                            {/* Add NotificationSettingsDialog for the current circle */}
-                            {circle._id &&
-                                user && ( // Ensure circle ID and user are available
-                                    <NotificationSettingsDialog // Changed Popover to Dialog
-                                        entityType="CIRCLE"
-                                        entityId={circle._id.toString()}
-                                        className="ml-1" // Add some margin if needed
-                                    />
-                                )}
-                        </div>
-                    )}
                 </div>
             </div>
         </div>
