@@ -320,25 +320,35 @@ function InfoTab({
                 </div>
             </div>
 
-            {/* Group Description */}
-            <div>
-                <label className="text-sm font-medium text-gray-500">Description</label>
-                <div className="mt-1">
-                    {canEditInfo && isEditing ? (
-                        <textarea
-                            value={editedDescription}
-                            onChange={(e) => setEditedDescription(e.target.value)}
-                            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="Add group description"
-                            rows={3}
-                        />
-                    ) : (
-                        <p className="text-sm text-gray-600">
-                            {editedDescription || "No description"}
-                        </p>
-                    )}
-                </div>
-            </div>
+            {!chatRoom.isDirect && (
+                <>
+                    {/* Group Description */}
+                    <div>
+                        <label className="text-sm font-medium text-gray-500">Description</label>
+                        <div className="mt-1">
+                            {canEditInfo && isEditing ? (
+                                <textarea
+                                    value={editedDescription}
+                                    onChange={(e) => setEditedDescription(e.target.value)}
+                                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Add group description"
+                                    rows={3}
+                                />
+                            ) : (
+                                <p className="text-sm text-gray-600">
+                                    {editedDescription || "No description"}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Group Info */}
+                    <div className="space-y-2 text-sm text-gray-600">
+                        <p>Created {new Date(chatRoom.createdAt).toLocaleDateString()}</p>
+                        <p>Group · {memberCount} {memberCount === 1 ? "member" : "members"}</p>
+                    </div>
+                </>
+            )}
 
             {/* Edit/Save/Cancel Buttons */}
             {canEditInfo && (
@@ -371,11 +381,6 @@ function InfoTab({
                 </div>
             )}
 
-            {/* Group Info */}
-            <div className="space-y-2 text-sm text-gray-600">
-                <p>Created {new Date(chatRoom.createdAt).toLocaleDateString()}</p>
-                <p>Group · {memberCount} {memberCount === 1 ? "member" : "members"}</p>
-            </div>
         </div>
     );
 }
