@@ -23,6 +23,12 @@ export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: Gr
     const [canEditInfo, setCanEditInfo] = useState(false);
 
     useEffect(() => {
+        if (chatRoom.isDirect && activeTab === "members") {
+            setActiveTab("info");
+        }
+    }, [activeTab, chatRoom.isDirect]);
+
+    useEffect(() => {
         if (!open || !chatRoom?._id) {
             setCanEditInfo(false);
             return;
@@ -63,15 +69,17 @@ export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: Gr
                 </DialogHeader>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-                    <TabsList className="grid w-full grid-cols-4">
+                    <TabsList className={`grid w-full ${chatRoom.isDirect ? "grid-cols-3" : "grid-cols-4"}`}>
                         <TabsTrigger value="info" className="flex items-center gap-2">
                             <Info className="h-4 w-4" />
                             <span className="hidden sm:inline">Info</span>
                         </TabsTrigger>
-                        <TabsTrigger value="members" className="flex items-center gap-2">
-                            <Users className="h-4 w-4" />
-                            <span className="hidden sm:inline">Members</span>
-                        </TabsTrigger>
+                        {!chatRoom.isDirect && (
+                            <TabsTrigger value="members" className="flex items-center gap-2">
+                                <Users className="h-4 w-4" />
+                                <span className="hidden sm:inline">Members</span>
+                            </TabsTrigger>
+                        )}
                         <TabsTrigger value="media" className="flex items-center gap-2">
                             <ImageIcon className="h-4 w-4" />
                             <span className="hidden sm:inline">Media</span>
@@ -87,9 +95,11 @@ export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: Gr
                             <InfoTab chatRoom={chatRoom} canEditInfo={canEditInfo} onOpenChange={onOpenChange} />
                         </TabsContent>
 
-                        <TabsContent value="members" className="mt-0">
-                            <MembersTab chatRoom={chatRoom} isAdmin={isAdmin || canEditInfo} />
-                        </TabsContent>
+                        {!chatRoom.isDirect && (
+                            <TabsContent value="members" className="mt-0">
+                                <MembersTab chatRoom={chatRoom} isAdmin={isAdmin || canEditInfo} />
+                            </TabsContent>
+                        )}
 
                         <TabsContent value="media" className="mt-0">
                             <MediaTab chatRoom={chatRoom} isActive={activeTab === "media"} />
