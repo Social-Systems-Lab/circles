@@ -103,6 +103,7 @@ export const FeedComponent = ({
                 <div className="flex w-full justify-center">
                     <div className="w-full max-w-[700px]">
                         <ListFilter
+                            key={defaultSort}
                             defaultValue={defaultSort}
                             onFilterChange={onFilterChange ?? handleFilterChange}
                             onSdgChange={onSdgChange ?? handleSdgSelectionChange}
