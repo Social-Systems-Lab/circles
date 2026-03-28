@@ -139,6 +139,8 @@ export const GlobalCreateDialogContent: React.FC<GlobalCreateDialogContentProps>
     setCreateCommunityOpen,
     setCreateProjectOpen,
 }) => {
+    const visibleCreatableItems = creatableItemsList.filter((item) => item.key !== "project");
+
     const handleItemClick = (itemKey: CreatableItemKey) => {
         onCloseMainDialog(); // Close this selection dialog
 
@@ -161,7 +163,7 @@ export const GlobalCreateDialogContent: React.FC<GlobalCreateDialogContentProps>
                 </DialogDescription>
             </DialogHeader>
             <div className="grid grid-cols-1 gap-4 p-6 pt-2 md:grid-cols-2">
-                {creatableItemsList.map((item) => (
+                {visibleCreatableItems.map((item) => (
                     <Card
                         key={item.key}
                         onClick={() => handleItemClick(item.key)}
