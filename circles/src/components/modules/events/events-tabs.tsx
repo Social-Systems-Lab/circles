@@ -41,23 +41,36 @@ function EventsTabsContent({ circle, events, canCreate }: Props) {
     const [filteredEvents, setFilteredEvents] = useState(events);
     const [milestones, setMilestones] = useState<Milestone[]>([]);
 
+    const getCanonicalEventId = useCallback((event: EventDisplay) => {
+        const rawId = (event as any).originalEventId ?? (event as any)._id;
+        return rawId?.toString?.() || rawId || "";
+    }, []);
+
     const handleEventHidden = useCallback(
         (eventId: string) => {
             if (!eventId) return;
             setFilteredEvents((prev) =>
                 prev.filter((evt) => {
-                    const id = ((evt as any)._id?.toString?.() || (evt as any)._id || "") as string;
+                    const id = getCanonicalEventId(evt);
                     return id !== eventId;
                 }),
             );
         },
-        [setFilteredEvents],
+        [getCanonicalEventId, setFilteredEvents],
     );
 
     useEffect(() => {
         const fetchEvents = async () => {
             if (circle.circleType === "user" && user?.did === circle.did) {
-                const data = await getEventsAction(circle.handle!, undefined, includeCreated, includeParticipating);
+                const today = new Date();
+                const nextYear = new Date(today);
+                nextYear.setFullYear(today.getFullYear() + 1);
+                const data = await getEventsAction(
+                    circle.handle!,
+                    { from: today.toISOString(), to: nextYear.toISOString() },
+                    includeCreated,
+                    includeParticipating,
+                );
                 setFilteredEvents(data.events);
             }
         };

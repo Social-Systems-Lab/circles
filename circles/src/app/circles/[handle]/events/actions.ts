@@ -272,6 +272,7 @@ export async function createEventAction(
             causes: formData.getAll("causes"),
             capacity: (formData.get("capacity") as string) ?? undefined,
             visibility: (formData.get("visibility") as string) ?? undefined,
+            recurrence: (formData.get("recurrence") as string) ?? undefined,
         });
         if (!validated.success) {
             return {
@@ -413,6 +414,7 @@ export async function updateEventAction(
             causes: formData.getAll("causes"),
             capacity: (formData.get("capacity") as string) ?? undefined,
             visibility: (formData.get("visibility") as string) ?? undefined,
+            recurrence: (formData.get("recurrence") as string) ?? undefined,
         });
         if (!validated.success) {
             return {

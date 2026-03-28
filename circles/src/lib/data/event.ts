@@ -39,6 +39,37 @@ export const SAFE_EVENT_PROJECTION = {
 } as const;
 
 type Range = { from?: Date; to?: Date };
+const RECURRING_INSTANCE_ID_PATTERN = /^([a-f\d]{24})_(\d+)$/i;
+
+function parseRecurringInstanceId(eventId: string): { baseEventId: string; occurrenceStart: Date } | null {
+    const match = RECURRING_INSTANCE_ID_PATTERN.exec(eventId);
+    if (!match) return null;
+
+    const occurrenceTimestamp = Number(match[2]);
+    if (!Number.isFinite(occurrenceTimestamp)) return null;
+
+    const occurrenceStart = new Date(occurrenceTimestamp);
+    if (Number.isNaN(occurrenceStart.getTime())) return null;
+
+    return {
+        baseEventId: match[1],
+        occurrenceStart,
+    };
+}
+
+function buildRecurringInstance(event: EventDisplay, occurrenceStart: Date): EventDisplay {
+    const duration = new Date(event.endAt).getTime() - new Date(event.startAt).getTime();
+    const instanceEnd = new Date(occurrenceStart.getTime() + duration);
+
+    return {
+        ...event,
+        _id: `${event._id}_${occurrenceStart.getTime()}`,
+        startAt: occurrenceStart,
+        endAt: instanceEnd,
+        isRecurringInstance: true,
+        originalEventId: event._id,
+    } as unknown as EventDisplay;
+}
 
 /**
  * Build $match for optional date range. Includes events that overlap the range window.
@@ -85,20 +116,7 @@ function expandRecurringEvent(event: EventDisplay, range: Range): EventDisplay[]
     // Note: rrule.between(after, before, inc)
     const instances = rule.between(range.from, range.to, true);
 
-    return instances.map((date: Date, idx: number) => {
-        // Calculate duration to shift endAt correctly
-        const duration = new Date(event.endAt).getTime() - new Date(event.startAt).getTime();
-        const instanceEnd = new Date(date.getTime() + duration);
-
-        return {
-            ...event,
-            _id: `${event._id}_${date.getTime()}`, // Virtual ID
-            startAt: date,
-            endAt: instanceEnd,
-            isRecurringInstance: true,
-            originalEventId: event._id,
-        } as unknown as EventDisplay; // Type assertion since we are adding virtual props
-    });
+    return instances.map((date: Date) => buildRecurringInstance(event, date));
 }
 
 /**
@@ -364,7 +382,10 @@ matchQuery.$or = userQueries;
             { $sort: { startAt: 1 } },
         ]).toArray()) as EventDisplay[];
 
-        return events;
+        const expandedEvents =
+            range?.from && range?.to ? events.flatMap((event) => expandRecurringEvent(event, range)) : events;
+
+        return expandedEvents.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
     } catch (error) {
         console.error("Error getting events by circle ID:", error);
         throw error;
@@ -376,12 +397,15 @@ matchQuery.$or = userQueries;
  */
 export const getEventById = async (eventId: string, userDid: string): Promise<EventDisplay | null> => {
     try {
-        if (!ObjectId.isValid(eventId)) {
+        const recurringInstance = parseRecurringInstanceId(eventId);
+        const lookupEventId = recurringInstance?.baseEventId ?? eventId;
+
+        if (!ObjectId.isValid(lookupEventId)) {
             return null;
         }
 
         const events = (await Events.aggregate([
-            { $match: { _id: new ObjectId(eventId) } },
+            { $match: { _id: new ObjectId(lookupEventId) } },
 
             // Author
             {
@@ -553,7 +577,24 @@ export const getEventById = async (eventId: string, userDid: string): Promise<Ev
             },
         ]).toArray()) as EventDisplay[];
 
-        return events.length > 0 ? events[0] : null;
+        if (events.length === 0) {
+            return null;
+        }
+
+        const event = events[0];
+        if (!recurringInstance) {
+            return event;
+        }
+
+        if (!event.recurrence) {
+            return null;
+        }
+
+        const occurrenceEvent = buildRecurringInstance(event, recurringInstance.occurrenceStart);
+        return {
+            ...occurrenceEvent,
+            _id: event._id,
+        } as EventDisplay;
     } catch (error) {
         console.error(`Error getting event by ID (${eventId}):`, error);
         throw error;

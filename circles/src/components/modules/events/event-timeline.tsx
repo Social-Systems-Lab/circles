@@ -68,6 +68,11 @@ function locationToString(evt: EventDisplay): string | undefined {
     return parts.length ? parts.join(", ") : undefined;
 }
 
+function getCanonicalEventId(evt: EventDisplay): string {
+    const rawId = (evt as any).originalEventId ?? (evt as any)._id;
+    return rawId?.toString?.() || rawId || "";
+}
+
 // Ongoing: now between start and end
 function isOngoing(evt: EventDisplay): boolean {
     const start = evt.startAt ? new Date(evt.startAt as any) : undefined;
@@ -105,7 +110,7 @@ const EventCard: React.FC<{
     const isCancelled = stage === "cancelled";
     const attendees = e.attendees ?? 0;
     const ongoing = isOngoing(e);
-    const eventId = ((e as any)._id?.toString?.() || (e as any)._id || "") as string;
+    const eventId = getCanonicalEventId(e);
     const router = useRouter();
 
     return (
@@ -368,7 +373,7 @@ export default function EventTimeline({
         const eventEntries =
             (events || [])
                 .filter((e) => {
-                    const id = ((e as any)._id?.toString?.() || (e as any)._id || "") as string;
+                    const id = getCanonicalEventId(e);
                     if (id && locallyHiddenIds.includes(id)) {
                         return false;
                     }
