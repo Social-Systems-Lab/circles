@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import React, { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { createEventAction, updateEventAction } from "@/app/circles/[handle]/events/actions";
-import { EventDisplay, Location, Media } from "@/models/models";
+import { Circle, EventDisplay, Location, Media } from "@/models/models";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,7 @@ type Props = {
     circleHandle?: string; // optional, can come from context or picker
     event?: EventDisplay | null;
     showCirclePicker?: boolean;
+    initialSelectedCircleId?: string;
 };
 
 function toISOStringLocal(date: Date) {
@@ -49,15 +50,15 @@ function formatTime(date: Date) {
 }
 
 import CircleSelector from "@/components/global-create/circle-selector";
-import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content";
+import { CreatableItemDetail, creatableItemsList } from "@/components/global-create/global-create-dialog-content";
 
-export default function EventForm({ circleHandle, event, showCirclePicker }: Props) {
+export default function EventForm({ circleHandle, event, showCirclePicker, initialSelectedCircleId }: Props) {
     console.log("EventForm mounted/updated. Event recurrence:", event?.recurrence);
     const [selectedCircle, setSelectedCircle] = useState<string | undefined>(circleHandle);
     const router = useRouter();
-    const searchParams = useSearchParams();
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
+    const itemDetail = creatableItemsList.find((item: CreatableItemDetail) => item.key === "event");
 
     const [title, setTitle] = useState(event?.title || "");
     const [description, setDescription] = useState(event?.description || "");
@@ -171,6 +172,9 @@ export default function EventForm({ circleHandle, event, showCirclePicker }: Pro
     }, [event?.images]);
 
     const handleImagesChange = (items: ImageItem[]) => setImages(items);
+    const handleCircleSelected = useCallback((circle: Circle | null) => {
+        setSelectedCircle(circle?.handle);
+    }, []);
 
     const onSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -190,7 +194,11 @@ export default function EventForm({ circleHandle, event, showCirclePicker }: Pro
         }
 
         if (!selectedCircle) {
-            toast({ title: "Validation", description: "Please select a circle.", variant: "destructive" });
+            toast({
+                title: "Validation",
+                description: "Please select a profile or circle.",
+                variant: "destructive",
+            });
             return;
         }
 
@@ -278,18 +286,13 @@ export default function EventForm({ circleHandle, event, showCirclePicker }: Pro
 
     return (
         <form className="space-y-6" onSubmit={onSubmit}>
-            {showCirclePicker && (
+            {showCirclePicker && itemDetail && (
                 <div>
-                    <Label>Select Circle</Label>
+                    <Label>Create as</Label>
                     <CircleSelector
-                        itemType={
-                            {
-                                key: "event",
-                                moduleHandle: "events",
-                                createFeatureHandle: "createEvent",
-                            } as CreatableItemDetail
-                        }
-                        onCircleSelected={(circle) => setSelectedCircle(circle?.handle)}
+                        itemType={itemDetail}
+                        onCircleSelected={handleCircleSelected}
+                        initialSelectedCircleId={initialSelectedCircleId}
                     />
                 </div>
             )}

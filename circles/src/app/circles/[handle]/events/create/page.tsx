@@ -55,7 +55,11 @@ export default async function CreateEventPage(props: PageProps) {
             </div>
 
             <div className="p-4">
-                <EventForm circleHandle={circleHandle} />
+                <EventForm
+                    circleHandle={circleHandle}
+                    showCirclePicker
+                    initialSelectedCircleId={circle._id?.toString()}
+                />
             </div>
         </div>
     );
