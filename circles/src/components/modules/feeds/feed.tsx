@@ -108,6 +108,7 @@ export const FeedComponent = ({
                             onFilterChange={onFilterChange ?? handleFilterChange}
                             onSdgChange={onSdgChange ?? handleSdgSelectionChange}
                             selectedSdgs={selectedSdgsExternal ?? selectedSdgs}
+                            showSdgFilter={false}
                         />
                     </div>
                 </div>
@@ -259,6 +260,7 @@ export const AggregateFeedComponent = ({
                             onFilterChange={handleFilterChange}
                             onSdgChange={handleSdgSelectionChange}
                             selectedSdgs={selectedSdgs}
+                            showSdgFilter={false}
                         />
                     </div>
                 </div>

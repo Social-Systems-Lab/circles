@@ -14,6 +14,7 @@ type ListFilterProps = {
     onSdgChange?: (sdgs: SDG[]) => void;
     selectedSdgs?: SDG[];
     defaultValue?: string;
+    showSdgFilter?: boolean;
 };
 
 export const ListFilter = ({
@@ -21,6 +22,7 @@ export const ListFilter = ({
     onSdgChange,
     selectedSdgs = [],
     defaultValue = "top",
+    showSdgFilter = true,
 }: ListFilterProps) => {
     const [filter, setFilter] = useState(defaultValue);
     const isCompact = useIsCompact();
@@ -97,43 +99,45 @@ export const ListFilter = ({
                         </Label>
                     </div>
                 </RadioGroup>
-                <div className="flex-shrink-0 self-end">
-                    <SdgFilter
-                        selectedSdgs={selectedSdgs}
-                        onSelectionChange={onSdgChange ? onSdgChange : () => {}}
-                        displayAs="popover"
-                        gridCols="grid-cols-3"
-                        trigger={
-                            <Button
-                                variant="ghost"
-                                className="relative top-[-1px] flex h-8 items-center gap-2 px-2 data-[selected=true]:bg-accent"
-                                data-selected={selectedSdgs.length > 0}
-                            >
-                                {selectedSdgs.length === 0 ? (
-                                    <Image
-                                        src="/images/sdgs/SDG_Wheel_WEB.png"
-                                        alt="SDG Wheel"
-                                        width={20}
-                                        height={20}
-                                    />
-                                ) : (
-                                    <div className="flex -space-x-2">
-                                        {selectedSdgs.slice(0, 3).map((sdg) => (
-                                            <Image
-                                                key={sdg.handle}
-                                                src={sdg.picture?.url ?? "/images/default-picture.png"}
-                                                alt={sdg.name}
-                                                width={20}
-                                                height={20}
-                                                className="h-5 w-5 rounded-full border-2 border-white object-cover"
-                                            />
-                                        ))}
-                                    </div>
-                                )}
-                            </Button>
-                        }
-                    />
-                </div>
+                {showSdgFilter ? (
+                    <div className="flex-shrink-0 self-end">
+                        <SdgFilter
+                            selectedSdgs={selectedSdgs}
+                            onSelectionChange={onSdgChange ? onSdgChange : () => {}}
+                            displayAs="popover"
+                            gridCols="grid-cols-3"
+                            trigger={
+                                <Button
+                                    variant="ghost"
+                                    className="relative top-[-1px] flex h-8 items-center gap-2 px-2 data-[selected=true]:bg-accent"
+                                    data-selected={selectedSdgs.length > 0}
+                                >
+                                    {selectedSdgs.length === 0 ? (
+                                        <Image
+                                            src="/images/sdgs/SDG_Wheel_WEB.png"
+                                            alt="SDG Wheel"
+                                            width={20}
+                                            height={20}
+                                        />
+                                    ) : (
+                                        <div className="flex -space-x-2">
+                                            {selectedSdgs.slice(0, 3).map((sdg) => (
+                                                <Image
+                                                    key={sdg.handle}
+                                                    src={sdg.picture?.url ?? "/images/default-picture.png"}
+                                                    alt={sdg.name}
+                                                    width={20}
+                                                    height={20}
+                                                    className="h-5 w-5 rounded-full border-2 border-white object-cover"
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+                                </Button>
+                            }
+                        />
+                    </div>
+                ) : null}
             </div>
         </div>
     );

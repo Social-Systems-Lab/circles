@@ -250,7 +250,7 @@ export default function EventsPanel() {
         });
 
         return list;
-    }, [events, userLngLat, sort, selectedSdgs]);
+    }, [events, hideVirtual, userLngLat, sort, selectedSdgs]);
 
     return (
         <div className="flex h-full w-full flex-col">
@@ -267,6 +267,7 @@ export default function EventsPanel() {
                         onFilterChange={setSort}
                         selectedSdgs={selectedSdgs}
                         onSdgChange={setSelectedSdgs}
+                        showSdgFilter={false}
                     />
                     <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-600">
                         <input

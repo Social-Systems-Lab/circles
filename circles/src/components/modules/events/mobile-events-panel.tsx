@@ -234,7 +234,7 @@ export default function MobileEventsPanel() {
         list = list.sort((a, b) => byStartAsc(a, b));
 
         return list;
-    }, [events, userLngLat, sort, selectedSdgs]);
+    }, [events, hideVirtual, userLngLat, sort, selectedSdgs]);
 
     return (
         <div className="flex h-full flex-col">
@@ -245,6 +245,7 @@ export default function MobileEventsPanel() {
                         onFilterChange={setSort}
                         selectedSdgs={selectedSdgs}
                         onSdgChange={setSelectedSdgs}
+                        showSdgFilter={false}
                     />
                     <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-600">
                         <input
