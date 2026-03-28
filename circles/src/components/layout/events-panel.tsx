@@ -160,7 +160,7 @@ export default function EventsPanel() {
     const [user] = useAtom(userAtom);
     const [events, setEvents] = useState<EventDisplay[]>([]);
     const [loading, setLoading] = useState(false);
-    const [sort, setSort] = useState<string>("top");
+    const [sort, setSort] = useState<string>("near");
     const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>([]);
     const [hideVirtual, setHideVirtual] = useState<boolean>(false);
 
@@ -263,7 +263,7 @@ export default function EventsPanel() {
             <div className="px-2">
                 <div className="flex items-center justify-between gap-3">
                     <ListFilter
-                        defaultValue="top"
+                        defaultValue="near"
                         onFilterChange={setSort}
                         selectedSdgs={selectedSdgs}
                         onSdgChange={setSelectedSdgs}

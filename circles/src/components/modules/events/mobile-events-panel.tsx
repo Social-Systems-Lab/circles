@@ -149,7 +149,7 @@ export default function MobileEventsPanel() {
     const [user] = useAtom(userAtom);
     const [events, setEvents] = useState<EventDisplay[]>([]);
     const [loading, setLoading] = useState(false);
-    const [sort, setSort] = useState<string>("top");
+    const [sort, setSort] = useState<string>("near");
     const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>([]);
     const [hideVirtual, setHideVirtual] = useState<boolean>(false);
 
@@ -241,7 +241,7 @@ export default function MobileEventsPanel() {
             <div className="px-3 py-2">
                 <div className="flex items-center justify-between gap-3">
                     <ListFilter
-                        defaultValue="top"
+                        defaultValue="near"
                         onFilterChange={setSort}
                         selectedSdgs={selectedSdgs}
                         onSdgChange={setSelectedSdgs}
