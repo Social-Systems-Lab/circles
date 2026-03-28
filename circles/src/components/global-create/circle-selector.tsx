@@ -17,6 +17,7 @@ interface CircleSelectorProps {
     onCircleSelected: (circle: Circle | null) => void;
     initialSelectedCircleId?: string;
     variant?: "standard" | "condensed"; // New variant prop
+    showModuleEnableMessage?: boolean;
 }
 
 export const CircleSelector: React.FC<CircleSelectorProps> = ({
@@ -24,6 +25,7 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
     onCircleSelected,
     initialSelectedCircleId,
     variant = "standard", // Default to standard variant
+    showModuleEnableMessage = true,
 }) => {
     const [user] = useAtom(userAtom);
     const [selectableCircles, setSelectableCircles] = useState<Circle[]>([]);
@@ -205,7 +207,7 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
                     ))}
                 </SelectContent>
             </Select>
-            {showEnableModuleMessage && (
+            {showModuleEnableMessage && showEnableModuleMessage && (
                 <p className={`mt-1 text-xs text-blue-600 ${variant === "condensed" ? "text-center" : ""}`}>
                     The &quot;{moduleName}&quot; module will be enabled.
                 </p>

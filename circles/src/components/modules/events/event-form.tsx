@@ -288,11 +288,11 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
         <form className="space-y-6" onSubmit={onSubmit}>
             {showCirclePicker && itemDetail && (
                 <div>
-                    <Label>Create as</Label>
                     <CircleSelector
                         itemType={itemDetail}
                         onCircleSelected={handleCircleSelected}
                         initialSelectedCircleId={initialSelectedCircleId}
+                        showModuleEnableMessage={false}
                     />
                 </div>
             )}
