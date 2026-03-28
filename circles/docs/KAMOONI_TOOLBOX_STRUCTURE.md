@@ -104,9 +104,10 @@ Profile pages can also show relationship controls, including:
 
 - Add Contact
 - Requested
-- Requested You
-- Accept / Decline
+- Requested You via a compact **Respond** dropdown
 - Message when contact or existing DM history allows it
+
+The profile header CTA row is now anchored to the title/header row, so CTA alignment stays stable even when profile description length changes.
 
 ### Notifications
 
