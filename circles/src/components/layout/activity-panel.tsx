@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useAtom } from "jotai";
 import { useSearchParams } from "next/navigation";
 import { AggregateFeedComponent } from "@/components/modules/feeds/feed";
-import FeedTabs from "@/components/modules/feeds/feeds-tab";
 import {
     getAggregatePostsAction,
     getGlobalPostsAction,
@@ -73,7 +72,6 @@ export default function ActivityPanel({ mode = "panel" }: ActivityPanelProps) {
 
     return (
         <div className="flex h-full w-full flex-col">
-            {userDid && <FeedTabs currentTab={activeTab} />}
             <div className="flex-1 overflow-y-auto scrollbar-hover stable-scrollbar">
                 <AggregateFeedComponent
                     posts={posts}
