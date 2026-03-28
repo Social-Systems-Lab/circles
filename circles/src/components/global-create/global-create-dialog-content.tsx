@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react"; // Keep useState for potential future use if needed locally
+import React from "react";
 import { DialogTitle, DialogDescription, DialogHeader } from "@/components/ui/dialog";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardTitle } from "@/components/ui/card";
 import {
     Users,
     ListChecks,
@@ -14,7 +14,6 @@ import {
     Calendar,
     Hammer,
 } from "lucide-react";
-import { features } from "@/lib/data/constants"; // modules as moduleInfos removed as descriptions are simplified
 
 // Define types for creatable items
 export type CreatableItemKey =
@@ -28,17 +27,7 @@ export type CreatableItemKey =
     | "event"
     | "discussion";
 
-const iconColors: Record<CreatableItemKey, string> = {
-    community: "bg-purple-100 text-purple-600",
-    project: "bg-blue-100 text-blue-600",
-    post: "bg-orange-100 text-orange-600",
-    task: "bg-teal-100 text-teal-600",
-    event: "bg-pink-100 text-pink-600",
-    issue: "bg-red-100 text-red-600",
-    goal: "bg-cyan-100 text-cyan-600",
-    proposal: "bg-yellow-100 text-yellow-600",
-    discussion: "bg-indigo-100 text-indigo-600",
-};
+const visibleGlobalCreateItemKeys: CreatableItemKey[] = ["community", "post", "event", "goal"];
 
 export interface CreatableItemDetail {
     key: CreatableItemKey;
@@ -139,7 +128,7 @@ export const GlobalCreateDialogContent: React.FC<GlobalCreateDialogContentProps>
     setCreateCommunityOpen,
     setCreateProjectOpen,
 }) => {
-    const visibleCreatableItems = creatableItemsList.filter((item) => item.key !== "project");
+    const visibleCreatableItems = creatableItemsList.filter((item) => visibleGlobalCreateItemKeys.includes(item.key));
 
     const handleItemClick = (itemKey: CreatableItemKey) => {
         onCloseMainDialog(); // Close this selection dialog
@@ -167,18 +156,18 @@ export const GlobalCreateDialogContent: React.FC<GlobalCreateDialogContentProps>
                     <Card
                         key={item.key}
                         onClick={() => handleItemClick(item.key)}
-                        className="group flex cursor-pointer flex-row items-center space-x-4 rounded-lg border p-4 shadow-sm transition-all hover:shadow-md"
+                        className="group flex cursor-pointer flex-row items-center gap-4 rounded-2xl border border-[#e8dfd3] bg-[#fcfbf8] p-4 shadow-sm transition-all duration-200 hover:border-[#d9cbb6] hover:bg-white hover:shadow-md"
                     >
                         <div
-                            className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full ${iconColors[item.key]}`}
+                            className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border border-[#e3d8ca] bg-[#f5efe6] text-[#7b6750]"
                         >
                             {item.icon && <item.icon className="h-6 w-6" />} {/* Conditionally render icon */}
                         </div>
                         <div className="flex-grow">
-                            <CardTitle className="text-lg font-semibold">{item.title}</CardTitle>
-                            <p className="text-sm text-muted-foreground">{item.description}</p>
+                            <CardTitle className="text-lg font-semibold text-[#3b352f]">{item.title}</CardTitle>
+                            <p className="text-sm text-[#746b60]">{item.description}</p>
                         </div>
-                        <ChevronRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1" />
+                        <ChevronRight className="h-5 w-5 text-[#9d8f80] transition-transform group-hover:translate-x-1" />
                     </Card>
                 ))}
             </div>
