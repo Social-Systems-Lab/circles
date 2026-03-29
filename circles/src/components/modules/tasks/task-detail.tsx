@@ -123,6 +123,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [stageChangeDialogOpen, setStageChangeDialogOpen] = useState(false);
     const [targetStage, setTargetStage] = useState<TaskStage | null>(null); // Updated type
+    const [selectedStage, setSelectedStage] = useState<TaskStage>(task.stage);
     const [assignDialogOpen, setAssignDialogOpen] = useState(false);
     const [members, setMembers] = useState<MemberDisplay[]>([]);
     const [selectedAssigneeDid, setSelectedAssigneeDid] = useState<string | undefined>(task.assignedTo); // Use task prop
@@ -136,6 +137,10 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     useEffect(() => {
         setSelectedPriority(task.priority ?? "none");
     }, [task._id, task.priority]);
+
+    useEffect(() => {
+        setSelectedStage(task.stage);
+    }, [task._id, task.stage]);
 
     // Fetch members when assign dialog opens
     useEffect(() => {
@@ -200,12 +205,15 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
 
     const confirmStageChange = () => {
         if (!targetStage) return;
+        const previousStage = selectedStage;
+        setSelectedStage(targetStage);
         startTransition(async () => {
             const result = await changeTaskStageAction(circle.handle!, task._id as string, targetStage); // Renamed action, use task prop
             if (result.success) {
                 toast({ title: "Success", description: result.message });
                 router.refresh(); // Refresh to show the new stage
             } else {
+                setSelectedStage(previousStage);
                 toast({
                     title: "Error",
                     description: result.message || "Failed to update task stage", // Updated message
@@ -239,7 +247,8 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
         });
     };
 
-    const { color: stageColor, icon: StageIcon, text: stageText } = getStageInfo(task.stage); // Use task prop
+    const currentStage = selectedStage;
+    const { color: stageColor, icon: StageIcon, text: stageText } = getStageInfo(currentStage);
     const priorityInfo = getPriorityInfo(selectedPriority === "none" ? undefined : selectedPriority);
 
     // Determine available stage transitions based on current stage and permissions
@@ -248,26 +257,26 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
         {
             label: "Approve (Open)",
             stage: "open" as TaskStage, // Updated type
-            allowed: permissions.canReview && task.stage === "review", // Use task prop
+            allowed: permissions.canReview && currentStage === "review",
         },
         {
             label: "Start Progress",
             stage: "inProgress" as TaskStage, // Updated type
-            allowed: (permissions.canResolve || isAssignee) && task.stage === "open", // Use task prop
+            allowed: (permissions.canResolve || isAssignee) && currentStage === "open",
         },
         {
             label: "Mark Resolved",
             stage: "resolved" as TaskStage, // Updated type
-            allowed: (permissions.canResolve || isAssignee) && task.stage === "inProgress", // Use task prop
+            allowed: (permissions.canResolve || isAssignee) && currentStage === "inProgress",
         },
         {
             label: "Re-open",
             stage: "open" as TaskStage, // Updated type
-            allowed: permissions.canResolve && (task.stage === "resolved" || task.stage === "inProgress"), // Use task prop
+            allowed: permissions.canResolve && (currentStage === "resolved" || currentStage === "inProgress"),
         }, // Allow re-opening
     ].filter((action) => action.allowed);
 
-    const canEditTask = (isAuthor && task.stage === "review") || permissions.canModerate; // Renamed variable, use task prop
+    const canEditTask = (isAuthor && currentStage === "review") || permissions.canModerate;
     const canDeleteTask = isAuthor || permissions.canModerate; // Renamed variable
 
     const handlePriorityChange = (value: TaskPriority | "none") => {
@@ -302,32 +311,28 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
         const actions = [];
 
         // Stage change actions
-        if (permissions.canReview && task.stage === "review") {
-            // Use task prop
+        if (permissions.canReview && currentStage === "review") {
             actions.push(
                 <Button key="approve" onClick={() => openStageChangeDialog("open")} disabled={isPending}>
                     {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Approve (Open)
                 </Button>,
             );
         }
-        if ((permissions.canResolve || isAssignee) && task.stage === "open") {
-            // Use task prop
+        if ((permissions.canResolve || isAssignee) && currentStage === "open") {
             actions.push(
                 <Button key="start" onClick={() => openStageChangeDialog("inProgress")} disabled={isPending}>
                     {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Start Progress
                 </Button>,
             );
         }
-        if ((permissions.canResolve || isAssignee) && task.stage === "inProgress") {
-            // Use task prop
+        if ((permissions.canResolve || isAssignee) && currentStage === "inProgress") {
             actions.push(
                 <Button key="resolve" onClick={() => openStageChangeDialog("resolved")} disabled={isPending}>
                     {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Mark Resolved
                 </Button>,
             );
         }
-        if (permissions.canResolve && (task.stage === "resolved" || task.stage === "inProgress")) {
-            // Use task prop
+        if (permissions.canResolve && (currentStage === "resolved" || currentStage === "inProgress")) {
             actions.push(
                 <Button
                     key="reopen"
@@ -443,9 +448,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                 <DropdownMenuLabel>Options</DropdownMenuLabel>
                                 {/* Edit Action */}
                                 {canEditTask && ( // Renamed variable
-                                    <DropdownMenuItem onClick={handleEdit} disabled={task.stage === "resolved"}>
-                                        {" "}
-                                        {/* Use task prop */}
+                                    <DropdownMenuItem onClick={handleEdit} disabled={currentStage === "resolved"}>
                                         <Pencil className="mr-2 h-4 w-4" /> Edit Task {/* Updated text */}
                                     </DropdownMenuItem>
                                 )}
