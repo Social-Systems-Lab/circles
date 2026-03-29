@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
 import {
+    ChevronDown,
     Loader2,
     MoreHorizontal,
     Pencil,
@@ -92,15 +93,15 @@ const taskPriorityOptions: { value: TaskPriority | "none"; label: string }[] = [
 const getPriorityInfo = (priority?: TaskPriority) => {
     switch (priority) {
         case "low":
-            return { label: "Low", badgeClassName: "border-green-200 bg-green-100 text-green-800" };
+            return { label: "Low", badgeClassName: "border-transparent bg-green-100 text-green-800" };
         case "medium":
-            return { label: "Medium", badgeClassName: "border-blue-200 bg-blue-100 text-blue-800" };
+            return { label: "Medium", badgeClassName: "border-transparent bg-blue-100 text-blue-800" };
         case "high":
-            return { label: "High", badgeClassName: "border-orange-200 bg-orange-100 text-orange-800" };
+            return { label: "High", badgeClassName: "border-transparent bg-orange-100 text-orange-800" };
         case "critical":
-            return { label: "Critical", badgeClassName: "border-red-200 bg-red-100 text-red-800" };
+            return { label: "Critical", badgeClassName: "border-transparent bg-red-100 text-red-800" };
         default:
-            return { label: "No Priority", badgeClassName: "border-slate-200 bg-slate-100 text-slate-700" };
+            return { label: "No Priority", badgeClassName: "border-transparent bg-slate-100 text-slate-700" };
     }
 };
 
@@ -379,26 +380,110 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     // Define the main content structure
     const mainContent = (
         <>
-            <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-                <div>
-                    <div className="mb-2 flex items-center space-x-2">
-                        {/* Link only if not in preview */}
-                        {isPreview ? (
-                            <h1>{task.title}</h1> // Use task prop
-                        ) : (
-                            <Link
-                                href={`/circles/${circle.handle}/tasks/${task._id}`} // Updated path
-                                onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                            >
-                                <h1>{task.title}</h1> {/* Use task prop */}
-                            </Link>
-                        )}
-                        <Badge className={`${stageColor} items-center gap-1`}>
-                            <StageIcon className="h-3 w-3" />
-                            {stageText}
-                        </Badge>
+            <CardHeader className="space-y-0 pb-2">
+                <div className="flex min-w-0 flex-col gap-3">
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <Badge className={`${stageColor} shrink-0 items-center gap-1`}>
+                                <StageIcon className="h-3 w-3" />
+                                {stageText}
+                            </Badge>
+                            {canEditTask ? (
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            disabled={isPending}
+                                            className={cn(
+                                                "h-6 max-w-full gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold shadow-none",
+                                                priorityInfo.badgeClassName,
+                                            )}
+                                        >
+                                            <span className="truncate">{priorityInfo.label}</span>
+                                            <ChevronDown className="h-3 w-3 shrink-0" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="start" className="w-[180px]">
+                                        <DropdownMenuLabel>Priority</DropdownMenuLabel>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuRadioGroup
+                                            value={selectedPriority}
+                                            onValueChange={(value) =>
+                                                handlePriorityChange(value as TaskPriority | "none")
+                                            }
+                                        >
+                                            {taskPriorityOptions.map((option) => (
+                                                <DropdownMenuRadioItem key={option.value} value={option.value}>
+                                                    {option.label}
+                                                </DropdownMenuRadioItem>
+                                            ))}
+                                        </DropdownMenuRadioGroup>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            ) : (
+                                <Badge
+                                    variant="outline"
+                                    className={cn("shrink-0 border", priorityInfo.badgeClassName)}
+                                >
+                                    {priorityInfo.label}
+                                </Badge>
+                            )}
+                        </div>
+
+                        {/* Actions Dropdown */}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="h-8 w-8 shrink-0 p-0">
+                                    <span className="sr-only">Open menu</span>
+                                    <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Options</DropdownMenuLabel>
+                                {/* Edit Action */}
+                                {canEditTask && ( // Renamed variable
+                                    <DropdownMenuItem onClick={handleEdit} disabled={task.stage === "resolved"}>
+                                        {" "}
+                                        {/* Use task prop */}
+                                        <Pencil className="mr-2 h-4 w-4" /> Edit Task {/* Updated text */}
+                                    </DropdownMenuItem>
+                                )}
+                                {/* Delete Action */}
+                                {canDeleteTask && ( // Renamed variable
+                                    <>
+                                        {canEditTask && <DropdownMenuSeparator />} {/* Renamed variable */}
+                                        <DropdownMenuItem
+                                            onClick={() => setDeleteDialogOpen(true)}
+                                            className="text-red-600"
+                                        >
+                                            <Trash2 className="mr-2 h-4 w-4" /> Delete Task {/* Updated text */}
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
+                                {/* Show message if no actions */}
+                                {!canEditTask &&
+                                    !canDeleteTask && ( // Renamed variables
+                                        <DropdownMenuItem disabled>No actions available</DropdownMenuItem>
+                                    )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+
+                    {/* Link only if not in preview */}
+                    {isPreview ? (
+                        <h1 className="min-w-0 break-words [overflow-wrap:anywhere]">{task.title}</h1>
+                    ) : (
+                        <Link
+                            href={`/circles/${circle.handle}/tasks/${task._id}`} // Updated path
+                            className="min-w-0"
+                            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                        >
+                            <h1 className="min-w-0 break-words [overflow-wrap:anywhere]">{task.title}</h1>
+                        </Link>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                         <div className="flex items-center">
                             <User className="mr-1 h-3 w-3" />
                             Created by {task.author.name} {/* Use task prop */}
@@ -431,83 +516,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                             </div>
                         )}
                     </div>
-                    <div className="mt-3 flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2 text-sm">
-                            <span className="font-medium text-foreground">Priority</span>
-                        </div>
-                        {canEditTask ? (
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        disabled={isPending}
-                                        className={cn(
-                                            "h-8 min-w-[140px] justify-between rounded-full border px-3 text-sm",
-                                            priorityInfo.badgeClassName,
-                                        )}
-                                    >
-                                        <span>{priorityInfo.label}</span>
-                                        <MoreHorizontal className="ml-2 h-4 w-4" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-[180px]">
-                                    <DropdownMenuLabel>Priority</DropdownMenuLabel>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuRadioGroup
-                                        value={selectedPriority}
-                                        onValueChange={(value) => handlePriorityChange(value as TaskPriority | "none")}
-                                    >
-                                        {taskPriorityOptions.map((option) => (
-                                            <DropdownMenuRadioItem key={option.value} value={option.value}>
-                                                {option.label}
-                                            </DropdownMenuRadioItem>
-                                        ))}
-                                    </DropdownMenuRadioGroup>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        ) : (
-                            <Badge variant="outline" className={cn("border", priorityInfo.badgeClassName)}>
-                                {priorityInfo.label}
-                            </Badge>
-                        )}
-                    </div>
                 </div>
-
-                {/* Actions Dropdown */}
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                            <span className="sr-only">Open menu</span>
-                            <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Options</DropdownMenuLabel>
-                        {/* Edit Action */}
-                        {canEditTask && ( // Renamed variable
-                            <DropdownMenuItem onClick={handleEdit} disabled={task.stage === "resolved"}>
-                                {" "}
-                                {/* Use task prop */}
-                                <Pencil className="mr-2 h-4 w-4" /> Edit Task {/* Updated text */}
-                            </DropdownMenuItem>
-                        )}
-                        {/* Delete Action */}
-                        {canDeleteTask && ( // Renamed variable
-                            <>
-                                {canEditTask && <DropdownMenuSeparator />} {/* Renamed variable */}
-                                <DropdownMenuItem onClick={() => setDeleteDialogOpen(true)} className="text-red-600">
-                                    <Trash2 className="mr-2 h-4 w-4" /> Delete Task {/* Updated text */}
-                                </DropdownMenuItem>
-                            </>
-                        )}
-                        {/* Show message if no actions */}
-                        {!canEditTask &&
-                            !canDeleteTask && ( // Renamed variables
-                                <DropdownMenuItem disabled>No actions available</DropdownMenuItem>
-                            )}
-                    </DropdownMenuContent>
-                </DropdownMenu>
             </CardHeader>
 
             <CardContent className="pt-4">
