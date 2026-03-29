@@ -76,7 +76,12 @@ export default async function TasksModule({ circle }: PageProps) {
     return (
         <div className="flex w-full flex-col">
             {/* Pass the potentially filtered tasksData object and permissions */}
-            <TasksList tasksData={filteredTasksData} circle={circle} permissions={permissions} />
+            <TasksList
+                tasksData={filteredTasksData}
+                circle={circle}
+                permissions={permissions}
+                persistViewState
+            />
         </div>
     );
 }

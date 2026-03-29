@@ -76,6 +76,7 @@ interface TasksListProps {
     hideRank?: boolean;
     inToolbox?: boolean;
     onTaskNavigate?: () => void;
+    persistViewState?: boolean;
 }
 
 const SortIcon = ({ sortDir }: { sortDir: string | boolean }) => {
@@ -85,6 +86,8 @@ const SortIcon = ({ sortDir }: { sortDir: string | boolean }) => {
 
 const allTaskStages: TaskStage[] = ["open", "inProgress", "review", "resolved"];
 const allTaskPriorities: TaskPriority[] = ["low", "medium", "high", "critical"];
+const defaultTasksListSorting: SortingState = [{ id: "createdAt", desc: true }];
+const tasksListViewStateVersion = 1;
 const taskPriorityBadgeClasses: Record<TaskPriority, string> = {
     low: "bg-green-100 text-green-800",
     medium: "bg-blue-100 text-blue-800",
@@ -99,6 +102,7 @@ const taskPriorityLabels: Record<TaskPriority, string> = {
 };
 const getSortableCircleLabel = (circle?: Circle) =>
     circle?.name?.trim().toLocaleLowerCase() || circle?.handle?.trim().toLocaleLowerCase() || "";
+const sortableTaskColumnIds = new Set(["title", "priority", "stage", "assignee", "createdAt"]);
 
 const tableRowVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -129,12 +133,82 @@ const getStageInfo = (stage: TaskStage) => {
     }
 };
 
+type PersistedTasksListViewState = {
+    version: number;
+    searchText: string;
+    sorting: SortingState;
+    selectedStages: TaskStage[];
+    selectedPriorities: TaskPriority[];
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null;
+
+const sanitizeSelectedStages = (value: unknown): TaskStage[] => {
+    if (!Array.isArray(value)) {
+        return allTaskStages;
+    }
+
+    const nextStages = Array.from(
+        new Set(value.filter((item): item is TaskStage => allTaskStages.includes(item as TaskStage))),
+    );
+
+    return nextStages.length > 0 ? nextStages : allTaskStages;
+};
+
+const sanitizeSelectedPriorities = (value: unknown): TaskPriority[] => {
+    if (!Array.isArray(value)) {
+        return allTaskPriorities;
+    }
+
+    const nextPriorities = Array.from(
+        new Set(
+            value.filter((item): item is TaskPriority => allTaskPriorities.includes(item as TaskPriority)),
+        ),
+    );
+
+    return nextPriorities.length > 0 ? nextPriorities : allTaskPriorities;
+};
+
+const sanitizeSorting = (value: unknown): SortingState => {
+    if (!Array.isArray(value)) {
+        return defaultTasksListSorting;
+    }
+
+    const nextSorting = value
+        .filter(
+            (item): item is { id: string; desc: boolean } =>
+                isRecord(item) &&
+                typeof item.id === "string" &&
+                sortableTaskColumnIds.has(item.id) &&
+                typeof item.desc === "boolean",
+        )
+        .map((item) => ({ id: item.id, desc: item.desc }));
+
+    return nextSorting.length > 0 ? nextSorting : defaultTasksListSorting;
+};
+
+const sanitizePersistedTasksListViewState = (value: unknown): PersistedTasksListViewState | null => {
+    if (!isRecord(value) || value.version !== tasksListViewStateVersion) {
+        return null;
+    }
+
+    return {
+        version: tasksListViewStateVersion,
+        searchText: typeof value.searchText === "string" ? value.searchText : "",
+        sorting: sanitizeSorting(value.sorting),
+        selectedStages: sanitizeSelectedStages(value.selectedStages),
+        selectedPriorities: sanitizeSelectedPriorities(value.selectedPriorities),
+    };
+};
+
 const TasksList: React.FC<TasksListProps> = ({
     tasksData,
     circle,
     permissions,
     inToolbox,
     onTaskNavigate,
+    persistViewState = false,
 }) => {
     // Renamed component, props
     const { tasks } = tasksData;
@@ -152,7 +226,7 @@ const TasksList: React.FC<TasksListProps> = ({
 
         return baseTasks;
     }, [tasks, filteredTasks, circle.circleType, circle.did, user?.did, inToolbox]);
-    const [sorting, setSorting] = React.useState<SortingState>([{ id: "createdAt", desc: true }]);
+    const [sorting, setSorting] = React.useState<SortingState>(defaultTasksListSorting);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
     const [deleteTaskDialogOpen, setDeleteTaskDialogOpen] = useState<boolean>(false); // Renamed state
     const [selectedTask, setSelectedTask] = useState<TaskDisplay | null>(null); // Renamed state, updated type
@@ -160,11 +234,22 @@ const TasksList: React.FC<TasksListProps> = ({
     const isCompact = useIsCompact();
     const router = useRouter();
     const { toast } = useToast();
+    const [searchText, setSearchText] = useState("");
     const [selectedStages, setSelectedStages] = useState<TaskStage[]>(allTaskStages);
     const [selectedPriorities, setSelectedPriorities] = useState<TaskPriority[]>(allTaskPriorities);
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [isCreateTaskDialogOpen, setIsCreateTaskDialogOpen] = useState(false); // State for Create Task Dialog
+    const shouldPersistViewState = persistViewState && !inToolbox;
+    const tasksListViewStateStorageKey = useMemo(() => {
+        if (!shouldPersistViewState) {
+            return null;
+        }
+
+        const userKey = user?.did || "anonymous";
+        const circleKey = circle.handle || String(circle._id || "unknown-circle");
+        return `tasks-list-view:${userKey}:${circleKey}`;
+    }, [shouldPersistViewState, user?.did, circle.handle, circle._id]);
 
     useEffect(() => {
         const fetchTasks = async () => {
@@ -204,8 +289,25 @@ const TasksList: React.FC<TasksListProps> = ({
     // Fixes hydration errors
     const [isMounted, setIsMounted] = useState(false);
     useEffect(() => {
+        if (tasksListViewStateStorageKey) {
+            try {
+                const rawState = localStorage.getItem(tasksListViewStateStorageKey);
+                if (rawState) {
+                    const savedState = sanitizePersistedTasksListViewState(JSON.parse(rawState));
+                    if (savedState) {
+                        setSearchText(savedState.searchText);
+                        setSorting(savedState.sorting);
+                        setSelectedStages(savedState.selectedStages);
+                        setSelectedPriorities(savedState.selectedPriorities);
+                    }
+                }
+            } catch {
+                // Ignore unreadable persisted state and fall back to defaults.
+            }
+        }
+
         setIsMounted(true);
-    }, []);
+    }, [tasksListViewStateStorageKey]);
 
     const areAllStagesSelected = selectedStages.length === allTaskStages.length;
     const stageFilterLabel = useMemo(() => {
@@ -452,6 +554,9 @@ const TasksList: React.FC<TasksListProps> = ({
     });
 
     useEffect(() => {
+        table.getColumn("title")?.setFilterValue(searchText || undefined);
+    }, [searchText, table]);
+    useEffect(() => {
         if (areAllStagesSelected) {
             table.getColumn("stage")?.setFilterValue(undefined);
             return;
@@ -467,6 +572,25 @@ const TasksList: React.FC<TasksListProps> = ({
 
         table.getColumn("priority")?.setFilterValue(selectedPriorities);
     }, [areAllPrioritiesSelected, selectedPriorities, table]);
+    useEffect(() => {
+        if (!isMounted || !tasksListViewStateStorageKey) {
+            return;
+        }
+
+        const nextState: PersistedTasksListViewState = {
+            version: tasksListViewStateVersion,
+            searchText,
+            sorting,
+            selectedStages,
+            selectedPriorities,
+        };
+
+        try {
+            localStorage.setItem(tasksListViewStateStorageKey, JSON.stringify(nextState));
+        } catch {
+            // Ignore storage write failures and keep the current in-memory state.
+        }
+    }, [isMounted, searchText, selectedPriorities, selectedStages, sorting, tasksListViewStateStorageKey]);
 
     const onConfirmDeleteTask = async () => {
         // Renamed function
@@ -549,8 +673,8 @@ const TasksList: React.FC<TasksListProps> = ({
                             <div className="flex flex-1 flex-col">
                                 <Input
                                     placeholder="Search tasks by title..." // Updated placeholder
-                                    value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
-                                    onChange={(event) => table.getColumn("title")?.setFilterValue(event.target.value)}
+                                    value={searchText}
+                                    onChange={(event) => setSearchText(event.target.value)}
                                 />
                             </div>
                             {canCreateTask && (
