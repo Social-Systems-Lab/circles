@@ -5,6 +5,7 @@ import React, { useEffect, useState, useTransition, useCallback, useMemo } from 
 import {
     ColumnDef,
     ColumnFiltersState,
+    Row,
     SortingState,
     flexRender,
     getCoreRowModel,
@@ -63,6 +64,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { getTasksAction } from "@/app/circles/[handle]/tasks/actions";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 interface TasksListProps {
     tasksData: {
         tasks: TaskDisplay[];
@@ -240,6 +242,7 @@ const TasksList: React.FC<TasksListProps> = ({
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [isCreateTaskDialogOpen, setIsCreateTaskDialogOpen] = useState(false); // State for Create Task Dialog
+    const [isResolvedSectionOpen, setIsResolvedSectionOpen] = useState(false);
     const shouldPersistViewState = persistViewState && !inToolbox;
     const tasksListViewStateStorageKey = useMemo(() => {
         if (!shouldPersistViewState) {
@@ -648,6 +651,18 @@ const TasksList: React.FC<TasksListProps> = ({
         return null; // Prevent rendering until mounted
     }
 
+    const tableRows = table.getRowModel().rows;
+    const activeRows = inToolbox
+        ? tableRows
+        : tableRows.filter((row) => row.original.stage === "open" || row.original.stage === "inProgress" || row.original.stage === "review");
+    const resolvedRows = inToolbox ? [] : tableRows.filter((row) => row.original.stage === "resolved");
+    const shouldAutoExpandResolvedSection = !inToolbox && activeRows.length === 0 && resolvedRows.length > 0;
+    const resolvedSectionOpen = shouldAutoExpandResolvedSection || isResolvedSectionOpen;
+    const activeEmptyMessage =
+        !inToolbox && resolvedRows.length > 0
+            ? "No active tasks match the current filters. Resolved matches are available below."
+            : "No tasks found.";
+
     const handleCreateTaskSuccess = (data: { id?: string; circleHandle?: string }) => {
         toast({
             title: "Task Created",
@@ -663,6 +678,112 @@ const TasksList: React.FC<TasksListProps> = ({
             router.push(`/circles/${circle.handle}/tasks/${data.id}`);
         }
     };
+
+    const renderTaskRow = (row: Row<TaskDisplay>, index: number) => {
+        const task = row.original;
+        const isAuthor = user?.did === task.createdBy;
+        const canEdit = (isAuthor && task.stage === "review") || permissions.canModerate;
+        const canDelete = isAuthor || permissions.canModerate;
+
+        return (
+            <motion.tr
+                key={row.id}
+                custom={index}
+                initial="hidden"
+                animate="visible"
+                variants={tableRowVariants}
+                className={`cursor-pointer
+                    ${row.getIsSelected() ? "bg-muted" : ""}
+                    ${(contentPreview?.content as TaskDisplay)?._id === task._id && sidePanelContentVisible === "content" ? "bg-gray-100" : "hover:bg-gray-50"} // Updated type, variable
+                `}
+                onClick={() => handleRowClick(task)}
+            >
+                {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                ))}
+                {!inToolbox && (
+                    <TableCell className="w-[40px]">
+                        {(canEdit || canDelete) && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        className="h-8 w-8 p-0"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        <span className="sr-only">Open menu</span>
+                                        <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    {canEdit && (
+                                        <DropdownMenuItem
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                router.push(`/circles/${circle.handle}/tasks/${task._id}/edit`);
+                                            }}
+                                            disabled={task.stage === "resolved"}
+                                        >
+                                            Edit
+                                        </DropdownMenuItem>
+                                    )}
+                                    {canDelete && (
+                                        <DropdownMenuItem
+                                            className="text-red-600"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedTask(task);
+                                                setDeleteTaskDialogOpen(true);
+                                            }}
+                                        >
+                                            Delete
+                                        </DropdownMenuItem>
+                                    )}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        )}
+                    </TableCell>
+                )}
+            </motion.tr>
+        );
+    };
+
+    const renderTaskTable = (rows: Row<TaskDisplay>[], emptyMessage: string) => (
+        <div className="overflow-hidden rounded-[15px] shadow-lg">
+            <Table className="overflow-hidden">
+                <TableHeader className="bg-white">
+                    {table.getHeaderGroups().map((headerGroup) => (
+                        <TableRow key={headerGroup.id} className="!border-b-0">
+                            {headerGroup.headers.map((header) => (
+                                <TableHead key={header.id}>
+                                    {header.isPlaceholder
+                                        ? null
+                                        : flexRender(header.column.columnDef.header, header.getContext())}
+                                </TableHead>
+                            ))}
+                            {!inToolbox && <TableHead className="w-[40px]"></TableHead>}
+                        </TableRow>
+                    ))}
+                </TableHeader>
+                <TableBody className="bg-white">
+                    {rows.length ? (
+                        rows.map((row, index) => renderTaskRow(row, index))
+                    ) : (
+                        <TableRow>
+                            <TableCell
+                                colSpan={columns.length + 1}
+                                className={inToolbox ? "p-8 text-center text-muted-foreground" : "h-24 text-center"}
+                            >
+                                {emptyMessage}
+                            </TableCell>
+                        </TableRow>
+                    )}
+                </TableBody>
+            </Table>
+        </div>
+    );
 
     return (
         <TooltipProvider>
@@ -761,120 +882,32 @@ const TasksList: React.FC<TasksListProps> = ({
                         </div>
                     )}
 
-                    <div className="mt-3 overflow-hidden rounded-[15px] shadow-lg">
-                        <Table className="overflow-hidden">
-                            <TableHeader className="bg-white">
-                                {table.getHeaderGroups().map((headerGroup) => (
-                                    <TableRow key={headerGroup.id} className="!border-b-0">
-                                        {headerGroup.headers.map((header) => (
-                                            <TableHead key={header.id}>
-                                                {header.isPlaceholder
-                                                    ? null
-                                                    : flexRender(header.column.columnDef.header, header.getContext())}
-                                            </TableHead>
-                                        ))}
-                                        {/* Adjust colspan if rank header is added */}
-                                        {!inToolbox && <TableHead className="w-[40px]"></TableHead>}
-                                    </TableRow>
-                                ))}
-                            </TableHeader>
-                            <TableBody className="bg-white">
-                                {table.getRowModel().rows?.length ? (
-                                    table.getRowModel().rows.map((row, index) => {
-                                        const task = row.original; // Renamed variable
-                                        const isAuthor = user?.did === task.createdBy; // Renamed variable
-                                        // Determine if edit/delete should be shown
-                                        const canEdit =
-                                            (isAuthor && task.stage === "review") || permissions.canModerate; // Renamed variable
-                                        const canDelete = isAuthor || permissions.canModerate;
+                    <div className="mt-3">{renderTaskTable(activeRows, activeEmptyMessage)}</div>
 
-                                        return (
-                                            <motion.tr
-                                                key={row.id}
-                                                custom={index}
-                                                initial="hidden"
-                                                animate="visible"
-                                                variants={tableRowVariants}
-                                                className={`cursor-pointer
-                                                    ${row.getIsSelected() ? "bg-muted" : ""}
-                                                    ${(contentPreview?.content as TaskDisplay)?._id === task._id && sidePanelContentVisible === "content" ? "bg-gray-100" : "hover:bg-gray-50"} // Updated type, variable
-                                                `}
-                                                onClick={() => handleRowClick(task)} // Renamed param
-                                            >
-                                                {/* Start children immediately */}
-                                                {row.getVisibleCells().map((cell) => (
-                                                    <TableCell key={cell.id}>
-                                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                                    </TableCell>
-                                                ))}
-                                                {/* No space after map */}
-                                                {!inToolbox && (
-                                                    <TableCell className="w-[40px]">
-                                                        {(canEdit || canDelete) && (
-                                                            <DropdownMenu>
-                                                                <DropdownMenuTrigger asChild>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        className="h-8 w-8 p-0"
-                                                                        onClick={(e) => e.stopPropagation()} // Prevent row click
-                                                                    >
-                                                                        <span className="sr-only">Open menu</span>
-                                                                        <MoreHorizontal className="h-4 w-4" />
-                                                                    </Button>
-                                                                </DropdownMenuTrigger>
-                                                                <DropdownMenuContent align="end">
-                                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                                    <DropdownMenuSeparator />
-                                                                    {canEdit && (
-                                                                        <DropdownMenuItem
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                router.push(
-                                                                                    `/circles/${circle.handle}/tasks/${task._id}/edit`, // Updated path
-                                                                                );
-                                                                            }}
-                                                                            disabled={task.stage === "resolved"} // Can't edit resolved tasks, Renamed variable
-                                                                        >
-                                                                            Edit
-                                                                        </DropdownMenuItem>
-                                                                    )}
-                                                                    {canDelete && (
-                                                                        <DropdownMenuItem
-                                                                            className="text-red-600"
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                setSelectedTask(task); // Renamed state setter, param
-                                                                                setDeleteTaskDialogOpen(true); // Renamed state setter
-                                                                            }}
-                                                                        >
-                                                                            Delete
-                                                                        </DropdownMenuItem>
-                                                                    )}
-                                                                </DropdownMenuContent>
-                                                            </DropdownMenu>
-                                                        )}
-                                                    </TableCell>
-                                                )}
-                                            </motion.tr>
-                                        );
-                                    })
-                                ) : (
-                                    <TableRow>
-                                        <TableCell
-                                            colSpan={columns.length + 1}
-                                            className={
-                                                inToolbox
-                                                    ? "p-8 text-center text-muted-foreground"
-                                                    : "h-24 text-center"
-                                            }
-                                        >
-                                            No tasks found. {/* Updated text */}
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
+                    {!inToolbox && resolvedRows.length > 0 && (
+                        <Collapsible
+                            open={resolvedSectionOpen}
+                            onOpenChange={setIsResolvedSectionOpen}
+                            className="mt-6 overflow-hidden rounded-[15px] border border-gray-200 bg-white shadow-lg"
+                        >
+                            <CollapsibleTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    className="flex w-full items-center justify-between rounded-none px-4 py-6 text-left text-base font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                                >
+                                    <span>Review resolved tasks ({resolvedRows.length})</span>
+                                    <ChevronDown
+                                        className={`h-4 w-4 transition-transform ${
+                                            resolvedSectionOpen ? "rotate-180" : ""
+                                        }`}
+                                    />
+                                </Button>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="border-t border-gray-200 p-4 pt-0">
+                                <div className="pt-4">{renderTaskTable(resolvedRows, "No resolved tasks found.")}</div>
+                            </CollapsibleContent>
+                        </Collapsible>
+                    )}
 
                     <Dialog open={deleteTaskDialogOpen} onOpenChange={setDeleteTaskDialogOpen}>
                         {/* Renamed state */}
