@@ -12,12 +12,14 @@ import {
     Media,
     RankedList, // Added
     Task,
+    TaskPriority,
     TaskDisplay,
     TaskStage,
     mediaSchema,
     locationSchema,
     didSchema,
     rankedListSchema, // Added
+    taskPrioritySchema,
 } from "@/models/models";
 import { getCircleByHandle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -35,7 +37,6 @@ import {
     changeTaskStage,
     assignTask,
     getActiveTasksByCircleId,
-    getTaskRanking, // Will be created in task.ts
 } from "@/lib/data/task";
 import { getMembers, getMemberIdsByUserGroup } from "@/lib/data/member"; // Will be created in member.ts
 import { updateAggregateRankCache } from "@/lib/data/ranking"; // Import cache update function
@@ -50,7 +51,7 @@ import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
 import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
 
 type GetTasksActionResult = {
-    tasks: TaskDisplay[]; // Tasks with aggregated and user ranks
+    tasks: TaskDisplay[];
     hasUserRanked: boolean;
     totalRankers: number;
     unrankedCount: number;
@@ -83,8 +84,7 @@ export async function getTasksAction(
         if (!userDid) {
             throw new Error("User not authenticated");
         }
-        const user = await getUserByDid(userDid); // Need user._id
-        if (!user) {
+        if (!(await getUserByDid(userDid))) {
             throw new Error("User not found");
         }
 
@@ -112,56 +112,16 @@ export async function getTasksAction(
             includeAssignedFinal,
         );
 
-        // 2. Get aggregated ranking and the set of *rankable* task IDs
-        const { rankMap: aggregatedRankMap, totalRankers, activeTaskIds } = await getTaskRanking(circleId);
-
-        // 3. Get the current user's ranked list
-        const userRankingResult = await getUserRankedListAction(circleHandle);
-        const userRankedList = userRankingResult?.list || [];
-        const userRankMap = new Map(userRankedList.map((taskId, index) => [taskId, index + 1]));
-        const hasUserRanked = userRankedList.length > 0;
-
-        // get staleness info
-        const userRankingDoc = await RankedLists.findOne({
-            entityId: circleId,
-            type: "tasks",
-            userId: user._id,
-        });
-        const userRankUpdatedAt = userRankingDoc?.updatedAt || null;
-        const userRankBecameStaleAt = userRankingDoc?.becameStaleAt || null;
-
-        // 4. Calculate unranked count for the user *based on active/rankable tasks*
-        let unrankedCount = 0;
-        if (hasUserRanked) {
-            // Only calculate if user has ranked at least once
-            // Count how many *active* tasks are NOT in the user's map
-            activeTaskIds.forEach((taskId) => {
-                if (!userRankMap.has(taskId)) {
-                    unrankedCount++;
-                }
-            });
-        } else {
-            // If user hasn't ranked, all active tasks are unranked for them
-            unrankedCount = activeTaskIds.size;
-        }
-
-        // 5. Add ranks to each task object
-        const tasksWithRanks = allTasks.map((task) => ({
-            ...task,
-            rank: aggregatedRankMap.get(task._id!.toString()), // Aggregated rank
-            userRank: userRankMap.get(task._id!.toString()), // User's specific rank
-        }));
-
         return {
-            tasks: tasksWithRanks,
-            hasUserRanked,
-            totalRankers,
-            unrankedCount,
-            userRankUpdatedAt,
-            userRankBecameStaleAt,
+            tasks: allTasks,
+            hasUserRanked: false,
+            totalRankers: 0,
+            unrankedCount: 0,
+            userRankUpdatedAt: null,
+            userRankBecameStaleAt: null,
         };
     } catch (error) {
-        console.error("Error getting tasks with ranking:", error);
+        console.error("Error getting tasks:", error);
         return defaultResult; // Return default structure on error
     }
 }
@@ -248,6 +208,7 @@ const createTaskSchema = z.object({
     userGroups: z.array(z.string()).optional(), // Optional: User groups for visibility
     goalId: z.string().optional(), // Optional: Goal ID for task association
     eventId: z.string().optional(), // Optional: Event ID for task association
+    priority: z.preprocess((value) => (value === "" ? undefined : value), taskPrioritySchema.optional()),
 });
 
 const updateTaskSchema = createTaskSchema.extend({
@@ -255,6 +216,7 @@ const updateTaskSchema = createTaskSchema.extend({
     // Updates use the same base fields
     goalId: z.string().optional().nullable(),
     eventId: z.string().optional().nullable(),
+    priority: z.preprocess((value) => (value === "" ? undefined : value), taskPrioritySchema.optional()),
 });
 
 const assignTaskSchema = z.object({
@@ -287,6 +249,7 @@ export async function createTaskAction( // Renamed function
             userGroups: formData.getAll("userGroups"), // Assuming multi-select or similar
             goalId: formData.get("goalId") ?? undefined, // Optional goal ID
             eventId: formData.get("eventId") ?? undefined, // Optional event ID
+            priority: formData.get("priority") ?? undefined,
         });
 
         if (!validatedData.success) {
@@ -387,6 +350,7 @@ export async function createTaskAction( // Renamed function
             userGroups: data.userGroups || [], // Use provided groups or default to empty
             goalId: data.goalId, // Optional goal ID
             eventId: data.eventId, // Optional event ID
+            priority: data.priority,
         };
 
         // Create task in DB (Data function)
@@ -458,6 +422,7 @@ export async function updateTaskAction(
             goalId: formData.get("goalId") || "", // Default to empty string if null/undefined
             // Get eventId, treat empty string as intent to unset
             eventId: formData.get("eventId") || "", // Default to empty string if null/undefined
+            priority: formData.get("priority") || "",
         });
 
         if (!validatedData.success) {
@@ -566,8 +531,11 @@ export async function updateTaskAction(
         const finalImages: Media[] = [...parsedExistingMedia, ...newlyUploadedImages];
 
         // Prepare update data
-        const updateData: Partial<Task> & { goalId?: string | null } = {
-            // Use intersection type
+        const updateData: Omit<Partial<Task>, "goalId" | "eventId" | "priority"> & {
+            goalId?: string;
+            eventId?: string;
+            priority?: TaskPriority | "";
+        } = {
             title: data.title,
             description: data.description,
             images: finalImages,
@@ -578,6 +546,7 @@ export async function updateTaskAction(
             // Pass goalId directly (can be string or empty string for removal)
             goalId: data.goalId ?? "",
             eventId: data.eventId ?? "",
+            priority: data.priority ?? "",
         };
 
         // Update task in DB (Data function handles $set/$unset logic)

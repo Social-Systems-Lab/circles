@@ -493,7 +493,7 @@ export const getAggregateRanking = async (
 export const processRankingsPeriodically = async () => {
     console.log("Starting periodic ranking processing...");
     const now = new Date();
-    const itemTypesToProcess: ItemType[] = ["tasks", "goals", "issues", "proposals"]; // Add other types as needed
+    const itemTypesToProcess: ItemType[] = ["goals", "issues", "proposals"];
 
     try {
         // 1. Find all circles that might have rankings (e.g., based on enabled modules)

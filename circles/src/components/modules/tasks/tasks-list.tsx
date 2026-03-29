@@ -1,7 +1,7 @@
 //task-list.tsx
 "use client";
 
-import React, { useEffect, useState, useTransition, ChangeEvent, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useTransition, useCallback, useMemo } from "react";
 import {
     ColumnDef,
     ColumnFiltersState,
@@ -14,32 +14,22 @@ import {
 } from "@tanstack/react-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import {
-    Select,
-    SelectContent,
-    SelectGroup,
-    SelectItem,
-    SelectLabel,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import { Circle, ContentPreviewData, TaskDisplay, TaskStage, TaskPermissions } from "@/models/models"; // Use Task types, Added ContentPreviewData, TaskPermissions
+import { Circle, ContentPreviewData, TaskDisplay, TaskStage, TaskPermissions, TaskPriority } from "@/models/models"; // Use Task types, Added ContentPreviewData, TaskPermissions
 import { Button } from "@/components/ui/button";
 import {
     ArrowDown,
     ArrowUp,
+    CheckCircle,
+    ChevronDown,
+    Clock,
     Loader2,
     MoreHorizontal,
-    Plus,
-    CheckCircle,
-    Clock,
     Play,
-    User,
-    TriangleAlert,
-    CheckCircle2,
+    Plus,
 } from "lucide-react";
 import {
     DropdownMenu,
+    DropdownMenuCheckboxItem,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuLabel,
@@ -61,17 +51,14 @@ import { deleteTaskAction } from "@/app/circles/[handle]/tasks/actions";
 import { UserPicture } from "../members/user-picture";
 import { motion } from "framer-motion";
 import { isAuthorized } from "@/lib/auth/client-auth";
-import { features, RANKING_STALENESS_DAYS } from "@/lib/data/constants"; // Added constants import
+import { features } from "@/lib/data/constants";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { useAtom } from "jotai";
 import { userAtom, contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
 import Link from "next/link"; // Will be removed for the button
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import TaskPrioritizationModal from "./task-prioritization-modal"; // Import the modal
 import { CreateTaskDialog } from "@/components/global-create/create-task-dialog"; // Import CreateTaskDialog
-import { PiRanking, PiRankingBold, PiUser, PiUsersThree } from "react-icons/pi";
-import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { getTasksAction } from "@/app/circles/[handle]/tasks/actions";
@@ -96,6 +83,20 @@ const SortIcon = ({ sortDir }: { sortDir: string | boolean }) => {
     return sortDir === "asc" ? <ArrowUp className="ml-2 h-4 w-4" /> : <ArrowDown className="ml-2 h-4 w-4" />;
 };
 
+const allTaskStages: TaskStage[] = ["open", "inProgress", "review", "resolved"];
+const taskPriorityBadgeClasses: Record<TaskPriority, string> = {
+    low: "bg-slate-100 text-slate-700",
+    medium: "bg-sky-100 text-sky-800",
+    high: "bg-orange-100 text-orange-800",
+    critical: "bg-red-100 text-red-800",
+};
+const taskPriorityLabels: Record<TaskPriority, string> = {
+    low: "Low",
+    medium: "Medium",
+    high: "High",
+    critical: "Critical",
+};
+
 const tableRowVariants = {
     hidden: { opacity: 0, y: 20 },
     visible: (i: number) => ({
@@ -106,27 +107,6 @@ const tableRowVariants = {
             duration: 0.3,
         },
     }),
-};
-
-const formatExpiryDate = (expiryDate: Date): string => {
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    // Reset time part for accurate date comparison
-    today.setHours(0, 0, 0, 0);
-    tomorrow.setHours(0, 0, 0, 0);
-    const expiryDateOnly = new Date(expiryDate);
-    expiryDateOnly.setHours(0, 0, 0, 0);
-
-    if (expiryDateOnly.getTime() === today.getTime()) {
-        return "end of today";
-    }
-    if (expiryDateOnly.getTime() === tomorrow.getTime()) {
-        return "tomorrow";
-    }
-    // Example: "April 15th" - adjust formatting as needed
-    return expiryDate.toLocaleDateString(undefined, { month: "long", day: "numeric" });
 };
 
 // Helper function for stage badge styling and icons
@@ -150,12 +130,11 @@ const TasksList: React.FC<TasksListProps> = ({
     tasksData,
     circle,
     permissions,
-    hideRank,
     inToolbox,
     onTaskNavigate,
 }) => {
     // Renamed component, props
-    const { tasks, hasUserRanked, totalRankers, unrankedCount, userRankBecameStaleAt } = tasksData;
+    const { tasks } = tasksData;
     const [user] = useAtom(userAtom);
     const [includeCreated, setIncludeCreated] = useState(true);
     const [includeAssigned, setIncludeAssigned] = useState(true);
@@ -170,7 +149,7 @@ const TasksList: React.FC<TasksListProps> = ({
 
         return baseTasks;
     }, [tasks, filteredTasks, circle.circleType, circle.did, user?.did, inToolbox]);
-    const [sorting, setSorting] = React.useState<SortingState>([{ id: "rank", desc: false }]);
+    const [sorting, setSorting] = React.useState<SortingState>([{ id: "createdAt", desc: true }]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
     const [deleteTaskDialogOpen, setDeleteTaskDialogOpen] = useState<boolean>(false); // Renamed state
     const [selectedTask, setSelectedTask] = useState<TaskDisplay | null>(null); // Renamed state, updated type
@@ -178,12 +157,10 @@ const TasksList: React.FC<TasksListProps> = ({
     const isCompact = useIsCompact();
     const router = useRouter();
     const { toast } = useToast();
-    const [stageFilter, setStageFilter] = useState<TaskStage | "all">("all"); // Updated type
+    const [selectedStages, setSelectedStages] = useState<TaskStage[]>(allTaskStages);
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
-    const [showRankModal, setShowRankModal] = useState(false); // State for modal
     const [isCreateTaskDialogOpen, setIsCreateTaskDialogOpen] = useState(false); // State for Create Task Dialog
-    const isMobile = useIsMobile();
 
     useEffect(() => {
         const fetchTasks = async () => {
@@ -220,105 +197,36 @@ const TasksList: React.FC<TasksListProps> = ({
         [openAuthor],
     );
 
-    const stalenessInfo = useMemo(() => {
-        if (!userRankBecameStaleAt || unrankedCount === 0) {
-            return { isStale: false, expiryDate: null, expiryDateString: "" };
-        }
-        const becameStaleDate = new Date(userRankBecameStaleAt); // Ensure it's a Date
-        const expiryDate = new Date(becameStaleDate);
-        expiryDate.setDate(expiryDate.getDate() + RANKING_STALENESS_DAYS);
-
-        const now = new Date();
-        // Check if grace period has actually expired already
-        if (now > expiryDate) {
-            // This case means the backend should have excluded it,
-            // but we handle it defensively in UI.
-            // You might show a different "expired" message here if needed.
-            return { isStale: true, expiryDate: expiryDate, expiryDateString: "past", isExpired: true };
-        }
-
-        return {
-            isStale: true,
-            expiryDate: expiryDate,
-            expiryDateString: formatExpiryDate(expiryDate),
-            isExpired: false,
-        };
-    }, [userRankBecameStaleAt, unrankedCount]);
-
     // Fixes hydration errors
     const [isMounted, setIsMounted] = useState(false);
     useEffect(() => {
         setIsMounted(true);
     }, []);
 
+    const areAllStagesSelected = selectedStages.length === allTaskStages.length;
+    const stageFilterLabel = useMemo(() => {
+        if (areAllStagesSelected) {
+            return "All Stages";
+        }
+        if (selectedStages.length === 1) {
+            return getStageInfo(selectedStages[0]).text;
+        }
+        return `${selectedStages.length} Stages`;
+    }, [areAllStagesSelected, selectedStages]);
+
+    const toggleStageFilter = useCallback((stage: TaskStage) => {
+        setSelectedStages((currentStages) => {
+            if (currentStages.includes(stage)) {
+                const nextStages = currentStages.filter((value) => value !== stage);
+                return nextStages.length === 0 ? allTaskStages : nextStages;
+            }
+
+            return [...currentStages, stage];
+        });
+    }, []);
+
     const columns = React.useMemo<ColumnDef<TaskDisplay>[]>( // Updated type
         () => [
-            // --- Column 1: Aggregated Rank ---
-            {
-                accessorKey: "rank",
-                header: ({ column }) => (
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-                                    className="p-1"
-                                >
-                                    {/* Icon for aggregated rank */}
-                                    <PiRankingBold className="h-4 w-4" />
-                                    <SortIcon sortDir={column.getIsSorted()} />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Sort by Aggregated Rank</TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                ),
-                cell: (info) => {
-                    const rank = info.getValue() as number | undefined;
-                    return rank !== undefined ? (
-                        <span className="inline-block min-w-[20px] rounded bg-gray-200 px-1.5 py-0.5 text-center text-xs font-semibold text-gray-700">
-                            {rank}
-                        </span>
-                    ) : (
-                        <span className="text-gray-400">-</span>
-                    );
-                },
-                enableSorting: true,
-            },
-            // --- Column 2: User's Rank (NEW) ---
-            {
-                accessorKey: "userRank", // Access the new data field
-                header: ({ column }) => (
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-                                    className="p-1"
-                                >
-                                    {/* Icon indicating user-specific rank */}
-                                    <User className="h-4 w-4" />
-                                    <SortIcon sortDir={column.getIsSorted()} />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Sort by Your Rank</TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                ),
-                cell: (info) => {
-                    const userRank = info.getValue() as number | undefined;
-                    return userRank !== undefined ? (
-                        <span className="inline-block min-w-[20px] rounded border border-blue-300 bg-blue-100 px-1.5 py-0.5 text-center text-xs font-semibold text-blue-800">
-                            {userRank}
-                        </span>
-                    ) : (
-                        <span className="text-gray-400">-</span>
-                    );
-                },
-                enableSorting: true, // Allow sorting by user rank
-            },
             {
                 accessorKey: "title",
                 header: ({ column }) => (
@@ -330,23 +238,30 @@ const TasksList: React.FC<TasksListProps> = ({
                 cell: (info) => {
                     const task = info.row.original; // Renamed variable
                     return (
-                        <Link
-                            href={`/circles/${circle.handle}/tasks/${task._id}#circle-tabs`} // Updated path
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (inToolbox) {
-                                    onTaskNavigate?.();
-                                }
-                            }}
-                            className="flex items-center font-medium text-blue-600 hover:underline" // Added flex
-                        >
-                            {info.getValue() as string}
-                            {task.circle && task.circle._id !== circle._id && (
-                                <div className="ml-2">
-                                    <CirclePicture circle={task.circle} size="24px" />
-                                </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Link
+                                href={`/circles/${circle.handle}/tasks/${task._id}#circle-tabs`} // Updated path
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (inToolbox) {
+                                        onTaskNavigate?.();
+                                    }
+                                }}
+                                className="flex items-center font-medium text-blue-600 hover:underline"
+                            >
+                                {info.getValue() as string}
+                                {task.circle && task.circle._id !== circle._id && (
+                                    <div className="ml-2">
+                                        <CirclePicture circle={task.circle} size="24px" />
+                                    </div>
+                                )}
+                            </Link>
+                            {task.priority && (
+                                <Badge className={taskPriorityBadgeClasses[task.priority]}>
+                                    {taskPriorityLabels[task.priority]}
+                                </Badge>
                             )}
-                        </Link>
+                        </div>
                     );
                 },
             },
@@ -368,7 +283,13 @@ const TasksList: React.FC<TasksListProps> = ({
                         </Badge>
                     );
                 },
-                filterFn: (row, id, value) => row.getValue(id) === value,
+                filterFn: (row, id, value) => {
+                    if (!Array.isArray(value) || value.length === 0) {
+                        return true;
+                    }
+
+                    return value.includes(row.getValue(id));
+                },
             },
             {
                 accessorKey: "assignee",
@@ -457,8 +378,6 @@ const TasksList: React.FC<TasksListProps> = ({
             sorting,
             columnFilters,
             columnVisibility: {
-                rank: !hideRank && !inToolbox,
-                userRank: hasUserRanked && !hideRank && !inToolbox,
                 title: true,
                 stage: true,
                 assignee: !isCompact && !inToolbox,
@@ -469,12 +388,13 @@ const TasksList: React.FC<TasksListProps> = ({
     });
 
     useEffect(() => {
-        if (stageFilter !== "all") {
-            table.getColumn("stage")?.setFilterValue(stageFilter);
-        } else {
+        if (areAllStagesSelected) {
             table.getColumn("stage")?.setFilterValue(undefined);
+            return;
         }
-    }, [stageFilter, table]);
+
+        table.getColumn("stage")?.setFilterValue(selectedStages);
+    }, [areAllStagesSelected, selectedStages, table]);
 
     const onConfirmDeleteTask = async () => {
         // Renamed function
@@ -552,59 +472,6 @@ const TasksList: React.FC<TasksListProps> = ({
         <TooltipProvider>
             <div className="flex flex-1 flex-row justify-center">
                 <div className="mb-4 ml-2 mr-2 mt-4 flex max-w-[1100px] flex-1 flex-col">
-                    {/* --- START: Rank Stats and Nudge Boxes --- */}
-                    {!inToolbox && hasUserRanked && !hideRank && (
-                        <div className="mb-3 rounded border bg-blue-50 p-3 text-sm text-blue-800 shadow-sm">
-                            <p className="flex items-center">
-                                <PiUsersThree className="mr-2 h-5 w-5 flex-shrink-0" />
-                                You&apos;ve ranked these tasks.{" "}
-                                <span>
-                                    {" "}
-                                    Currently, <span className="mx-1 font-semibold">{totalRankers}</span>{" "}
-                                    {totalRankers === 1 ? "user" : "users"} contributed to the aggregated ranking.
-                                </span>
-                            </p>
-                        </div>
-                    )}
-
-                    {/* Show nudge only if user has ranked */}
-                    {!inToolbox && hasUserRanked && unrankedCount > 0 && !hideRank && (
-                        <div
-                            className="mb-4 cursor-pointer rounded border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800 shadow-sm transition-colors hover:bg-yellow-100"
-                            onClick={() => setShowRankModal(true)} // Open rank modal on click
-                            role="button"
-                            tabIndex={0}
-                            onKeyDown={(e) => e.key === "Enter" && setShowRankModal(true)} // Accessibility
-                        >
-                            <p className="flex items-center">
-                                <TriangleAlert className="mr-2 h-5 w-5 flex-shrink-0 text-yellow-600" />
-                                You have{" "}
-                                <span className="mx-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
-                                    {unrankedCount}
-                                </span>{" "}
-                                unranked task{unrankedCount !== 1 ? "s" : ""}.
-                                {!isMobile && (
-                                    <>
-                                        {" "}
-                                        Please update by{" "}
-                                        <span className="mx-1 font-semibold">{stalenessInfo.expiryDateString}</span>
-                                        to ensure your ranking continues to be counted. Click here to rank.
-                                    </>
-                                )}
-                            </p>
-                        </div>
-                    )}
-
-                    {/* Show success message only if user has ranked and count is 0 */}
-                    {!inToolbox && hasUserRanked && unrankedCount === 0 && !hideRank && (
-                        <div className="mb-4 rounded border border-green-400 bg-green-50 p-3 text-sm text-green-800 shadow-sm">
-                            <p className="flex items-center">
-                                <CheckCircle2 className="mr-2 h-5 w-5 flex-shrink-0 text-green-600" />
-                                Nicely done! You&apos;ve ranked all available tasks.
-                            </p>
-                        </div>
-                    )}
-
                     {!inToolbox && (
                         <div className="flex w-full flex-row items-center gap-2">
                             <div className="flex flex-1 flex-col">
@@ -619,29 +486,34 @@ const TasksList: React.FC<TasksListProps> = ({
                                     <Plus className="mr-2 h-4 w-4" /> Create Task
                                 </Button>
                             )}
-                            {/* Add Rank Button */}
-                            {isAuthorized(user, circle, features.tasks.rank) && !hideRank && (
-                                <Button onClick={() => setShowRankModal(true)}>
-                                    <PiRanking className="mr-2 h-4 w-4" /> Rank
-                                </Button>
-                            )}
-                            <Select
-                                value={stageFilter}
-                                onValueChange={(value) => setStageFilter(value as TaskStage | "all")} // Updated type
-                            >
-                                <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="Filter by stage" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Stages</SelectItem>
-                                    <SelectItem value="review">Review</SelectItem>
-                                    <SelectItem value="open">Open</SelectItem>
-                                    <SelectItem value="inProgress">In Progress</SelectItem>
-                                    <SelectItem value="resolved">Resolved</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            {/* Placeholder for Assignee Filter */}
-                            {/* <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>...</Select> */}
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" className="min-w-[180px] justify-between">
+                                        {stageFilterLabel}
+                                        <ChevronDown className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-[220px]">
+                                    <DropdownMenuItem
+                                        onSelect={(event) => {
+                                            event.preventDefault();
+                                            setSelectedStages(allTaskStages);
+                                        }}
+                                    >
+                                        All Stages
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    {allTaskStages.map((stage) => (
+                                        <DropdownMenuCheckboxItem
+                                            key={stage}
+                                            checked={selectedStages.includes(stage)}
+                                            onCheckedChange={() => toggleStageFilter(stage)}
+                                        >
+                                            {getStageInfo(stage).text}
+                                        </DropdownMenuCheckboxItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
                     )}
                     {!inToolbox && circle.circleType === "user" && user?.did === circle.did && (
@@ -807,10 +679,6 @@ const TasksList: React.FC<TasksListProps> = ({
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
-                    {/* Render Prioritization Modal */}
-                    {showRankModal && (
-                        <TaskPrioritizationModal circle={circle} onClose={() => setShowRankModal(false)} />
-                    )}
 
                     {/* Render CreateTaskDialog */}
                     {canCreateTask && (

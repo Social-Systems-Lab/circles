@@ -10,7 +10,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Circle, Media, Task, Location, GoalDisplay, EventDisplay, UserPrivate } from "@/models/models"; // Added UserPrivate
+import { Circle, Media, Task, Location, GoalDisplay, EventDisplay, UserPrivate, TaskPriority } from "@/models/models"; // Added UserPrivate
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, MapPinIcon, MapPin, CalendarIcon } from "lucide-react";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
@@ -29,6 +29,13 @@ import { CreatableItemDetail } from "@/components/global-create/global-create-di
 import { getGoalsAction } from "@/app/circles/[handle]/goals/actions"; // Corrected import for fetching goals
 import { getEventsAction } from "@/app/circles/[handle]/events/actions";
 
+const taskPriorityOptions: { value: TaskPriority; label: string; description: string }[] = [
+    { value: "low", label: "Low", description: "Nice to have" },
+    { value: "medium", label: "Medium", description: "Useful to have" },
+    { value: "high", label: "High", description: "Need to have" },
+    { value: "critical", label: "Critical", description: "Critical to have" },
+];
+
 // Form schema for creating/editing a task
 const taskFormSchema = z.object({
     title: z.string().min(1, { message: "Task title is required" }),
@@ -38,6 +45,7 @@ const taskFormSchema = z.object({
     targetDate: z.date().optional(),
     goalId: z.string().optional().nullable(), // Allow null or undefined
     eventId: z.string().optional().nullable(), // Allow null or undefined
+    priority: z.enum(["low", "medium", "high", "critical"]).optional().nullable(),
 });
 
 type TaskFormValues = Omit<z.infer<typeof taskFormSchema>, "images" | "location" | "targetDate"> & {
@@ -46,6 +54,7 @@ type TaskFormValues = Omit<z.infer<typeof taskFormSchema>, "images" | "location"
     targetDate?: Date;
     goalId?: string | null; // Allow null
     eventId?: string | null;
+    priority?: TaskPriority | null;
 };
 
 interface TaskFormProps {
@@ -106,6 +115,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             targetDate: prefilledDate ?? (task?.targetDate ? new Date(task.targetDate) : undefined),
             goalId: task?.goalId || preselectedGoalId || null,
             eventId: (task as any)?.eventId || preselectedEventId || null,
+            priority: task?.priority || null,
         },
     });
 
@@ -244,6 +254,12 @@ export const TaskForm: React.FC<TaskFormProps> = ({
         } else {
             // Explicitly handle unsetting the event
             formData.append("eventId", ""); // Send empty string to indicate removal
+        }
+
+        if (values.priority) {
+            formData.append("priority", values.priority);
+        } else {
+            formData.append("priority", "");
         }
 
         if (values.images) {
@@ -439,51 +455,87 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                         )}
                                     />
                                 )}
-                                <FormField
-                                    control={form.control}
-                                    name="targetDate"
-                                    render={({ field }) => (
-                                        <FormItem className="py-3 md:py-4">
-                                            <FormLabel>Target Date (Optional)</FormLabel>
-                                            <Popover>
-                                                <PopoverTrigger asChild>
+                                <div className="grid grid-cols-1 gap-0 md:grid-cols-2 md:gap-x-6">
+                                    <FormField
+                                        control={form.control}
+                                        name="targetDate"
+                                        render={({ field }) => (
+                                            <FormItem className="py-3 md:py-4">
+                                                <FormLabel>Target Date (Optional)</FormLabel>
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <FormControl>
+                                                            <Button
+                                                                variant={"outline"}
+                                                                className={cn(
+                                                                    "w-full pl-3 text-left font-normal md:w-[240px]",
+                                                                    !field.value && "text-muted-foreground",
+                                                                )}
+                                                                disabled={isSubmitting}
+                                                            >
+                                                                {field.value ? (
+                                                                    format(field.value, "PPP")
+                                                                ) : (
+                                                                    <span>Pick a date</span>
+                                                                )}
+                                                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                                            </Button>
+                                                        </FormControl>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-auto p-0" align="start">
+                                                        <Calendar
+                                                            mode="single"
+                                                            selected={field.value}
+                                                            onSelect={field.onChange}
+                                                            disabled={(date: Date) =>
+                                                                date < new Date("1900-01-01") || isSubmitting
+                                                            }
+                                                            initialFocus
+                                                        />
+                                                    </PopoverContent>
+                                                </Popover>
+                                                <FormDescription>
+                                                    Set an optional target completion date for this task.
+                                                </FormDescription>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="priority"
+                                        render={({ field }) => (
+                                            <FormItem className="py-3 md:py-4">
+                                                <FormLabel>Priority (Optional)</FormLabel>
+                                                <Select
+                                                    onValueChange={(value) =>
+                                                        field.onChange(value === "none" ? null : value)
+                                                    }
+                                                    value={field.value ?? "none"}
+                                                    disabled={isSubmitting}
+                                                >
                                                     <FormControl>
-                                                        <Button
-                                                            variant={"outline"}
-                                                            className={cn(
-                                                                "w-full pl-3 text-left font-normal md:w-[240px]",
-                                                                !field.value && "text-muted-foreground",
-                                                            )}
-                                                            disabled={isSubmitting}
-                                                        >
-                                                            {field.value ? (
-                                                                format(field.value, "PPP")
-                                                            ) : (
-                                                                <span>Pick a date</span>
-                                                            )}
-                                                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                                        </Button>
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Select a priority" />
+                                                        </SelectTrigger>
                                                     </FormControl>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="w-auto p-0" align="start">
-                                                    <Calendar
-                                                        mode="single"
-                                                        selected={field.value}
-                                                        onSelect={field.onChange}
-                                                        disabled={(date: Date) =>
-                                                            date < new Date("1900-01-01") || isSubmitting
-                                                        }
-                                                        initialFocus
-                                                    />
-                                                </PopoverContent>
-                                            </Popover>
-                                            <FormDescription>
-                                                Set an optional target completion date for this task.
-                                            </FormDescription>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
+                                                    <SelectContent>
+                                                        <SelectItem value="none">None</SelectItem>
+                                                        {taskPriorityOptions.map((option) => (
+                                                            <SelectItem key={option.value} value={option.value}>
+                                                                {option.label} - {option.description}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <FormDescription>
+                                                    Leave unset unless this task needs a visible priority badge.
+                                                </FormDescription>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
                                 <FormField
                                     control={form.control}
                                     name="description"

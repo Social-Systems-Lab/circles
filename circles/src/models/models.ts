@@ -1320,6 +1320,8 @@ export type RankedList = z.infer<typeof rankedListSchema>;
 // Task stages (mirroring Issue stages for now)
 export const taskStageSchema = z.enum(["review", "open", "inProgress", "resolved"]);
 export type TaskStage = z.infer<typeof taskStageSchema>;
+export const taskPrioritySchema = z.enum(["low", "medium", "high", "critical"]);
+export type TaskPriority = z.infer<typeof taskPrioritySchema>;
 
 // Task model (mirroring Issue model)
 export const taskSchema = z.object({
@@ -1340,6 +1342,7 @@ export const taskSchema = z.object({
     targetDate: z.date().nullable().optional(), // Target date for task (optional)
     goalId: z.string().optional(), // Optional link to a goal
     eventId: z.string().optional(), // Optional link to an event
+    priority: taskPrioritySchema.optional(),
 });
 
 export type Task = z.infer<typeof taskSchema>;

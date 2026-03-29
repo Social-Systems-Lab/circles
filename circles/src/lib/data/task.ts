@@ -1,7 +1,7 @@
 // task.ts - Task data access functions
 import { Tasks, Circles, Members, Reactions, RankedLists, Feeds, Posts } from "./db"; // Added Feeds, Posts
 import { ObjectId } from "mongodb";
-import { Task, TaskDisplay, TaskStage, Circle, Member, RankedList, Post } from "@/models/models"; // Added Post type
+import { Task, TaskDisplay, TaskStage, Circle, Member, RankedList, Post, TaskPriority } from "@/models/models"; // Added Post type
 import { getCircleById, SAFE_CIRCLE_PROJECTION } from "./circle";
 import { getMemberIdsByUserGroup } from "./member";
 import { isAuthorized } from "../auth/auth";
@@ -31,6 +31,7 @@ export const SAFE_TASK_PROJECTION = {
     targetDate: 1,
     goal: 1,
     event: 1,
+    priority: 1,
 } as const;
 
 /**
@@ -531,7 +532,14 @@ export const createTask = async (taskData: Omit<Task, "_id" | "commentPostId">):
  * @param updates Partial data containing fields to update
  * @returns Boolean indicating success (true) or failure (false)
  */
-export const updateTask = async (taskId: string, updates: Partial<Task>): Promise<boolean> => {
+export const updateTask = async (
+    taskId: string,
+    updates: Omit<Partial<Task>, "goalId" | "eventId" | "priority"> & {
+        goalId?: string;
+        eventId?: string;
+        priority?: TaskPriority | "";
+    },
+): Promise<boolean> => {
     try {
         if (!ObjectId.isValid(taskId)) {
             console.error("Invalid taskId provided for update:", taskId);
@@ -552,6 +560,10 @@ export const updateTask = async (taskId: string, updates: Partial<Task>): Promis
         if (updateData.hasOwnProperty("eventId") && updateData.eventId === "") {
             delete updateData.eventId; // Remove from $set
             unsetFields.eventId = ""; // Add to $unset
+        }
+        if (updateData.hasOwnProperty("priority") && updateData.priority === "") {
+            delete updateData.priority;
+            unsetFields.priority = "";
         }
 
         const updateOp: any = {};
