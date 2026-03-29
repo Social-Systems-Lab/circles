@@ -102,6 +102,12 @@ const taskPriorityLabels: Record<TaskPriority, string> = {
     high: "High",
     critical: "Critical",
 };
+const taskPrioritySortOrder: Record<TaskPriority, number> = {
+    critical: 4,
+    high: 3,
+    medium: 2,
+    low: 1,
+};
 const getSortableCircleLabel = (circle?: Circle) =>
     circle?.name?.trim().toLocaleLowerCase() || circle?.handle?.trim().toLocaleLowerCase() || "";
 const sortableTaskColumnIds = new Set(["title", "priority", "stage", "assignee", "createdAt"]);
@@ -408,6 +414,15 @@ const TasksList: React.FC<TasksListProps> = ({
 
                     const rowValue = row.getValue(id) as TaskPriority | undefined;
                     return rowValue ? value.includes(rowValue) : false;
+                },
+                sortingFn: (rowA, rowB, id) => {
+                    const priorityA = rowA.getValue(id) as TaskPriority | undefined;
+                    const priorityB = rowB.getValue(id) as TaskPriority | undefined;
+
+                    const rankA = priorityA ? taskPrioritySortOrder[priorityA] : 0;
+                    const rankB = priorityB ? taskPrioritySortOrder[priorityB] : 0;
+
+                    return rankA - rankB;
                 },
             },
             {
