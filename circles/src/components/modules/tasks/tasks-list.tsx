@@ -84,9 +84,10 @@ const SortIcon = ({ sortDir }: { sortDir: string | boolean }) => {
 };
 
 const allTaskStages: TaskStage[] = ["open", "inProgress", "review", "resolved"];
+const allTaskPriorities: TaskPriority[] = ["low", "medium", "high", "critical"];
 const taskPriorityBadgeClasses: Record<TaskPriority, string> = {
-    low: "bg-slate-100 text-slate-700",
-    medium: "bg-sky-100 text-sky-800",
+    low: "bg-green-100 text-green-800",
+    medium: "bg-blue-100 text-blue-800",
     high: "bg-orange-100 text-orange-800",
     critical: "bg-red-100 text-red-800",
 };
@@ -96,6 +97,8 @@ const taskPriorityLabels: Record<TaskPriority, string> = {
     high: "High",
     critical: "Critical",
 };
+const getSortableCircleLabel = (circle?: Circle) =>
+    circle?.name?.trim().toLocaleLowerCase() || circle?.handle?.trim().toLocaleLowerCase() || "";
 
 const tableRowVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -158,6 +161,7 @@ const TasksList: React.FC<TasksListProps> = ({
     const router = useRouter();
     const { toast } = useToast();
     const [selectedStages, setSelectedStages] = useState<TaskStage[]>(allTaskStages);
+    const [selectedPriorities, setSelectedPriorities] = useState<TaskPriority[]>(allTaskPriorities);
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [isCreateTaskDialogOpen, setIsCreateTaskDialogOpen] = useState(false); // State for Create Task Dialog
@@ -213,6 +217,16 @@ const TasksList: React.FC<TasksListProps> = ({
         }
         return `${selectedStages.length} Stages`;
     }, [areAllStagesSelected, selectedStages]);
+    const areAllPrioritiesSelected = selectedPriorities.length === allTaskPriorities.length;
+    const priorityFilterLabel = useMemo(() => {
+        if (areAllPrioritiesSelected) {
+            return "All Priorities";
+        }
+        if (selectedPriorities.length === 1) {
+            return taskPriorityLabels[selectedPriorities[0]];
+        }
+        return `${selectedPriorities.length} Priorities`;
+    }, [areAllPrioritiesSelected, selectedPriorities]);
 
     const toggleStageFilter = useCallback((stage: TaskStage) => {
         setSelectedStages((currentStages) => {
@@ -222,6 +236,16 @@ const TasksList: React.FC<TasksListProps> = ({
             }
 
             return [...currentStages, stage];
+        });
+    }, []);
+    const togglePriorityFilter = useCallback((priority: TaskPriority) => {
+        setSelectedPriorities((currentPriorities) => {
+            if (currentPriorities.includes(priority)) {
+                const nextPriorities = currentPriorities.filter((value) => value !== priority);
+                return nextPriorities.length === 0 ? allTaskPriorities : nextPriorities;
+            }
+
+            return [...currentPriorities, priority];
         });
     }, []);
 
@@ -238,31 +262,47 @@ const TasksList: React.FC<TasksListProps> = ({
                 cell: (info) => {
                     const task = info.row.original; // Renamed variable
                     return (
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Link
-                                href={`/circles/${circle.handle}/tasks/${task._id}#circle-tabs`} // Updated path
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (inToolbox) {
-                                        onTaskNavigate?.();
-                                    }
-                                }}
-                                className="flex items-center font-medium text-blue-600 hover:underline"
-                            >
-                                {info.getValue() as string}
-                                {task.circle && task.circle._id !== circle._id && (
-                                    <div className="ml-2">
-                                        <CirclePicture circle={task.circle} size="24px" />
-                                    </div>
-                                )}
-                            </Link>
-                            {task.priority && (
-                                <Badge className={taskPriorityBadgeClasses[task.priority]}>
-                                    {taskPriorityLabels[task.priority]}
-                                </Badge>
+                        <Link
+                            href={`/circles/${circle.handle}/tasks/${task._id}#circle-tabs`} // Updated path
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (inToolbox) {
+                                    onTaskNavigate?.();
+                                }
+                            }}
+                            className="flex items-center font-medium text-blue-600 hover:underline"
+                        >
+                            {info.getValue() as string}
+                            {task.circle && task.circle._id !== circle._id && (
+                                <div className="ml-2">
+                                    <CirclePicture circle={task.circle} size="24px" />
+                                </div>
                             )}
-                        </div>
+                        </Link>
                     );
+                },
+            },
+            {
+                accessorKey: "priority",
+                header: ({ column }) => (
+                    <Button variant="ghost" onClick={() => column.toggleSorting()}>
+                        Priority
+                        <SortIcon sortDir={column.getIsSorted()} />
+                    </Button>
+                ),
+                cell: (info) => {
+                    const priority = info.getValue() as TaskPriority | undefined;
+                    return priority ? (
+                        <Badge className={taskPriorityBadgeClasses[priority]}>{taskPriorityLabels[priority]}</Badge>
+                    ) : null;
+                },
+                filterFn: (row, id, value) => {
+                    if (!Array.isArray(value) || value.length === 0) {
+                        return true;
+                    }
+
+                    const rowValue = row.getValue(id) as TaskPriority | undefined;
+                    return rowValue ? value.includes(rowValue) : false;
                 },
             },
             {
@@ -293,7 +333,12 @@ const TasksList: React.FC<TasksListProps> = ({
             },
             {
                 accessorKey: "assignee",
-                header: "Assigned To",
+                header: ({ column }) => (
+                    <Button variant="ghost" onClick={() => column.toggleSorting()}>
+                        Assigned To
+                        <SortIcon sortDir={column.getIsSorted()} />
+                    </Button>
+                ),
                 cell: (info) => {
                     const assignee = info.getValue() as Circle | undefined;
                     if (!assignee) {
@@ -316,8 +361,26 @@ const TasksList: React.FC<TasksListProps> = ({
                                 </TooltipTrigger>
                                 <TooltipContent>{assignee.name}</TooltipContent>
                             </Tooltip>
-                        </TooltipProvider>
+                            </TooltipProvider>
                     );
+                },
+                sortingFn: (rowA, rowB, id) => {
+                    const assigneeA = getSortableCircleLabel(rowA.getValue(id) as Circle | undefined);
+                    const assigneeB = getSortableCircleLabel(rowB.getValue(id) as Circle | undefined);
+
+                    if (assigneeA === assigneeB) {
+                        return 0;
+                    }
+
+                    if (!assigneeA) {
+                        return 1;
+                    }
+
+                    if (!assigneeB) {
+                        return -1;
+                    }
+
+                    return assigneeA.localeCompare(assigneeB);
                 },
             },
             {
@@ -363,7 +426,7 @@ const TasksList: React.FC<TasksListProps> = ({
                 cell: (info) => new Date(info.getValue() as Date).toLocaleDateString(),
             },
         ],
-        [isCompact, circle.handle, circle._id, openAssignee, openAuthor, inToolbox, onTaskNavigate], // Add dependencies
+        [isCompact, circle.handle, circle._id, openAssignee, openAuthor, inToolbox, onTaskNavigate],
     );
 
     const table = useReactTable({
@@ -379,6 +442,7 @@ const TasksList: React.FC<TasksListProps> = ({
             columnFilters,
             columnVisibility: {
                 title: true,
+                priority: true,
                 stage: true,
                 assignee: !isCompact && !inToolbox,
                 author: !isCompact && !inToolbox,
@@ -395,6 +459,14 @@ const TasksList: React.FC<TasksListProps> = ({
 
         table.getColumn("stage")?.setFilterValue(selectedStages);
     }, [areAllStagesSelected, selectedStages, table]);
+    useEffect(() => {
+        if (areAllPrioritiesSelected) {
+            table.getColumn("priority")?.setFilterValue(undefined);
+            return;
+        }
+
+        table.getColumn("priority")?.setFilterValue(selectedPriorities);
+    }, [areAllPrioritiesSelected, selectedPriorities, table]);
 
     const onConfirmDeleteTask = async () => {
         // Renamed function
@@ -473,7 +545,7 @@ const TasksList: React.FC<TasksListProps> = ({
             <div className="flex flex-1 flex-row justify-center">
                 <div className="mb-4 ml-2 mr-2 mt-4 flex max-w-[1100px] flex-1 flex-col">
                     {!inToolbox && (
-                        <div className="flex w-full flex-row items-center gap-2">
+                        <div className="flex w-full flex-wrap items-center gap-2">
                             <div className="flex flex-1 flex-col">
                                 <Input
                                     placeholder="Search tasks by title..." // Updated placeholder
@@ -510,6 +582,34 @@ const TasksList: React.FC<TasksListProps> = ({
                                             onCheckedChange={() => toggleStageFilter(stage)}
                                         >
                                             {getStageInfo(stage).text}
+                                        </DropdownMenuCheckboxItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" className="min-w-[180px] justify-between">
+                                        {priorityFilterLabel}
+                                        <ChevronDown className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-[220px]">
+                                    <DropdownMenuItem
+                                        onSelect={(event) => {
+                                            event.preventDefault();
+                                            setSelectedPriorities(allTaskPriorities);
+                                        }}
+                                    >
+                                        All Priorities
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    {allTaskPriorities.map((priority) => (
+                                        <DropdownMenuCheckboxItem
+                                            key={priority}
+                                            checked={selectedPriorities.includes(priority)}
+                                            onCheckedChange={() => togglePriorityFilter(priority)}
+                                        >
+                                            {taskPriorityLabels[priority]}
                                         </DropdownMenuCheckboxItem>
                                     ))}
                                 </DropdownMenuContent>

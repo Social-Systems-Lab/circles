@@ -14,7 +14,6 @@ import { Circle, Media, Task, Location, GoalDisplay, EventDisplay, UserPrivate, 
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, MapPinIcon, MapPin, CalendarIcon } from "lucide-react";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRouter, useSearchParams } from "next/navigation";
 import LocationPicker from "@/components/forms/location-picker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -39,7 +38,7 @@ const taskPriorityOptions: { value: TaskPriority; label: string; description: st
 // Form schema for creating/editing a task
 const taskFormSchema = z.object({
     title: z.string().min(1, { message: "Task title is required" }),
-    description: z.string().min(1, { message: "Description is required" }),
+    description: z.string().optional(),
     images: z.array(z.any()).optional(),
     location: z.any().optional(),
     targetDate: z.date().optional(),
@@ -122,17 +121,19 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     // Callback for CircleSelector
     const handleCircleSelected = useCallback(
         (circle: Circle | null) => {
+            const isDifferentCircle = Boolean(selectedCircle?._id && circle?._id && selectedCircle._id !== circle._id);
             setSelectedCircle(circle);
-            // Reset goals when circle changes
             setGoals([]);
-            form.reset({
-                // Reset form fields that might depend on the circle, like goalId
-                ...form.getValues(), // keep existing values
-                goalId: null, // reset goalId
-                eventId: null, // reset eventId
-            });
+            setEvents([]);
+            if (isDifferentCircle) {
+                form.reset({
+                    ...form.getValues(),
+                    goalId: null,
+                    eventId: null,
+                });
+            }
         },
-        [form, setSelectedCircle, setGoals],
+        [form, selectedCircle?._id],
     );
 
     useEffect(() => {
@@ -230,7 +231,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
 
         const formData = new FormData();
         formData.append("title", values.title);
-        formData.append("description", values.description);
+        formData.append("description", values.description ?? "");
 
         if (location) {
             formData.append("location", JSON.stringify(location));
@@ -328,9 +329,9 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                     <h3 className="mb-2 text-2xl font-semibold leading-none tracking-tight">
                         {isEditing ? "Edit Task" : "Create New Task"}
                     </h3>
-                    {/* CircleSelector moved into this section */}
-                    {!isEditing && ( // Only show selector if creating new
+                    {!isEditing && (
                         <div className="pb-4 pt-2">
+                            <p className="mb-2 text-sm font-medium text-foreground">Create in</p>
                             <CircleSelector
                                 itemType={itemDetail}
                                 onCircleSelected={handleCircleSelected}
@@ -343,15 +344,13 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                     <CardContent className="p-6 pt-0">
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-0 md:space-y-0">
-                                {/* Adjusted y-spacing for grid */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-6">
-                                    {/* Grid container */}
                                     <FormField
                                         control={form.control}
                                         name="title"
                                         render={({ field }) => (
                                             <FormItem className="py-3 md:py-4">
-                                                <FormLabel>Task Title</FormLabel>
+                                                <FormLabel>Title</FormLabel>
                                                 <FormControl>
                                                     <Input
                                                         placeholder="e.g., Organize team meeting"
@@ -364,97 +363,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                             </FormItem>
                                         )}
                                     />
-                                    {/* Goal Selection Dropdown - Conditionally Rendered */}
-                                    {goalsModuleEnabled && (
-                                        <FormField
-                                            control={form.control}
-                                            name="goalId"
-                                            render={({ field }) => (
-                                                <FormItem className="py-3 md:py-4">
-                                                    <FormLabel>Assign to Goal (Optional)</FormLabel>
-                                                    <Select
-                                                        onValueChange={field.onChange}
-                                                        value={field.value ?? "none"}
-                                                        disabled={isSubmitting || isLoadingGoals || goals.length === 0}
-                                                    >
-                                                        <FormControl>
-                                                            <SelectTrigger>
-                                                                <SelectValue
-                                                                    placeholder={
-                                                                        isLoadingGoals
-                                                                            ? "Loading goals..."
-                                                                            : goals.length === 0
-                                                                              ? "No goals available"
-                                                                              : "Select a goal"
-                                                                    }
-                                                                />
-                                                            </SelectTrigger>
-                                                        </FormControl>
-                                                        <SelectContent>
-                                                            <SelectItem value="none">-- None --</SelectItem>
-                                                            {goals.map((goal) => (
-                                                                <SelectItem key={goal._id} value={goal._id}>
-                                                                    {goal.title}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                    <FormDescription>
-                                                        Link this task to an existing goal in this circle.
-                                                    </FormDescription>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
-                                    )}
-                                </div>{" "}
-                                {/* End grid container for first row */}
-                                {/* Event Selection Dropdown - Conditionally Rendered */}
-                                {eventsModuleEnabled && (
-                                    <FormField
-                                        control={form.control}
-                                        name="eventId"
-                                        render={({ field }) => (
-                                            <FormItem className="py-3 md:py-4">
-                                                <FormLabel>Assign to Event (Optional)</FormLabel>
-                                                <Select
-                                                    onValueChange={field.onChange}
-                                                    value={field.value ?? "none"}
-                                                    disabled={isSubmitting || isLoadingEvents || events.length === 0}
-                                                >
-                                                    <FormControl>
-                                                        <SelectTrigger>
-                                                            <SelectValue
-                                                                placeholder={
-                                                                    isLoadingEvents
-                                                                        ? "Loading events..."
-                                                                        : events.length === 0
-                                                                          ? "No events available"
-                                                                          : "Select an event"
-                                                                }
-                                                            />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent>
-                                                        <SelectItem value="none">-- None --</SelectItem>
-                                                        {events.map((event) => (
-                                                            <SelectItem
-                                                                key={(event as any)._id}
-                                                                value={(event as any)._id}
-                                                            >
-                                                                {event.title}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                                <FormDescription>
-                                                    Link this task to an existing event in this circle.
-                                                </FormDescription>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
-                                )}
+                                </div>
                                 <div className="grid grid-cols-1 gap-0 md:grid-cols-2 md:gap-x-6">
                                     <FormField
                                         control={form.control}
@@ -544,17 +453,21 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                             <FormLabel>Description</FormLabel>
                                             <FormControl>
                                                 <Textarea
-                                                    placeholder="Provide details about the task, goals, and any relevant context..."
-                                                    className="min-h-[150px] md:min-h-[200px]" // Adjusted height
+                                                    placeholder="Add details if helpful"
+                                                    className="min-h-[150px] md:min-h-[200px]"
                                                     {...field}
                                                     disabled={isSubmitting}
                                                 />
                                             </FormControl>
-                                            <FormDescription>Explain the task in detail.</FormDescription>
                                             <FormMessage />
                                         </FormItem>
                                     )}
                                 />
+                                <div className="py-2 md:col-span-2">
+                                    <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                                        Optional Details
+                                    </h4>
+                                </div>
                                 <FormField
                                     control={form.control}
                                     name="images"
@@ -576,37 +489,134 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                         </FormItem>
                                     )}
                                 />
-                                {location && (
-                                    <div className="mt-4 flex flex-row items-center justify-start rounded-lg border bg-muted/40 p-3">
-                                        <MapPin className={`mr-2 h-4 w-4 text-primary`} />
-                                        <span className="text-sm text-muted-foreground">
-                                            {getFullLocationName(location)}
-                                        </span>
+                                <div className="py-3 md:col-span-2 md:py-4">
+                                    <div className="space-y-3">
+                                        <div>
+                                            <p className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                                Location (Optional)
+                                            </p>
+                                            <p className="text-sm text-muted-foreground">
+                                                Add a place if this task needs one.
+                                            </p>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="w-full justify-start md:w-auto"
+                                            onClick={() => setIsLocationDialogOpen(true)}
+                                            disabled={isSubmitting}
+                                        >
+                                            <MapPinIcon className="mr-2 h-4 w-4" />
+                                            {location ? "Change Location" : "Add Location"}
+                                        </Button>
+                                        {location && (
+                                            <div className="flex flex-row items-center justify-start rounded-lg border bg-muted/40 p-3">
+                                                <MapPin className="mr-2 h-4 w-4 text-primary" />
+                                                <span className="text-sm text-muted-foreground">
+                                                    {getFullLocationName(location)}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                {(goalsModuleEnabled || eventsModuleEnabled) && (
+                                    <div className="py-2 md:col-span-2">
+                                        <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                                            Optional Linking
+                                        </h4>
                                     </div>
                                 )}
-                                <div className="flex items-center justify-between pt-4">
-                                    <div className="flex space-x-1">
-                                        <TooltipProvider delayDuration={100}>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="rounded-full"
-                                                        onClick={() => setIsLocationDialogOpen(true)}
-                                                        disabled={isSubmitting}
+                                <div className="grid grid-cols-1 gap-0 md:col-span-2 md:grid-cols-2 md:gap-x-6">
+                                    {goalsModuleEnabled && (
+                                        <FormField
+                                            control={form.control}
+                                            name="goalId"
+                                            render={({ field }) => (
+                                                <FormItem className="py-3 md:py-4">
+                                                    <FormLabel>Goal (Optional)</FormLabel>
+                                                    <Select
+                                                        onValueChange={field.onChange}
+                                                        value={field.value ?? "none"}
+                                                        disabled={isSubmitting || isLoadingGoals || goals.length === 0}
                                                     >
-                                                        <MapPinIcon className="h-5 w-5 text-gray-500" />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    <p>Add Location</p>
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
-                                    </div>
-
+                                                        <FormControl>
+                                                            <SelectTrigger>
+                                                                <SelectValue
+                                                                    placeholder={
+                                                                        isLoadingGoals
+                                                                            ? "Loading goals..."
+                                                                            : goals.length === 0
+                                                                              ? "No goals available"
+                                                                              : "Select a goal"
+                                                                    }
+                                                                />
+                                                            </SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            <SelectItem value="none">-- None --</SelectItem>
+                                                            {goals.map((goal) => (
+                                                                <SelectItem key={goal._id} value={goal._id}>
+                                                                    {goal.title}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <FormDescription>
+                                                        Link this task to an existing goal in this circle.
+                                                    </FormDescription>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    )}
+                                    {eventsModuleEnabled && (
+                                        <FormField
+                                            control={form.control}
+                                            name="eventId"
+                                            render={({ field }) => (
+                                                <FormItem className="py-3 md:py-4">
+                                                    <FormLabel>Event (Optional)</FormLabel>
+                                                    <Select
+                                                        onValueChange={field.onChange}
+                                                        value={field.value ?? "none"}
+                                                        disabled={isSubmitting || isLoadingEvents || events.length === 0}
+                                                    >
+                                                        <FormControl>
+                                                            <SelectTrigger>
+                                                                <SelectValue
+                                                                    placeholder={
+                                                                        isLoadingEvents
+                                                                            ? "Loading events..."
+                                                                            : events.length === 0
+                                                                              ? "No events available"
+                                                                              : "Select an event"
+                                                                    }
+                                                                />
+                                                            </SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            <SelectItem value="none">-- None --</SelectItem>
+                                                            {events.map((event) => (
+                                                                <SelectItem
+                                                                    key={(event as any)._id}
+                                                                    value={(event as any)._id}
+                                                                >
+                                                                    {event.title}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <FormDescription>
+                                                        Link this task to an existing event in this circle.
+                                                    </FormDescription>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    )}
+                                </div>
+                                <div className="flex items-center justify-between pt-4">
+                                    <div />
                                     <div className="flex space-x-4">
                                         {onCancel && ( // Always show onCancel if provided (dialog context)
                                             <Button

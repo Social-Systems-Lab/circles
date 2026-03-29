@@ -187,7 +187,7 @@ export async function getTaskAction(circleHandle: string, taskId: string): Promi
 const createTaskSchema = z.object({
     // Renamed schema
     title: z.string().min(1, "Title is required"),
-    description: z.string().min(1, "Description is required"),
+    description: z.preprocess((value) => (typeof value === "string" ? value : ""), z.string()),
     images: z.array(z.any()).optional(), // Allow files or existing Media objects initially
     location: z
         .string()
