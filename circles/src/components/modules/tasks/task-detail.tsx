@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useTransition, useEffect } from "react";
-import { Circle, TaskDisplay, TaskStage, MemberDisplay, TaskPermissions } from "@/models/models"; // Updated types
+import { Circle, TaskDisplay, TaskStage, MemberDisplay, TaskPermissions, TaskPriority } from "@/models/models"; // Updated types
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
@@ -56,6 +56,7 @@ import {
     assignTaskAction, // Renamed action
     deleteTaskAction, // Renamed action
     getMembersAction, // Keep this action (assuming it's generic)
+    updateTaskPriorityAction,
 } from "@/app/circles/[handle]/tasks/actions"; // Updated path
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -80,6 +81,29 @@ const getStageInfo = (stage: TaskStage) => {
     }
 };
 
+const taskPriorityOptions: { value: TaskPriority | "none"; label: string }[] = [
+    { value: "critical", label: "Critical" },
+    { value: "high", label: "High" },
+    { value: "medium", label: "Medium" },
+    { value: "low", label: "Low" },
+    { value: "none", label: "No Priority" },
+];
+
+const getPriorityInfo = (priority?: TaskPriority) => {
+    switch (priority) {
+        case "low":
+            return { label: "Low", badgeClassName: "border-green-200 bg-green-100 text-green-800" };
+        case "medium":
+            return { label: "Medium", badgeClassName: "border-blue-200 bg-blue-100 text-blue-800" };
+        case "high":
+            return { label: "High", badgeClassName: "border-orange-200 bg-orange-100 text-orange-800" };
+        case "critical":
+            return { label: "Critical", badgeClassName: "border-red-200 bg-red-100 text-red-800" };
+        default:
+            return { label: "No Priority", badgeClassName: "border-slate-200 bg-slate-100 text-slate-700" };
+    }
+};
+
 // Permissions type is imported from models
 
 interface TaskDetailProps {
@@ -101,11 +125,16 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     const [assignDialogOpen, setAssignDialogOpen] = useState(false);
     const [members, setMembers] = useState<MemberDisplay[]>([]);
     const [selectedAssigneeDid, setSelectedAssigneeDid] = useState<string | undefined>(task.assignedTo); // Use task prop
+    const [selectedPriority, setSelectedPriority] = useState<TaskPriority | "none">(task.priority ?? "none");
     const { toast } = useToast();
     const router = useRouter();
 
     const isAuthor = currentUserDid === task.createdBy; // Use task prop
     const isAssignee = currentUserDid === task.assignedTo; // Use task prop
+
+    useEffect(() => {
+        setSelectedPriority(task.priority ?? "none");
+    }, [task._id, task.priority]);
 
     // Fetch members when assign dialog opens
     useEffect(() => {
@@ -210,6 +239,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     };
 
     const { color: stageColor, icon: StageIcon, text: stageText } = getStageInfo(task.stage); // Use task prop
+    const priorityInfo = getPriorityInfo(selectedPriority === "none" ? undefined : selectedPriority);
 
     // Determine available stage transitions based on current stage and permissions
     const availableStageActions: { label: string; stage: TaskStage; allowed: boolean }[] = [
@@ -238,6 +268,32 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
 
     const canEditTask = (isAuthor && task.stage === "review") || permissions.canModerate; // Renamed variable, use task prop
     const canDeleteTask = isAuthor || permissions.canModerate; // Renamed variable
+
+    const handlePriorityChange = (value: TaskPriority | "none") => {
+        const previousPriority = selectedPriority;
+        setSelectedPriority(value);
+
+        startTransition(async () => {
+            const result = await updateTaskPriorityAction(
+                circle.handle!,
+                task._id as string,
+                value === "none" ? "" : value,
+            );
+
+            if (result.success) {
+                toast({ title: "Success", description: result.message });
+                router.refresh();
+                return;
+            }
+
+            setSelectedPriority(previousPriority);
+            toast({
+                title: "Error",
+                description: result.message || "Failed to update task priority",
+                variant: "destructive",
+            });
+        });
+    };
 
     // Function to render primary action buttons based on stage and permissions
     const renderTaskActions = () => {
@@ -373,6 +429,47 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                     Goal: {task.goal.title}
                                 </Link>
                             </div>
+                        )}
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 text-sm">
+                            <span className="font-medium text-foreground">Priority</span>
+                        </div>
+                        {canEditTask ? (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={isPending}
+                                        className={cn(
+                                            "h-8 min-w-[140px] justify-between rounded-full border px-3 text-sm",
+                                            priorityInfo.badgeClassName,
+                                        )}
+                                    >
+                                        <span>{priorityInfo.label}</span>
+                                        <MoreHorizontal className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-[180px]">
+                                    <DropdownMenuLabel>Priority</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuRadioGroup
+                                        value={selectedPriority}
+                                        onValueChange={(value) => handlePriorityChange(value as TaskPriority | "none")}
+                                    >
+                                        {taskPriorityOptions.map((option) => (
+                                            <DropdownMenuRadioItem key={option.value} value={option.value}>
+                                                {option.label}
+                                            </DropdownMenuRadioItem>
+                                        ))}
+                                    </DropdownMenuRadioGroup>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        ) : (
+                            <Badge variant="outline" className={cn("border", priorityInfo.badgeClassName)}>
+                                {priorityInfo.label}
+                            </Badge>
                         )}
                     </div>
                 </div>

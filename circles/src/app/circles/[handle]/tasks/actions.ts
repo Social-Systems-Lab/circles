@@ -568,6 +568,81 @@ export async function updateTaskAction(
 }
 
 /**
+ * Update only the priority of an existing task.
+ * @param circleHandle The handle of the circle
+ * @param taskId The ID of the task to update
+ * @param priority The new priority, or empty string to clear it
+ * @returns Success status and message
+ */
+export async function updateTaskPriorityAction(
+    circleHandle: string,
+    taskId: string,
+    priority: TaskPriority | "",
+): Promise<{ success: boolean; message?: string }> {
+    try {
+        const validatedData = z
+            .object({
+                priority: z.preprocess((value) => (value === "" ? undefined : value), taskPrioritySchema.optional()),
+            })
+            .safeParse({ priority });
+
+        if (!validatedData.success) {
+            console.error("Priority Validation Error:", validatedData.error.errors);
+            return {
+                success: false,
+                message: `Invalid priority: ${validatedData.error.errors.map((e) => e.message).join(", ")}`,
+            };
+        }
+
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "User not authenticated" };
+        }
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) {
+            return { success: false, message: "Circle not found" };
+        }
+
+        const task = await getTaskById(taskId, userDid);
+        if (!task) {
+            return { success: false, message: "Task not found" };
+        }
+
+        const isAuthor = userDid === task.createdBy;
+        const canModerate = await isAuthorized(userDid, circle._id as string, features.tasks?.moderate);
+        const canEdit = (isAuthor && task.stage === "review") || (canModerate && task.stage !== "resolved");
+
+        if (!canEdit) {
+            return {
+                success: false,
+                message: "Not authorized to update this task at its current stage",
+            };
+        }
+
+        const success = await updateTask(taskId, {
+            priority: validatedData.data.priority ?? "",
+            updatedAt: new Date(),
+        });
+
+        if (!success) {
+            return { success: false, message: "Failed to update task priority" };
+        }
+
+        revalidatePath(`/circles/${circleHandle}/tasks`);
+        revalidatePath(`/circles/${circleHandle}/tasks/${taskId}`);
+
+        return {
+            success: true,
+            message: validatedData.data.priority ? "Task priority updated" : "Task priority cleared",
+        };
+    } catch (error) {
+        console.error("Error updating task priority:", error);
+        return { success: false, message: "Failed to update task priority" };
+    }
+}
+
+/**
  * Delete a task
  * @param circleHandle The handle of the circle
  * @param taskId The ID of the task to delete
