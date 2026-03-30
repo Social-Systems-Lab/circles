@@ -17,37 +17,6 @@ export const accountTypeSchema = z.enum(["user", "organization"]);
 export const circleTypeSchema = z.enum(["user", "circle", "project"]);
 export const verificationStatusSchema = z.enum(["unverified", "pending", "verified"]);
 export const emailSchema = z.string().email({ message: "Enter valid email" });
-export const communityGuidelineRuleIdSchema = z.enum(COMMUNITY_GUIDELINE_RULE_IDS);
-export const communityGuidelineAgreementSchema = z.object({
-    accepted: z.boolean(),
-    acceptedAt: z.date().nullable(),
-});
-export const communityGuidelineAgreementStateSchema = z.object({
-    truth: communityGuidelineAgreementSchema,
-    constructive: communityGuidelineAgreementSchema,
-    respect: communityGuidelineAgreementSchema,
-    privacy: communityGuidelineAgreementSchema,
-    responsibility: communityGuidelineAgreementSchema,
-});
-export const moderationReportTargetContentTypeSchema = z.enum(["post", "comment", "profile", "discussion"]);
-export const moderationReportStatusSchema = z.enum(["open", "reviewed", "dismissed", "actioned"]);
-export const moderationReportTargetSnapshotSchema = z.object({
-    title: z.string().optional(),
-    excerpt: z.string().optional(),
-    handle: z.string().optional(),
-    url: z.string().optional(),
-});
-export const moderationReportHistoryEntrySchema = z.object({
-    at: z.date(),
-    status: moderationReportStatusSchema,
-    reviewerId: z.string().optional(),
-    notes: z.string().optional(),
-});
-export const moderationReportSignalsSchema = z.object({
-    reportCount: z.number().optional(),
-    riskScore: z.number().optional(),
-    trustImpact: z.number().optional(),
-});
 
 const DEFAULT_MAX_IMAGE_FILE_SIZE = 5000000; // 5MB
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
@@ -340,6 +309,7 @@ export type ChatRoom = z.infer<typeof chatRoomSchema>;
 
 export type ChatRoomDisplay = ChatRoom & {
     circle?: Circle;
+    unreadCount?: number;
 };
 
 export type MatrixMessageContent =
@@ -474,6 +444,21 @@ export const socialLinkSchema = z.object({
     url: z.string().url(),
 });
 
+export const communityGuidelineRuleIdSchema = z.enum(COMMUNITY_GUIDELINE_RULE_IDS);
+
+export const communityGuidelineAgreementSchema = z.object({
+    accepted: z.boolean(),
+    acceptedAt: z.date().nullable(),
+});
+
+export const communityGuidelineAgreementStateSchema = z.object({
+    truth: communityGuidelineAgreementSchema,
+    constructive: communityGuidelineAgreementSchema,
+    respect: communityGuidelineAgreementSchema,
+    privacy: communityGuidelineAgreementSchema,
+    responsibility: communityGuidelineAgreementSchema,
+});
+
 export const circleSchema = z.object({
     _id: z.any().optional(),
     did: didSchema.optional(),
@@ -564,9 +549,6 @@ export const circleSchema = z.object({
 export type Circle = z.infer<typeof circleSchema>;
 export type VerificationStatus = z.infer<typeof verificationStatusSchema>;
 export type DonationIntent = NonNullable<Circle["donationIntent"]>;
-export type CommunityGuidelineRuleId = z.infer<typeof communityGuidelineRuleIdSchema>;
-export type CommunityGuidelineAgreement = z.infer<typeof communityGuidelineAgreementSchema>;
-export type CommunityGuidelineAgreementState = z.infer<typeof communityGuidelineAgreementStateSchema>;
 
 export const verificationRequestStatusSchema = z.enum([
     "pending",
@@ -606,33 +588,6 @@ export const verificationMessageSchema = z.object({
 
 export type VerificationMessage = z.infer<typeof verificationMessageSchema>;
 export type VerificationMessageSenderRole = z.infer<typeof verificationMessageSenderRoleSchema>;
-
-export const moderationReportSchema = z.object({
-    _id: z.any().optional(),
-    reporterUserId: z.string(),
-    targetContentId: z.string(),
-    targetContentType: moderationReportTargetContentTypeSchema,
-    targetAuthorId: z.string().optional(),
-    ruleCategory: communityGuidelineRuleIdSchema,
-    subtype: z.string().optional(),
-    explanation: z.string().optional(),
-    status: moderationReportStatusSchema.default("open"),
-    createdAt: z.date(),
-    reviewedAt: z.date().optional(),
-    reviewerId: z.string().optional(),
-    internalNotes: z.string().optional(),
-    targetSnapshot: moderationReportTargetSnapshotSchema.optional(),
-    reviewHistory: z.array(moderationReportHistoryEntrySchema).optional(),
-    moderationSignals: moderationReportSignalsSchema.optional(),
-    metadata: z.record(z.string(), z.any()).optional(),
-});
-
-export type ModerationReportTargetContentType = z.infer<typeof moderationReportTargetContentTypeSchema>;
-export type ModerationReportStatus = z.infer<typeof moderationReportStatusSchema>;
-export type ModerationReportTargetSnapshot = z.infer<typeof moderationReportTargetSnapshotSchema>;
-export type ModerationReportHistoryEntry = z.infer<typeof moderationReportHistoryEntrySchema>;
-export type ModerationReportSignals = z.infer<typeof moderationReportSignalsSchema>;
-export type ModerationReport = z.infer<typeof moderationReportSchema>;
 
 export const serverSettingsSchema = z.object({
     _id: z.any().optional(),
@@ -976,7 +931,7 @@ export type UserToolboxTab =
     | "notifications"
     | "profile"
     | "circles"
-    | "projects"
+    | "connections"
     | "tasks"
     | "events"
     | "account"
@@ -1089,6 +1044,7 @@ export type NotificationType =
     | "user_verification_rejected" // User has requested verification - REJECTED
     | "user_becomes_member" // User becomes a platform member
     | "pm_received" // A private message has been received
+    | "contact_request_received" // A user received a contact request
     // Consolidated Summary Notification Types
     | "COMMUNITY_FOLLOW_REQUEST" // Replaces follow_request
     | "COMMUNITY_NEW_FOLLOWER" // Replaces new_follower
@@ -1148,6 +1104,7 @@ export const notificationTypeValues = [
     "user_verification_rejected",
     "user_becomes_member",
     "pm_received",
+    "contact_request_received",
     // Summary Types (for user configuration)
     "COMMUNITY_FOLLOW_REQUEST",
     "COMMUNITY_NEW_FOLLOWER",
