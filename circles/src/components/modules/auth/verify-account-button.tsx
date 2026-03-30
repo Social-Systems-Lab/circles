@@ -37,10 +37,7 @@ export function VerifyAccountButton({
     const { toast } = useToast();
     const router = useRouter();
 
-    const communityGuidelinesCompleted = isCommunityGuidelinesCompleted(
-        user?.communityGuidelinesAcceptance,
-        user?.communityGuidelinesAcceptedAt,
-    );
+    const communityGuidelinesCompleted = isCommunityGuidelinesCompleted(user?.communityGuidelinesAcceptance);
     const activeDialogMode: DialogMode = communityGuidelinesCompleted ? dialogMode : "guidelines";
 
     useEffect(() => {
