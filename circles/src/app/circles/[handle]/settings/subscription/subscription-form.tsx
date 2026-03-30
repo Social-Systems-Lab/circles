@@ -47,7 +47,7 @@ export default function SubscriptionForm({
     };
 
     return (
-        <div className="formatted container mx-auto">
+        <div className="formatted w-full">
             <div className="formatted mt-2 grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-2">
                 <Card className="flex flex-col rounded-3xl p-4">
                     <CardHeader>
