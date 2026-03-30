@@ -20,6 +20,7 @@ import { getGroupedUserNotificationSettings } from "@/lib/actions/notificationSe
 import { VerificationRequest } from "@/models/models";
 import { db } from "./db";
 import { isVerifiedUser } from "@/lib/auth/verification";
+import { ACTIVE_VERIFICATION_REQUEST_STATUSES } from "./verification-workflow";
 
 export const getVerificationStatus = async (userDid: string): Promise<"verified" | "pending" | "unverified"> => {
     const user = await getUserByDid(userDid);
@@ -30,7 +31,7 @@ export const getVerificationStatus = async (userDid: string): Promise<"verified"
     const verificationCollection = db.collection<VerificationRequest>("verifications");
     const existingRequest = await verificationCollection.findOne({
         userDid: userDid,
-        status: "pending",
+        status: { $in: [...ACTIVE_VERIFICATION_REQUEST_STATUSES] },
     });
 
     if (existingRequest) {
@@ -62,6 +63,38 @@ export const getAllUsers = async (): Promise<Circle[]> => {
             circle._id = circle._id.toString();
         }
     });
+    return circles;
+};
+
+export const getUsersByMatrixUsernames = async (matrixUsernames: string[]): Promise<Circle[]> => {
+    const normalizedUsernames = Array.from(
+        new Set(
+            matrixUsernames.filter(
+                (matrixUsername): matrixUsername is string =>
+                    typeof matrixUsername === "string" && matrixUsername.length > 0,
+            ),
+        ),
+    );
+    if (normalizedUsernames.length === 0) {
+        return [];
+    }
+
+    const circles = (await Circles.find(
+        {
+            matrixUsername: { $in: normalizedUsernames },
+            circleType: "user",
+        },
+        {
+            projection: SAFE_CIRCLE_PROJECTION,
+        },
+    ).toArray()) as Circle[];
+
+    circles.forEach((circle: Circle) => {
+        if (circle._id) {
+            circle._id = circle._id.toString();
+        }
+    });
+
     return circles;
 };
 

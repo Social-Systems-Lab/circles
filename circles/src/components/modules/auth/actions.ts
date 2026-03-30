@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { Circles, db } from "@/lib/data/db";
-import { Circle, UserPrivate, VerificationRequest } from "@/models/models";
+import { Circle, UserPrivate } from "@/models/models";
 import { ObjectId } from "mongodb";
 import { sendEmail } from "@/lib/data/email";
 import { getUserPrivate } from "@/lib/data/user";
@@ -15,6 +15,10 @@ import {
     isVerifiedUser,
 } from "@/lib/auth/verification";
 import { isCommunityGuidelinesCompleted } from "@/lib/community-guidelines";
+import {
+    ACTIVE_VERIFICATION_REQUEST_STATUSES,
+    createVerificationRequest,
+} from "@/lib/data/verification-workflow";
 
 export async function getVerificationStatus() {
     const userDid = await getAuthenticatedUserDid();
@@ -24,9 +28,7 @@ export async function getVerificationStatus() {
     return await getStatus(userDid);
 }
 
-const requestVerificationSchema = z.object({});
-
-type RequestVerificationState = {
+export type RequestVerificationResult = {
     message: string;
     success?: boolean;
     emailSent?: boolean;
@@ -34,9 +36,9 @@ type RequestVerificationState = {
 };
 
 export async function requestVerification(
-    prevState: RequestVerificationState,
-    formData: FormData,
-): Promise<RequestVerificationState> {
+    _prevState: RequestVerificationResult,
+    _formData: FormData,
+): Promise<RequestVerificationResult> {
     try {
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) {
@@ -47,10 +49,26 @@ export async function requestVerification(
         if (!user) {
             return { message: "User not found." };
         }
+
+        const communityGuidelinesCompleted = isCommunityGuidelinesCompleted(
+            user.communityGuidelinesAcceptance,
+            user.communityGuidelinesAcceptedAt,
+        );
+
+        console.log("[requestVerification] invoked", {
+            userDid,
+            communityGuidelinesCompleted,
+            communityGuidelinesAcceptance: user.communityGuidelinesAcceptance,
+            communityGuidelinesAcceptedAt: user.communityGuidelinesAcceptedAt,
+        });
+
         if (isVerifiedUser(user)) {
             return { success: true, message: "Your account is already verified." };
         }
-        if (!isCommunityGuidelinesCompleted(user.communityGuidelinesAcceptance)) {
+        if (!communityGuidelinesCompleted) {
+            console.log("[requestVerification] blocked by community guidelines", {
+                userDid,
+            });
             return {
                 success: false,
                 requiresCommunityGuidelines: true,
@@ -58,25 +76,23 @@ export async function requestVerification(
             };
         }
 
-        const verificationCollection = db.collection<VerificationRequest>("verifications");
+        const verificationCollection = db.collection("verifications");
 
         const existingRequest = await verificationCollection.findOne({
             userDid: user.did,
-            status: "pending",
+            status: { $in: [...ACTIVE_VERIFICATION_REQUEST_STATUSES] },
         });
 
         if (existingRequest) {
             return { message: "You already have a pending verification request." };
         }
 
-        const newRequest: VerificationRequest = {
-            _id: new ObjectId(),
-            userDid: user.did!,
-            status: "pending",
-            requestedAt: new Date(),
-        };
+        const newRequest = await createVerificationRequest(user.did!);
 
-        await verificationCollection.insertOne(newRequest);
+        console.log("[requestVerification] verification request inserted", {
+            userDid,
+            verificationRequestId: newRequest._id.toString(),
+        });
 
         const admins = await db.collection<Circle>("circles").find({ isAdmin: true }).toArray();
         const adminUserPrivates = (await Promise.all(admins.map((admin) => getUserPrivate(admin.did!)))).filter(
@@ -95,6 +111,7 @@ export async function requestVerification(
             console.log("Skipping verification request email in development mode (POSTMARK_API_TOKEN not set).");
         } else {
             try {
+                const adminVerificationUrl = `${process.env.CIRCLES_URL || "https://kamooni.org"}/admin?tab=verification-requests`;
                 await sendEmail({
                     to: "hello@socialsystems.io",
                     templateAlias: "user-verification-request",
@@ -102,7 +119,7 @@ export async function requestVerification(
                         subject: "New Account Verification Request",
                         header: "New Account Verification Request",
                         body: `User ${user.name} (@${user.handle}) has requested account verification.`,
-                        action_url: "https://circles.socialsystems.io/admin?tab=users",
+                        action_url: adminVerificationUrl,
                     },
                 });
                 emailSent = true;

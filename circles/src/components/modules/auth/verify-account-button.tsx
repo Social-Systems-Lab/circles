@@ -16,20 +16,31 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { isCommunityGuidelinesCompleted } from "@/lib/community-guidelines";
 import { userAtom } from "@/lib/data/atoms";
-import { requestVerification, getVerificationStatus } from "./actions";
+import { getVerificationStatus, requestVerification, RequestVerificationResult } from "./actions";
 
 type DialogMode = "guidelines" | "confirm";
 
-export function VerifyAccountButton() {
+const INITIAL_REQUEST_STATE: RequestVerificationResult = {
+    message: "",
+};
+
+export function VerifyAccountButton({
+    onStatusChange,
+}: {
+    onStatusChange?: () => void | Promise<void>;
+}) {
     const [user, setUser] = useAtom(userAtom);
-    const [state, formAction, isSubmitting] = useActionState(requestVerification, { message: "" });
     const [open, setOpen] = useState(false);
     const [dialogMode, setDialogMode] = useState<DialogMode>("confirm");
-    const { toast } = useToast();
+    const [state, formAction, isSubmitting] = useActionState(requestVerification, INITIAL_REQUEST_STATE);
     const [verificationStatus, setVerificationStatus] = useState<"verified" | "pending" | "unverified">("unverified");
+    const { toast } = useToast();
     const router = useRouter();
 
-    const communityGuidelinesCompleted = isCommunityGuidelinesCompleted(user?.communityGuidelinesAcceptance);
+    const communityGuidelinesCompleted = isCommunityGuidelinesCompleted(
+        user?.communityGuidelinesAcceptance,
+        user?.communityGuidelinesAcceptedAt,
+    );
     const activeDialogMode: DialogMode = communityGuidelinesCompleted ? dialogMode : "guidelines";
 
     useEffect(() => {
@@ -57,56 +68,91 @@ export function VerifyAccountButton() {
         if (state.message === "Verification request submitted successfully.") {
             setVerificationStatus("pending");
             setOpen(false);
+            router.refresh();
+            void onStatusChange?.();
             return;
         }
 
         if (state.message === "You already have a pending verification request.") {
             setVerificationStatus("pending");
             setOpen(false);
+            void onStatusChange?.();
             return;
         }
 
         if (state.message === "Your account is already verified.") {
             setVerificationStatus("verified");
             setOpen(false);
+            router.refresh();
+            void onStatusChange?.();
         }
-    }, [state, toast]);
+    }, [onStatusChange, router, state, toast]);
 
-    if (user?.isVerified) {
+    if (user?.isVerified || verificationStatus === "verified") {
         return null;
     }
 
-    if (verificationStatus === "verified") {
-        return null;
-    }
+    const openVerificationDialog = () => {
+        if (verificationStatus === "pending") {
+            if (user?.handle) {
+                router.push(`/circles/${user.handle}/settings/subscription`);
+            }
+            return;
+        }
 
-    const handleLearnMore = () => {
-        if (user) {
-            router.push(`/circles/${user.handle}/settings/subscription`);
-            setOpen(false);
+        const nextMode: DialogMode = communityGuidelinesCompleted ? "confirm" : "guidelines";
+
+        console.log("[VerifyAccountButton] open", {
+            nextMode,
+            communityGuidelinesCompleted,
+            communityGuidelinesAcceptance: user?.communityGuidelinesAcceptance,
+            communityGuidelinesAcceptedAt: user?.communityGuidelinesAcceptedAt,
+            userDid: user?.did,
+        });
+
+        setDialogMode(nextMode);
+        setOpen(true);
+    };
+
+    const handleDialogChange = (nextOpen: boolean) => {
+        setOpen(nextOpen);
+
+        if (!nextOpen) {
+            setDialogMode("confirm");
         }
     };
 
-    const openVerificationDialog = () => {
-        setDialogMode(communityGuidelinesCompleted ? "confirm" : "guidelines");
-        setOpen(true);
+    const handleLearnMore = () => {
+        if (!user) {
+            return;
+        }
+
+        router.push(`/circles/${user.handle}/settings/subscription`);
+        setOpen(false);
+    };
+
+    const handleGuidelinesComplete = async () => {
+        console.log("[VerifyAccountButton] guidelines completed", {
+            communityGuidelinesCompleted: isCommunityGuidelinesCompleted(
+                user?.communityGuidelinesAcceptance,
+                user?.communityGuidelinesAcceptedAt,
+            ),
+            communityGuidelinesAcceptance: user?.communityGuidelinesAcceptance,
+            communityGuidelinesAcceptedAt: user?.communityGuidelinesAcceptedAt,
+            userDid: user?.did,
+        });
+
+        setDialogMode("confirm");
+        return { success: true };
     };
 
     return (
         <>
-            <Button variant="outline" disabled={verificationStatus === "pending"} onClick={openVerificationDialog}>
-                {verificationStatus === "pending" ? "Pending Approval" : "Verify Account"}
+            <Button variant="outline" onClick={openVerificationDialog}>
+                {verificationStatus === "pending" ? "Open Verification" : "Verify Account"}
             </Button>
 
-            <Dialog
-                open={open}
-                onOpenChange={(nextOpen) => {
-                    setOpen(nextOpen);
-                    if (!nextOpen) {
-                        setDialogMode("confirm");
-                    }
-                }}
-            >
+            <Dialog open={open} onOpenChange={handleDialogChange}>
                 <DialogContent
                     className={
                         activeDialogMode === "guidelines"
@@ -118,10 +164,7 @@ export function VerifyAccountButton() {
                         <CommunityGuidelinesAgreementFlow
                             user={user}
                             onUserChange={(nextUser) => setUser(nextUser)}
-                            onComplete={async () => {
-                                setDialogMode("confirm");
-                                return { success: true };
-                            }}
+                            onComplete={handleGuidelinesComplete}
                         />
                     ) : (
                         <>
@@ -141,13 +184,14 @@ export function VerifyAccountButton() {
                                     </Button>
                                 </div>
                             </DialogHeader>
-                            <DialogFooter>
-                                <form action={formAction}>
+
+                            <form action={formAction}>
+                                <DialogFooter>
                                     <Button type="submit" disabled={isSubmitting || !communityGuidelinesCompleted}>
                                         {isSubmitting ? "Submitting..." : "Confirm"}
                                     </Button>
-                                </form>
-                            </DialogFooter>
+                                </DialogFooter>
+                            </form>
                         </>
                     )}
                 </DialogContent>

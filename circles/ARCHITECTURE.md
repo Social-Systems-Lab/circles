@@ -1,314 +1,158 @@
-# Kamooni System Architecture
+# Circles / Kamooni — System Architecture (AI bootstrap)
 
-High-level architecture overview for the Kamooni platform.
-
----
-
-# 1. Platform Overview
-
-Kamooni is a community collaboration platform designed to help people discover projects, contribute skills, coordinate collective action, and respond to meaningful opportunities to help.
-
-The system combines:
-
-- social networking
-- volunteer coordination
-- project collaboration
-- real-time messaging
-- in-app notifications
-
-Core goals:
-
-- enable contribution
-- surface opportunities to help
-- build trust and reputation
-- connect communities globally
+This file is a **fast orientation map for AI agents and developers**.
+It intentionally stays short so tools like Codex or ChatGPT can quickly understand the repository.
 
 ---
 
-# 2. Core Technology Stack
+# Repository Structure
 
-Frontend:
+Repo root:
 
-Next.js (App Router)
+~/circles
 
-Backend:
+Application directory:
 
-Node.js server actions and route handlers
+/circles
 
-Database:
+Main application code:
 
-MongoDB
-
-Storage:
-
-MinIO (S3-compatible object storage)
-
-Vector Search:
-
-Qdrant (used for semantic search and future matching)
-
-Chat:
-
-Mongo-native chat engine
-
-Notifications:
-
-Mongo-backed in-app notification system
-
-Deployment:
-
-Docker containers on Circles-Genesis2
+circles/src/
 
 ---
 
-# 3. Major System Components
+# Key Systems
 
-## Identity System
+## Chat backend
 
-User identities are stored as circles with:
+circles/src/lib/data/mongo-chat.ts
 
-circleType: "user"
-
-This allows users and organizations to share the same core data model.
-
----
-
-## Circles System
-
-Circles represent:
-
-- individuals
-- projects
-- communities
-- organizations
-
-Each circle can contain:
-
-- offers (skills available)
-- needs (skills requested)
-- tasks
-- events
-- posts
-
----
-
-## Chat System
-
-Chat is implemented as a Mongo-native messaging engine.
-
-Collections:
+MongoDB collections:
 
 - chatConversations
-- chatMessageDocs
 - chatRoomMembers
+- chatMessageDocs
 - chatReadStates
 
-Supported conversation types:
+---
 
-- dm
-- group
-- announcement
+## Chat UI
 
-Architecture details:
+circles/src/components/modules/chat/
 
-See:
+Main UI components:
 
-docs/CHAT_SYSTEM_ARCHITECTURE.md
+- chat-list.tsx
+- chat-room.tsx
+- create-chat-modal.tsx
 
 ---
 
-## Notifications System
+## Circle creation system
 
-Kamooni now uses a Mongo-backed in-app notification system.
+circles/src/components/circle-wizard/
 
-Current launch behavior:
+Responsible for:
 
-- **Mail icon** owns unread message activity
-  - direct messages
-  - group chat unread
-  - help/contact thread unread
-
-- **Bell icon** owns non-message activity
-  - mentions
-  - approvals
-  - requests
-  - other system notifications
-
-Notification delivery is intentionally conservative.
-Kamooni is not designed around attention capture or high-frequency engagement loops.
-
-Current implementation includes:
-
-- Mongo-backed notification persistence
-- unread bell count endpoint
-- notification list endpoint
-- mark-all-read endpoint
-- chat-triggered PM notifications routed into the notifications system
-
-Important launch note:
-
-- chat/message mentions remain enabled
-- non-chat mentions in posts/comments/discussions are intentionally disabled for launch and should be rebuilt later using the working chat mention path as the reference implementation
+- creating circles
+- onboarding flow
+- profile setup
 
 ---
 
-## System Messaging
+## User Toolbox / Clipboard
 
-Platform messages are delivered through chat.
+circles/src/components/layout/user-toolbox.tsx
 
-Examples:
+Purpose:
 
-- welcome messages
-- platform announcements
-- admin broadcasts
+Personal dashboard aggregating:
 
-System messages reuse the Mongo chat infrastructure rather than a separate transport.
-
----
-
-## Matching Engine
-
-Matching connects:
-
-- offers (skills people have)
-- needs (skills projects request)
-
-Matching is used in:
-
-- circle pages
-- explore page
-- future task/help system
+- events
+- tasks
+- goals
+- issues
 
 ---
 
-## Task / Help System
+## Verification workflow
 
-Tasks and help requests are a major future engagement path.
+Verification clarification threads use a dedicated workflow, not DM/chat rooms.
 
-These will eventually support:
+MongoDB collections:
 
-- skill matching
-- contribution history
-- reputation tracking
-- high-signal notifications when someone is needed
+- verifications
+- verificationMessages
 
 ---
 
-# 4. Deployment Architecture
+# Storage System
 
-Production environment:
+Object storage: **MinIO**
 
-Server: Circles-Genesis2
+Public path:
 
-Core services:
+/storage/*
 
-- Next.js app container
-- MongoDB
-- MinIO
-- Qdrant
-- cron container
+Reverse proxy:
 
-Deployment command:
+nginx → MinIO
 
-deploykamooni
+---
 
-Production code path:
+# Image URL Model
+
+Image URLs are written into MongoDB **at upload time**.
+
+Configuration source:
+
+CIRCLES_URL
+
+Example:
+
+https://kamooni.org/storage/<owner-id>/<filename>
+
+If CIRCLES_URL is wrong, broken URLs are permanently written to MongoDB.
+
+---
+
+# Deployment
+
+Production server:
+
+Circles-Genesis2
+
+Production path:
 
 /root/circles/circles
 
-Deployment verification:
+Preferred deployment command:
+
+deploykamooni
+
+Equivalent manual command:
+
+cd /root/circles/circles
+./deploy-genesis2.sh main
+
+---
+
+# Deployment Verification
+
+Check deployed version:
 
 curl -sS https://kamooni.org/api/version && echo
 
-Rollback point before the notifications polish release:
-
-pre-notifications-polish-20260321-1008
+The returned gitSha should match the deployed commit.
 
 ---
 
-# 5. Key Architectural Principles
+# Purpose of this file
 
-Kamooni architecture prioritizes:
+This document helps:
 
-- simplicity
-- transparency
-- extensibility
-- high-signal communication over notification overload
+- AI coding agents
+- new developers
+- debugging sessions
 
-Important rules:
-
-1. Mongo is the primary data store
-2. Chat uses the same DB as the platform
-3. Notifications are Mongo-backed
-4. Mail and Bell are intentionally separated
-5. Conversations normalize before UI use
-6. UI must rely on normalized flags
-7. System messages reuse chat infrastructure
-8. Notifications should bring users back only when something meaningful happened
-
----
-
-# 6. Current Launch State
-
-Current launch-ready communication model:
-
-- Search is implemented
-- Mongo chat is active
-- Mail/Bell split is active
-- In-app notifications are active
-- Chat mentions work
-- Non-chat mentions are intentionally disabled for launch
-- Notification settings MVP is active
-- Notification settings are currently per circle/profile entity, not global
-- Notification settings currently control Bell-owned non-message activity only
-- Task/goal/proposal/issue notifications are role-relevant, not broadcast to everyone in a circle
-- Launch-facing notification settings UI is simplified to high-signal grouped categories
-
-Deferred items:
-
-- web push notifications
-- email fallback notifications
-- rebuilt non-chat mentions for posts/comments/discussions
-- broader notification taxonomy refinement
-
----
-
-# 7. Future Architecture Expansion
-
-Upcoming major systems include:
-
-- web push notifications
-- task/help notification routing expansion
-- contribution history
-- reputation signals
-- improved semantic search
-- rebuilt non-chat mentions outside chat
-- broader notification settings evolution beyond the current MVP
-
-These systems build on the same core identity and circle model.
-
----
-
-# 8. Developer Entry Points
-
-Start here when exploring the codebase:
-
-- src/app
-- src/components
-- src/lib/data
-- src/lib/chat
-
-Additional details:
-
-See related architecture docs below.
-
----
-
-# Related Architecture Documents
-
-For deeper technical details see:
-
-- docs/CHAT_SYSTEM_ARCHITECTURE.md
-- docs/chat.md
-- docs/CHAT_RUNTIME_NOTE.md
-- docs/CHAT_DEBUG_PLAYBOOK.md
+quickly understand the **structure and operational layout** of the Circles/Kamooni system.
