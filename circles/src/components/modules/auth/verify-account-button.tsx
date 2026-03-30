@@ -130,10 +130,7 @@ export function VerifyAccountButton({
 
     const handleGuidelinesComplete = async () => {
         console.log("[VerifyAccountButton] guidelines completed", {
-            communityGuidelinesCompleted: isCommunityGuidelinesCompleted(
-                user?.communityGuidelinesAcceptance,
-                user?.communityGuidelinesAcceptedAt,
-            ),
+            communityGuidelinesCompleted: isCommunityGuidelinesCompleted(user?.communityGuidelinesAcceptance),
             communityGuidelinesAcceptance: user?.communityGuidelinesAcceptance,
             communityGuidelinesAcceptedAt: user?.communityGuidelinesAcceptedAt,
             userDid: user?.did,
