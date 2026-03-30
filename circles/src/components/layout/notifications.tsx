@@ -394,7 +394,19 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                 router.push(`/circles/${notification.circle?.handle}`);
                 break;
             case "user_verified":
-                router.push(`/`);
+            case "user_verification_clarification_requested":
+            case "user_verification_rejected": {
+                const verificationHandle = user?.handle;
+                if (verificationHandle) {
+                    router.push(`/circles/${verificationHandle}/settings/subscription`);
+                } else {
+                    router.push(`/`);
+                }
+                break;
+            }
+            case "user_verification_request":
+            case "user_verification_reply_received":
+                router.push(`/admin`);
                 break;
             case "pm_received":
                 if (notification.roomId) {

@@ -148,7 +148,11 @@ export function VerifyAccountButton({
 
     return (
         <>
-            <Button variant="outline" onClick={openVerificationDialog}>
+            <Button
+                variant="default"
+                className="bg-black text-white hover:bg-black/90"
+                onClick={openVerificationDialog}
+            >
                 {verificationStatus === "pending" ? "Open Verification" : "Verify Account"}
             </Button>
 

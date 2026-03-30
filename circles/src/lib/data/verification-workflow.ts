@@ -1,6 +1,6 @@
 import { buildVerifiedUserSet } from "@/lib/auth/verification";
 import { Circles, db } from "@/lib/data/db";
-import { sendNotifications } from "@/lib/data/matrix";
+import { sendNotifications } from "@/lib/data/notifications";
 import { saveFile } from "@/lib/data/storage";
 import {
     Circle,
